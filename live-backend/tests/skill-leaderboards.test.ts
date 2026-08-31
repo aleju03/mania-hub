@@ -10,6 +10,8 @@ import {
   expireSkillLeaderboardBoard,
   getDanLeaderboard,
   getSkillLeaderboard,
+  isDanLeaderboardKeyCount,
+  isSkillLeaderboardKeyCount,
   leaderboardAxesFor,
   resetSkillLeaderboardCache,
   skillLeaderboardBuildCount,
@@ -86,6 +88,16 @@ async function seed(db: TestDb, players: SeedPlayer[]): Promise<void> {
 }
 
 describe("leaderboardAxesFor", () => {
+  it("accepts 4K-18K for MSD while keeping dan on its three ladders", () => {
+    for (let keyCount = 4; keyCount <= 18; keyCount += 1) {
+      expect(isSkillLeaderboardKeyCount(keyCount)).toBe(true);
+    }
+    expect(isSkillLeaderboardKeyCount(3)).toBe(false);
+    expect(isSkillLeaderboardKeyCount(19)).toBe(false);
+    expect([4, 6, 7].every(isDanLeaderboardKeyCount)).toBe(true);
+    expect([5, 8, 18].some(isDanLeaderboardKeyCount)).toBe(false);
+  });
+
   it("gives 4K the MSD skillsets plus the grafted LN pattern axis", () => {
     const axes = leaderboardAxesFor(4);
     expect(axes).toContain("Chordjack");
@@ -95,7 +107,7 @@ describe("leaderboardAxesFor", () => {
   });
 
   it("gives non-4K keymodes the pattern vocabulary only", () => {
-    for (const keyCount of [6, 7]) {
+    for (const keyCount of [5, 6, 7, 10, 18]) {
       const axes = leaderboardAxesFor(keyCount);
       expect(axes).toContain("pattern:jack");
       expect(axes).toContain("pattern:chordstream");
@@ -108,7 +120,7 @@ describe("leaderboardAxesFor", () => {
   });
 
   it("leads every keymode with Overall, so the default board needs no specialty", () => {
-    for (const keyCount of [4, 6, 7]) {
+    for (let keyCount = 4; keyCount <= 18; keyCount += 1) {
       expect(leaderboardAxesFor(keyCount)[0]).toBe("Overall");
     }
   });
@@ -131,6 +143,7 @@ describe("skill leaderboard", () => {
       expect(board.ranking[0].rank).toBe(1);
       expect(board.ranking[0].plays).toBe(200);
       expect(board.ranking[0].analyzedPlays).toBe(300);
+      expect(board.keyCounts).toEqual([7]);
       // No curves seeded, so nothing is shrunk and the payload says so.
       expect(board.shrunk).toBe(false);
       expect(board.ranking[0].value).toBe(30);
@@ -193,6 +206,43 @@ describe("skill leaderboard", () => {
       const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 7, axis: "Overall" });
       expect(board.ranking.map((entry) => entry.user.username)).toEqual(["a", "b"]);
       expect(board.axes[0]).toEqual({ axis: "Overall", players: 2 });
+    });
+  });
+
+  it("builds boards for the newly supported keymodes", async () => {
+    await withDb(async (db) => {
+      await seed(db, [
+        { userId: 51, username: "ten", country: "JP", keyCount: 10, analyzedPlays: 80, ratings: { Overall: 23 }, patterns: [{ id: "stream", rating: 22, plays: 40 }] },
+        { userId: 52, username: "eighteen", country: "KR", keyCount: 18, analyzedPlays: 60, ratings: { Overall: 21 }, patterns: [{ id: "jack", rating: 20, plays: 30 }] },
+      ]);
+
+      const ten = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 10, axis: "Overall" });
+      expect(ten.ranking.map((entry) => entry.user.username)).toEqual(["ten"]);
+      expect(ten.axes).toContainEqual({ axis: "pattern:stream", players: 1 });
+      expect(ten.keyCounts).toEqual([10, 18]);
+
+      const eighteen = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 18, axis: "pattern:jack" });
+      expect(eighteen.ranking.map((entry) => entry.user.username)).toEqual(["eighteen"]);
+    });
+  });
+
+  it("publishes only keymodes with a rated player in the requested scope", async () => {
+    await withDb(async (db) => {
+      await seed(db, [
+        { userId: 61, username: "four", country: "JP", keyCount: 4, analyzedPlays: 80, ratings: { Overall: 24 } },
+        { userId: 62, username: "ten", country: "KR", keyCount: 10, analyzedPlays: 60, ratings: { Overall: 20 } },
+        // A stored mode without a publishable rating must not create a chip.
+        { userId: 63, username: "empty", country: "US", keyCount: 18, analyzedPlays: 40 },
+      ]);
+
+      const global = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 4, axis: "Overall" });
+      expect(global.keyCounts).toEqual([4, 10]);
+
+      const jp = await getSkillLeaderboard(db, { country: "JP", keyCount: 4, axis: "Overall" });
+      expect(jp.keyCounts).toEqual([4]);
+
+      const us = await getSkillLeaderboard(db, { country: "US", keyCount: 18, axis: "Overall" });
+      expect(us.keyCounts).toEqual([]);
     });
   });
 

@@ -87,8 +87,10 @@ export const SIGNATURE_TYPE_LABELS: Record<SignatureType, MessageDescriptor> = {
 /* The render version cannot live in the URL the way OG_IMAGE_VERSION does -
    the whole point is a URL a player pastes once and never edits. It lives in
    the cache key instead, so bumping it supersedes every stored render and
-   propagates within one edge TTL. Bump it when a layout changes. */
-export const SIGNATURE_RENDER_VERSION = "22";
+   propagates within one edge TTL. Bump it when a layout changes, and when
+   the encoding does - a stored object is immutable for its key, so an old one
+   would otherwise be served under the new content type. */
+export const SIGNATURE_RENDER_VERSION = "23";
 
 export function isSignatureType(value: string): value is SignatureType {
   return (SIGNATURE_TYPES as readonly string[]).includes(value);

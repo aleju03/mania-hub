@@ -1113,8 +1113,16 @@ export async function putOgImage(cacheKey: string, buffer: Buffer): Promise<void
    whose URLs address the object itself and must never get a rule.) */
 const SIGNATURE_IMAGE_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}signature/`;
 
+/* Signatures are WebP where the OG pair is PNG. Satori only emits PNG, so this
+   is an encode on the way out; it lives here rather than in signature-shared so
+   the plain-node scripts that import this module do not pull a lingui macro in
+   with it. The pasted url still ends in `.png` - the extension is decoration
+   and the browser goes by the header - which is why swapping the encoding had
+   to ride a SIGNATURE_RENDER_VERSION bump. */
+export const SIGNATURE_IMAGE_CONTENT_TYPE = "image/webp";
+
 function getSignatureImageStorageKey(cacheKey: string): string {
-  return `${SIGNATURE_IMAGE_CACHE_PREFIX}${signatureImageDigest(cacheKey)}.png`;
+  return `${SIGNATURE_IMAGE_CACHE_PREFIX}${signatureImageDigest(cacheKey)}.webp`;
 }
 
 /** The digest is also the ETag body, so both sides derive it here exactly once. */
@@ -1155,7 +1163,7 @@ export async function putSignatureImage(cacheKey: string, buffer: Buffer): Promi
       Bucket: REPLAY_CACHE_BUCKET,
       Key: storageKey,
       Body: buffer,
-      ContentType: OG_IMAGE_CONTENT_TYPE,
+      ContentType: SIGNATURE_IMAGE_CONTENT_TYPE,
       CacheControl: "public, max-age=31536000, immutable",
     }));
   } catch {

@@ -21,6 +21,10 @@ export interface LivePlayerSkillPlay {
   creator: string | null;
   version: string;
   coverUrl: string | null;
+  // The chart's osu! leaderboard status, lowercased ("ranked", "loved",
+  // "graveyard", ...). Null on older backend payloads and on charts this site
+  // has never stored a beatmap row for, which is not the same as unranked.
+  beatmapStatus?: string | null;
   keyCount: number;
   rating: number;
   overallRating: number;
@@ -42,9 +46,39 @@ export interface LivePlayerSkillPlay {
 
 export interface LivePlayerSkillPlaysPage {
   items: LivePlayerSkillPlay[];
+  /** How many plays the active filters leave, which is what `offset` pages. */
   total: number;
+  /** The bounded order-cohort total before any filter; absent on older payloads. */
+  unfilteredTotal?: number;
   limit: number;
   offset: number;
+}
+
+/** The clear rules a rated play can fall to, as the backend names them. */
+export type LiveDanRejectReason =
+  | "chart_unanalyzed"
+  | "chart_ineligible"
+  | "low_od"
+  | "ez_windows"
+  | "no_accuracy"
+  | "no_chart_dan"
+  | "below_bar";
+
+/** One rated play that credits no dan, with the rule that stopped it. */
+export interface LivePlayerDanRejectedPlay {
+  play: LivePlayerSkillPlay;
+  reason: LiveDanRejectReason;
+  /** Null when the chart names no side at this rate, so it shows on both. */
+  side: "rc" | "ln" | null;
+  chartDan: number | null;
+  chartDanLabel: string | null;
+  clearAccuracy: number | null;
+  bar: number | null;
+  /** The lowest accuracy that still credits a decayed dan, below the pass bar. */
+  minAccuracy?: number | null;
+  od: number | null;
+  /** The tiles it would have been filed under, had it counted. */
+  skillsets?: string[];
 }
 
 // One credited clear behind a dan estimate: the play, the chart's own dan on
@@ -60,6 +94,9 @@ export interface LivePlayerDanEvidencePlay {
   creditedDan: number;
   creditedDanLabel: string;
   clearAccuracy: number;
+  /** The skillset tiles this clear is filed under ("jack", "speed", ...); two
+   *  when the rules deliberately share the chart. Absent on older payloads. */
+  skillsets?: string[];
   countsTowardDan: boolean;
   /** The stray rule left this clear out of the average behind the estimate. */
   ignoredAsStray?: boolean;
@@ -128,6 +165,10 @@ export interface LivePlayerDanEvidence {
   totalClears: number;
   clears: LivePlayerDanEvidencePlay[];
   skillsets: LivePlayerDanSkillsetEvidence[];
+  /** Present only when the read asked for it (`includeRejected`). */
+  rejected?: LivePlayerDanRejectedPlay[];
+  /** How many rejected plays this side has, before the page cap. */
+  totalRejected?: number;
   courseClear: LivePlayerDanCourseEvidence | null;
 }
 
@@ -172,6 +213,8 @@ export type LiveCountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes"
 export interface LiveCountryFeature {
   country: string;
   featureTier: LiveCountryFeatureTier;
+  /** Tracked roster members. Undefined only when an older backend answered. */
+  rosterSize?: number;
 }
 
 export interface LiveCountryFeaturesSnapshot {
@@ -1187,7 +1230,11 @@ async function loadLiveBackendBootstrap(): Promise<LiveBackendBootstrap> {
             typeof entry.country === "string" &&
             isCountryFeatureTier((entry as Partial<LiveCountryFeature>).featureTier),
           )
-          .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
+          .map((entry) => ({
+            country: entry.country.toUpperCase().slice(0, 2),
+            featureTier: entry.featureTier,
+            ...(Number.isFinite(entry.rosterSize) ? { rosterSize: Number(entry.rosterSize) } : {}),
+          })),
       },
     };
   } catch (error) {
@@ -1460,16 +1507,33 @@ export async function fetchLivePlayerSkillPlaysDirect(
   userId: number,
   keyCount: number,
   axis: string,
-  options: { limit?: number; offset?: number; signal?: AbortSignal } = {},
+  options: {
+    limit?: number;
+    offset?: number;
+    signal?: AbortSignal;
+    /** "recent" reorders the same set by when each play was set. */
+    sort?: "rating" | "recent";
+    /** Drops plays on ranked/approved/qualified charts. */
+    hideRanked?: boolean;
+    /** Keeps at most this many plays per chart, for maps with several rates. */
+    maxPerChart?: number;
+  } = {},
 ): Promise<LivePlayerSkillPlaysPage> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
   const query = new URLSearchParams({
     keys: String(keyCount),
     axis,
-    limit: String(Math.max(1, Math.min(50, Math.floor(options.limit ?? 50)))),
+    limit: String(Math.max(1, Math.min(200, Math.floor(options.limit ?? 50)))),
     offset: String(Math.max(0, Math.floor(options.offset ?? 0))),
   });
+  // Filters and order stay off the query string at their defaults, so an
+  // unfiltered read keeps the URL (and the backend's cache key) it always had.
+  if (options.sort === "recent") query.set("sort", "recent");
+  if (options.hideRanked) query.set("hideRanked", "1");
+  if (Number.isFinite(options.maxPerChart) && Number(options.maxPerChart) > 0) {
+    query.set("maxPerChart", String(Math.floor(Number(options.maxPerChart))));
+  }
   return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
 }
 
@@ -1556,11 +1620,27 @@ export async function fetchLivePlayerDanEvidenceDirect(
   userId: number,
   keyCount: number,
   side: "rc" | "ln",
-  options: { signal?: AbortSignal; limit?: number; offset?: number } = {},
+  options: {
+    signal?: AbortSignal;
+    limit?: number;
+    offset?: number;
+    /** Also return the rated plays the clear rules turned away. */
+    includeRejected?: boolean;
+    rejectedLimit?: number;
+    /** Orders the returned clear/rejection pages; the estimate remains best-first. */
+    sort?: "rating" | "recent";
+  } = {},
 ): Promise<LivePlayerDanEvidence> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
   const query = new URLSearchParams({ keys: String(keyCount), side });
+  if (options.includeRejected) {
+    query.set("rejected", "1");
+    if (Number.isInteger(options.rejectedLimit) && options.rejectedLimit! > 0) {
+      query.set("rejectedLimit", String(options.rejectedLimit));
+    }
+  }
+  if (options.sort === "recent") query.set("sort", "recent");
   // Pages the "all clears" list past the default window (server-clamped).
   if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
   if (Number.isInteger(options.offset) && options.offset! > 0) query.set("offset", String(options.offset));

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, exec, migrate } from "../src/db.js";
+import { createDb, migrate } from "../src/db.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { defaultWorkerLanes } from "../src/workers.js";
 

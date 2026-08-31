@@ -50,6 +50,10 @@ export function SkillLeaderboardBoard({
       setSnapshot(cached);
       setLoading(false);
       setError(null);
+      const fallbackKeys = cached.keyCounts?.[0];
+      if (fallbackKeys != null && !cached.keyCounts?.includes(keys)) {
+        onNavigate({ keys: fallbackKeys, axis: undefined, page: 1 });
+      }
       return;
     }
     setLoading(true);
@@ -60,6 +64,10 @@ export function SkillLeaderboardBoard({
         setSnapshot(next);
         setLoading(false);
         if (!next) setError(t`Could not load this leaderboard.`);
+        const fallbackKeys = next?.keyCounts?.[0];
+        if (fallbackKeys != null && !next.keyCounts?.includes(keys)) {
+          onNavigate({ keys: fallbackKeys, axis: undefined, page: 1 });
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -108,15 +116,22 @@ export function SkillLeaderboardBoard({
   }, [snapshot, hiddenUserIds, meta, t]);
 
   const totalPages = Math.max(1, Math.ceil((snapshot?.total ?? 0) / LEADERBOARD_PAGE_SIZE));
+  // Before the first population payload arrives, show only the requested mode
+  // rather than flashing the full 4K-18K capability list. An empty published
+  // list means this scope genuinely has no rated keymode yet.
+  const availableKeyCounts = snapshot?.keyCounts ?? [keys];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <KeymodeControl
-          id="skill-leaderboard-keys"
-          value={keys}
-          onChange={(next) => onNavigate({ keys: next, axis: undefined, page: 1 })}
-        />
+        {availableKeyCounts.length > 0 && (
+          <KeymodeControl
+            id="skill-leaderboard-keys"
+            value={keys}
+            keyCounts={availableKeyCounts}
+            onChange={(next) => onNavigate({ keys: next, axis: undefined, page: 1 })}
+          />
+        )}
         <AxisPicker
           axes={snapshot?.axes ?? []}
           value={requestedAxis}

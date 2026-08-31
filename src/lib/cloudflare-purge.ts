@@ -1,11 +1,12 @@
 // Server-only: drops specific URLs out of Cloudflare's edge cache.
 //
 // This exists because removal has to mean removal. A dynamic render is served
-// with `s-maxage=300, stale-while-revalidate=86400`, which is right for an
+// with `max-age=300, stale-while-revalidate=86400`, which is right for an
 // image that only changes when a player's data does - and wrong the moment a
 // picture has to come down now. Without a purge, an edge that already holds a
-// copy keeps handing it out for minutes after the origin has started refusing,
-// which is a poor answer to "take that down".
+// copy keeps handing it out for minutes after the origin has started refusing
+// (a full day of it, once stale-while-revalidate is actually in effect), which
+// is a poor answer to "take that down".
 //
 // Deliberately best-effort and silent about it: a purge that fails must not
 // turn a block into an error, because the block itself already worked. The

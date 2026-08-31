@@ -513,6 +513,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     jobType: "recompute_msd_poison_sweep",
   }),
   chartAnalysisSweep({
+    id: "nkey-msd",
+    label: "n-key MSD sweep",
+    description: "Re-analyzes 5K and 8K-18K charts, which had no MSD at all until MinaCalc's n-key pipeline became reachable in the 2026-08-30 leoblack re-pin.",
+    doneKey: "nkey_msd_done:v1",
+    jobType: "recompute_nkey_msd_sweep",
+  }),
+  chartAnalysisSweep({
     id: "inverse-cluster-bpm",
     label: "Inverse cluster BPM sweep",
     description: "Re-analyzes rows whose stored pattern clusters carry a BPM at or above 1500, the ceiling the timed-window floor makes computable (v1 swept the mixed-pool sentinel dilution; v2 the non-mixed pools where tiny tail-gap windows voted).",

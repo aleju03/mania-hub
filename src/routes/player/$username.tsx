@@ -56,6 +56,7 @@ import {
   scoreHasReplay,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
+import { SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
@@ -70,7 +71,7 @@ import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton"
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
-import { SkillBreakdownBody, SkillModePanel } from "../../components/player/SkillBreakdown";
+import { SkillBreakdownBody, SkillModePanel, SkillModeOption } from "../../components/player/SkillBreakdown";
 import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
@@ -1800,6 +1801,9 @@ export function PlayerProfilePage({
      wider than the screen and the chips at the end are unreachable without a
      swipe nothing announces. */
   const MAX_INLINE_KEY_MODES = 5;
+  /* The desktop header shares its row with the tabs, so the strip gets more
+     chips than a phone but still has to stop before it pushes About off. */
+  const MAX_INLINE_KEY_MODES_WIDE = 8;
 
   const availableKeyModes = useMemo(() => {
     const modes = new Set([...bestFilters.keyModes, ...getAvailableKeyModes(recent)]);
@@ -2961,6 +2965,9 @@ export function PlayerProfilePage({
                     availableKeyModes={availableKeyModes}
                     keyFilter={keyFilter}
                     onChangeKeyFilter={setKeyFilter}
+                    maxVisible={MAX_INLINE_KEY_MODES_WIDE}
+                    playCounts={keyModePlayCounts}
+                    onOverflow={keyModeOverflowHandler}
                   />
                 )}
               </div>
@@ -3533,16 +3540,66 @@ function PlayerSkillCard({ title, accent, children }: { title: string; accent: s
   );
 }
 
+/* The height the Skills panel last stood at, module-level on purpose: the
+   collapse it exists to prevent happens across an UNMOUNT (leaving the tab and
+   coming back), so a floor kept in component state would be gone exactly when
+   it is needed. One number for the whole app, because only one profile's
+   Skills panel is ever on screen. */
+let lastSkillsPanelHeight: number | null = null;
+
+// What the public Skills tab is showing: its published ratings, or one of the
+// two bounded plays lists behind them.
+type PlayerSkillsView = "ratings" | SkillPlaysExplorerView;
+
+const PLAYER_SKILLS_VIEWS: PlayerSkillsView[] = ["ratings", "msd", "dan"];
+
+function getPlayerSkillsViewLabelMsg(view: PlayerSkillsView): MessageDescriptor {
+  if (view === "msd") return msg`MSD plays`;
+  if (view === "dan") return msg`Dan plays`;
+  return msg`Ratings`;
+}
+
 // Public Skills tab: the exact per-keymode skill ratings (same renderer as the
 // My Data card) with population percentiles and player dan chips. First-time
 // visitors start "pending" while the backend rates their plays, so the panel
 // polls until the breakdown lands.
+/* The ratings view is one column: the keymode strip, the open panel and the
+   add-a-score row all share this width and centre together on a wide screen.
+   The plays views stay full width - they are lists, not a card. */
+const SKILLS_COLUMN_CLASS = "mx-auto max-w-[880px]";
+
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
+  const [skillsView, setSkillsView] = useState<PlayerSkillsView>("ratings");
+  /* Swapping the ratings grid for a plays list that has not loaded yet takes
+     a thousand pixels out of the document for as long as the read takes. The
+     browser clamps the scroll offset to the shorter page, so a reader deep in
+     the tab is thrown back up to the header and then left there when the rows
+     land. The panel holds the height it had until the incoming view has
+     something in it, which is a floor, not a fixed size: the new view is free
+     to be taller, and a genuinely shorter one settles into place once rather
+     than after a jump. */
+  const [heldHeight, setHeldHeight] = useState<number | null>(() => lastSkillsPanelHeight);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  /* Recorded continuously rather than on unmount: a cleanup cannot read a
+     height off an element React is in the middle of detaching. */
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const height = panel.getBoundingClientRect().height;
+      if (height > 0) lastSkillsPanelHeight = height;
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
   const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
   const [skillsError, setSkillsError] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
+  /* Which keymode the open panel is for; null follows the profile's own main. */
+  const [skillModeKey, setSkillModeKey] = useState<number | null>(null);
   /* The run behind a course-floored dan, shown on the same card a tracked play
      opens. Built here rather than in the window because the card belongs to the
      profile and the play is by the profile's owner. */
@@ -3574,6 +3631,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       />
     )
     : null;
+  const addScoreRow = <div className="mt-3 flex justify-end">{addScoreButton}</div>;
 
   useEffect(() => {
     if (!liveConfigured) return;
@@ -3612,49 +3670,156 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
 
   useEffect(() => {
     setSelectedSkill(null);
+    setSkillModeKey(null);
   }, [user.id]);
 
   if (!liveConfigured) {
     return <div className="py-8 text-center text-sm text-osu-f1">{t`Skill ratings are unavailable right now.`}</div>;
   }
   const modes = qualifyingSkillModes(skills);
+  /* `modes` arrives ranked by rated plays, most first, and the strip keeps
+     that order: the keymode someone plays leads, and its panel is the one that
+     opens. Keycount order would put a profile's 4K first whether they play it
+     or not. */
+  const skillModeStrip = modes;
+  const activeSkillMode = modes.find((mode) => mode.keyCount === skillModeKey) ?? modes[0] ?? null;
+  const view = skillsView;
+
+  const selectView = useCallback((next: PlayerSkillsView) => {
+    if (next === skillsView) return;
+    setHeldHeight(panelRef.current?.getBoundingClientRect().height ?? null);
+    setSkillsView(next);
+  }, [skillsView]);
+
+  /* The ratings view releases the floor itself, one frame after it has an
+     answer to draw. Waiting for the answer is the point: on a fresh mount the
+     breakdown is still in flight, and releasing on the first frame would drop
+     the floor onto the loading skeleton, which is the collapse all over again.
+     An error releases too, since a failed read is as final as a good one.
+     The two plays lists release through onListSettled instead. */
+  useEffect(() => {
+    if (heldHeight == null || view !== "ratings") return;
+    if (skills == null && !skillsError) return;
+    const frame = requestAnimationFrame(() => setHeldHeight(null));
+    return () => cancelAnimationFrame(frame);
+  }, [heldHeight, skills, skillsError, view]);
+
+  const releaseHeldHeight = useCallback(() => setHeldHeight(null), []);
   /* Every state of the panel is one tree, not a return each: a submission
      queues a recompute that can flip the panel between them while the dialog
      is open, and a second mount point would tear the dialog down mid-paste. */
   const rated = skills != null && skills.status === "ready" && modes.length > 0;
   return (
-    <>
+    <div ref={panelRef} style={heldHeight != null ? { minHeight: heldHeight } : undefined}>
+      {rated ? (
+        <div className={`mb-3 flex flex-wrap items-center gap-1 ${view === "ratings" ? SKILLS_COLUMN_CLASS : ""}`}>
+          {PLAYER_SKILLS_VIEWS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => selectView(option)}
+              onPointerEnter={() => {
+                if (option !== "ratings") prefetchSkillPlaysExplorerView(user.id, modes, option);
+              }}
+              onFocus={() => {
+                if (option !== "ratings") prefetchSkillPlaysExplorerView(user.id, modes, option);
+              }}
+              aria-pressed={view === option}
+              className={`rounded-full px-3 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
+                view === option ? "bg-osu-b3/70 text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
+              }`}
+            >
+              {i18n._(getPlayerSkillsViewLabelMsg(option))}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {skillsError ? (
         <div className="py-8 text-center text-sm text-osu-f1">{t`Could not load skill ratings. Try again in a bit.`}</div>
       ) : !skills ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-7 w-24" />
-              {Array.from({ length: 5 }).map((_, j) => (
-                <Skeleton key={j} className="h-3 w-full" />
+        /* Shaped like what lands: a keymode strip over one panel, not the
+           two-panel grid the tab used to open with. */
+        <div className={SKILLS_COLUMN_CLASS}>
+          <div className="mb-4 flex flex-wrap gap-x-7 gap-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-1">
+                <Skeleton className="h-2.5 w-6" />
+                <Skeleton className="h-5 w-14" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-7 w-24" />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-3 w-full" />
+            ))}
+          </div>
+        </div>
+      ) : rated && view !== "ratings" ? (
+        <SkillPlaysExplorer
+          userId={user.id}
+          username={user.username}
+          modes={modes}
+          view={view}
+          onListSettled={releaseHeldHeight}
+        />
+      ) : rated ? (
+        /* One column, strip and panel the same width: a page-wide strip over a
+           half-width panel read as a layout that had lost its other half. */
+        <div className={SKILLS_COLUMN_CLASS}>
+          {/* Every keymode at one size: a keymode is not worth less because
+              it is played less, and MinaCalc rating 4K-18K means a profile can
+              hold nine of them. The strip carries each rating, so it reads as
+              the whole answer and the panel below is the one being looked
+              at. */}
+          {skillModeStrip.length > 1 ? (
+            <div className="mb-4 flex flex-wrap gap-x-7 gap-y-3">
+              {skillModeStrip.map((mode) => (
+                <SkillModeOption
+                  key={mode.keyCount}
+                  mode={mode}
+                  selected={mode.keyCount === activeSkillMode?.keyCount}
+                  onSelect={() => setSkillModeKey(mode.keyCount)}
+                />
               ))}
             </div>
-          ))}
-        </div>
-      ) : rated ? (
-        <div
-          className={`grid grid-cols-1 gap-3 ${
-            modes.length > 1
-              ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
-              : "md:max-w-[640px]"
-          }`}
-        >
-          {modes.map((mode) => (
-            <SkillModePanel
-              key={mode.keyCount}
-              skills={skills}
-              mode={mode}
-              onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: mode.keyCount })}
-              onSelectDan={(side) => setSelectedDan({ side, keyCount: mode.keyCount })}
-            />
-          ))}
+          ) : null}
+          {/* Height reserve. Every keymode's panel is mounted into one grid
+              cell with all but the open one `invisible`, so the cell is always
+              as tall as the tallest panel and switching keymode cannot change
+              the page height - a 4K panel with a radar and seven axes is twice
+              a 5K panel with two rows, and swapping between them shrank the
+              document under the reader and threw their scroll position back up
+              the page. `invisible` keeps the hidden ones out of the tab order
+              while still reserving their height.
+
+              The open panel keeps its natural height (`items-start`) and the
+              add-a-score row rides in the same cell beneath it, so the slack
+              lands at the bottom of the tab as plain page background rather
+              than as empty space inside the card or a stranded button. */}
+          <div className="grid grid-cols-1 items-start">
+            {skillModeStrip.filter((mode) => mode.keyCount !== activeSkillMode?.keyCount).map((mode) => (
+              <div key={mode.keyCount} className="invisible col-start-1 row-start-1" aria-hidden>
+                <SkillModePanel skills={skills} mode={mode} />
+                {/* The reserve measures what the open cell measures, button
+                    row included, or picking the tallest keymode would still
+                    move the page by exactly this row. */}
+                {addScoreRow}
+              </div>
+            ))}
+            {activeSkillMode ? (
+              <div className="col-start-1 row-start-1">
+                <SkillModePanel
+                  skills={skills}
+                  mode={activeSkillMode}
+                  onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: activeSkillMode.keyCount })}
+                  onSelectDan={(side) => setSelectedDan({ side, keyCount: activeSkillMode.keyCount })}
+                />
+                {addScoreRow}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="mx-auto max-w-[440px]">
@@ -3665,8 +3830,9 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       )}
       {/* A profile with nothing rated yet is exactly who has scores to
           backfill, so the button rides that state too - but not the states
-          where there is nothing to read yet. */}
-      {skills && !skillsError ? (
+          where there is nothing to read yet. The ratings view draws its own
+          inside the height reserve, so it is excluded here. */}
+      {skills && !skillsError && !(rated && view === "ratings") ? (
         <div className={`mt-3 flex ${rated ? "justify-end" : "justify-center"}`}>{addScoreButton}</div>
       ) : null}
       {addScoreModal}
@@ -3725,7 +3891,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       {courseScore ? (
         <ScoreDetailModal score={courseScore} onClose={() => setCourseScore(null)} />
       ) : null}
-    </>
+    </div>
   );
 }
 

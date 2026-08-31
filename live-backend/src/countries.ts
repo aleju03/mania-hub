@@ -387,6 +387,23 @@ export async function getCountryRegistry(db: Db, config: CountryWarmConfig, opti
   return rows.map((row) => rowToCountryRegistry(row, config));
 }
 
+/* Tracked roster size per country. The album shelf and anything else that
+   asks "does this country have a roster yet" needs the count, not the feature
+   tier: a country goes to the 'live' tier the moment one of its players is
+   seen, which a retired-empty country like the Vatican also did. */
+export async function getCountryRosterSizes(db: Db): Promise<Map<string, number>> {
+  const rows = (await exec(
+    db,
+    `select country, count(*) as members
+     from country_rosters
+     where is_tracked = 1
+     group by country`,
+  )).rows;
+  const sizes = new Map<string, number>();
+  for (const row of rows) sizes.set(String(row.country).toUpperCase(), Number(row.members ?? 0));
+  return sizes;
+}
+
 export async function getCountryRegistryRow(db: Db, country: string, config: CountryWarmConfig): Promise<CountryRegistryRow | null> {
   const row = (await exec(db, "select * from country_registry where country = ?", [normalizeCountry(country)])).rows[0];
   return row ? rowToCountryRegistry(row, config) : null;

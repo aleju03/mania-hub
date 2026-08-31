@@ -1107,6 +1107,14 @@ describe("live backend", () => {
     // Pinned countries are seeded at boot in prod; the features read path no
     // longer seeds (it must not write on the serving connection), so seed here.
     await ensurePinnedCountries(db, config);
+    // rosterSize is what the pack albums shelf on: a country with no tracked
+    // roster gets no album, whatever tier it sits on.
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 1, 1, 'test', 1, ?), ('CR', 2, 2, 'test', 1, ?), ('CR', 3, 3, 'test', 0, ?)`,
+      [new Date().toISOString(), new Date().toISOString(), new Date().toISOString()],
+    );
 
     await routeHttp(mockReq("GET", "/api/countries/features"), response.res, {
       db,
@@ -1121,9 +1129,9 @@ describe("live backend", () => {
     expect(response.res.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("public, max-age=30");
     expect(body.countries).toEqual(expect.arrayContaining([
-      { country: "CR", featureTier: "snipes" },
-      { country: "MX", featureTier: "indexed" },
-      { country: "BR", featureTier: "maps_warm" },
+      { country: "CR", featureTier: "snipes", rosterSize: 2 },
+      { country: "MX", featureTier: "indexed", rosterSize: 0 },
+      { country: "BR", featureTier: "maps_warm", rosterSize: 0 },
     ]));
     expect(body.queueDepth).toBeUndefined();
   });

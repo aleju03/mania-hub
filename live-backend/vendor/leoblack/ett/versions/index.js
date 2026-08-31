@@ -1,10 +1,18 @@
 import createMinaCalc740 from "./minaclac-74.0.js";
+import createMinaCalc750 from "./minaclac-75.0.js";
 import createMinaCalc680Unofficial from "./minaclac-68.0-unofficial.js";
 import createMinaCalc700 from "./minaclac-70.0.js";
 import createMinaCalc720 from "./minaclac-72.0.js";
 import createMinaCalc723 from "./minaclac-72.3.js";
 
-const COMMON_SUPPORTED_KEYCOUNTS = Object.freeze([4, 6, 7]);
+// Keycounts 4..18: 4/6/7 use their official per-keycount MinaCalc classes,
+// everything else falls back to the generic n-key Bazoinkazoink. Older wasm
+// builds (<= 0.72.3) only gate 4/6/7 in their FFI, which is safe because
+// every non-4K keycount is pinned to the fallback version below.
+const COMMON_SUPPORTED_KEYCOUNTS = Object.freeze(Array.from({ length: 15 }, (_, i) => i + 4));
+// All non-4K keycounts are pinned to 0.74.0: it is the first MinaCalc with a
+// real n-key pipeline, while the 4K-era builds reject anything wider. 0.75.0
+// shares the same n-key structure but stays selectable for 4K comparisons.
 export const NON_4K_ETTERNA_FALLBACK_VERSION = "0.74.0";
 
 const ETTERNA_VERSION_REGISTRY = Object.freeze({
@@ -35,6 +43,12 @@ const ETTERNA_VERSION_REGISTRY = Object.freeze({
     "0.74.0": {
         loader: createMinaCalc740,
         wasmFileName: "minaclac-74.0.wasm",
+        reason: null,
+        supportedKeycounts: COMMON_SUPPORTED_KEYCOUNTS,
+    },
+    "0.75.0": {
+        loader: createMinaCalc750,
+        wasmFileName: "minaclac-75.0.wasm",
         reason: null,
         supportedKeycounts: COMMON_SUPPORTED_KEYCOUNTS,
     },
@@ -117,7 +131,7 @@ export function resolveEtternaVersionLoaderForKeycount(value, keycount) {
     const resolved = resolveEtternaVersionLoader(value);
     const parsedKeycount = Number(keycount);
 
-    const shouldPreferNon4kStableVersion = parsedKeycount === 6 || parsedKeycount === 7;
+    const shouldPreferNon4kStableVersion = parsedKeycount !== 4;
     if (shouldPreferNon4kStableVersion
         && resolved.version !== NON_4K_ETTERNA_FALLBACK_VERSION
         && supportsEtternaKeycount(NON_4K_ETTERNA_FALLBACK_VERSION, parsedKeycount)) {

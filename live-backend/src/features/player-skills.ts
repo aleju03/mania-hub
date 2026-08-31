@@ -624,6 +624,11 @@ export interface PlayerSkillPlay {
   creator: string | null;
   version: string;
   coverUrl: string | null;
+  // The chart's osu! leaderboard status ("ranked", "loved", "graveyard", ...),
+  // lowercased, or null when this backend has never stored the beatmap row.
+  // Drives the ranked filter; unknown is not the same as unranked, so a null
+  // is kept rather than folded into either side.
+  beatmapStatus: string | null;
   keyCount: number;
   rating: number;
   overallRating: number;
@@ -646,13 +651,24 @@ export interface PlayerSkillPlay {
 
 export interface PlayerSkillPlaysPage {
   items: PlayerSkillPlay[];
+  /** How many plays the active filters leave, which is what `offset` pages. */
   total: number;
+  /** How many the bounded order cohort has before any filter. */
+  unfilteredTotal: number;
   limit: number;
   offset: number;
 }
 
+// The explorer deliberately follows osu!'s top-play window: each ordering is
+// a bounded 200-play cohort, paged or progressively revealed 50 at a time by
+// its callers. Filters narrow that cohort rather than pulling rank 201 in.
+export const PLAYER_SKILL_PLAYS_MAX = 200;
+
+// Overall is listable even though no skill tile opens it: the plays explorer
+// ranks a whole keymode by the rating the profile headline is, which is the
+// one axis a tile could never stand for.
 const PLAYER_SKILL_AXES = new Set<string>([
-  ...SKILL_RATING_SKILLSETS.filter((axis) => axis !== "Overall"),
+  ...SKILL_RATING_SKILLSETS,
   ...PLAYER_SKILL_PATTERN_AXES.map((axis) => `pattern:${axis}`),
 ]);
 
@@ -1595,19 +1611,137 @@ function missingRateVerdictPairs(
 // the same terms as the wife goal's OD8 assumption.
 const DAN_MIN_OD = 5.5;
 
+// 7K LN is the one ladder with a lower floor: JinJin's official 7K LN dan
+// courses are OD 5, so a 5.5 floor would turn away the very charts the ladder
+// is measured against.
+const DAN_MIN_OD_7K_LN = 5;
+
+/** The floor the play's own ladder holds it to. */
+function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
+  return keyCount === 7 && side === "ln" ? DAN_MIN_OD_7K_LN : DAN_MIN_OD;
+}
+
+/**
+ * Why a rated play credits no dan.
+ *
+ * Every one of these is a rule the estimate depends on, and each drops a play
+ * that the player did in fact set - so the explaining surfaces list the play
+ * with its reason rather than leaving a hole the reader has to guess at.
+ * `chart_rewritten` is the one class that never reaches here: DA/HO/IN/NR
+ * plays are refused a rating at all (scoreRewritesChart), so no stored play
+ * carries them and nothing downstream can name them.
+ */
+export type DanClearRejectReason =
+  | "chart_unanalyzed"
+  | "chart_ineligible"
+  | "low_od"
+  | "ez_windows"
+  | "no_accuracy"
+  | "no_chart_dan"
+  | "below_bar";
+
+/** One rated play that credited no dan, with the rule that stopped it. */
+export interface DanClearReject {
+  play: StoredPlaySsr;
+  reason: DanClearRejectReason;
+  /** The side it would have testified for, when the chart names one. */
+  side: "rc" | "ln" | null;
+  /** The chart's dan at the played rate, when it has one. */
+  chartDan: number | null;
+  chartDanLabel: string | null;
+  /** Only for below_bar: what it was judged on, and the bar it missed. */
+  accuracy: number | null;
+  bar: number | null;
+  /** Only for below_bar: the lowest accuracy that would still have credited. */
+  minAccuracy: number | null;
+  /** Only for low_od: the stored OD that failed the floor. */
+  od: number | null;
+}
+
+/** The dan a play would testify for at its own rate, before any accuracy gate. */
+interface DanClearTarget {
+  rawDan: number;
+  side: "rc" | "ln";
+  label: string | null;
+}
+
+/**
+ * Which dan a play is measured against, from the chart and the played rate.
+ *
+ * Split out of collectDanClears so a rejected play can still say what it was
+ * aiming at: naming the chart's dan is most of what makes a "does not count"
+ * row readable. Pure, and the branch order is the clear rule's own.
+ */
+function danClearTargetFor(
+  play: StoredPlaySsr,
+  info: ChartSkillInfo,
+  keyCount: number,
+  rateVerdicts: RateVerdictMap,
+): DanClearTarget | null {
+  const target = (rawDan: number | null, side: "rc" | "ln", label: string | null): DanClearTarget | null =>
+    rawDan == null ? null : { rawDan, side, label };
+  if (play.rate === 1 && info.lnRatio != null) {
+    const side = info.lnRatio >= lnPrimaryMinRatioFor(keyCount) ? "ln" : "rc";
+    return target(side === "ln" ? info.lnRawDan : info.rcRawDan, side, side === "ln" ? info.lnDanLabel : info.rcDanLabel);
+  }
+  if (play.rate === 1.5 && info.dtFamily != null) {
+    return target(info.dtRawDan, info.dtFamily, info.dtDanLabel);
+  }
+  if (play.rate === 0.75 && info.htFamily != null) {
+    // Credited what the chart is worth AT 0.75x, which is well under its 1.0x
+    // dan: slowing a chart down does not clear the chart it used to be.
+    return target(info.htRawDan, info.htFamily, info.htDanLabel);
+  }
+  // Every other rate in the 0.5x-2.0x band - a lazer speed_change, or a
+  // 1.5x/0.75x chart the sweeps never stored columns for - credits the
+  // dan_estimates verdict at the play's own rate, on the same terms.
+  const ratePercent = clearRatePercent(play.rate);
+  if (ratePercent == null) return null;
+  const verdict = rateVerdicts.get(rateDanVerdictKey(play.beatmapId, ratePercent));
+  return verdict ? target(verdict.rawDan, verdict.side, verdict.displayName ?? null) : null;
+}
+
 function collectDanClears(
   keyCount: number,
   plays: StoredPlaySsr[],
   scoresByIdentity: Map<string, OscScore>,
   infoByBeatmap: Map<number, ChartSkillInfo>,
   rateVerdicts: RateVerdictMap = new Map(),
+  // When given, every play this function turns away is appended here with the
+  // rule that turned it away. Left undefined by the verdict compute, which
+  // only wants the clears and should not pay to describe the rest.
+  rejects?: DanClearReject[],
 ): DanClearEvidence[] {
   const clears: DanClearEvidence[] = [];
+  const reject = (
+    play: StoredPlaySsr,
+    reason: DanClearRejectReason,
+    extra: Partial<Omit<DanClearReject, "play" | "reason">> = {},
+  ) => {
+    if (!rejects) return;
+    rejects.push({ play, reason, side: null, chartDan: null, chartDanLabel: null, accuracy: null, bar: null, minAccuracy: null, od: null, ...extra });
+  };
   for (const play of plays) {
     const info = infoByBeatmap.get(play.beatmapId);
-    if (!info) continue;
-    if (!info.danEligible) continue;
-    if (info.od != null && info.od < DAN_MIN_OD) continue;
+    if (!info) {
+      reject(play, "chart_unanalyzed");
+      continue;
+    }
+    // Resolved up front so every rejection below can name the dan the play was
+    // measured against, and so the OD floor knows which ladder it is guarding.
+    // Pure, so hoisting it changes nothing about the clears.
+    const target = danClearTargetFor(play, info, keyCount, rateVerdicts);
+    const aimed = target
+      ? { side: target.side, chartDan: target.rawDan, chartDanLabel: target.label }
+      : {};
+    if (!info.danEligible) {
+      reject(play, "chart_ineligible", aimed);
+      continue;
+    }
+    if (info.od != null && info.od < danMinOdFor(keyCount, target?.side ?? null)) {
+      reject(play, "low_od", { ...aimed, od: info.od });
+      continue;
+    }
     // Clear evidence rides on the stored play (retained plays outlive their
     // score payload); the live score object is the fallback for cache entries
     // written before the fields existed.
@@ -1616,9 +1750,15 @@ function collectDanClears(
     // not earned against the windows the bar assumes; no dan credit. The play
     // itself stays rated: the wife goal already derates it for the skill
     // rating.
-    if (play.ezWindows ?? (score != null && ezWindowScale(score) > 1)) continue;
+    if (play.ezWindows ?? (score != null && ezWindowScale(score) > 1)) {
+      reject(play, "ez_windows", aimed);
+      continue;
+    }
     const displayed = play.accuracy ?? (score ? getDisplayedAccuracy(score) : null);
-    if (typeof displayed !== "number") continue;
+    if (typeof displayed !== "number") {
+      reject(play, "no_accuracy", aimed);
+      continue;
+    }
     // Both currencies come off the judgement counts, so a bar written in one
     // of them means the same thing on stable and on lazer. The client's own
     // displayed accuracy is only the fallback for acc-only archived rows,
@@ -1629,7 +1769,10 @@ function collectDanClears(
     // accuracy is that currency even with no counts to recompute from.
     const isLazerPlay = stable != null && Math.abs(displayed - stable) > 1e-9;
     const push = (rawDan: number | null, side: "rc" | "ln", chartDanLabel: string | null) => {
-      if (rawDan == null) return;
+      if (rawDan == null) {
+        reject(play, "no_chart_dan", aimed);
+        return;
+      }
       const bar = danClearBarFor(side, keyCount, rawDan);
       let threshold = bar.accuracy;
       let accuracy: number;
@@ -1647,7 +1790,14 @@ function collectDanClears(
       // the converted 97.5%, so the credit window and the bonus headroom both
       // shift with it: the whole scale rides the converted bar, deliberately.
       const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount);
-      if (creditedDan == null) return;
+      if (creditedDan == null) {
+        // The bar is where a clear credits the chart's full dan, but a pass
+        // under it still credits a decayed dan down to the ladder's window
+        // edge, so the number this play actually missed is that floor.
+        const floor = Math.round((threshold - danCreditBelowBarWindowFor(side, keyCount)) * 1000) / 1000;
+        reject(play, "below_bar", { side, chartDan: rawDan, chartDanLabel, accuracy, bar: threshold, minAccuracy: floor });
+        return;
+      }
       clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold });
     };
     if (play.rate === 1 && info.lnRatio != null) {
@@ -1664,9 +1814,16 @@ function collectDanClears(
       // 1.5x/0.75x chart the sweeps never stored columns for - credits the
       // dan_estimates verdict at the play's own rate, on the same terms.
       const ratePercent = clearRatePercent(play.rate);
-      if (ratePercent == null) continue;
+      if (ratePercent == null) {
+        reject(play, "no_chart_dan", aimed);
+        continue;
+      }
       const verdict = rateVerdicts.get(rateDanVerdictKey(play.beatmapId, ratePercent));
-      if (verdict) push(verdict.rawDan, verdict.side, verdict.displayName ?? null);
+      if (verdict) {
+        push(verdict.rawDan, verdict.side, verdict.displayName ?? null);
+      } else {
+        reject(play, "no_chart_dan", aimed);
+      }
     }
   }
   return clears;
@@ -1678,8 +1835,9 @@ export function collectDanClearsForTest(
   plays: StoredPlaySsr[],
   infoByBeatmap: Map<number, ChartSkillInfo>,
   rateVerdicts: RateVerdictMap = new Map(),
+  rejects?: DanClearReject[],
 ): DanClearEvidence[] {
-  return collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts);
+  return collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts, rejects);
 }
 
 /** Test seam over one side's whole verdict, skillset dans and averaged headline. */
@@ -2766,16 +2924,18 @@ export async function getPlayerSkillPlays(
   userId: number,
   keyCount: number,
   axis: string,
-  options: { limit?: number; offset?: number } = {},
+  options: PlayerSkillPlaysOptions = {},
 ): Promise<PlayerSkillPlaysPage> {
-  const limit = Math.max(1, Math.min(50, Math.floor(Number(options.limit) || 50)));
+  const limit = Math.max(1, Math.min(PLAYER_SKILL_PLAYS_MAX, Math.floor(Number(options.limit) || 50)));
   const offset = Math.max(0, Math.min(5_000, Math.floor(Number(options.offset) || 0)));
+  const sort: PlayerSkillPlaysSort = options.sort === "recent" ? "recent" : "rating";
+  const empty: PlayerSkillPlaysPage = { items: [], total: 0, unfilteredTotal: 0, limit, offset };
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0 || !isPlayerSkillAxis(axis)) {
-    return { items: [], total: 0, limit, offset };
+    return empty;
   }
 
   const storedPlays = await loadLatestStoredPlayerSkillPlays(db, userId);
-  if (!storedPlays) return { items: [], total: 0, limit, offset };
+  if (!storedPlays) return empty;
   const patternId = axis.startsWith("pattern:") ? axis.slice("pattern:".length) : null;
   const candidates = storedPlays
     .flatMap((play) => {
@@ -2790,17 +2950,148 @@ export async function getPlayerSkillPlays(
   // (loadChartSkillInfo), so this list and the LN rating above it are the same
   // set of plays. Plays stored before the gate keep their old tags until the
   // profile's next recompute.
-  const matches = candidates
-    .sort((left, right) =>
-      right.rating - left.rating
-      || Number(right.play.pp ?? 0) - Number(left.play.pp ?? 0)
-      || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
-      || left.play.beatmapId - right.play.beatmapId);
+  const ranked = candidates.sort(comparePlayerSkillPlays(sort));
+  const cohort = ranked.slice(0, PLAYER_SKILL_PLAYS_MAX);
+
+  // The active order chooses the osu-style 200-play cohort first. Filters then
+  // narrow that fixed cohort rather than pulling rank 201 in, so the explorer
+  // can cache it and make every filtering control local and immediate. The
+  // ranked filter needs a status for the cohort rather than for the page alone,
+  // which is why it reads its own narrow column before the metadata join.
+  const statuses = options.hideRanked
+    ? await readPlayerSkillPlayStatuses(db, cohort.map(({ play }) => play.beatmapId))
+    : null;
+  const matches = filterPlayerSkillPlays(cohort, {
+    ...(statuses ? { statuses } : {}),
+    ...(options.maxPerChart != null ? { maxPerChart: options.maxPerChart } : {}),
+  });
 
   const page = matches.slice(offset, offset + limit);
   const metadata = await readPlayerSkillPlayMetadata(db, page.map(({ play }) => play.beatmapId));
   const items = page.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata));
-  return { items, total: matches.length, limit, offset };
+  return { items, total: matches.length, unfilteredTotal: cohort.length, limit, offset };
+}
+
+export type PlayerSkillPlaysSort = "rating" | "recent";
+
+export interface PlayerSkillPlaysOptions {
+  limit?: number;
+  offset?: number;
+  /** "recent" reorders the same set by when each play was set, newest first. */
+  sort?: PlayerSkillPlaysSort;
+  /** Drop plays on charts the osu! leaderboards call ranked/approved/qualified. */
+  hideRanked?: boolean;
+  /** Keep at most this many plays per beatmap, in the active order. */
+  maxPerChart?: number;
+}
+
+/**
+ * The list order, over the same set either way.
+ *
+ * A "recent" read is not a play feed: the stored set keeps one best play per
+ * chart and rate (the compute keys its candidates `beatmapId:rate`), so this
+ * is "the rated plays, newest first" and never "every attempt". A play with no
+ * stored timestamp sorts last rather than to the top, where an empty string
+ * would otherwise put it.
+ */
+export function comparePlayerSkillPlays(
+  sort: PlayerSkillPlaysSort,
+): (left: { play: StoredPlaySsr; rating: number }, right: { play: StoredPlaySsr; rating: number }) => number {
+  if (sort === "recent") {
+    return (left, right) => {
+      const leftAt = typeof left.play.endedAt === "string" ? left.play.endedAt : "";
+      const rightAt = typeof right.play.endedAt === "string" ? right.play.endedAt : "";
+      if (leftAt !== rightAt) {
+        if (leftAt === "") return 1;
+        if (rightAt === "") return -1;
+        return rightAt.localeCompare(leftAt);
+      }
+      return right.rating - left.rating || left.play.beatmapId - right.play.beatmapId;
+    };
+  }
+  return (left, right) =>
+    right.rating - left.rating
+    || Number(right.play.pp ?? 0) - Number(left.play.pp ?? 0)
+    || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
+    || left.play.beatmapId - right.play.beatmapId;
+}
+
+/**
+ * The ranked filter and the per-chart cap, applied in the list's own order.
+ *
+ * The cap keeps the FIRST n plays of each chart, so which rates survive is
+ * whatever the active sort put on top: the best n on a rating list, the newest
+ * n on a recency list. A chart this backend has never stored a beatmap row for
+ * has an unknown status, and unknown is kept - hiding it would quietly drop
+ * every chart the catalog has not caught up with, which is most of the
+ * graveyard the ranked filter exists to leave behind.
+ *
+ * Exported for the tests and for the dan list, which filters the clears it
+ * already holds rather than asking for a narrower read.
+ */
+export function filterPlayerSkillPlays<T extends { play: StoredPlaySsr }>(
+  plays: T[],
+  options: { statuses?: Map<number, string | null>; maxPerChart?: number } = {},
+): T[] {
+  const maxPerChart = Number.isFinite(options.maxPerChart) && Number(options.maxPerChart) > 0
+    ? Math.floor(Number(options.maxPerChart))
+    : null;
+  if (!options.statuses && maxPerChart == null) return plays;
+  const seenPerChart = new Map<number, number>();
+  const kept: T[] = [];
+  for (const entry of plays) {
+    if (options.statuses && isRankedBeatmapStatus(options.statuses.get(entry.play.beatmapId) ?? null)) continue;
+    if (maxPerChart != null) {
+      const seen = seenPerChart.get(entry.play.beatmapId) ?? 0;
+      if (seen >= maxPerChart) continue;
+      seenPerChart.set(entry.play.beatmapId, seen + 1);
+    }
+    kept.push(entry);
+  }
+  return kept;
+}
+
+// The statuses that put a chart on the official leaderboards, which is what
+// "hide ranked" means to a player. Loved is not one of them (no pp, and the
+// dan tables live there), and neither is anything unsubmitted.
+const RANKED_BEATMAP_STATUSES = new Set(["ranked", "approved", "qualified"]);
+
+export function isRankedBeatmapStatus(status: string | null): boolean {
+  return status != null && RANKED_BEATMAP_STATUSES.has(status);
+}
+
+/**
+ * The osu! status of a chart, normalized. Both spellings are in the wild: the
+ * v2 API sends the word, older rows kept the integer enum.
+ */
+export function readBeatmapStatus(value: unknown): string | null {
+  if (typeof value === "string" && value.trim() !== "") return value.trim().toLowerCase();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BEATMAP_STATUS_BY_ENUM.get(Math.trunc(value)) ?? null;
+  }
+  return null;
+}
+
+const BEATMAP_STATUS_BY_ENUM = new Map<number, string>([
+  [-2, "graveyard"],
+  [-1, "wip"],
+  [0, "pending"],
+  [1, "ranked"],
+  [2, "approved"],
+  [3, "qualified"],
+  [4, "loved"],
+]);
+
+/** Status alone for a candidate set, without the covers and title join. */
+async function readPlayerSkillPlayStatuses(db: Db, beatmapIds: number[]): Promise<Map<number, string | null>> {
+  const rows = await selectRowsByIntegerSet(db, "select beatmap_id, status from beatmaps where beatmap_id in", beatmapIds);
+  const statuses = new Map<number, string | null>();
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+    statuses.set(beatmapId, readBeatmapStatus(row.status));
+  }
+  return statuses;
 }
 
 const RATE_MOD_ACRONYMS = new Set(["DT", "NC", "HT", "DC"]);
@@ -2824,6 +3115,7 @@ function buildPlayerSkillPlay(
     creator: map?.creator ?? null,
     version: map?.version ?? `${keyCount}K`,
     coverUrl: map?.coverUrl ?? null,
+    beatmapStatus: map?.status ?? null,
     keyCount,
     rating: Math.round(rating * 100) / 100,
     overallRating: Math.round(Number(play.values?.Overall ?? 0) * 100) / 100,
@@ -2855,6 +3147,8 @@ export interface PlayerSkillDanEvidencePlay {
   creditedDan: number;
   creditedDanLabel: string;
   clearAccuracy: number;
+  /** The skillset tiles this clear is filed under; two when the rules share it. */
+  skillsets: string[];
   countsTowardDan: boolean;
   /**
    * The stray rule left this clear out of the average behind the number above
@@ -2909,6 +3203,32 @@ export interface PlayerSkillDanCourseEvidence {
   isLazer: boolean | null;
 }
 
+/**
+ * One rated play that credits this side no dan, as the evidence surface shows
+ * it: the play, what it was aiming at, and the rule that stopped it.
+ *
+ * These are deliberately not clears and are never counted anywhere - listing
+ * them answers "why is this play missing", which is otherwise unanswerable
+ * from the outside.
+ */
+export interface PlayerSkillDanRejectedPlay {
+  play: PlayerSkillPlay;
+  reason: DanClearRejectReason;
+  /** Null when the chart names no side at this rate, so it shows on both. */
+  side: "rc" | "ln" | null;
+  chartDan: number | null;
+  chartDanLabel: string | null;
+  /** Only set for below_bar: what it was judged on, and the bar it missed. */
+  clearAccuracy: number | null;
+  bar: number | null;
+  /** Only set for below_bar: the lowest accuracy that would still have credited. */
+  minAccuracy: number | null;
+  /** Only set for low_od: the stored OD that failed the floor. */
+  od: number | null;
+  /** The skillset tiles it would have been filed under, had it counted. */
+  skillsets: string[];
+}
+
 export interface PlayerSkillDanEvidence {
   side: "rc" | "ln";
   keyCount: number;
@@ -2925,7 +3245,19 @@ export interface PlayerSkillDanEvidence {
   skillsets: PlayerSkillDanSkillsetEvidence[];
   /** Present only when a course clear set this side's headline. */
   courseClear: PlayerSkillDanCourseEvidence | null;
+  /** Present only when the read asked for it (`includeRejected`). */
+  rejected?: PlayerSkillDanRejectedPlay[];
+  /** How many rejected plays exist for this side, before the page cap. */
+  totalRejected?: number;
 }
+
+// The OD floor a rejected play reports, so the surface can name the number a
+// chart missed rather than just the rule. 7K LN sits at DAN_MIN_OD_7K_LN.
+export const DAN_MIN_OD_FLOOR = DAN_MIN_OD;
+
+// Per-request ceiling on the rejected list. Sized like the clears page: it is
+// an explanation, not a second leaderboard.
+export const DAN_EVIDENCE_MAX_REJECTED = 200;
 
 // Every play the average actually reads must ship: each list averages its best
 // DAN_CLEAR_AVERAGE_WINDOW clears, so a shorter cap would hide clears that set
@@ -3238,6 +3570,34 @@ interface GroupedDanClears {
  * on-demand evidence window so "your jack dan" is the same number on the
  * leaderboard and in the window that explains it.
  */
+/**
+ * The skillset tiles a play is filed under, in filing order.
+ *
+ * Pure over the play and its chart, with no reference to the clear's credit,
+ * which is what lets the same rule name the tile on a play that credited
+ * nothing. The first entry is the primary on 4K's shared tiles; a chart the
+ * rules deliberately share sits in two, and the surface that prints them says
+ * so ("Speed/Tech") rather than picking one.
+ *
+ * Everything that names a tile goes through here, so the grouping behind the
+ * per-skill dans and the label on a row can never disagree.
+ */
+function danSkillsetBucketsForPlay(
+  buckets: DanSkillsetBucket[],
+  play: StoredPlaySsr,
+  chart: ChartSkillInfo | undefined,
+): DanSkillsetBucket[] {
+  const topSkillset = bucketingSkillset(
+    play.values,
+    chart?.lengthSeconds ?? null,
+    play.rate,
+    chart?.techScore ?? 0,
+    chart?.jackShare ?? null,
+    chart?.handstreamCluster === true,
+  );
+  return bucketsForClear(buckets, topSkillset, chart, play.values, play.rate);
+}
+
 function groupDanClearsBySkillset(
   keyCount: number,
   side: "rc" | "ln",
@@ -3253,15 +3613,7 @@ function groupDanClearsBySkillset(
   }
   for (const clear of clears) {
     const chart = infoByBeatmap.get(clear.play.beatmapId);
-    const topSkillset = bucketingSkillset(
-      clear.play.values,
-      chart?.lengthSeconds ?? null,
-      clear.play.rate,
-      chart?.techScore ?? 0,
-      chart?.jackShare ?? null,
-      chart?.handstreamCluster === true,
-    );
-    const filed = bucketsForClear(buckets, topSkillset, chart, clear.play.values, clear.play.rate);
+    const filed = danSkillsetBucketsForPlay(buckets, clear.play, chart);
     filed.forEach((bucket, index) => {
       byBucket.get(bucket.id)!.push(clear);
       // Tag keymodes (6K/7K) overlap by analyzer tag rather than by a shared
@@ -3298,7 +3650,14 @@ export async function getPlayerSkillDanEvidence(
   // under the default is ignored so a read can only widen the page the average
   // already ships; `clearsOffset` starts the page partway down the same
   // ordering, leaving every other field of the payload as the full read.
-  options: { maxClears?: number; clearsOffset?: number } = {},
+  options: {
+    maxClears?: number;
+    clearsOffset?: number;
+    includeRejected?: boolean;
+    rejectedLimit?: number;
+    /** Orders the returned play pages only; the dan calculation stays best-first. */
+    sort?: PlayerSkillPlaysSort;
+  } = {},
 ): Promise<PlayerSkillDanEvidence | null> {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
   const storedPlays = await loadLatestStoredPlayerSkillPlays(db, userId);
@@ -3315,12 +3674,41 @@ export async function getPlayerSkillDanEvidence(
       await enqueueRateDanEstimate(queue, pair.beatmapId, pair.ratePercent).catch(() => {});
     }
   }
-  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts)
+  // Collected in the same pass as the clears so the two lists cannot disagree
+  // about which rule a play fell to. The array is only handed over when the
+  // read asks for it; without it collectDanClears does no extra work.
+  const rejectSink: DanClearReject[] | undefined = options.includeRejected ? [] : undefined;
+  const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts, rejectSink)
     .filter((clear) => clear.side === side)
     .sort((left, right) =>
       right.creditedDan - left.creditedDan
       || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
       || left.play.beatmapId - right.play.beatmapId);
+  // A play whose chart names no side at this rate cannot be filed under one,
+  // so it shows on both rather than vanishing from the surface that exists to
+  // account for it.
+  const rejectedForSide = (rejectSink ?? [])
+    .filter((entry) => entry.side == null || entry.side === side)
+    .sort((left, right) =>
+      (right.chartDan ?? -1) - (left.chartDan ?? -1)
+      || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
+      || left.play.beatmapId - right.play.beatmapId);
+  const rejectedForPage = options.sort === "recent"
+    ? [...rejectedForSide].sort((left, right) => {
+      const leftAt = typeof left.play.endedAt === "string" ? left.play.endedAt : "";
+      const rightAt = typeof right.play.endedAt === "string" ? right.play.endedAt : "";
+      if (leftAt !== rightAt) {
+        if (leftAt === "") return 1;
+        if (rightAt === "") return -1;
+        return rightAt.localeCompare(leftAt);
+      }
+      return (right.chartDan ?? -1) - (left.chartDan ?? -1) || left.play.beatmapId - right.play.beatmapId;
+    })
+    : rejectedForSide;
+  const rejectedPage = rejectedForPage.slice(0, Math.max(1, Math.min(
+    Math.floor(Number(options.rejectedLimit) || DAN_EVIDENCE_MAX_REJECTED),
+    DAN_EVIDENCE_MAX_REJECTED,
+  )));
   const courseClears = await loadPlayerDanCourseClears(db, userId);
   const dan = danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
   // Everything at or above the estimate "backs" it, matching the stored
@@ -3379,11 +3767,24 @@ export async function getPlayerSkillDanEvidence(
     DAN_EVIDENCE_PAGE_MAX_CLEARS,
   );
   const clearsOffset = Math.max(Math.floor(options.clearsOffset ?? 0), 0);
-  const topClears = clears.slice(clearsOffset, clearsOffset + maxClears);
+  const clearsForPage = options.sort === "recent"
+    ? [...clears].sort((left, right) => {
+      const leftAt = typeof left.play.endedAt === "string" ? left.play.endedAt : "";
+      const rightAt = typeof right.play.endedAt === "string" ? right.play.endedAt : "";
+      if (leftAt !== rightAt) {
+        if (leftAt === "") return 1;
+        if (rightAt === "") return -1;
+        return rightAt.localeCompare(leftAt);
+      }
+      return right.creditedDan - left.creditedDan || left.play.beatmapId - right.play.beatmapId;
+    })
+    : clears;
+  const topClears = clearsForPage.slice(clearsOffset, clearsOffset + maxClears);
   const courseSource = dan?.courseClear ? bestDanCourseClear(courseClears, keyCount, side) : null;
   const evidenceBeatmapIds = [
     ...(courseSource ? [courseSource.beatmapId] : []),
     ...topClears.map((clear) => clear.play.beatmapId),
+    ...rejectedPage.map((entry) => entry.play.beatmapId),
     ...[...bySkillset.byBucket.values()].flatMap((list) => list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => clear.play.beatmapId)),
   ];
   const metadata = await readPlayerSkillPlayMetadata(db, evidenceBeatmapIds);
@@ -3402,6 +3803,7 @@ export async function getPlayerSkillDanEvidence(
       // chart's exact words too; only a real credit shift re-bands.
       creditedDanLabel: clear.creditedDan === clear.chartDan ? chartDanLabel : danLabelFor(clear.creditedDan, side, keyCount),
       clearAccuracy: clear.accuracy,
+      skillsets: danSkillsetBucketsForPlay(buckets, clear.play, infoByBeatmap.get(clear.play.beatmapId)).map((bucket) => bucket.id),
       countsTowardDan: threshold != null && clear.creditedDan >= threshold,
       ...((section === ALL_CLEARS_SECTION ? ignoredInAllClears.has(clear) : ignoredBySection.get(section)?.has(clear) === true)
         ? { ignoredAsStray: true }
@@ -3436,6 +3838,27 @@ export async function getPlayerSkillDanEvidence(
     clears: topClears.map((clear) => toEvidencePlay(clear)),
     skillsets,
     courseClear: courseSource ? toCourseEvidence(courseSource, side, keyCount, metadata) : null,
+    ...(rejectSink
+      ? {
+        totalRejected: rejectedForSide.length,
+        rejected: rejectedPage.map((entry): PlayerSkillDanRejectedPlay => ({
+          // Rated at Overall, like every other row here: a rejected play has
+          // no dan credit to print in that column, so its own skill rating is
+          // the only number it can honestly carry.
+          play: buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata),
+          reason: entry.reason,
+          side: entry.side,
+          chartDan: entry.chartDan == null ? null : Math.round(entry.chartDan * 100) / 100,
+          chartDanLabel: entry.chartDanLabel
+            ?? (entry.chartDan != null && entry.side != null ? chartDanLabelFor(entry.chartDan, entry.side, keyCount) : null),
+          clearAccuracy: entry.accuracy,
+          bar: entry.bar,
+          minAccuracy: entry.minAccuracy,
+          od: entry.od,
+          skillsets: danSkillsetBucketsForPlay(buckets, entry.play, infoByBeatmap.get(entry.play.beatmapId)).map((bucket) => bucket.id),
+        })),
+      }
+      : {}),
   };
 }
 
@@ -4111,12 +4534,13 @@ interface PlayerSkillPlayMetadata {
   creator: string | null;
   version: string;
   coverUrl: string | null;
+  status: string | null;
 }
 
 async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promise<Map<number, PlayerSkillPlayMetadata>> {
   const rows = await selectRowsByIntegerSet(
     db,
-    `select b.beatmap_id, b.beatmapset_id, b.version, s.title, s.artist, s.creator, s.covers_json
+    `select b.beatmap_id, b.beatmapset_id, b.version, b.status, s.title, s.artist, s.creator, s.covers_json
      from beatmaps b left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
      where b.beatmap_id in`,
     beatmapIds,
@@ -4139,6 +4563,7 @@ async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promis
       creator: typeof row.creator === "string" && row.creator ? row.creator : null,
       version: typeof row.version === "string" && row.version ? row.version : "Unknown difficulty",
       coverUrl: coverUrl ?? (beatmapsetId ? `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg` : null),
+      status: readBeatmapStatus(row.status),
     });
   }
   return metadata;
@@ -4562,7 +4987,13 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // split charts can contribute to two tiles. The chart-side motion sweep must
 // finish before this pass starts, or the fallback filing would be stamped as
 // current for rows encountered before their charts were backfilled.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v20";
+// v21: 7K LN accepts the OD 5 charts its official JinJin courses use. Stored
+// verdicts made under the old 5.5 floor omit those clears, so every row carrying
+// 7K evidence must be folded again before badges and leaderboards agree with
+// the evidence read. The existing full scope is intentional: it is already a
+// cheap plays_json derivation and avoids teaching the historical two-scope
+// machinery a one-off third shape.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v21";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

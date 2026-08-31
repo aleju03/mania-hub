@@ -5,7 +5,9 @@ import {
 } from "./versions/index.js";
 
 const DEFAULT_SCORE_GOAL = 0.93;
-const SUPPORTED_KEYS = new Set([4, 6, 7]);
+// 4..18, matching the n-key FFI gate of the version every non-4K keycount
+// is pinned to (see versions/index.js).
+const SUPPORTED_KEYS = new Set(Array.from({ length: 15 }, (_, i) => i + 4));
 const OFFICIAL_OUTPUT_ORDER = [
     "Overall",
     "Stream",

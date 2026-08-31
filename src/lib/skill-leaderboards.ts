@@ -10,8 +10,15 @@
 export type LeaderboardTab = "pp" | "skills" | "dan";
 export type DanSide = "rc" | "ln";
 
-export const LEADERBOARD_KEY_COUNTS = [4, 7, 6] as const;
+// Every keymode MinaCalc rates. Keep this in numeric order: unlike the three
+// dan ladders, the MSD picker is a continuous range and is easiest to scan as
+// one. The control scrolls horizontally on narrow screens.
+export const LEADERBOARD_KEY_COUNTS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 export type LeaderboardKeyCount = (typeof LEADERBOARD_KEY_COUNTS)[number];
+
+// Dan estimates only exist for these community ladders. This list stays
+// separate so expanding MSD support never exposes empty dan boards.
+export const DAN_LEADERBOARD_KEY_COUNTS = [4, 7, 6] as const satisfies readonly LeaderboardKeyCount[];
 
 export const LEADERBOARD_PAGE_SIZE = 50;
 
@@ -34,6 +41,13 @@ export function parseLeaderboardTab(value: unknown): LeaderboardTab {
 export function parseLeaderboardKeys(value: unknown): LeaderboardKeyCount {
   const keys = Number(value);
   return (LEADERBOARD_KEY_COUNTS as readonly number[]).includes(keys)
+    ? (keys as LeaderboardKeyCount)
+    : DEFAULT_LEADERBOARD_KEYS;
+}
+
+export function parseDanLeaderboardKeys(value: unknown): LeaderboardKeyCount {
+  const keys = Number(value);
+  return (DAN_LEADERBOARD_KEY_COUNTS as readonly number[]).includes(keys)
     ? (keys as LeaderboardKeyCount)
     : DEFAULT_LEADERBOARD_KEYS;
 }
@@ -108,6 +122,9 @@ export interface SkillLeaderboardSnapshot extends LeaderboardSnapshotBase {
   axis: string;
   ranking: SkillLeaderboardEntry[];
   axes: LeaderboardAxisInfo[];
+  // Population-driven keymode picker. Optional only for compatibility with a
+  // backend process still finishing a rolling deploy.
+  keyCounts?: LeaderboardKeyCount[];
   // Per axis, not per board: false means this axis has no population median,
   // so its ratings are raw and will not match the profile page. Dan snapshots
   // carry no such flag, a dan is not shrunk at all.

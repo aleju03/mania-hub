@@ -5,7 +5,7 @@ import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
 import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores, ProfileUserSuppressedError } from "../../features/player-profiles.js";
 import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../features/keymode-pp.js";
 import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
-import { DAN_EVIDENCE_PAGE_MAX_CLEARS, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
+import { DAN_EVIDENCE_MAX_REJECTED, DAN_EVIDENCE_PAGE_MAX_CLEARS, PLAYER_SKILL_PLAYS_MAX, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
@@ -154,9 +154,17 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         sendJson(req, res, ctx, 400, { error: "invalid_skill_axis" });
         return true;
       }
+      // `maxPerChart` caps how many rates of the same chart the bounded cohort
+      // may repeat; 0 (the default) means no cap. The explorer fetches the
+      // unfiltered cohort and narrows it locally, while the older modal keeps
+      // using these query controls and ordinary endpoint paging.
+      const maxPerChart = clampInteger(url.searchParams.get("maxPerChart"), 0, 50, 0);
       const page = await getPlayerSkillPlays(ctx.db, userId, keyCount, axis, {
-        limit: clampInteger(url.searchParams.get("limit"), 1, 50, 50),
+        limit: clampInteger(url.searchParams.get("limit"), 1, PLAYER_SKILL_PLAYS_MAX, 50),
         offset: clampInteger(url.searchParams.get("offset"), 0, 5_000, 0),
+        sort: url.searchParams.get("sort") === "recent" ? "recent" : "rating",
+        hideRanked: url.searchParams.get("hideRanked") === "1",
+        ...(maxPerChart > 0 ? { maxPerChart } : {}),
       });
       res.setHeader("cache-control", "public, max-age=60");
       sendJson(req, res, ctx, 200, page);
@@ -200,13 +208,23 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       // (the modal's "load more"); the feature clamps both to its own ceilings.
       const limit = clampInteger(url.searchParams.get("limit"), 1, DAN_EVIDENCE_PAGE_MAX_CLEARS, 0);
       const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
+      // The rejected list is opt-in: it describes every rated play the clear
+      // rules turned away, which the ordinary breakdown read has no use for.
+      const includeRejected = url.searchParams.get("rejected") === "1";
+      const rejectedLimit = clampInteger(url.searchParams.get("rejectedLimit"), 1, DAN_EVIDENCE_MAX_REJECTED, 0);
       const evidence = await getPlayerSkillDanEvidence(
         ctx.db,
         userId,
         keyCount,
         side,
         ctx.serveWriteQueue ?? ctx.queue,
-        { ...(limit > 0 ? { maxClears: limit } : {}), clearsOffset: offset },
+        {
+          ...(limit > 0 ? { maxClears: limit } : {}),
+          clearsOffset: offset,
+          ...(includeRejected ? { includeRejected } : {}),
+          ...(includeRejected && rejectedLimit > 0 ? { rejectedLimit } : {}),
+          sort: url.searchParams.get("sort") === "recent" ? "recent" : "rating",
+        },
       );
       if (!evidence) {
         // A first-ever skill compute has no persisted evidence to serve yet.

@@ -5,7 +5,7 @@
    apart, an embed either freezes or re-rasterizes on every profile view. */
 import { describe, expect, it } from "vitest";
 
-import { etagMatches, signatureCacheKey } from "./api/signature/$token/$variant";
+import { etagMatches, signatureCacheKey, SIGNATURE_CACHE_HEADER } from "./api/signature/$token/$variant";
 import { signatureImageDigest } from "../lib/r2-cache";
 import { SIGNATURE_RENDER_VERSION } from "../lib/signature-shared";
 
@@ -65,5 +65,26 @@ describe("etagMatches", () => {
      under a tag that merely starts the same way. */
   it("does not match a prefix of the tag", () => {
     expect(etagMatches('"0123456789abcdef"', etag)).toBe(false);
+  });
+});
+
+describe("SIGNATURE_CACHE_HEADER", () => {
+  it("gives the edge a five minute copy", () => {
+    expect(SIGNATURE_CACHE_HEADER).toContain("max-age=300");
+  });
+
+  /* The trap this header keeps stepping around: RFC 9111 gives `s-maxage` the
+     semantics of `proxy-revalidate`, so pairing it with stale-while-revalidate
+     means the edge may never serve the stale copy - Cloudflare ignores the
+     directive outright. The two must not appear together, and the symptom if
+     they do is invisible: every expiry silently becomes a blocking origin
+     fetch for whoever arrives first. */
+  it("does not pair s-maxage with stale-while-revalidate", () => {
+    expect(SIGNATURE_CACHE_HEADER).toContain("stale-while-revalidate=");
+    expect(SIGNATURE_CACHE_HEADER).not.toContain("s-maxage");
+  });
+
+  it("keeps serving a render through an origin outage", () => {
+    expect(SIGNATURE_CACHE_HEADER).toContain("stale-if-error=");
   });
 });

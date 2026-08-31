@@ -817,6 +817,10 @@ msgstr "{ariaLabel} 最小值"
 msgid "{ariaLabel} range"
 msgstr "{ariaLabel}区间"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "{cap} rates per chart"
+msgstr "每张谱面 {cap} 个倍速"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "{caption} - click to play"
 msgstr "{caption}，点击播放"
@@ -1003,6 +1007,7 @@ msgstr "{keys}K 缩略图"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} 段位"
@@ -1188,6 +1193,10 @@ msgstr "{playerName} 的回放已加载，但对应谱面不在 osu! 上(未提�
 msgid "{playerName}'s replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
 msgstr "{playerName} 的回放已加载，但现在无法下载 {mapLabel} 的谱面文件。"
 
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{plays} play"
+#~ msgstr "{plays} 次游玩"
+
 #: src/lib/streak-game.ts
 #: src/routes/rankings.tsx
 msgid "{plays} plays"
@@ -1350,6 +1359,10 @@ msgstr "{username} maniacard"
 msgid "{username}'s {sideLabel} dan estimate"
 msgstr "{username} 的 {sideLabel}段位估算"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "{username}'s rated {axisLabel} plays"
+msgstr "{username} 的 {axisLabel} 评分成绩"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top {label} plays"
 msgstr "{username} 的 {label} 最佳成绩"
@@ -1357,6 +1370,10 @@ msgstr "{username} 的 {label} 最佳成绩"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top <0>{label}</0> plays"
 msgstr "{username} 的 <0>{label}</0> 最佳成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "{value} rates per chart"
+#~ msgstr "每张谱面 {value} 个倍速"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{viewCountLabel} views"
@@ -1588,6 +1605,10 @@ msgstr "0 小时"
 msgid "1 person has your card"
 msgstr "有 1 人持有你的卡片"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "1 rate per chart"
+msgstr "每张谱面 1 个倍速"
+
 #: src/routes/report.tsx
 msgid "1 screenshot"
 msgstr "1 张截图"
@@ -1764,6 +1785,10 @@ msgstr "96%，1 段以下的 Normal Kyu 区间是 95%"
 msgid "A {0} chart, credited as {1} at this accuracy"
 msgstr "谱面为 {0}，按此准确率计为 {1}"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "A {chart} chart, credited as {credit} at this accuracy"
+msgstr "谱面为 {chart}，按此准确率计为 {credit}"
+
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
@@ -1923,6 +1948,7 @@ msgid "Account menu"
 msgstr "账号菜单"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "准确率"
@@ -2162,6 +2188,7 @@ msgid "all"
 msgstr "全部"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
@@ -2718,6 +2745,10 @@ msgstr "低于决定估算的计入段位"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
+msgstr "最佳"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Best"
 msgstr "最佳"
 
 #: src/components/packs/StreakGame.tsx
@@ -3673,10 +3704,12 @@ msgstr "无法加载卡包统计。"
 msgid "Could not load the showcases."
 msgstr "无法加载展示柜。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays"
 msgstr "无法加载这些成绩"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays."
 msgstr "无法加载这些成绩。"
@@ -4128,6 +4161,10 @@ msgstr "段位估计：{0}（{1}）"
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 #~ msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的段位通过记录。请当作大致排序看待，而不是正式排名。"
 
+#: src/routes/player/$username.tsx
+msgid "Dan plays"
+msgstr "段位成绩"
+
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
 msgstr "段位评定"
@@ -4370,6 +4407,60 @@ msgstr "{hidden} 的 Ranked 分数比 {shown} 多还是少？"
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "{hidden} 的游戏时长比 {shown} 多还是少？"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "does not count"
+msgstr "不计入"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan yet: the chart has not been analyzed."
+msgstr "暂不计入段位：该谱面尚未分析。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
+msgstr "不计入段位：Easy 放宽了所有判定区间，准确率并非在段位通过所要求的判定下取得。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the accuracy is under the pass bar."
+msgstr "不计入段位：准确率低于通过线。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
+msgstr "不计入段位：该谱面在此倍速下没有段位评级。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart's hit windows are too forgiving to prove a level."
+msgstr "不计入段位：该谱面的判定区间过于宽松，无法证明段位水平。"
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart's OD is {0}, and hit windows that forgiving cannot prove a level."
+msgstr "不计入段位：该谱面的 OD 为 {0}，这样宽松的判定区间无法证明段位水平。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
+msgstr "不计入段位：该谱面的构成方式无法从通过成绩中读出段位水平。"
+
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
+msgstr "不计入段位：此次通过需要 {0} 的准确率，实际为 {1}。"
+
+#. placeholder {0}: formatAccuracy(minAccuracy)
+#. placeholder {1}: formatAccuracy(bar)
+#. placeholder {2}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+msgstr "不计入段位：此次通过需要 {0} 才能获得任何段位（通过线为 {1}），实际为 {2}。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
+msgstr "不计入段位：该成绩的判定数据已丢失，无法计算准确率。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan."
+msgstr "不计入段位。"
 
 #: src/routes/farm-helper.tsx
 msgid "done"
@@ -4762,6 +4853,10 @@ msgstr "每个卡包都给 {PACK_OPEN_SHARD_REWARD} 个碎片。回收重复卡�
 #: src/routes/dan-estimates.tsx
 msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
 msgstr "每一次达标通过都会落到四个技能中的一个，而整个估算就是用这四个搭起来的。4K 这边是叠、技、速度和耐力，取自成绩本身的 MSD 技能项评分，通常按谱面上最强的那一项归类：叠（JackSpeed 和 Chordjack）、技（Technical 和 Jumpstream）、速度（Stream）、耐力（Handstream 和 Stamina）。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Every rate of a chart"
+msgstr "谱面的所有倍速"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -5429,7 +5524,7 @@ msgstr "渐变"
 msgid "Gradient text"
 msgstr "渐变文字"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "graveyard"
 msgstr "坟场"
 
@@ -5534,9 +5629,15 @@ msgstr "已从你的推荐中隐藏，直到你通关或在上面打出成绩"
 msgid "Hidden list ({0})"
 msgstr "隐藏列表（{0}）"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide"
 msgstr "隐藏"
+
+#. placeholder {0}: mode.keyCount
+#: src/routes/player/$username.tsx
+#~ msgid "Hide {0}K"
+#~ msgstr "隐藏 {0}K"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
@@ -5546,6 +5647,18 @@ msgstr "对其他人隐藏，而不是显示出来却进不去"
 msgid "Hide players"
 msgstr "隐藏玩家"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on ranked, approved and qualified charts"
+msgstr "隐藏上架、approved 和 qualified 谱面上的成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide plays that don't count"
+#~ msgstr "隐藏不计入的成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide ranked maps"
+#~ msgstr "隐藏上架谱面"
+
 #. placeholder {0}: section.label
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
@@ -5554,6 +5667,10 @@ msgstr "隐藏 {0} 的通过记录"
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
 msgstr "收起说明"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide the plays the dan rules turned away"
+msgstr "隐藏被段位规则排除的成绩"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
@@ -5709,6 +5826,14 @@ msgstr "有多少与你水平相近的玩家在刷它"
 #: src/routes/farm-helper.tsx
 msgid "how many players near you have it"
 msgstr "有多少与你水平相近的玩家打过它"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "How many plays of the same chart the list may repeat"
+msgstr "同一张谱面在列表中最多重复几次成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "How many plays of the same chart the list may repeat. Click to change."
+#~ msgstr "同一张谱面在列表中最多重复几次成绩。点击可切换。"
 
 #: src/routes/dan-estimates.tsx
 msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
@@ -6165,6 +6290,7 @@ msgstr "按键会播放音符的打击音，和游戏里一样。Miss 会触发�
 msgid "Key Split"
 msgstr "键数分布"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Keymode"
@@ -6505,6 +6631,7 @@ msgstr "实时更新已开启"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
@@ -6728,6 +6855,7 @@ msgstr "加载中…"
 msgid "Loading..."
 msgstr "加载中..."
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/player/$username.tsx
@@ -6822,7 +6950,7 @@ msgstr "正在查找成绩{elapsedLabel}"
 msgid "Lost the run. The board could not be reached."
 msgstr "本局结束。无法连接排行榜。"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "loved"
 msgstr "社区喜爱"
 
@@ -7380,6 +7508,10 @@ msgstr "MSD"
 msgid "MSD at {0}"
 msgstr "{0} 下的 MSD"
 
+#: src/routes/player/$username.tsx
+msgid "MSD plays"
+msgstr "MSD 成绩"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "音乐"
@@ -7802,6 +7934,10 @@ msgstr "没有隐藏的玩家。"
 msgid "No players match."
 msgstr "没有匹配的玩家。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No plays match these filters"
+msgstr "没有符合筛选条件的成绩"
+
 #: src/routes/farm-helper.tsx
 msgid "no pp range"
 msgstr "无 pp 区间"
@@ -7834,6 +7970,10 @@ msgstr "还没有上榜玩家。"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "No rated {label} plays found"
 msgstr "没有找到已评分的 {label} 成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No rated keymode yet."
+msgstr "暂无已评分的键数。"
 
 #: src/components/rankings/LeaderboardTable.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
@@ -8078,6 +8218,7 @@ msgid "not a bug"
 msgstr "并非问题"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "not counted"
 msgstr "不计入"
 
@@ -8567,6 +8708,10 @@ msgstr "或其他玩家"
 msgid "orange"
 msgstr "橙"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Order"
+msgstr "排序"
+
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
 msgid "osu! Assets And Data"
@@ -8654,6 +8799,10 @@ msgstr "其他"
 #: src/routes/player/$username.tsx
 msgid "Other"
 msgstr "其他"
+
+#: src/routes/player/$username.tsx
+#~ msgid "Other keymodes"
+#~ msgstr "其他键数"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -8863,7 +9012,7 @@ msgstr "同水平在刷"
 msgid "peers hold"
 msgstr "玩家平均"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "pending"
 msgstr "待定"
 
@@ -9444,7 +9593,7 @@ msgstr "px"
 msgid "Quadstream"
 msgstr "四押切"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "qualified"
 msgstr "过审"
 
@@ -9508,7 +9657,8 @@ msgstr "排名"
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，同时结合控制、速度、精度和耐力特征。"
 
-#: src/components/maps/SearchCard.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+#: src/lib/beatmap-status.ts
 msgid "ranked"
 msgstr "上架"
 
@@ -9572,6 +9722,10 @@ msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "仅依据 {plays} 个成绩评分，在更多 {keyCount}K 成绩被评分之前只能当作粗略估算"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Rates per chart"
+msgstr "每张谱面的倍速数"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
 msgstr "成绩评分失败。系统会自动重试，请稍后再来看。"
@@ -9579,6 +9733,10 @@ msgstr "成绩评分失败。系统会自动重试，请稍后再来看。"
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
 msgstr "你的成绩评分失败。系统会自动重试，请稍后再来看。"
+
+#: src/routes/player/$username.tsx
+msgid "Ratings"
+msgstr "评分"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Ratio"
@@ -9674,6 +9832,7 @@ msgstr "重建中…"
 msgid "recent"
 msgstr "最近"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/top-plays.tsx
 msgid "Recent"
 msgstr "最新"
@@ -9814,6 +9973,7 @@ msgstr "区域"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "常规"
@@ -10141,6 +10301,10 @@ msgstr "全部揭晓"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "正在揭晓剩下的…"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Rice"
+#~ msgstr "单点"
 
 #: src/components/packs/StreakGame.tsx
 msgid "right"
@@ -10874,6 +11038,11 @@ msgstr "再显示 {0} 个"
 msgid "Show {0} picks"
 msgstr "显示 {0} 个选项"
 
+#. placeholder {0}: mode.keyCount
+#: src/routes/player/$username.tsx
+#~ msgid "Show {0}K"
+#~ msgstr "显示 {0}K"
+
 #. placeholder {0}: bucket.keyCount
 #: src/routes/player/$username.tsx
 msgid "Show {0}K plays"
@@ -10924,6 +11093,7 @@ msgstr "收起"
 msgid "show more"
 msgstr "显示更多"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.uploads.tsx
@@ -10979,11 +11149,24 @@ msgstr "展示柜"
 msgid "showcases"
 msgstr "展示柜"
 
+#. placeholder {0}: shown.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Showing {0} of {1}"
+msgstr "显示 {1} 条中的 {0} 条"
+
 #. placeholder {0}: visible.length
 #. placeholder {1}: matches.length
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Showing {0} of {1} images. Refine your search to see the rest."
 msgstr "显示 {1} 张图片中的 {0} 张。缩小搜索范围可以看到其余的。"
+
+#. placeholder {0}: shown.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#. placeholder {2}: hidden.toLocaleString("en-US")
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Showing {0} of {1}, {2} hidden by filters"
+msgstr "显示 {1} 条中的 {0} 条，{2} 条被筛选隐藏"
 
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
@@ -11008,6 +11191,10 @@ msgstr "正在洗牌"
 #: src/components/packs/ShuffleStage.tsx
 msgid "Shuffling players..."
 msgstr "正在洗牌…"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Side"
+msgstr "方向"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
@@ -11105,6 +11292,7 @@ msgstr "大小"
 msgid "Size"
 msgstr "大小"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/LeaderboardControls.tsx
 msgid "Skill"
 msgstr "技能"
@@ -13146,6 +13334,10 @@ msgstr "请稍后再试。"
 msgid "Try this again"
 msgstr "再试一次"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Try turning a filter off."
+msgstr "试试关掉一个筛选条件。"
+
 #: src/routes/player/$username.tsx
 msgid "Tue"
 msgstr "二"
@@ -13601,6 +13793,7 @@ msgstr "查看"
 msgid "view map details"
 msgstr "查看谱面详情"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "View map details"
 msgstr "查看谱面详情"

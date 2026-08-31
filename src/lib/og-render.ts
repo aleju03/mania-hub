@@ -193,14 +193,50 @@ export function scheduleDetached(promise: Promise<unknown>): void {
   }
 }
 
-export function pngResponse(buffer: Buffer, cacheControl: string, extraHeaders?: Record<string, string>): Response {
+export function imageResponse(
+  buffer: Buffer,
+  contentType: string,
+  cacheControl: string,
+  extraHeaders?: Record<string, string>,
+): Response {
   return new Response(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
-      "Content-Type": "image/png",
+      "Content-Type": contentType,
       "Content-Length": String(buffer.length),
       "Cache-Control": cacheControl,
       ...extraHeaders,
     },
   });
+}
+
+export function pngResponse(buffer: Buffer, cacheControl: string, extraHeaders?: Record<string, string>): Response {
+  return imageResponse(buffer, "image/png", cacheControl, extraHeaders);
+}
+
+/* Satori only emits PNG, and a signature is the one card where that is the
+   wrong container: the layouts composite a photograph (an osu! banner, a top
+   play cover, a pasted url) behind text, and RGBA PNG stores that at roughly a
+   byte per pixel. An 880x200 render measured 129 KB, which a viewer's browser
+   paints scanline by scanline as it arrives - the picture visibly wipes in from
+   the top. The same render is 23 KB as WebP.
+ *
+ * Quality 94 rather than the usual 75-82: these are small cards carrying small
+ * text, and the artifacts a photograph hides show up on a glyph edge. 90 was
+ * tried first and someone looking for the difference could find it in the soft
+ * gradients of an avatar; 94 puts it under that, costs 4 KB (23 KB against the
+ * PNG's 129 KB), and is still far under the size where a transfer is slow
+ * enough to paint scanline by scanline. Effort 4 keeps the encode near 25ms,
+ * which is noise next to the rasterization it follows.
+ *
+ * Only stored renders go through this. /api/signature-preview stays PNG: it is
+ * no-store, it runs once per slider drag, and it has no transfer worth 25ms of
+ * CPU. */
+export async function encodeSignatureWebp(png: Buffer): Promise<Buffer> {
+  // Lazy for the same reason the background pass is: sharp is a native module
+  // and nothing about booting the server should pull it in.
+  const { default: sharp } = await import("sharp");
+  return sharp(png)
+    .webp({ quality: 94, alphaQuality: 100, effort: 4, smartSubsample: true })
+    .toBuffer();
 }

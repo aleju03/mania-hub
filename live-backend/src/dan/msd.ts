@@ -10,7 +10,11 @@ export interface MsdResult {
   values: Record<string, number>;
 }
 
-const MSD_SUPPORTED_KEYS = new Set([4, 6, 7]);
+// MinaCalc rates 4..18K: 4/6/7 through their official per-keycount classes,
+// the rest through the generic n-key pipeline that landed in 0.74.0 (which
+// vendor/leoblack/ett pins every non-4K keycount to). Anything narrower than
+// 4K has no calc at all.
+const MSD_SUPPORTED_KEYS = new Set(Array.from({ length: 15 }, (_, i) => i + 4));
 
 // MinaCalc rates the rice skeleton: LN tails never reach it, so hold-heavy
 // charts underrate. The tail-aware pass (lnTailTaps) is a strict upper bound
@@ -82,7 +86,7 @@ export function isMsdSupportedKeyCount(keyCount: number): boolean {
  * `scoreGoal` is the target wife percent (default 0.93, the MSD baseline);
  * passing a score's accuracy turns the result into that score's SSR. The calc
  * clamps goals above 0.965 itself, mirroring Etterna's SSR cap.
- * Returns null for keymodes MinaCalc does not support (anything but 4/6/7K).
+ * Returns null for keymodes MinaCalc does not support (anything outside 4-18K).
  */
 export async function computeMsd(
   osuText: string,

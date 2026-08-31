@@ -808,6 +808,10 @@ msgstr "Mínimo de {ariaLabel}"
 msgid "{ariaLabel} range"
 msgstr "Rango de {ariaLabel}"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "{cap} rates per chart"
+msgstr "{cap} velocidades por mapa"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "{caption} - click to play"
 msgstr "{caption} - clic para reproducir"
@@ -994,6 +998,7 @@ msgstr "Miniatura {keys}K"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
@@ -1179,6 +1184,10 @@ msgstr "El replay de {playerName} cargó, pero su beatmap no está en osu! (sin 
 msgid "{playerName}'s replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
 msgstr "El replay de {playerName} cargó, pero el archivo del chart de {mapLabel} no se puede descargar ahora mismo."
 
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{plays} play"
+#~ msgstr "{plays} play"
+
 #: src/lib/streak-game.ts
 #: src/routes/rankings.tsx
 msgid "{plays} plays"
@@ -1341,6 +1350,10 @@ msgstr "maniacard de {username}"
 msgid "{username}'s {sideLabel} dan estimate"
 msgstr "Estimación de dan {sideLabel} de {username}"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "{username}'s rated {axisLabel} plays"
+msgstr "Jugadas de {axisLabel} puntuadas de {username}"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top {label} plays"
 msgstr "Top {label} plays de {username}"
@@ -1348,6 +1361,10 @@ msgstr "Top {label} plays de {username}"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top <0>{label}</0> plays"
 msgstr "Top <0>{label}</0> plays de {username}"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "{value} rates per chart"
+#~ msgstr "{value} velocidades por mapa"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{viewCountLabel} views"
@@ -1579,6 +1596,10 @@ msgstr "0h"
 msgid "1 person has your card"
 msgstr "1 persona tiene tu carta"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "1 rate per chart"
+msgstr "1 velocidad por mapa"
+
 #: src/routes/report.tsx
 msgid "1 screenshot"
 msgstr "1 captura"
@@ -1755,6 +1776,10 @@ msgstr "96%, o 95% en la banda Normal Kyu por debajo del 1er dan"
 msgid "A {0} chart, credited as {1} at this accuracy"
 msgstr "Un chart {0}, acreditado como {1} con esta acc"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "A {chart} chart, credited as {credit} at this accuracy"
+msgstr "Un chart {chart}, acreditado como {credit} con esta acc"
+
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
@@ -1914,6 +1939,7 @@ msgid "Account menu"
 msgstr "Menú de cuenta"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "Acc"
@@ -2153,6 +2179,7 @@ msgid "all"
 msgstr "todos"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
@@ -2710,6 +2737,10 @@ msgstr "Por debajo del crédito que fija la estimación"
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "mejor"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Best"
+msgstr "Mejores"
 
 #: src/components/packs/StreakGame.tsx
 msgid "best {best}"
@@ -3664,10 +3695,12 @@ msgstr "No se pudieron cargar las estadísticas de los packs."
 msgid "Could not load the showcases."
 msgstr "No se pudieron cargar los destacados."
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays"
 msgstr "No se pudieron cargar estas plays"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays."
 msgstr "No se pudieron cargar estas plays."
@@ -4119,6 +4152,10 @@ msgstr "Estimación de dan: {0} ({1})"
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 #~ msgstr "Los dans de aquí se estiman a partir de los mapas que cada jugador ha pasado, no de clears reales de dans. Tómalo como un orden aproximado, no como un ranking."
 
+#: src/routes/player/$username.tsx
+msgid "Dan plays"
+msgstr "Jugadas de dan"
+
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
 msgstr "Nivel de dan"
@@ -4361,6 +4398,60 @@ msgstr "¿{hidden} tiene más o menos ranked score que {shown}?"
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "¿{hidden} tiene más o menos tiempo de juego que {shown}?"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "does not count"
+msgstr "no cuenta"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan yet: the chart has not been analyzed."
+msgstr "Todavía no cuenta para dan: el mapa no ha sido analizado."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
+msgstr "No cuenta para dan: Easy amplió todas las ventanas de acierto, así que la precisión no se logró con las ventanas que asume un pase de dan."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the accuracy is under the pass bar."
+msgstr "No cuenta para dan: la precisión está por debajo del mínimo para pasar."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
+msgstr "No cuenta para dan: el mapa no tiene calificación de dan a la velocidad con la que se jugó."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart's hit windows are too forgiving to prove a level."
+msgstr "No cuenta para dan: las ventanas de acierto del mapa son demasiado permisivas para demostrar un nivel."
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart's OD is {0}, and hit windows that forgiving cannot prove a level."
+msgstr "No cuenta para dan: el OD del mapa es {0}, y ventanas de acierto tan permisivas no pueden demostrar un nivel."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
+msgstr "No cuenta para dan: este mapa no está construido de forma que un pase permita leer un nivel de dan."
+
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
+msgstr "No cuenta para dan: este pase necesita {0} de precisión y obtuvo {1}."
+
+#. placeholder {0}: formatAccuracy(minAccuracy)
+#. placeholder {1}: formatAccuracy(bar)
+#. placeholder {2}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+msgstr "No cuenta para dan: este pase necesita {0} para acreditar algo (barra de paso de {1}) y obtuvo {2}."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
+msgstr "No cuenta para dan: los conteos de juicios de esta jugada ya no están, así que no hay precisión que medir."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan."
+msgstr "No cuenta para dan."
 
 #: src/routes/farm-helper.tsx
 msgid "done"
@@ -4753,6 +4844,10 @@ msgstr "Cada pack paga {PACK_OPEN_SHARD_REWARD} shards. Recicla los duplicados p
 #: src/routes/dan-estimates.tsx
 msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
 msgstr "Cada pase válido cae en uno de cuatro skills, y con esos cuatro se arma la estimación. En 4K son jack, tech, speed y stamina, sacados de los ratings de skillset MSD de la propia play y normalmente agrupados según el skillset más fuerte de ese chart: jack (JackSpeed y Chordjack), tech (Technical y Jumpstream), speed (Stream) y stamina (Handstream y Stamina)."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Every rate of a chart"
+msgstr "Todas las velocidades de un mapa"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -5420,7 +5515,7 @@ msgstr "Degradado"
 msgid "Gradient text"
 msgstr "Texto con degradado"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "graveyard"
 msgstr "abandonado"
 
@@ -5525,9 +5620,15 @@ msgstr "oculto de tus recs hasta que lo pases o pongas un puntaje en él"
 msgid "Hidden list ({0})"
 msgstr "Lista oculta ({0})"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide"
 msgstr "Ocultar"
+
+#. placeholder {0}: mode.keyCount
+#: src/routes/player/$username.tsx
+#~ msgid "Hide {0}K"
+#~ msgstr "Ocultar {0}K"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
@@ -5537,6 +5638,18 @@ msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar
 msgid "Hide players"
 msgstr "Ocultar jugadores"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on ranked, approved and qualified charts"
+msgstr "Ocultar jugadas en mapas ranked, approved y qualified"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide plays that don't count"
+#~ msgstr "Ocultar jugadas que no cuentan"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide ranked maps"
+#~ msgstr "Ocultar mapas ranked"
+
 #. placeholder {0}: section.label
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
@@ -5545,6 +5658,10 @@ msgstr "Ocultar los clears de {0}"
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
 msgstr "ocultar la nota"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide the plays the dan rules turned away"
+msgstr "Ocultar las jugadas que las reglas de dan descartaron"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
@@ -5700,6 +5817,14 @@ msgstr "cuántos jugadores cerca de ti lo farmean"
 #: src/routes/farm-helper.tsx
 msgid "how many players near you have it"
 msgstr "cuántos jugadores cerca de ti lo tienen"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "How many plays of the same chart the list may repeat"
+msgstr "Cuántas jugadas del mismo mapa puede repetir la lista"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "How many plays of the same chart the list may repeat. Click to change."
+#~ msgstr "Cuántas jugadas del mismo mapa puede repetir la lista. Haz clic para cambiar."
 
 #: src/routes/dan-estimates.tsx
 msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
@@ -6156,6 +6281,7 @@ msgstr "Presionar una tecla reproduce el hitsound de la nota, como en el juego. 
 msgid "Key Split"
 msgstr "Distribución de modos"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Keymode"
@@ -6496,6 +6622,7 @@ msgstr "Actualizaciones en vivo activas"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
@@ -6719,6 +6846,7 @@ msgstr "cargando..."
 msgid "Loading..."
 msgstr "Cargando..."
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/player/$username.tsx
@@ -6813,7 +6941,7 @@ msgstr "Buscando el score{elapsedLabel}"
 msgid "Lost the run. The board could not be reached."
 msgstr "Perdiste la partida. No se pudo conectar con el leaderboard."
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "loved"
 msgstr "amado"
 
@@ -7371,6 +7499,10 @@ msgstr "MSD"
 msgid "MSD at {0}"
 msgstr "MSD a {0}"
 
+#: src/routes/player/$username.tsx
+msgid "MSD plays"
+msgstr "Jugadas de MSD"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "Música"
@@ -7793,6 +7925,10 @@ msgstr "No hay jugadores ocultos."
 msgid "No players match."
 msgstr "Ningún jugador coincide."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No plays match these filters"
+msgstr "Ninguna jugada coincide con estos filtros"
+
 #: src/routes/farm-helper.tsx
 msgid "no pp range"
 msgstr "sin rango de pp"
@@ -7825,6 +7961,10 @@ msgstr "Aún no hay jugadores ranked."
 #: src/components/player/SkillPlaysModal.tsx
 msgid "No rated {label} plays found"
 msgstr "No se encontraron plays de {label} calificables"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No rated keymode yet."
+msgstr "Todavía no hay ningún key mode puntuado."
 
 #: src/components/rankings/LeaderboardTable.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
@@ -8069,6 +8209,7 @@ msgid "not a bug"
 msgstr "no es un error"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "not counted"
 msgstr "no cuenta"
 
@@ -8558,6 +8699,10 @@ msgstr "o alguien más"
 msgid "orange"
 msgstr "naranja"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Order"
+msgstr "Orden"
+
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
 msgid "osu! Assets And Data"
@@ -8645,6 +8790,10 @@ msgstr "otro"
 #: src/routes/player/$username.tsx
 msgid "Other"
 msgstr "Otro"
+
+#: src/routes/player/$username.tsx
+#~ msgid "Other keymodes"
+#~ msgstr "Otros modos de teclas"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -8854,7 +9003,7 @@ msgstr "jugadores cercanos farmeando"
 msgid "peers hold"
 msgstr "ellos tienen"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "pending"
 msgstr "pendiente"
 
@@ -9435,7 +9584,7 @@ msgstr "px"
 msgid "Quadstream"
 msgstr "Quadstream"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "qualified"
 msgstr "calificado"
 
@@ -9499,7 +9648,8 @@ msgstr "Rank"
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "El rank se calcula con tus {0} mejores plays de mania: principalmente pp, más los rasgos de control, velocidad, acc y stamina."
 
-#: src/components/maps/SearchCard.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+#: src/lib/beatmap-status.ts
 msgid "ranked"
 msgstr "ranked"
 
@@ -9563,6 +9713,10 @@ msgstr "calificado con {plays} plays de tus top plays y tu historial trackeado, 
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "Calificado con solo {plays} plays - tómalo como una estimación aproximada hasta que se califiquen más plays de {keyCount}K"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Rates per chart"
+msgstr "Velocidades por mapa"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
 msgstr "No se pudieron calificar los plays. Se reintenta automáticamente, vuelve en un rato."
@@ -9570,6 +9724,10 @@ msgstr "No se pudieron calificar los plays. Se reintenta automáticamente, vuelv
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
 msgstr "No se pudieron calificar tus plays. Se reintenta automáticamente, vuelve en un rato."
+
+#: src/routes/player/$username.tsx
+msgid "Ratings"
+msgstr "Puntuaciones"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Ratio"
@@ -9665,6 +9823,7 @@ msgstr "Reconstruyendo..."
 msgid "recent"
 msgstr "recientes"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/top-plays.tsx
 msgid "Recent"
 msgstr "Recientes"
@@ -9805,6 +9964,7 @@ msgstr "Regiones"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "Regular"
@@ -10132,6 +10292,10 @@ msgstr "revelar todo"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "Revelando el resto..."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Rice"
+#~ msgstr "Rice"
 
 #: src/components/packs/StreakGame.tsx
 msgid "right"
@@ -10865,6 +11029,11 @@ msgstr "Mostrar {0} más"
 msgid "Show {0} picks"
 msgstr "Mostrar {0} selecciones"
 
+#. placeholder {0}: mode.keyCount
+#: src/routes/player/$username.tsx
+#~ msgid "Show {0}K"
+#~ msgstr "Mostrar {0}K"
+
 #. placeholder {0}: bucket.keyCount
 #: src/routes/player/$username.tsx
 msgid "Show {0}K plays"
@@ -10915,6 +11084,7 @@ msgstr "Mostrar menos"
 msgid "show more"
 msgstr "mostrar más"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.uploads.tsx
@@ -10970,11 +11140,24 @@ msgstr "Destacados"
 msgid "showcases"
 msgstr "destacados"
 
+#. placeholder {0}: shown.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Showing {0} of {1}"
+msgstr "Mostrando {0} de {1}"
+
 #. placeholder {0}: visible.length
 #. placeholder {1}: matches.length
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Showing {0} of {1} images. Refine your search to see the rest."
 msgstr "Mostrando {0} de {1} imágenes. Refina tu búsqueda para ver el resto."
+
+#. placeholder {0}: shown.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#. placeholder {2}: hidden.toLocaleString("en-US")
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Showing {0} of {1}, {2} hidden by filters"
+msgstr "Mostrando {0} de {1}, {2} ocultas por los filtros"
 
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
@@ -10999,6 +11182,10 @@ msgstr "mezclando"
 #: src/components/packs/ShuffleStage.tsx
 msgid "Shuffling players..."
 msgstr "Mezclando jugadores..."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Side"
+msgstr "Lado"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
@@ -11096,6 +11283,7 @@ msgstr "tamaño"
 msgid "Size"
 msgstr "Tamaño"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/LeaderboardControls.tsx
 msgid "Skill"
 msgstr "Habilidad"
@@ -13137,6 +13325,10 @@ msgstr "Inténtalo de nuevo en un rato."
 msgid "Try this again"
 msgstr "Reintentar"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Try turning a filter off."
+msgstr "Prueba a desactivar un filtro."
+
 #: src/routes/player/$username.tsx
 msgid "Tue"
 msgstr "mar"
@@ -13592,6 +13784,7 @@ msgstr "Verlo"
 msgid "view map details"
 msgstr "ver detalles del mapa"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "View map details"
 msgstr "Ver detalles del mapa"

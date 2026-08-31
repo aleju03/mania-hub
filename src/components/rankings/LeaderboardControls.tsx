@@ -8,18 +8,20 @@ export function KeymodeControl({
   id,
   value,
   onChange,
+  keyCounts = LEADERBOARD_KEY_COUNTS,
 }: {
   id: string;
   value: LeaderboardKeyCount;
   onChange: (keys: LeaderboardKeyCount) => void;
+  keyCounts?: readonly LeaderboardKeyCount[];
 }) {
   const { t } = useLingui();
   return (
-    <div role="group" aria-label={t`Key mode`}>
+    <div className="max-w-full overflow-x-auto scrollbar-hide" role="group" aria-label={t`Key mode`}>
       <SegmentedControl
         id={id}
         value={String(value)}
-        options={LEADERBOARD_KEY_COUNTS.map((keys) => ({ value: String(keys), label: `${keys}K` }))}
+        options={keyCounts.map((keys) => ({ value: String(keys), label: `${keys}K` }))}
         onChange={(next) => onChange(Number(next) as LeaderboardKeyCount)}
       />
     </div>

@@ -4009,6 +4009,93 @@ async function enqueueInverseClusterBpmRecovery(queue: JobQueue, cursor: number)
   );
 }
 
+// MinaCalc's n-key pipeline became reachable with the 2026-08-30 leoblack
+// re-pin, so 5K and 8K-18K charts can be rated where the row previously stored
+// no MSD at all. Same playbook as the sweeps above: chunked, self-chaining,
+// boot-seeded, done in meta, enqueue-only chunks.
+export const NKEY_MSD_JOB = "recompute_nkey_msd_sweep";
+const NKEY_MSD_META_KEY = "nkey_msd_done:v1";
+const NKEY_MSD_CHUNK = 200;
+
+export interface NkeyMsdChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeNkeyMsdChunk(
+  db: Db,
+  cursor: number,
+  limit = NKEY_MSD_CHUNK,
+): Promise<NkeyMsdChunkResult> {
+  const rows = (await exec(
+    db,
+    `select a.beatmap_id
+     from beatmap_chart_analysis a
+     where a.analysis_version = ? and a.status = 'ready'
+       and a.beatmap_id > ?
+       and a.key_count between 5 and 18 and a.key_count not in (6, 7)
+       and a.msd_json is null
+     order by a.beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    changed.push(beatmapId);
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureNkeyMsdSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [NKEY_MSD_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [NKEY_MSD_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueNkeyMsd(queue, 0);
+}
+
+export async function runNkeyMsdJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeNkeyMsdChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row, so a newly rated
+  // keymode reaches /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [NKEY_MSD_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueNkeyMsd(queue, result.nextCursor);
+}
+
+async function enqueueNkeyMsd(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    NKEY_MSD_JOB,
+    `${NKEY_MSD_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
 // One-shot heal for charts MinaCalc used to crash on (fixed 2026-08-16 in
 // vendor/leoblack/ett/calc.js): a note before the audio leads in (osu! allows
 // negative timestamps) walked the calc's interval index out of bounds and the

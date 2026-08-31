@@ -1,5 +1,5 @@
 import { dbHealth, exec, getSqliteBusyRetryStats, getWriteGateStats, parseJson, type Db } from "../db.js";
-import { getCountryRegistry, isGlobalCountry } from "../countries.js";
+import { getCountryRegistry, getCountryRosterSizes, isGlobalCountry } from "../countries.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../features/activity.js";
 import { getBeatmapOsuFileBackfillStatus } from "../features/beatmap-osu-file-backfill.js";
 import { packCommunitySnapshotStatus } from "../features/pack-community.js";
@@ -430,11 +430,17 @@ async function countryCatchupStatus(ctx: HttpContext): Promise<Record<string, Co
 
 export async function countryFeaturesBody(ctx: HttpContext) {
   const countries = await getCountryRegistry(ctx.db, ctx.config, { ensure: false });
+  // rosterSize rides along because the tier alone cannot say whether a country
+  // has players: a single seen score puts a country on the 'live' tier, roster
+  // or not. Surfaces that list countries as collections (the pack albums) need
+  // the count instead.
+  const rosterSizes = await getCountryRosterSizes(ctx.db);
   return {
     generatedAt: new Date().toISOString(),
     countries: countries.map((entry) => ({
       country: entry.country,
       featureTier: entry.featureTier,
+      rosterSize: rosterSizes.get(entry.country) ?? 0,
     })),
   };
 }

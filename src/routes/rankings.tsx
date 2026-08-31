@@ -32,6 +32,7 @@ import {
   DEFAULT_LEADERBOARD_KEYS,
   DEFAULT_LEADERBOARD_TAB,
   parseDanSide,
+  parseDanLeaderboardKeys,
   parseDanSkillset,
   parseLeaderboardAxis,
   parseLeaderboardKeys,
@@ -114,15 +115,18 @@ function handlePlayerAuxClick(event: MouseEvent<HTMLElement>, username: string):
 }
 
 export const Route = createFileRoute("/rankings")({
-  validateSearch: (search: Record<string, unknown>): RankingsSearch => ({
-    page: parseRankingsPage(search.page),
-    country: parseCountrySearchParam(search.country),
-    tab: parseLeaderboardTab(search.tab),
-    keys: parseLeaderboardKeys(search.keys),
-    axis: parseLeaderboardAxis(search.axis),
-    side: parseDanSide(search.side),
-    skillset: parseDanSkillset(search.skillset),
-  }),
+  validateSearch: (search: Record<string, unknown>): RankingsSearch => {
+    const tab = parseLeaderboardTab(search.tab);
+    return {
+      page: parseRankingsPage(search.page),
+      country: parseCountrySearchParam(search.country),
+      tab,
+      keys: tab === "dan" ? parseDanLeaderboardKeys(search.keys) : parseLeaderboardKeys(search.keys),
+      axis: parseLeaderboardAxis(search.axis),
+      side: parseDanSide(search.side),
+      skillset: parseDanSkillset(search.skillset),
+    };
+  },
   search: {
     middlewares: [stripSearchParams(RANKINGS_SEARCH_DEFAULTS)],
   },

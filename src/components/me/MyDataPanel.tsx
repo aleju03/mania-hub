@@ -920,7 +920,9 @@ function FeedTab({ active, onClick, children }: { active: boolean; onClick: () =
 
 function KeymodeToggle({ modes, active, onChange }: { modes: Array<{ keyCount: number | null }>; active: number | null; onChange: (keyCount: number | null) => void }) {
   return (
-    <span className="inline-flex gap-1">
+    // Eleven keymodes fit no card header, so the strip scrolls in place
+    // instead of pushing the header stats off their line.
+    <span className="inline-flex max-w-full gap-1 overflow-x-auto scrollbar-hide">
       {modes.map((mode) => {
         const label = mode.keyCount == null ? "?" : KEY_LABEL[mode.keyCount] ?? `${mode.keyCount}K`;
         return (
@@ -928,7 +930,7 @@ function KeymodeToggle({ modes, active, onChange }: { modes: Array<{ keyCount: n
             key={mode.keyCount ?? "unknown"}
             type="button"
             onClick={() => onChange(mode.keyCount)}
-            className={`rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors cursor-pointer ${
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors cursor-pointer ${
               mode.keyCount === active ? "bg-osu-pink/15 text-osu-pink-light" : "text-osu-l3 hover:text-osu-l1"
             }`}
           >

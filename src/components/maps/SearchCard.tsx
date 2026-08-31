@@ -4,6 +4,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { oszDownloadUrl } from "../../lib/beatmap-mirrors";
+import { beatmapStatusPill } from "../../lib/beatmap-status";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { MapPreviewButton, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
@@ -147,16 +148,6 @@ export function osuDirectUrl(beatmapsetId: number): string {
 // 302s to a healthy one; the archive bytes still flow mirror-to-browser.
 export { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 
-function statusPill(status: string): { label: MessageDescriptor; className: string } | null {
-  const s = status.toLowerCase();
-  if (s === "ranked" || s === "approved") return { label: msg`ranked`, className: "bg-[#6cf27f] text-black" };
-  if (s === "loved") return { label: msg`loved`, className: "bg-[#f26fa6] text-black" };
-  if (s === "qualified") return { label: msg`qualified`, className: "bg-[#66ccff] text-black" };
-  if (s === "graveyard") return { label: msg`graveyard`, className: "bg-[#4a4a52] text-white" };
-  if (s === "pending" || s === "wip") return { label: msg`pending`, className: "bg-[#f2b56c] text-black" };
-  return null;
-}
-
 function secondaryPatterns(entry: LiveMapSearchEntry): string[] {
   return Object.entries(entry.patterns)
     .filter(([key, value]) => key !== entry.primaryPattern && value >= 0.5)
@@ -226,7 +217,7 @@ export function SearchCard({
 }) {
   const { t, i18n } = useLingui();
   const patternName = usePatternLabel();
-  const pill = statusPill(entry.status);
+  const pill = beatmapStatusPill(entry.status);
   const [coverFailed, setCoverFailed] = useState(false);
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;

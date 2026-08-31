@@ -808,6 +808,10 @@ msgstr "{ariaLabel} minimum"
 msgid "{ariaLabel} range"
 msgstr "{ariaLabel} range"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "{cap} rates per chart"
+msgstr "{cap} rates per chart"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "{caption} - click to play"
 msgstr "{caption} - click to play"
@@ -994,6 +998,7 @@ msgstr "{keys}K thumbnail"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
@@ -1179,6 +1184,10 @@ msgstr "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted
 msgid "{playerName}'s replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
 msgstr "{playerName}'s replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
 
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{plays} play"
+#~ msgstr "{plays} play"
+
 #: src/lib/streak-game.ts
 #: src/routes/rankings.tsx
 msgid "{plays} plays"
@@ -1341,6 +1350,10 @@ msgstr "{username} maniacard"
 msgid "{username}'s {sideLabel} dan estimate"
 msgstr "{username}'s {sideLabel} dan estimate"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "{username}'s rated {axisLabel} plays"
+msgstr "{username}'s rated {axisLabel} plays"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top {label} plays"
 msgstr "{username}'s top {label} plays"
@@ -1348,6 +1361,10 @@ msgstr "{username}'s top {label} plays"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{username}'s top <0>{label}</0> plays"
 msgstr "{username}'s top <0>{label}</0> plays"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "{value} rates per chart"
+#~ msgstr "{value} rates per chart"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{viewCountLabel} views"
@@ -1579,6 +1596,10 @@ msgstr "0h"
 msgid "1 person has your card"
 msgstr "1 person has your card"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "1 rate per chart"
+msgstr "1 rate per chart"
+
 #: src/routes/report.tsx
 msgid "1 screenshot"
 msgstr "1 screenshot"
@@ -1755,6 +1776,10 @@ msgstr "96%, or 95% in the Normal Kyu band below 1st dan"
 msgid "A {0} chart, credited as {1} at this accuracy"
 msgstr "A {0} chart, credited as {1} at this accuracy"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "A {chart} chart, credited as {credit} at this accuracy"
+msgstr "A {chart} chart, credited as {credit} at this accuracy"
+
 #. placeholder {0}: formatNumber(Math.round(profileInsights.keyPpCutoff))
 #: src/routes/player/$username.tsx
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
@@ -1914,6 +1939,7 @@ msgid "Account menu"
 msgstr "Account menu"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "accuracy"
 msgstr "accuracy"
@@ -2153,6 +2179,7 @@ msgid "all"
 msgstr "all"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
@@ -2710,6 +2737,10 @@ msgstr "Below the credit that sets the estimate"
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "best"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Best"
+msgstr "Best"
 
 #: src/components/packs/StreakGame.tsx
 msgid "best {best}"
@@ -3664,10 +3695,12 @@ msgstr "Could not load the pack stats."
 msgid "Could not load the showcases."
 msgstr "Could not load the showcases."
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays"
 msgstr "Could not load these plays"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays."
 msgstr "Could not load these plays."
@@ -4119,6 +4152,10 @@ msgstr "Dan estimate: {0} ({1})"
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 #~ msgstr "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 
+#: src/routes/player/$username.tsx
+msgid "Dan plays"
+msgstr "Dan plays"
+
 #: src/lib/signature-shared.ts
 msgid "Dan rating"
 msgstr "Dan rating"
@@ -4361,6 +4398,60 @@ msgstr "Does {hidden} have more or fewer ranked score than {shown}?"
 #: src/lib/streak-game.ts
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "Does {hidden} have more or less playtime than {shown}?"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "does not count"
+msgstr "does not count"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan yet: the chart has not been analyzed."
+msgstr "Does not count for dan yet: the chart has not been analyzed."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
+msgstr "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the accuracy is under the pass bar."
+msgstr "Does not count for dan: the accuracy is under the pass bar."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
+msgstr "Does not count for dan: the chart has no dan rating at the rate this was played at."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart's hit windows are too forgiving to prove a level."
+msgstr "Does not count for dan: the chart's hit windows are too forgiving to prove a level."
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: the chart's OD is {0}, and hit windows that forgiving cannot prove a level."
+msgstr "Does not count for dan: the chart's OD is {0}, and hit windows that forgiving cannot prove a level."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
+msgstr "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
+
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
+msgstr "Does not count for dan: this pass needs {0} accuracy and got {1}."
+
+#. placeholder {0}: formatAccuracy(minAccuracy)
+#. placeholder {1}: formatAccuracy(bar)
+#. placeholder {2}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+msgstr "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
+msgstr "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan."
+msgstr "Does not count for dan."
 
 #: src/routes/farm-helper.tsx
 msgid "done"
@@ -4757,6 +4848,10 @@ msgstr "Every pack pays {PACK_OPEN_SHARD_REWARD} shards. Recycle duplicates for 
 #: src/routes/dan-estimates.tsx
 msgid "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
 msgstr "Every qualifying pass lands in one of four skills, and those four are what the estimate is built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD skillset ratings and normally filed under whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina)."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Every rate of a chart"
+msgstr "Every rate of a chart"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Every step above is the site guessing. A dan course pass is not guesswork: there is a pass mark, and you were over it. So when the site sees one, your estimate for that side <0>cannot read below the course you passed</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta."
@@ -5424,7 +5519,7 @@ msgstr "Gradient"
 msgid "Gradient text"
 msgstr "Gradient text"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "graveyard"
 msgstr "graveyard"
 
@@ -5529,9 +5624,15 @@ msgstr "hidden from your recs until you clear it or set a score on it"
 msgid "Hidden list ({0})"
 msgstr "Hidden list ({0})"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide"
 msgstr "Hide"
+
+#. placeholder {0}: mode.keyCount
+#: src/routes/player/$username.tsx
+#~ msgid "Hide {0}K"
+#~ msgstr "Hide {0}K"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
@@ -5541,6 +5642,18 @@ msgstr "Hide it from everyone else, instead of showing it with no way in"
 msgid "Hide players"
 msgstr "Hide players"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on ranked, approved and qualified charts"
+msgstr "Hide plays on ranked, approved and qualified charts"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide plays that don't count"
+#~ msgstr "Hide plays that don't count"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Hide ranked maps"
+#~ msgstr "Hide ranked maps"
+
 #. placeholder {0}: section.label
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
@@ -5549,6 +5662,10 @@ msgstr "Hide the {0} clears"
 #: src/routes/dan-estimates.tsx
 msgid "hide the note"
 msgstr "hide the note"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide the plays the dan rules turned away"
+msgstr "Hide the plays the dan rules turned away"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
@@ -5704,6 +5821,14 @@ msgstr "how many players near you farm it"
 #: src/routes/farm-helper.tsx
 msgid "how many players near you have it"
 msgstr "how many players near you have it"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "How many plays of the same chart the list may repeat"
+msgstr "How many plays of the same chart the list may repeat"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "How many plays of the same chart the list may repeat. Click to change."
+#~ msgstr "How many plays of the same chart the list may repeat. Click to change."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How much this moves you depends on how lopsided you are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
@@ -6164,6 +6289,7 @@ msgstr "Key presses play the note's hitsound, like in game. Misses trigger the c
 msgid "Key Split"
 msgstr "Key Split"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Keymode"
@@ -6504,6 +6630,7 @@ msgstr "Live updates on"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/skill-axes.ts
@@ -6727,6 +6854,7 @@ msgstr "loading..."
 msgid "Loading..."
 msgstr "Loading..."
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/player/$username.tsx
@@ -6821,7 +6949,7 @@ msgstr "Looking up the score{elapsedLabel}"
 msgid "Lost the run. The board could not be reached."
 msgstr "Lost the run. The board could not be reached."
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "loved"
 msgstr "loved"
 
@@ -7379,6 +7507,10 @@ msgstr "MSD"
 msgid "MSD at {0}"
 msgstr "MSD at {0}"
 
+#: src/routes/player/$username.tsx
+msgid "MSD plays"
+msgstr "MSD plays"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "Music"
@@ -7801,6 +7933,10 @@ msgstr "No players hidden."
 msgid "No players match."
 msgstr "No players match."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No plays match these filters"
+msgstr "No plays match these filters"
+
 #: src/routes/farm-helper.tsx
 msgid "no pp range"
 msgstr "no pp range"
@@ -7833,6 +7969,10 @@ msgstr "No ranked players yet."
 #: src/components/player/SkillPlaysModal.tsx
 msgid "No rated {label} plays found"
 msgstr "No rated {label} plays found"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No rated keymode yet."
+msgstr "No rated keymode yet."
 
 #: src/components/rankings/LeaderboardTable.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
@@ -8077,6 +8217,7 @@ msgid "not a bug"
 msgstr "not a bug"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "not counted"
 msgstr "not counted"
 
@@ -8566,6 +8707,10 @@ msgstr "or someone else"
 msgid "orange"
 msgstr "orange"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Order"
+msgstr "Order"
+
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
 msgid "osu! Assets And Data"
@@ -8653,6 +8798,10 @@ msgstr "other"
 #: src/routes/player/$username.tsx
 msgid "Other"
 msgstr "Other"
+
+#: src/routes/player/$username.tsx
+#~ msgid "Other keymodes"
+#~ msgstr "Other keymodes"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -8862,7 +9011,7 @@ msgstr "peers farming"
 msgid "peers hold"
 msgstr "peers hold"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "pending"
 msgstr "pending"
 
@@ -9443,7 +9592,7 @@ msgstr "px"
 msgid "Quadstream"
 msgstr "Quadstream"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/beatmap-status.ts
 msgid "qualified"
 msgstr "qualified"
 
@@ -9507,7 +9656,8 @@ msgstr "Rank"
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 
-#: src/components/maps/SearchCard.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+#: src/lib/beatmap-status.ts
 msgid "ranked"
 msgstr "ranked"
 
@@ -9571,6 +9721,10 @@ msgstr "rated from {plays} plays across your top plays and tracked history, DT a
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Rates per chart"
+msgstr "Rates per chart"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
 msgstr "Rating the plays failed. It retries automatically, check back in a bit."
@@ -9578,6 +9732,10 @@ msgstr "Rating the plays failed. It retries automatically, check back in a bit."
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
 msgstr "Rating your plays failed. It retries automatically, check back in a bit."
+
+#: src/routes/player/$username.tsx
+msgid "Ratings"
+msgstr "Ratings"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Ratio"
@@ -9673,6 +9831,7 @@ msgstr "Rebuilding..."
 msgid "recent"
 msgstr "recent"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/top-plays.tsx
 msgid "Recent"
 msgstr "Recent"
@@ -9813,6 +9972,7 @@ msgstr "Regions"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "Regular"
@@ -10140,6 +10300,10 @@ msgstr "reveal all"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "Revealing the rest..."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Rice"
+#~ msgstr "Rice"
 
 #: src/components/packs/StreakGame.tsx
 msgid "right"
@@ -10873,6 +11037,11 @@ msgstr "Show {0} More"
 msgid "Show {0} picks"
 msgstr "Show {0} picks"
 
+#. placeholder {0}: mode.keyCount
+#: src/routes/player/$username.tsx
+#~ msgid "Show {0}K"
+#~ msgstr "Show {0}K"
+
 #. placeholder {0}: bucket.keyCount
 #: src/routes/player/$username.tsx
 msgid "Show {0}K plays"
@@ -10923,6 +11092,7 @@ msgstr "Show fewer"
 msgid "show more"
 msgstr "show more"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.uploads.tsx
@@ -10978,11 +11148,24 @@ msgstr "Showcase"
 msgid "showcases"
 msgstr "showcases"
 
+#. placeholder {0}: shown.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Showing {0} of {1}"
+msgstr "Showing {0} of {1}"
+
 #. placeholder {0}: visible.length
 #. placeholder {1}: matches.length
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Showing {0} of {1} images. Refine your search to see the rest."
 msgstr "Showing {0} of {1} images. Refine your search to see the rest."
+
+#. placeholder {0}: shown.toLocaleString("en-US")
+#. placeholder {1}: total.toLocaleString("en-US")
+#. placeholder {2}: hidden.toLocaleString("en-US")
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Showing {0} of {1}, {2} hidden by filters"
+msgstr "Showing {0} of {1}, {2} hidden by filters"
 
 #: src/routes/tracker.tsx
 msgid "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
@@ -11007,6 +11190,10 @@ msgstr "shuffling"
 #: src/components/packs/ShuffleStage.tsx
 msgid "Shuffling players..."
 msgstr "Shuffling players..."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Side"
+msgstr "Side"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
@@ -11104,6 +11291,7 @@ msgstr "size"
 msgid "Size"
 msgstr "Size"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/LeaderboardControls.tsx
 msgid "Skill"
 msgstr "Skill"
@@ -13145,6 +13333,10 @@ msgstr "Try again in a bit."
 msgid "Try this again"
 msgstr "Try this again"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Try turning a filter off."
+msgstr "Try turning a filter off."
+
 #: src/routes/player/$username.tsx
 msgid "Tue"
 msgstr "Tue"
@@ -13600,6 +13792,7 @@ msgstr "View it"
 msgid "view map details"
 msgstr "view map details"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "View map details"
 msgstr "View map details"

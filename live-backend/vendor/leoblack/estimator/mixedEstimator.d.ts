@@ -7,6 +7,13 @@ export interface LeoBlackEstimatorOptions {
   extendedEstimationRange?: boolean;
   /** Emit the "RC || LN" split even when lnRatio < 0.15. */
   enableAlwaysShowLNDifficulty?: boolean;
+  /**
+   * Inputs for the marathon duration correction Azusa and Roxy apply to their
+   * own numeric difficulty. Omit it (or leave ettValues null) and neither
+   * estimator moves. Upstream's pipeline only injects this for 4K charts over
+   * 300 seconds; the module itself re-checks the duration.
+   */
+  marathonCorrection?: { durationS: number; ettValues: Record<string, number> | null } | null;
 }
 
 export interface LeoBlackReworkResult {

@@ -30,10 +30,10 @@ import {
 //
 // The board is built once and cached per Db, exactly like the pp board in
 // global-rankings.ts, and scope/keymode/axis are slices of it. What it must NOT
-// do is materialize one entry object per (player, keymode, axis) - that is
-// ~660k objects on the real roster. Instead each keymode holds one shared
-// player record set plus, per axis, three typed arrays: the value, the evidence
-// count, and a descending order of player slots. The whole thing is a few MB.
+// do is materialize one entry object per (player, keymode, axis) - that becomes
+// hundreds of thousands of objects on the real roster. Instead each keymode
+// holds one shared player record set plus, per axis, three typed arrays: the
+// value, the evidence count, and a descending order of player slots.
 //
 // Ratings are the DISPLAY-SHRUNK ones, the same number the profile Skills tab
 // prints (shrinkRating against the population median from the exact curves).
@@ -44,8 +44,12 @@ import {
 
 export type DanSide = "rc" | "ln";
 
-export const SKILL_LEADERBOARD_KEY_COUNTS = [4, 6, 7] as const;
+// The MSD pipeline rates every keymode in this range. Dan remains populated
+// only where a ladder exists (4K/6K/7K), but the shared board can safely hold
+// those sparse dan columns alongside every MSD keymode.
+export const SKILL_LEADERBOARD_KEY_COUNTS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 export type SkillLeaderboardKeyCount = (typeof SKILL_LEADERBOARD_KEY_COUNTS)[number];
+export const DAN_LEADERBOARD_KEY_COUNTS = [4, 6, 7] as const;
 
 export const SKILL_LEADERBOARD_MAX_PAGE_SIZE = 50;
 
@@ -53,11 +57,16 @@ export function isSkillLeaderboardKeyCount(value: number): value is SkillLeaderb
   return (SKILL_LEADERBOARD_KEY_COUNTS as readonly number[]).includes(value);
 }
 
+export function isDanLeaderboardKeyCount(value: number): boolean {
+  return (DAN_LEADERBOARD_KEY_COUNTS as readonly number[]).includes(value);
+}
+
 /**
  * Axes a keymode publishes, mirroring skillModeEntries on the frontend and
  * percentileAxes in skill-baseline: 4K speaks MinaCalc's native skillsets plus
- * the grafted LN pattern axis; 6K/7K speak the in-house pattern vocabulary only,
- * because the calc's skillset names are 4K-born and unreliable elsewhere.
+ * the grafted LN pattern axis; every other supported keymode speaks the
+ * in-house pattern vocabulary only, because the calc's skillset names are
+ * 4K-born and unreliable elsewhere.
  *
  * Overall leads every keymode and is the board's default: it is the "no
  * particular skill" ranking, the aggregate the profile card headlines, and the
@@ -169,6 +178,10 @@ export interface SkillLeaderboardSnapshot extends LeaderboardSnapshotBase {
   axis: string;
   ranking: SkillLeaderboardEntry[];
   axes: SkillLeaderboardAxisInfo[];
+  // Keymodes with at least one rated player in this scope, in picker order.
+  // This is population-driven rather than the full supported 4K-18K range so
+  // a small country does not get a row of empty boards.
+  keyCounts: SkillLeaderboardKeyCount[];
   /* False when THIS axis has no population median and the board is therefore
      ranking raw ratings, which would disagree with the profile page. Per axis
      and not per board on purpose: a board-wide flag answers off whichever
@@ -417,8 +430,9 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
             value = Number(mode?.ratings?.[axis]) || 0;
             plays = analyzedPlays;
           }
-          // A 6K/7K calc returns ~0.15 slivers for skillsets it does not rate;
-          // the same floor the profile card uses keeps those off the board.
+          // The non-4K calc returns ~0.15 slivers for skillsets it does not
+          // rate; the same floor the profile card uses keeps those off the
+          // board.
           if (!(value >= 1)) continue;
           const shrunkValue = curves ? shrinkRating(value, plays, curveMedian(axisCurves, axis)) : value;
           let column = draft.axes.get(axis);
@@ -714,6 +728,28 @@ function axisPopulations(
   return infos;
 }
 
+function populatedSkillKeyCounts(
+  db: Db,
+  board: SkillBoardCache,
+  scopeCode: string,
+  codes: string[] | null,
+): SkillLeaderboardKeyCount[] {
+  const keyCounts: SkillLeaderboardKeyCount[] = [];
+  for (const keyCount of SKILL_LEADERBOARD_KEY_COUNTS) {
+    const keymode = board.keymodes.get(keyCount);
+    if (!keymode) continue;
+    // Overall exists on every current row, but checking the published axis
+    // vocabulary also keeps older rows with only a pattern rating reachable.
+    const populated = leaderboardAxesFor(keyCount).some((axis) => {
+      const column = keymode.axes.get(axis);
+      if (!column) return false;
+      return scopedOrder(db, board, keymode, `${scopeCode}:${keyCount}:${axis}`, column.order, codes).length > 0;
+    });
+    if (populated) keyCounts.push(keyCount);
+  }
+  return keyCounts;
+}
+
 export async function getSkillLeaderboard(db: Db, query: SkillLeaderboardQuery): Promise<SkillLeaderboardSnapshot> {
   const board = await getSkillBoard(db);
   const scope = resolveCountryScope(query.country);
@@ -722,12 +758,14 @@ export async function getSkillLeaderboard(db: Db, query: SkillLeaderboardQuery):
   const page = clampPage(query.page);
   const pageSize = clampPageSize(query.pageSize);
   const axes = axisPopulations(db, board, keymode, scope.code, codes);
+  const keyCounts = populatedSkillKeyCounts(db, board, scope.code, codes);
   const axisCurves: AxisCurveMap | undefined = board.curves?.curves[String(query.keyCount)];
 
   const base: SkillLeaderboardSnapshot = {
     axis: query.axis,
     ranking: [],
     axes,
+    keyCounts,
     total: 0,
     page,
     pageSize,

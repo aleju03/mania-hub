@@ -91,6 +91,49 @@ export interface ClassifyChartInput extends DanEstimateInput {
   companella?: CompanellaEstimate | null;
 }
 
+// Marathon duration correction (upstream 2026-08-30, vendored in
+// estimator/marathonCorrection.js): Azusa and Roxy shave numeric off long
+// charts whose MinaCalc skillsets are evenly spread, on the reading that
+// sustained even difficulty is endurance rather than skill.
+//
+// It is deliberately NOT wired in. The estimators only correct when a caller
+// passes `options.marathonCorrection`, and nothing here does. A dan course is
+// long and skill-balanced by construction, so the correction lands almost
+// entirely on courses, and on our labels it pushes correctly-rated ones down:
+// EXTRA-DELTA `delta+` -> `delta-`, EXTRA-GAMMA `gamma+` -> `gamma-`,
+// INTRO-1st `1` -> `1--`, against wins that only move already-wrong rows
+// closer. Softening the constants softens the damage without removing it
+// (measured at scale 0.20/cap 0.25 too), because a uniform downward push on
+// that chart shape cannot tell an over-rated course from a correct one. See
+// "Re-pin at 5a6144c" in vendor/leoblack/PORT_NOTES.md for the benchmark.
+//
+// The gate below stays so the decision is testable and so a future re-copy
+// that re-enables it has to delete this comment first.
+export const MARATHON_CORRECTION_MIN_DURATION_S = 300;
+
+/** First-to-last note span in seconds, as upstream measures a marathon. */
+export function chartNoteSpanSeconds(map: ManiaBeatmap): number {
+  const notes = map.notes;
+  if (notes.length < 2) return 0;
+  let earliest = Infinity;
+  let latest = -Infinity;
+  for (const note of notes) {
+    if (note.time < earliest) earliest = note.time;
+    if (note.time > latest) latest = note.time;
+  }
+  return latest > earliest ? (latest - earliest) / 1000 : 0;
+}
+
+/**
+ * Whether MSD values would change this chart's verdict through the marathon
+ * correction, so an async caller knows when computing them is worth a
+ * MinaCalc pass. The correction's other gates (skill balance, numeric taper)
+ * live in the vendored module and need the values themselves.
+ */
+export function isMarathonCorrectionCandidate(map: ManiaBeatmap): boolean {
+  return map.keyCount === 4 && chartNoteSpanSeconds(map) > MARATHON_CORRECTION_MIN_DURATION_S;
+}
+
 const TIER_VARIANTS: Record<string, string | null> = {
   low: "--",
   "mid/low": "-",

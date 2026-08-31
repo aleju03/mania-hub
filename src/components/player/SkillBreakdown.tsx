@@ -570,3 +570,38 @@ export function SkillModePanel({
     </div>
   );
 }
+
+/**
+ * One keymode in the row that picks which panel is open.
+ *
+ * Drawn as the rating itself, not as a button: nine bordered cards above a
+ * bordered panel read as a control panel rather than a page of numbers, and
+ * the row is the profile's ratings at a glance before it is anything to click.
+ * Selection is the accent rule under the one that is open.
+ */
+export function SkillModeOption({ mode, selected, onSelect }: {
+  mode: MyDataSkillMode;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className="group flex flex-col gap-1 text-left transition-colors cursor-pointer"
+    >
+      <span className={`text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+        selected ? "text-osu-pink-light" : "text-osu-f1 group-hover:text-osu-l2"
+      }`}>
+        {mode.keyCount}K
+      </span>
+      <span className={`text-[22px] font-bold leading-none tabular-nums transition-colors ${
+        selected ? "text-white" : "text-osu-l3 group-hover:text-osu-l1"
+      }`}>
+        {Number(mode.ratings.Overall ?? 0).toFixed(2)}
+      </span>
+      <span className={`h-[2px] w-full rounded-full transition-colors ${selected ? "bg-osu-pink" : "bg-transparent"}`} />
+    </button>
+  );
+}

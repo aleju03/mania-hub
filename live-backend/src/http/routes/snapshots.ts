@@ -7,7 +7,7 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { getMapCollection, getMapCollections, getMapCollectionsRotation } from "../../features/map-collections.js";
 import { getMapSearchPage, getMapSearchSetEntry } from "../../features/map-search.js";
 import { getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersPageQuery } from "../../features/maps.js";
-import { getDanLeaderboard, getSkillLeaderboard, isSkillLeaderboardKeyCount } from "../../features/skill-leaderboards.js";
+import { getDanLeaderboard, getSkillLeaderboard, isDanLeaderboardKeyCount, isSkillLeaderboardKeyCount } from "../../features/skill-leaderboards.js";
 import { getRankDeltaSnapshot } from "../../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../../features/snipes.js";
 import { getTopPlaysSnapshot } from "../../features/top-plays.js";
@@ -291,7 +291,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
   if (url.pathname === "/api/snapshots/dan-leaderboard") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const query = parseDanLeaderboardQuery(url.searchParams);
-    if (!isSkillLeaderboardKeyCount(query.keyCount)) {
+    if (!isDanLeaderboardKeyCount(query.keyCount)) {
       sendJson(req, res, ctx, 400, { error: "unsupported_keymode" });
       return true;
     }

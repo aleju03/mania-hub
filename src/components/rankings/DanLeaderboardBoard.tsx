@@ -12,6 +12,7 @@ import { formatNumber } from "../../lib/format";
 import { useHiddenUserIds } from "../../store";
 import {
   DEFAULT_DAN_SKILLSET,
+  DAN_LEADERBOARD_KEY_COUNTS,
   LEADERBOARD_PAGE_SIZE,
   type DanLeaderboardSnapshot,
   type DanSide,
@@ -136,6 +137,7 @@ export function DanLeaderboardBoard({
         <KeymodeControl
           id="dan-leaderboard-keys"
           value={keys}
+          keyCounts={DAN_LEADERBOARD_KEY_COUNTS}
           onChange={(next) => onNavigate({ keys: next, skillset: undefined, page: 1 })}
         />
         <div role="group" aria-label={t`Dan course`}>

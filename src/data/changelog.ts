@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-31", text: "Updated to a MinaCalc version (0.74.0, was 0.72.3) with support from 4K to 18K, so 5K, 8K, 9K, 10K and every keymode up to 18K get an MSD and skillset breakdown instead of only a pattern profile, and plays on those keymodes count toward your Skill rating, each keymode rated separately like 4K, 6K and 7K already were. Maps on those keymodes are being rated now", to: "/my-stats" },
   { date: "2026-08-31", text: "More work on how maps are sorted into skills on 4K, so fewer tech maps land under speed. A map that is genuinely both now counts in both skills, and so does a long jack map that is also stamina. About one map in seven changes skill", to: "/dan-estimates" },
   { date: "2026-08-30", text: "Dan estimates now leave up to three passes out of a skillset's average when they credit more than five levels below the average of your five best in it. A dan 6 pass in a skillset whose best five are beta is left out. They still show in the dan window, marked not counted", to: "/dan-estimates" },
   { date: "2026-08-29", text: "Fixed plays with the lazer Difficulty Adjust mod counting toward skill ratings and dan, and plays with the EZ mod counting toward dan. EZ plays still count for MSD, with their Wife accuracy measured against the wider EZ windows, so they rate lower and there is nothing to gain from playing EZ", to: "/my-stats" },

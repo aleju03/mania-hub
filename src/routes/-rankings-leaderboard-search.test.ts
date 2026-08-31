@@ -3,6 +3,7 @@ import {
   DEFAULT_DAN_SIDE,
   DEFAULT_LEADERBOARD_KEYS,
   DEFAULT_LEADERBOARD_TAB,
+  parseDanLeaderboardKeys,
   parseDanSide,
   parseLeaderboardAxis,
   parseLeaderboardKeys,
@@ -21,12 +22,19 @@ describe("leaderboard search params", () => {
     }
   });
 
-  it("accepts only the keymodes the skill pipeline rates", () => {
-    expect(parseLeaderboardKeys("7")).toBe(7);
-    expect(parseLeaderboardKeys(6)).toBe(6);
-    // 5K/10K have no MSD support, so they must not reach a request.
-    for (const value of ["5", 10, "abc", undefined, null]) {
+  it("accepts every MSD-supported keymode from 4K through 18K", () => {
+    for (let keys = 4; keys <= 18; keys += 1) {
+      expect(parseLeaderboardKeys(String(keys))).toBe(keys);
+    }
+    for (const value of [3, 19, "abc", undefined, null]) {
       expect(parseLeaderboardKeys(value)).toBe(DEFAULT_LEADERBOARD_KEYS);
+    }
+  });
+
+  it("keeps dan rankings on the three keymodes with ladders", () => {
+    for (const keys of [4, 6, 7]) expect(parseDanLeaderboardKeys(keys)).toBe(keys);
+    for (const value of [5, 8, 18, "abc", undefined, null]) {
+      expect(parseDanLeaderboardKeys(value)).toBe(DEFAULT_LEADERBOARD_KEYS);
     }
   });
 

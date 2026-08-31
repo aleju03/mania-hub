@@ -103,19 +103,28 @@ async function postSignatureAction(
     if (!response.ok) return { allowed: true, signature: null };
     const signature = readSignature(await response.json().catch(() => null));
     const memo = await import("./signature-resolve");
+    const renders = await import("./signature-render-cache");
     if (action === "enable" || action === "time-zone") {
       /* The render route resolves tokens through a short-lived memo. Without
          this, the preview fetched immediately after a save would re-render the
          style that was stored a moment ago, and the page would look like the
          setting did nothing. A zone report is the same shape of write: it
          moves the insights version, so the memo has to let go of the token. */
-      if (signature?.token) memo.forgetSignatureToken(signature.token);
+      if (signature?.token) {
+        memo.forgetSignatureToken(signature.token);
+        /* And the finished pictures under that token. Dropping only the resolve
+           would leave the previous render answering from this process for its
+           own TTL, which is the same "the setting did nothing" the memo drop
+           above exists to prevent. */
+        renders.forgetSignatureRenders(signature.token);
+      }
     } else {
       /* Rotating and disabling are the revoke. The old token is not in the
          response to forget by name, and leaving it memoized would keep a
          revoked signature answering for another memo window, so the whole map
          goes - it is small and this is rare. */
       memo.clearSignatureResolveMemo();
+      renders.clearSignatureRenderCache();
     }
     return { allowed: true, signature };
   } catch {
@@ -258,24 +267,42 @@ interface SignaturePurgeTarget {
   versions: Record<SignatureType, string>;
 }
 
-/* Removing a picture has to reach three places, because a render lives in
-   three: the edge cache keyed by URL, the stored object in R2 keyed by data
-   version, and the row itself. The row is the backend's job and already done
-   by the time this runs; these are the other two.
+/* Removing a picture has to reach four places, because a render lives in four:
+   this process's own copy of the bytes, the edge cache keyed by URL, the stored
+   object in R2 keyed by data version, and the row itself. The row is the
+   backend's job and already done by the time this runs; these are the rest.
 
-   Both are best-effort. The moderation action has already succeeded, and an
-   admin being told "block failed" because Cloudflare timed out would be a lie
-   that invites them to press it again. */
+   Only this instance's copy is dropped - the other frontend instances did not
+   serve the moderation call and have no channel to hear about it, so their
+   copies expire on the render cache's own short TTL instead.
+
+   The two network calls are best-effort. The moderation action has already
+   succeeded, and an admin being told "block failed" because Cloudflare timed
+   out would be a lie that invites them to press it again. */
 async function eraseSignatureCopies(userId: number, purge: SignaturePurgeTarget | null | undefined): Promise<void> {
   if (!purge?.token) return;
 
-  const [{ purgeCloudflareUrls }, { deleteSignatureImages }, { getPrimarySiteOrigin }, shared, route] = await Promise.all([
+  const [
+    { purgeCloudflareUrls },
+    { deleteSignatureImages },
+    { getPrimarySiteOrigin },
+    { forgetSignatureRenders },
+    shared,
+    route,
+  ] = await Promise.all([
     import("./cloudflare-purge"),
     import("./r2-cache"),
     import("./origin"),
+    import("./signature-render-cache"),
     import("./signature-shared"),
     import("../routes/api/signature/$token/$variant"),
   ]);
+
+  /* A fourth place, and the one the other three cannot reach: this process is
+     holding the finished bytes and would keep handing them out past the purge.
+     Free and synchronous, so it happens before the network work rather than
+     alongside it. */
+  forgetSignatureRenders(purge.token);
 
   const urls: string[] = [];
   const cacheKeys: string[] = [];

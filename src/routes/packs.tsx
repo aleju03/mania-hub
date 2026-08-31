@@ -533,9 +533,15 @@ function PacksPage() {
 
   const wallet = walletApi.wallet;
   if (phase === "pack" && wallet) collectionWalletRef.current = wallet;
-  /* Identity-stable for the memoized album view. */
+  /* Identity-stable for the memoized album view. Only countries that actually
+     have a tracked roster get a shelf: a country the backend has merely seen a
+     score from sits on the 'live' tier with nobody in it, and its album would
+     be an empty book (the Vatican's, for one). An older backend answers without
+     rosterSize, and there the tier list is all there is to go on. */
   const trackedCountries = useMemo(
-    () => countryFeatures?.countries.map((entry) => entry.country) ?? null,
+    () => countryFeatures?.countries
+      .filter((entry) => entry.rosterSize === undefined || entry.rosterSize > 0)
+      .map((entry) => entry.country) ?? null,
     [countryFeatures],
   );
   const selectedType = packTypeById(packTypeId);

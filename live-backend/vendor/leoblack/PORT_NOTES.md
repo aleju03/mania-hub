@@ -1,8 +1,8 @@
 # LeoBlack analyzer port
 
 Vendored calculation layer from LeoBlackMT/osumania_map_analyser (the tosu overlay
-"ManiaMapAnalyser by Leo_Black"), upstream commit `214aedd` (2026-08-23 HEAD at
-re-copy time; see "Re-pin at 214aedd" below for what moved). MIT, see LICENSE in
+"ManiaMapAnalyser by Leo_Black"), upstream commit `5a6144c` (2026-08-30 HEAD at
+re-copy time; see "Re-pin at 5a6144c" below for what moved). MIT, see LICENSE in
 this directory.
 
 Post-pin-adjacent files that ride along without changing default behavior: the
@@ -70,11 +70,24 @@ and must NOT be overwritten on a re-copy:
   band. Mystery/Nihility/Finish have no course files yet and extrapolate the
   Terra->Celestial level width; recalibrate when those courses exist. Covered by
   `live-backend/tests/dan-6k-rc-extension.test.ts`.
-- The `ett/versions/minaclac-*.js` glue stays at the old pin `0b27cc8` bytes: our
-  calc.js hands over `wasmBinary` and defines the CommonJS globals, so upstream's
-  newer locateFile-based glue offers nothing and re-copying it would re-open the
-  Vite asset-copying quirks the two "stop Vite from copying raw ett glue" commits
-  fixed.
+- The `ett/versions/minaclac-{68,70,72}*.js` glue stays at the old pin `0b27cc8`
+  bytes: our calc.js hands over `wasmBinary` and defines the CommonJS globals, so
+  upstream's newer locateFile-based glue offers nothing for those and re-copying
+  it would re-open the Vite asset-copying quirks the two "stop Vite from copying
+  raw ett glue" commits fixed. `minaclac-74.0.js` and `minaclac-75.0.js` are the
+  exception and DO carry upstream's 2026-08-30 emscripten output, because the
+  n-key wasm they load only exists in that build; both are top-level-await ESM
+  factories that do their own Node environment sniffing, and they bundle and run
+  under our loader unchanged (verified by `npm run build`'s asset check).
+- The 74.0/75.0 wasm binaries carry OUR cap patch, not upstream's. Upstream's
+  n-key rebuild silently dropped the 40 -> 100 SSR clamp lift their own
+  `tools/patch-minaclac-msd-cap.mjs` applies, so a straight re-copy re-clamps
+  every top-end skillset at 40 (caught on eight local 6K/7K charts stored above
+  it, e.g. beatmap 3278106 at 56.87 coming back 40.00). Both binaries were
+  re-patched with that same tool's edit - `f32.const 40.0` (43 00 00 20 42) ->
+  `100.0` (43 00 00 c8 42), four occurrences each - after which those eight
+  charts return their stored values exactly. Re-run it on any future re-copy and
+  re-check a known above-40 chart; the count is not stable across their builds.
 
 ## What's here
 
@@ -100,12 +113,14 @@ and must NOT be overwritten on a re-copy:
 - `pipeline/` - upstream's `runAnalysisPipeline.js`, a pure full-analysis
   orchestrator (parse once, run everything). Vendored for diff hygiene; our
   facades run their own orchestration and do not call it.
-- `ett/` - Etterna MinaCalc as Emscripten WASM (5 versions). The glue is
+- `ett/` - Etterna MinaCalc as Emscripten WASM (6 versions; 0.74.0 and 0.75.0
+  carry the n-key pipeline, and every non-4K keycount is pinned to 0.74.0). The glue is
   browser-targeted, but `calc.js` is isomorphic: in Node it reads the wasm bytes
   itself (`wasmBinary` override) and defines the CommonJS globals the glue's
   environment sniffing dereferences at factory time. `constants.js` is upstream's
-  version registry (their `index.js` imports it). The 70.0/72.0/72.3/74.0 wasm
-  binaries are upstream's cap-patched blobs (`8e42f49d`: the f32 40.0 per-skillset
+  version registry (their `index.js` imports it). The 70.0/72.0/72.3 wasm
+  binaries are upstream's cap-patched blobs (74.0/75.0 are patched by us, see
+  above) (`8e42f49d`: the f32 40.0 per-skillset
   SSR clamp byte-patched to 100.0, reproducible via their
   `tools/patch-minaclac-msd-cap.mjs`); 68.0-Unofficial is deliberately unpatched
   upstream and unchanged here.
@@ -277,6 +292,92 @@ Ops wiring that shipped with the re-pin: `DAN_ESTIMATE_CACHE_VERSION` bumped to
   row backdated stale, so the next profile view re-rates just those plays on
   the lifted engine. A targeted purge, not a PLAYER_SKILLS_VERSION bump,
   because sub-cap SSRs are bit-identical.
+
+## Re-pin at 5a6144c (2026-08-31)
+
+Two upstream calculation changes; the rest of the range (`7721a8b`..`87fb529`)
+is their telemetry backend and dashboard, plus card/pause UI, none of it
+vendored.
+
+1. **Marathon duration correction** (PR #61, `4c00d32`..`649ae28`): a new
+   `estimator/marathonCorrection.js`, applied inside Azusa and Roxy rather than
+   as a pipeline post-step. Downward-only on `numericDifficulty`, with `estDiff`
+   re-derived from the corrected value:
+   `corr = min(0.50, 0.40 * ln(1 + (durationS - 300) / 60))`, tapered linearly
+   to zero between numeric 10 and 16, and gated on 4K + drain over 300s + MSD
+   present + a skill balance of `max/total < 0.45`. `reworkEstimatorUtils.js`
+   also gained a null-guard for keymodes with no LN interval table (10K), and
+   `pipeline/` picked up the on-demand pre-Ett reuse. All copied verbatim.
+
+   **Vendored but deliberately not enabled.** The estimators only correct when
+   a caller passes `options.marathonCorrection`, and `chart-classifier.ts`
+   never does; the gate helpers (`isMarathonCorrectionCandidate`,
+   `chartNoteSpanSeconds`, `MARATHON_CORRECTION_MIN_DURATION_S`) stay so the
+   decision is testable, pinned by `tests/dan-marathon-correction.test.ts`.
+
+   Why: a dan course is long and skill-balanced by construction, so the
+   correction lands almost entirely on courses. Every one of the 20 labelled
+   rows it moved on the benchmark is a course chart, and the moves split 5
+   better against 3 worse - but all three losses are courses the estimator had
+   exactly right, pushed off their variant:
+
+   | chart | off | scale 0.20 / cap 0.25 | upstream 0.40 / 0.50 | expected |
+   | --- | --- | --- | --- | --- |
+   | EXTRA-DELTA | `delta+` | `delta` | `delta-` | `delta+` |
+   | EXTRA-GAMMA | `gamma+` | `gamma` | `gamma-` | `gamma+` |
+   | INTRO-1st | `1` | `1-` | `1--` | `1` |
+   | EXTRA-BETA | `gamma--` | `beta++` | `beta` | `beta+` |
+
+   Summary line, `npm run dan:benchmark` normal/unified rate 1.0, 2026-08-31:
+   off exact 91 / wrong 135 / base 64.66%; 0.20-0.25 exact 91 / wrong 133 /
+   base 65.18%; 0.40-0.50 exact 90 / wrong 131 / base 65.71%. The headline
+   improves, but softening the constants only softens the damage - the same
+   three anchors regress at every non-zero setting, because a uniform downward
+   push on that chart shape cannot tell an over-rated course from a correct
+   one. The one clear win (EXTRA-BETA, `gamma--` -> `beta`) is the estimator
+   over-rating a course, which is what `sunnyLowEndReroute` and
+   `isAzusaLowEndSuspect` already exist to catch at the other end of the scale.
+   Gating it on "is this a dan course" is not available to us: chart rating
+   must stay algorithmic, and `dan-courses.ts` is a player-layer registry.
+
+   Revisit if upstream recalibrates against absolute course placement rather
+   than the relative ordering of adjacent courses, which is what their
+   acceptance notes describe.
+
+2. **MinaCalc n-key support** (PR #62, `d2d7561`..`34b96f2`): a rebuilt 0.74.0
+   whose FFI gates 4..18K instead of 4/6/7, plus a new 0.75.0 on the same
+   structure. `SUPPORTED_KEYS` widens to 4..18 in `ett/constants.js`, our
+   `ett/calc.js` and `ett/versions/index.js` (the latter two are ours, so this
+   was a merge), and the non-4K pin broadens from "6 or 7" to "anything but 4".
+   `DEFAULT_ETTERNA_VERSION` stays 0.72.3: 0.75.0 is registered and selectable
+   but nothing routes to it, since adopting it would move 4/6/7K numbers too.
+   `MSD_SUPPORTED_KEYS` in `src/dan/msd.ts` is the backend gate and widens to
+   match; every `computeMsd` caller inherits it.
+
+   Measured before shipping: 4/6/7K are bit-identical on the rebuilt 0.74.0
+   (120 charts, one 7K skillset off by 0.008 with Overall unchanged), so no
+   re-sweep is owed there. The whole local non-4/6/7K corpus rates: 4022 charts
+   across 5K and 8K-18K, 4021 with a positive Overall, one hard failure (18K
+   beatmap 1548754 aborts inside the wasm, deterministically; calc.js evicts the
+   instance and later charts are unaffected). The n-key engine does not rate
+   Technical - it returns the ~0.18 floor - which the MSD readout already drops
+   with its `>= 1` filter, the same way it does for 6K/7K.
+
+   `LN_TAIL_BLEND_BY_KEYMODE` still only has weights for 4/6/7. The new
+   keymodes get no LN-tail blend rather than a guessed one; fit them the way
+   the 4K/7K weights were fit before adding entries.
+
+Ops wiring: one boot-seeded sweep, `recompute_nkey_msd_sweep`
+(chart-analysis.ts), re-analyzing 5K and 8K-18K rows whose `msd_json` is null.
+No `CHART_ANALYSIS_VERSION` or `DAN_ESTIMATE_CACHE_VERSION` bump: with the
+marathon correction off, no existing rating moves at all.
+
+Unrelated gap noticed while measuring the above: `parseLeoBlackRcHalf`
+collapses upstream's whole Intro ladder onto dan 1 (`Intro 3 mid` -> `1`,
+everything above or below it -> `1++`, with a negative rawDan, so `1++` reads
+as harder than `1` while being easier). About a thousand 4K rows already sit
+there. Fixing it means deciding how Intro should read below Reform 1, which is
+a labelling call rather than a port one.
 
 ## Benchmark vs our labels (2026-07-03, `dan_benchmark_labels` in Turso)
 

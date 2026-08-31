@@ -1,10 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { getCachedSignatureImage, putSignatureImage, signatureImageDigest } from "../../../../lib/r2-cache";
+import {
+  getCachedSignatureImage,
+  putSignatureImage,
+  signatureImageDigest,
+  SIGNATURE_IMAGE_CONTENT_TYPE,
+} from "../../../../lib/r2-cache";
 import { isSignatureTokenShape, resolveSignatureToken } from "../../../../lib/signature-resolve";
+import {
+  readSignatureRender,
+  signatureRenderKey,
+  storeSignatureRender,
+} from "../../../../lib/signature-render-cache";
 import { parseSignatureVariant, SIGNATURE_RENDER_VERSION } from "../../../../lib/signature-shared";
 import { normalizeSignatureStyleMap } from "../../../../lib/signature-style";
-import { ogRenderGate, pngResponse, scheduleDetached } from "../../../../lib/og-render";
+import { encodeSignatureWebp, imageResponse, ogRenderGate, pngResponse, scheduleDetached } from "../../../../lib/og-render";
 import { createFixedWindowLimiter } from "../../../../lib/upload-guards";
 import { placeholderPng, renderSignature } from "../-renderers";
 
@@ -26,12 +36,23 @@ import { placeholderPng, renderSignature } from "../-renderers";
  *    profile view".
  *
  * So the cost ladder per view is: browser cache, then edge cache, then a 304,
- * then an R2 read, and only then satori. */
+ * then this process's own copy of the finished bytes, then an R2 read, and only
+ * then satori. */
 
-// Short enough that an update lands quickly, long enough that the edge absorbs
-// a popular profile: at most one origin request per edge per 5 minutes per URL,
-// no matter how many people load the page.
-const SIGNATURE_CACHE_HEADER = "public, max-age=60, s-maxage=300, stale-while-revalidate=86400, stale-if-error=604800";
+/* Short enough that an update lands quickly, long enough that the edge absorbs
+   a popular profile: at most one origin request per edge per 5 minutes per URL,
+   no matter how many people load the page.
+
+   `max-age` rather than `s-maxage`, and that is not a style choice. RFC 9111
+   gives `s-maxage` the semantics of `proxy-revalidate`, so a shared cache may
+   not serve a stale copy at all - Cloudflare documents the pairing explicitly
+   ("do not use s-maxage with stale-while-revalidate") and simply ignored the
+   stale-while-revalidate that used to sit beside it here. The result was that
+   every expiry became a blocking origin fetch for whoever arrived first, which
+   is the 1-2s first paint this header is supposed to prevent. Under plain
+   `max-age` the edge takes the same 5 minutes, and an expired copy now goes out
+   immediately while the revalidation happens behind it. */
+export const SIGNATURE_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=86400, stale-if-error=604800";
 // A refusal is cached too, so a dead or guessed token cannot be used to poke
 // the origin in a loop.
 const SIGNATURE_REFUSAL_HEADER = "public, max-age=300";
@@ -85,7 +106,13 @@ function refuse(): Response {
 }
 
 function placeholderResponse(): Response {
+  // Stays PNG: it is a 1x1 no-store pixel that no cache keeps and no encoder
+  // needs to touch.
   return pngResponse(placeholderPng(), SIGNATURE_PLACEHOLDER_HEADER);
+}
+
+function signatureResponse(buffer: Buffer, etag: string): Response {
+  return imageResponse(buffer, SIGNATURE_IMAGE_CONTENT_TYPE, SIGNATURE_CACHE_HEADER, { ETag: etag });
 }
 
 async function renderAndStore(cacheKey: string, render: () => Promise<Buffer>): Promise<Buffer | null> {
@@ -117,6 +144,22 @@ export const Route = createFileRoute("/api/signature/$token/$variant")({
         const variant = parseSignatureVariant(params.variant);
         if (!variant) return refuse();
 
+        /* Above the resolve, because the resolve is half of what an edge miss
+           costs. A hit here answers with no backend call and no R2 read; what
+           it gives up is that a mutation on another frontend instance takes up
+           to the cache's TTL to be noticed, which is why that TTL is short. */
+        const renderKey = signatureRenderKey(token, variant.type, variant.design);
+        const memoized = readSignatureRender(renderKey);
+        if (memoized) {
+          if (etagMatches(request.headers.get("if-none-match"), memoized.etag)) {
+            return new Response(null, {
+              status: 304,
+              headers: { ETag: memoized.etag, "Cache-Control": SIGNATURE_CACHE_HEADER },
+            });
+          }
+          return signatureResponse(memoized.buffer, memoized.etag);
+        }
+
         const resolved = await resolveSignatureToken(token);
         if (!resolved) return refuse();
         if (!resolved.enabledTypes.includes(variant.type)) return refuse();
@@ -134,7 +177,10 @@ export const Route = createFileRoute("/api/signature/$token/$variant")({
         }
 
         const cached = await getCachedSignatureImage(cacheKey);
-        if (cached) return pngResponse(cached, SIGNATURE_CACHE_HEADER, { ETag: etag });
+        if (cached) {
+          storeSignatureRender(renderKey, cached, etag);
+          return signatureResponse(cached, etag);
+        }
 
         /* Cold render. Unlike /api/og this WAITS on the gate instead of
            degrading to a fallback image when it is busy. An OG card is a
@@ -155,16 +201,17 @@ export const Route = createFileRoute("/api/signature/$token/$variant")({
            reaching satori. */
         const style = normalizeSignatureStyleMap(resolved.styles)[variant.type];
 
-        const buffer = await renderAndStore(cacheKey, () => renderSignature({
+        const buffer = await renderAndStore(cacheKey, async () => encodeSignatureWebp(await renderSignature({
           request,
           resolved,
           type: variant.type,
           design: variant.design,
           style,
-        }));
+        })));
         if (!buffer) return placeholderResponse();
 
-        return pngResponse(buffer, SIGNATURE_CACHE_HEADER, { ETag: etag });
+        storeSignatureRender(renderKey, buffer, etag);
+        return signatureResponse(buffer, etag);
       },
     },
   },

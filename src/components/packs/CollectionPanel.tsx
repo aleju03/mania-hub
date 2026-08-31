@@ -1080,13 +1080,18 @@ export function CollectionPanel({
             <button
               type="button"
               onPointerDown={(event) => {
-                // Primary button only; a right-click opens a menu, not a recycle.
+                // Primary button only; another pointer must never start a recycle.
                 if (event.button !== 0) return;
                 startRecycleAllHold(event.currentTarget);
               }}
               onPointerUp={cancelRecycleAllHold}
               onPointerLeave={cancelRecycleAllHold}
               onPointerCancel={cancelRecycleAllHold}
+              /* Android opens its page menu before this 700ms hold finishes
+                 unless the context gesture is claimed. The button has no
+                 context action of its own, so suppress that native default
+                 without shortening the destructive-action guard. */
+              onContextMenu={(event) => event.preventDefault()}
               /* Enter and Space hold too, so the gesture is not pointer-only.
                  Both are prevented from firing the button's own click, and the
                  auto-repeat while a key is held is ignored by the guard in
@@ -1102,8 +1107,8 @@ export function CollectionPanel({
                 cancelRecycleAllHold();
               }}
               onBlur={cancelRecycleAllHold}
-              // Holding on a phone is a press, not the start of a scroll.
-              style={{ touchAction: "none" }}
+              // Holding on a phone is a press, not scrolling or a native callout.
+              style={{ touchAction: "none", WebkitTouchCallout: "none" }}
               aria-label={t`Hold to recycle every duplicate, worth ${recyclable} shards`}
               className="relative overflow-hidden rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors select-none hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
             >
