@@ -97,7 +97,13 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // (resolveTilesForClear). A shared clear raises both tiles' dans but only its
 // primary tile counts toward that tile's quorum, so it cannot open a skill on
 // its own. Only tile filing moves; no SSR value or goal changes.
-export const PLAYER_SKILLS_VERSION = 21;
+// v22: no pipeline change at all - the bump exists so the version-stale drip
+// re-walks the roster after MinaCalc gained 5K and 8-18K (MSD_SUPPORTED_KEYS).
+// Rows recomputed between the v21 deploy and that one are stamped current but
+// hold no mode outside 4/6/7K, and the drip only picks users with no row at
+// the current version, so 3,544 of 17,838 ready rows would have kept an
+// incomplete keymode set until a profile view or a new session touched them.
+export const PLAYER_SKILLS_VERSION = 22;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -119,7 +125,7 @@ export const PLAYER_SKILLS_VERSION = 21;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
