@@ -95,8 +95,8 @@ function InsightCard({ title, children, right, accent = "#e173a6" }: { title: st
     <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3">{title}</span>
-        {right ? <span className="ml-auto text-[10px] text-osu-f1">{right}</span> : null}
+        <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-osu-l3">{title}</span>
+        {right ? <span className="ml-auto min-w-0 text-[10px] text-osu-f1">{right}</span> : null}
       </div>
       {children}
     </div>
@@ -920,9 +920,11 @@ function FeedTab({ active, onClick, children }: { active: boolean; onClick: () =
 
 function KeymodeToggle({ modes, active, onChange }: { modes: Array<{ keyCount: number | null }>; active: number | null; onChange: (keyCount: number | null) => void }) {
   return (
-    // Eleven keymodes fit no card header, so the strip scrolls in place
-    // instead of pushing the header stats off their line.
-    <span className="inline-flex max-w-full gap-1 overflow-x-auto scrollbar-hide">
+    // MinaCalc rates 4K-18K, so a card header can be asked to hold fifteen
+    // keymodes. They wrap onto as many rows as they need rather than scrolling
+    // out of reach: the header has the width, and a chip nobody can see is a
+    // keymode nobody knows is rated.
+    <span className="flex max-w-full flex-wrap justify-end gap-1">
       {modes.map((mode) => {
         const label = mode.keyCount == null ? "?" : KEY_LABEL[mode.keyCount] ?? `${mode.keyCount}K`;
         return (
