@@ -135,6 +135,17 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 10_000,
   },
   {
+    // Same structural gap as the roster lane: a queue reserve with no lane of
+    // its own. Ingest re-requests a user's reconcile directly, which masks the
+    // starvation most of the time, but nothing guarantees the parked ones
+    // drain. Deliberately slow -- one osu! call each, and urgent reconciles
+    // (priority 70) still win a fast-lane slot.
+    name: "recent-reconcile",
+    jobTypes: [RECENT_RECONCILE_JOB_TYPE],
+    claimLimit: 1,
+    intervalMs: 10_000,
+  },
+  {
     // Keep global backfill separate and slow so socket outages can be repaired
     // without letting JSON catch-up crowd out interactive enrichment jobs.
     name: "osc-backfill",

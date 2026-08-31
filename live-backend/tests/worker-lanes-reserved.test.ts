@@ -30,8 +30,9 @@ describe("worker lanes for reserved types", () => {
 
   // Both guarantees at once: a dedicated lane so scheduled work always drains,
   // and a fast-lane seat so an admitted urgent job runs immediately.
-  it("gives rosters a dedicated lane while keeping them in fast", () => {
+  it("gives rosters and reconciles a dedicated lane while keeping them in fast", () => {
     expect(laneNames("refresh_country_roster")).toEqual(["fast", "country-rosters"]);
+    expect(laneNames("reconcile_user_recent_scores")).toEqual(["fast", "recent-reconcile"]);
   });
 
   it("claims a roster even while higher-priority fast work floods the queue", async () => {
