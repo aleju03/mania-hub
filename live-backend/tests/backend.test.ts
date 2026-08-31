@@ -227,6 +227,21 @@ describe("live backend", () => {
     expect(`${row.source}:${Number(row.is_tracked)}`).toBe("manual:0");
   });
 
+  it("does not discover roster countries outside an ingest country allowlist", async () => {
+    const { db, ingestor } = await setup(["CR", "MX"]);
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('MX', 101, null, 'manual', 1, ?)",
+      [new Date().toISOString()],
+    );
+
+    expect(await ingestor.ingestBatch([score], "profile_recent", { countryAllowlist: ["MX"] }))
+      .toEqual({ inserted: 1, skipped: 0 });
+    expect(Number((await exec(db, "select count(*) as count from score_events where country = 'MX' and user_id = 101")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from country_rosters where country = 'CR' and user_id = 101")).rows[0].count)).toBe(0);
+  });
+
   it("projects tracked player activity by year without double-counting duplicate ingestion", async () => {
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -3889,6 +3904,8 @@ describe("live backend", () => {
     }]);
     const ctx = {
       db,
+      serveWriteDb: db,
+      serveWriteQueue: queue,
       queue,
       events,
       config: baseConfig(),
@@ -3910,12 +3927,47 @@ describe("live backend", () => {
     expect(osuResponse.res.statusCode).toBe(200);
     expect(JSON.parse(osuResponse.writes.join("")).payload).toHaveLength(1);
     expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    await vi.waitFor(async () => {
+      expect(Number((await exec(db, "select count(*) as count from score_events where score_id = 9910")).rows[0].count)).toBe(1);
+    });
 
     const invalidResponse = mockRes();
     await routeHttp(mockReq("GET", "/api/profiles/101/recent?source=other"), invalidResponse.res, ctx);
     expect(invalidResponse.res.statusCode).toBe(400);
     expect(JSON.parse(invalidResponse.writes.join(""))).toMatchObject({ error: "invalid_recent_source" });
     expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start tracking a player when their osu! recents are loaded", async () => {
+    const { db, queue, events } = await setup();
+    const [recentScore] = await fixture<OscScore[]>("top-best.json");
+    const getUserRecentScores = vi.fn(async () => [{
+      ...recentScore,
+      ended_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    }]);
+    const ctx = {
+      db,
+      serveWriteDb: db,
+      serveWriteQueue: queue,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {
+        getUserRecentScores,
+        limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) },
+      },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/recent?source=osu"), response.res, ctx);
+
+    expect(response.res.statusCode).toBe(200);
+    expect(JSON.parse(response.writes.join("")).payload).toHaveLength(1);
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    expect(Number((await exec(db, "select count(*) as count from country_rosters where user_id = 101")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from score_events where user_id = 101")).rows[0].count)).toBe(0);
   });
 
   it("answers 404 when a profile names no live osu! account", async () => {

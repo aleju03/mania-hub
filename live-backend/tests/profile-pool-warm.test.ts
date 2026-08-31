@@ -93,12 +93,12 @@ describe("profile pool warm sweep", () => {
     expect(await selectColdPoolUserIds(db, 10)).toEqual([1, 2]);
   });
 
-  it("includes manual opt-in members (rank null) but not score-sourced rows", async () => {
+  it("includes manual opt-in and score-sourced members with rank null", async () => {
     await seedPoolUser(1, 5000);
     await seedPoolUser(2, 6000, { source: "manual", rank: null });
     await seedPoolUser(3, 7000, { source: "score", rank: null });
 
-    expect(await selectColdPoolUserIds(db, 10)).toEqual([2, 1]);
+    expect(await selectColdPoolUserIds(db, 10)).toEqual([3, 2, 1]);
   });
 
   it("warms a batch, stores snapshots, and chains the next run", async () => {

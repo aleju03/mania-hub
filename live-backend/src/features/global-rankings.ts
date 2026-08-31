@@ -55,9 +55,9 @@ export interface GlobalRankingsQuery {
   pageSize?: number;
   sort?: GlobalRankingsSort;
   dir?: GlobalRankingsSortDirection;
-  /* "packs" serves the card-pack draw pool: the ranked board with manual
-     opt-in roster members merged in by pp. Leaderboard reads omit it and stay
-     ranked-only. */
+  /* "packs" serves the card-pack draw pool: the ranked board with tracked,
+     unranked manual/score roster members merged in by pp. Leaderboard reads
+     omit them and stay ranked-only. */
   pool?: "packs";
   /* With pool "packs", narrows the pool to players whose main keymode this is
      (see readMainKeymodes). Players whose keymode is unknown are in neither
@@ -308,12 +308,12 @@ async function getGlobalBoard(db: Db): Promise<GlobalBoardCache> {
   return refresh;
 }
 
-// Manual opt-in roster members carry rank null, which keeps them off every
-// ranking surface (see isRankedRosterMember) - but opting in is also the one
-// way a player outside the top N becomes a pullable maniacard, so the pack
-// pool deliberately includes them: the ranked board with manual members merged
-// in by pp and pool positions renumbered. Only `pool=packs` requests see this
-// merged board; leaderboards keep serving the ranked-only build above.
+// Manual opt-ins and score-discovered roster members carry rank null, which
+// keeps them off every ranking surface (see isRankedRosterMember). They are
+// still genuinely tracked players, so the pack pool includes both sources:
+// the ranked board with unranked tracked members merged in by pp and pool
+// positions renumbered. Only `pool=packs` requests see this merged board;
+// leaderboards keep serving the ranked-only build above.
 const PACK_POOL_CACHE_TTL_MS = 60 * 1000;
 
 interface PackPoolMemory {
@@ -327,9 +327,9 @@ interface PackPoolMemory {
 const packPoolCacheByDb = new WeakMap<Db, PackPoolMemory>();
 const packPoolBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
 
-/* Manual opt-in members who never made a ranked roster slot anywhere. The
-   ranked-slot exclusion keeps a player who is manual in one country but ranked
-   in another from appearing twice.
+/* Manual opt-in and score-discovered members who never made a ranked roster
+   slot anywhere. The ranked-slot exclusion keeps a player who is unranked in
+   one country but ranked in another from appearing twice.
 
    pp has to be above zero, not merely present. Opting in is self-serve, so an
    account with no ranked mania play at all can put itself on this list, and pp
@@ -344,9 +344,9 @@ const packPoolBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
    Roster-driven on purpose: country_rosters has no standalone user_id index,
    so a users-driven correlated EXISTS scans the whole roster once per
    pp-carrying user - ~7s of synchronous CPU on the serving connection. Driving
-   from the small manual set (one roster scan, then PK lookups) returns the
+   from the small unranked set (one roster scan, then PK lookups) returns the
    same rows in milliseconds. */
-export async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
+export async function readUnrankedPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
   const rows = (await exec(
     db,
     `select
@@ -361,14 +361,14 @@ export async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[
      from (
        select distinct m.user_id
        from country_rosters m
-       where m.is_tracked = 1 and m.source = 'manual' and m.rank is null
-     ) manual
-     join users u on u.user_id = manual.user_id
+       where m.is_tracked = 1 and m.source in ('manual', 'score') and m.rank is null
+     ) unranked
+     join users u on u.user_id = unranked.user_id
      where u.pp > 0
        and coalesce(u.is_active, 1) = 1
        and not exists (
          select 1 from country_rosters ranked
-         where ranked.user_id = manual.user_id and ranked.is_tracked = 1 and ranked.rank is not null
+         where ranked.user_id = unranked.user_id and ranked.is_tracked = 1 and ranked.rank is not null
        )
      order by u.pp desc`,
   )).rows;
@@ -381,10 +381,10 @@ export async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[
 
 export function mergePackPoolEntries(
   board: GlobalRankingEntry[],
-  manual: GlobalRankingEntry[],
+  unranked: GlobalRankingEntry[],
 ): GlobalRankingEntry[] {
-  if (manual.length === 0) return board;
-  const merged = [...board, ...manual].sort(
+  if (unranked.length === 0) return board;
+  const merged = [...board, ...unranked].sort(
     (a, b) =>
       b.pp - a.pp ||
       (a.global_rank ?? Number.MAX_SAFE_INTEGER) - (b.global_rank ?? Number.MAX_SAFE_INTEGER),
@@ -397,15 +397,15 @@ export function mergePackPoolEntries(
 
 async function buildPackPoolBoard(db: Db, board: GlobalBoardCache): Promise<GlobalBoardCache> {
   try {
-    const manual = await readManualPoolEntries(db);
-    const pool: GlobalBoardCache = { entries: mergePackPoolEntries(board.entries, manual), builtAt: board.builtAt };
+    const unranked = await readUnrankedPoolEntries(db);
+    const pool: GlobalBoardCache = { entries: mergePackPoolEntries(board.entries, unranked), builtAt: board.builtAt };
     packPoolCacheByDb.set(db, { board: pool, boardBuiltAt: board.builtAt, checkedAt: Date.now() });
     return pool;
   } catch (error) {
     // The pack pool must never be less available than the board itself: a
-    // failed manual-members read serves the ranked board alone (uncached, so
+    // failed unranked-members read serves the ranked board alone (uncached, so
     // the next request retries the merge).
-    logWarn("pack_pool_manual_read_failed", errorContext(error));
+    logWarn("pack_pool_unranked_read_failed", errorContext(error));
     return board;
   }
 }

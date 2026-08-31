@@ -23,9 +23,9 @@ export const PACK_SIZE = 5;
 // Packs draw from the server's tracked-player pool (the global
 // rankings snapshot, ~6k players whose data the backend already stores), so
 // opening a pack costs local DB reads instead of osu! API calls. The pool=packs
-// variant additionally merges in manual roster opt-ins - a player who adds
-// themselves to their country's roster becomes a pullable card, even though
-// they stay off the ranking surfaces. There is deliberately no direct osu!
+// variant additionally merges in rankless tracked members, whether they opted
+// in manually or were discovered from a score. They become pullable cards but
+// stay off the ranking surfaces. There is deliberately no direct osu!
 // rankings fallback: it used to exist, and on 2026-08-07 a run of spammed
 // opens got its pool reads 429ed by the backend's abuse guard, which routed
 // every one of those draws onto random deep osu! rankings pages (~50 real

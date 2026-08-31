@@ -123,7 +123,7 @@ export async function enqueueRosterRefreshes(queue: JobQueue, countries: string[
  * so they are deliberately excluded from ranking surfaces (global rankings, the country maps
  * board, snipe boards, rank deltas). This is the shared discriminator for that. The one
  * exception is the card-pack pool (`pool=packs` on the global rankings snapshot), which
- * merges manual opt-in members back in so they are pullable maniacards.
+ * merges both kinds of tracked, rankless member back in so they are pullable maniacards.
  */
 export async function isRankedRosterMember(db: Db, country: string, userId: number): Promise<boolean> {
   const row = (await exec(

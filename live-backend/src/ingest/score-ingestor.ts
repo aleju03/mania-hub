@@ -100,7 +100,7 @@ export class ScoreIngestor {
     const countries = await this.getTrackedCountries(score, options.countryAllowlist);
     if (countries.length === 0) return false;
     logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, countries, beatmap_id: beatmapId, source });
-    await this.persistMetadata(score);
+    await this.persistMetadata(score, options.countryAllowlist);
     const totalScore = getDisplayedTotalScore(score);
     const scoreIdentity = getScoreIdentity(score);
     let inserted = 0;
@@ -349,7 +349,7 @@ export class ScoreIngestor {
     return [...countries];
   }
 
-  private async persistMetadata(score: OscScore): Promise<void> {
+  private async persistMetadata(score: OscScore, countryAllowlist?: string[]): Promise<void> {
     const now = nowIso();
     const statements: DbStatement[] = [];
     if (score.user) {
@@ -360,7 +360,10 @@ export class ScoreIngestor {
         args: [score.user.id, score.user.username, score.user.avatar_url, score.user.country_code, json(score.user), now],
       });
       const activeCountries = await getActiveCountryCodes(this.db, this.config);
-      if (score.user.country_code && activeCountries.includes(score.user.country_code.toUpperCase())) {
+      const userCountry = score.user.country_code?.toUpperCase();
+      const countryAllowed = countryAllowlist == null
+        || countryAllowlist.some((country) => country.trim().toUpperCase() === userCountry);
+      if (userCountry && countryAllowed && activeCountries.includes(userCountry)) {
         statements.push({
           // Also revives an untracked non-manual row: play evidence carrying user metadata is
           // the only path that can, since the /scores fallback feed has no user objects. Manual
@@ -369,7 +372,7 @@ export class ScoreIngestor {
                 values (?, ?, null, 'score', 1, ?)
                 on conflict(country, user_id) do update set is_tracked = 1, refreshed_at = excluded.refreshed_at
                 where country_rosters.source != 'manual' and country_rosters.is_tracked = 0`,
-          args: [score.user.country_code, score.user.id, now],
+          args: [userCountry, score.user.id, now],
         });
       }
     }

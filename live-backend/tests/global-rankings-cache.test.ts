@@ -106,11 +106,11 @@ describe("global rankings board cache", () => {
   });
 });
 
-async function seedManualMember(
+async function seedUnrankedMember(
   userId: number,
   username: string,
   pp: number | null,
-  options: { country?: string; active?: boolean } = {},
+  options: { country?: string; active?: boolean; source?: "manual" | "score" } = {},
 ): Promise<void> {
   const country = options.country ?? "CR";
   await exec(
@@ -131,25 +131,26 @@ async function seedManualMember(
   await exec(
     db,
     `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
-     values (?, ?, null, 'manual', 1, ?)`,
-    [country, userId, new Date().toISOString()],
+     values (?, ?, null, ?, 1, ?)`,
+    [country, userId, options.source ?? "manual", new Date().toISOString()],
   );
 }
 
 describe("pack pool (pool=packs)", () => {
-  it("merges manual opt-in members into the pool by pp and keeps the default board ranked-only", async () => {
+  it("merges manual and score-sourced members into the pool while keeping the default board ranked-only", async () => {
     await seedPlayer(1, "alpha", 9000);
     await seedPlayer(2, "beta", 12000);
-    await seedManualMember(3, "gamma", 10000);
+    await seedUnrankedMember(3, "gamma", 10000);
+    await seedUnrankedMember(4, "delta", 11000, { source: "score" });
 
     const board = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50 });
     expect(board.total).toBe(2);
     expect(board.ranking.map((entry) => entry.user.username)).toEqual(["beta", "alpha"]);
 
     const pool = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50, pool: "packs" });
-    expect(pool.total).toBe(3);
-    expect(pool.ranking.map((entry) => entry.user.username)).toEqual(["beta", "gamma", "alpha"]);
-    expect(pool.ranking.map((entry) => entry.rank)).toEqual([1, 2, 3]);
+    expect(pool.total).toBe(4);
+    expect(pool.ranking.map((entry) => entry.user.username)).toEqual(["beta", "delta", "gamma", "alpha"]);
+    expect(pool.ranking.map((entry) => entry.rank)).toEqual([1, 2, 3, 4]);
   });
 
   it("does not duplicate a member who holds a ranked slot somewhere", async () => {
@@ -169,8 +170,8 @@ describe("pack pool (pool=packs)", () => {
 
   it("excludes inactive and never-enriched (pp null) manual members", async () => {
     await seedPlayer(1, "alpha", 9000);
-    await seedManualMember(2, "banned", 8000, { active: false });
-    await seedManualMember(3, "cold", null);
+    await seedUnrankedMember(2, "banned", 8000, { active: false });
+    await seedUnrankedMember(3, "cold", null);
 
     const pool = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50, pool: "packs" });
     expect(pool.total).toBe(1);

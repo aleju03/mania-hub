@@ -77,11 +77,24 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       }
       if (source === "osu") {
         if (!checkRate(req, res, ctx, "publicCostly")) return true;
+        // Loading osu!'s recent-history view is not an opt-in action. Reuse
+        // the payload for gap-filling only when this player was already in
+        // tracking scope before the request; the explicit "Track my plays"
+        // route remains the only profile action that can add them.
+        const trackedCountries = (await exec(
+          ctx.db,
+          "select country from country_rosters where user_id = ? and is_tracked = 1",
+          [userId],
+        )).rows.map((row) => String(row.country).toUpperCase());
         sendJson(req, res, ctx, 200, await getPlayerRecentScoresFromOsu(
           ctx.serveWriteDb ?? ctx.db,
           ctx.osu,
           userId,
-          { onFreshScores: (scores) => void ingestProfileRecentScores(ctx, userId, scores) },
+          {
+            ...(trackedCountries.length > 0
+              ? { onFreshScores: (scores: OscScore[]) => void ingestProfileRecentScores(ctx, userId, scores, trackedCountries) }
+              : {}),
+          },
         ));
         return true;
       }
@@ -280,11 +293,17 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
  * That button fetches exactly what the recent-score reconcile job fetches, so
  * ingesting it here costs no extra osu! API budget and lets a profile view top
  * up the tracker while that player's own reconcile is still parked behind queue
- * pressure. Strictly opportunistic: it only fires when someone actually opens a
- * profile, so the queued job stays the real path. Runs detached from the
- * response, on the serving write connection, and never fails the request.
+ * pressure. This is only for players already in tracking scope: loading an
+ * arbitrary profile's recents must never enlist that player. Runs detached
+ * from the response, on the serving write connection, and never fails the
+ * request.
  */
-async function ingestProfileRecentScores(ctx: HttpContext, userId: number, scores: OscScore[]): Promise<void> {
+async function ingestProfileRecentScores(
+  ctx: HttpContext,
+  userId: number,
+  scores: OscScore[],
+  trackedCountries: string[],
+): Promise<void> {
   // No dedicated write connection means this process serves read-only (tests,
   // worker role); the reconcile job covers those.
   if (!ctx.serveWriteDb) return;
@@ -301,6 +320,10 @@ async function ingestProfileRecentScores(ctx: HttpContext, userId: number, score
     const result = await ingestor.ingestBatch(passed, "profile_recent", {
       enqueueRecentReconcile: false,
       processLeaderboardFeatures: false,
+      // Freeze the scope captured before the osu! fetch. Besides preventing
+      // score writes for any other country, the ingestor also applies this to
+      // its score-sourced roster discovery.
+      countryAllowlist: trackedCountries,
     });
     if (result.inserted > 0) {
       logInfo("profile_recent_scores_ingested", { user_id: userId, inserted: result.inserted, skipped: result.skipped });

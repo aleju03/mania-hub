@@ -26,9 +26,9 @@ export interface ProfilePoolWarmResult {
   done: boolean;
 }
 
-/* Pool players (ranked roster members plus manual opt-ins, the same set pack
-   draws come from) with no stored best scores anywhere. pp desc so the top
-   slices (elite and legend packs) go warm first. */
+/* Pool players (ranked roster members plus rankless manual/score members, the
+   same set pack draws come from) with no stored best scores anywhere. pp desc
+   so the top slices (elite and legend packs) go warm first. */
 export async function selectColdPoolUserIds(db: Db, limit: number): Promise<number[]> {
   const rows = (await exec(
     db,
@@ -39,7 +39,7 @@ export async function selectColdPoolUserIds(db: Db, limit: number): Promise<numb
        and exists (
          select 1 from country_rosters ro
          where ro.user_id = u.user_id and ro.is_tracked = 1
-           and (ro.rank is not null or ro.source = 'manual')
+           and (ro.rank is not null or ro.source in ('manual', 'score'))
        )
        and not exists (select 1 from profile_snapshots ps where ps.user_id = u.user_id)
        and not exists (select 1 from user_top_scores uts where uts.user_id = u.user_id)
