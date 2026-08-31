@@ -903,7 +903,14 @@ function startVariantPpDripScheduler(db: Awaited<ReturnType<typeof createDb>>, q
 // enqueues at bottom priority, so view-triggered computes (priority 50) and
 // dan estimates always jump ahead and the drip drains at whatever pace the
 // lane has spare. Strongest players first: their profiles get viewed most.
-const SKILLS_DRIP_BATCH = 16;
+//
+// Batch size is a write-path budget, not a CPU one: a compute is ~0.5s median
+// (measured over 237 runs, most of them drip work) but rewrites a ~54KB
+// plays_json blob, and this DB's repeated failure mode is write-lock
+// saturation rather than a busy core. 32 puts the roster inside ~2 days at
+// ~385 computes/h; raising it further wants the sqlite_batch_busy /
+// sqlite_wedged reopen counters checked against their ~5/h baseline first.
+const SKILLS_DRIP_BATCH = 32;
 const SKILLS_DRIP_INTERVAL_MS = 5 * 60_000;
 const SKILLS_DRIP_PRIORITY = 5;
 
