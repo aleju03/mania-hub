@@ -32,6 +32,7 @@ import {
 } from "./FilterChips";
 import type { TriStateMode } from "../../lib/maps-random-filter";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
+import { useNoDans } from "../../store";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -585,6 +586,7 @@ function MobileFilters({
   hasActiveFilters,
   collapsedFilterCount,
   resultsLabel,
+  showDan,
 }: {
   ui: MapSearchUiState;
   apply: ApplyFn;
@@ -592,6 +594,7 @@ function MobileFilters({
   hasActiveFilters: boolean;
   collapsedFilterCount: number;
   resultsLabel: string;
+  showDan: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -621,6 +624,7 @@ function MobileFilters({
         onClear={onClear}
         hasActiveFilters={hasActiveFilters}
         resultsLabel={resultsLabel}
+        showDan={showDan}
       />
     </>
   );
@@ -639,6 +643,7 @@ function MobileFilterSheet({
   onClear,
   hasActiveFilters,
   resultsLabel,
+  showDan,
 }: {
   open: boolean;
   onClose: () => void;
@@ -647,6 +652,7 @@ function MobileFilterSheet({
   onClear: () => void;
   hasActiveFilters: boolean;
   resultsLabel: string;
+  showDan: boolean;
 }) {
   const { t } = useLingui();
   // The sheet is always mounted (see above) and portals into document.body,
@@ -685,8 +691,9 @@ function MobileFilterSheet({
   // Pre-fetch/decode the badge art for the ladders the sheet would show, so
   // the first open animates over already-decoded images. The contexts join to
   // a string so the effect keys on the value, not the array identity.
-  const danContexts = danLadderGroups(ui).map((group) => group.context).join(" ");
+  const danContexts = showDan ? danLadderGroups(ui).map((group) => group.context).join(" ") : "";
   useEffect(() => {
+    if (!danContexts) return;
     const warm = () => {
       for (const context of danContexts.split(" ")) warmDanBadgeArt(context as DanScaleContext);
     };
@@ -755,9 +762,11 @@ function MobileFilterSheet({
           <ChipGroup label={t`Difficulty`}>
             <StarSlider ui={ui} apply={apply} />
           </ChipGroup>
-          <ChipGroup label={t`Dan (est.)`}>
-            <DanPicker ui={ui} apply={apply} inline />
-          </ChipGroup>
+          {showDan ? (
+            <ChipGroup label={t`Dan (est.)`}>
+              <DanPicker ui={ui} apply={apply} inline />
+            </ChipGroup>
+          ) : null}
           <ChipGroup label={t`BPM`}>
             <BpmSlider ui={ui} apply={apply} />
           </ChipGroup>
@@ -841,6 +850,7 @@ function SearchCardGridSkeleton() {
 
 export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props) {
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
   // Local source of truth so a tap updates the grid on the same frame; the URL
   // still syncs underneath (shareable links, back/forward) without gating the fetch.
   const [ui, setUi] = useState<MapSearchUiState>(state);
@@ -891,6 +901,13 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     onChange(patch);
   };
 
+  useEffect(() => {
+    if (!noDans || (uiRef.current.danMin == null && uiRef.current.danMax == null)) return;
+    apply({ danMin: null, danMax: null, page: 0 });
+    // `apply` intentionally follows the latest local UI through uiRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noDans]);
+
   // Free text is debounced so we don't refetch per keystroke.
   useEffect(() => {
     if (searchInput === ui.q) return;
@@ -900,8 +917,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   }, [searchInput, ui.q]);
 
   const requestKey = useMemo(
-    () => JSON.stringify(ui),
-    [ui],
+    () => JSON.stringify([ui, noDans]),
+    [ui, noDans],
   );
 
   // On a cold load the first client render must keep the SSR default sort; a
@@ -951,8 +968,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       bpmMax: ui.bpmMax > 0 ? ui.bpmMax : null,
       lenMin: ui.lenMin > 0 ? ui.lenMin : null,
       lenMax: ui.lenMax > 0 ? ui.lenMax : null,
-      danMin: ui.danMin,
-      danMax: ui.danMax,
+      danMin: noDans ? null : ui.danMin,
+      danMax: noDans ? null : ui.danMax,
       country: null,
       sort: ui.sort,
       dir: ui.dir,
@@ -1012,7 +1029,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0 ||
-    ui.danMin != null || ui.danMax != null;
+    (!noDans && (ui.danMin != null || ui.danMax != null));
 
   // How many collapsed filters are active, for the mobile toggle's badge.
   // Patterns stay visible above the toggle, so they don't count.
@@ -1022,7 +1039,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
     (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
     (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
-    (ui.danMin != null || ui.danMax != null ? 1 : 0);
+    (!noDans && (ui.danMin != null || ui.danMax != null) ? 1 : 0);
 
   // The sort table is module-scope descriptors; resolve it once per locale.
   const sortOptions = useMemo(
@@ -1102,6 +1119,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             hasActiveFilters={hasActiveFilters}
             collapsedFilterCount={collapsedFilterCount}
             resultsLabel={t`Show ${totalLabel} maps`}
+            showDan={!noDans}
           />
           <div className="ml-auto">
             <SortSelect options={sortOptions} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
@@ -1122,9 +1140,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                 </button>
               </div>
             </ChipGroup>
-            <ChipGroup label={t`Dan (est.)`}>
-              <DanPicker ui={ui} apply={apply} />
-            </ChipGroup>
+            {!noDans ? (
+              <ChipGroup label={t`Dan (est.)`}>
+                <DanPicker ui={ui} apply={apply} />
+              </ChipGroup>
+            ) : null}
           </div>
 
           {showMore && (

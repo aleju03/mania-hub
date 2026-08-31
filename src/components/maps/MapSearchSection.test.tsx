@@ -12,6 +12,7 @@ import { getI18n } from "../../lib/i18n";
 import { MapSearchSection, type MapSearchUiState } from "./MapSearchSection";
 import { fetchLiveMapSearch } from "../../lib/live-backend";
 import { writeSearchSortPreference } from "./searchSortPreference";
+import { useAppStore } from "../../store";
 
 vi.mock("../../lib/live-backend", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/live-backend")>();
@@ -65,6 +66,7 @@ function renderSection(state: MapSearchUiState) {
 
 beforeEach(() => {
   localStorage.clear();
+  useAppStore.getState().setNoDans(false);
   fetchMock.mockClear();
 });
 
@@ -162,6 +164,25 @@ describe("MapSearchSection cold-load fetch", () => {
       statusesExclude: ["loved"],
       patternsExclude: ["jack"],
     });
+  });
+
+  it("removes an active dan filter when No Dans is enabled", () => {
+    const onChange = vi.fn();
+    const view = render(
+      withI18n(
+        <MapSearchSection
+          state={{ ...DEFAULT_STATE, danMin: 4, danMax: 4 }}
+          onChange={onChange}
+          liveBackendEnabled={true}
+        />,
+      ),
+    );
+
+    act(() => useAppStore.getState().setNoDans(true));
+
+    expect(view.queryByText("Dan (est.)")).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith({ danMin: null, danMax: null, page: 0 });
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ danMin: null, danMax: null });
   });
 
   it("right-clicking a neutral pattern excludes it", () => {

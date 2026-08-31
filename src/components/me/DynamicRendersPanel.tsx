@@ -21,6 +21,7 @@ import {
 import { browserTimeZone } from "../../lib/time-zone";
 import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
 import type { SignatureImageProbe } from "../../routes/api/signature/-backgrounds";
+import { useNoDans } from "../../store";
 import {
   signatureBBCode,
   signatureDesigns,
@@ -259,6 +260,7 @@ async function syncTimeZone(current: SignatureSettings): Promise<SignatureSettin
 
 export function DynamicRendersPanel() {
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
   const { viewer } = useAuth();
   const viewerTimeZone = useViewerTimeZone();
   const location = useLocation();
@@ -351,7 +353,18 @@ export function DynamicRendersPanel() {
   }, []);
 
   const enabledTypes = useMemo(() => settings?.enabledTypes ?? [], [settings]);
+  const visibleTypes = useMemo(
+    () => SIGNATURE_TYPES.filter((entry) => !noDans || entry !== "dan"),
+    [noDans],
+  );
   const isLive = Boolean(settings?.enabled && settings.token);
+
+  useEffect(() => {
+    if (!noDans || type !== "dan") return;
+    const fallback = visibleTypes[0]!;
+    setType(fallback);
+    setDesign(signatureDesigns(fallback)[0]!.design);
+  }, [noDans, type, visibleTypes]);
 
   /* The write, on its own schedule. It no longer gates the picture, so nothing
      visible waits on it - what it protects is the link: a style that is only
@@ -652,7 +665,7 @@ export function DynamicRendersPanel() {
           press at once, and this is one choice. */}
       <div className="-mx-1 overflow-x-auto border-b border-osu-b3/25 scrollbar-hide">
         <div className="flex min-w-max px-1">
-          {SIGNATURE_TYPES.map((entry) => (
+          {visibleTypes.map((entry) => (
             <button
               key={entry}
               type="button"

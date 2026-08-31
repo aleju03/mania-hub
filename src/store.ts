@@ -309,6 +309,7 @@ interface AppState {
   themeHue: number;
   themeSaturation: number;
   showDanEstimates: boolean;
+  noDans: boolean;
   hiddenUsers: Record<number, HiddenUser>;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
@@ -331,6 +332,7 @@ interface AppState {
   setThemeHue: (hue: number) => void;
   setThemeSaturation: (sat: number) => void;
   setShowDanEstimates: (show: boolean) => void;
+  setNoDans: (hidden: boolean) => void;
   addHiddenUser: (user: HiddenUser) => void;
   removeHiddenUser: (userId: number) => void;
   resetThemeHue: () => void;
@@ -560,6 +562,7 @@ export const useAppStore = create<AppState>()(
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
       showDanEstimates: false,
+      noDans: false,
       hiddenUsers: initialClientHiddenUsers,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
@@ -596,6 +599,7 @@ export const useAppStore = create<AppState>()(
         set({ themeSaturation: clamped });
       },
       setShowDanEstimates: (show) => set({ showDanEstimates: show }),
+      setNoDans: (hidden) => set({ noDans: hidden }),
       addHiddenUser: (user) =>
         set((state) => {
           // Re-adding an existing entry refreshes its stored username/avatar
@@ -957,6 +961,9 @@ export const useAppStore = create<AppState>()(
           showDanEstimates: typeof nextState.showDanEstimates === "boolean"
             ? nextState.showDanEstimates
             : currentState.showDanEstimates,
+          noDans: typeof nextState.noDans === "boolean"
+            ? nextState.noDans
+            : currentState.noDans,
           // Dedicated key wins. The legacy blob fallback only matters for
           // returning users whose accents still live in `mania-hub-cache-v5`
           // and haven't been re-fetched since this migration landed; those
@@ -1014,6 +1021,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         selectedCountry: state.selectedCountry,
         showDanEstimates: state.showDanEstimates,
+        noDans: state.noDans,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
         // drop a theme change on the floor.
@@ -1115,6 +1123,16 @@ function getHydrationServerSnapshot(): boolean {
 }
 export function useHasHydrated(): boolean {
   return useSyncExternalStore(subscribeHydration, getHydrationSnapshot, getHydrationServerSnapshot);
+}
+
+// Browser-only content preference. Keep Dan UI in the SSR and hydration
+// renders, then remove it once the persisted store is available; otherwise a
+// returning user's local preference would make the client hydrate a different
+// tree from the server.
+export function useNoDans(): boolean {
+  const noDans = useAppStore((state) => state.noDans);
+  const hydrated = useHasHydrated();
+  return hydrated && noDans;
 }
 
 // Read the currently-selected country with no SSR/hydration flash.

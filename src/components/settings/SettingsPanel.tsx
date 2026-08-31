@@ -91,7 +91,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore } from "../../store";
+import { useAppStore, useNoDans } from "../../store";
 import { Switch } from "../ui/Switch";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -978,6 +978,8 @@ function ViewerPanel({
 
 function HiddenPlayersPanel() {
   const { t } = useLingui();
+  const noDans = useNoDans();
+  const setNoDans = useAppStore((state) => state.setNoDans);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
   const addHiddenUser = useAppStore((state) => state.addHiddenUser);
   const removeHiddenUser = useAppStore((state) => state.removeHiddenUser);
@@ -1031,6 +1033,18 @@ function HiddenPlayersPanel() {
 
   return (
     <div className="space-y-6">
+      <PanelGroup label={t`Content`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>No Dans</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Excludes all dan-related stuff from the website</Trans>
+            </div>
+          </div>
+          <Switch checked={noDans} onChange={setNoDans} label={t`No Dans`} />
+        </div>
+      </PanelGroup>
+
       <PanelGroup label={t`Hide players`}>
         <p className="text-[12px] leading-relaxed text-osu-f1">
           <Trans>

@@ -21,7 +21,7 @@ import { useCountryWarming } from "../lib/use-country-warming";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
-import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
 import { PageTabs } from "../components/layout/PageTabs";
 import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBoard";
 import { DanLeaderboardBoard } from "../components/rankings/DanLeaderboardBoard";
@@ -182,7 +182,18 @@ function RankingsPage() {
   const selectedCountry = search.country ?? fallbackCountry;
   const locale = useLocale();
   const { warming } = useCountryWarming(selectedCountry);
-  const tab: LeaderboardTab = search.tab ?? DEFAULT_LEADERBOARD_TAB;
+  const noDans = useNoDans();
+  const requestedTab: LeaderboardTab = search.tab ?? DEFAULT_LEADERBOARD_TAB;
+  const tab: LeaderboardTab = noDans && requestedTab === "dan" ? DEFAULT_LEADERBOARD_TAB : requestedTab;
+
+  useEffect(() => {
+    if (!noDans || requestedTab !== "dan") return;
+    void navigate({
+      to: "/rankings",
+      search: { ...search, tab: DEFAULT_LEADERBOARD_TAB, page: 1 },
+      replace: true,
+    });
+  }, [navigate, noDans, requestedTab, search]);
 
   /* One tab bar for all three boards, with the per-board status text riding in
      its right slot: PageHeader's own `right` wraps onto a second row on mobile,
@@ -194,7 +205,7 @@ function RankingsPage() {
         { id: "pp" as LeaderboardTab, label: t`Performance` },
         { id: "skills" as LeaderboardTab, label: t`MSD` },
         { id: "dan" as LeaderboardTab, label: t`Dan` },
-      ]}
+      ].filter((item) => !noDans || item.id !== "dan")}
       value={tab}
       onChange={(next) => navigate({ to: "/rankings", search: { ...search, tab: next, page: 1 }, replace: true })}
       right={right}

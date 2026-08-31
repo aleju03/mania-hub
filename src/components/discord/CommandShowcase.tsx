@@ -27,7 +27,7 @@ import {
 import { getRankings } from "../../lib/osu";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import type { LeanRankingEntry, RankingsResponse } from "../../lib/types";
-import { useAppStore, useSelectedCountry } from "../../store";
+import { useAppStore, useNoDans, useSelectedCountry } from "../../store";
 
 // Authentic Discord palette so the previews read as real Discord messages.
 const D = {
@@ -698,7 +698,7 @@ function ManiacardArt({ player }: { player: ShowcasePlayer }) {
 // Command labels, invocations and everything the render() closures emit mirror
 // the real bot's English output and stay English; only the page-chrome blurbs
 // and the descriptive feed-preview labels resolve through i18n.
-function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n: I18n): Command[] {
+function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n: I18n, noDans = false): Command[] {
   const fallback = fallbackPlayers(sample.commandCountry)[0];
   const pick = (index: number): ShowcasePlayer => sample.players[index] ?? sample.viewer ?? fallback;
   const self = sample.viewer ?? pick(0);
@@ -1227,7 +1227,9 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n:
     },
     {
       id: "map", label: "/map", invocation: "/map 1234567", group: "Beatmaps", accent: PINK,
-      blurb: i18n._(msg`Beatmap card: stars, keys, status, BPM, length and dan.`),
+      blurb: noDans
+        ? i18n._(msg`Beatmap card: stars, keys, status, BPM and length.`)
+        : i18n._(msg`Beatmap card: stars, keys, status, BPM, length and dan.`),
       render: () => (
         <Embed accent={PINK} thumb={<Thumb src={coverOf(mapInfo?.cover)} />}>
           <EmbedTitle linked>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
@@ -1237,7 +1239,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n:
             { name: "Status", value: mapInfo?.status ?? "Ranked" },
             { name: "BPM", value: mapInfo?.bpm ?? "200" },
             { name: "Length", value: mapInfo?.length ?? "4:18" },
-            { name: "Dan", value: mapInfo?.dan ?? "10th" },
+            ...(noDans ? [] : [{ name: "Dan", value: mapInfo?.dan ?? "10th" }]),
           ]} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", "Farm detail"]} />
@@ -1364,6 +1366,7 @@ const DEFAULT_COMMAND_ID = "link";
 export function CommandShowcase() {
   const { i18n } = useLingui();
   const auth = useAuth();
+  const noDans = useNoDans();
   const rawScope = useSelectedCountry();
   // The bot has no region commands; a region scope demos the global forms.
   const selectedCountry = isRegionScope(rawScope) ? GLOBAL_SCOPE_CODE : rawScope;
@@ -1375,6 +1378,10 @@ export function CommandShowcase() {
   const [selectedId, setSelectedId] = useState(DEFAULT_COMMAND_ID);
   const [sampleSeed, setSampleSeed] = useState("");
   const [fixture, setFixture] = useState<DiscordShowcase | null>(null);
+
+  useEffect(() => {
+    if (noDans && selectedId === "dan") setSelectedId(DEFAULT_COMMAND_ID);
+  }, [noDans, selectedId]);
 
   useEffect(() => {
     setSampleSeed(`${selectedCountry}:${Date.now()}:${Math.random()}`);
@@ -1456,9 +1463,12 @@ export function CommandShowcase() {
   // the tier is known to be snipes.
   const { featureTier } = useCountryWarming(selectedCountry);
   const commands = useMemo(() => {
-    const all = buildCommands(sample, activeFixture, i18n);
-    return featureTier === "snipes" ? all : all.filter((cmd) => cmd.id !== "feed-snipe");
-  }, [sample, activeFixture, featureTier, i18n]);
+    const all = buildCommands(sample, activeFixture, i18n, noDans);
+    return all.filter((cmd) =>
+      (featureTier === "snipes" || cmd.id !== "feed-snipe")
+      && (!noDans || cmd.id !== "dan"),
+    );
+  }, [sample, activeFixture, featureTier, i18n, noDans]);
   const selected = commands.find((c) => c.id === selectedId) ?? commands[0];
 
   return (

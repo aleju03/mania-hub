@@ -41,7 +41,7 @@ import {
   formatPP,
 } from "../../lib/format";
 import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
-import { useHasHydrated } from "../../store";
+import { useHasHydrated, useNoDans } from "../../store";
 import {
   getBeatmapUrl,
   getBeatmapKeyCount,
@@ -3570,6 +3570,7 @@ const SKILLS_COLUMN_CLASS = "mx-auto max-w-[880px]";
 
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
   const [skillsView, setSkillsView] = useState<PlayerSkillsView>("ratings");
   /* Swapping the ratings grid for a plays list that has not loaded yet takes
      a thousand pixels out of the document for as long as the read takes. The
@@ -3673,6 +3674,13 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     setSkillModeKey(null);
   }, [user.id]);
 
+  useEffect(() => {
+    if (!noDans) return;
+    setSkillsView((current) => current === "dan" ? "ratings" : current);
+    setSelectedDan(null);
+    setCourseScore(null);
+  }, [noDans]);
+
   if (!liveConfigured) {
     return <div className="py-8 text-center text-sm text-osu-f1">{t`Skill ratings are unavailable right now.`}</div>;
   }
@@ -3683,7 +3691,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
      or not. */
   const skillModeStrip = modes;
   const activeSkillMode = modes.find((mode) => mode.keyCount === skillModeKey) ?? modes[0] ?? null;
-  const view = skillsView;
+  const view = noDans && skillsView === "dan" ? "ratings" : skillsView;
+  const skillsViews = noDans
+    ? PLAYER_SKILLS_VIEWS.filter((option) => option !== "dan")
+    : PLAYER_SKILLS_VIEWS;
 
   const selectView = useCallback((next: PlayerSkillsView) => {
     if (next === skillsView) return;
@@ -3713,7 +3724,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     <div ref={panelRef} style={heldHeight != null ? { minHeight: heldHeight } : undefined}>
       {rated ? (
         <div className={`mb-3 flex flex-wrap items-center gap-1 ${view === "ratings" ? SKILLS_COLUMN_CLASS : ""}`}>
-          {PLAYER_SKILLS_VIEWS.map((option) => (
+          {skillsViews.map((option) => (
             <button
               key={option}
               type="button"
@@ -3847,7 +3858,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           onClose={() => setSelectedSkill(null)}
         />
       ) : null}
-      {selectedDan ? (
+      {selectedDan && !noDans ? (
         <DanEvidenceModal
           userId={user.id}
           username={user.username}

@@ -15,6 +15,7 @@ import { useLocale } from "../../lib/locale-context";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
+import { useNoDans } from "../../store";
 import {
   PATTERN_COLOR,
   SubPatternChip,
@@ -234,6 +235,7 @@ function MsdBlock({
   rateDan?: { label: string; family: string; rawDan: number } | null;
 }) {
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
   // Under a rate mod the chart the play met is not the stored one, so its own
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
@@ -255,7 +257,7 @@ function MsdBlock({
   const overall = Number(msd.Overall ?? 0);
   const topName = skillsets[0]?.name;
 
-  const dan = rateAdjusted ? rateDan : entry.dan ?? null;
+  const dan = noDans ? null : rateAdjusted ? rateDan : entry.dan ?? null;
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
   const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;

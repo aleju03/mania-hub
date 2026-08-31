@@ -22,6 +22,7 @@ import { UserCollectionsSection } from "./UserCollectionsSection";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
 import { PATTERN_COLOR, SearchCard, patternLabel, toPreviewTrack } from "./SearchCard";
+import { useNoDans } from "../../store";
 
 // Auto-rotating map packs grouped by pattern, keymode, and difficulty bucket.
 // Two difficulty axes cover both vocabularies players actually use: dan
@@ -240,6 +241,7 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
   const [rebuilding, setRebuilding] = useState(false);
   const canRebuild = useAuth().canUseAdminFeatures;
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
 
   useEffect(() => {
     if (!liveBackendEnabled) {
@@ -283,8 +285,8 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
   // Rows from a backend that has not rebuilt in the dan/MSD format yet carry no
   // axis; they cannot render as difficulty buckets, so they don't render at all.
   const usable = useMemo(
-    () => (collections ?? []).filter((collection) => collection.axis === "dan" || collection.axis === "msd"),
-    [collections],
+    () => (collections ?? []).filter((collection) => collection.axis === "msd" || (!noDans && collection.axis === "dan")),
+    [collections, noDans],
   );
 
   const availableKeys = useMemo(() => {
@@ -325,12 +327,14 @@ function CollectionsBrowse({ onSelect, keyFilter, axis, onKeyFilterChange, onAxi
             onChange={onKeyFilterChange}
             render={(key) => `${key}K`}
           />
-          <SegmentedControl<Axis>
-            options={["dan", "msd"]}
-            value={axis}
-            onChange={onAxisChange}
-            render={(option) => (option === "dan" ? t`Dan est.` : t`MSD`)}
-          />
+          {!noDans ? (
+            <SegmentedControl<Axis>
+              options={["dan", "msd"]}
+              value={axis}
+              onChange={onAxisChange}
+              render={(option) => (option === "dan" ? t`Dan est.` : t`MSD`)}
+            />
+          ) : null}
         </div>
         <div className="flex items-center gap-2.5">
           <p className="text-[12px] text-osu-f1">
@@ -396,6 +400,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   const preview = useMapPreviewAudio();
   const { t } = useLingui();
   const locale = useLocale();
+  const noDans = useNoDans();
   const { stop: stopPreview } = preview;
 
   useEffect(() => () => stopPreview(), [stopPreview]);
@@ -426,6 +431,10 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
     };
   }, [id, liveBackendEnabled]);
 
+  useEffect(() => {
+    if (noDans && detail?.axis === "dan") onBack();
+  }, [detail?.axis, noDans, onBack]);
+
   // Skip order for the preview player: the pack as listed.
   const previewTracks = useMemo(() => (detail?.items ?? []).map(toPreviewTrack), [detail]);
 
@@ -449,7 +458,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
 
       {error ? (
         <div className="py-16 text-center text-[13px] text-osu-f1">{error}</div>
-      ) : !detail ? (
+      ) : !detail || (noDans && detail.axis === "dan") ? (
         <div className="py-16 text-center text-[13px] text-osu-f1">{t`Loading collection...`}</div>
       ) : (
         <>
@@ -500,6 +509,11 @@ export function MapCollectionsSection({
   liveBackendEnabled,
 }: Props) {
   const { t } = useLingui();
+  const noDans = useNoDans();
+
+  useEffect(() => {
+    if (noDans && axis === "dan") onAxisChange("msd");
+  }, [axis, noDans, onAxisChange]);
   // The switch belongs to the two browse grids, not to a pack that is open:
   // each detail view already has its own way back, and a source switch beside
   // it would read as a filter on the thing being looked at.

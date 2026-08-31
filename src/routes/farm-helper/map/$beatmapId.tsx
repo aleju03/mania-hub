@@ -15,6 +15,7 @@ import { FarmersList } from "../../../components/farm-helper/FarmersList";
 import { fetchLiveMapSearchEntry, type LiveFarmHelperKeyMode, type LiveFarmHelperReason, type LiveFarmHelperSpeedBucket, type LiveMapSearchEntry } from "../../../lib/live-backend";
 import { danBareLabel, getDanImageSrc } from "../../../lib/dan-images";
 import { pageSeo } from "../../../lib/seo";
+import { useNoDans } from "../../../store";
 
 type FarmMapContext = {
   beatmapsetId?: number;
@@ -134,6 +135,7 @@ export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
 
 function FarmMapDetailPage() {
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
   const { beatmapId: beatmapIdRaw } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -379,7 +381,7 @@ function FarmMapDetailPage() {
                           detail={metrics.vibro ? t`vibro chart, estimate unreliable` : metrics.msdTopSkillset}
                         />
                       ) : null}
-                      {metrics.dan ? (
+                      {metrics.dan && !noDans ? (
                         <MetricTile
                           icon={<Star className="h-3.5 w-3.5" />}
                           label={metrics.dan.family === "ln" ? t`LN dan est.` : t`dan est.`}

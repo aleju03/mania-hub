@@ -43,3 +43,30 @@ describe("useHiddenUserIds", () => {
     expect(renders[renders.length - 1]).toEqual([123]);
   });
 });
+
+describe("useNoDans", () => {
+  it("keeps the hydration render unchanged, then applies the persisted filter", async () => {
+    localStorage.clear();
+    localStorage.setItem(
+      "mania-hub-cache-v5",
+      JSON.stringify({ state: { noDans: true }, version: 0 }),
+    );
+    vi.resetModules();
+    const { useNoDans } = await import("./store");
+
+    const renders: boolean[] = [];
+    function Probe() {
+      renders.push(useNoDans());
+      return null;
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    await act(async () => {
+      hydrateRoot(container, <Probe />);
+    });
+
+    expect(renders[0]).toBe(false);
+    expect(renders[renders.length - 1]).toBe(true);
+  });
+});

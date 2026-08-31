@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -12,6 +12,7 @@ import { formatNumber } from "../lib/format";
 import { ModBadge } from "../components/ui/ModBadge";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
+import { useHasHydrated, useNoDans } from "../store";
 
 /* The one place the dan estimate explains itself in full.
 
@@ -139,6 +140,9 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
 
 function DanEstimatesPage() {
   const { t } = useLingui();
+  const navigate = useNavigate();
+  const hydrated = useHasHydrated();
+  const noDans = useNoDans();
 
   /* This page is worth counting on its own, so it says who it is instead of
      leaving the admin to pick /dan-estimates out of every pageview: the
@@ -148,9 +152,11 @@ function DanEstimatesPage() {
      screen, and only once per visit. */
   const endRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
+    if (!hydrated || noDans) return;
     track("dan_estimates_view");
-  }, []);
+  }, [hydrated, noDans]);
   useEffect(() => {
+    if (!hydrated || noDans) return;
     const end = endRef.current;
     if (!end || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver((entries) => {
@@ -160,7 +166,14 @@ function DanEstimatesPage() {
     });
     observer.observe(end);
     return () => observer.disconnect();
-  }, []);
+  }, [hydrated, noDans]);
+
+  useEffect(() => {
+    if (!hydrated || !noDans) return;
+    void navigate({ to: "/rankings", search: { country: undefined, page: 1 }, replace: true });
+  }, [hydrated, navigate, noDans]);
+
+  if (noDans) return null;
 
   // Ladder names read the same in every table on the page, so they are named
   // once here rather than once per row.
@@ -1249,7 +1262,8 @@ function CreditCurveTabs() {
         ["95%", t`the chart's level -0.51`],
         ["94%", t`the chart's level -0.76`],
         ["92%", t`the chart's level -1.25`],
-        [t`below 92%`, t`nothing`],
+        ["91%", t`the chart's level -1.5`],
+        [t`below 91%`, t`nothing`],
       ],
     },
     {
@@ -1286,7 +1300,8 @@ function CreditCurveTabs() {
         ["94.9%", t`the chart's level -0.36`],
         ["94.5%", t`the chart's level -0.76`],
         ["94%", t`the chart's level -1.25`],
-        [t`below 94%`, t`nothing`],
+        ["93%", t`the chart's level -1.5`],
+        [t`below 93%`, t`nothing`],
       ],
     },
   ];

@@ -6,6 +6,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
 import { danBareLabel } from "../../lib/dan-images";
 import { formatAccuracy } from "../../lib/format";
+import { useNoDans } from "../../store";
 import { DanLevelBadge } from "./DanLevelBadge";
 import {
   lnPlayShare,
@@ -91,8 +92,9 @@ function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18
 
 function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side: "rc" | "ln") => void }) {
   const { t, i18n } = useLingui();
+  const noDans = useNoDans();
   const dan = mode.dan;
-  if (!dan) return null;
+  if (noDans || !dan) return null;
   // A numbered course reads as a level, not a name, so it needs the word;
   // named ladders (greek letters and the like) already read as one.
   const formatDanChip = (label: string): string => (/^\d/.test(label) ? t`${label} dan` : label);
