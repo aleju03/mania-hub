@@ -200,6 +200,12 @@ export interface AnalyticsFeedEvent {
   addScoreMap: string | null;
   addScoreRepeat: string | null;
   addScoreReason: string | null;
+  skillPlaysPlayer: string | null;
+  skillPlaysView: string | null;
+  skillPlaysOrder: string | null;
+  skillPlaysKeys: string | null;
+  skillPlaysAxis: string | null;
+  skillPlaysSide: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -1386,6 +1392,12 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     addScoreMap: str("add_score_map"),
     addScoreRepeat: str("add_score_repeat"),
     addScoreReason: str("add_score_reason"),
+    skillPlaysPlayer: str("skill_plays_player"),
+    skillPlaysView: str("skill_plays_view"),
+    skillPlaysOrder: str("skill_plays_order"),
+    skillPlaysKeys: str("skill_plays_keys"),
+    skillPlaysAxis: str("skill_plays_axis"),
+    skillPlaysSide: str("skill_plays_side"),
     viewerUsername: record.viewerUsername,
     referrer: record.referringDomain,
   };

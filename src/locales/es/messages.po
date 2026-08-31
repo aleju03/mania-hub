@@ -4423,11 +4423,6 @@ msgstr "No cuenta para dan: el mapa no tiene calificación de dan a la velocidad
 msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
 msgstr "No cuenta para dan: el OD con el que se jugó está por debajo del OD que el dan necesita."
 
-#. placeholder {0}: od.toFixed(1)
-#: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
-msgstr "No cuenta para dan: esta jugada se jugó con OD {0}, por debajo del OD que el dan necesita."
-
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
 msgstr "No cuenta para dan: este mapa no está construido de forma que un pase permita leer un nivel de dan."
@@ -4444,6 +4439,11 @@ msgstr "No cuenta para dan: este pase necesita {0} de precisión y obtuvo {1}."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
 msgstr "No cuenta para dan: este pase necesita {0} para acreditar algo (barra de paso de {1}) y obtuvo {2}."
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
+msgstr "No cuenta para dan: esta jugada se jugó con OD {0}, por debajo del OD que el dan necesita."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."

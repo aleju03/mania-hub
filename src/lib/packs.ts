@@ -51,10 +51,11 @@ export interface PackPlayer {
   };
   globalRank: number;
   pp: number;
-  /* The one-time completion reward slot: this card reveals at the Eternal
-     tier. Display-only on this side - the server dealt the ":eternal" row and
-     refuses the tier from any client claim, so forging this flag paints a
-     card only on the forger's own screen. */
+  /* An Eternal slot: this card reveals at the Eternal tier, whether it is
+     the opener's own completion reward or another collector's card on the
+     0.0025% pull. Display-only on this side - the server dealt the ":eternal"
+     row and refuses the tier from any client claim, so forging this flag
+     paints a card only on the forger's own screen. */
   eternal?: boolean;
 }
 
@@ -768,9 +769,10 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
       continue;
     }
     if (slot.eternal) {
-      // The opener's own card. The claimed slot normally carries the frozen
-      // identity numbers itself; the inlined card snapshot is an additional
-      // authoritative fallback across deploy skew.
+      // The opener's own card, or the collector's whose Eternal this pack
+      // pulled. The claimed slot normally carries the frozen identity numbers
+      // itself; the inlined card snapshot is an additional authoritative
+      // fallback across deploy skew.
       const snapshot = snapshotsByUserId.get(slot.userId);
       const pp = slot.pp ?? snapshot?.statistics?.pp ?? 0;
       const globalRank = slot.globalRank ?? snapshot?.statistics?.global_rank ?? null;

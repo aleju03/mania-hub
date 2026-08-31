@@ -4423,11 +4423,6 @@ msgstr "Does not count for dan: the chart has no dan rating at the rate this was
 msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
 msgstr "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
 
-#. placeholder {0}: od.toFixed(1)
-#: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
-msgstr "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
-
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
 msgstr "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
@@ -4444,6 +4439,11 @@ msgstr "Does not count for dan: this pass needs {0} accuracy and got {1}."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
 msgstr "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
+msgstr "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."

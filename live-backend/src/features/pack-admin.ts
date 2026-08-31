@@ -173,8 +173,9 @@ export interface AdminPackCardGrant {
   /* One of the eleven stored tiers, or null for an unrated card. Unlike the
      sync path, "goat" is accepted for any player (the roster guard exists to
      stop a stranger minting a 500-shard card, and this caller is the person
-     who owns the roster) and so is "eternal", which no other writer may set at
-     all: this desk is the only way onto a card and the only way back off. */
+     who owns the roster) and so is "eternal", which no client may ever claim:
+     the only other writers are the draw route's two Eternal deals, and this
+     desk is the only way to put one on an arbitrary card or take it back off. */
   tier: string | null;
   tierLabel?: string | null;
   copies?: number;
@@ -634,12 +635,15 @@ export async function removeAdminPackCard(
       /* Admin removal is the one intentional reset. Recycling never touches
          this registry, but removing the collector's last Eternal means the
          current-completion reward may restore it on a later pack. Keep the
-         claim while any other Eternal variant remains. */
+         claim while any other Eternal variant remains - and read "theirs" the
+         same way OWN_ETERNAL_CLAIM_SQL does, so somebody else's ":eternal"
+         card, which any pack can deal, does not hold the claim open. */
       sql: `delete from pack_eternal_rewards
             where owner_user_id = ?
               and not exists (
                 select 1 from pack_collection_cards
                 where owner_user_id = ? and tier = 'eternal'
+                  and (card_key not like '%:eternal' or card_user_id = owner_user_id)
               )`,
       args: [ownerUserId, ownerUserId],
     });

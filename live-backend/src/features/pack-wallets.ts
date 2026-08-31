@@ -877,6 +877,15 @@ export async function setPackWalletEconomy(
 const WALLET_MAX_SHARDS = 100_000_000;
 const WALLET_MAX_OPENED_PACKS = 10_000_000;
 
+/* Which Eternal-tier holdings say their owner already had their one reward.
+   A granted Eternal (a ":v<n>" variant off /admin/collections) does, and so
+   does the collector's own ":eternal" card. Somebody else's ":eternal" card,
+   which any pack can now deal at ETERNAL_PULL_CHANCE, does not: it is a card
+   they pulled, not the reward for finishing the game, and counting it would
+   quietly retire a completion reward they never received. */
+const OWN_ETERNAL_CLAIM_SQL =
+  "tier = 'eternal' and (card_key not like '%:eternal' or card_user_id = owner_user_id)";
+
 /* Whether the one-time completion reward is still unclaimed. The durable
    registry, not a JSON read followed by a later JSON write, is what makes two
    concurrent opens race for one primary key instead of both minting a copy. A
@@ -889,7 +898,7 @@ export async function isPackWalletEternalPending(db: Db, userId: number): Promis
     db,
     `select 1 from pack_eternal_rewards where owner_user_id = ?
      union all
-     select 1 from pack_collection_cards where owner_user_id = ? and tier = 'eternal'
+     select 1 from pack_collection_cards where owner_user_id = ? and ${OWN_ETERNAL_CLAIM_SQL}
      limit 1`,
     [userId, userId],
   )).rows.length > 0;
@@ -1916,7 +1925,7 @@ export async function mintEternalSelfCardOnce(
             select ?, ?, ?
             where not exists (
               select 1 from pack_collection_cards
-              where owner_user_id = ? and tier = 'eternal'
+              where owner_user_id = ? and ${OWN_ETERNAL_CLAIM_SQL}
             )`,
       args: [ownerUserId, claimToken, now, ownerUserId],
     },
@@ -1977,6 +1986,132 @@ export async function mintEternalSelfCardOnce(
   ]);
   const dealt = Number(results[0]?.rowsAffected ?? 0) > 0;
   return { dealt, isNew: dealt && !owned };
+}
+
+/* One Eternal card a pack could deal to somebody else, and whether this
+   collector already holds it. */
+export interface PullableEternalCard {
+  userId: number;
+  owned: boolean;
+}
+
+/* The Eternal cards in circulation, which is what the 0.0025% slot draws from.
+   Read off the small card catalog rather than the millions of collection
+   rows, and restricted to the ":eternal" key form: that key is written by the
+   completion deal (and by this pull), so every entry is a card somebody
+   actually finished the collection for. A granted Eternal sits on a ":v<n>"
+   variant and stays out of circulation - it was handed out once, on purpose.
+
+   The opener's own card is excluded: their Eternal is the reward for
+   finishing the game, and a pack handing it to them early would take that
+   ending away and cost them the claim. */
+export async function listPullableEternalCards(db: Db, ownerUserId: number): Promise<PullableEternalCard[]> {
+  const rows = (await exec(
+    db,
+    `select pc.card_user_id as user_id,
+       exists (
+         select 1 from pack_collection_cards c
+         where c.owner_user_id = ? and c.card_key = pc.card_key and c.copies > 0
+       ) as owned
+     from pack_cards pc
+     where pc.tier = 'eternal'
+       and pc.card_key = cast(pc.card_user_id as text) || ':eternal'
+       and pc.card_user_id != ?`,
+    [ownerUserId, ownerUserId],
+  )).rows;
+  return rows
+    .map((row) => ({ userId: Math.floor(Number(row.user_id)), owned: Number(row.owned) !== 0 }))
+    .filter((card) => Number.isInteger(card.userId) && card.userId > 0);
+}
+
+/* The face for a pulled Eternal card. The users row first (it carries the
+   live name and the pp/rank the card prints), then the catalog row the
+   original completion deal wrote, so a collector who has since fallen out of
+   the tracked users table still has a card that renders. */
+export async function getPullableEternalIdentity(db: Db, cardUserId: number): Promise<PackUserIdentity | null> {
+  const stored = await getPackUserIdentity(db, cardUserId);
+  if (stored) return stored;
+  const row = (await exec(
+    db,
+    "select username, avatar_url, country_code from pack_cards where card_key = ?",
+    [packCardKey(cardUserId, "eternal")],
+  )).rows[0];
+  if (!row) return null;
+  return {
+    username: String(row.username ?? "").slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+    avatarUrl: normalizeAvatarUrl(row.avatar_url),
+    countryCode: normalizeCountryCode(String(row.country_code ?? "")),
+    pp: 0,
+    globalRank: 0,
+  };
+}
+
+/* Writes somebody else's Eternal card into this collection. Deliberately not
+   mintEternalSelfCardOnce: there is no one-time claim to race for and nothing
+   to retire, so this is an ordinary repeatable pull that happens to land on
+   an awarded tier. The catalog row normally exists already (the completion
+   deal wrote it); the insert-or-ignore only covers a card whose catalog entry
+   was lost.
+
+   completion_eligible stays 1 like every other server deal, and costs
+   nothing: pool progress counts plain keys only, so a ":eternal" holding can
+   never stand in for the pool slot of the player it belongs to. */
+export async function mintPulledEternalCard(
+  db: Db,
+  ownerUserId: number,
+  cardUserId: number,
+  identity: PackUserIdentity,
+  now = Date.now(),
+): Promise<{ isNew: boolean }> {
+  const cardKey = packCardKey(cardUserId, "eternal");
+  const owned = (await exec(
+    db,
+    "select 1 from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
+    [ownerUserId, cardKey],
+  )).rows.length > 0;
+  const pp = Math.min(PACK_CARD_MAX_PP, Math.max(0, toFiniteNumber(identity.pp, 0)));
+  const globalRank = Math.max(0, Math.floor(toFiniteNumber(identity.globalRank, 0)));
+  await execBatch(db, [
+    {
+      sql: `insert or ignore into pack_cards (
+              card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
+            ) values (?, 'eternal', ?, ?, ?, ?, null, ?)`,
+      args: [
+        cardKey,
+        cardUserId,
+        identity.username.slice(0, PACK_CARD_USERNAME_MAX_CHARS),
+        normalizeAvatarUrl(identity.avatarUrl),
+        normalizeCountryCode(identity.countryCode),
+        now,
+      ],
+    },
+    {
+      sql: `insert into pack_collection_cards (
+              owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
+              copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, completion_eligible
+            ) values (?, ?, ?, 'eternal', null, ?, ?, 1, 0, ?, ?, ?, 1)
+            on conflict(owner_user_id, card_key) do update set
+              tier = 'eternal',
+              pp = case when excluded.pp > 0 then excluded.pp else pack_collection_cards.pp end,
+              global_rank = case when excluded.global_rank > 0 then excluded.global_rank else pack_collection_cards.global_rank end,
+              copies = pack_collection_cards.copies + 1,
+              first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
+              last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
+              updated_at = excluded.updated_at,
+              completion_eligible = 1`,
+      args: [ownerUserId, cardUserId, cardKey, pp, globalRank, now, now, now],
+    },
+    mintPackCardSerialStatement(cardKey, cardUserId, ownerUserId, now, { pullReportPending: true }),
+    /* The serial only mints once, so a repeat pull has to re-arm the pending
+       bit itself: that bit is what lets pack-pulls.ts tell an honest report of
+       this deal from a replay of an older one. */
+    {
+      sql: `update pack_card_serials set pull_report_pending = 1
+            where card_key = ? and owner_user_id = ?`,
+      args: [cardKey, ownerUserId],
+    },
+  ]);
+  return { isNew: !owned };
 }
 
 /* Writes a dealt hand into the collection at draw time. This is what makes

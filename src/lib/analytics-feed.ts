@@ -76,6 +76,12 @@ export interface AnalyticsRecentEventRow {
   addScoreMap: string | null;
   addScoreRepeat: string | null;
   addScoreReason: string | null;
+  skillPlaysPlayer: string | null;
+  skillPlaysView: string | null;
+  skillPlaysOrder: string | null;
+  skillPlaysKeys: string | null;
+  skillPlaysAxis: string | null;
+  skillPlaysSide: string | null;
   viewerUsername: string | null;
   referrer: string | null;
 }
@@ -301,6 +307,23 @@ function describeRankings(row: AnalyticsRecentEventRow, scope: string | null): A
   };
 }
 
+function describeSkillPlays(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  const dan = row.skillPlaysView === "dan";
+  const keys = row.skillPlaysKeys ? `${row.skillPlaysKeys}K` : null;
+  const facet = dan
+    ? (row.skillPlaysSide ? RANKINGS_SIDE_LABELS[row.skillPlaysSide] ?? row.skillPlaysSide : null)
+    : (row.skillPlaysAxis ? skillAxisMeta(row.skillPlaysAxis)?.label ?? row.skillPlaysAxis : null);
+  const order = row.skillPlaysOrder === "recent" ? "recent" : row.skillPlaysOrder === "best" ? "best" : null;
+  return {
+    kind: "profile",
+    verb: "browsed",
+    subject: row.skillPlaysPlayer
+      ? `${row.skillPlaysPlayer}'s ${dan ? "dan" : "MSD"} plays`
+      : dan ? "a profile's dan plays" : "a profile's MSD plays",
+    detail: joinDetail([[keys, facet].filter(Boolean).join(" ") || null, order]),
+  };
+}
+
 function describeSkinsList(row: AnalyticsRecentEventRow): AnalyticsActivity {
   const facets = joinDetail([
     row.skinsKeys,
@@ -523,6 +546,13 @@ function describeNamedAnalyticsEvent(
           row.addScoreReason ? ADD_SCORE_FAILURE_LABELS[row.addScoreReason] ?? row.addScoreReason : null,
         ]),
       };
+    /* The Skills tab's two plays lists, one line per list actually opened:
+       which view, whose profile, and the keymode, skill (or dan side) and
+       order behind it. The order is the point of carrying it - "MSD plays,
+       best" and "MSD plays, recent" are two different questions people come
+       to the tab with. */
+    case "skill_plays_view":
+      return describeSkillPlays(row);
     case "packs_showcase_edit":
       return { kind: "pack", verb: "opened", subject: "their showcase picker", detail: null };
     case "packs_showcase_saved":

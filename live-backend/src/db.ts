@@ -1973,11 +1973,14 @@ async function migratePackEternalRewards(db: Db): Promise<void> {
       dealt_at integer not null
     )
   `);
-  // Seed the stronger claim registry from every existing Eternal holding,
-  // including the manually granted variant-keyed cards that predate the
-  // completion reward. Drive the join from the small card catalog, then seek
-  // exact serial/holding keys, rather than scanning millions of collection
-  // rows during deploy.
+  // Seed the stronger claim registry from every existing Eternal holding the
+  // owner was actually awarded, including the manually granted variant-keyed
+  // cards that predate the completion reward. Somebody else's ":eternal" card
+  // is excluded: packs deal those now, and a pulled one is not the reward (see
+  // OWN_ETERNAL_CLAIM_SQL in pack-wallets.ts, which reads the same rule).
+  // Drive the join from the small card catalog, then seek exact
+  // serial/holding keys, rather than scanning millions of collection rows
+  // during deploy.
   await db.execute(`
     insert or ignore into pack_eternal_rewards (owner_user_id, claim_token, dealt_at)
     select c.owner_user_id, 'legacy:' || c.owner_user_id,
@@ -1988,6 +1991,7 @@ async function migratePackEternalRewards(db: Db): Promise<void> {
     left join pack_card_serials s
       on s.card_key = c.card_key and s.owner_user_id = c.owner_user_id
     where pc.tier = 'eternal'
+      and (c.card_key not like '%:eternal' or c.card_user_id = c.owner_user_id)
     group by c.owner_user_id
   `);
 }
@@ -2796,8 +2800,8 @@ async function migrateBugReports(db: Db): Promise<void> {
   // shape as translation_reports above: signed-out visitors may file, so
   // user_id is nullable and `reporter_key` carries the opaque per-reporter
   // bucket the caps key on. status is new|investigating|fixed|wontfix|
-  // duplicate, timestamps are epoch ms. Durable: retention never prunes this
-  // table.
+  // duplicate|notabug, timestamps are epoch ms. Durable: retention never
+  // prunes this table.
   //
   // Two text columns that look alike are not: `admin_note` is private triage
   // scratch, `reply` is written for the reporter and shown back to them on

@@ -16,8 +16,9 @@ import { mintPackCardSerialStatement, settlePackCardPullReportStatement } from "
 // the name and country on the row are read from the users table rather than
 // from the browser. See resolvePullCardIdentities.
 
-// The largest pack (Wild, 10 cards) plus the one-time completion bonus slot.
-export const PACK_PULL_MAX_CARDS_PER_EVENT = 11;
+// The largest pack (Wild, 10 cards) plus both Eternal bonus slots: the
+// one-time completion card and the 0.0025% pull of somebody else's.
+export const PACK_PULL_MAX_CARDS_PER_EVENT = 12;
 // A generous ceiling on how fast a single account can append events: five
 // charge packs per regen cycle plus shard packs lands well under this. Past
 // the cap the batch is dropped silently; the wallet sync is unaffected.
@@ -36,12 +37,11 @@ const NOTABLE_TIERS = new Set([
   "goat",
 ]);
 
-/* Tiers a pull may claim. "eternal" carries an extra guard below (it is the
-   one-time completion reward, dealt server-side as the opener's own card, so
-   a claim only stands when the reporter's collection actually holds their own
-   ":eternal" row) - that guard and this list are what stand between a forged
-   report and "pulled Eternal <anyone>" on the public feed, the live SSE
-   stream and the share page. */
+/* Tiers a pull may claim. "eternal" carries an extra guard below (both ways
+   of getting one are dealt server-side, so a claim only stands when the
+   reporter's collection actually holds that ":eternal" row) - that guard and
+   this list are what stand between a forged report and "pulled Eternal
+   <anyone>" on the public feed, the live SSE stream and the share page. */
 export const VALID_TIERS: ReadonlySet<string> = new Set([
   "common",
   "rare",
@@ -270,20 +270,34 @@ export async function recordPackPullEvents(
     .filter((card): card is PackPullCardInput => card !== null);
   if (normalized.length === 0) return { recorded: 0, mints: [], eventIds: [] };
 
-  /* An Eternal claim stands only for the reporter's own card, and only when
-     the collection actually holds their ":eternal" row - which nothing but
-     the draw route's one-time completion deal can write. Anything else
-     demotes to an unrated pull rather than being refused, like every other
-     rejected tier claim, so a tampered report still cannot put "pulled
-     Eternal <anyone>" on the feed or mint a serial under that key. */
-  if (normalized.some((card) => card.tier === "eternal")) {
-    const held = (await exec(
+  /* An Eternal claim stands only for a ":eternal" card the reporter's
+     collection actually holds - their own from the completion deal, or
+     somebody else's from the draw route's 0.0025% slot, which are the only two
+     writers of that key - and only while that deal is still unreported. Both
+     deals mint the serial with pull_report_pending set, and the batch below
+     settles it, so the bit is what ties one feed line to one deal: without it
+     a holder could replay "pulled Eternal <them>" for as long as they kept the
+     card. A repeat pull of the same card re-arms it, so an honest duplicate is
+     still reportable. Anything else demotes to an unrated pull rather than
+     being refused, like every other rejected tier claim, so a tampered report
+     still cannot put "pulled Eternal <anyone>" on the feed or mint a serial
+     under that key. */
+  const eternalClaims = [...new Set(
+    normalized.filter((card) => card.tier === "eternal").map((card) => card.userId),
+  )];
+  if (eternalClaims.length > 0) {
+    const heldKeys = eternalClaims.map((userId) => `${userId}:eternal`);
+    const held = new Set((await exec(
       db,
-      "select 1 from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
-      [ownerUserId, `${ownerUserId}:eternal`],
-    )).rows.length > 0;
+      `select c.card_key as card_key from pack_collection_cards c
+       join pack_card_serials s
+         on s.card_key = c.card_key and s.owner_user_id = c.owner_user_id
+       where c.owner_user_id = ? and c.copies > 0 and s.pull_report_pending != 0
+         and c.card_key in (${heldKeys.map(() => "?").join(", ")})`,
+      [ownerUserId, ...heldKeys],
+    )).rows.map((row) => String(row.card_key)));
     normalized = normalized.map((card) =>
-      card.tier === "eternal" && !(card.userId === ownerUserId && held) ? { ...card, tier: null } : card,
+      card.tier === "eternal" && !held.has(`${card.userId}:eternal`) ? { ...card, tier: null } : card,
     );
   }
 

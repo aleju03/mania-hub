@@ -21,10 +21,12 @@ import type { OsuScore } from "./types";
 export interface ServerPackDrawSlot {
   userId: number;
   honorary?: boolean;
-  /* The one-time 100%-completion reward: the opener's own card at the Eternal
-     tier, appended by the backend as the hand's final slot. Decided entirely
-     server-side (a unique durable claim + completion-eligible collection
-     rows), so it cannot be provoked or repeated from the client. */
+  /* An Eternal card, appended by the backend as a bonus slot at the tail of
+     the hand: either the opener's own, the one-time 100%-completion reward,
+     or somebody else's, on the 0.0025% slot any pack rolls. Both are decided
+     entirely server-side (a unique durable claim for the reward, the roster
+     of existing Eternals for the pull), so neither can be provoked from the
+     client. */
   eternal?: boolean;
   isNew?: boolean;
   username?: string;

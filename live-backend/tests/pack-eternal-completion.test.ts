@@ -9,11 +9,14 @@ import {
   applyPackCollectionCardMint,
   countMissingEternalGoatCards,
   getPackCollectionEternalProgress,
+  getPullableEternalIdentity,
   HONORARY_USER_IDS,
   isPackWalletEternalPending,
+  listPullableEternalCards,
   mergeImportedPackWallet,
   mintDealtPackCards,
   mintEternalSelfCardOnce,
+  mintPulledEternalCard,
   normalizePackCardKey,
   packCardKey,
   recyclePackCollectionCards,
@@ -307,6 +310,98 @@ describe("authoritative completion provenance", () => {
   });
 });
 
+/* The 0.0025% slot: somebody else's Eternal card, dealt by any pack. It is an
+   ordinary repeatable pull that lands on an awarded tier, so the thing to pin
+   is that it stays clear of the one-time reward machinery in both directions. */
+describe("pulling somebody else's eternal card", () => {
+  const OTHER = 42;
+  const OTHER_IDENTITY = {
+    username: "finisher",
+    avatarUrl: "https://a.ppy.sh/u/42",
+    countryCode: "US",
+    pp: 9_000,
+    globalRank: 100,
+  };
+
+  async function seedOtherEternal(): Promise<void> {
+    await seedUser(OTHER, "finisher");
+    await mintEternalSelfCardOnce(db, OTHER, OTHER_IDENTITY, 1_000);
+  }
+
+  it("lists the eternals in circulation, minus the opener's own", async () => {
+    await seedOtherEternal();
+    await seedUser(OWNER, "completionist");
+    await mintEternalSelfCardOnce(db, OWNER, SELF_IDENTITY, 1_000);
+    expect(await listPullableEternalCards(db, OWNER)).toEqual([{ userId: OTHER, owned: false }]);
+    expect(await listPullableEternalCards(db, OTHER)).toEqual([{ userId: OWNER, owned: false }]);
+  });
+
+  it("marks a card the opener already holds so the draw can prefer a new one", async () => {
+    await seedOtherEternal();
+    await mintPulledEternalCard(db, OWNER, OTHER, OTHER_IDENTITY, 2_000);
+    expect(await listPullableEternalCards(db, OWNER)).toEqual([{ userId: OTHER, owned: true }]);
+  });
+
+  it("keeps a granted eternal out of circulation", async () => {
+    // The desk mints onto a ":v<n>" variant, which is a card handed out once
+    // rather than one somebody finished the collection for.
+    await grantAdminPackCard(db, ADMIN_OWNER, { cardUserId: OTHER, tier: "eternal", copies: 1 }, 2_000);
+    expect(await listPullableEternalCards(db, 999)).toEqual([]);
+  });
+
+  it("mints the holding, the serial and a second copy on a repeat", async () => {
+    await seedOtherEternal();
+    expect(await mintPulledEternalCard(db, OWNER, OTHER, OTHER_IDENTITY, 2_000)).toEqual({ isNew: true });
+    const row = (await exec(
+      db,
+      "select tier, copies, card_user_id, pp from pack_collection_cards where owner_user_id = ? and card_key = ?",
+      [OWNER, `${OTHER}:eternal`],
+    )).rows[0];
+    expect(row?.tier).toBe("eternal");
+    expect(Number(row?.copies)).toBe(1);
+    expect(Number(row?.card_user_id)).toBe(OTHER);
+    expect(Number(row?.pp)).toBe(OTHER_IDENTITY.pp);
+    // The finisher minted #1; the puller is the card's second serial.
+    const serial = (await exec(
+      db,
+      "select serial from pack_card_serials where card_key = ? and owner_user_id = ?",
+      [`${OTHER}:eternal`, OWNER],
+    )).rows[0];
+    expect(Number(serial?.serial)).toBe(2);
+
+    expect(await mintPulledEternalCard(db, OWNER, OTHER, OTHER_IDENTITY, 3_000)).toEqual({ isNew: false });
+    const repeat = (await exec(
+      db,
+      "select copies from pack_collection_cards where owner_user_id = ? and card_key = ?",
+      [OWNER, `${OTHER}:eternal`],
+    )).rows[0];
+    expect(Number(repeat?.copies)).toBe(2);
+  });
+
+  it("does not retire the puller's own completion reward", async () => {
+    await seedOtherEternal();
+    await spendPackOpen(db, OWNER, { kind: "charge" }, 1_000);
+    await mintPulledEternalCard(db, OWNER, OTHER, OTHER_IDENTITY, 2_000);
+    expect(await isPackWalletEternalPending(db, OWNER)).toBe(true);
+    // Including across a boot, whose registry backfill reads the same rule.
+    await migrate(db);
+    expect(await isPackWalletEternalPending(db, OWNER)).toBe(true);
+    // And the reward itself still deals when they finish the collection.
+    expect((await mintEternalSelfCardOnce(db, OWNER, SELF_IDENTITY, 3_000)).dealt).toBe(true);
+    expect(await isPackWalletEternalPending(db, OWNER)).toBe(false);
+  });
+
+  it("names the card off the users row, falling back to the catalog", async () => {
+    await seedOtherEternal();
+    expect((await getPullableEternalIdentity(db, OTHER))?.username).toBe("finisher");
+    await exec(db, "delete from users where user_id = ?", [OTHER]);
+    const fallback = await getPullableEternalIdentity(db, OTHER);
+    expect(fallback?.username).toBe("finisher");
+    expect(fallback?.pp).toBe(0);
+    expect(await getPullableEternalIdentity(db, 12_345)).toBeNull();
+  });
+});
+
 describe("eternal pulls on the community feed", () => {
   it("accepts the tier only for the reporter's own held :eternal card", async () => {
     await seedUser(OWNER, "completionist");
@@ -333,7 +428,7 @@ describe("eternal pulls on the community feed", () => {
     expect(serials).not.toContain(`${OWNER}:eternal`);
   });
 
-  it("demotes an eternal claim about somebody else's card even when the reporter holds their own", async () => {
+  it("demotes an eternal claim about a card the reporter does not hold", async () => {
     await seedUser(OWNER, "completionist");
     await seedUser(42, "bystander");
     await mintEternalSelfCardOnce(db, OWNER, SELF_IDENTITY, 5_000);
@@ -342,5 +437,47 @@ describe("eternal pulls on the community feed", () => {
     ], 10_000);
     expect(result.recorded).toBe(1);
     expect((await exec(db, "select tier from pack_pull_events")).rows[0]?.tier).toBeNull();
+  });
+
+  it("accepts somebody else's eternal once the 0.0025% slot actually dealt it", async () => {
+    await seedUser(OWNER, "completionist");
+    await seedUser(42, "finisher");
+    await mintEternalSelfCardOnce(db, 42, { ...SELF_IDENTITY, username: "finisher" }, 4_000);
+    await mintPulledEternalCard(db, OWNER, 42, { ...SELF_IDENTITY, username: "finisher" }, 5_000);
+    const result = await recordPackPullEvents(db, OWNER, "completionist", "standard", [
+      { userId: 42, username: "finisher", countryCode: "CR", tier: "eternal", isNew: true },
+    ], 10_000);
+    expect(result.recorded).toBe(1);
+    const row = (await exec(db, "select tier, notable from pack_pull_events")).rows[0];
+    expect(row?.tier).toBe("eternal");
+    expect(Number(row?.notable)).toBe(1);
+  });
+
+  /* One deal, one feed line. Holding the card is not standing permission to
+     keep announcing it: the report settles the serial's pending bit, and a
+     replay after that demotes like any other unproven tier claim. */
+  it("demotes a replayed eternal claim the deal already paid for", async () => {
+    await seedUser(OWNER, "completionist");
+    await mintEternalSelfCardOnce(db, OWNER, SELF_IDENTITY, 4_000);
+    const card = { userId: OWNER, username: "completionist", countryCode: "CR", tier: "eternal", isNew: true } as const;
+    await recordPackPullEvents(db, OWNER, "completionist", "standard", [{ ...card }], 10_000);
+    await recordPackPullEvents(db, OWNER, "completionist", "standard", [{ ...card }], 11_000);
+    const tiers = (await exec(db, "select tier from pack_pull_events order by id")).rows.map((row) => row.tier);
+    expect(tiers).toEqual(["eternal", null]);
+  });
+
+  it("lets an honest duplicate report through, because the repeat deal re-arms it", async () => {
+    await seedUser(OWNER, "completionist");
+    await seedUser(42, "finisher");
+    await mintEternalSelfCardOnce(db, 42, { ...SELF_IDENTITY, username: "finisher" }, 4_000);
+    const card = { userId: 42, username: "finisher", countryCode: "CR", tier: "eternal", isNew: true } as const;
+    await mintPulledEternalCard(db, OWNER, 42, { ...SELF_IDENTITY, username: "finisher" }, 5_000);
+    await recordPackPullEvents(db, OWNER, "completionist", "standard", [{ ...card, isNew: true }], 10_000);
+    await mintPulledEternalCard(db, OWNER, 42, { ...SELF_IDENTITY, username: "finisher" }, 11_000);
+    await recordPackPullEvents(db, OWNER, "completionist", "standard", [{ ...card, isNew: false }], 12_000);
+    const rows = (await exec(db, "select tier, is_first_global from pack_pull_events order by id")).rows;
+    expect(rows.map((row) => row.tier)).toEqual(["eternal", "eternal"]);
+    // The finisher's own serial is the card's first; neither pull is a first.
+    expect(rows.map((row) => Number(row.is_first_global))).toEqual([0, 0]);
   });
 });

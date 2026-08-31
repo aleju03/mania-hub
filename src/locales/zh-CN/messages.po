@@ -4432,11 +4432,6 @@ msgstr "不计入段位：该谱面在此倍速下没有段位评级。"
 msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
 msgstr "不计入段位：这次游玩的判定 OD 低于段位认定所需的 OD。"
 
-#. placeholder {0}: od.toFixed(1)
-#: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
-msgstr "不计入段位：这次游玩的判定 OD 为 {0}，低于段位认定所需的 OD。"
-
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
 msgstr "不计入段位：该谱面的构成方式无法从通过成绩中读出段位水平。"
@@ -4453,6 +4448,11 @@ msgstr "不计入段位：此次通过需要 {0} 的准确率，实际为 {1}。
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
 msgstr "不计入段位：此次通过需要 {0} 才能获得任何段位（通过线为 {1}），实际为 {2}。"
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
+msgstr "不计入段位：这次游玩的判定 OD 为 {0}，低于段位认定所需的 OD。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."

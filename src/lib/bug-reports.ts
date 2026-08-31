@@ -20,7 +20,7 @@ import { reporterKeyFor } from "./reporter-key";
    signed-in only, and the form says so before it is submitted rather than
    after. */
 
-export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate";
+export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate" | "notabug";
 
 export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "new",
@@ -28,6 +28,7 @@ export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "fixed",
   "wontfix",
   "duplicate",
+  "notabug",
 ];
 
 export const BUG_REPORT_BODY_MAX = 4000;
@@ -90,6 +91,7 @@ export interface BugReportCounts {
   fixed: number;
   wontfix: number;
   duplicate: number;
+  notabug: number;
   total: number;
 }
 

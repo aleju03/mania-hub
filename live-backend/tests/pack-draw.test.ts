@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Db } from "../src/db.js";
 import type { GlobalRankingEntry } from "../src/features/global-rankings.js";
-import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, type PackDrawDeps, type PackDrawSlot } from "../src/features/pack-draw.js";
+import { drawPackHand, ETERNAL_PULL_CHANCE, PACK_DRAW_TYPES, PackPoolUnavailableError, type PackDrawDeps, type PackDrawSlot } from "../src/features/pack-draw.js";
 import { HONORARY_USER_IDS } from "../src/features/pack-wallets.js";
 
 // The deps carry every read the draw performs, so no database is stood up.
@@ -50,6 +50,7 @@ function makeDeps(entries: GlobalRankingEntry[], overrides: Partial<PackDrawDeps
     getPoolEntries: async () => entries,
     listOwnedCardKeys: async () => [],
     selectReadyUserIds: async (_db, ids) => [...ids],
+    listEternalCards: async () => [],
     rng: rngQueue([]),
     ...overrides,
   };
@@ -236,5 +237,88 @@ describe("drawPackHand", () => {
     );
     const goat = (hand?.players ?? []).find((slot) => slot.honorary);
     expect(goat?.userId).toBe(roster[1]);
+  });
+});
+
+describe("the eternal pull slot", () => {
+  /* The roll is the last thing drawPackHand asks the rng for, so a queue that
+     ends in a miss covers the whole draw and a queue that ends in a hit needs
+     the pick right behind it. */
+  const eternals = [
+    { userId: 501, owned: true },
+    { userId: 502, owned: false },
+    { userId: 503, owned: false },
+  ];
+
+  it("misses on an ordinary open and deals no eternal", async () => {
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(pool(200), { listEternalCards: async () => eternals }),
+    );
+    expect(hand?.eternalPullUserId).toBe(0);
+    expect((hand?.players ?? []).some((slot) => slot.eternal)).toBe(false);
+  });
+
+  it("hits inside the published chance and picks a card the opener lacks", async () => {
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      // 0 misses nothing, so the honorary roll fires too; the eternal roll is
+      // the last one and takes the queued values.
+      makeDeps(pool(200), {
+        listEternalCards: async () => eternals,
+        rng: rngQueue([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, ETERNAL_PULL_CHANCE / 2, 0.99], 0.9),
+      }),
+    );
+    // 0.99 over the two unowned entries lands on the last one.
+    expect(hand?.eternalPullUserId).toBe(503);
+  });
+
+  it("falls back to a duplicate when the opener already holds every eternal", async () => {
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(pool(200), {
+        listEternalCards: async () => [{ userId: 501, owned: true }],
+        rng: rngQueue([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0, 0], 0.9),
+      }),
+    );
+    expect(hand?.eternalPullUserId).toBe(501);
+  });
+
+  it("deals nothing when no eternal exists yet, and survives a failed read", async () => {
+    const hit = rngQueue([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0, 0], 0.9);
+    expect((await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(pool(200), { listEternalCards: async () => [], rng: hit }),
+    ))?.eternalPullUserId).toBe(0);
+    expect((await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(pool(200), {
+        listEternalCards: async () => {
+          throw new Error("catalog unavailable");
+        },
+        rng: rngQueue([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0, 0], 0.9),
+      }),
+    ))?.eternalPullUserId).toBe(0);
+  });
+
+  it("is the same chance on every pack type", async () => {
+    for (const packType of [...PACK_DRAW_TYPES.keys()]) {
+      const hand = await drawPackHand(
+        db,
+        { packType, ownerUserId: 1 },
+        makeDeps(pool(200), {
+          listEternalCards: async () => [{ userId: 777, owned: false }],
+          // Never enough to miss the eternal roll, and a valid [0, 1) draw so
+          // the pick lands on the roster's only entry.
+          rng: () => ETERNAL_PULL_CHANCE / 2,
+        }),
+      );
+      expect(hand?.eternalPullUserId).toBe(777);
+    }
   });
 });

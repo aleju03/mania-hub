@@ -354,7 +354,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 11) // The largest pack (Wild) plus the completion bonus slot.
+      .slice(0, 12) // The largest pack (Wild) plus both Eternal bonus slots.
       .map((raw: unknown) => {
         const card = raw as Partial<PackPullRecordCard> | null;
         const userId = Math.floor(Number(card?.userId) || 0);
@@ -627,7 +627,7 @@ export interface PackPullMintCard {
 export const mintServerPackCollectionCards = createServerFn({ method: "POST" })
   .validator((input: { cards?: unknown }) => {
     const cards: PackPullMintCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 11) // The largest pack (Wild) plus the completion bonus slot.
+      .slice(0, 12) // The largest pack (Wild) plus both Eternal bonus slots.
       .map((raw: unknown): PackPullMintCard | null => {
         const card = raw as Partial<PackPullMintCard> | null;
         const cardKey = typeof card?.cardKey === "string" ? sanitizeCardKey(card.cardKey) : null;

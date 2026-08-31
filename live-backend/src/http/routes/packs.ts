@@ -3,7 +3,7 @@ import { checkWriteGateOverloaded, parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, getPullableEternalIdentity, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, mintPulledEternalCard, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
 import { logInfo, logWarn } from "../../logger.js";
@@ -91,7 +91,9 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       (Array.isArray(body.userIds) ? body.userIds : [])
         .map(Number)
         .filter((id) => Number.isInteger(id) && id > 0),
-    )].slice(0, 11); // The largest pack (Wild) plus the completion bonus slot.
+    // The largest pack (Wild) plus both Eternal bonus slots: the opener's
+    // own completion card and the 0.0025% pull of somebody else's.
+    )].slice(0, 12);
     if (userIds.length === 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
       return true;
@@ -265,6 +267,29 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
           },
     );
     const isNewByCardKey = await mintDealtPackCards(writeDb, ownerUserId, dealtSlots, Date.now());
+    /* Somebody else's Eternal card, on the 0.0025% slot. Nothing one-time about
+       it, so unlike the completion reward it is an ordinary repeatable mint;
+       a failure here still returns the paid hand rather than losing the pack.
+       Placed before the completion reward's push so the opener's own card, if
+       both ever land in one open, is still the last thing the reveal shows. */
+    if (hand.eternalPullUserId > 0) {
+      try {
+        const identity = await getPullableEternalIdentity(ctx.db, hand.eternalPullUserId);
+        if (identity) {
+          const pulled = await mintPulledEternalCard(writeDb, ownerUserId, hand.eternalPullUserId, identity, Date.now());
+          hand.players.push({ eternal: true, userId: hand.eternalPullUserId, ...identity });
+          isNewByCardKey.set(packCardKey(hand.eternalPullUserId, "eternal"), pulled.isNew);
+          // Their card renders from their plays like any other, so a holder
+          // the pool never warmed joins the warm the cold path would run.
+          if ((await selectReadyPackCardUserIds(ctx.db, [hand.eternalPullUserId])).length === 0) {
+            hand.notReadyUserIds.push(hand.eternalPullUserId);
+          }
+          logInfo("pack_eternal_pull", { ownerUserId, cardUserId: hand.eternalPullUserId, packType });
+        }
+      } catch (error) {
+        logWarn("pack_eternal_pull_failed", { userId: ownerUserId, error: String(error) });
+      }
+    }
     /* Eligibility is a read, but the award is a database claim: parallel draw
        requests may both arrive here as candidates, and exactly one random
        claim token wins the primary key while minting the card in that same
@@ -860,7 +885,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       // every server-dealt open).
       if (body.mode === "mint") {
         if (Array.isArray(body.cards)) {
-          const mints = body.cards.slice(0, 11); // Wild pack plus the completion bonus slot.
+          const mints = body.cards.slice(0, 12); // Wild pack plus both Eternal bonus slots.
           let applied = 0;
           for (const raw of mints) {
             const mint = (raw ?? {}) as Record<string, unknown>;

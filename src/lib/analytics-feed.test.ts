@@ -76,6 +76,12 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     addScoreMap: null,
     addScoreRepeat: null,
     addScoreReason: null,
+    skillPlaysPlayer: null,
+    skillPlaysView: null,
+    skillPlaysOrder: null,
+    skillPlaysKeys: null,
+    skillPlaysAxis: null,
+    skillPlaysSide: null,
     viewerUsername: null,
     referrer: null,
     ...overrides,
@@ -446,6 +452,34 @@ describe("describeAnalyticsEvent", () => {
       verb: "submitted",
       subject: "7K GLOBAL",
     });
+  });
+
+  it("names the Skills tab plays list, its subject and its order", () => {
+    expect(
+      describeAnalyticsEvent(row({
+        event: "skill_plays_view",
+        skillPlaysPlayer: "Aleju03",
+        skillPlaysView: "msd",
+        skillPlaysOrder: "recent",
+        skillPlaysKeys: "7",
+        skillPlaysAxis: "Stamina",
+      })),
+    ).toMatchObject({
+      kind: "profile",
+      verb: "browsed",
+      subject: "Aleju03's MSD plays",
+      detail: "7K Stamina · recent",
+    });
+    expect(
+      describeAnalyticsEvent(row({
+        event: "skill_plays_view",
+        skillPlaysPlayer: "Aleju03",
+        skillPlaysView: "dan",
+        skillPlaysOrder: "best",
+        skillPlaysKeys: "4",
+        skillPlaysSide: "ln",
+      })),
+    ).toMatchObject({ subject: "Aleju03's dan plays", detail: "4K LN · best" });
   });
 
   it("reads the add-a-score funnel", () => {

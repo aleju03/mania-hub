@@ -290,7 +290,7 @@ describe("bug reports", () => {
 
     const all = await listBugReports(db);
     expect(all.total).toBe(2);
-    expect(all.counts).toEqual({ new: 1, investigating: 0, fixed: 1, wontfix: 0, duplicate: 0, total: 2 });
+    expect(all.counts).toEqual({ new: 1, investigating: 0, fixed: 1, wontfix: 0, duplicate: 0, notabug: 0, total: 2 });
 
     const open = await listBugReports(db, { status: "new" });
     expect(open.reports).toHaveLength(1);

@@ -22,7 +22,7 @@ import { getAdminTodo, type AdminTodo } from "./admin-todos.js";
 // Triage is admin-only (/admin/bug-reports). The table is durable: retention
 // never prunes it.
 
-export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate";
+export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate" | "notabug";
 
 export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "new",
@@ -30,9 +30,17 @@ export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "fixed",
   "wontfix",
   "duplicate",
+  "notabug",
 ];
 
-/** Statuses that mean the report is off the owner's plate. */
+/**
+ * Statuses that mean the report is off the owner's plate.
+ *
+ * `notabug` is deliberately not one of them. Plenty of what arrives through
+ * /report is a question or a feature request rather than something broken, and
+ * those are worth keeping: it is a parking tier, so "clear closed" leaves it
+ * alone and nothing there is stamped resolved.
+ */
 export const BUG_REPORT_CLOSED_STATUSES: readonly BugReportStatus[] = ["fixed", "wontfix", "duplicate"];
 
 const BODY_MAX = 4000;
@@ -173,6 +181,7 @@ export interface BugReportCounts {
   fixed: number;
   wontfix: number;
   duplicate: number;
+  notabug: number;
   total: number;
 }
 
@@ -335,10 +344,17 @@ function rowToReport(row: Record<string, unknown>): BugReport {
   };
 }
 
+/**
+ * `notabug` is a triage tier, not a verdict on the person who wrote in, and
+ * telling a reporter their question "is not a bug" reads harsher than it is
+ * meant. So the reporter's own view shows it as still open, which is true: it
+ * is not a closed status and it is not stamped resolved. The distinction stays
+ * on the admin board.
+ */
 export function toBugReportForReporter(report: BugReport): BugReportForReporter {
   return {
     id: report.id,
-    status: report.status,
+    status: report.status === "notabug" ? "new" : report.status,
     body: report.body,
     pagePath: report.pagePath,
     screenshotCount: report.screenshotKeys.length,
@@ -589,7 +605,7 @@ export async function attachBugReportScreenshot(
 
 export async function countBugReports(db: Db): Promise<BugReportCounts> {
   const rows = (await exec(db, "select status, count(*) as n from bug_reports group by status")).rows;
-  const counts: BugReportCounts = { new: 0, investigating: 0, fixed: 0, wontfix: 0, duplicate: 0, total: 0 };
+  const counts: BugReportCounts = { new: 0, investigating: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0, total: 0 };
   for (const row of rows) {
     const status = normalizeBugReportStatus(row.status);
     const n = Number(row.n ?? 0);
@@ -794,7 +810,7 @@ export interface UpdateBugReportInput {
 /**
  * Triage one report. Fields left undefined keep their stored value, so a
  * status flip needs only `{ id, status }`. `resolvedAt` follows the status:
- * stamped only for fixed/wontfix/duplicate, cleared for new/investigating.
+ * stamped only for fixed/wontfix/duplicate, cleared for new/investigating/notabug.
  * `reply` is retained as a rolling-deploy compatibility input. A changed,
  * non-empty value appends an admin message instead of replacing history.
  */

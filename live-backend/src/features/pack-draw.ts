@@ -22,8 +22,10 @@ import {
   HONORARY_USER_IDS,
   isPackWalletEternalPending,
   listPackCollectionOwnedCardKeys,
+  listPullableEternalCards,
   normalizePackCardKey,
   type PackOpenCost,
+  type PullableEternalCard,
 } from "./pack-wallets.js";
 import { selectReadyPackCardUserIds } from "./player-profiles.js";
 
@@ -44,6 +46,19 @@ export interface PackDrawTypeDef {
 }
 
 const HONORARY_CASCADE_CHANCE = 0.1;
+
+/* The chance that any pack, of any type, also deals somebody else's Eternal
+   card - the card another collector earned by finishing the whole collection.
+   One roll per open, not per slot, and the same number for every pack: an
+   Eternal is not priced against a pack's slice, so a Standard charge buys the
+   same lottery ticket a Legend does.
+
+   0.0025% is one open in forty thousand, and it lands as a bonus slot rather
+   than in place of a dealt player, so a hit never costs the hand a card. The pool
+   it draws from is whatever Eternals exist (listPullableEternalCards), which
+   is empty until somebody completes the collection - so this rolls to nothing
+   at all rather than needing a flag until then. */
+export const ETERNAL_PULL_CHANCE = 0.000025;
 
 export const PACK_DRAW_TYPES: ReadonlyMap<string, PackDrawTypeDef> = new Map(
   (
@@ -88,10 +103,10 @@ export class PackPoolUnavailableError extends Error {
 
 export type PackDrawSlot =
   | { honorary: true; eternal?: false; userId: number }
-  /* The one-time 100%-completion reward: the opener's own card at the Eternal
-     tier, appended once as a bonus slot. Identity rides along when the users
-     projection knows the opener (most completionists are tracked players);
-     the client falls back to the signed-in identity it already holds. */
+  /* An Eternal card, appended as a bonus slot: either the opener's own, dealt
+     once for 100% completion, or somebody else's, dealt by the 0.0025% slot.
+     Identity rides along when the users projection knows that player; the
+     client falls back to the card snapshot in the same response. */
   | { honorary?: false; eternal: true; userId: number; username?: string; avatarUrl?: string; countryCode?: string }
   | {
       honorary?: false;
@@ -109,6 +124,10 @@ export interface PackDrawHand {
   poolTotal: number;
   /* Reveal order: weakest first, honorary hits at the tail (the climax). */
   players: PackDrawSlot[];
+  /* Whose Eternal card this open hit, or 0 for the other 39,999 opens. Not a
+     slot yet: the route mints it and appends it to `players`, because the
+     card is an ownership row rather than a roll over the pool. */
+  eternalPullUserId: number;
   /* Dealt ids with no stored score window (only when the slice had no ready
      replacement left); the route warms them so the client's cold path is a
      coalesced wait, not a fresh mint. */
@@ -133,6 +152,7 @@ export interface PackDrawDeps {
   getPoolEntries: (db: Db, keys?: PackPoolKeymode) => Promise<readonly GlobalRankingEntry[]>;
   listOwnedCardKeys: (db: Db, userId: number) => Promise<string[]>;
   selectReadyUserIds: (db: Db, userIds: readonly number[]) => Promise<number[]>;
+  listEternalCards: (db: Db, ownerUserId: number) => Promise<PullableEternalCard[]>;
   rng: () => number;
 }
 
@@ -140,6 +160,7 @@ const defaultDeps: PackDrawDeps = {
   getPoolEntries: getPackPoolEntries,
   listOwnedCardKeys: listPackCollectionOwnedCardKeys,
   selectReadyUserIds: selectReadyPackCardUserIds,
+  listEternalCards: listPullableEternalCards,
   rng: Math.random,
 };
 
@@ -323,7 +344,28 @@ export async function drawPackHand(
     }
   }
 
-  return { poolTotal, players, notReadyUserIds };
+  /* The Eternal slot. Rolled last so it cannot disturb the hand it rides
+     along with, and the roll happens before the roster is read so an open
+     that misses (all but one in forty thousand) costs no query at all.
+     Preferring an unheld card mirrors the honorary slot: a duplicate is still
+     a 125-shard recycle, but the point of the slot is a card you do not have. */
+  let eternalPullUserId = 0;
+  if (rng() < ETERNAL_PULL_CHANCE) {
+    let cards: readonly PullableEternalCard[] = [];
+    try {
+      cards = await deps.listEternalCards(db, options.ownerUserId);
+    } catch {
+      // No Eternal rather than no pack: the hand is servable either way.
+      cards = [];
+    }
+    const unowned = cards.filter((card) => !card.owned);
+    const pool = unowned.length > 0 ? unowned : cards;
+    if (pool.length > 0) {
+      eternalPullUserId = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))].userId;
+    }
+  }
+
+  return { poolTotal, players, notReadyUserIds, eternalPullUserId };
 }
 
 /* Injectable reads for the completion check, so tests can drive it without a

@@ -42,6 +42,7 @@ import {
   writeSkillPlaysPrefs,
 } from "#/lib/skill-plays-prefs";
 import { rateModFor, stubEntry } from "./SkillPlaysModal";
+import { track } from "#/lib/analytics";
 import { useLocale } from "#/lib/locale-context";
 
 const PLAYS_COHORT_SIZE = 200;
@@ -259,6 +260,31 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
     if (!axisOptions.some((option) => axisKeyOf(option) === axis)) setAxis(OVERALL_AXIS_META.key);
   }, [axis, axisOptions]);
   const activeAxis = axisOptions.find((option) => axisKeyOf(option) === axis) ?? OVERALL_AXIS_META;
+
+  /* What the reader is actually looking at, reported once per distinct list:
+     which of the two views, in which keymode and skill (or dan side), and in
+     which order. Sent from an effect rather than from the controls because
+     the first list of a visit is opened by the tab strip above this component,
+     not by anything in the toolbar, and it counts the same as a switch made in
+     here. The key dedupes re-renders, so only a real change emits. */
+  const trackedListRef = useRef<string | null>(null);
+  const activeAxisKey = axisKeyOf(activeAxis);
+  useEffect(() => {
+    if (!mode) return;
+    const listKey = view === "msd"
+      ? `msd:${mode.keyCount}:${activeAxisKey}:${sort}`
+      : `dan:${mode.keyCount}:${side}:${sort}`;
+    if (trackedListRef.current === listKey) return;
+    trackedListRef.current = listKey;
+    track("skill_plays_view", {
+      skill_plays_player: username,
+      skill_plays_view: view,
+      // The toolbar's own two labels, so the feed reads the way the page does.
+      skill_plays_order: sort === "rating" ? "best" : "recent",
+      skill_plays_keys: String(mode.keyCount),
+      ...(view === "msd" ? { skill_plays_axis: activeAxisKey } : { skill_plays_side: side }),
+    });
+  }, [activeAxisKey, mode, side, sort, username, view]);
 
   const openDetail = useCallback((play: LivePlayerSkillPlay, rating: { label: string; color: string }) => {
     const context = { ratingLabel: rating.label, ratingColor: rating.color };

@@ -201,6 +201,7 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   replay_view: "Replay watched",
   replay_watch_crash: "Replay viewer crash",
   route_error: "Page error",
+  skill_plays_view: "Skills tab plays list opened",
   skin_download: "Skin downloaded",
   skin_file_updated: "Skin build shipped",
   skin_previews_edited: "Skin previews edited",

@@ -193,12 +193,12 @@ function devForceGoatPull(): boolean {
 }
 
 /* Dev only, same deal as forceGoat: `/packs?forceEternal=1` marks the dealt
-   hand's final slot as the completion reward so the Eternal ceremony can be
-   reviewed without owning the whole pool. Unlike forceGoat it also applies to
-   a server-dealt (signed-in) hand, since that is the path the real reward
-   arrives on and the local roll never runs while a backend is configured.
-   Display-only even if it survived a build: the server refuses the tier from
-   every client claim and only its own completion deal writes an ":eternal"
+   hand's final slot as an Eternal so the ceremony can be reviewed without
+   owning the whole pool or hitting the 0.0025% pull. Unlike forceGoat it also
+   applies to a server-dealt (signed-in) hand, since that is the path a real
+   Eternal arrives on and the local roll never runs while a backend is
+   configured. Display-only even if it survived a build: the server refuses
+   the tier from every client claim and only its own deals write an ":eternal"
    row, so the forced card mints nothing and syncs nothing. */
 function devForceEternalPull(): boolean {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
@@ -634,9 +634,10 @@ function PacksPage() {
       // draw reports only its filtered slice, so it must not overwrite it.
       if (!type.keys) walletApi.notePoolTotal(poolTotal);
       preparedPackKeyRef.current = dealKey;
-      // A completion reward is once per account and cannot be pulled again.
-      // If this was the unlucky pack somebody sliced through, forgive the cut
-      // entirely so Eternal gets its full ceremony and stays in the album.
+      // An Eternal is once per account (the completion reward) or one open
+      // in forty thousand (somebody else's card). If this was the unlucky pack
+      // somebody sliced through, forgive the cut entirely so Eternal gets its
+      // full ceremony and stays in the album.
       setDamage((current) => effectivePackDamage(players, current));
       setCards(buildCardStates(players, seededScores));
       /* A pack opened straight from the summary pays here rather than at the

@@ -8,6 +8,7 @@ import {
   Copy,
   Inbox,
   Layers,
+  Lightbulb,
   ListPlus,
   MessageSquare,
   Pencil,
@@ -134,14 +135,24 @@ const STATUS_META: Record<BugReportStatus, StatusMeta> = {
     pill: "border-osu-b3/40 bg-osu-b4/60 text-osu-l2",
     edge: "border-l-osu-b3/60",
   },
+  notabug: {
+    label: "Not a bug",
+    Icon: Lightbulb,
+    text: "text-sky-300",
+    pill: "border-sky-400/30 bg-sky-400/10 text-sky-200",
+    edge: "border-l-sky-400/50",
+  },
 };
 
-const FILTERS: StatusFilter[] = ["new", "investigating", "fixed", "wontfix", "duplicate", "all"];
+const FILTERS: StatusFilter[] = ["new", "investigating", "fixed", "wontfix", "duplicate", "notabug", "all"];
 
 /* Every status a row can be moved to, in the order they get used. The row
    drops whichever one it is already on. */
-const STATUS_MOVES: BugReportStatus[] = ["investigating", "fixed", "wontfix", "duplicate", "new"];
+const STATUS_MOVES: BugReportStatus[] = ["investigating", "fixed", "wontfix", "duplicate", "notabug", "new"];
 
+/* What "clear closed" takes. `notabug` is left out on purpose: a question or a
+   suggestion is parked there, not finished with, so it survives the sweep the
+   same way new and investigating do. */
 const CLOSED_STATUSES: BugReportStatus[] = ["fixed", "wontfix", "duplicate"];
 
 function formatWhen(ms: number): string {
@@ -478,7 +489,7 @@ function ReportCard({
   useEffect(() => { setEditing(null); }, [report.updatedAt]);
 
   const meta = STATUS_META[report.status];
-  const open = report.status === "new" || report.status === "investigating";
+  const open = !CLOSED_STATUSES.includes(report.status);
 
   return (
     <article
@@ -624,6 +635,7 @@ function BugReportsAdminPage() {
     fixed: 0,
     wontfix: 0,
     duplicate: 0,
+    notabug: 0,
     total: 0,
   });
   const [total, setTotal] = useState(0);
@@ -735,7 +747,7 @@ function BugReportsAdminPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40 sm:grid-cols-6">
+        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40 lg:grid-cols-7">
           {FILTERS.map((filter) => {
             const active = status === filter;
             const meta = filter === "all" ? null : STATUS_META[filter];
@@ -744,7 +756,7 @@ function BugReportsAdminPage() {
               <button
                 key={filter}
                 onClick={() => setStatus(filter)}
-                className={`relative cursor-pointer border-b border-r border-osu-b3/20 px-3 py-2 text-left transition-colors duration-[120ms] last:border-r-0 sm:border-b-0 ${
+                className={`relative cursor-pointer border-b border-r border-osu-b3/20 px-3 py-2 text-left transition-colors duration-[120ms] last:border-r-0 lg:border-b-0 ${
                   active ? "bg-osu-b4/45" : "hover:bg-osu-b4/25"
                 }`}
               >
@@ -845,7 +857,7 @@ function BugReportsAdminPage() {
       {clearAsk ? (
         <ConfirmModal
           title="Clear every closed report?"
-          body={`${closedCount(counts)} fixed, won't fix and duplicate reports go for good, screenshots included. New and investigating ones stay.`}
+          body={`${closedCount(counts)} fixed, won't fix and duplicate reports go for good, screenshots included. New, investigating and not-a-bug ones stay.`}
           confirmLabel="Clear"
           danger
           onConfirm={() => void act("clear", async () => { await clearClosedBugReports(); })}
