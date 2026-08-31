@@ -119,6 +119,22 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 5_000,
   },
   {
+    // Third instance of the enrich/top-scores story, and the one that actually
+    // broke: rosters have a queue reserve but rode only the mixed fast lane,
+    // where the priority-desc claim never reaches a scheduled refresh at
+    // priority 10 while profile work (80/120) holds the three slots. Two such
+    // rosters (LI, MQ) took the reserve's two slots at attempts=0 and stayed
+    // there, so every other country -- including a live activation at priority
+    // 85 -- was parked behind them, and no roster anywhere refreshed for two
+    // days. This lane is what guarantees they drain; refresh_country_roster
+    // stays in the fast lane too, so an admitted activation still runs at once
+    // instead of waiting on this interval.
+    name: "country-rosters",
+    jobTypes: ["refresh_country_roster"],
+    claimLimit: 1,
+    intervalMs: 10_000,
+  },
+  {
     // Keep global backfill separate and slow so socket outages can be repaired
     // without letting JSON catch-up crowd out interactive enrichment jobs.
     name: "osc-backfill",
