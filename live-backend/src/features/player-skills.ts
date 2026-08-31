@@ -4987,13 +4987,20 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // split charts can contribute to two tiles. The chart-side motion sweep must
 // finish before this pass starts, or the fallback filing would be stamped as
 // current for rows encountered before their charts were backfilled.
-// v21: 7K LN accepts the OD 5 charts its official JinJin courses use. Stored
+// v22: 7K LN accepts the OD 5 charts its official JinJin courses use. Stored
 // verdicts made under the old 5.5 floor omit those clears, so every row carrying
 // 7K evidence must be folded again before badges and leaderboards agree with
 // the evidence read. The existing full scope is intentional: it is already a
 // cheap plays_json derivation and avoids teaching the historical two-scope
 // machinery a one-off third shape.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v21";
+//
+// This needed a key of its own rather than riding v21: the v21 pass had already
+// stamped done in production for the motion rollout, so the seeder would have
+// returned early and only players whose own row happened to recompute (a play,
+// or a profile view past the 12h TTL) would ever have picked the floor up.
+// Everyone else - including every inactive 7K player - would have kept a dan
+// that disagreed with their own evidence window indefinitely.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v22";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
