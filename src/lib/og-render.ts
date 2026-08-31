@@ -219,15 +219,16 @@ export function pngResponse(buffer: Buffer, cacheControl: string, extraHeaders?:
    play cover, a pasted url) behind text, and RGBA PNG stores that at roughly a
    byte per pixel. An 880x200 render measured 129 KB, which a viewer's browser
    paints scanline by scanline as it arrives - the picture visibly wipes in from
-   the top. The same render is 23 KB as WebP.
+   the top. The same render is 32 KB as WebP.
  *
- * Quality 94 rather than the usual 75-82: these are small cards carrying small
- * text, and the artifacts a photograph hides show up on a glyph edge. 90 was
- * tried first and someone looking for the difference could find it in the soft
- * gradients of an avatar; 94 puts it under that, costs 4 KB (23 KB against the
- * PNG's 129 KB), and is still far under the size where a transfer is slow
- * enough to paint scanline by scanline. Effort 4 keeps the encode near 25ms,
- * which is noise next to the rasterization it follows.
+ * Quality 98 rather than the usual 75-82: these are small cards carrying small
+ * text, and the artifacts a photograph hides show up on a glyph edge. The walk
+ * up was empirical - at 90 someone looking for the difference finds it in the
+ * soft gradients of an avatar, at 94 they have to hunt, and 98 is where a 3x
+ * zoom against the source stops being an argument. It costs 32 KB against the
+ * PNG's 129 KB, still a quarter of the bytes and nowhere near the size where a
+ * transfer is slow enough to paint scanline by scanline. Effort 4 keeps the
+ * encode near 25ms, which is noise next to the rasterization it follows.
  *
  * Only stored renders go through this. /api/signature-preview stays PNG: it is
  * no-store, it runs once per slider drag, and it has no transfer worth 25ms of
@@ -237,6 +238,6 @@ export async function encodeSignatureWebp(png: Buffer): Promise<Buffer> {
   // and nothing about booting the server should pull it in.
   const { default: sharp } = await import("sharp");
   return sharp(png)
-    .webp({ quality: 94, alphaQuality: 100, effort: 4, smartSubsample: true })
+    .webp({ quality: 98, alphaQuality: 100, effort: 4, smartSubsample: true })
     .toBuffer();
 }
