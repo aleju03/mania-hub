@@ -4,6 +4,7 @@ import {
   RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS,
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
+  createClockStallWatch,
   findDensestPreviewStartTime,
   getChartPreviewPlaybackPlan,
   getSetPreviewReferenceBeatmap,
@@ -354,5 +355,53 @@ describe("rate variant parsing", () => {
   it("points the reference beatmap at the unscaled difficulty", () => {
     const beatmaps = [difficulty("[4K] Macabre 1.2x", 100), difficulty("[4K] Macabre", 120)];
     expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] Macabre");
+  });
+});
+
+describe("createClockStallWatch", () => {
+  it("never reports a stall while the clock keeps advancing", () => {
+    const watch = createClockStallWatch(1200, 0.005);
+    let stalls = 0;
+    // A 240Hz frame loop sampling a media clock: every single sample moves it
+    // by less than the epsilon, but the clock is perfectly healthy.
+    for (let frame = 0; frame < 2000; frame++) {
+      const nowMs = frame * (1000 / 240);
+      if (watch.observe(nowMs / 1000, nowMs)) stalls++;
+    }
+    expect(stalls).toBe(0);
+  });
+
+  it("reports a stall only after a full window with the clock still", () => {
+    const watch = createClockStallWatch(1200, 0.005);
+    expect(watch.observe(10, 0)).toBe(false);
+    expect(watch.observe(10, 600)).toBe(false);
+    expect(watch.observe(10, 1199)).toBe(false);
+    expect(watch.observe(10, 1200)).toBe(true);
+  });
+
+  it("re-baselines after reporting so it cannot fire every sample", () => {
+    const watch = createClockStallWatch(1200, 0.005);
+    watch.observe(10, 0);
+    expect(watch.observe(10, 1200)).toBe(true);
+    expect(watch.observe(10, 1300)).toBe(false);
+    expect(watch.observe(10, 2399)).toBe(false);
+    expect(watch.observe(10, 2400)).toBe(true);
+  });
+
+  it("measures the window from the last advance, not the last sample", () => {
+    const watch = createClockStallWatch(1200, 0.005);
+    watch.observe(10, 0);
+    watch.observe(10, 900);
+    expect(watch.observe(10.5, 1000)).toBe(false);
+    expect(watch.observe(10.5, 2100)).toBe(false);
+    expect(watch.observe(10.5, 2200)).toBe(true);
+  });
+
+  it("forgets its baseline on reset", () => {
+    const watch = createClockStallWatch(1200, 0.005);
+    watch.observe(10, 0);
+    watch.reset(1000);
+    expect(watch.observe(10, 2400)).toBe(false);
+    expect(watch.observe(10, 3600)).toBe(true);
   });
 });
