@@ -320,12 +320,12 @@ msgstr "{0} albums"
 msgid "{0} biggest"
 msgstr "{0} biggest"
 
-#. placeholder {0}: result.total.toLocaleString("en-US")
+#. placeholder {0}: shown.total.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} card"
 msgstr "{0} card"
 
-#. placeholder {0}: result.total.toLocaleString("en-US")
+#. placeholder {0}: shown.total.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} cards"
 msgstr "{0} cards"
@@ -8365,8 +8365,8 @@ msgid "on a map"
 msgstr "on a map"
 
 #: src/routes/dan-estimates.tsx
-msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
-msgstr "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+#~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+#~ msgstr "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
@@ -11270,6 +11270,10 @@ msgstr "Snipes don't apply to Global"
 msgid "Solid"
 msgstr "Solid"
 
+#: src/routes/dan-estimates.tsx
+msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+msgstr "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -11355,13 +11359,21 @@ msgstr "Spectators"
 msgid "Speed"
 msgstr "Speed"
 
+#: src/routes/dan-estimates.tsx
+msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
+msgstr "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
+
 #: src/components/maps/SearchCard.tsx
 msgid "Speedjack"
 msgstr "Speedjack"
 
 #: src/routes/dan-estimates.tsx
-msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
-msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
+#~ msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
+#~ msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
+
+#: src/routes/dan-estimates.tsx
+msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
+msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx

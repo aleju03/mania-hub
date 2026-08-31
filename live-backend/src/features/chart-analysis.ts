@@ -21,6 +21,7 @@ import { logInfo, logWarn } from "../logger.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
 import { inspectChartDanEligibility, type ChartDanEligibility } from "../dan/dan-eligibility.js";
 import { classifyFourKeyJackDemand, type FourKeyJackDemandVerdict } from "../dan/jack-demand.js";
+import { motionFeatures, type MotionFeatures } from "../dan/motion-features.js";
 
 // Per-beatmap chart analysis at 1.0x: the unified classifier verdict (dan
 // estimate, pattern clusters, in-house pattern hits) plus the Etterna MSD
@@ -68,6 +69,9 @@ interface LeanChartClassification {
   // Note-weighted song tempo at 1.0x (dan/note-bpm.ts); null when the chart
   // has no timing points or notes. Serves profile BPM stats via readNoteBpms.
   noteBpm: number | null;
+  // Wrist-versus-roll shares read off the notes (dan/motion-features.ts), 4K
+  // only and null everywhere else. Read by the player-dan speed/tech split.
+  motion?: MotionFeatures | null;
 }
 
 function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
@@ -84,7 +88,11 @@ function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
   };
 }
 
-function leanClassification(classification: ChartClassification, noteBpm: number | null = null): LeanChartClassification {
+function leanClassification(
+  classification: ChartClassification,
+  noteBpm: number | null = null,
+  motion: MotionFeatures | null = null,
+): LeanChartClassification {
   const clusters = (classification.clusters?.topFiveClusters ?? []).map((cluster) => ({
     label: cluster.format(1),
     pattern: cluster.Pattern,
@@ -95,6 +103,7 @@ function leanClassification(classification: ChartClassification, noteBpm: number
   }));
   return {
     noteBpm,
+    ...(motion ? { motion } : {}),
     keyCount: classification.keyCount,
     supported: classification.supported,
     lnRatio: classification.lnRatio,
@@ -321,7 +330,7 @@ export async function computeBeatmapChartAnalysis(
       msdLn = await computeMsd(osuText, { keyCount: map.keyCount, lnTailTaps: true }).catch(() => null);
     }
 
-    const lean = leanClassification(classification, computeNoteBpm(osuText));
+    const lean = leanClassification(classification, computeNoteBpm(osuText), motionFeatures(map.notes, map.keyCount));
     const computedAt = nowIso();
     await exec(
       db,
@@ -1762,6 +1771,126 @@ async function enqueueJackDemandRecompute(queue: JobQueue, cursor: number): Prom
   await queue.enqueue(
     JACK_DEMAND_RECOMPUTE_JOB,
     `${JACK_DEMAND_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot 4K motion-feature sweep. Fresh chart analyses store
+// `classification_json.motion`, but every row analysed before it predates the
+// field, and the player-dan speed/tech split reads it on every clear. Like the
+// Jack-demand sweep this parses only the cached .osu: no MinaCalc, no
+// LeoBlack, no osu! API fallback, so it is a note-shape pass rather than a
+// CHART_ANALYSIS_VERSION bump (which would hide all ~147k stored rows at once
+// and blank the analysis-derived columns until the backfill caught up).
+//
+// A chart with no stored block reads as "unknown" on the player side, which
+// keeps the pre-existing MSD-lead behaviour rather than guessing, so the
+// corpus degrades gracefully while this runs.
+export const MOTION_FEATURES_RECOMPUTE_JOB = "recompute_motion_features_sweep";
+export const MOTION_FEATURES_RECOMPUTE_META_KEY = "motion_features_recompute_done:v1";
+const MOTION_FEATURES_RECOMPUTE_CHUNK = 50;
+
+export interface MotionFeaturesRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number;
+  done: boolean;
+}
+
+export async function recomputeMotionFeaturesChunk(
+  db: Db,
+  cursor: number,
+  limit = MOTION_FEATURES_RECOMPUTE_CHUNK,
+): Promise<MotionFeaturesRecomputeChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready' and key_count = 4
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  let changed = 0;
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "motion"> | null>(row.classification_json, null);
+    if (!stored) continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId, { touch: false }).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4) continue;
+      const fresh = motionFeatures(map.notes, map.keyCount);
+      // A chart too short to measure has nothing to store, and leaving the
+      // field absent is how "unknown" is spelled.
+      if (!fresh) continue;
+      if (json(fresh) === json(stored.motion)) continue;
+      const now = nowIso();
+      const written = await exec(
+        db,
+        `update beatmap_chart_analysis
+         set classification_json = json_set(classification_json, '$.motion', json(?)), updated_at = ?
+         where beatmap_id = ? and analysis_version = ? and status = 'ready'`,
+        [json(fresh), now, beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      if (Number(written.rowsAffected ?? 0) > 0) changed += 1;
+    } catch {
+      // A malformed cached chart keeps whatever it had. Ordinary chart
+      // analysis would reject the same file, and no network fallback belongs
+      // in a zero-API sweep.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureMotionFeaturesRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [MOTION_FEATURES_RECOMPUTE_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [MOTION_FEATURES_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueMotionFeaturesRecompute(queue, 0);
+}
+
+/** True on the finishing chunk so the worker can seed the dependent player-dan fold. */
+export async function runMotionFeaturesRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<boolean> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeMotionFeaturesChunk(db, cursor);
+  if (result.changed > 0) {
+    logInfo("motion_features_recompute_chunk", { charts: result.changed, cursor: result.nextCursor });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [MOTION_FEATURES_RECOMPUTE_META_KEY, json({ finishedAt: now }), now],
+    );
+    return true;
+  }
+  await enqueueMotionFeaturesRecompute(queue, result.nextCursor);
+  return false;
+}
+
+async function enqueueMotionFeaturesRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    MOTION_FEATURES_RECOMPUTE_JOB,
+    `${MOTION_FEATURES_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

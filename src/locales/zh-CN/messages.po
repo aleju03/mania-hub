@@ -329,12 +329,12 @@ msgstr "{0} 个卡册"
 msgid "{0} biggest"
 msgstr "{0} 大"
 
-#. placeholder {0}: result.total.toLocaleString("en-US")
+#. placeholder {0}: shown.total.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} card"
 msgstr "{0} 张卡片"
 
-#. placeholder {0}: result.total.toLocaleString("en-US")
+#. placeholder {0}: shown.total.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} cards"
 msgstr "{0} 张卡片"
@@ -8366,8 +8366,8 @@ msgid "on a map"
 msgstr "单图"
 
 #: src/routes/dan-estimates.tsx
-msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
-msgstr "在密集谱面上，Stream 和 Technical 的评分经常只差一丝，哪个略微领先几乎等于抛硬币。这种几乎持平的情况通常判给速度，但当 Technical 咬得这么紧、而谱面分析本身也确信这张谱是技时，这次通过就会改归到技。"
+#~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
+#~ msgstr "在密集谱面上，Stream 和 Technical 的评分经常只差一丝，哪个略微领先几乎等于抛硬币。这种几乎持平的情况通常判给速度，但当 Technical 咬得这么紧、而谱面分析本身也确信这张谱是技时，这次通过就会改归到技。"
 
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
@@ -11271,6 +11271,10 @@ msgstr "狙击不适用于全球视图"
 msgid "Solid"
 msgstr "纯色"
 
+#: src/routes/dan-estimates.tsx
+msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能。当速度与技之间的判断确实难分伯仲，或者一张叠谱长到耐力已占了一半的要求（这会同时归入叠和耐力）时，谱面就会落在两个技能里。大约每九张 4K 谱面就有一张是这种情况。这类通过会同时计入两个技能的等级，但只计入其中较强一方的四次通过门槛，因此它能拉高你已有的技能，却无法凭一己之力开启一个新技能。"
+
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
@@ -11356,13 +11360,21 @@ msgstr "观众"
 msgid "Speed"
 msgstr "速度"
 
+#: src/routes/dan-estimates.tsx
+msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
+msgstr "速度与技的区分靠的是音符本身，而不是评分。在高密度谱面上，Stream 和 Technical 的评分往往只差一点点，谁略微领先几乎是抛硬币的结果，所以谱面分析改为衡量动作：谱面中有多少是双键交互、小叠和不规则节奏（这些要靠转动手腕来打），又有多少是在两手之间铺开的楼梯。在来自 170 个速度与技练习包的 738 张谱面上验证过，且验证时会整包排除在外，这种判断与包名吻合的比例远高于只看评分。当它无法确定时，该谱面会同时计入两者。"
+
 #: src/components/maps/SearchCard.tsx
 msgid "Speedjack"
 msgstr "速叠"
 
 #: src/routes/dan-estimates.tsx
-msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
-msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是让同一次通过计入两个技能。"
+#~ msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
+#~ msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是让同一次通过计入两个技能。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
+msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是在其之上再加一项。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx

@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-31", text: "More work on how maps are sorted into skills on 4K, so fewer tech maps land under speed. A map that is genuinely both now counts in both skills, and so does a long jack map that is also stamina. About one map in seven changes skill", to: "/dan-estimates" },
   { date: "2026-08-30", text: "Dan estimates now leave up to three passes out of a skillset's average when they credit more than five levels below the average of your five best in it. A dan 6 pass in a skillset whose best five are beta is left out. They still show in the dan window, marked not counted", to: "/dan-estimates" },
   { date: "2026-08-29", text: "Fixed plays with the lazer Difficulty Adjust mod counting toward skill ratings and dan, and plays with the EZ mod counting toward dan. EZ plays still count for MSD, with their Wife accuracy measured against the wider EZ windows, so they rate lower and there is nothing to gain from playing EZ", to: "/my-stats" },
   { date: "2026-08-28", text: "Player profiles have a new Add a missing score button: paste an osu! score link and, if the score really belongs to that player, the site tracks it like any other. Old ranked and loved plays can finally count toward skill ratings and dan without replaying them, and you can add scores to anyone" },

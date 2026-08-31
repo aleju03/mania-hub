@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { danSkillsetBucketsForValues, danTagBucketsForTest } from "../src/features/player-skills.js";
+import type { MotionFeatures } from "../src/dan/motion-features.js";
 
 // Real MSD vectors, kept as data rather than as chart ids: the classifier must
 // separate these populations by their shape, so a new speed pack lands in speed
@@ -52,6 +53,8 @@ const SPEEDJACK_CHART = {
   handstreamCluster: null,
   chordjackScore: 0,
   techScore: 0,
+  // No stored motion block, so these fixtures exercise the fallback arms.
+  motion: null,
   lnRatio: 0,
   vibro: false,
   danEligible: true,
@@ -211,7 +214,10 @@ describe("danSkillsetBucketsForValues", () => {
     expect(danSkillsetBucketsForValues(4, "rc", { Stamina: 30, Stream: 20, Jumpstream: 21, Technical: 22, Chordjack: 24, Handstream: 26, JackSpeed: 15 })).toEqual(["stamina"]);
   });
 
-  it("assigns every 4K skillset to exactly one tile, so the tiles stay disjoint", () => {
+  it("gives a chart with nothing ambiguous about it exactly one tile", () => {
+    // Two tiles are for charts that earn them (see the shared-tile describe);
+    // a lone dominant skillset on a chart with no stored motion block is not
+    // one of those, and neither is the speedjack override.
     const skillsets = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
     for (const winner of skillsets) {
       const values = Object.fromEntries(skillsets.map((key) => [key, key === winner ? 30 : 10]));
@@ -782,5 +788,110 @@ describe("the stamina tile's length gate", () => {
     // touches it.
     const handstream = { ...INFECTIOUS_CRYING, Handstream: 34.0, Stamina: 33.0 };
     expect(danSkillsetBucketsForValues(4, "rc", handstream, 60)).toEqual(["stamina"]);
+  });
+});
+
+// Real charts, with the motion block dan/motion-features.ts measures off their
+// .osu and the analyzer/MSD readings stored beside it. These are the charts a
+// 4K dan player labelled by hand on 2026-08-30, plus the two that named the
+// shared-tile rules, so a refit that stops agreeing with them shows up here.
+const withMotion = (motion: MotionFeatures, techScore: number, extra: Record<string, unknown> = {}) => ({
+  ...SPEEDJACK_CHART,
+  patterns: [],
+  techScore,
+  motion,
+  ...extra,
+});
+
+// Blastix Riotz [4K] GRAVITY (770127). Jumptrill the reporter calls tech.
+const GRAVITY = {
+  values: { Stream: 21.22, Jumpstream: 27.91, Handstream: 21.38, Stamina: 26.06, JackSpeed: 18.90, Chordjack: 20.82, Technical: 26.71 },
+  chart: withMotion({
+    sameHand: 0.1608, miniJack: 0.0012, oneHandTrill: 0.0412, crossHandTrill: 0.0547,
+    roll4: 0.1875, rhythmBreak: 0.0062, chordSwing: 0.2532, densitySwing: 0.4450,
+  }, 0.73, { clusterTrill: true, techCategory: false, chordjackScore: 0.50, jackShare: 0.11 }),
+};
+
+// Blastix Riotz [4K] Jinjin's INFINITE (789784). Same reporter, same verdict,
+// but the model reads it at 0.49 - the honest answer is both tiles.
+const JINJIN = {
+  values: { Stream: 22.26, Jumpstream: 23.27, Handstream: 15.22, Stamina: 23.07, JackSpeed: 14.90, Chordjack: 16.74, Technical: 23.85 },
+  chart: withMotion({
+    sameHand: 0.2173, miniJack: 0.0008, oneHandTrill: 0.0265, crossHandTrill: 0.0601,
+    roll4: 0.1258, rhythmBreak: 0.0065, chordSwing: 0.3009, densitySwing: 0.3833,
+  }, 0.538, { clusterTrill: false, techCategory: true, chordjackScore: 0.233, jackShare: 0.086 }),
+};
+
+// Beajek's 4K Training Pack, a named speed chart the model calls speed at 0.16.
+const NAMED_SPEED = {
+  values: { Stream: 28.48, Jumpstream: 26.18, Handstream: 16.82, Stamina: 25.84, JackSpeed: 15.78, Chordjack: 22.58, Technical: 26.55 },
+  chart: withMotion({
+    sameHand: 0.2349, miniJack: 0.0088, oneHandTrill: 0.0030, crossHandTrill: 0.0007,
+    roll4: 0.0585, rhythmBreak: 0.0068, chordSwing: 0.3279, densitySwing: 0.4581,
+  }, 0.44),
+};
+
+// STRONG 280 [4K] Conflagration (3798537): 4:13 of Stamina 25.50 over
+// Jumpstream 25.39, filed jack on a 0.79 chordjack score inside a trill label.
+const STRONG_280 = {
+  values: { Stream: 19.78, Jumpstream: 25.39, Handstream: 23.55, Stamina: 25.50, JackSpeed: 17.22, Chordjack: 20.10, Technical: 24.96 },
+  chart: withMotion({
+    sameHand: 0.1133, miniJack: 0.0027, oneHandTrill: 0.0135, crossHandTrill: 0.0508,
+    roll4: 0.0441, rhythmBreak: 0.0034, chordSwing: 0.5188, densitySwing: 0.2985,
+  }, 0.96, { clusterTrill: true, techCategory: true, chordjackScore: 0.79, jackShare: 0.45, lengthSeconds: 253 }),
+};
+
+describe("the 4K speed/tech split read off the notes", () => {
+  it("calls a jumptrill tech and a rolling speed chart speed", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", GRAVITY.values, 127, 1, GRAVITY.chart)).toEqual(["tech"]);
+    expect(danSkillsetBucketsForValues(4, "rc", NAMED_SPEED.values, 100, 1, NAMED_SPEED.chart)).toEqual(["speed"]);
+  });
+
+  it("keeps the MSD-lead arms on a chart whose motion block is not written yet", () => {
+    // What every chart does between this shipping and the sweep reaching it.
+    const unread = { ...GRAVITY.chart, motion: null };
+    expect(danSkillsetBucketsForValues(4, "rc", GRAVITY.values, 127, 1, unread)).toEqual(["tech"]);
+    const unreadSpeed = { ...NAMED_SPEED.chart, motion: null };
+    expect(danSkillsetBucketsForValues(4, "rc", NAMED_SPEED.values, 100, 1, unreadSpeed)).toEqual(["speed"]);
+  });
+
+  it("ignores a motion block that is missing a share rather than half-reading it", () => {
+    const partial = { ...GRAVITY.chart, motion: { sameHand: 0.16, miniJack: 0.001 } as unknown as MotionFeatures };
+    expect(danSkillsetBucketsForValues(4, "rc", GRAVITY.values, 127, 1, partial)).toEqual(["tech"]);
+  });
+});
+
+describe("charts that carry two tiles", () => {
+  it("files a genuinely split speed/tech chart under both, strongest side first", () => {
+    const tiles = danSkillsetBucketsForValues(4, "rc", JINJIN.values, 127, 1, JINJIN.chart);
+    expect(tiles).toHaveLength(2);
+    expect(new Set(tiles)).toEqual(new Set(["tech", "speed"]));
+  });
+
+  it("files a long jack marathon under jack and stamina", () => {
+    const tiles = danSkillsetBucketsForValues(4, "rc", STRONG_280.values, 253, 1, STRONG_280.chart);
+    expect(tiles).toEqual(["jack", "stamina"]);
+  });
+
+  it("leaves a short jack chart on jack alone", () => {
+    // The endurance is half of what makes it both, so a 2:00 cut is just jack.
+    expect(danSkillsetBucketsForValues(4, "rc", STRONG_280.values, 120, 1, { ...STRONG_280.chart, lengthSeconds: 120 }))
+      .toEqual(["jack"]);
+  });
+
+  it("does not share a jack chart whose MSD argmax was never endurance", () => {
+    const speedjackArgmax = { ...STRONG_280.values, Stamina: 18.0, Handstream: 17.0, Chordjack: 26.0 };
+    expect(danSkillsetBucketsForValues(4, "rc", speedjackArgmax, 253, 1, STRONG_280.chart)).toEqual(["jack"]);
+  });
+
+  it("never files more than two tiles", () => {
+    for (const sample of [GRAVITY, JINJIN, NAMED_SPEED, STRONG_280]) {
+      for (const length of [60, 253, 600]) {
+        const tiles = danSkillsetBucketsForValues(4, "rc", sample.values, length, 1, { ...sample.chart, lengthSeconds: length });
+        expect(tiles.length).toBeGreaterThanOrEqual(1);
+        expect(tiles.length).toBeLessThanOrEqual(2);
+        expect(new Set(tiles).size).toBe(tiles.length);
+      }
+    }
   });
 });

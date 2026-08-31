@@ -68,6 +68,7 @@ describe("sweeps status registry", () => {
       "companella-recompute",
       "chordjack-tag-recompute",
       "jack-demand-recompute",
+      "motion-features-recompute",
       "bracket-tag-recompute",
       "bracket-content-recompute",
       "ln-msd-backfill",

@@ -13,6 +13,7 @@ import {
   danIgnoredStrayCount,
   estimateWifeAccuracy,
   getPlayerSkillBreakdown,
+  getPlayerSkillDanEvidence,
   getPlayRate,
   getRateModAcronym,
   getPlayerSkillPlays,
@@ -1010,6 +1011,128 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("lets a shared clear raise a second tile's dan but never open one on its own", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const now = new Date().toISOString();
+      // Four 4:13 jack marathons whose MSD argmax is Stamina: exactly the
+      // shape that files jack AND stamina (resolveTilesForClear). Plus four short
+      // stamina charts that file stamina outright.
+      const charts: Array<[number, number, number, boolean]> = [
+        [401, 12, 253, true], [402, 12, 253, true], [403, 12, 253, true], [404, 12, 253, true],
+        [405, 6, 300, false], [406, 6, 300, false], [407, 6, 300, false], [408, 6, 300, false],
+      ];
+      for (const [beatmapId, rawDan, length, jackDemand] of charts) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)",
+          [beatmapId, 900, JSON.stringify({ total_length: length }), now],
+        );
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+           values (?, ?, 'ready', 4, ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({
+            lnRatio: 0, patterns: [], clusters: [], rc: { rawDan },
+            ...(jackDemand ? { jackDemand: { detected: true } } : {}),
+          }), now],
+        );
+      }
+      const { danSideFromClearsForTest, loadChartSkillInfo, danSkillsetBucketsForValues } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, charts.map(([beatmapId]) => beatmapId));
+      const values = (top: string, rating: number) => ({ Overall: rating, Stream: 1, [top]: rating });
+      const clearPlay = (beatmapId: number, top: string) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: values(top, 25), patterns: [], accuracy: 0.96, stableAccuracy: 0.96,
+      });
+      const marathons = [401, 402, 403, 404].map((id) => clearPlay(id, "Stamina"));
+      const stamina = [405, 406, 407, 408].map((id) => clearPlay(id, "Stamina"));
+
+      // The marathons really do carry both tiles.
+      expect(danSkillsetBucketsForValues(4, "rc", values("Stamina", 25), 253, 1, info.get(401)))
+        .toEqual(["jack", "stamina"]);
+
+      // Four of them alone rate jack, their primary tile, and nothing else:
+      // one body of work cannot light up two skills.
+      const jackOnly = danSideFromClearsForTest(4, "rc", marathons, info)!;
+      expect(Object.keys(jackOnly.skillsets ?? {})).toEqual(["jack"]);
+      // And the window counts each clear once rather than twice.
+      expect(jackOnly.clearWindow?.have).toBe(4);
+
+      // Add four real stamina clears and the stamina tile opens on its own
+      // primaries - then the marathons DO pull its dan up, from 6 to 9.
+      const both = danSideFromClearsForTest(4, "rc", [...marathons, ...stamina], info)!;
+      expect(Object.keys(both.skillsets ?? {}).sort()).toEqual(["jack", "stamina"]);
+      expect(both.skillsets?.jack?.rawDan).toBe(12);
+      expect(both.skillsets?.stamina?.rawDan).toBe(9);
+      expect(both.clearWindow?.have).toBe(8);
+    });
+  });
+
+  it("does not call a shared clear globally ignored when one of its tiles still counts it", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const now = new Date().toISOString();
+      const charts: Array<{ id: number; rawDan: number; length: number; jackDemand: boolean; top: "JackSpeed" | "Stamina" }> = [
+        // Five strong jack-only clears establish the jack tile's reference.
+        ...[501, 502, 503, 504, 505].map((id) => ({ id, rawDan: 12, length: 120, jackDemand: true, top: "JackSpeed" as const })),
+        // This low marathon is shared. It is a stray beside the jack clears,
+        // but ordinary evidence beside the stamina clears below.
+        { id: 506, rawDan: 5, length: 253, jackDemand: true, top: "Stamina" },
+        ...[507, 508, 509, 510].map((id) => ({ id, rawDan: 5, length: 300, jackDemand: false, top: "Stamina" as const })),
+      ];
+      for (const chart of charts) {
+        await exec(
+          db,
+          "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)",
+          [chart.id, 901, JSON.stringify({ total_length: chart.length }), now],
+        );
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+           values (?, ?, 'ready', 4, ?, ?)`,
+          [chart.id, CHART_ANALYSIS_VERSION, JSON.stringify({
+            lnRatio: 0,
+            patterns: [],
+            clusters: [],
+            rc: { rawDan: chart.rawDan },
+            ...(chart.jackDemand ? { jackDemand: { detected: true } } : {}),
+          }), now],
+        );
+      }
+      const plays = charts.map((chart) => ({
+        identity: `official:${chart.id}`,
+        beatmapId: chart.id,
+        keyCount: 4,
+        rate: 1,
+        goal: 0.95,
+        pp: 100,
+        values: { Overall: 25, Stream: 1, [chart.top]: 25 },
+        patterns: [],
+        accuracy: 0.96,
+        stableAccuracy: 0.96,
+      }));
+      await exec(
+        db,
+        `insert into player_skill_ratings
+         (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (99, ?, 'ready', '{}', ?, ?, ?)`,
+        [PLAYER_SKILLS_VERSION, JSON.stringify({ plays }), now, now],
+      );
+
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc");
+      const allClear = evidence?.clears.find((clear) => clear.play.beatmapId === 506);
+      const jackClear = evidence?.skillsets.find((skillset) => skillset.id === "jack")
+        ?.plays.find((clear) => clear.play.beatmapId === 506);
+      const staminaClear = evidence?.skillsets.find((skillset) => skillset.id === "stamina")
+        ?.plays.find((clear) => clear.play.beatmapId === 506);
+      expect(jackClear?.ignoredAsStray).toBe(true);
+      expect(staminaClear?.ignoredAsStray).not.toBe(true);
+      expect(allClear?.ignoredAsStray).not.toBe(true);
+    });
+  });
+
   it("averages the skillset dans into the side estimate instead of taking the best clears", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
@@ -1803,7 +1926,11 @@ describe("computePlayerSkillsJob", () => {
          values (99, '99', '{}', ?, 200, ?, ?, ?)`,
         [JSON.stringify([play({ id: 41, beatmap_id: 777 })]), now, now, now],
       );
-      const seededVersion = PLAYER_SKILLS_SEED_VERSIONS[0];
+      // Exercise the oldest still-compatible row, not merely the immediately
+      // previous one: these are the players most likely to carry retained
+      // evidence that has aged out of every live score source.
+      const seededVersion = Math.min(...PLAYER_SKILLS_SEED_VERSIONS);
+      expect(seededVersion).toBe(16);
       const storedPlay = {
         identity: "official:31", beatmapId: 106, keyCount: 4, rate: 1, goal: 0.93,
         pp: 90, values: { Overall: 20, Stream: 18 }, patterns: [], source: "top",
@@ -1837,6 +1964,43 @@ describe("computePlayerSkillsJob", () => {
 });
 
 describe("getPlayerSkillPlays", () => {
+  it("keeps serving persisted breakdown and evidence while a refresh is running", async () => {
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      const summary = {
+        totalPlays: 1,
+        analyzedPlays: 1,
+        pendingPlays: 0,
+        unsupportedPlays: 0,
+        modes: [{ keyCount: 4, analyzedPlays: 1, ratings: { Overall: 21.5, Stream: 18 } }],
+      };
+      const storedPlay = {
+        identity: "official:31", beatmapId: 106, keyCount: 4, rate: 1, goal: 0.93,
+        pp: 90, values: { Overall: 21.5, Stream: 18 }, patterns: [], source: "top",
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings
+         (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (99, ?, 'running', ?, ?, ?, ?)`,
+        [PLAYER_SKILLS_VERSION, JSON.stringify(summary), JSON.stringify({ plays: [storedPlay] }), now, now],
+      );
+
+      const breakdown = await getPlayerSkillBreakdown(db, new JobQueue(db), 99, { allowEnqueue: false });
+      expect(breakdown.status).toBe("ready");
+      expect(breakdown.stale).toBe(true);
+      expect(breakdown.modes[0]?.ratings.Overall).toBe(21.5);
+
+      const plays = await getPlayerSkillPlays(db, 99, 4, "Stream");
+      expect(plays.total).toBe(1);
+      expect(plays.items[0]?.beatmapId).toBe(106);
+
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc");
+      expect(evidence).not.toBeNull();
+      expect(evidence?.keyCount).toBe(4);
+    });
+  });
+
   it("filters and paginates the durable plays behind a skill axis", async () => {
     await withDb(async (db) => {
       const now = new Date().toISOString();

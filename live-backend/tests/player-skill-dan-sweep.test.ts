@@ -10,7 +10,7 @@ import {
   recomputePlayerSkillDanChunk,
   runPlayerSkillDanSweepJob,
 } from "../src/features/player-skills.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY } from "../src/features/chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 let dir = "";
@@ -34,6 +34,20 @@ async function markJackDemandSwept(db: Db): Promise<void> {
     "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
     [JACK_DEMAND_RECOMPUTE_META_KEY, json({ finishedAt: "2026-08-19T00:00:00.000Z" }), "2026-08-19T00:00:00.000Z"],
   );
+}
+
+/** The v20 fold also reads classification_json.motion. */
+async function markMotionFeaturesSwept(db: Db): Promise<void> {
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
+    [MOTION_FEATURES_RECOMPUTE_META_KEY, json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
+  );
+}
+
+async function markDanDependenciesSwept(db: Db): Promise<void> {
+  await markJackDemandSwept(db);
+  await markMotionFeaturesSwept(db);
 }
 
 async function seedChart(
@@ -338,27 +352,35 @@ describe("recomputePlayerSkillDanChunk", () => {
     for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);
     for (const userId of [21, 22, 23]) await seedRow(db, userId, [301, 302, 303, 304]);
 
+    await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v19'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v20'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
-    await markJackDemandSwept(db);
+    await markDanDependenciesSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(jobs.c)).toBe(0);
     db.close();
   });
 
-  it("waits for the chart-side jack-demand sweep before folding", async () => {
+  it("waits for both chart-side dependencies before folding", async () => {
     const db = await makeDb();
     const queue = new JobQueue(db);
 
     // Folding first would bake a half-patched corpus into the done key.
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
+    // A job queued by older code is guarded at execution time too.
+    await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
+    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v20'", [])).rows).toHaveLength(0);
 
     await markJackDemandSwept(db);
+    await ensurePlayerSkillDanSweepSeeded(db, queue);
+    expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
+
+    await markMotionFeaturesSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(1);
     db.close();
@@ -368,7 +390,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     const db = await makeDb();
     const queue = new JobQueue(db);
 
-    await markJackDemandSwept(db);
+    await markDanDependenciesSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;
     expect(jobs).toHaveLength(1);
@@ -390,9 +412,9 @@ describe("recomputePlayerSkillDanChunk", () => {
     const startedAt = "2026-08-26T00:00:00.000Z";
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [HT_RATE_ANALYSIS_META_KEY, json({ finishedAt: "2026-08-26T00:00:30.000Z" }), "2026-08-26T00:00:30.000Z"]);
+    await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0, startedAt });
 
-    await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const queued = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(queued.c)).toBe(1);
@@ -408,6 +430,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     const startedAt = "2026-08-27T00:00:00.000Z";
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [SUNNY_REPIN_DT_META_KEY, json({ finishedAt: "2026-08-27T00:00:30.000Z" }), "2026-08-27T00:00:30.000Z"]);
+    await markDanDependenciesSwept(db);
     // Model the production worker accurately: the cursor-0 job is still
     // running while its handler tries to schedule the required second pass.
     await queue.enqueue(PLAYER_SKILL_DAN_SWEEP_JOB, `${PLAYER_SKILL_DAN_SWEEP_JOB}:0`, { cursor: 0, startedAt });
@@ -431,9 +454,9 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [HT_RATE_ANALYSIS_META_KEY, json({ finishedAt: "2026-08-26T00:00:00.000Z" }), "2026-08-26T00:00:00.000Z"]);
+    await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0, startedAt: "2026-08-26T00:00:30.000Z" });
 
-    await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const queued = (await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0];
     expect(Number(queued.c)).toBe(0);

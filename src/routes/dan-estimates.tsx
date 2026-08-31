@@ -443,9 +443,19 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
+              Some charts are two of those things at once, and those count in both. A chart lands in two
+              skills when the reading is genuinely split between speed and tech, or when it is a jack chart
+              long enough that the endurance is half of what it asks for, which puts it in jack and stamina.
+              About one 4K chart in nine is one of these. A pass on a chart like that counts toward both
+              skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a
+              skill you already have and cannot start one on its own.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
               Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is
               jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to
-              jack. It replaces the MSD choice instead of counting in two skills.
+              jack. It replaces the MSD choice rather than adding to it.
             </Trans>
           </P>
           <P>
@@ -459,10 +469,13 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              On dense charts Stream and Technical often rate within a fraction of each other, and
-              whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but
-              when Technical sits that close and the chart analysis itself is confident the chart is
-              tech, the pass files under tech instead.
+              Speed and tech are told apart by the notes rather than by the ratings. On dense charts
+              Stream and Technical rate within a fraction of each other and whichever edges ahead is close
+              to a coin flip, so the chart analysis measures the movement instead: how much of the chart is
+              two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against
+              how much of it rolls across the hands. Checked against 738 charts from 170 named speed and
+              tech practice packs, with whole packs held out of the check, that reading agrees with the pack
+              names far more often than the ratings alone do. When it is not sure, the chart counts as both.
             </Trans>
           </P>
           <P>

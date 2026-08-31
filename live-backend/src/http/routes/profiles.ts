@@ -209,6 +209,11 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         { ...(limit > 0 ? { maxClears: limit } : {}), clearsOffset: offset },
       );
       if (!evidence) {
+        // A first-ever skill compute has no persisted evidence to serve yet.
+        // Do not let browsers or reverse proxies negatively cache that brief
+        // state, or the modal's retry can keep replaying the old 404 after the
+        // worker has made the row ready.
+        res.setHeader("cache-control", "no-store");
         sendJson(req, res, ctx, 404, { error: "dan_evidence_not_ready" });
         return true;
       }

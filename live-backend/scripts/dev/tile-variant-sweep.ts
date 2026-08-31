@@ -21,6 +21,16 @@
  * NOTE: libsql rows are array-like, so a column literally named "length" is
  * shadowed by Array.length (the column count) - alias it, as len_seconds is.
  *
+ * SUPERSEDED FOR SPEED/TECH as of v21: the shipped speed-versus-tech verdict
+ * is no longer an MSD-lead bar but a reading of the notes (SPEED_TECH_MODEL in
+ * player-skills.ts), and a chart between its bars files under BOTH tiles. The
+ * variants below still model the pre-v21 arms, which are what a chart with no
+ * stored motion block falls back to, so they measure the fallback rather than
+ * the shipped verdict. For the shipped one run
+ * `scripts/dev/speed-tech-model.ts --impact`, which walks the same corpora
+ * through danSkillsetBucketsForValues itself instead of reimplementing it.
+ * The jack, stamina and Jumpstream-arbitration variants here are unaffected.
+ *
  * Read-only: nothing is written. Run:
  *   npx tsx scripts/dev/tile-variant-sweep.ts
  */
