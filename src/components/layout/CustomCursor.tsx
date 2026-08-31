@@ -159,9 +159,10 @@ function CursorOverlay() {
     let lastFrameAt: number | null = null;
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    /* `desynchronized` lets Chromium present the canvas outside the normal
-       compositor queue, cutting a frame of latency off the drawn cursor. */
-    const context = canvas.getContext("2d", { desynchronized: true });
+    /* No `desynchronized`: on Windows it puts the canvas on a low-latency swap
+       chain that some drivers composite as opaque, painting the whole page
+       black behind the cursor. The frame it saved is not worth that. */
+    const context = canvas.getContext("2d");
     if (!context) return;
 
     let cursorSprite = buildCursorSprite(settings, dpr);
