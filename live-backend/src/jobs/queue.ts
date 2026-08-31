@@ -147,7 +147,7 @@ export class JobQueue {
   constructor(private readonly db: Db) {}
 
   async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean; debounce?: boolean } = {}): Promise<void> {
-    const pressureStatus = await this.pressureStatusFor(type, dedupeKey);
+    const pressureStatus = await this.pressureStatusFor(type, options.priority ?? 0, dedupeKey);
     const now = nowIso();
     const status = pressureStatus.defer ? "deferred_pressure" : "queued";
     const runAfter = pressureStatus.defer ? new Date(Date.now() + PRESSURE_DEFER_MS) : options.runAfter ?? new Date();
@@ -405,14 +405,13 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0);
   }
 
-  private async pressureStatusFor(type: string, dedupeKey?: string): Promise<{ defer: boolean; reason: string | null }> {
+  private async pressureStatusFor(type: string, priority: number, dedupeKey?: string): Promise<{ defer: boolean; reason: string | null }> {
     const reserve = RESERVED_LANE_TYPES[type];
     if (reserve != null) {
       const activeOfType = await activeDepth(this.db, type, dedupeKey);
-      if (activeOfType >= reserve) {
-        return { defer: true, reason: `deferred by ${type} reserve (${activeOfType}/${reserve})` };
-      }
-      return { defer: false, reason: null };
+      if (activeOfType < reserve) return { defer: false, reason: null };
+      if (await this.evictLowerPriorityReserved(type, priority, dedupeKey)) return { defer: false, reason: null };
+      return { defer: true, reason: `deferred by ${type} reserve (${activeOfType}/${reserve})` };
     }
 
     const depth = await this.depth();
@@ -427,6 +426,54 @@ export class JobQueue {
       return { defer: true, reason: `deferred by ${type} cap (${activeOfType}/${cap})` };
     }
     return { defer: false, reason: null };
+  }
+
+  /**
+   * Take a full reserve's lowest-priority waiter out so a job that outranks it
+   * can have the slot. Admission is otherwise priority-blind, which parks
+   * whatever arrives next even when it outranks everything holding a slot: on
+   * prod a country activation (priority 85) sat parked behind two scheduled
+   * roster refreshes (priority 10) that the fast lane never claimed, and 149
+   * rosters queued up behind them for days. One out for one in, so the reserve
+   * size still holds. Running jobs are never touched (they own their slot until
+   * they finish) and equal priority never displaces, so a sweep that enqueues
+   * a hundred jobs at one priority does not churn the reserve on every insert.
+   */
+  private async evictLowerPriorityReserved(type: string, priority: number, dedupeKey?: string): Promise<boolean> {
+    // The incoming job is excluded for the same reason activeDepth() excludes
+    // it: a re-enqueue must not pick its own queued row as the victim.
+    const selfFilter = dedupeKey == null ? "" : " and dedupe_key != ?";
+    const selfArgs = dedupeKey == null ? [] : [dedupeKey];
+    const result = await exec(
+      this.db,
+      `update jobs
+       set status = 'deferred_pressure',
+           locked_by = null,
+           locked_until = null,
+           run_after = ?,
+           last_error = ?,
+           updated_at = ?
+       where id = (
+         select id
+         from jobs
+         where status in ('queued', 'failed')
+           and run_after <= ?
+           and type = ?
+           and priority < ?${selfFilter}
+         order by priority asc, run_after desc, updated_at asc, id asc
+         limit 1
+       )`,
+      [
+        new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
+        `deferred by ${type} reserve (outranked)`,
+        nowIso(),
+        nowIso(),
+        type,
+        priority,
+        ...selfArgs,
+      ],
+    );
+    return Number(result.rowsAffected ?? 0) > 0;
   }
 
   private async deferQueuedOrFailedByTypes(types: string[], limit: number): Promise<number> {
