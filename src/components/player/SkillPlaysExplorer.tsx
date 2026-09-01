@@ -15,7 +15,7 @@
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
 // round trip; changing the actual subject (keymode/skill/side) loads a new one.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Ban } from "lucide-react";
+import { Ban, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -34,6 +34,7 @@ import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisM
 import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModBadge } from "#/components/ui/ModBadge";
+import { ModFilterChip } from "#/components/ui/ModFilterChip";
 import { MapDetailModal } from "#/components/maps/MapDetailModal";
 import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "#/lib/dan-images";
 import {
@@ -44,6 +45,13 @@ import {
 import { rateModFor, stubEntry } from "./SkillPlaysModal";
 import { track } from "#/lib/analytics";
 import { useLocale } from "#/lib/locale-context";
+import {
+  cycleModFilterMode,
+  matchesModAcronymFilter,
+  relevantModFilterKeys,
+  reverseCycleModFilterMode,
+  type ModFilterState,
+} from "#/lib/mod-filter";
 
 const PLAYS_COHORT_SIZE = 200;
 const PLAYS_REVEAL_STEP = 50;
@@ -215,6 +223,18 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   const [hideRanked, setHideRanked] = useState(storedPrefs.hideRanked);
   const [maxPerChart, setMaxPerChart] = useState<number>(storedPrefs.maxPerChart);
   const [showRejected, setShowRejected] = useState(storedPrefs.showRejected);
+  // The mod filter is not stored with the rest: it is a question about one
+  // list ("only my rate-up plays"), not a way the reader likes this panel set
+  // up, and a chip left on from last visit would silently thin a new one.
+  const [modFilter, setModFilter] = useState<ModFilterState>({});
+  // Reported by whichever list is mounted, from the cohort it actually holds,
+  // so no chip is offered for a mod nothing in view was played with.
+  const [availableMods, setAvailableMods] = useState<string[]>([]);
+  // Three narrowing controls plus the order is four tracks, which is one row
+  // on a desktop and four stacked ones on a phone, where they pushed the first
+  // play off the screen. Narrow screens get them behind one button instead;
+  // from sm up the disclosure is gone and they are simply on.
+  const [showFilters, setShowFilters] = useState(false);
   // The rating column travels with the play: the detail card prints the same
   // number the row did, under the same name, and the dan list's rows carry the
   // Overall rating their evidence payload rated them at.
@@ -241,6 +261,37 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   }, [keyCount, modes]);
 
   const mode = modes.find((entry) => entry.keyCount === keyCount) ?? modes[0] ?? null;
+
+  // An empty report is a cohort that has not landed yet far more often than it
+  // is a player with no plays, so the chips (and any filter set on them) hold
+  // across a keymode or skill switch instead of blinking out and back.
+  const handleAvailableMods = useCallback((mods: string[]) => {
+    if (mods.length === 0) return;
+    setAvailableMods((current) => (current.length === mods.length && current.every((mod, index) => mod === mods[index]) ? current : mods));
+  }, []);
+  // A chip that stopped being on offer (another keymode, the other view) must
+  // not keep filtering from off screen, where nothing could switch it back.
+  useEffect(() => {
+    setModFilter((current) => {
+      const kept = Object.entries(current).filter(([mod]) => availableMods.includes(mod));
+      return kept.length === Object.keys(current).length ? current : Object.fromEntries(kept);
+    });
+  }, [availableMods]);
+
+  // What the button has to say for itself while the controls behind it are
+  // closed: how many of them are currently thinning the list.
+  const activeFilterCount = (maxPerChart !== 0 ? 1 : 0)
+    + Object.keys(modFilter).length
+    + (hideRanked ? 1 : 0)
+    + (view === "dan" && !showRejected ? 1 : 0);
+
+  const cycleMod = useCallback((mod: string, reverse: boolean) => {
+    setModFilter((current) => {
+      const next = reverse ? reverseCycleModFilterMode(current[mod]) : cycleModFilterMode(current[mod]);
+      const { [mod]: _dropped, ...rest } = current;
+      return next ? { ...rest, [mod]: next } : rest;
+    });
+  }, []);
 
   // Written back whenever any of them moves, including the corrections the two
   // effects above make: what is stored is the state the reader was last left
@@ -369,54 +420,67 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           />
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <Segmented
-          ariaLabel={t`Order`}
-          value={sort}
-          options={[
-            {
-              value: "rating" as const,
-              label: t`Best`,
-              onPrefetch: () => {
-                if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "rating").catch(() => {});
-                else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "rating").catch(() => {});
+      {/* Two rows on a phone (the order, then the filters it opens) and one
+          wrapped row from sm up, where the disclosure is gone and all four
+          tracks belong to the same line. */}
+      <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1.5 sm:space-y-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <Segmented
+            ariaLabel={t`Order`}
+            value={sort}
+            options={[
+              {
+                value: "rating" as const,
+                label: t`Best`,
+                onPrefetch: () => {
+                  if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "rating").catch(() => {});
+                  else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "rating").catch(() => {});
+                },
               },
-            },
-            {
-              value: "recent" as const,
-              label: t`Recent`,
-              onPrefetch: () => {
-                if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "recent").catch(() => {});
-                else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "recent").catch(() => {});
+              {
+                value: "recent" as const,
+                label: t`Recent`,
+                onPrefetch: () => {
+                  if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "recent").catch(() => {});
+                  else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "recent").catch(() => {});
+                },
               },
-            },
-          ]}
-          onChange={setSort}
-        />
-        <RateCapControl value={maxPerChart} onChange={setMaxPerChart} />
-        {/* Both of these are the same decision asked twice, and together they
-            are the common setting, so they share one label and one track. Only
-            the dan list has plays it turned away, so only it offers the second. */}
-        <HideControl
-          options={[
-            {
-              key: "ranked",
-              label: t`ranked`,
-              title: t`Hide plays on ranked, approved and qualified charts`,
-              pressed: hideRanked,
-              onChange: () => setHideRanked((current) => !current),
-            },
-            ...(view === "dan"
-              ? [{
-                key: "uncounted",
-                label: t`not counted`,
-                title: t`Hide the plays the dan rules turned away`,
-                pressed: !showRejected,
-                onChange: () => setShowRejected((current) => !current),
-              }]
-              : []),
-          ]}
-        />
+            ]}
+            onChange={setSort}
+          />
+          <FiltersToggle
+            open={showFilters}
+            activeCount={activeFilterCount}
+            onToggle={() => setShowFilters((current) => !current)}
+          />
+        </div>
+        <div className={`${showFilters ? "flex" : "hidden"} flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex`}>
+          <RateCapControl value={maxPerChart} onChange={setMaxPerChart} />
+          {availableMods.length > 1 ? <ModsControl mods={availableMods} modFilter={modFilter} onCycle={cycleMod} /> : null}
+          {/* Both of these are the same decision asked twice, and together they
+              are the common setting, so they share one label and one track. Only
+              the dan list has plays it turned away, so only it offers the second. */}
+          <HideControl
+            options={[
+              {
+                key: "ranked",
+                label: t`ranked`,
+                title: t`Hide plays on ranked, approved and qualified charts`,
+                pressed: hideRanked,
+                onChange: () => setHideRanked((current) => !current),
+              },
+              ...(view === "dan"
+                ? [{
+                  key: "uncounted",
+                  label: t`not counted`,
+                  title: t`Hide the plays the dan rules turned away`,
+                  pressed: !showRejected,
+                  onChange: () => setShowRejected((current) => !current),
+                }]
+                : []),
+            ]}
+          />
+        </div>
       </div>
     </div>
   );
@@ -436,6 +500,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           sort={sort}
           hideRanked={hideRanked}
           maxPerChart={maxPerChart}
+          modFilter={modFilter}
+          onAvailableMods={handleAvailableMods}
           onSettled={onListSettled}
           onOpen={openDetail}
         />
@@ -448,6 +514,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           hideRanked={hideRanked}
           maxPerChart={maxPerChart}
           showRejected={showRejected}
+          modFilter={modFilter}
+          onAvailableMods={handleAvailableMods}
           onSettled={onListSettled}
           onOpen={openDetail}
         />
@@ -486,6 +554,8 @@ function MsdPlaysList({
   sort,
   hideRanked,
   maxPerChart,
+  modFilter,
+  onAvailableMods,
   onSettled,
   onOpen,
 }: {
@@ -497,6 +567,8 @@ function MsdPlaysList({
   sort: "rating" | "recent";
   hideRanked: boolean;
   maxPerChart: number;
+  modFilter: ModFilterState;
+  onAvailableMods: (mods: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string }) => void;
 }) {
@@ -544,12 +616,19 @@ function MsdPlaysList({
     return () => { cancelled = true; };
   }, [axis, cacheKey, keyCount, listIdentity, onSettled, sort, userId]);
 
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart]);
+  const modKey = modFilterKey(modFilter);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, modKey]);
+
+  // The chips on offer come from the whole cohort, not from what the other
+  // filters left, so narrowing by mod never removes the chip that would undo it.
+  const cohortMods = useMemo(() => relevantModFilterKeys(cohort.map(playModAcronyms)), [cohort]);
+  useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
 
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     return cohort.filter((play) => {
       if (hideRanked && isRankedStatus(play.beatmapStatus ?? null)) return false;
+      if (!matchesModAcronymFilter(playModAcronyms(play), modFilter)) return false;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(play.beatmapId) ?? 0;
         if (seen >= maxPerChart) return false;
@@ -557,7 +636,7 @@ function MsdPlaysList({
       }
       return true;
     });
-  }, [cohort, hideRanked, maxPerChart]);
+  }, [cohort, hideRanked, maxPerChart, modFilter]);
   const items = filtered.slice(0, visibleLimit);
 
   const axisLabel = i18n._(axisMeta.labelMsg);
@@ -610,6 +689,8 @@ function DanPlaysList({
   hideRanked,
   maxPerChart,
   showRejected,
+  modFilter,
+  onAvailableMods,
   onSettled,
   onOpen,
 }: {
@@ -620,6 +701,8 @@ function DanPlaysList({
   hideRanked: boolean;
   maxPerChart: number;
   showRejected: boolean;
+  modFilter: ModFilterState;
+  onAvailableMods: (mods: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string }) => void;
 }) {
@@ -668,7 +751,11 @@ function DanPlaysList({
     return () => { cancelled = true; };
   }, [cacheKey, keyCount, listIdentity, onSettled, side, sort, userId]);
 
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, showRejected]);
+  const modKey = modFilterKey(modFilter);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, showRejected, modKey]);
+
+  const cohortMods = useMemo(() => relevantModFilterKeys(cohort.map((row) => playModAcronyms(row.play))), [cohort]);
+  useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
 
   const { rows, hidden } = useMemo(() => {
     const seenPerChart = new Map<number, number>();
@@ -676,6 +763,7 @@ function DanPlaysList({
     for (const row of cohort) {
       if (!showRejected && row.kind === "rejected") continue;
       if (hideRanked && isRankedStatus(row.play.beatmapStatus ?? null)) continue;
+      if (!matchesModAcronymFilter(playModAcronyms(row.play), modFilter)) continue;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(row.play.beatmapId) ?? 0;
         if (seen >= maxPerChart) continue;
@@ -684,7 +772,7 @@ function DanPlaysList({
       kept.push(row);
     }
     return { rows: kept, hidden: cohort.length - kept.length };
-  }, [cohort, hideRanked, maxPerChart, showRejected]);
+  }, [cohort, hideRanked, maxPerChart, showRejected, modFilter]);
   const visibleRows = rows.slice(0, visibleLimit);
 
   return (
@@ -1168,7 +1256,7 @@ function Segmented<T extends string | number>({
     // A profile with a mode for every keymode MinaCalc rates makes this wider
     // than a phone row. It scrolls inside its own pill rather than running off
     // the screen, so the controls beside it stay put.
-    <div role="group" aria-label={ariaLabel} className="inline-flex max-w-full items-center overflow-x-auto scrollbar-hide rounded-full bg-osu-b5/70 p-0.5">
+    <div role="group" aria-label={ariaLabel} className={`inline-flex max-w-full items-center overflow-x-auto scrollbar-hide p-0.5 ${CONTROL_TRACK_CLASS}`}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -1255,8 +1343,8 @@ function RateCapControl({ value, onChange }: { value: number; onChange: (next: n
       role="group"
       aria-label={title}
       title={title}
-      className={`inline-flex items-center gap-0.5 rounded-full p-0.5 pl-2 transition-colors ${
-        capped ? "bg-osu-pink/15" : "bg-osu-b5/70"
+      className={`inline-flex items-center gap-0.5 p-0.5 pl-2 transition-colors ${CONTROL_TRACK_CLASS} ${
+        capped ? "bg-osu-pink/15" : ""
       }`}
     >
       <span className={`mr-1 shrink-0 text-[11px] ${capped ? "text-osu-pink-light" : "text-osu-f1"}`}>
@@ -1286,6 +1374,78 @@ function RateCapControl({ value, onChange }: { value: number; onChange: (next: n
 }
 
 /**
+ * The one control a phone gets for the three that narrow the list.
+ *
+ * It is not a menu: the same tracks a desktop shows inline open under it, in
+ * the same order, so nobody has to learn a second arrangement. The count is
+ * what makes a closed row honest - a list quietly thinned by a setting nobody
+ * can see is the reason this is a disclosure and not a hidden default.
+ */
+function FiltersToggle({
+  open,
+  activeCount,
+  onToggle,
+}: {
+  open: boolean;
+  activeCount: number;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className={`inline-flex cursor-pointer items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-semibold transition-colors sm:hidden ${CONTROL_TRACK_CLASS} ${
+        activeCount > 0 ? "text-osu-pink-light" : "text-osu-f1"
+      }`}
+    >
+      <SlidersHorizontal size={12} />
+      <Trans>Filters</Trans>
+      {activeCount > 0 ? <span className="tabular-nums">{activeCount}</span> : null}
+      <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+    </button>
+  );
+}
+
+/**
+ * The mod filter, the same chip and the same cycle Best Performance uses:
+ * click to require a mod, again to hide it, again to stop asking.
+ *
+ * It wears the toolbar's track rather than sitting loose beside it, because
+ * the chips alone would read as badges on the row above rather than as a
+ * control. Only the mods the visible cohort was played with get a chip, so an
+ * empty answer is never on offer.
+ */
+function ModsControl({
+  mods,
+  modFilter,
+  onCycle,
+}: {
+  mods: string[];
+  modFilter: ModFilterState;
+  onCycle: (mod: string, reverse: boolean) => void;
+}) {
+  const { t } = useLingui();
+  const any = Object.keys(modFilter).length > 0;
+  return (
+    <div role="group" aria-label={t`Mods`} className={`inline-flex items-center gap-1 p-1 pl-2 ${CONTROL_TRACK_CLASS}`}>
+      <span className={`mr-0.5 shrink-0 text-[11px] ${any ? "text-osu-pink-light" : "text-osu-f1"}`}>
+        <Trans>Mods</Trans>
+      </span>
+      {mods.map((mod) => (
+        <ModFilterChip
+          key={mod}
+          mod={mod}
+          mode={modFilter[mod]}
+          onClick={() => onCycle(mod, false)}
+          onContextMenu={() => onCycle(mod, true)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
  * What the list leaves out, as one track rather than a pill per answer.
  *
  * Two independent toggles, so this is not a Segmented: any number of them can
@@ -1302,7 +1462,7 @@ function HideControl({
   const { t } = useLingui();
   const any = options.some((option) => option.pressed);
   return (
-    <div role="group" aria-label={t`Hide`} className="inline-flex items-center gap-0.5 rounded-full bg-osu-b5/70 p-0.5 pl-2">
+    <div role="group" aria-label={t`Hide`} className={`inline-flex items-center gap-0.5 p-0.5 pl-2 ${CONTROL_TRACK_CLASS}`}>
       <span className={`mr-1 shrink-0 text-[11px] ${any ? "text-osu-pink-light" : "text-osu-f1"}`}>
         <Trans>Hide</Trans>
       </span>
@@ -1322,6 +1482,26 @@ function HideControl({
       ))}
     </div>
   );
+}
+
+/* The toolbar's arrangement controls all wear the same track: a filled pill
+   with a hairline, so a label and its buttons read as one object. Without the
+   hairline the track sits too close to the panel behind it and the row reads
+   as loose words with a highlighted one among them. */
+const CONTROL_TRACK_CLASS = "rounded-full bg-osu-b5 ring-1 ring-inset ring-osu-b3/45";
+
+/* What a rated play carries as mods. The stored cohort keeps the rate and the
+   rate mod's acronym and nothing else, so this list is the speed mods (and the
+   empty list that means NoMod). It is what the rows themselves badge, so the
+   mod filter never offers a chip the list cannot show. */
+function playModAcronyms(play: LivePlayerSkillPlay): string[] {
+  const rateMod = rateModFor(play.rate, play.rateMod);
+  return rateMod ? [rateMod.acronym] : [];
+}
+
+/** The filter state as a value the reset effects can depend on. */
+function modFilterKey(modFilter: ModFilterState): string {
+  return Object.entries(modFilter).sort(([left], [right]) => left.localeCompare(right)).map(([mod, mode]) => `${mod}:${mode}`).join(",");
 }
 
 // The two sides of the dan ladder, matching the dan modal's own accent. The

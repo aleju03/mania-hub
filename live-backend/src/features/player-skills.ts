@@ -55,54 +55,13 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v14: mod-less archived day-best rows no longer rate at an assumed 1.0x
-// (that inflated HT/DC originals); stored plays built from them purge.
-// v15: LN-tail blend - SSRs on hold-bearing charts blend toward a second
-// calc pass that sees LN releases as rows, closing the systematic deficit
-// for LN players (keymode-calibrated; rice charts unchanged).
-// v16: wife goals value judgements against the chart's real OD hit windows
-// (plus stable EZ/HR window scaling) instead of assumed OD8, so low-OD
-// charts stop reading easy 300s as near-MAX precision; stored plays rated
-// under the OD8 assumption purge.
-// v18: Difficulty Adjust plays are not evidence (their windows are not the
-// chart's); stored DA plays purge while their score is still visible, and
-// dan clears gain the stored-OD floor (DAN_MIN_OD) plus the EZ exclusion
-// (widened windows stay rated, derated, but credit no dan; lazer EZ scales
-// windows too, so the wife goal now derates it same as stable). The bump
-// exists so the version-stale drip walks the whole roster instead of
-// waiting on views.
-// v19: four 4K tile-filing corrections (2026-08-30), all from 4K dan players
-// reading their own tiles back. The Jumpstream arbitration lost its 90-second
-// floor and now splits the ambiguous "Jumpstream Tech" label by MinaCalc's
-// runner-up skillset (TRILL_CLUSTER_CATEGORY); Handstream wins a near-tie on a
-// chart LeoBlack labels handstream (HANDSTREAM_NEAR_TIE_MSD); the long Stamina
-// hold reads its band against the best of Technical, Jumpstream and Handstream
-// rather than Technical alone (STAMINA_HOLD_BASE_BAND); and the tech-lead arm
-// dropped from 0.6 to 0.35 MSD (TECH_NEAR_TIE_MSD_LEAD) so a rated set stops
-// splitting across two tiles. Only which tile a clear files under moves, so
-// the per-tile dans and the headline that averages them move with it.
-// v20: the same 4K tiles again, corrected against a second round of player
-// feedback (2026-08-30). A trill-labelled chart files jack when its wrist
-// demand is real, read as a dense chordjack score OR a lighter one that jack
-// clusters corroborate (TRILL_JACK_CORROBORATED_SHARE), and that check runs
-// ahead of the MSD argmax because the charts it has to catch rate Technical
-// first. A long trill that is not a jack demand hands the tile to its
-// runner-up instead of keeping tech. And HANDSTREAM_NEAR_TIE_MSD comes back
-// from 1.25 to 0.95: at 1.25 the handstream rule swallowed Matusa Bomber's
-// 1.25 diff, which v19 shipped with. Only tile filing moves.
-// v21: the 4K speed/tech split stops being an MSD-lead bar and becomes a
-// reading of the notes (SPEED_TECH_MODEL), and a chart can now carry TWO tiles
-// where the evidence is genuinely split - speed and tech between the model's
-// bars, jack and stamina on a long jack file whose MSD argmax was endurance
-// (resolveTilesForClear). A shared clear raises both tiles' dans but only its
-// primary tile counts toward that tile's quorum, so it cannot open a skill on
-// its own. Only tile filing moves; no SSR value or goal changes.
-// v22: no pipeline change at all - the bump exists so the version-stale drip
-// re-walks the roster after MinaCalc gained 5K and 8-18K (MSD_SUPPORTED_KEYS).
-// Rows recomputed between the v21 deploy and that one are stamped current but
-// hold no mode outside 4/6/7K, and the drip only picks users with no row at
-// the current version, so 3,544 of 17,838 ready rows would have kept an
-// incomplete keymode set until a profile view or a new session touched them.
+// v22 (current): no pipeline change at all - the bump exists so the
+// version-stale drip re-walks the roster after MinaCalc gained 5K and 8-18K
+// (MSD_SUPPORTED_KEYS). Rows recomputed between the v21 deploy and that one are
+// stamped current but hold no mode outside 4/6/7K, and the drip only picks
+// users with no row at the current version, so 3,544 of 17,838 ready rows would
+// have kept an incomplete keymode set until a profile view or a new session
+// touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
 export const PLAYER_SKILLS_VERSION = 22;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
@@ -4938,123 +4897,22 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v2: the side headline became the mean of the skillset dans rather than the
-// quorum-th clear, so every stored verdict is stale and the sweep runs again.
-// v3: a verified dan course clear now floors the headline, which no stored row
-// has ever been asked about. It re-derives from plays_json plus the two course
-// lookups without re-rating, so this costs no MinaCalc.
-// v4: custom-rate clears now credit the dan_estimates verdict at the play's
-// own rate, and stored rows hold plays at rates no stored verdict ever
-// covered. The sweep reads whatever verdicts exist (months of map-page rate
-// lookups) and computes none; the rest fill in on demand and land on each
-// player's next recompute.
-// v5: a dan became the mean of the best DAN_CLEAR_AVERAGE_WINDOW clears
-// rather than the quorum-th clear alone, so every stored verdict is stale
-// again. Same re-derive from plays_json, no MinaCalc.
-// v6: the stamina tile now has to earn a Stamina argmax on length
-// (STAMINA_TILE_MIN_LENGTH_SECONDS), which moves clears between skillset
-// tiles and so moves the per-tile dans and the headline they average.
-// v6: a clear's credit now moves with its accuracy (bonus above the ladder's
-// bar, decay down to the credit window under it, dan-credit.ts), so every
-// stored verdict is stale again. Same re-derive from plays_json plus the
-// stored rate verdicts, no MinaCalc. Until the sweep rewrites a row, the
-// badge and leaderboard show the old number while the evidence modal (which
-// recomputes live) already shows the new one; that skew existed for v5 too,
-// it is just wider here.
-// v7: the 4K LN ladder cooled off - its bonus now scores against the decay
-// window rather than its 2.5-3 point headroom, and its near-bar cap deepened
-// to 0.75 (dan-credit.ts has the measurement). Every other ladder's numbers
-// are unchanged, but the stored 4K LN verdicts are stale.
-// v8: a confident analyzer speedjack/chordjack tag now overrides MinaCalc's
-// 4K argmax into the jack tile. That moves clears between skillset verdicts
-// and can move the headline average, so all stored verdicts are stale.
-// v9: charts with exploit-sized same-column head stacks are structurally
-// ineligible as dan evidence. The chart verdict remains visible, but every
-// stored player dan must be rebuilt without those clears.
-// v10: the LN decay window narrowed from four accuracy points to one
-// (danCreditBelowBarWindowFor), dropping the routine sub-bar passes that
-// still dominated the LN best-5 windows after the v7 bonus cool-off, and
-// 4K LN now averages its best ten clears rather than five
-// (danClearAverageWindowFor), asking its bucket-less headline for a body of
-// work. parseLnDan also picked up parseDan's variant bands, so
-// stored 4K LN labels move too (a 13.6 average now prints "14-", not "14").
-// Only LN verdicts move, but the sweep rewrites the row's whole dan block as
-// always.
-// v11: the 7K identity line moved to 0.375 (lnPrimaryMinRatioFor), so 7K
-// clears on 37.5-45% hold charts re-route from the rice side to LN. 1.0x
-// routing reads the live line immediately; DT/HT clears on those charts wait
-// on the chart re-pin sweep, which is why rateVerdictsLandedAfter lists its
-// done key and re-runs this sweep once it lands.
-// v12: the credit curve cooled on both halves (dan-credit.ts, 2026-08-28).
-// The first point above a bar is now a flat zone crediting the chart's bare
-// level (a 96.9% on a 96% ladder no longer earns a bonus), and the decay
-// bottom deepened from -1 to -1.25 so a bottom-of-window scrape credits a
-// bare level down (92.09% on epsilon+ prints delta, not delta+). Every
-// ladder's stored verdicts are stale.
-// v13: second bonus cool-off (dan-credit.ts, 2026-08-28). The real bonus now
-// opens at 99%: below it the curve crawls to +0.2 instead of climbing through
-// +0.35 at 98%, so a 98.3% on a beta++ chart credits ~gamma-- rather than
-// bare gamma. In the same pass the clear average widened from the best 5 to
-// the best 20 (danClearAverageWindowFor, one window for every ladder now), so
-// a skillset takes a body of work rather than a few best plays. Every stored
-// verdict is stale.
-// v14: no number moves. Verdicts now carry how full their averaging window is
-// (clearWindow), which the dan badges read to mark an estimate that is still
-// filling in. A stored row without it reads as "unknown" rather than complete,
-// so the boards would mark players unevenly until every row has one.
-// v15: three 4K tile-filing changes landed together (2026-08-29), all of which
-// move clears between skillset tiles and so move the per-tile dans and the
-// headline that averages them. A Jumpstream argmax is now arbitrated by
-// LeoBlack's label instead of always pairing with tech
-// (JS_TECH_CLUSTER_CATEGORY), which is the largest of the three: the
-// mapper-named stamina corpus goes 26.5% -> 62.6% stamina-tiled. The stamina
-// length gate now reads the longer of the 1.0x drain and the played time, so
-// an uprated marathon keeps the tile. And a length-qualified Stamina argmax
-// holds the tile against the speed near-tie when Technical also outranks
-// Stream.
-// v16: the later arbitration-length floor and jack-share veto also move
-// stored clears, and v15 already exists on main without them. It additionally
-// reverts false rate-edit matches between unrelated rice-pack diffs by
-// requiring exact object counts. Re-derives from plays_json as always, no
-// MinaCalc.
-// v17: the 4K LN credit curve got tables of its own (dan-credit.ts,
-// 2026-08-29). Its bar is written in ScoreV2, where a 100% is not reachable on
-// most charts with long notes, so the shared headroom table was pricing its
-// top anchor on an accuracy nobody sets and paying +0.001 for a 98%. The bonus
-// now tops out at 99.7% (same +0.7 top) with real credit under it, and the
-// decay window widened from 1 point to 2.5, crediting down to 94.5% and
-// bottoming out at -1.55 rather than -1.25, with its step at the bar cut from
-// 0.75 to 0.3. Only 4K LN verdicts move, so the initial v17 pass patches only
-// that side and leaves every RC verdict and every other keymode unchanged in
-// modes_json. A later rate-verdict repair still requests the
-// generic full scope, because those inputs can move either side at any rate.
-// v19: a window now ignores up to three stray clears - ones sitting more than
-// five levels under the mean of its own best five (danIgnoredStrayCount) - so
-// one joke run on a chart far below a player's body of work stops setting
-// their tile back. Never trims past the quorum, and only the average moves:
-// the clear stays listed and stays in the window's `have`. Every stored
-// verdict with such a clear is stale. Re-derives from plays_json as always,
-// no MinaCalc.
-// v20: 4K Speed/Tech is re-filed from the chart's motion block and genuinely
-// split charts can contribute to two tiles. The chart-side motion sweep must
-// finish before this pass starts, or the fallback filing would be stamped as
-// current for rows encountered before their charts were backfilled.
-// v21: 7K LN accepts the OD 5 charts its official JinJin courses use. Stored
-// verdicts made under the old 5.5 floor omit those clears, so every row carrying
-// 7K evidence must be folded again before badges and leaderboards agree with
-// the evidence read. The existing full scope is intentional: it is already a
-// cheap plays_json derivation and avoids teaching the historical two-scope
-// machinery a one-off third shape.
-// v22: both credit windows opened (dan-credit.ts, 2026-08-31). 6K/7K LN went
-// from one accuracy point under its 95% bar to three, crediting 92-94% clears
-// down to -1.75, and the rice ladders went from four points to five, crediting
-// 91-92% clears down to -1.5. Nothing that already credited moves in either
-// case: each curve carries a knee at the old window's edge and keeps the old
-// line above it. Stored verdicts are still stale, since they were folded
-// without those clears in the window at all, so every row has to be folded
-// again. Full scope for the same reason v21 used it: the fold is a cheap
-// plays_json derivation with no MinaCalc behind it, and the change reaches
-// every ladder anyway.
+// v22 (current): both credit windows opened (dan-credit.ts, 2026-08-31). 6K/7K
+// LN went from one accuracy point under its 95% bar to three, crediting 92-94%
+// clears down to -1.75, and the rice ladders went from four points to five,
+// crediting 91-92% clears down to -1.5. Nothing that already credited moves in
+// either case: each curve carries a knee at the old window's edge and keeps the
+// old line above it. Stored verdicts were folded without those clears in the
+// window at all, so every row has to be folded again. It takes the full scope
+// because the fold is a cheap plays_json derivation with no MinaCalc behind it
+// and the change reaches every ladder anyway; the narrower 4k-ln scope stays
+// for callers that explicitly want the historical curve-only repair.
+//
+// Two things every bump here inherits. The sweep re-derives from plays_json
+// (plus stored rate verdicts) and never re-rates, so it costs no MinaCalc. And
+// until it rewrites a row, that player's badge and leaderboard entry show the
+// old number while the evidence modal, which recomputes live, already shows the
+// new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
 const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v22";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200

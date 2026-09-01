@@ -65,6 +65,7 @@ import { CountryFlag } from "../../components/ui/CountryFlag";
 import { StarRatingBadge } from "../../components/ui/StarRating";
 import { getManiaJudgementStats } from "../../components/ui/ManiaJudgementStats";
 import { ModBadge } from "../../components/ui/ModBadge";
+import { ModFilterChip } from "../../components/ui/ModFilterChip";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
@@ -89,6 +90,19 @@ import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 import { displayCountryName, isSupportedCountryCode } from "../../lib/country";
 import { useLocale } from "../../lib/locale-context";
+import {
+  NO_MOD_KEY,
+  cycleModFilterMode,
+  getModFilterGroup,
+  matchesModAcronymFilter,
+  relevantModFilterKeys,
+  reverseCycleModFilterMode,
+  type ModFilterMode,
+  type ModFilterState,
+} from "../../lib/mod-filter";
+// The two cycling helpers keep their old home in the route's public surface:
+// the mod-filter tests import them from here.
+export { cycleModFilterMode, matchesModAcronymFilter, reverseCycleModFilterMode, type ModFilterMode };
 import { preservePlayerCountryFlagState } from "../../lib/player-profile-navigation";
 
 // The BBCode editor (toolbar + parser + preview) only loads when someone
@@ -489,8 +503,6 @@ export const Route = createFileRoute("/player/$username")({
 });
 
 type KeyFilter = "all" | string;
-export type ModFilterMode = "include" | "exclude";
-type ModFilterState = Record<string, ModFilterMode>;
 type BestPpSort = "pp-desc" | "pp-asc";
 type BestAgeSort = "newest" | "oldest";
 type BestSort = BestPpSort | BestAgeSort;
@@ -521,9 +533,6 @@ function writePpDistributionModePreference(mode: PpDistributionMode): void {
     // Preference storage is best-effort; the modal still works normally.
   }
 }
-
-// Synthetic chip used to filter for scores submitted without any mods.
-const NO_MOD_KEY = "NM";
 
 const MOD_USAGE_COLORS: Record<string, string> = {
   NM: "#4d8dff",
@@ -562,26 +571,6 @@ const MOD_USAGE_COLORS: Record<string, string> = {
 function getModUsageColor(mod: string, fallbackIndex: number): string {
   const fallbackPalette = ["#ff66aa", "#ffcc22", "#34d399", "#fb923c", "#f472b6", "#22d3ee"];
   return MOD_USAGE_COLORS[mod] ?? fallbackPalette[fallbackIndex % fallbackPalette.length];
-}
-
-// DT and NC apply the same 1.5x rate (NC is DT with an audio swap); HT and DC
-// are the same 0.75x rate. Scores carry one or the other, so collapse them into
-// a single filter chip that matches either mod in the group.
-const MOD_ALIAS_GROUPS: readonly { readonly key: string; readonly mods: readonly string[] }[] = [
-  { key: "DT|NC", mods: ["DT", "NC"] },
-  { key: "HT|DC", mods: ["HT", "DC"] },
-];
-
-function getModFilterKey(mod: string): string {
-  for (const group of MOD_ALIAS_GROUPS) {
-    if (group.mods.includes(mod)) return group.key;
-  }
-  return mod;
-}
-
-function getModFilterGroup(key: string): readonly string[] | null {
-  const group = MOD_ALIAS_GROUPS.find((g) => g.key === key);
-  return group?.mods ?? null;
 }
 
 function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
@@ -679,27 +668,6 @@ export function bestListRowMatchesModFilter(row: BestListRow, modFilter: ModFilt
     : matchesModAcronymFilter(row.play.mods, modFilter);
 }
 
-/** The mod filter, against the acronyms a tracked play carries instead of a
-    score's mod objects. Same rules, so both kinds of row filter alike. */
-export function matchesModAcronymFilter(acronyms: string[], modFilter: ModFilterState): boolean {
-  const entries = Object.entries(modFilter);
-  if (entries.length === 0) return true;
-
-  const mods = new Set(acronyms);
-  const hasNoMods = mods.size === 0;
-  for (const [key, mode] of entries) {
-    let present: boolean;
-    if (key === NO_MOD_KEY) {
-      present = hasNoMods;
-    } else {
-      const group = getModFilterGroup(key);
-      present = group ? group.some((m) => mods.has(m)) : mods.has(key);
-    }
-    if (mode === "include" && !present) return false;
-    if (mode === "exclude" && present) return false;
-  }
-  return true;
-}
 
 function getSortablePp(score: OsuScore): number | null {
   return typeof score.pp === "number" && Number.isFinite(score.pp) ? score.pp : null;
@@ -752,44 +720,8 @@ function hasValidDate(value: string | null | undefined): value is string {
   return Number.isFinite(Date.parse(value));
 }
 
-export function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
-  if (current === undefined) return "include";
-  if (current === "include") return "exclude";
-  return undefined;
-}
-
-export function reverseCycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
-  if (current === undefined) return "exclude";
-  if (current === "exclude") return "include";
-  return undefined;
-}
-
 function getRelevantMods(scores: OsuScore[]): string[] {
-  const counts = new Map<string, number>();
-  let noModCount = 0;
-  for (const score of scores) {
-    const mods = getModAcronyms(score.mods);
-    if (mods.length === 0) {
-      noModCount += 1;
-      continue;
-    }
-    // Collapse DT/NC and HT/DC into a single key per score so the count reflects
-    // the number of scores matched by the chip, not double-counted aliases.
-    const seenKeys = new Set<string>();
-    for (const mod of mods) {
-      const key = getModFilterKey(mod);
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  }
-
-  const sorted = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([key]) => key);
-
-  if (noModCount > 0) sorted.unshift(NO_MOD_KEY);
-  return sorted;
+  return relevantModFilterKeys(scores.map((score) => getModAcronyms(score.mods)));
 }
 
 function buildPlayerBestFilterMetadata(scores: OsuScore[]): PlayerBestFilterMetadata {
@@ -5651,73 +5583,6 @@ function formatRecentRefreshWait(waitMs: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-}
-
-function ModFilterChip({
-  mod,
-  mode,
-  onClick,
-  onContextMenu,
-}: {
-  mod: string;
-  mode: ModFilterMode | undefined;
-  onClick: () => void;
-  onContextMenu: () => void;
-}) {
-  const { t } = useLingui();
-  const groupMods = getModFilterGroup(mod);
-  const label = mod === NO_MOD_KEY
-    ? t`NoMod`
-    : groupMods
-      ? groupMods.join(t` or `)
-      : mod;
-  const title = mode === "include"
-    ? t`Showing only ${label}`
-    : mode === "exclude"
-      ? t`Hiding ${label}`
-      : t`Click to require ${label}`;
-
-  const ringClass = mode === "include"
-    ? "border-osu-green-light bg-osu-green/15"
-    : mode === "exclude"
-      ? "border-osu-red-light bg-osu-red/15"
-      : "border-osu-b3/30 bg-osu-b4/50 hover:bg-osu-b3/40";
-
-  const contentDimClass = mode === "exclude" ? "opacity-40 saturate-50" : "";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onContextMenu();
-      }}
-      title={title}
-      aria-label={title}
-      className={`relative flex items-center gap-1 rounded-md border px-1.5 py-1 transition-colors cursor-pointer ${ringClass}`}
-    >
-      <div className={`flex items-center transition-opacity ${contentDimClass}`}>
-        {mod === NO_MOD_KEY ? (
-          <span className="text-[10px] font-bold text-osu-l2 px-1">{t`NoMod`}</span>
-        ) : groupMods ? (
-          <div className="flex items-center gap-0.5">
-            {groupMods.map((m) => (
-              <ModBadge key={m} mod={m} size={0.7} />
-            ))}
-          </div>
-        ) : (
-          <ModBadge mod={mod} size={0.8} />
-        )}
-      </div>
-      {mode === "exclude" && (
-        <span
-          className="pointer-events-none absolute left-1 right-1 top-1/2 h-[2px] -translate-y-1/2 rotate-[-10deg] rounded-full bg-osu-red-light shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"
-          aria-hidden="true"
-        />
-      )}
-    </button>
-  );
 }
 
 // A stat on the flat rail under the hero: quiet label, the number carrying the

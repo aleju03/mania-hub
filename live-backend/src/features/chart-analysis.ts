@@ -817,10 +817,7 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 // local work, no osu! API.
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
-// v3: v2 was burned by a dev-watch restart that ran the sweep mid-edit with
-// the old holds-heavy candidate filter; the rice sweep needs the full corpus.
-// v4: rice tier 3 (burst-soak vibro) plus the relaxed tier-2 column-ratio
-// floor; the v3 corpus left 8-23-note burst packs unflagged.
+// Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
 export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v5";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
@@ -943,12 +940,10 @@ async function enqueueVibroRecompute(queue: JobQueue, cursor: number): Promise<v
 // API.
 
 export const NOTE_BPM_RECOMPUTE_JOB = "recompute_note_bpm_sweep";
-// v2: v1 ran against a pre-fold computeNoteBpm (a dev-watch restart picked the
-// sweep up mid-edit), so inflated-timing charts were stored raw (666 instead
-// of 333). The scan below revisits stored values above the fold trigger.
-// v3: v2 was burned the same way - a dev-watch restart booted between the key
-// bump and the widened scan landing, saw zero missing rows, and wrote the
-// done-key. Key bumps must ship in the same write as their scan change.
+// Bump history: `git log -S NOTE_BPM_RECOMPUTE_META_KEY`. The lesson from the
+// v1 and v2 passes, both burned by a dev-watch restart booting between the key
+// bump and the scan change: a key bump must ship in the same write as the scan
+// change it depends on.
 const NOTE_BPM_RECOMPUTE_META_KEY = "note_bpm_recompute_done:v3";
 const NOTE_BPM_RECOMPUTE_CHUNK = 50;
 // Keep in sync with FOLD_TRIGGER_BPM (dan/note-bpm.ts): stored medians above
@@ -2114,8 +2109,7 @@ async function enqueueBracketContentRecompute(queue: JobQueue, cursor: number): 
 // the msd_dt_json / dan_dt_json columns so the gate can screen DT recs too. Same
 // playbook as the vibro sweep above: chunked, self-chaining, boot-seeded, done in
 // live_meta. Purely local work (cached .osu corpus), no osu! API.
-// v2: the v1 sweep was 4K-only; the bump reseeds it so 7K charts backfill (4K
-// rows already carrying msd_dt_json are skipped by the null filter).
+// Bump history: `git log -S DT_RATE_ANALYSIS_META_KEY`.
 
 export const DT_RATE_ANALYSIS_JOB = "recompute_dt_rate_analysis_sweep";
 const DT_RATE_ANALYSIS_META_KEY = "dt_rate_analysis_done:v2";
@@ -2929,13 +2923,7 @@ async function enqueueLnSourceRecompute(queue: JobQueue, cursor: number): Promis
 // half and carries plan.lnDifficulty through untouched), so the cheap
 // classifyChart is the same LN answer the analysis job would store.
 export const LN_LEOBLACK_RECOMPUTE_JOB = "recompute_ln_leoblack_sweep";
-// v2: the diff now compares rawDan too. Rows minted by the pre-2026-08-25 kNN
-// carry a label clamped at the old ladder top (15) beside a free-running
-// rawDan (up to 22.84 on the measured corpus, 1,271 of 21,395 4K LN halves on
-// 2026-08-27), and the label-only diff read those as unchanged whenever the
-// fresh verdict printed the same bare level, so the stale number survived the
-// v1 pass. The player dan credit reads the rawDan, which is how those charts
-// credited LN clears past the whole ladder.
+// Bump history: `git log -S LN_LEOBLACK_META_KEY`.
 const LN_LEOBLACK_META_KEY = "ln_leoblack_recompute_done:v2";
 const LN_LEOBLACK_CHUNK = 40;
 
@@ -3186,11 +3174,7 @@ async function enqueueSunnyRepinRecompute(queue: JobQueue, cursor: number): Prom
 // chart costs one classifier pass. Consumers: the DT-play dan credit in
 // player-skills and the DT verdict on /maps cards.
 export const SUNNY_REPIN_DT_RECOMPUTE_JOB = "recompute_sunny_repin_dt_sweep";
-// v2: rows minted by the pre-table-first LN estimator carry a label clamped
-// at the old ladder top (15) beside a free-running rawDan (measured up to
-// 22.84 on 78 of 626 LN-family DT verdicts, 2026-08-27). The credit path
-// reads the rawDan, so those charts credited DT LN clears past the whole
-// ladder; the re-derive rewrites them with the table-first verdict.
+// Bump history: `git log -S SUNNY_REPIN_DT_META_KEY`.
 export const SUNNY_REPIN_DT_META_KEY = "sunny_repin_dt_recompute_done:v2";
 const SUNNY_REPIN_DT_CHUNK = 40;
 
