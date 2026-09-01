@@ -496,6 +496,15 @@ export class OsuApiClient {
     return all;
   }
 
+  // A map's global leaderboard: osu! serves the top 50 and nothing past it,
+  // so this is the whole board as far as the API is concerned. Solo-score
+  // shape under the api version header, with the user embedded (country code
+  // included) but no beatmap/beatmapset, which the caller attaches.
+  async getBeatmapScores(beatmapId: number, caller = "unknown"): Promise<OscScore[]> {
+    const body = await this.getJson<{ scores?: OscScore[] } | OscScore[]>(`/beatmaps/${beatmapId}/scores?mode=mania`, caller);
+    return Array.isArray(body) ? body : body.scores ?? [];
+  }
+
   async getBeatmapUserScoresAll(beatmapId: number, userId: number, caller = "unknown"): Promise<OscScore[]> {
     const body = await this.getJson<{ scores?: OscScore[] } | OscScore[]>(`/beatmaps/${beatmapId}/scores/users/${userId}/all?mode=mania`, caller);
     return Array.isArray(body) ? body : body.scores ?? [];

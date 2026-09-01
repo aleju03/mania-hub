@@ -8,8 +8,9 @@ import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, JACK_DEMAND_RECOMPUTE_JOB, NKEY_MSD_JOB, JACK_TAG_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_LEOBLACK_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanEligibilityRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runHtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runJackDemandRecomputeJob, runNkeyMsdJob, runJackTagRecomputeJob, runMotionFeaturesRecomputeJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnLeoblackRecomputeJob, runLnMsdSweepJob, runLn7PrimaryRepinJob, runLnPrimaryRepinJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runOsuFileRepairJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileGoalsForUser, reconcileStatGoalsForCountry } from "./features/goals.js";
-import { runMapSearchIndexBuildJob } from "./features/map-search.js";
+import { runMapSearchIndexBuildJob, upsertMapSearchIndexRow } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
+import { LEADERBOARD_IMPORT_JOB, importBeatmapLeaderboard } from "./features/leaderboard-import.js";
 import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, runGlobalFarmedBoardRepackJob } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
@@ -78,6 +79,13 @@ interface WorkerActiveJob {
   attempts: number;
   startedAt: string;
   payload: unknown;
+}
+
+class LeaderboardImportRefusedError extends Error {
+  constructor(reason: string) {
+    super(`leaderboard import refused: ${reason}`);
+    this.name = "LeaderboardImportRefusedError";
+  }
 }
 
 const REPLAY_VIDEO_JOB_TYPES = new Set(["replay_video_server_render", "replay_video_export"]);
@@ -302,6 +310,15 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     claimLimit: 1,
     intervalMs: 2_000,
   },
+  {
+    // Admin leaderboard imports arrive in bursts (a whole search page at a
+    // time); one at a time here paces the two osu! calls each takes, and the
+    // queue reserve keeps a burst from being shed as pressure.
+    name: "leaderboard-import",
+    jobTypes: [LEADERBOARD_IMPORT_JOB],
+    claimLimit: 1,
+    intervalMs: 2_000,
+  },
 ];
 
 const OSU_API_JOB_TYPES = new Set([
@@ -313,6 +330,7 @@ const OSU_API_JOB_TYPES = new Set([
   "enrich_user",
   "enrich_beatmap",
   "reconcile_user_recent_scores",
+  LEADERBOARD_IMPORT_JOB,
   "compute_dan_estimate",
   "analyze_activity_beatmap",
   // CHART_ANALYSIS_JOB and PLAYER_SKILLS_JOB are deliberately absent: both are
@@ -920,6 +938,14 @@ export class WorkerRunner {
       await this.processHydratedScores({ userId: payload.userId });
       return;
     }
+    if (job.type === LEADERBOARD_IMPORT_JOB) {
+      const payload = job.payload as { beatmapId: number };
+      const result = await importBeatmapLeaderboard(this.db, this.queue, this.events, readConfig(), this.osu, payload.beatmapId);
+      // A chart osu! turns down is a finished job, not a retry: the answer
+      // will not change, and the dialog reads the reason off the job row.
+      if (!result.ok) throw new LeaderboardImportRefusedError(result.reason);
+      return;
+    }
     if (job.type === "enrich_beatmap") {
       const payload = job.payload as { beatmapId: number };
       if (await this.hasFreshBeatmapRow(payload.beatmapId)) {
@@ -928,6 +954,10 @@ export class WorkerRunner {
       }
       const beatmap = await this.osu.getBeatmap(payload.beatmapId, "job:enrich_beatmap");
       await this.upsertBeatmap(beatmap, payload.beatmapId);
+      // The index materializes set metadata (ranked_date, counts) only on its
+      // own writes, so the fresh row goes in now; sibling diffs pick the date
+      // up from the hourly reconcile.
+      await upsertMapSearchIndexRow(this.db, payload.beatmapId);
       await this.processHydratedScores({ beatmapId: payload.beatmapId });
       return;
     }
@@ -1026,7 +1056,7 @@ export class WorkerRunner {
     // a beatmapsets row that was never written. Only the pair counts as known.
     const row = (await exec(
       this.db,
-      `select b.status, b.updated_at from beatmaps b
+      `select b.status, b.updated_at, json_extract(s.metadata_json, '$.ranked_date') as ranked_date from beatmaps b
        join beatmapsets s on s.beatmapset_id = b.beatmapset_id
        where b.beatmap_id = ? and b.metadata_json is not null`,
       [beatmapId],
@@ -1036,6 +1066,10 @@ export class WorkerRunner {
     if (!Number.isFinite(updatedAtMs)) return false;
     const status = String(row.status ?? "").trim().toLowerCase();
     const settled = status === "ranked" || status === "approved" || status === "loved";
+    // A settled set whose stored metadata is still the compact shape a score
+    // payload carries (no ranked_date) has never been fetched in full, however
+    // recently ingest touched the row; the full fetch is what this job is for.
+    if (settled && row.ranked_date == null) return false;
     const maxAgeMs = settled ? 30 * 24 * 60 * 60_000 : 24 * 60 * 60_000;
     return Date.now() - updatedAtMs <= maxAgeMs;
   }
@@ -1335,6 +1369,10 @@ function isPoisonedMapsRefresh(type: string, nextAttempt: number, error: unknown
 
 function getRetryDelayMs(type: string, attempts: number, error: unknown): number {
   if (error instanceof Error && error.message.includes("OSU_CLIENT_ID")) return 5 * 60_000;
+  // A refused chart (not mania, no leaderboard) stays refused; the failed row
+  // keeps the reason for the dialog and is parked rather than retried. A
+  // fresh enqueue for the same chart pulls run_after back to now.
+  if (error instanceof LeaderboardImportRefusedError) return 365 * 24 * 60 * 60_000;
   if (error instanceof OsuApiError && error.status === 429) {
     return Math.max(error.retryAfterMs ?? 60_000, 60_000);
   }

@@ -3408,6 +3408,87 @@ function PlayerPageSkeleton({
   );
 }
 
+// One line over the Skills tab for a player this site does not track. The
+// rating only ever saw their osu! top-200, which carries ranked plays alone,
+// so it says that and names the two ways loved and graveyard plays get in:
+// tracking (the owner's own opt-in, offered inline) or an added score link
+// (the button already on the tab). Bare text at heading weight, no card and no
+// accent: what made the first cut invisible was size and contrast, and a box
+// around it would read as a second panel above the real one.
+function SkillsUntrackedNote({
+  username,
+  mode,
+  loginAvailable,
+  onTracked,
+}: {
+  username: string;
+  mode: "self" | "other" | "anon";
+  loginAvailable: boolean;
+  onTracked?: () => void;
+}) {
+  const location = useLocation();
+  const { t } = useLingui();
+  const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
+
+  const handleTrack = useCallback(async () => {
+    setStatus("pending");
+    setMessage(null);
+    try {
+      const result = await addSelfToRoster();
+      if (result.ok) {
+        setStatus("done");
+        showTrackingStartedToast();
+        onTracked?.();
+        return;
+      }
+      setStatus("error");
+      setMessage(
+        result.status === "country_not_tracked"
+          ? t`Your country isn't tracked yet, so there's nothing to record your plays against.`
+          : result.status === "country_full"
+            ? t`This country's opt-in list is full right now. Check back later.`
+            : t`Couldn't turn on tracking right now. Try again in a moment.`,
+      );
+    } catch {
+      setStatus("error");
+      setMessage(t`Couldn't turn on tracking right now. Try again in a moment.`);
+    }
+  }, [onTracked]);
+
+  const actionClass = "inline-flex shrink-0 cursor-pointer items-center rounded-full border border-osu-pink/40 bg-osu-pink/15 px-3.5 py-1.5 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white disabled:cursor-default disabled:opacity-60";
+  const lead = mode === "self"
+    ? status === "done"
+      ? t`You're being tracked now`
+      : t`You're not tracked, so only your ranked plays are rated here`
+    : t`${username} isn't tracked, so only their ranked plays are rated here`;
+  const detail = mode === "self" && status === "done"
+    ? t`Your recent plays are being pulled in and will be rated here in a few minutes.`
+    : t`Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score.`;
+  const action = mode === "self" && status !== "done" ? (
+    <button type="button" onClick={handleTrack} disabled={status === "pending"} className={actionClass}>
+      {status === "pending" ? t`Adding you…` : t`Track my plays`}
+    </button>
+  ) : mode === "anon" && loginAvailable ? (
+    <a href={loginHref} className={actionClass}>
+      <OsuLogo className="mr-1.5 h-3.5 w-3.5" />
+      {t`Log in to track yourself`}
+    </a>
+  ) : null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 py-1">
+      <div className="min-w-0 flex-1 basis-[280px]">
+        <div className="text-[15px] font-semibold leading-snug text-white">{lead}</div>
+        <div className="mt-1 text-[12.5px] leading-relaxed text-osu-l3">{detail}</div>
+        {message ? <div className="mt-1 text-[12px] text-osu-red-light">{message}</div> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
 // Empty state for the Activity tab when a player isn't tracked yet. For the signed-in owner it
 // becomes an opt-in: they can add themselves to their country's roster instead of being locked
 // out for not being in the top 100. Anonymous visitors get a login nudge; other people's
@@ -3555,6 +3636,7 @@ const SKILLS_COLUMN_CLASS = "mx-auto max-w-[880px]";
 
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const { t, i18n } = useLingui();
+  const auth = useAuth();
   const noDans = useNoDans();
   const [skillsView, setSkillsView] = useState<PlayerSkillsView>("ratings");
   /* Swapping the ratings grid for a plays list that has not loaded yet takes
@@ -3705,8 +3787,22 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
      queues a recompute that can flip the panel between them while the dialog
      is open, and a second mount point would tear the dialog down mid-paste. */
   const rated = skills != null && skills.status === "ready" && modes.length > 0;
+  /* Said before anything is read, in every view: a reader who lands here
+     looking for a loved or graveyard play would otherwise take its absence
+     for a bug. Older backends omit the flag, and then nothing is claimed. */
+  const untrackedNote = skills?.tracked === false ? (
+    <div className={`mb-4 ${view === "ratings" || !rated ? SKILLS_COLUMN_CLASS : ""}`}>
+      <SkillsUntrackedNote
+        username={user.username}
+        mode={auth.viewer == null ? "anon" : auth.viewer.id === user.id ? "self" : "other"}
+        loginAvailable={auth.loginAvailable}
+        onTracked={() => setSkillsRefreshKey((key) => key + 1)}
+      />
+    </div>
+  ) : null;
   return (
     <div ref={panelRef} style={heldHeight != null ? { minHeight: heldHeight } : undefined}>
+      {untrackedNote}
       {rated ? (
         <div className={`mb-3 flex flex-wrap items-center gap-1 ${view === "ratings" ? SKILLS_COLUMN_CLASS : ""}`}>
           {skillsViews.map((option) => (

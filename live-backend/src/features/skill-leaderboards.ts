@@ -8,6 +8,7 @@ import {
   PLAYER_SKILL_PATTERN_AXES,
   SKILL_RATING_SKILLSETS,
   danSkillsetBucketIds,
+  usesPatternSkillAxes,
   type PlayerSkillModeBreakdown,
 } from "./player-skills.js";
 import {
@@ -63,10 +64,10 @@ export function isDanLeaderboardKeyCount(value: number): boolean {
 
 /**
  * Axes a keymode publishes, mirroring skillModeEntries on the frontend and
- * percentileAxes in skill-baseline: 4K speaks MinaCalc's native skillsets plus
- * the grafted LN pattern axis; every other supported keymode speaks the
- * in-house pattern vocabulary only, because the calc's skillset names are
- * 4K-born and unreliable elsewhere.
+ * percentileAxes in skill-baseline: 6K and 7K (PATTERN_AXIS_KEY_COUNTS) speak
+ * the in-house pattern vocabulary only, because the calc's skillset names are
+ * 4K-born and mislead there; every other supported keymode speaks MinaCalc's
+ * native skillsets plus the grafted LN pattern axis.
  *
  * Overall leads every keymode and is the board's default: it is the "no
  * particular skill" ranking, the aggregate the profile card headlines, and the
@@ -79,7 +80,7 @@ export function isDanLeaderboardKeyCount(value: number): boolean {
 export const LEADERBOARD_DEFAULT_AXIS = "Overall";
 
 export function leaderboardAxesFor(keyCount: number): string[] {
-  if (keyCount === 4) {
+  if (!usesPatternSkillAxes(keyCount)) {
     return [...SKILL_RATING_SKILLSETS, "pattern:ln"];
   }
   return [LEADERBOARD_DEFAULT_AXIS, ...PLAYER_SKILL_PATTERN_AXES.map((axis) => `pattern:${axis}`)];

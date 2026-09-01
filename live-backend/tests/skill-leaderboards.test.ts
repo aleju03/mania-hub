@@ -98,20 +98,23 @@ describe("leaderboardAxesFor", () => {
     expect([5, 8, 18].some(isDanLeaderboardKeyCount)).toBe(false);
   });
 
-  it("gives 4K the MSD skillsets plus the grafted LN pattern axis", () => {
-    const axes = leaderboardAxesFor(4);
-    expect(axes).toContain("Chordjack");
-    expect(axes).toContain("JackSpeed");
-    expect(axes).toContain("pattern:ln");
-    expect(axes).not.toContain("pattern:chordjack");
+  it("gives 4K, 5K and 8K+ the MSD skillsets plus the grafted LN pattern axis", () => {
+    for (const keyCount of [4, 5, 8, 10, 18]) {
+      const axes = leaderboardAxesFor(keyCount);
+      expect(axes).toContain("Chordjack");
+      expect(axes).toContain("JackSpeed");
+      expect(axes).toContain("pattern:ln");
+      expect(axes).not.toContain("pattern:jack");
+      expect(axes).not.toContain("pattern:chordjack");
+    }
   });
 
-  it("gives non-4K keymodes the pattern vocabulary only", () => {
-    for (const keyCount of [5, 6, 7, 10, 18]) {
+  it("gives 6K and 7K the pattern vocabulary only", () => {
+    for (const keyCount of [6, 7]) {
       const axes = leaderboardAxesFor(keyCount);
       expect(axes).toContain("pattern:jack");
       expect(axes).toContain("pattern:chordstream");
-      // MinaCalc's skillset names are 4K-born and unreliable elsewhere.
+      // MinaCalc's skillset names are 4K-born and mislead on 6K/7K.
       expect(axes).not.toContain("Chordjack");
       // The jack tile absorbed chordjack; publishing both would rank the
       // same charts twice under two names.
@@ -212,16 +215,19 @@ describe("skill leaderboard", () => {
   it("builds boards for the newly supported keymodes", async () => {
     await withDb(async (db) => {
       await seed(db, [
-        { userId: 51, username: "ten", country: "JP", keyCount: 10, analyzedPlays: 80, ratings: { Overall: 23 }, patterns: [{ id: "stream", rating: 22, plays: 40 }] },
-        { userId: 52, username: "eighteen", country: "KR", keyCount: 18, analyzedPlays: 60, ratings: { Overall: 21 }, patterns: [{ id: "jack", rating: 20, plays: 30 }] },
+        // 10K and 18K publish MinaCalc's own skillsets, like 4K: a stored
+        // pattern rating stays off the board there.
+        { userId: 51, username: "ten", country: "JP", keyCount: 10, analyzedPlays: 80, ratings: { Overall: 23, Handstream: 22 }, patterns: [{ id: "stream", rating: 22, plays: 40 }] },
+        { userId: 52, username: "eighteen", country: "KR", keyCount: 18, analyzedPlays: 60, ratings: { Overall: 21, Chordjack: 20 }, patterns: [{ id: "jack", rating: 20, plays: 30 }] },
       ]);
 
       const ten = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 10, axis: "Overall" });
       expect(ten.ranking.map((entry) => entry.user.username)).toEqual(["ten"]);
-      expect(ten.axes).toContainEqual({ axis: "pattern:stream", players: 1 });
+      expect(ten.axes).toContainEqual({ axis: "Handstream", players: 1 });
+      expect(ten.axes.map((entry) => entry.axis)).not.toContain("pattern:stream");
       expect(ten.keyCounts).toEqual([10, 18]);
 
-      const eighteen = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 18, axis: "pattern:jack" });
+      const eighteen = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount: 18, axis: "Chordjack" });
       expect(eighteen.ranking.map((entry) => entry.user.username)).toEqual(["eighteen"]);
     });
   });

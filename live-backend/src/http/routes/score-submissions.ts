@@ -1,10 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { checkWriteGateOverloaded, parseJson } from "../../db.js";
+import { enqueueLeaderboardImport, getLeaderboardImportStatuses } from "../../features/leaderboard-import.js";
 import { parseScoreLink, submitMissingScore } from "../../features/score-submissions.js";
 import { errorContext, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
 import type { HttpContext } from "../context.js";
-import { isAdmin, readBody } from "../request.js";
+import { isAdmin, normalizeIdList, readBody } from "../request.js";
 import { checkRate, sendJson, sendRateLimited, sendWritePressureShed } from "../respond.js";
 
 /**
@@ -14,6 +15,7 @@ import { checkRate, sendJson, sendRateLimited, sendWritePressureShed } from "../
  * pastes it, so a friend can fill in someone else's missing play.
  */
 export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
+  if (url.pathname === "/api/admin/leaderboard-imports") return handleLeaderboardImport(req, res, ctx, url);
   if (url.pathname !== "/api/score-submissions") return false;
   if (req.method !== "POST") {
     sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
@@ -90,5 +92,44 @@ export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: Ser
     return true;
   }
   sendJson(req, res, ctx, 200, result);
+  return true;
+}
+
+/**
+ * The admin-only sibling: one chart's global leaderboard (osu!'s top 50)
+ * through the same ingest, as a queued job. POST enqueues and answers at
+ * once; GET ?ids= reports each job's state and how many rows the chart has
+ * from imports, which is what the dialog polls. Admin because each run is two
+ * osu! requests and up to fifty rows, so it sits behind the admin token
+ * rather than the submission buckets; the frontend's server function checks
+ * the session before adding that token.
+ */
+async function handleLeaderboardImport(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
+  if (!isAdmin(req, ctx)) {
+    sendJson(req, res, ctx, 401, { error: "unauthorized" });
+    return true;
+  }
+  if (req.method === "GET") {
+    const ids = normalizeIdList((url.searchParams.get("ids") ?? "").split(",")).slice(0, 200);
+    sendJson(req, res, ctx, 200, { ok: true, statuses: await getLeaderboardImportStatuses(ctx.db, ids) });
+    return true;
+  }
+  if (req.method !== "POST") {
+    sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+    return true;
+  }
+  const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+  const beatmapId = Number(body.beatmapId);
+  if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+    sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
+    return true;
+  }
+  const queue = ctx.serveWriteQueue ?? ctx.queue;
+  if (!ctx.serveWriteDb || !queue) {
+    sendJson(req, res, ctx, 503, { error: "submissions_unavailable" });
+    return true;
+  }
+  await enqueueLeaderboardImport(queue, beatmapId);
+  sendJson(req, res, ctx, 202, { ok: true, queued: true, beatmapId });
   return true;
 }

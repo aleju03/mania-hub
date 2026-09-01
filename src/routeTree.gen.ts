@@ -54,6 +54,7 @@ import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiBugReportUploadRouteImport } from './routes/api/bug-report-upload'
 import { Route as ApiCardMotifRouteImport } from './routes/api/card-motif'
 import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
+import { Route as ApiCommunityBeatmapAssetRouteImport } from './routes/api/community-beatmap-asset'
 import { Route as ApiCommunityImageRouteImport } from './routes/api/community-image'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiOgRouteImport } from './routes/api/og'
@@ -309,6 +310,12 @@ const ApiCatboxUploadRoute = ApiCatboxUploadRouteImport.update({
   path: '/api/catbox-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCommunityBeatmapAssetRoute =
+  ApiCommunityBeatmapAssetRouteImport.update({
+    id: '/api/community-beatmap-asset',
+    path: '/api/community-beatmap-asset',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCommunityImageRoute = ApiCommunityImageRouteImport.update({
   id: '/api/community-image',
   path: '/api/community-image',
@@ -502,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
+  '/api/community-beatmap-asset': typeof ApiCommunityBeatmapAssetRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
@@ -578,6 +586,7 @@ export interface FileRoutesByTo {
   '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
+  '/api/community-beatmap-asset': typeof ApiCommunityBeatmapAssetRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
@@ -655,6 +664,7 @@ export interface FileRoutesById {
   '/api/bug-report-upload': typeof ApiBugReportUploadRoute
   '/api/card-motif': typeof ApiCardMotifRoute
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
+  '/api/community-beatmap-asset': typeof ApiCommunityBeatmapAssetRoute
   '/api/community-image': typeof ApiCommunityImageRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
@@ -733,6 +743,7 @@ export interface FileRouteTypes {
     | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
+    | '/api/community-beatmap-asset'
     | '/api/community-image'
     | '/api/favicon'
     | '/api/og'
@@ -809,6 +820,7 @@ export interface FileRouteTypes {
     | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
+    | '/api/community-beatmap-asset'
     | '/api/community-image'
     | '/api/favicon'
     | '/api/og'
@@ -885,6 +897,7 @@ export interface FileRouteTypes {
     | '/api/bug-report-upload'
     | '/api/card-motif'
     | '/api/catbox-upload'
+    | '/api/community-beatmap-asset'
     | '/api/community-image'
     | '/api/favicon'
     | '/api/og'
@@ -962,6 +975,7 @@ export interface RootRouteChildren {
   ApiBugReportUploadRoute: typeof ApiBugReportUploadRoute
   ApiCardMotifRoute: typeof ApiCardMotifRoute
   ApiCatboxUploadRoute: typeof ApiCatboxUploadRoute
+  ApiCommunityBeatmapAssetRoute: typeof ApiCommunityBeatmapAssetRoute
   ApiCommunityImageRoute: typeof ApiCommunityImageRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
@@ -1302,6 +1316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCatboxUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/community-beatmap-asset': {
+      id: '/api/community-beatmap-asset'
+      path: '/api/community-beatmap-asset'
+      fullPath: '/api/community-beatmap-asset'
+      preLoaderRoute: typeof ApiCommunityBeatmapAssetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/community-image': {
       id: '/api/community-image'
       path: '/api/community-image'
@@ -1610,6 +1631,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBugReportUploadRoute: ApiBugReportUploadRoute,
   ApiCardMotifRoute: ApiCardMotifRoute,
   ApiCatboxUploadRoute: ApiCatboxUploadRoute,
+  ApiCommunityBeatmapAssetRoute: ApiCommunityBeatmapAssetRoute,
   ApiCommunityImageRoute: ApiCommunityImageRoute,
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,

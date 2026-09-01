@@ -514,7 +514,9 @@ describe("computePlayerSkillRatings", () => {
         [],
       );
       expect(raised.summary.analyzedPlays).toBe(1);
-      expect(raised.plays[0].odOverride).toBe(10);
+      // The slider is stored raw: the wife estimate clamps it into 0..10
+      // itself, and the widened-windows check needs the true value.
+      expect(raised.plays[0].odOverride).toBe(12);
       const fast = await computePlayerSkillRatings(
         db,
         failingOsu,
@@ -531,6 +533,69 @@ describe("computePlayerSkillRatings", () => {
       expect(purged.summary.analyzedPlays).toBe(0);
       const retained = await computePlayerSkillRatings(db, failingOsu, [], [{ ...fast.plays[0] }], {});
       expect(retained.summary.analyzedPlays).toBe(1);
+    });
+  });
+
+  it("reads the chart's OD off the .osu when the beatmaps row has none yet", async () => {
+    await withDb(async (db) => {
+      // No beatmaps row at all: the only OD anyone knows is the one in the
+      // file. OD 3 here, so a DA raising it to 5 is an honest, harder play
+      // even though 5 sits under the dan floor - it must rate, not be
+      // refused on the floor alone.
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile().replace("OverallDifficulty:8", "OverallDifficulty:3"), { source: "test" });
+      const raised = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 51, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 5 } }] })],
+        [],
+      );
+      expect(raised.summary.analyzedPlays).toBe(1);
+      expect(raised.plays[0].odOverride).toBe(5);
+      // ...and a stored copy of it survives the retention pass on the same
+      // reading, with no score payload left.
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [{ ...raised.plays[0], identity: "legacy-raise" }], {});
+      expect(retained.summary.analyzedPlays).toBe(1);
+
+      // Lowering it is still caught, from the same file.
+      const lowered = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 52, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 2 } }] })],
+        [],
+      );
+      expect(lowered.summary.analyzedPlays).toBe(0);
+      expect(lowered.summary.unsupportedPlays).toBe(1);
+      const purged = await computePlayerSkillRatings(db, failingOsu, [], [{ ...raised.plays[0], identity: "legacy-lower", odOverride: 2 }], {});
+      expect(purged.summary.analyzedPlays).toBe(0);
+    });
+  });
+
+  it("catches a DA below zero on an OD 0 chart", async () => {
+    await withDb(async (db) => {
+      // Clamping the slider into 0..10 would make -15 equal the chart's own
+      // OD 0 and slip through; the raw slider does not.
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile().replace("OverallDifficulty:8", "OverallDifficulty:0"), { source: "test" });
+      await exec(
+        db,
+        "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)",
+        [101, 1, JSON.stringify({ accuracy: 0 }), "2026-01-01T00:00:00Z"],
+      );
+      const widened = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 61, beatmap_id: 101, mods: [{ acronym: "DA", settings: { extended_limits: true, overall_difficulty: -15 } }] })],
+        [],
+      );
+      expect(widened.summary.analyzedPlays).toBe(0);
+      expect(widened.summary.unsupportedPlays).toBe(1);
+      // DA set to exactly the chart's OD changes nothing and rates.
+      const same = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 62, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 0 } }] })],
+        [],
+      );
+      expect(same.summary.analyzedPlays).toBe(1);
     });
   });
 

@@ -51,6 +51,9 @@ const ACTIVE_TYPE_CAPS: Record<string, number> = {
 // but capped to this many active jobs so they cannot crowd anything out. The
 // osu! API token bucket still governs their actual request rate.
 const RESERVED_LANE_TYPES: Record<string, number> = {
+  // Admin leaderboard imports come in bursts; the worker lane drains them
+  // one at a time, so the reserve only has to keep them out of the shedder.
+  import_beatmap_leaderboard: 3,
   analyze_activity_beatmap: 10,
   analyze_beatmap_chart: 10,
   // Self-chaining top-up runner for the chart-analysis backfill: one slot for

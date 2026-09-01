@@ -228,8 +228,9 @@ interface AuthorizedUploader {
   viewer: { id: number; username: string } | null;
 }
 
-/** The authorized uploader, or null when unauthenticated. */
-async function authorizeUploader(request: Request): Promise<AuthorizedUploader | null> {
+/** The authorized uploader, or null when unauthenticated. Shared with the
+ *  community beatmap asset upload, which takes the same contributors. */
+export async function authorizeUploader(request: Request): Promise<AuthorizedUploader | null> {
   const viewer = await readViewerFromRequest(request);
   if (viewer) return { rateKey: `user:${viewer.id}`, viewer: { id: viewer.id, username: viewer.username } };
   let hostname = "";

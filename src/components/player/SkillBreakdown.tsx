@@ -192,10 +192,16 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
 // languages the way they do into English.
 function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: boolean, i18n: I18n): string {
   const plays = mode.analyzedPlays;
+  // An untracked player has no tracked history to cite: the rating saw the
+  // osu! top plays and whatever was added by score link, nothing else.
   const parts = [
-    own
-      ? i18n._(msg`rated from ${plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
-      : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`),
+    skills.tracked === false
+      ? own
+        ? i18n._(msg`rated from ${plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
+        : i18n._(msg`rated from ${plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
+      : own
+        ? i18n._(msg`rated from ${plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
+        : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`),
   ];
   const pending = skills.pendingPlays;
   if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`));

@@ -22,6 +22,7 @@ import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
 import { recentReplayUploadKey, type RecentReplayEntry } from "#/lib/replay-recent";
 import { useAuth } from "#/lib/auth-context";
 import { getRecentCommunityUploads, type CommunityUploadEntry } from "#/lib/uploaded-replay-community";
+import { getCommunityBeatmapAssetUrl } from "#/lib/community-beatmap-assets";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
@@ -261,7 +262,9 @@ function communityUploadToRecentEntry(upload: CommunityUploadEntry, unknownBeatm
     playerName: upload.playerName,
     coverUrl: upload.beatmap?.beatmapsetId
       ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/list.jpg`
-      : undefined,
+      : upload.communityBackground && upload.beatmapHash
+        ? getCommunityBeatmapAssetUrl(upload.beatmapHash, "background")
+        : undefined,
     grade: upload.grade,
     accuracy: upload.accuracy,
     mods: withModRate(upload.mods, upload.modRate),

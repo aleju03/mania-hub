@@ -118,6 +118,10 @@ export interface MyDataSkillBreakdown {
   // Ready only: the served snapshot is known-superseded and a recompute is on
   // its way; present the numbers as refreshing, not final.
   stale?: boolean;
+  // Whether this site tracks the player's plays. False means the rating only
+  // saw the osu! top-200, so loved and graveyard plays are absent by design.
+  // Absent on older backend payloads.
+  tracked?: boolean;
 }
 
 export interface MyDataBeatmapRef {

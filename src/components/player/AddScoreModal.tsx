@@ -1,8 +1,9 @@
 import { useLingui } from "@lingui/react/macro";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Loader2, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Loader2, Search, X } from "lucide-react";
 import {
+  fetchLiveMapSearch,
   loadLiveMapSearchEntry,
   submitLiveMissingScore,
   type LiveMapSearchEntry,
@@ -16,6 +17,9 @@ import { ModBadge } from "../ui/ModBadge";
 import { useLocale } from "../../lib/locale-context";
 import type { AppLocale } from "../../lib/locale";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
+import { useAuth } from "../../lib/auth-context";
+import { getLeaderboardImportStatuses, importBeatmapLeaderboard, type LeaderboardImportFailure } from "../../lib/leaderboard-import";
+import { StatusChip } from "../maps/FilterChips";
 
 /*
  * Adding a missing score to a player, from their profile page.
@@ -76,6 +80,7 @@ export function AddScoreModal({
 }) {
   const { t } = useLingui();
   const locale = useLocale();
+  const auth = useAuth();
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -323,9 +328,381 @@ export function AddScoreModal({
               </button>
             )}
           </form>
+
+          {auth.canUseAdminFeatures ? <LeaderboardImportPanel /> : null}
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+/* ------------------------------------------------- admin: leaderboard import
+
+   Admin-only for now, so its copy is plain English like the rest of the admin
+   surfaces. Search is the site's own map index, the one /maps searches, with
+   the same token syntax (key=6, stars>5, creator=...) and the same debounce,
+   narrowed to ranked or loved. Every chart on the results has one action:
+   queue its global leaderboard for the ingest. osu! publishes a map's top 50
+   and nothing past it, so that is the whole board. A set-level button queues
+   the charts the index returned for that set. */
+
+type ImportStatusFilter = "ranked" | "loved";
+
+/* The index's sorts that mean something here. Its "relevance" is play count
+   under another name (no relevance column exists), so it is not offered. */
+type ImportSort = "playcount" | "stars" | "date";
+type ImportDir = "desc" | "asc";
+
+const IMPORT_SORTS: Array<{ id: ImportSort; label: string }> = [
+  { id: "playcount", label: "plays" },
+  { id: "stars", label: "stars" },
+  { id: "date", label: "date" },
+];
+
+const IMPORT_SEARCH_DEBOUNCE_MS = 250;
+const IMPORT_SEARCH_PAGE_SIZE = 60;
+
+/* sending: the enqueue request is in flight. queued/running: the backend job,
+   as the poll last saw it. done/failed: the job's end, with the rows the
+   chart has from imports (every run included) or the job's reason. */
+type ImportState =
+  | { kind: "sending" }
+  | { kind: "queued" }
+  | { kind: "running" }
+  | { kind: "done"; stored: number }
+  | { kind: "failed"; message: string };
+
+const IMPORT_POLL_MS = 2_500;
+
+function importFailureMessage(reason: LeaderboardImportFailure): string {
+  switch (reason) {
+    case "rate_limited":
+      return "Too many imports right now. Try again later.";
+    case "failed":
+      return "Could not queue that. Try again.";
+  }
+}
+
+/* The job's last_error, as the dialog says it. Refusals are the worker's
+   "leaderboard import refused: <reason>"; anything else is shown as is. */
+function jobErrorMessage(error: string | null): string {
+  const refused = /refused: (\w+)/.exec(error ?? "")?.[1];
+  switch (refused) {
+    case "beatmap_not_found":
+      return "osu! doesn't know that chart.";
+    case "not_mania":
+      return "Not a mania chart.";
+    case "no_leaderboard":
+      return "That chart has no leaderboard.";
+  }
+  return error?.trim() || "The import failed.";
+}
+
+function LeaderboardImportPanel() {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<ImportStatusFilter>("ranked");
+  const [sort, setSort] = useState<ImportSort>("playcount");
+  const [dir, setDir] = useState<ImportDir>("desc");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [results, setResults] = useState<{ sets: ImportSet[]; total: number } | null>(null);
+  const [imports, setImports] = useState<Record<number, ImportState>>({});
+  const mountedRef = useRef(true);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open) focusOnDesktop(searchRef.current);
+  }, [open]);
+
+  /* Searches as typed, like /maps: the query waits the same 250ms, filters
+     fire at once. The counter lets a stale response lose to the newest. */
+  const searchSeq = useRef(0);
+  useEffect(() => {
+    if (!open) return;
+    const seq = ++searchSeq.current;
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetchLiveMapSearch({
+          q: query,
+          keys: [],
+          keysExclude: [],
+          statuses: [status],
+          statusesExclude: [],
+          patterns: [],
+          patternsExclude: [],
+          starMin: null,
+          starMax: null,
+          bpmMin: null,
+          bpmMax: null,
+          lenMin: null,
+          lenMax: null,
+          danMin: null,
+          danMax: null,
+          country: null,
+          sort,
+          dir,
+          page: 0,
+          pageSize: IMPORT_SEARCH_PAGE_SIZE,
+        });
+        if (!mountedRef.current || seq !== searchSeq.current) return;
+        setSearchError(null);
+        setResults({ sets: groupBySet(res.items), total: res.total });
+      } catch {
+        if (mountedRef.current && seq === searchSeq.current) setSearchError("Search failed. Try again.");
+      } finally {
+        if (mountedRef.current && seq === searchSeq.current) setSearching(false);
+      }
+    }, IMPORT_SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, query, status, sort, dir]);
+
+  const importOne = async (beatmapId: number) => {
+    setImports((current) => ({ ...current, [beatmapId]: { kind: "sending" } }));
+    let next: ImportState;
+    try {
+      const result = await importBeatmapLeaderboard({ data: { beatmapId } });
+      next = result.ok ? { kind: "queued" } : { kind: "failed", message: importFailureMessage(result.reason) };
+    } catch {
+      next = { kind: "failed", message: importFailureMessage("failed") };
+    }
+    if (mountedRef.current) setImports((current) => ({ ...current, [beatmapId]: next }));
+  };
+
+  /* Enqueueing is cheap, so a set's charts go out together; the backend's
+     lane runs them one at a time. */
+  const importMany = (beatmapIds: number[]) => {
+    for (const beatmapId of beatmapIds) void importOne(beatmapId);
+  };
+
+  /* Watches every queued or running job until it ends. The stored count is
+     read off the job's chart, so the row can say what actually landed. */
+  const pending = Object.entries(imports)
+    .filter(([, state]) => state.kind === "queued" || state.kind === "running")
+    .map(([id]) => Number(id));
+  const pendingKey = pending.join(",");
+  useEffect(() => {
+    if (!pendingKey) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const statuses = await getLeaderboardImportStatuses({ data: { beatmapIds: pendingKey.split(",").map(Number) } });
+        if (cancelled || !mountedRef.current) return;
+        setImports((current) => {
+          const next = { ...current };
+          for (const status of statuses) {
+            const state = next[status.beatmapId];
+            if (!state || (state.kind !== "queued" && state.kind !== "running")) continue;
+            if (status.status === "done") next[status.beatmapId] = { kind: "done", stored: status.stored };
+            else if (status.status === "failed") next[status.beatmapId] = { kind: "failed", message: jobErrorMessage(status.error) };
+            else if (status.status === "running") next[status.beatmapId] = { kind: "running" };
+            else if (status.status === "none") next[status.beatmapId] = { kind: "failed", message: "The job went missing." };
+          }
+          return next;
+        });
+      } catch {
+        /* next tick */
+      }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), IMPORT_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [pendingKey]);
+
+  return (
+    <div className="border-t border-white/[0.06]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full cursor-pointer items-center justify-between px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-osu-f1 transition-colors hover:text-osu-l2 sm:px-5"
+      >
+        <span>Import a leaderboard</span>
+        <span className="text-[10px] font-semibold normal-case tracking-normal">admin</span>
+      </button>
+      {open ? (
+        <div className="px-4 pb-4 sm:px-5">
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-osu-b4 px-3 py-2">
+              <Search size={14} className="shrink-0 text-osu-f1" aria-hidden="true" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="search maps, e.g. key=6 stars>5 creator=..."
+                spellCheck={false}
+                autoComplete="off"
+                aria-label="Map search"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-osu-l1 outline-none placeholder:text-osu-f1"
+              />
+              {searching ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-osu-f1" aria-hidden="true" /> : null}
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {(["ranked", "loved"] as const).map((option) => (
+              <StatusChip key={option} id={option} label={option} active={status === option} onClick={() => setStatus(option)} />
+            ))}
+            <div className="ml-auto flex items-center gap-0.5 text-[11px] font-bold text-osu-f1">
+              {IMPORT_SORTS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={sort === option.id}
+                  onClick={() => setSort(option.id)}
+                  className={`cursor-pointer rounded-md px-2 py-1 transition-colors ${sort === option.id ? "bg-osu-b4 text-osu-l1" : "hover:text-osu-l2"}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+              {/* Direction reads in the sort's own words: newest/oldest for
+                  date, most/least for the rest. */}
+              <button
+                type="button"
+                onClick={() => setDir((value) => (value === "desc" ? "asc" : "desc"))}
+                aria-label={dir === "desc" ? "Sort descending" : "Sort ascending"}
+                className="ml-1 flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-osu-l2 transition-colors hover:text-osu-l1"
+              >
+                {dir === "desc" ? <ArrowDown size={12} aria-hidden="true" /> : <ArrowUp size={12} aria-hidden="true" />}
+                {sort === "date" ? (dir === "desc" ? "newest" : "oldest") : dir === "desc" ? "most" : "least"}
+              </button>
+            </div>
+          </div>
+
+          {searchError ? <p className="mt-2 text-[11.5px] text-osu-red-light">{searchError}</p> : null}
+
+          {results ? (
+            results.sets.length === 0
+              ? <p className="mt-3 text-[12px] text-osu-f1">No maps found.</p>
+              : (
+                <div className="mt-3 max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+                  {results.sets.map((set) => {
+                    const anyBusy = set.charts.some((chart) => {
+                      const kind = imports[chart.beatmapId]?.kind;
+                      return kind === "sending" || kind === "queued" || kind === "running";
+                    });
+                    return (
+                      <div key={set.beatmapsetId}>
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={set.cover ?? `https://assets.ppy.sh/beatmaps/${set.beatmapsetId}/covers/list.jpg`}
+                            alt=""
+                            className="h-9 w-9 shrink-0 rounded-md bg-osu-b4 object-cover"
+                            onError={(event) => { event.currentTarget.style.visibility = "hidden"; }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-bold text-osu-l1">
+                              {set.title}
+                              {set.year ? <span className="ml-1.5 text-[11px] font-semibold text-osu-f1">{set.year}</span> : null}
+                            </div>
+                            <div className="truncate text-[11px] text-osu-f1">{set.artist} · {set.creator}</div>
+                          </div>
+                          {set.charts.length > 1 ? (
+                            <button
+                              type="button"
+                              disabled={anyBusy}
+                              onClick={() => importMany(set.charts.map((chart) => chart.beatmapId))}
+                              className="shrink-0 cursor-pointer rounded-full bg-osu-b3/60 px-2.5 py-1 text-[11px] font-bold text-osu-l2 transition hover:bg-osu-b3 disabled:cursor-default disabled:opacity-60"
+                            >
+                              Add all {set.charts.length}
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-1.5 divide-y divide-white/[0.05]">
+                          {set.charts.map((chart) => (
+                            <ImportChartRow
+                              key={chart.beatmapId}
+                              chart={chart}
+                              state={imports[chart.beatmapId]}
+                              onImport={() => void importOne(chart.beatmapId)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {results.total > results.sets.length ? (
+                    <p className="pb-1 text-[11px] text-osu-f1">Showing the first {IMPORT_SEARCH_PAGE_SIZE} sets of {results.total}. Narrow the search for the rest.</p>
+                  ) : null}
+                </div>
+              )
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* The index answers one entry per set, the representative diff on top and
+   every filter-matching diff of the set under `diffs` (easiest first); a set
+   here is that list, with the representative itself when a cached payload
+   predates the field. */
+interface ImportSet {
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  cover: string | null;
+  // The set's ranked/loved year, off its representative diff.
+  year: string | null;
+  charts: LiveMapSearchEntry[];
+}
+
+function groupBySet(items: LiveMapSearchEntry[]): ImportSet[] {
+  return items.map((item) => {
+    const diffs = item.diffs?.length ? item.diffs : [item];
+    const charts = diffs.some((diff) => diff.beatmapId === item.beatmapId) ? diffs : [item, ...diffs];
+    return {
+      beatmapsetId: item.beatmapsetId,
+      title: item.title,
+      artist: item.artist,
+      creator: item.creator,
+      cover: item.covers?.list ?? item.covers?.card ?? null,
+      year: item.rankedDate ? item.rankedDate.slice(0, 4) : null,
+      charts: [...charts].sort((a, b) => a.stars - b.stars),
+    };
+  });
+}
+
+function ImportChartRow({ chart, state, onImport }: { chart: LiveMapSearchEntry; state: ImportState | undefined; onImport: () => void }) {
+  return (
+    <div className="flex items-center gap-2.5 py-1.5 pl-[46px]">
+      <span className="shrink-0 text-[11px] font-bold text-osu-yellow">{chart.keyCount}K</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] text-osu-l2">{chart.version}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-osu-f1">{chart.stars.toFixed(2)}★</span>
+      {state?.kind === "done" ? (
+        <span className="shrink-0 text-[11px] tabular-nums font-bold text-osu-green-light" title="rows this chart has from imports">
+          done · {state.stored} stored
+        </span>
+      ) : state?.kind === "failed" ? (
+        <span className="shrink-0 text-[11px] text-osu-red-light">{state.message}</span>
+      ) : state?.kind === "queued" ? (
+        <span className="shrink-0 text-[11px] font-bold text-osu-l2">queued</span>
+      ) : state?.kind === "running" ? (
+        <span className="shrink-0 text-[11px] font-bold text-osu-yellow">importing</span>
+      ) : null}
+      <button
+        type="button"
+        disabled={state?.kind === "sending" || state?.kind === "queued" || state?.kind === "running"}
+        onClick={onImport}
+        aria-label={`Import the leaderboard of ${chart.version}`}
+        className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+      >
+        {state?.kind === "sending" || state?.kind === "queued" || state?.kind === "running"
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          : <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
+      </button>
+    </div>
   );
 }
 

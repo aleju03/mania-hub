@@ -438,6 +438,25 @@ export function CollectionPanel({
   const [recycleAllHint, setRecycleAllHint] = useState(false);
   const recycleAllTimerRef = useRef<number | null>(null);
   const recycleAllHintTimerRef = useRef<number | null>(null);
+  /* Android's long-press menu opens before the 700ms hold finishes and sends
+     a pointercancel that aborts it. Preventing contextmenu is not enough on
+     every device (a tablet in desktop-site mode still opened it), so the
+     native gesture is refused at touchstart. That listener has to be
+     non-passive, which React's onTouchStart is not, so it is attached by
+     hand through a callback ref: the button mounts and unmounts with the
+     duplicate count, so a plain effect would miss it. Pointer events still
+     fire after a prevented touchstart, so the hold itself is unaffected. */
+  const recycleAllTouchCleanupRef = useRef<(() => void) | null>(null);
+  const recycleAllButtonRef = (node: HTMLButtonElement | null) => {
+    recycleAllTouchCleanupRef.current?.();
+    recycleAllTouchCleanupRef.current = null;
+    if (!node) return;
+    const refuseNativeGesture = (event: TouchEvent) => {
+      if (event.touches.length === 1) event.preventDefault();
+    };
+    node.addEventListener("touchstart", refuseNativeGesture, { passive: false });
+    recycleAllTouchCleanupRef.current = () => node.removeEventListener("touchstart", refuseNativeGesture);
+  };
   const [bulkBusy, setBulkBusy] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
   /* Dev-only skeleton sim. "cards" blanks the thumbnails on real tiles (the
@@ -1078,6 +1097,7 @@ export function CollectionPanel({
           </span>
           {recyclable > 0 && !selecting && !missingOpen && (
             <button
+              ref={recycleAllButtonRef}
               type="button"
               onPointerDown={(event) => {
                 // Primary button only; another pointer must never start a recycle.
@@ -1087,10 +1107,9 @@ export function CollectionPanel({
               onPointerUp={cancelRecycleAllHold}
               onPointerLeave={cancelRecycleAllHold}
               onPointerCancel={cancelRecycleAllHold}
-              /* Android opens its page menu before this 700ms hold finishes
-                 unless the context gesture is claimed. The button has no
-                 context action of its own, so suppress that native default
-                 without shortening the destructive-action guard. */
+              /* Second line of defence behind the touchstart listener above,
+                 for mouse and pen long-presses: the button has no context
+                 action of its own, so the native menu is never wanted. */
               onContextMenu={(event) => event.preventDefault()}
               /* Enter and Space hold too, so the gesture is not pointer-only.
                  Both are prevented from firing the button's own click, and the

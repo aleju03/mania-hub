@@ -36,7 +36,7 @@ msgstr " · 仅显示前 {0} 名"
 msgid " · updated {0}"
 msgstr " · 更新于 {0}"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid " or "
 msgstr " 或 "
 
@@ -1350,6 +1350,14 @@ msgstr "{username} 大约在 <0>{0}</0>"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is beyond <0>{0}</0>"
 msgstr "{username} 高于 <0>{0}</0>"
+
+#: src/routes/player/$username.tsx
+msgid "{username} isn't tracked, so only their ranked plays are rated here"
+msgstr "{username} 没有被追踪，所以这里只评了 ranked 成绩"
+
+#: src/routes/player/$username.tsx
+#~ msgid "{username} isn't tracked, so only their ranked plays are rated here. Loved and graveyard plays count once a player is tracked, or when added with Add a missing score."
+#~ msgstr "{username} 没有被追踪，所以这里只评了 ranked 成绩。社区喜爱和坟场谱面的成绩要在玩家被追踪之后才会计入，或者通过“添加缺失的成绩”添加。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "{username} maniacard"
@@ -3353,7 +3361,7 @@ msgstr "点击跳转到指定页"
 msgid "Click to open the numbered levels"
 msgstr "点击展开数字段位"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
 msgstr "点击以必须包含 {label}"
 
@@ -5160,6 +5168,7 @@ msgid "filters"
 msgstr "筛选"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
@@ -5717,7 +5726,7 @@ msgstr "隐藏被段位规则排除的成绩"
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "收起 ScoreV2 说明"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
 msgstr "隐藏 {label}"
 
@@ -5927,6 +5936,10 @@ msgstr "混合"
 #: src/routes/dan-estimates.tsx
 #~ msgid "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 #~ msgstr "如果本站看到你通过了一个段位课题，你在那一侧的估算<0>就不会低于那个课题</0>，不管技能平均下来是多少。打过 EXTRA-EPSILON，你就读作 epsilon，哪怕你的技能平均下来只到 delta。这一页其它部分都是从你的成绩里算出一个数字，而课题直接把数字给你，所以它说了算。"
+
+#: src/routes/player/$username.tsx
+#~ msgid "If this is you, <0>log in with osu!</0> to track your plays."
+#~ msgstr "如果这是你，<0>使用 osu! 登录</0>来追踪你的成绩。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
@@ -6911,6 +6924,10 @@ msgstr "登录后发布"
 msgid "Log in to see your data"
 msgstr "登录后查看你的数据"
 
+#: src/routes/player/$username.tsx
+msgid "Log in to track yourself"
+msgstr "登录以追踪自己"
+
 #: src/routes/skins.tsx
 msgid "Log in to upload"
 msgstr "登录后上传"
@@ -7000,6 +7017,10 @@ msgstr "社区喜爱"
 #: src/routes/maps.tsx
 msgid "Loved"
 msgstr "社区喜爱"
+
+#: src/routes/player/$username.tsx
+msgid "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+msgstr "社区喜爱和坟场谱面的成绩只有在被追踪之后才会进入本站，或者由某人通过“添加缺失的成绩”添加。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Low PP"
@@ -7409,6 +7430,7 @@ msgid "moderation"
 msgstr "审核"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Mods"
@@ -8220,7 +8242,7 @@ msgstr "提名者"
 msgid "nomod"
 msgstr "无 Mod"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "NoMod"
 msgstr "无 Mod"
 
@@ -9763,8 +9785,16 @@ msgid "Rate mods count, and they count for what the chart is worth at that speed
 msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x)，以及 0.5x 到 2.0x 之间任意的 lazer 自定义倍速下的通过，都会按谱面在那个速度下的段位计入，每个速度单独评。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。如果某个速度还没有人评过这张谱面，你的估算第一次用到它时就会现算，所以冷门倍速的成绩可能要过一小会儿才开始计入。"
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+
+#: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11228,7 +11258,7 @@ msgstr "正在显示 FC 断连（1 miss）- 左键清除，右键切换为全连
 msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 msgstr "正在显示全连（0 miss）- 左键切换为 FC 断连，右键清除"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"
 msgstr "只显示 {label}"
 
@@ -14380,6 +14410,10 @@ msgstr "你已经超过 {0} 了"
 msgid "You're being tracked now"
 msgstr "你已经被追踪了"
 
+#: src/routes/player/$username.tsx
+#~ msgid "You're being tracked now. Your recent plays are being pulled in and will be rated here in a few minutes."
+#~ msgstr "你已经被追踪了。正在拉取你最近的成绩，几分钟后会在这里评分。"
+
 #: src/routes/farm-helper.tsx
 msgid "you're done improving this map: hides it from your recs for 60 days"
 msgstr "这张图你已经刷够了：会从你的推荐中隐藏 60 天"
@@ -14387,6 +14421,14 @@ msgstr "这张图你已经刷够了：会从你的推荐中隐藏 60 天"
 #: src/routes/farm-helper.tsx
 msgid "you're logged out, log in again to save marks"
 msgstr "你已退出登录，重新登录后才能保存标记"
+
+#: src/routes/player/$username.tsx
+msgid "You're not tracked, so only your ranked plays are rated here"
+msgstr "你没有被追踪，所以这里只评了你的 ranked 成绩"
+
+#: src/routes/player/$username.tsx
+#~ msgid "You're not tracked, so only your ranked plays are rated here. Loved and graveyard plays count once you're tracked, or when added with Add a missing score."
+#~ msgstr "你没有被追踪，所以这里只评了你的 ranked 成绩。社区喜爱和坟场谱面的成绩要在你被追踪之后才会计入，或者通过“添加缺失的成绩”添加。"
 
 #. placeholder {0}: nf(cur)
 #: src/components/me/GoalsPanel.tsx
@@ -14498,6 +14540,10 @@ msgstr "你的私有皮肤"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在这里。"
+
+#: src/routes/player/$username.tsx
+msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
+msgstr "正在拉取你最近的成绩，几分钟后会在这里评分。"
 
 #: src/routes/player/$username.tsx
 msgid "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."

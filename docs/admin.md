@@ -88,3 +88,7 @@ With `DISCORD_BUG_REPORT_CHANNEL_ID` set, each new report also posts an embed to
 ## BBCode image audit
 
 `/admin/bbcode-images` is the narrower tool for the `bbcode/` prefix, whose objects are permanent, have no second copy, and are tracked by nothing but their own `uploaded-by` metadata. `src/lib/bbcode-image-audit.ts` lists the prefix, reads each uploader's profile BBCode fresh from osu! (`page.raw`, deliberately uncached), and reports each file as on a profile / unused / unchecked. Two rules make it safe to delete from: a file counts as used if *any* read profile embeds it, since content-addressing means one object can be shared and `uploaded-by` names only the last uploader; and a profile that could not be read yields `unchecked`, never `unused`. `deleteUnusedBbcodeImages` re-runs the whole audit server-side and drops only what is still unused, so the client never labels its own deletions.
+
+## Leaderboard imports
+
+The **Import a leaderboard** panel inside a profile's "Add a missing score" dialog is shown to `canUseAdminFeatures` sessions only. It searches the site's map index as typed, like `/maps` (ranked or loved, the same token syntax such as `key=6`, sorted by plays, stars or ranked date, either direction) and queues a chart's global top 50 for the ordinary ingest, one job per chart; the rows show queued / importing / done with the stored count as the jobs run. Players from untracked countries are counted, not stored; nothing here bypasses the ingest's gates or rates anything. Details in `docs/features.md` under dan estimates.

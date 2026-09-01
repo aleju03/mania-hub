@@ -44,3 +44,6 @@ capture-replays/
 scripts/ln-axis/out/
 # Named per-player opinions from the rater; stays out of the repo
 scripts/ln-axis/labels-draft.json
+
+# development replay uploads (prod uses R2)
+data/replay-uploads/

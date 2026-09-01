@@ -106,7 +106,7 @@ describe("HT rate analysis", () => {
     await exec(
       db,
       "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v22", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
+      ["player_skill_dan_sweep_done:v23", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
     );
     // The fold's other dependency, the chart-side jack-demand sweep, is done.
     await exec(

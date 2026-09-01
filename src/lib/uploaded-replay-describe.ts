@@ -3,7 +3,12 @@ import { getPersistentCacheEntry, osuFetch, setPersistentCache } from "./api";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
 import { getJsonArtifact, getUploadedReplayDescStorageKey, getUploadedReplayStorageKey, putJsonArtifact } from "./r2-cache";
 import { getManiaAccuracyFromCounts, getModDisplayList, scoreUsesLazerScoring } from "./score";
-import { normalizeUploadedReplayId, normalizeUploadedReplayFilename, readUploadedReplay } from "./uploaded-replay-store";
+import {
+  normalizeUploadedReplayId,
+  normalizeUploadedReplayFilename,
+  readUploadedReplay,
+  uploadedReplaysUseR2,
+} from "./uploaded-replay-store";
 
 // Uploaded replays are content-addressed by a random id, so a parsed description
 // never changes for a given id. Cache it so the community list and the R2 admin
@@ -12,6 +17,13 @@ import { normalizeUploadedReplayId, normalizeUploadedReplayFilename, readUploade
 // parse result is just as immutable); only the beatmap lookup is retried, at
 // most once per retry window, so a later submission still resolves.
 const DESCRIPTION_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+// The cross-instance artifact lives next to the .osr in R2, so it is only
+// written when uploads go there; a development upload on local disk leaves no
+// trace in the shared bucket and just re-parses from the memory tier.
+async function putDescriptionArtifact(normalized: string, description: UploadedReplayDescription): Promise<void> {
+  if (!uploadedReplaysUseR2()) return;
+  await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), description);
+}
 const DESCRIPTION_UNRESOLVED_CACHE_TTL = 24 * 60 * 60 * 1000;
 const UNRESOLVED_BEATMAP_RETRY_MS = 24 * 60 * 60 * 1000;
 // A stored description otherwise lives forever, so bump this whenever the
@@ -142,7 +154,7 @@ function descriptionCacheKey(normalized: string): string {
 async function persistDescription(normalized: string, description: UploadedReplayDescription): Promise<void> {
   const ttl = description.beatmap ? DESCRIPTION_CACHE_TTL : DESCRIPTION_UNRESOLVED_CACHE_TTL;
   await setPersistentCache(descriptionCacheKey(normalized), description, ttl);
-  await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), description);
+  await putDescriptionArtifact(normalized, description);
 }
 
 // A description written by an older build: re-derive it from the .osr once and
@@ -155,7 +167,7 @@ async function upgradeStoredDescription(
   if ((stored.version ?? 1) >= DESCRIPTION_VERSION) return refreshStoredDescription(normalized, stored);
   const recomputed = await computeUploadedReplayDescription(normalized);
   if (!recomputed) return refreshStoredDescription(normalized, stored);
-  await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), recomputed);
+  await putDescriptionArtifact(normalized, recomputed);
   return recomputed;
 }
 
@@ -174,7 +186,7 @@ async function refreshStoredDescription(
     beatmap: await lookupUploadedReplayBeatmap(stored.beatmapHash),
     computedAt: Date.now(),
   };
-  await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), refreshed);
+  await putDescriptionArtifact(normalized, refreshed);
   return refreshed;
 }
 

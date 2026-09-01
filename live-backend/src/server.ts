@@ -10,7 +10,7 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue, registerGlobalFarmedBoardDiskCache, registerGlobalFarmedBoardRepackDelegation } from "./features/maps.js";
-import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
+import { cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
 import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackDemandRecomputeSeeded, ensureNkeyMsdSeeded, ensureJackTagRecomputeSeeded, ensureMotionFeaturesRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLn7PrimaryRepinSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureOsuFileRepairSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
@@ -585,7 +585,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // Active WAL brake: keeps the -wal file bounded so it can never grow into the
     // read-pin death-spiral. Worker/all role only (never the serving process).
     startWalCheckpointer(app.config);
-    startMapSearchStatusReconciler(app.db);
+    startMapSearchStatusReconciler(app.db, app.queue);
     startQueuePressureScheduler(app.queue);
     if (app.config.enableOscBackfill) {
       enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
@@ -1008,7 +1008,7 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
 // at first indexing otherwise) and the bogus-ln-tag cleanup. Pure DB work, no
 // osu! API, so it runs regardless of the osu!-API scheduler gating (like
 // retention).
-function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>): void {
+function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
   const tick = async () => {
     const healed = await reconcileMapSearchIndexStatuses(db).catch((error) => {
       console.warn("[map-search] status reconcile failed", error);
@@ -1030,6 +1030,18 @@ function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>
       return 0;
     });
     if (untagged > 0) console.log(`[map-search] stripped bogus ln tag from ${untagged} zero-LN map row(s)`);
+    // Ranked dates: copy what the set table has, then send what it lacks to
+    // the enrich job (the one osu!-API step here, bounded per tick).
+    const dated = await reconcileMapSearchIndexRankedDates(db).catch((error) => {
+      console.warn("[map-search] ranked date reconcile failed", error);
+      return 0;
+    });
+    if (dated > 0) console.log(`[map-search] filled ranked dates on ${dated} map row(s)`);
+    const enriching = await enqueueRankedDateEnrichment(db, queue).catch((error) => {
+      console.warn("[map-search] ranked date enrichment enqueue failed", error);
+      return 0;
+    });
+    if (enriching > 0) console.log(`[map-search] queued ${enriching} set(s) for a full metadata fetch (no ranked date)`);
     setTimeout(tick, 60 * 60_000).unref();
   };
   setTimeout(tick, 30_000).unref();

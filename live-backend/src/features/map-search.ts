@@ -120,6 +120,8 @@ export interface MapSearchEntry {
   bpm: number;
   length: number;
   playCount: number;
+  // ISO ranked (or loved) date from the set's metadata; null while pending.
+  rankedDate: string | null;
   lnCount: number;
   primaryPattern: string;
   patterns: Record<string, number>;
@@ -719,6 +721,47 @@ export async function reconcileMapSearchIndexStatuses(db: Db): Promise<number> {
   return Number(result.rowsAffected ?? 0);
 }
 
+// Periodic backstop for ranked_date, in two steps. A set first seen through a
+// score payload carries osu!'s compact beatmapset, which has no ranked_date,
+// and ingest never overwrites metadata_json on conflict, so the index row
+// stays dateless until an enrich_beatmap run stores the full set. Step one
+// copies dates the beatmapsets row has since gained (pure DB); step two hands
+// the rest to the enrich job, one diff per set and a bounded batch per tick,
+// since each is an osu! call. Returns the rows dated.
+export async function reconcileMapSearchIndexRankedDates(db: Db): Promise<number> {
+  const result = await exec(
+    db,
+    `update map_search_index
+        set ranked_date = (select json_extract(s.metadata_json, '$.ranked_date') from beatmapsets s
+                            where s.beatmapset_id = map_search_index.beatmapset_id),
+            updated_at = ?
+      where ranked_date is null
+        and exists (select 1 from beatmapsets s
+                     where s.beatmapset_id = map_search_index.beatmapset_id
+                       and json_extract(s.metadata_json, '$.ranked_date') is not null)`,
+    [nowIso()],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
+export async function enqueueRankedDateEnrichment(db: Db, queue: JobQueue, limit = 50): Promise<number> {
+  const settled = SETTLED_MAP_STATUSES.map(() => "?").join(", ");
+  const rows = (await exec(
+    db,
+    `select min(beatmap_id) as beatmap_id from map_search_index
+      where ranked_date is null and status in (${settled})
+      group by beatmapset_id
+      order by beatmapset_id asc
+      limit ?`,
+    [...SETTLED_MAP_STATUSES, Math.max(1, Math.floor(limit))],
+  )).rows;
+  for (const row of rows) {
+    const beatmapId = intOr(row.beatmap_id);
+    if (beatmapId > 0) await queue.enqueue("enrich_beatmap", `beatmap:${beatmapId}`, { beatmapId }, { priority: 10, replaceDone: true });
+  }
+  return rows.length;
+}
+
 // Periodic backstop for play_count/pass_count: the index materializes both from
 // beatmaps.metadata_json only on index writes, and the full build runs once per
 // BUILD_REVISION, so the counts froze at whatever ingest had stored when each
@@ -945,7 +988,7 @@ const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
   stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
-  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro`;
+  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro, ranked_date`;
 
 const KEY_CLAUSES: Record<string, (p: string) => string> = {
   "4k": (p) => `${p}key_count = 4`,
@@ -1519,7 +1562,7 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   ];
   const rows = (await exec(
     db,
-    `select ${SELECT_COLUMNS}, ranked_date
+    `select ${SELECT_COLUMNS}
      from map_search_index i
      where ${pageConditions.join(" and ")}
      order by i.${orderColumn} ${orderDir}, i.beatmap_id ${orderDir}
@@ -1685,6 +1728,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     bpm: realOr(row.bpm),
     length: intOr(row.length_seconds),
     playCount: intOr(row.play_count),
+    rankedDate: row.ranked_date == null ? null : String(row.ranked_date),
     lnCount: intOr(row.ln_count),
     primaryPattern: String(row.primary_pattern ?? "unknown"),
     patterns,

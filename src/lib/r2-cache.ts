@@ -363,6 +363,123 @@ export async function putCommunityBeatmapObject(checksum: string, content: strin
   return true;
 }
 
+// The map's song and background, contributed alongside the .osu from the same
+// .osz drop (see community-beatmap-store.ts). Keyed by the chart checksum, one
+// object per kind, so a viewer of an unsubmitted map gets the same audio and
+// backdrop a submitted one would. First write wins: the objects are as
+// immutable as the .osu they belong to.
+export type CommunityBeatmapAssetKind = "audio" | "background";
+
+export function getCommunityBeatmapAssetStorageKey(checksum: string, kind: CommunityBeatmapAssetKind): string {
+  return `${COMMUNITY_BEATMAP_PREFIX}${checksum}/${kind}`;
+}
+
+export type CommunityBeatmapAssetHead = {
+  mimeType: string;
+  sizeBytes: number;
+  originalFilename?: string;
+};
+
+export async function headCommunityBeatmapAsset(
+  checksum: string,
+  kind: CommunityBeatmapAssetKind,
+): Promise<CommunityBeatmapAssetHead | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getCommunityBeatmapAssetStorageKey(checksum, kind);
+  assertReplayCacheKey(storageKey);
+  try {
+    const head = await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    return {
+      mimeType: head.ContentType ?? "application/octet-stream",
+      sizeBytes: head.ContentLength ?? 0,
+      originalFilename: head.Metadata?.originalfilename,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Stores the asset unless one is already there; returns whether this call wrote it. */
+export async function putCommunityBeatmapAsset(
+  checksum: string,
+  kind: CommunityBeatmapAssetKind,
+  mimeType: string,
+  buffer: Buffer,
+  originalFilename: string,
+): Promise<boolean> {
+  const r2 = getClient();
+  if (!r2) return false;
+
+  const storageKey = getCommunityBeatmapAssetStorageKey(checksum, kind);
+  assertReplayCacheKey(storageKey);
+  if (await headCommunityBeatmapAsset(checksum, kind)) return false;
+  await r2.send(new PutObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: storageKey,
+    Body: buffer,
+    ContentType: mimeType,
+    CacheControl: "public, max-age=31536000, immutable",
+    Metadata: { originalfilename: sanitizeFilename(originalFilename) },
+  }));
+  return true;
+}
+
+export type CommunityBeatmapAssetBody = {
+  /** 200 for the whole object, 206 for a satisfied byte range. */
+  status: 200 | 206;
+  mimeType: string;
+  contentLength: number;
+  contentRange?: string;
+  body: ReadableStream<Uint8Array>;
+};
+
+// Streams the object, optionally a byte range of it, for the same-origin
+// proxy route: an <audio> element seeks with Range requests, and the recovery
+// path fetches the whole file, both of which want the bytes to come from this
+// origin rather than a signed storage URL with no CORS headers.
+export async function getCommunityBeatmapAssetBody(
+  checksum: string,
+  kind: CommunityBeatmapAssetKind,
+  range?: string | null,
+): Promise<CommunityBeatmapAssetBody | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getCommunityBeatmapAssetStorageKey(checksum, kind);
+  assertReplayCacheKey(storageKey);
+  try {
+    const object = await r2.send(new GetObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+      Range: range ?? undefined,
+    }));
+    const body = object.Body as { transformToWebStream?: () => ReadableStream<Uint8Array> } | undefined;
+    if (!body?.transformToWebStream) return null;
+    return {
+      status: object.ContentRange ? 206 : 200,
+      mimeType: object.ContentType ?? "application/octet-stream",
+      contentLength: object.ContentLength ?? 0,
+      contentRange: object.ContentRange,
+      body: body.transformToWebStream(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function signCommunityBeatmapAssetUrl(
+  checksum: string,
+  kind: CommunityBeatmapAssetKind,
+  mimeType: string,
+): Promise<string> {
+  return signGetUrl(getCommunityBeatmapAssetStorageKey(checksum, kind), mimeType);
+}
+
 // ── Gzipped JSON artifacts ──
 // Cross-instance cache tier for expensive server-side computations (parsed replays, uploaded-replay
 // descriptions). Content is derived data: age-based lifecycle expiry is fine because a miss just

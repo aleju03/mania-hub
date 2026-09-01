@@ -152,11 +152,16 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       // backend already knows (tracked roster members or players with a
       // stored profile snapshot), so anonymous visitors cannot flood the
       // MinaCalc lane with arbitrary user ids.
-      const known = (await exec(ctx.db, "select 1 from country_rosters where user_id = ? limit 1", [userId])).rows[0]
-        ?? (await exec(ctx.db, "select 1 from profile_snapshots where user_id = ? limit 1", [userId])).rows[0];
-      const breakdown = await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId, { allowEnqueue: !!known });
+      // `tracked` rides the payload so the tab can say why an untracked
+      // player's loved and graveyard plays are missing: only tracking (or an
+      // added score link) brings plays the osu! top-200 never carries.
+      const roster = (await exec(ctx.db, "select max(is_tracked) as tracked from country_rosters where user_id = ?", [userId])).rows[0];
+      const tracked = !!Number(roster?.tracked);
+      const known = roster?.tracked != null
+        || !!(await exec(ctx.db, "select 1 from profile_snapshots where user_id = ? limit 1", [userId])).rows[0];
+      const breakdown = await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId, { allowEnqueue: known });
       res.setHeader("cache-control", "public, max-age=60");
-      sendJson(req, res, ctx, 200, await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown));
+      sendJson(req, res, ctx, 200, { ...(await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown)), tracked });
       return true;
     }
     if (profileRoute.kind === "skill-plays") {

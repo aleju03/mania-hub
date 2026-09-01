@@ -25,7 +25,8 @@ export function getBeatmapHitsoundsUrl(beatmapsetId: number | string, excludeFil
   return `${liveBackendUrl}/api/hitsounds?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}${exclude}`;
 }
 
-// The same-origin, inline variant of an /api/background URL. Anything that
+// The same-origin, inline variant of an /api/background URL (or a community
+// background, which redirects to storage the same way). Anything that
 // turns the background into a WebGL texture or a canvas draw (the storyboard
 // backdrop, the video exporter) needs the bytes rather than a 302 to signed
 // storage. Non-background URLs pass through untouched.
@@ -33,7 +34,9 @@ export function getInlineBackgroundUrl(src: string | null): string | null {
   if (!src) return null;
   try {
     const url = new URL(src, window.location.origin);
-    if (url.origin === window.location.origin && url.pathname === "/api/background") {
+    const isBackgroundRoute = url.pathname === "/api/background"
+      || (url.pathname === "/api/community-beatmap-asset" && url.searchParams.get("kind") === "background");
+    if (url.origin === window.location.origin && isBackgroundRoute) {
       url.searchParams.set("inline", "1");
       return `${url.pathname}${url.search}`;
     }

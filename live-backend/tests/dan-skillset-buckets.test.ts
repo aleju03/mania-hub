@@ -861,7 +861,40 @@ describe("the 4K speed/tech split read off the notes", () => {
   });
 });
 
+// PEACE BREAKER [4K] FINAL PUNISHMENT (777348): 4:51 of Stamina 30.15 /
+// Technical 30.03 / Stream 30.02. The stamina hold keeps it off the speed tile
+// and the model reads its notes at 0.70 tech, so it is a tech marathon.
+const FINAL_PUNISHMENT_MOTION = {
+  values: { Stream: 30.02, Jumpstream: 25.54, Handstream: 24.02, Stamina: 30.15, JackSpeed: 17.78, Chordjack: 20.34, Technical: 30.03 },
+  chart: withMotion({
+    sameHand: 0.2274, miniJack: 0.0128, oneHandTrill: 0.0148, crossHandTrill: 0.0768,
+    roll4: 0.0772, rhythmBreak: 0.0365, chordSwing: 0.2692, densitySwing: 0.3895,
+  }, 0.439, { techCategory: true, chordjackScore: 0.0, jackShare: 0.08, lengthSeconds: 291 }),
+};
+
 describe("charts that carry two tiles", () => {
+  it("files a tech marathon under stamina and tech, stamina first", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", FINAL_PUNISHMENT_MOTION.values, 291, 1, FINAL_PUNISHMENT_MOTION.chart))
+      .toEqual(["stamina", "tech"]);
+  });
+
+  it("keeps a stamina marathon on stamina alone until its motion block is written", () => {
+    const unread = { ...FINAL_PUNISHMENT_MOTION.chart, motion: null };
+    expect(danSkillsetBucketsForValues(4, "rc", FINAL_PUNISHMENT_MOTION.values, 291, 1, unread)).toEqual(["stamina"]);
+  });
+
+  it("does not share a stamina marathon whose notes read speed", () => {
+    const rolling = { ...FINAL_PUNISHMENT_MOTION.chart, motion: NAMED_SPEED.chart.motion, techScore: 0.2 };
+    expect(danSkillsetBucketsForValues(4, "rc", FINAL_PUNISHMENT_MOTION.values, 291, 1, rolling)).toEqual(["stamina"]);
+  });
+
+  it("does not share a stamina marathon whose base is jumpstream", () => {
+    // Jumpstream and handstream are stamina (jumpstreamRunnerUp), whatever the
+    // model would say about the trills.
+    const jumpstream = { ...FINAL_PUNISHMENT_MOTION.values, Jumpstream: 30.10 };
+    expect(danSkillsetBucketsForValues(4, "rc", jumpstream, 291, 1, FINAL_PUNISHMENT_MOTION.chart)).toEqual(["stamina"]);
+  });
+
   it("files a genuinely split speed/tech chart under both, strongest side first", () => {
     const tiles = danSkillsetBucketsForValues(4, "rc", JINJIN.values, 127, 1, JINJIN.chart);
     expect(tiles).toHaveLength(2);
@@ -885,7 +918,7 @@ describe("charts that carry two tiles", () => {
   });
 
   it("never files more than two tiles", () => {
-    for (const sample of [GRAVITY, JINJIN, NAMED_SPEED, STRONG_280]) {
+    for (const sample of [GRAVITY, JINJIN, NAMED_SPEED, STRONG_280, FINAL_PUNISHMENT_MOTION]) {
       for (const length of [60, 253, 600]) {
         const tiles = danSkillsetBucketsForValues(4, "rc", sample.values, length, 1, { ...sample.chart, lengthSeconds: length });
         expect(tiles.length).toBeGreaterThanOrEqual(1);

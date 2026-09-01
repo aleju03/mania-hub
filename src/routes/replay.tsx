@@ -63,6 +63,7 @@ import type { ReplayHandAccuracyStyle, ReplayThumbHand } from "../lib/replay-ove
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
+import { getCommunityBeatmapAssetUrl, uploadCommunityBeatmapAssets } from "../lib/community-beatmap-assets";
 import type { BeatmapChecksumLookupResult } from "../lib/osu/replay";
 import { startProgressPoll } from "../lib/progress-poll";
 import {
@@ -295,12 +296,17 @@ type PendingBeatmapUpload = {
   options: UploadedReplayOpenOptions;
 };
 
+// Song and background for a map osu! can't supply: blob object URLs pulled
+// out of the .osz the viewer just dropped, or same-origin URLs to the copies a
+// previous contributor left in the community store (`remote`, which the video
+// exporter's backend can fetch where a blob: URL is unreachable).
 type LocalBeatmapAssets = {
   audioUrl: string | null;
   backgroundUrl: string | null;
+  remote: boolean;
 };
 
-const EMPTY_LOCAL_BEATMAP_ASSETS: LocalBeatmapAssets = { audioUrl: null, backgroundUrl: null };
+const EMPTY_LOCAL_BEATMAP_ASSETS: LocalBeatmapAssets = { audioUrl: null, backgroundUrl: null, remote: false };
 
 declare global {
   interface Window {
@@ -1256,7 +1262,9 @@ function ReplayPage() {
   // they are replaced or cleared.
   const applyLocalBeatmapAssets = useCallback((assets: LocalBeatmapAssets) => {
     for (const url of localBeatmapAssetUrlsRef.current) URL.revokeObjectURL(url);
-    localBeatmapAssetUrlsRef.current = [assets.audioUrl, assets.backgroundUrl].filter((url): url is string => !!url);
+    localBeatmapAssetUrlsRef.current = assets.remote
+      ? []
+      : [assets.audioUrl, assets.backgroundUrl].filter((url): url is string => !!url);
     setLocalBeatmapAssets(assets);
   }, []);
 
@@ -1343,7 +1351,20 @@ function ReplayPage() {
       const community = await getCommunityBeatmapFile({ data: { checksum } }).catch(() => null);
       if (!community?.content) return false;
       setReplayBeatmapFileStatus("fetched");
-      const { beatmapsetId } = await finishBeatmapLoad({ content: community.content, beatmapMeta, uploaded, scorePromise });
+      // The song and background a contributor dropped with the .osz, when
+      // they exist; for a map osu! knows the viewer's own set-id lookups win.
+      const communityAssets: LocalBeatmapAssets = {
+        audioUrl: community.assets.audio ? getCommunityBeatmapAssetUrl(checksum, "audio") : null,
+        backgroundUrl: community.assets.background ? getCommunityBeatmapAssetUrl(checksum, "background") : null,
+        remote: true,
+      };
+      const { beatmapsetId } = await finishBeatmapLoad({
+        content: community.content,
+        beatmapMeta,
+        uploaded,
+        scorePromise,
+        localAssets: communityAssets.audioUrl || communityAssets.backgroundUrl ? communityAssets : undefined,
+      });
       setUploadedReplayShareUrl(options.shareUrl);
       setLoadedUploadId(options.uploadId);
       track("replay_upload_community_beatmap", {
@@ -1412,7 +1433,11 @@ function ReplayPage() {
       // The file matched the replay's checksum, so hand the .osu to the community
       // store and spare the next viewer the same prompt. Best-effort: never block
       // the local playback the user is waiting on.
-      void submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } }).catch(() => {});
+      // The song and background follow the .osu once it is in, so the next
+      // viewer's copy plays and looks like the contributor's own.
+      void submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } })
+        .then((result) => (result.stored ? uploadCommunityBeatmapAssets(pending.checksum, match) : []))
+        .catch(() => {});
       const scorePromise = pending.scoreId
         ? getScore({ data: { scoreId: pending.scoreId, mode: "mania" } }).catch(() => null)
         : Promise.resolve(null);
@@ -1424,6 +1449,7 @@ function ReplayPage() {
         localAssets: {
           audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
           backgroundUrl: match.backgroundBlob ? URL.createObjectURL(match.backgroundBlob) : null,
+          remote: false,
         },
       });
       track("replay_upload_local_beatmap", {
@@ -1989,7 +2015,7 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={replaySkinOwnerUserId} shareUrl={replayShareUrl} onClear={handleClearReplay}>
+                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} localAssetsAreRemote={localBeatmapAssets.remote} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={replaySkinOwnerUserId} shareUrl={replayShareUrl} onClear={handleClearReplay}>
                   {/* Phones scroll the card inside a padded list; on desktop
                       the strip runs edge to edge, flush against the stage. */}
                   <div className="mx-auto w-full max-w-[1200px] px-3 sm:max-w-none sm:px-0">{replayInfoCard}</div>
@@ -2106,6 +2132,7 @@ function ReplayViewer({
   initialTime,
   localAudioUrl,
   localBackgroundUrl,
+  localAssetsAreRemote = false,
   presenceKey,
   ownerUserId,
   shareUrl,
@@ -2127,9 +2154,11 @@ function ReplayViewer({
   fallbackBeatmapsetId?: number;
   initialTime?: number;
   // Blob object URLs extracted from a user-supplied .osz when the beatmap
-  // isn't downloadable from osu! or the mirrors.
+  // isn't downloadable from osu! or the mirrors, or (`localAssetsAreRemote`)
+  // same-origin URLs to a previous contributor's copies of the same files.
   localAudioUrl?: string | null;
   localBackgroundUrl?: string | null;
+  localAssetsAreRemote?: boolean;
   /** Identity of the watched replay for the anonymous spectator counter
    *  (`score:<id>` / `upload:<id>`); null disables presence entirely. */
   presenceKey?: string | null;
@@ -3080,9 +3109,11 @@ function ReplayViewer({
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
   // The remote URL is kept separate because server-side video export muxes
   // audio on the backend, which can't read a local blob: URL.
-  const remoteAudioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
-    ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
-    : null;
+  const remoteAudioUrl = localAssetsAreRemote && localAudioUrl
+    ? localAudioUrl
+    : effectiveBeatmapsetId && beatmap?.audioFilename
+      ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
+      : null;
   const audioUrl = localAudioUrl ?? remoteAudioUrl;
   const canRecoverRemoteAudio = remoteAudioUrl != null && audioUrl === remoteAudioUrl;
   // What the <audio> element actually plays: the local blob once downloaded,

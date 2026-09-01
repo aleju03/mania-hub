@@ -7,6 +7,7 @@ import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_PATTERN_SWEEP_META_KEY,
   SKILL_RATING_SKILLSETS,
+  usesPatternSkillAxes,
   SSR_CALC_GOAL_CAP,
   SSR_EXTRAPOLATION_BASE_GOAL,
   aggregateSsrs,
@@ -145,8 +146,9 @@ export const EXACT_SKILL_CURVES_META_KEY = "skill_exact_curves:v1";
    time. 2: sparse axes carry a median (and an empty curve) instead of being
    dropped, so the display shrink reaches them. 3: axes carry an exact tail
    (`tail`), so the top of the population gets a rank-true percentile instead
-   of the 200-point curve's 0.5% floor. */
-export const EXACT_SKILL_CURVES_FORMAT = 3;
+   of the 200-point curve's 0.5% floor. 4: 5K and 8K-18K publish the MSD
+   skillset axes (percentileAxes), which the v3 fold never sampled for them. */
+export const EXACT_SKILL_CURVES_FORMAT = 4;
 
 // Per-(keymode, axis) curve entry. `median` is the raw population median the
 // display shrink uses; curve values are already shrunk with it, so subject
@@ -454,7 +456,10 @@ function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEnt
   if (rate == null) return null;
   // Same DA exclusion as the exact pipeline: a play whose hit windows were
   // widened below the chart's own OD is not a play of this chart, and must
-  // not set the bar the rest of the population is measured against.
+  // not set the bar the rest of the population is measured against. The
+  // baseline never opens the .osu, so a chart with no OD on its row falls to
+  // the dan-floor rule alone; leaving such a play out of a population
+  // statistic is the safe side of that ambiguity.
   if (daWidensHitWindows(difficultyAdjustOd(score.mods), entry.od)) return null;
   // Same sub-floor exclusion as the exact pipeline: a play the calc would
   // rate at its 0.8 goal floor does not count toward the baseline either.
@@ -911,12 +916,13 @@ export function axisPercentile(entry: { count: number; curve: number[]; tail?: n
   return percentileFromCurve(entry.curve, value);
 }
 
-// Axes eligible for a percentile per keymode: 4K speaks the native MSD
-// skillsets (plus pattern axes); other keymodes publish Overall + pattern
-// axes only, since MinaCalc's non-4K skillset names are unreliable.
+// Axes eligible for a percentile per keymode: the pattern keymodes (6K/7K,
+// PATTERN_AXIS_KEY_COUNTS) publish Overall + pattern axes only, since
+// MinaCalc's skillset names mislead there; every other keymode speaks the
+// native MSD skillsets (plus pattern axes).
 export function percentileAxes(keyCount: number, ratings: Record<string, number>): string[] {
   const axes = Object.keys(ratings);
-  if (keyCount === 4) return axes;
+  if (!usesPatternSkillAxes(keyCount)) return axes;
   return axes.filter((axis) => axis === "Overall" || axis.startsWith("pattern:"));
 }
 

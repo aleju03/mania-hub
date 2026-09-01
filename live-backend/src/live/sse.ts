@@ -21,10 +21,11 @@ export async function getLastIngestAtMs(db: Db): Promise<number | null> {
   if (now - ingestFreshness.checkedAt < INGEST_FRESHNESS_CACHE_MS) return ingestFreshness.ingestAtMs;
   ingestFreshness.checkedAt = now;
   try {
-    // Manual submissions are excluded: their rows are written with a current
-    // received_at, and this readout exists to expose a stalled pipeline - a
-    // hand-pasted historical score must not make a wedged feed look healthy.
-    const row = (await exec(db, "select received_at from score_events where source <> 'manual_submit' order by id desc limit 1")).rows[0];
+    // Manual submissions and leaderboard imports are excluded: their rows are
+    // written with a current received_at, and this readout exists to expose a
+    // stalled pipeline - a hand-pasted historical score must not make a wedged
+    // feed look healthy.
+    const row = (await exec(db, "select received_at from score_events where source not in ('manual_submit', 'leaderboard_import') order by id desc limit 1")).rows[0];
     const parsed = row?.received_at == null ? NaN : Date.parse(String(row.received_at));
     ingestFreshness.ingestAtMs = Number.isFinite(parsed) ? parsed : null;
   } catch {

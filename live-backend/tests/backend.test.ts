@@ -2529,10 +2529,13 @@ describe("live backend", () => {
   it("answers enrich_beatmap from a fresh local row without an osu! API call", async () => {
     const { db, queue, events, ingestor } = await setup();
     const now = new Date().toISOString();
+    // A full set record (it has a ranked_date): only that shape counts as
+    // fresh for a settled map, since the compact one a score carries never
+    // has the date.
     await exec(
       db,
       `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
-       values (50, 'Fixture Song', 'Fixture Artist', 'mapper', 'ranked', '{}', '{}', ?)`,
+       values (50, 'Fixture Song', 'Fixture Artist', 'mapper', 'ranked', '{}', '{"ranked_date":"2020-01-01T00:00:00Z"}', ?)`,
       [now],
     );
     await exec(
@@ -2550,6 +2553,37 @@ describe("live backend", () => {
     expect(osu.getBeatmap).not.toHaveBeenCalled();
     const job = (await exec(db, "select status from jobs where dedupe_key = 'beatmap:502'")).rows[0];
     expect(job.status).toBe("done");
+  });
+
+  it("re-fetches a fresh settled row whose set is still the compact score-payload shape", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+       values (50, 'Fixture Song', 'Fixture Artist', 'mapper', 'ranked', '{}', '{"id":50,"title":"Fixture Song"}', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (502, 50, 'mania', 'ranked', 4, 5.6, 180, 999, 'Another', 'https://osu.ppy.sh/beatmaps/502', '{}', ?)`,
+      [now],
+    );
+    await queue.enqueue("enrich_beatmap", "beatmap:502", { beatmapId: 502 }, { priority: 90 });
+    const osu = {
+      getBeatmap: vi.fn(async () => ({
+        id: 502, beatmapset_id: 50, mode: "mania", status: "ranked", cs: 4, difficulty_rating: 5.6, bpm: 180, version: "Another",
+        beatmapset: { id: 50, title: "Fixture Song", artist: "Fixture Artist", creator: "mapper", status: "ranked", covers: {}, ranked_date: "2020-01-01T00:00:00Z" },
+      })),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(osu.getBeatmap).toHaveBeenCalledTimes(1);
+    const set = (await exec(db, "select json_extract(metadata_json, '$.ranked_date') as ranked_date from beatmapsets where beatmapset_id = 50")).rows[0];
+    expect(set.ranked_date).toBe("2020-01-01T00:00:00Z");
   });
 
   it("re-fetches a beatmap whose stored row has gone stale", async () => {

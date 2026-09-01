@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { getPersistentCacheEntry, setPersistentCache } from "./api";
+import { getCommunityBeatmapAssets } from "./community-beatmap-store";
 import { describeUploadedReplayById, type UploadedReplayDescription } from "./uploaded-replay-describe";
 import { fetchUploadedReplayIndexRow } from "./uploaded-replay-index";
 import { listRecentUploadedReplays } from "./uploaded-replay-store";
@@ -17,6 +18,9 @@ export type CommunityUploadEntry = UploadedReplayDescription & {
   uploadedAt: number;
   /** Null when the owner index has no row (pre-index upload, or index down). */
   uploadedBy: { userId: number; username: string } | null;
+  /** A map osu! doesn't know whose background a contributor supplied; the
+   *  card draws it where a submitted map's cover would go. */
+  communityBackground: boolean;
 };
 
 const COMMUNITY_UPLOADS_LIMIT = 9;
@@ -39,10 +43,14 @@ export const getRecentCommunityUploads = createServerFn({ method: "GET" }).handl
           fetchUploadedReplayIndexRow(entry.id),
         ]);
         if (!description) return null;
+        const communityBackground = !description.beatmap && description.beatmapHash
+          ? (await getCommunityBeatmapAssets(description.beatmapHash)).background
+          : false;
         return {
           ...description,
           uploadedAt: entry.uploadedAt,
           uploadedBy: owner ? { userId: owner.ownerUserId, username: owner.ownerUsername } : null,
+          communityBackground,
         };
       }),
     )).filter((entry): entry is CommunityUploadEntry => entry !== null);

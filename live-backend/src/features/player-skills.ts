@@ -37,8 +37,9 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // MinaCalc's skillset taxonomy is 4K-born, so each keymode additionally gets
 // per-pattern ratings in our own vocabulary: the play's Overall SSRs
 // aggregated over the chart-analysis pattern tags of the charts they were set
-// on ("your rating on chordstream charts"). The 4K card shows the native MSD
-// skillsets; 6K/7K show these pattern ratings instead.
+// on ("your rating on chordstream charts"). Only the 6K and 7K cards show
+// those; every other keymode (4K, 5K, 8K and up) shows the native MSD
+// skillsets, see PATTERN_AXIS_KEY_COUNTS.
 //
 // Rates come from the rate mods: DT/NC 1.5x and HT/DC 0.75x by default, or
 // the exact speed_change a lazer mod carries (MinaCalc takes the rate as a
@@ -97,6 +98,20 @@ export const SKILL_RATING_SKILLSETS = [
   "Chordjack",
   "Technical",
 ] as const;
+
+// Keymodes whose skill card, percentiles and leaderboards speak the in-house
+// pattern vocabulary (chordstream, bracket, delay, ...) instead of MinaCalc's
+// skillsets. 6K and 7K are the two where the pattern detector was validated
+// against mapper-named packs and the calc's 4K-born names mislead; 5K and
+// 8K-18K tried the same tiles and read as inaccurate (2026-09-01 reports), so
+// they show what the calc rates, the same way 4K does. The pattern ratings are
+// still computed and stored for every keymode; this only decides what is
+// published.
+export const PATTERN_AXIS_KEY_COUNTS: ReadonlySet<number> = new Set([6, 7]);
+
+export function usesPatternSkillAxes(keyCount: number): boolean {
+  return PATTERN_AXIS_KEY_COUNTS.has(keyCount);
+}
 
 const READY_RECOMPUTE_TTL_MS = 12 * 60 * 60_000;
 const PENDING_RETRY_TTL_MS = 30 * 60_000;
@@ -759,12 +774,14 @@ export function scoreRewritesChart(mods: OsuMod[] | string[] | undefined): boole
  * no DA (or a DA that left the slider alone, which lazer sends as a settings-
  * less mod). Mania's DA exposes exactly one difficulty value, OverallDifficulty
  * (ppy/osu ManiaModDifficultyAdjust), so this is the whole of what DA changes
- * about how a play is judged: with Extended Limits the slider runs -15..15,
- * and the value is clamped into the 0..10 the rest of the OD math speaks.
+ * about how a play is judged. With Extended Limits the slider runs -15..15,
+ * and that raw value is what comes back: the wife estimate clamps it into the
+ * 0..10 its window math speaks, but the widened-windows check
+ * (daWidensHitWindows) needs the unclamped slider, since a clamped -15 on an
+ * OD 0 chart would read as no change at all.
  *
  * Raising OD this way is a real, harder play, so it earns dan credit like any
- * other clear; lowering it below the ladder's floor is caught by that floor
- * rather than by refusing to rate the play at all.
+ * other clear; lowering it below the chart's own OD refuses the play a rating.
  */
 export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): number | null {
   for (const mod of mods ?? []) {
@@ -772,7 +789,7 @@ export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): numbe
     if (String(mod?.acronym ?? "") !== "DA") continue;
     const od = Number(mod.settings?.overall_difficulty);
     if (!Number.isFinite(od)) return null;
-    return Math.max(0, Math.min(10, od));
+    return Math.max(-15, Math.min(15, od));
   }
   return null;
 }
@@ -790,14 +807,29 @@ export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): numbe
  *
  * Raising OD is the opposite and stays rated: harder windows, an honest play.
  *
- * `chartOd` null means the chart is not enriched yet and there is no value to
- * compare against; a DA that put the slider under the dan OD floor is the
- * abuse shape regardless, so that alone disqualifies.
+ * `odOverride` is the raw slider (difficultyAdjustOd), so a -15 on an OD 0
+ * chart still reads as widened. Stored plays rated before the slider was
+ * kept raw carry it clamped to 0..10, which only loses that one OD 0 case.
+ *
+ * `chartOd` null means nothing is known about the chart's own OD - not the
+ * beatmaps row, not the .osu itself (chartOdFor tries both before this
+ * runs). There is then no value to compare against, and a DA that put the
+ * slider under the dan OD floor is the abuse shape regardless, so that alone
+ * disqualifies.
  */
 export function daWidensHitWindows(odOverride: number | null | undefined, chartOd: number | null): boolean {
   if (odOverride == null) return false;
   if (chartOd == null) return odOverride < DAN_MIN_OD;
   return odOverride < chartOd;
+}
+
+/** The chart's own OD as the .osu states it, or null when the file has no
+ * OverallDifficulty line. */
+export function parseOsuOd(osuText: string): number | null {
+  const match = osuText.match(/^OverallDifficulty\s*:\s*(-?\d+(?:\.\d+)?)/m);
+  if (!match) return null;
+  const od = Number(match[1]);
+  return Number.isFinite(od) && od >= 0 && od <= 10 ? od : null;
 }
 
 /**
@@ -1013,8 +1045,9 @@ function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
 }
 
 // "Your rating on chordstream charts": the Overall SSRs of the plays whose
-// charts carry a pattern tag, aggregated per tag. This is the keymode-honest
-// axis set for 6K/7K, where MinaCalc's 4K-born skillset names mislead.
+// charts carry a pattern tag, aggregated per tag. This is the published axis
+// set for the PATTERN_AXIS_KEY_COUNTS keymodes (6K/7K), where MinaCalc's
+// 4K-born skillset names mislead; other keymodes store it unpublished.
 function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPatternRating[] {
   const playsByPattern = new Map<string, StoredPlaySsr[]>();
   for (const play of plays) {
@@ -2234,6 +2267,11 @@ interface PlayCandidate {
   goal: number;
   identity: string;
   source: "top" | "tracked";
+  /** The DA slider, when the play carries one; the widened-windows check
+   * against the chart's own OD is deferred to the calc loop when that OD is
+   * not on the beatmaps row yet (chartOdPending). */
+  odOverride: number | null;
+  chartOdPending: boolean;
 }
 
 /**
@@ -2319,8 +2357,11 @@ export async function computePlayerSkillRatings(
     const odOverride = difficultyAdjustOd(score.mods);
     const chartOd = odByBeatmap.get(beatmapId) ?? info?.od ?? null;
     // ...unless DA widened those windows below the chart's own OD, which is
-    // not a play of this chart at all (daWidensHitWindows).
-    if (daWidensHitWindows(odOverride, chartOd)) {
+    // not a play of this chart at all (daWidensHitWindows). With no OD on the
+    // beatmaps row yet the decision waits for the calc loop, which reads the
+    // chart's OD off the .osu it loads anyway: refusing here on the floor
+    // alone would throw out an honest raise (OD 3 set to 5) with the abuse.
+    if (chartOd != null && daWidensHitWindows(odOverride, chartOd)) {
       widenedWindowIdentities.add(getScoreIdentity(score));
       if (source === "top") unsupportedPlays += 1;
       return;
@@ -2333,7 +2374,10 @@ export async function computePlayerSkillRatings(
     const key = `${beatmapId}:${rate}`;
     const existing = candidates.get(key);
     if (!existing || goal > existing.goal || (goal === existing.goal && source === "top" && existing.source === "tracked")) {
-      candidates.set(key, { score, beatmapId, rate, goal, identity: getScoreIdentity(score), source });
+      candidates.set(key, {
+        score, beatmapId, rate, goal, identity: getScoreIdentity(score), source,
+        odOverride, chartOdPending: odOverride != null && chartOd == null,
+      });
     }
   };
   for (const score of topPlays) consider(score, "top");
@@ -2344,11 +2388,38 @@ export async function computePlayerSkillRatings(
   const candidateRateByIdentity = new Map<string, number>();
   for (const candidate of candidates.values()) candidateRateByIdentity.set(candidate.identity, candidate.rate);
 
+  // The chart's own OD for the widened-windows check when the beatmaps row
+  // has none yet: the .osu states it. Read once per chart per compute; only
+  // DA plays on not-yet-enriched charts ever get here. `undefined` means the
+  // file itself is not cached, which is the calc loop's pending case.
+  const osuOdByBeatmap = new Map<number, number | null | undefined>();
+  const chartOdFor = async (beatmapId: number): Promise<number | null | undefined> => {
+    const known = odByBeatmap.get(beatmapId) ?? infoByBeatmap.get(beatmapId)?.od ?? null;
+    if (known != null) return known;
+    if (osuOdByBeatmap.has(beatmapId)) return osuOdByBeatmap.get(beatmapId);
+    const osuText = await loadOsuText(db, osu, beatmapId);
+    const od = osuText == null ? undefined : parseOsuOd(osuText);
+    osuOdByBeatmap.set(beatmapId, od);
+    return od;
+  };
+
   const analyzedByKey = new Map<string, StoredPlaySsr>();
   let calcRuns = 0;
   let calcRunsTotal = 0;
   for (const [key, candidate] of candidates) {
     const { score, beatmapId, rate, goal, identity, source } = candidate;
+    if (candidate.chartOdPending) {
+      const chartOd = await chartOdFor(beatmapId);
+      if (chartOd === undefined) {
+        pendingPlays += 1;
+        continue;
+      }
+      if (daWidensHitWindows(candidate.odOverride, chartOd)) {
+        widenedWindowIdentities.add(identity);
+        if (source === "top") unsupportedPlays += 1;
+        continue;
+      }
+    }
     scoresByIdentity.set(identity, score);
     const clearEvidence = {
       source,
@@ -2429,7 +2500,7 @@ export async function computePlayerSkillRatings(
     // exclusion existed even after their score payload is gone - which is the
     // common case, since DA earns no pp and such plays are tracked-sourced.
     if (widenedWindowIdentities.has(previous.identity)) continue;
-    if (daWidensHitWindows(previous.odOverride, infoByBeatmap.get(previous.beatmapId)?.od ?? null)) continue;
+    if (previous.odOverride != null && daWidensHitWindows(previous.odOverride, (await chartOdFor(previous.beatmapId)) ?? null)) continue;
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.source !== "top" &&
@@ -3554,7 +3625,8 @@ function bucketsForClear(
  * tiles where the evidence for one is not evidence against the other: the
  * model landing between its bars (SPEED_TECH_DUAL_LOW / SPEED_TECH_DUAL_HIGH),
  * or a jack chart long enough that the endurance is the other half of what it
- * asks for (JACK_STAMINA_ENDURANCE_SKILLSETS).
+ * asks for (JACK_STAMINA_ENDURANCE_SKILLSETS), or a stamina marathon whose
+ * base identity the model reads as tech.
  *
  * Never more than two, and the tile the clear filed under first stays first:
  * that is its PRIMARY, and only a primary filing counts toward a tile's quorum
@@ -3599,6 +3671,27 @@ function resolveTilesForClear(
     const endurance = enduranceSeconds(chart?.lengthSeconds ?? null, rate);
     if (endurance == null || endurance < STAMINA_TILE_MIN_LENGTH_SECONDS) return filed;
     return add("stamina");
+  }
+
+  if (primary.id === "stamina") {
+    // MinaCalc's Stamina is a rider (STAMINA_TILE_MIN_LENGTH_SECONDS): a
+    // Stamina argmax says the file is long, and its identity sits in the best
+    // base skillset under it. When that base is the speed/tech axis and the
+    // notes read tech, the chart is a tech marathon and files under both.
+    // PEACE BREAKER [4K] FINAL PUNISHMENT (777348) is the case that named it:
+    // 4:51 of Stamina 30.15 / Technical 30.03 / Stream 30.02, which the
+    // stamina hold keeps off the speed tile and the model reads at 0.70 tech.
+    // A Jumpstream or Handstream base stays stamina alone (a 4K dan player's
+    // rule, see jumpstreamRunnerUp), a jack base is the jack override's
+    // business, and a speed reading shares nothing: a stream marathon is what
+    // the stamina tile is for. Handstream-led clears never reach this, since
+    // they name a pattern rather than riding on one.
+    if (dominantSkillset(values) !== "Stamina") return filed;
+    const base = dominantSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS));
+    if (base !== "Stream" && base !== "Technical") return filed;
+    const modelled = speedTechTiles(values, chart?.motion ?? null, chart?.techScore ?? 0);
+    if (!modelled || modelled.primary !== "tech") return filed;
+    return add("tech");
   }
 
   return filed;
@@ -4940,7 +5033,12 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v22 (current): both credit windows opened (dan-credit.ts, 2026-08-31). 6K/7K
+// v23 (current): a 4K stamina marathon whose base skillset is the speed/tech
+// axis and whose notes read tech now files under tech as well
+// (resolveTilesForClear, 2026-09-01). Nothing about a play's rating or credit
+// moves, only which tiles a stored clear is evidence for, so the fold is the
+// same plays_json re-derivation as every earlier bump.
+// v22: both credit windows opened (dan-credit.ts, 2026-08-31). 6K/7K
 // LN went from one accuracy point under its 95% bar to three, crediting 92-94%
 // clears down to -1.75, and the rice ladders went from four points to five,
 // crediting 91-92% clears down to -1.5. Nothing that already credited moves in
@@ -4956,7 +5054,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v22";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v23";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

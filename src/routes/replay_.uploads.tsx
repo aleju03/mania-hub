@@ -14,6 +14,7 @@ import { useAuth } from "../lib/auth-context";
 import { formatAccuracy, formatTimeAgo } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
 import { withModRate } from "../lib/score";
+import { getCommunityBeatmapAssetUrl } from "../lib/community-beatmap-assets";
 import { pageSeo } from "../lib/seo";
 import {
   backfillUploadedReplayOwners,
@@ -259,7 +260,9 @@ function UploadRow({
   const description = upload.description;
   const coverUrl = description?.beatmap?.beatmapsetId
     ? `https://assets.ppy.sh/beatmaps/${description.beatmap.beatmapsetId}/covers/list.jpg`
-    : null;
+    : upload.communityBackground && description?.beatmapHash
+      ? getCommunityBeatmapAssetUrl(description.beatmapHash, "background")
+      : null;
   // "[Insane] 7K // player", with whatever parts the description has; a row
   // whose file is gone still renders (and deletes) from the index row alone.
   const chart = description

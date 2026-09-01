@@ -2071,6 +2071,8 @@ export interface LiveMapSearchEntry {
   bpm: number;
   length: number;
   playCount: number;
+  // ISO ranked/loved date; null while pending, absent on older cached payloads.
+  rankedDate?: string | null;
   lnCount: number;
   primaryPattern: string;
   patterns: Record<string, number>;

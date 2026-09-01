@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // the caching/refresh logic around describeUploadedReplayById is exercised,
 // not the KV/R2 stores or the replay parser. vi.hoisted keeps these defined
 // before the hoisted vi.mock factories run.
-const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedReplay, getJsonArtifact, putJsonArtifact, parseUploadedReplayBuffer } = vi.hoisted(() => ({
+const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedReplay, uploadedReplaysUseR2, getJsonArtifact, putJsonArtifact, parseUploadedReplayBuffer } = vi.hoisted(() => ({
   getPersistentCacheEntry: vi.fn(),
   setPersistentCache: vi.fn(async () => {}),
   osuFetch: vi.fn(),
   readUploadedReplay: vi.fn(),
+  // Production mode by default: uploads and their description artifacts go to R2.
+  uploadedReplaysUseR2: vi.fn(() => true),
   getJsonArtifact: vi.fn(async () => null),
   putJsonArtifact: vi.fn(async () => true),
   parseUploadedReplayBuffer: vi.fn(),
@@ -21,7 +23,7 @@ vi.mock("./api", () => ({
 }));
 vi.mock("./uploaded-replay-store", async (importActual) => {
   const actual = await importActual<typeof import("./uploaded-replay-store")>();
-  return { ...actual, readUploadedReplay };
+  return { ...actual, readUploadedReplay, uploadedReplaysUseR2 };
 });
 vi.mock("./r2-cache", async (importActual) => {
   const actual = await importActual<typeof import("./r2-cache")>();
@@ -219,6 +221,19 @@ describe("persistUploadedReplayDescription", () => {
       beatmapHash: "d".repeat(32),
     });
     expect(written.computedAt).toBeGreaterThan(0);
+  });
+
+  // A development upload lives on local disk; writing its description next to
+  // the prod uploads in the shared bucket would leave a stray artifact there.
+  it("writes no R2 artifact when uploads are not going to R2", async () => {
+    uploadedReplaysUseR2.mockReturnValue(false);
+    osuFetch.mockRejectedValue(new Error("404"));
+
+    await persistUploadedReplayDescription(VALID_ID, fakeParsed("d".repeat(32)), "cool play.osr");
+
+    expect(setPersistentCache).toHaveBeenCalledTimes(1);
+    expect(putJsonArtifact).not.toHaveBeenCalled();
+    uploadedReplaysUseR2.mockReturnValue(true);
   });
 
   // The stored mods are acronyms, so a lazer custom rate needs its own field or

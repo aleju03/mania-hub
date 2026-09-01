@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { describeUploadedReplayById, type UploadedReplayDescription } from "./uploaded-replay-describe";
+import { getCommunityBeatmapAssets } from "./community-beatmap-store";
 import {
   deleteUploadedReplayIndexRow,
   fetchUploadedReplayIndexPage,
@@ -26,6 +27,16 @@ export interface MyUploadedReplay {
   originalFilename: string | null;
   /** Null when the file behind the row is gone or no longer parses. */
   description: UploadedReplayDescription | null;
+  /** A map osu! doesn't know whose background a contributor supplied. */
+  communityBackground: boolean;
+}
+
+async function describeWithCommunityBackground(id: string): Promise<Pick<MyUploadedReplay, "description" | "communityBackground">> {
+  const description = await describeUploadedReplayById(id).catch(() => null);
+  const communityBackground = description && !description.beatmap && description.beatmapHash
+    ? (await getCommunityBeatmapAssets(description.beatmapHash)).background
+    : false;
+  return { description, communityBackground };
 }
 
 export interface MyUploadedReplayPage {
@@ -79,7 +90,7 @@ export const fetchMyUploadedReplays = createServerFn({ method: "GET" })
       originalFilename: row.originalFilename,
       // A row whose file has gone is kept, not dropped: it still needs a delete
       // button, and hiding it would leave the count wrong for good.
-      description: await describeUploadedReplayById(row.id).catch(() => null),
+      ...(await describeWithCommunityBackground(row.id)),
     })));
 
     return { uploads, total: index.total, page: index.page, hasMore: index.hasMore, allOwners };
@@ -143,8 +154,10 @@ export const deleteUploadedReplay = createServerFn({ method: "POST" })
     if (!authorized.ok) return { ok: false, error: authorized.error };
 
     const { deleteUploadedReplayObjects } = await import("./r2-cache");
+    const { deleteLocalUploadedReplay, uploadedReplaysUseR2 } = await import("./uploaded-replay-store");
     try {
-      await deleteUploadedReplayObjects(data.id);
+      if (uploadedReplaysUseR2()) await deleteUploadedReplayObjects(data.id);
+      await deleteLocalUploadedReplay(data.id);
     } catch {
       return { ok: false, error: "unavailable" };
     }

@@ -28,7 +28,8 @@ export interface SkillAxisMeta {
 }
 
 // Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
-// the same palette the old pattern fingerprint used. Native for 4K only.
+// the same palette the old pattern fingerprint used. Shown for every keymode
+// except 6K and 7K (usesPatternSkillAxes).
 export const MSD_SKILLSET_META: SkillAxisMeta[] = [
   { key: "Stream", label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
   { key: "Jumpstream", label: "Jumpstream", labelMsg: msg`Jumpstream`, color: "#6f87d8" },
@@ -39,8 +40,8 @@ export const MSD_SKILLSET_META: SkillAxisMeta[] = [
   { key: "Technical", label: "Technical", labelMsg: msg`Technical`, color: "#83a86f" },
 ];
 
-// Non-4K axes come from the in-house pattern detector instead (MinaCalc's
-// skillset names are 4K vocabulary): each value is the aggregate of the
+// 6K and 7K axes come from the in-house pattern detector instead (MinaCalc's
+// skillset names mislead there): each value is the aggregate of the
 // player's Overall SSRs on charts tagged with that pattern. Family ids only;
 // subtypes (speedjack, lnrelease, ...) stay a maps-page concern. No chordjack
 // row: the backend's jack tag covers chord jack and single-note jack alike,
@@ -115,10 +116,19 @@ export interface SkillAxisEntry extends SkillAxisMeta {
   axis: string;
 }
 
-// 4K speaks MinaCalc's native skillsets; other keymodes speak the in-house
-// pattern vocabulary (falling back to the MSD names while tags are missing).
+// Keymodes whose card speaks the in-house pattern vocabulary. Mirrors the
+// backend's PATTERN_AXIS_KEY_COUNTS (player-skills.ts), which decides what
+// percentiles and leaderboards publish: 6K and 7K are where the pattern tiles
+// were validated; 5K and 8K-18K tried them and read as inaccurate, so they
+// show what MinaCalc rates, like 4K.
+export function usesPatternSkillAxes(keyCount: number): boolean {
+  return keyCount === 6 || keyCount === 7;
+}
+
+// 6K/7K speak the in-house pattern vocabulary (falling back to the MSD names
+// while tags are missing); every other keymode speaks MinaCalc's skillsets.
 export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
-  if (mode.keyCount !== 4) {
+  if (usesPatternSkillAxes(mode.keyCount)) {
     const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
     const patternEntries = PATTERN_RATING_META
       .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0), axis: `pattern:${meta.key}` }))
@@ -128,10 +138,10 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   }
   const entries: SkillAxisEntry[] = MSD_SKILLSET_META
     .map((meta) => ({ ...meta, value: Number(mode.ratings[meta.key] ?? 0), axis: meta.key }))
-    // The 6K/7K calc engine returns ~0 for skillsets it does not rate
-    // (Technical); a 0.15 sliver next to 20+ bars is noise, not signal.
+    // The generic n-key calc engine returns ~0 for skillsets it does not
+    // rate; a 0.15 sliver next to 20+ bars is noise, not signal.
     .filter((entry) => entry.value >= 1);
-  // Etterna's taxonomy has no LN skillset, so the 4K card grafts in the LN
+  // Etterna's taxonomy has no LN skillset, so the MSD card grafts in the LN
   // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
   if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474", value: ln.rating, axis: "pattern:ln" });

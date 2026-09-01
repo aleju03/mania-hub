@@ -27,7 +27,7 @@ msgstr " · top {0} shown"
 msgid " · updated {0}"
 msgstr " · updated {0}"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid " or "
 msgstr " or "
 
@@ -1341,6 +1341,14 @@ msgstr "{username} is around <0>{0}</0>"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is beyond <0>{0}</0>"
 msgstr "{username} is beyond <0>{0}</0>"
+
+#: src/routes/player/$username.tsx
+msgid "{username} isn't tracked, so only their ranked plays are rated here"
+msgstr "{username} isn't tracked, so only their ranked plays are rated here"
+
+#: src/routes/player/$username.tsx
+#~ msgid "{username} isn't tracked, so only their ranked plays are rated here. Loved and graveyard plays count once a player is tracked, or when added with Add a missing score."
+#~ msgstr "{username} isn't tracked, so only their ranked plays are rated here. Loved and graveyard plays count once a player is tracked, or when added with Add a missing score."
 
 #: src/components/packs/StreakGame.tsx
 msgid "{username} maniacard"
@@ -3344,7 +3352,7 @@ msgstr "Click to jump to page"
 msgid "Click to open the numbered levels"
 msgstr "Click to open the numbered levels"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "Click to require {label}"
 msgstr "Click to require {label}"
 
@@ -5155,6 +5163,7 @@ msgid "filters"
 msgstr "filters"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
 #: src/routes/snipes.tsx
 msgid "Filters"
@@ -5712,7 +5721,7 @@ msgstr "Hide the plays the dan rules turned away"
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "hide the ScoreV2 note"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "Hiding {label}"
 msgstr "Hiding {label}"
 
@@ -5926,6 +5935,10 @@ msgstr "Hybrid"
 #: src/routes/dan-estimates.tsx
 #~ msgid "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 #~ msgstr "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
+
+#: src/routes/player/$username.tsx
+#~ msgid "If this is you, <0>log in with osu!</0> to track your plays."
+#~ msgstr "If this is you, <0>log in with osu!</0> to track your plays."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
@@ -6910,6 +6923,10 @@ msgstr "Log in to post"
 msgid "Log in to see your data"
 msgstr "Log in to see your data"
 
+#: src/routes/player/$username.tsx
+msgid "Log in to track yourself"
+msgstr "Log in to track yourself"
+
 #: src/routes/skins.tsx
 msgid "Log in to upload"
 msgstr "Log in to upload"
@@ -6999,6 +7016,10 @@ msgstr "loved"
 #: src/routes/maps.tsx
 msgid "Loved"
 msgstr "Loved"
+
+#: src/routes/player/$username.tsx
+msgid "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+msgstr "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Low PP"
@@ -7408,6 +7429,7 @@ msgid "moderation"
 msgstr "moderation"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "Mods"
@@ -8219,7 +8241,7 @@ msgstr "nominator"
 msgid "nomod"
 msgstr "nomod"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "NoMod"
 msgstr "NoMod"
 
@@ -9762,8 +9784,16 @@ msgid "Rate mods count, and they count for what the chart is worth at that speed
 msgstr "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x), at <2/> or <3/> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. A speed nobody has rated that chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to start counting."
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+
+#: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11227,7 +11257,7 @@ msgstr "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
 msgid "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 msgstr "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
 
-#: src/routes/player/$username.tsx
+#: src/components/ui/ModFilterChip.tsx
 msgid "Showing only {label}"
 msgstr "Showing only {label}"
 
@@ -14379,6 +14409,10 @@ msgstr "you're already past {0}"
 msgid "You're being tracked now"
 msgstr "You're being tracked now"
 
+#: src/routes/player/$username.tsx
+#~ msgid "You're being tracked now. Your recent plays are being pulled in and will be rated here in a few minutes."
+#~ msgstr "You're being tracked now. Your recent plays are being pulled in and will be rated here in a few minutes."
+
 #: src/routes/farm-helper.tsx
 msgid "you're done improving this map: hides it from your recs for 60 days"
 msgstr "you're done improving this map: hides it from your recs for 60 days"
@@ -14386,6 +14420,14 @@ msgstr "you're done improving this map: hides it from your recs for 60 days"
 #: src/routes/farm-helper.tsx
 msgid "you're logged out, log in again to save marks"
 msgstr "you're logged out, log in again to save marks"
+
+#: src/routes/player/$username.tsx
+msgid "You're not tracked, so only your ranked plays are rated here"
+msgstr "You're not tracked, so only your ranked plays are rated here"
+
+#: src/routes/player/$username.tsx
+#~ msgid "You're not tracked, so only your ranked plays are rated here. Loved and graveyard plays count once you're tracked, or when added with Add a missing score."
+#~ msgstr "You're not tracked, so only your ranked plays are rated here. Loved and graveyard plays count once you're tracked, or when added with Add a missing score."
 
 #. placeholder {0}: nf(cur)
 #: src/components/me/GoalsPanel.tsx
@@ -14497,6 +14539,10 @@ msgstr "Your private skins"
 #: src/routes/skins.tsx
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Your private skins are on the shelf above; anything you publish lands here."
+
+#: src/routes/player/$username.tsx
+msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
+msgstr "Your recent plays are being pulled in and will be rated here in a few minutes."
 
 #: src/routes/player/$username.tsx
 msgid "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."

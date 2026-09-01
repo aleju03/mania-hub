@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getUploadedReplay, isR2ReplayCacheConfigured, listUploadedReplayObjects, putUploadedReplay } from "./r2-cache";
 
@@ -27,6 +27,17 @@ export class ReplayStorageUnavailableError extends Error {
   constructor(message = "Replay storage is unavailable.") {
     super(message);
   }
+}
+
+// Uploads only go to R2 in production. The local .env points at the same
+// bucket as prod, and the community list on /replay is an R2 listing, so a
+// development upload would otherwise surface on the live site within minutes.
+// Development writes to local disk instead; set REPLAY_UPLOADS_TO_R2=1 to
+// exercise the R2 path deliberately. Reads still fall through to R2 so a prod
+// share link keeps opening locally.
+export function uploadedReplaysUseR2(): boolean {
+  if (!isR2ReplayCacheConfigured()) return false;
+  return process.env.NODE_ENV === "production" || process.env.REPLAY_UPLOADS_TO_R2 === "1";
 }
 
 export function createUploadedReplayId(): string {
@@ -69,7 +80,7 @@ export async function saveUploadedReplay(
   const safeFilename = normalizeUploadedReplayFilename(metadata.originalFilename);
   const production = process.env.NODE_ENV === "production";
 
-  if (isR2ReplayCacheConfigured()) {
+  if (uploadedReplaysUseR2()) {
     try {
       const stored = await putUploadedReplay(id, buffer, {
         originalFilename: safeFilename,
@@ -110,7 +121,7 @@ export type UploadedReplayListEntry = { id: string; uploadedAt: number };
 export async function listRecentUploadedReplays(limit: number): Promise<UploadedReplayListEntry[]> {
   const entries: UploadedReplayListEntry[] = [];
 
-  if (isR2ReplayCacheConfigured()) {
+  if (uploadedReplaysUseR2()) {
     try {
       for (const object of await listUploadedReplayObjects()) {
         const base = object.key.split("/").pop() ?? "";
@@ -144,29 +155,47 @@ export async function readUploadedReplay(id: string): Promise<StoredUploadedRepl
   const normalized = normalizeUploadedReplayId(id);
   if (!normalized) return null;
 
-  if (isR2ReplayCacheConfigured()) {
+  const fromR2 = async (): Promise<StoredUploadedReplay | null> => {
+    if (!isR2ReplayCacheConfigured()) return null;
     const stored = await getUploadedReplay(normalized);
-    if (stored) {
-      return {
-        id: normalized,
-        buffer: stored.buffer,
-        storage: "r2",
-        originalFilename: normalizeUploadedReplayFilename(stored.originalFilename),
-      };
-    }
-  }
-
-  try {
-    const meta: { originalFilename?: string } = await readFile(getLocalUploadMetaPath(normalized), "utf8")
-      .then((raw) => JSON.parse(raw) as { originalFilename?: string })
-      .catch(() => ({}));
+    if (!stored) return null;
     return {
       id: normalized,
-      buffer: await readFile(getLocalUploadPath(normalized)),
-      storage: "local",
-      originalFilename: normalizeUploadedReplayFilename(meta.originalFilename),
+      buffer: stored.buffer,
+      storage: "r2",
+      originalFilename: normalizeUploadedReplayFilename(stored.originalFilename),
     };
-  } catch {
-    return null;
-  }
+  };
+
+  const fromDisk = async (): Promise<StoredUploadedReplay | null> => {
+    try {
+      const meta: { originalFilename?: string } = await readFile(getLocalUploadMetaPath(normalized), "utf8")
+        .then((raw) => JSON.parse(raw) as { originalFilename?: string })
+        .catch(() => ({}));
+      return {
+        id: normalized,
+        buffer: await readFile(getLocalUploadPath(normalized)),
+        storage: "local",
+        originalFilename: normalizeUploadedReplayFilename(meta.originalFilename),
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // Whichever store this environment writes to is checked first; the other
+  // is a fallback so development can still open a prod share link.
+  if (uploadedReplaysUseR2()) return (await fromR2()) ?? (await fromDisk());
+  return (await fromDisk()) ?? (await fromR2());
+}
+
+// Removes a development upload from local disk. A no-op for ids that were
+// never stored there, so callers can run it unconditionally after the R2 delete.
+export async function deleteLocalUploadedReplay(id: string): Promise<void> {
+  const normalized = normalizeUploadedReplayId(id);
+  if (!normalized) return;
+  await Promise.all([
+    rm(getLocalUploadPath(normalized), { force: true }),
+    rm(getLocalUploadMetaPath(normalized), { force: true }),
+  ]);
 }

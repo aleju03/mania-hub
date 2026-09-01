@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createDb, exec, execBatch, json, migrate, type Db, type DbStatement } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, MAP_SEARCH_COUNT_CAP, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, MAP_SEARCH_COUNT_CAP, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -1208,6 +1208,36 @@ describe("map search LN-adjusted MSD", () => {
       [json({ etternaVersion: "0.72.3", values: { Overall: 24, Stream: 22 } })],
     );
     expect((await getMapSearchSetEntry(db, 1))?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+  });
+});
+
+describe("map search ranked date reconciliation", () => {
+  it("dates a row from a set that gained its ranked_date, and hands the rest to enrich_beatmap once per set", async () => {
+    const db = await makeDb();
+    // Two diffs of a set first seen through a score payload: compact set
+    // metadata, no ranked_date. And one settled set that is fine.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 10, stars: 5, primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, rankedDate: "2019-05-05T00:00:00Z", primary: "jack", patterns: { jack: 1 } });
+    await exec(db, "update beatmapsets set metadata_json = json_remove(metadata_json, '$.ranked_date') where beatmapset_id = 10");
+    await buildAll(db);
+    expect((await getMapSearchSetEntry(db, 1))?.rankedDate).toBeNull();
+    expect((await getMapSearchSetEntry(db, 3))?.rankedDate).toBe("2019-05-05T00:00:00Z");
+
+    // Nothing to copy yet, so the set goes to the enrich job: one diff of it.
+    expect(await reconcileMapSearchIndexRankedDates(db)).toBe(0);
+    const queue = new JobQueue(db);
+    expect(await enqueueRankedDateEnrichment(db, queue)).toBe(1);
+    const jobs = (await exec(db, "select dedupe_key from jobs where type = 'enrich_beatmap'")).rows.map((row) => String(row.dedupe_key));
+    expect(jobs).toEqual(["beatmap:1"]);
+
+    // The enrich job stored the full set; the sweep dates every diff of it.
+    await exec(db, "update beatmapsets set metadata_json = json_set(metadata_json, '$.ranked_date', '2021-02-03T00:00:00Z') where beatmapset_id = 10");
+    expect(await reconcileMapSearchIndexRankedDates(db)).toBe(2);
+    expect((await getMapSearchSetEntry(db, 1))?.rankedDate).toBe("2021-02-03T00:00:00Z");
+    expect((await getMapSearchSetEntry(db, 2))?.rankedDate).toBe("2021-02-03T00:00:00Z");
+    expect(await reconcileMapSearchIndexRankedDates(db)).toBe(0);
+    expect(await enqueueRankedDateEnrichment(db, queue)).toBe(0);
   });
 });
 

@@ -9,8 +9,10 @@ import {
   runWithCacheLockRenewal
 } from "../api";
 import {
+  getCommunityBeatmapAssets,
   getCommunityBeatmapFile as readCommunityBeatmap,
   putCommunityBeatmap,
+  type CommunityBeatmapAssets,
   type CommunityBeatmapSubmitResult,
 } from "../community-beatmap-store";
 import type { ReplayEndpointKind } from "../r2-cache";
@@ -304,17 +306,21 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
 // beatmap id at all.
 export const getCommunityBeatmapFile = createServerFn({ method: "GET" })
   .validator(normalizeBeatmapChecksumPayload)
-  .handler(async ({ data }: { data: { checksum: string } }): Promise<{ content: string } | null> => {
-    const content = await readCommunityBeatmap(data.checksum);
+  .handler(async ({ data }: { data: { checksum: string } }): Promise<{ content: string; assets: CommunityBeatmapAssets } | null> => {
+    const [content, assets] = await Promise.all([
+      readCommunityBeatmap(data.checksum),
+      getCommunityBeatmapAssets(data.checksum),
+    ]);
     if (!content) {
       // A miss flips to a hit the moment someone contributes this map, so never
       // let a CDN pin the empty answer and keep asking the next viewer.
       noStore();
       return null;
     }
-    // A contributed .osu is immutable for its checksum; cache it hard.
-    edgeCache(86400, 604800);
-    return { content };
+    // A contributed .osu is immutable for its checksum, but its song and
+    // background can still arrive later, so the answer only caches briefly.
+    edgeCache(assets.audio && assets.background ? 86400 : 120, 604800);
+    return { content, assets };
   });
 
 export const submitCommunityBeatmap = createServerFn({ method: "POST" })
