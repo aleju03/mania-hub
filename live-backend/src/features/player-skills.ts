@@ -740,7 +740,9 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
  * slider (and HP drain), never a note, so the stored .osu is still the chart
  * that was played. What it does move is the hit windows, so the play is rated
  * and judged against the OD it was actually set at (difficultyAdjustOd),
- * which is what the wife goal and the dan OD floor both read.
+ * which is what the wife goal and the dan OD floor both read. A DA that moves
+ * the slider DOWN is refused a rating outright though - see
+ * daWidensHitWindows.
  */
 const CHART_REWRITING_MODS = new Set(["HO", "IN", "NR"]);
 
@@ -773,6 +775,29 @@ export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): numbe
     return Math.max(0, Math.min(10, od));
   }
   return null;
+}
+
+/**
+ * Whether Difficulty Adjust made the play easier to hit than the chart the
+ * SSR would be computed from: DA below the chart's own OD widens every hit
+ * window, so the judgements were earned against windows the stored .osu never
+ * had. That is the same kind of lie as Hold Off's - the notes are intact but
+ * what the play proves is not what the chart asks - and at high rates it is
+ * the whole trick: OD -15 with Extended Limits makes a 2.0x run hittable, and
+ * the SSR then reads as a 2.0x clear of a chart nobody cleared. The wife goal
+ * does derate such a play (it estimates against the wide windows), but not
+ * nearly enough to offset the rate, so the play is refused a rating outright.
+ *
+ * Raising OD is the opposite and stays rated: harder windows, an honest play.
+ *
+ * `chartOd` null means the chart is not enriched yet and there is no value to
+ * compare against; a DA that put the slider under the dan OD floor is the
+ * abuse shape regardless, so that alone disqualifies.
+ */
+export function daWidensHitWindows(odOverride: number | null | undefined, chartOd: number | null): boolean {
+  if (odOverride == null) return false;
+  if (chartOd == null) return odOverride < DAN_MIN_OD;
+  return odOverride < chartOd;
 }
 
 /**
@@ -1630,9 +1655,10 @@ function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
  * with its reason rather than leaving a hole the reader has to guess at.
  * `chart_rewritten` is the one class that never reaches here: HO/IN/NR plays
  * are refused a rating at all (scoreRewritesChart), so no stored play carries
- * them and nothing downstream can name them. Difficulty Adjust is not among
- * them: it only moves the OD, so such a play rates normally and answers to the
- * OD floor like any other.
+ * them and nothing downstream can name them. A DA that widened the hit
+ * windows is refused on the same terms (daWidensHitWindows), so `low_od` now
+ * only names plays judged at an OD the chart itself sets too low, or a DA that
+ * raised the slider but not past the floor.
  */
 export type DanClearRejectReason =
   | "chart_unanalyzed"
@@ -2267,6 +2293,9 @@ export async function computePlayerSkillRatings(
   // never candidates, and grounds for evicting a stored play rated before
   // the exclusion existed.
   const rewritingModIdentities = new Set<string>();
+  // Score identities seen carrying a DA that widened the hit windows below
+  // the chart's own OD: same treatment, and the same grounds for eviction.
+  const widenedWindowIdentities = new Set<string>();
   const consider = (score: OscScore, source: "top" | "tracked") => {
     const beatmapId = beatmapIdOf(score);
     if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
@@ -2288,7 +2317,15 @@ export async function computePlayerSkillRatings(
     // DA's OD wins over the chart's: the windows the play was judged against
     // are the ones the wife estimate has to assume.
     const odOverride = difficultyAdjustOd(score.mods);
-    const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odOverride ?? odByBeatmap.get(beatmapId) ?? null);
+    const chartOd = odByBeatmap.get(beatmapId) ?? info?.od ?? null;
+    // ...unless DA widened those windows below the chart's own OD, which is
+    // not a play of this chart at all (daWidensHitWindows).
+    if (daWidensHitWindows(odOverride, chartOd)) {
+      widenedWindowIdentities.add(getScoreIdentity(score));
+      if (source === "top") unsupportedPlays += 1;
+      return;
+    }
+    const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odOverride ?? chartOd);
     if (goal == null) {
       if (source === "top") unsupportedPlays += 1;
       return;
@@ -2387,6 +2424,12 @@ export async function computePlayerSkillRatings(
     // retaining. Applies to any source: top trust is about the rate, and
     // these disqualify regardless of rate.
     if (rewritingModIdentities.has(previous.identity)) continue;
+    // Same for a DA that widened the hit windows. The stored play carries the
+    // OD it was judged at, so this catches the ones rated before the
+    // exclusion existed even after their score payload is gone - which is the
+    // common case, since DA earns no pp and such plays are tracked-sourced.
+    if (widenedWindowIdentities.has(previous.identity)) continue;
+    if (daWidensHitWindows(previous.odOverride, infoByBeatmap.get(previous.beatmapId)?.od ?? null)) continue;
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.source !== "top" &&

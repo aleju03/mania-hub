@@ -459,15 +459,78 @@ describe("computePlayerSkillRatings", () => {
       );
       expect(untouched.plays[0].odOverride).toBe(null);
 
-      // Extended Limits reaches -15; the override is clamped into the 0..10
-      // the rest of the OD math speaks, and stays far under every dan floor.
+      // Extended Limits reaches -15; such a play is refused a rating outright
+      // (see the widened-windows test below), so nothing is stored for it.
       const extreme = await computePlayerSkillRatings(
         db,
         failingOsu,
         [play({ id: 23, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: -15 } }] })],
         [],
       );
-      expect(extreme.plays[0].odOverride).toBe(0);
+      expect(extreme.plays).toHaveLength(0);
+    });
+  });
+
+  it("refuses a rating to a DA that widened the hit windows, and evicts stored ones", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+      await exec(
+        db,
+        "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)",
+        [101, 1, JSON.stringify({ accuracy: 8 }), "2026-01-01T00:00:00Z"],
+      );
+
+      // OD -15 with Extended Limits at 2.0x is the whole trick: without the
+      // exclusion the calc reads it as a 2.0x clear of a chart nobody cleared.
+      const abused = play({
+        id: 41,
+        beatmap_id: 101,
+        mods: [
+          { acronym: "DT", settings: { speed_change: 2 } },
+          { acronym: "DA", settings: { drain_rate: 0, extended_limits: true, overall_difficulty: -15 } },
+        ],
+      });
+      const tracked = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: [{ ...abused, pp: null }] });
+      expect(tracked.summary.analyzedPlays).toBe(0);
+      const top = await computePlayerSkillRatings(db, failingOsu, [abused], []);
+      expect(top.summary.analyzedPlays).toBe(0);
+      expect(top.summary.unsupportedPlays).toBe(1);
+
+      // Any DA under the chart's own OD widens windows, not just the extreme.
+      const nudged = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 42, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 7.5 } }] })],
+        [],
+      );
+      expect(nudged.summary.analyzedPlays).toBe(0);
+
+      // Raising OD is the harder play and keeps rating, and the 2.0x rate
+      // itself is not what disqualifies: the same run without DA is fine.
+      const raised = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 43, beatmap_id: 101, mods: [{ acronym: "DA", settings: { extended_limits: true, overall_difficulty: 12 } }] })],
+        [],
+      );
+      expect(raised.summary.analyzedPlays).toBe(1);
+      expect(raised.plays[0].odOverride).toBe(10);
+      const fast = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 44, beatmap_id: 101, mods: [{ acronym: "DT", settings: { speed_change: 2 } }] })],
+        [],
+      );
+      expect(fast.summary.analyzedPlays).toBe(1);
+      expect(fast.plays[0].rate).toBe(2);
+
+      // A play rated before the exclusion existed drops on the next compute
+      // from its stored OD alone, with no score payload left to consult.
+      const storedAbuse = { ...fast.plays[0], identity: "legacy-da", odOverride: 0 };
+      const purged = await computePlayerSkillRatings(db, failingOsu, [], [storedAbuse], {});
+      expect(purged.summary.analyzedPlays).toBe(0);
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [{ ...fast.plays[0] }], {});
+      expect(retained.summary.analyzedPlays).toBe(1);
     });
   });
 

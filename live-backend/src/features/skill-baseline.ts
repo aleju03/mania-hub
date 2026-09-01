@@ -10,6 +10,8 @@ import {
   SSR_CALC_GOAL_CAP,
   SSR_EXTRAPOLATION_BASE_GOAL,
   aggregateSsrs,
+  daWidensHitWindows,
+  difficultyAdjustOd,
   getPlayRate,
   ssrGoalForScore,
   type PlayerSkillBreakdown,
@@ -450,6 +452,10 @@ function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEnt
   if (!entry) return null;
   const rate = getPlayRate(score.mods);
   if (rate == null) return null;
+  // Same DA exclusion as the exact pipeline: a play whose hit windows were
+  // widened below the chart's own OD is not a play of this chart, and must
+  // not set the bar the rest of the population is measured against.
+  if (daWidensHitWindows(difficultyAdjustOd(score.mods), entry.od)) return null;
   // Same sub-floor exclusion as the exact pipeline: a play the calc would
   // rate at its 0.8 goal floor does not count toward the baseline either.
   const goal = ssrGoalForScore(score, entry.lnRatio, entry.od);
