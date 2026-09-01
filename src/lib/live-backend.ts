@@ -442,6 +442,10 @@ export interface LivePlayerProfileSnapshot {
      response cached before the backend started sending it has no such field,
      and the profile page falls back to asking for them on their own. */
   keymodeKeyCounts?: number[];
+  /* Plays per keymode, same order as `keymodeKeyCounts` and optional for the
+     same reason. What the profile's keymode chips rank by, so the chips that
+     stay inline are picked once rather than shuffled when the tail lands. */
+  keymodePlayCounts?: { keyCount: number; count: number }[];
   fetchedAt: string;
   userFetchedAt: string;
   isStale: boolean;
@@ -1603,6 +1607,8 @@ export interface LivePlayerKeymodePpKeys {
   userId: number;
   tracked: boolean;
   keyCounts: number[];
+  /** Plays per keymode, same order. Absent on a backend older than the field. */
+  playCounts?: { keyCount: number; count: number }[];
   generatedAt: string;
 }
 

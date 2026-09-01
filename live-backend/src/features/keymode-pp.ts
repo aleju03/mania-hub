@@ -91,6 +91,11 @@ export interface KeymodePpKeyCounts {
   tracked: boolean;
   /** Ascending, and only keymodes a mania source could name. */
   keyCounts: number[];
+  /* How many plays each of those keymodes holds, in the same order and capped
+     the way a list is. The profile's chip strip ranks by it, so which chips
+     stay inline is decided once, from the whole tail, instead of moving when
+     the plays behind them are finally fetched. */
+  playCounts: { keyCount: number; count: number }[];
   generatedAt: string;
 }
 
@@ -269,7 +274,7 @@ export async function getPlayerKeymodePpTail(
 export async function getPlayerKeymodePpKeyCounts(db: Db, userId: number): Promise<KeymodePpKeyCounts> {
   const generatedAt = nowIso();
   if (!Number.isInteger(userId) || userId <= 0) {
-    return { userId, tracked: false, keyCounts: [], generatedAt };
+    return { userId, tracked: false, keyCounts: [], playCounts: [], generatedAt };
   }
   /* A map's own key count is the same on every day it was played, but the key
      mod that can override it belongs to one row, so this has to read the same
@@ -283,7 +288,7 @@ export async function getPlayerKeymodePpKeyCounts(db: Db, userId: number): Promi
        from player_activity_maps a
        where a.user_id = ? and a.best_pp > 0
      )
-     select distinct a.best_mods_json as mods_json, coalesce(m.cs, s.key_count) as key_count
+     select a.best_mods_json as mods_json, coalesce(m.cs, s.key_count) as key_count
      from ranked a
      left join maps_beatmaps m on m.beatmap_id = a.beatmap_id
      left join map_search_index s on s.beatmap_id = a.beatmap_id
@@ -291,18 +296,26 @@ export async function getPlayerKeymodePpKeyCounts(db: Db, userId: number): Promi
     [userId],
   )).rows;
 
-  const keyCounts = new Set<number>();
+  /* One row per map here, since the row_number already picked the play each
+     map is quoted by, so counting rows counts plays the way the tail does. */
+  const countsByKeyCount = new Map<number, number>();
   for (const row of rows) {
     const raw = Number(row.key_count);
     const mapKeyCount = Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null;
     const keyCount = getManiaKeyModCount(parseJson<OsuMod[]>(row.mods_json, [])) ?? mapKeyCount;
     if (keyCount === null) continue;
-    keyCounts.add(keyCount);
+    countsByKeyCount.set(keyCount, (countsByKeyCount.get(keyCount) ?? 0) + 1);
   }
+  const keyCounts = [...countsByKeyCount.keys()].sort((a, b) => a - b);
   return {
     userId,
     tracked: rows.length > 0,
-    keyCounts: [...keyCounts].sort((a, b) => a - b),
+    keyCounts,
+    // Capped where the tail caps its own list, so the two never disagree.
+    playCounts: keyCounts.map((keyCount) => ({
+      keyCount,
+      count: Math.min(countsByKeyCount.get(keyCount) ?? 0, KEYMODE_PP_PLAY_LIMIT),
+    })),
     generatedAt,
   };
 }

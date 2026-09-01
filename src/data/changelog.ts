@@ -27,6 +27,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-31", text: "Lowered the minimum accuracy a pass needs to count for dan: 91% on regular and 92% on 7K LN, worth less the lower they are", to: "/dan-estimates" },
+  { date: "2026-08-31", text: "New No Dans switch in the settings filters tab to exclude everything dan-related from the website" },
   { date: "2026-08-31", text: "To make OD 0 7K maps count for LN dan, play them with Difficulty Adjust and set Overall Difficulty to 5. The play is judged at the OD you set instead of the map's", to: "/dan-estimates" },
   { date: "2026-08-31", text: "Made it possible to pull other people's eternal cards on any pack, chance is too low though so it surely won't happen to anyone :clueless:", to: "/packs" },
   { date: "2026-08-31", text: "The Skills tab has MSD plays and Dan plays next to Ratings. MSD plays lists the plays behind a skill rating, one keymode and one skill at a time, ordered by best or most recent, and you can cap how many rates per chart count or hide ranked maps. Dan plays lists the clears behind a dan, regular or LN, and the plays that do not count, with the reason. Ratings now shows one keymode at a time, picked from the row of ratings above it" },

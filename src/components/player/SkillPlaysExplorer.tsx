@@ -876,25 +876,25 @@ function DanRejectedRow({
   const od = rejected.od;
   const reason = rejected.reason === "below_bar"
     ? (minAccuracy != null && bar != null && accuracy != null
-      ? t`Does not count for dan: this pass needs ${formatAccuracy(minAccuracy)} to credit anything (${formatAccuracy(bar)} pass bar) and got ${formatAccuracy(accuracy)}.`
+      ? t`Minimum required for dan credit is ${formatAccuracy(minAccuracy)}. This play got ${formatAccuracy(accuracy)}.`
       : bar != null && accuracy != null
-        ? t`Does not count for dan: this pass needs ${formatAccuracy(bar)} accuracy and got ${formatAccuracy(accuracy)}.`
-        : t`Does not count for dan: the accuracy is under the pass bar.`)
+        ? t`Minimum required for dan credit is ${formatAccuracy(bar)}. This play got ${formatAccuracy(accuracy)}.`
+        : t`This play is under the minimum accuracy required for dan credit.`)
     : rejected.reason === "low_od"
       ? (od != null
-        ? t`Does not count for dan: this play was judged at OD ${od.toFixed(1)}, which is below the OD dan credit needs.`
-        : t`Does not count for dan: the OD this was judged at is below the OD dan credit needs.`)
+        ? t`This play was judged at OD ${od.toFixed(1)}. A dan clear has to be played at a higher OD than that.`
+        : t`This play was judged at a lower OD than a dan clear has to be played at.`)
       : rejected.reason === "ez_windows"
-        ? t`Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes.`
+        ? t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`
         : rejected.reason === "chart_ineligible"
-          ? t`Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it.`
+          ? t`This chart is not built in a way a dan level can be read off a clear of it.`
           : rejected.reason === "chart_unanalyzed"
-            ? t`Does not count for dan yet: the chart has not been analyzed.`
+            ? t`This chart has not been analyzed yet, so there is no dan level to credit. It can count later.`
             : rejected.reason === "no_chart_dan"
-              ? t`Does not count for dan: the chart has no dan rating at the rate this was played at.`
+              ? t`This chart has no dan level at the rate it was played at.`
               : rejected.reason === "no_accuracy"
-                ? t`Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure.`
-                : t`Does not count for dan.`;
+                ? t`The judgement counts for this play are gone, so there is no accuracy to check it against.`
+                : t`This play counts for nothing on the dan estimate.`;
   // The level it was aiming at, dimmed, with the block mark over its corner:
   // the reader sees what the clear would have been worth and that it is not,
   // in the same column and the same shape the credited rows use.

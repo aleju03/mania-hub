@@ -51,7 +51,7 @@ import { getLiveBackendUrl } from "../../lib/live-backend";
 export const Route = createFileRoute("/admin/ghost")({
   head: () => ({
     meta: [
-      { title: "Ghost - admin" },
+      { title: "Ralsei - admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -793,7 +793,7 @@ function GhostAdminPage() {
     <div className="mx-auto w-full max-w-[100rem] px-4 py-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Ghost</h1>
+          <h1 className="text-2xl font-bold text-white">Ralsei</h1>
           <p className="text-xs text-osu-f1">
             Appear on a page as {character.name}. WASD moves him, everything is live for whoever is in the audience.
           </p>

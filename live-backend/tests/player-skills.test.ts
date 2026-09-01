@@ -727,12 +727,12 @@ describe("computePlayerSkillRatings", () => {
         // A DT clear counts only because the DT sweep stored a verdict, and
         // it lands on the verdict's primary side (rc here).
         play({ id: 3, beatmap_id: 101, mods: [{ acronym: "DT" }], accuracy: 0.96, statistics: atRcBar }),
-        // Below the credit window entirely (91.9%, under the 92% edge):
+        // Below the credit window entirely (90.9%, under the 91% edge):
         // analyzed, but credits nothing (if this 9.9 counted even decayed,
         // the rc dan would move). Count-free so the goal falls back to the
         // displayed accuracy and stays above the 0.8 floor: judgement counts
         // this bad wife-rate under the floor and would not rate at all.
-        play({ id: 4, beatmap_id: 107, accuracy: 0.919 }),
+        play({ id: 4, beatmap_id: 107, accuracy: 0.909 }),
         play({ id: 5, beatmap_id: 108, accuracy: 0.97, statistics: atLnBar }),
         // Hybrid below the LN cutoff (lnRatio 0.4): counts as a rice clear
         // only - its ln half (7.0) must never reach the LN ladder.
@@ -968,10 +968,10 @@ describe("computePlayerSkillRatings", () => {
       });
       // The motivating cases: a 92% on an epsilon+ chart weighs a level and a
       // quarter down (plain delta, never delta+), a 99.5% weighs +1.1 up, and
-      // 91.9% is off the window.
+      // 90.9% is off the window.
       const spread = collectDanClearsForTest(
         4,
-        [stablePlay(261, 0.92), stablePlay(262, 0.995), stablePlay(263, 0.919)],
+        [stablePlay(261, 0.92), stablePlay(262, 0.995), stablePlay(263, 0.909)],
         info,
       );
       expect(spread.map((clear) => clear.play.beatmapId)).toEqual([261, 262]);

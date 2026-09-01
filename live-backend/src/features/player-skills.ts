@@ -402,10 +402,11 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // a course awards the whole dan in game: the bar IS the pass, and it is the
 // zero point of the accuracy credit curve (dan-credit.ts). Away from the bar
 // the credit moves with the accuracy in both directions: a pass up to the
-// ladder's decay window under the bar (danCreditBelowBarWindowFor: four
-// points on rice, one on 6K/7K LN, 2.5 on 4K LN) still credits the chart minus a
-// decay (capped so it can never equal the chart's own dan, and reaching a
-// level and a quarter down at the window's edge), and accuracy above the bar credits a
+// ladder's decay window under the bar (danCreditBelowBarWindowFor: five
+// points on rice, three on 6K/7K LN, 2.5 on 4K LN) still credits the chart minus a
+// decay (capped so it can never equal the chart's own dan, and reaching a level
+// and a half down at the rice window's edge, a level and three quarters at the
+// 6K/7K LN one), and accuracy above the bar credits a
 // bonus that reaches +1.5 levels at 100% in the ladder's own currency. This
 // is not the danCreditFor fade an earlier revision had and 75373b2b removed:
 // that one discounted the at-bar clear itself, which taxed thin evidence
@@ -5044,7 +5045,17 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // the evidence read. The existing full scope is intentional: it is already a
 // cheap plays_json derivation and avoids teaching the historical two-scope
 // machinery a one-off third shape.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v21";
+// v22: both credit windows opened (dan-credit.ts, 2026-08-31). 6K/7K LN went
+// from one accuracy point under its 95% bar to three, crediting 92-94% clears
+// down to -1.75, and the rice ladders went from four points to five, crediting
+// 91-92% clears down to -1.5. Nothing that already credited moves in either
+// case: each curve carries a knee at the old window's edge and keeps the old
+// line above it. Stored verdicts are still stale, since they were folded
+// without those clears in the window at all, so every row has to be folded
+// again. Full scope for the same reason v21 used it: the fold is a cheap
+// plays_json derivation with no MinaCalc behind it, and the change reaches
+// every ladder anyway.
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v22";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

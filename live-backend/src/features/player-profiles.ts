@@ -62,6 +62,9 @@ export interface PlayerProfileSnapshot {
      keymode can live entirely below the window, so shipping it with the
      snapshot is what keeps the strip from growing a beat after it paints. */
   keymodeKeyCounts: number[];
+  /* Plays per keymode, same order, so the chip strip can rank which chips stay
+     inline from the first paint instead of re-ranking when the tail lands. */
+  keymodePlayCounts: { keyCount: number; count: number }[];
   fetchedAt: string;
   userFetchedAt: string;
   isStale: boolean;
@@ -1283,11 +1286,13 @@ async function buildServedSnapshot(
   if (includeNoteBpms) await attachNoteBpms(db, projection.scores);
   const basePp = readNumber(readRecord(user.statistics)?.pp);
   const projectedPp = calculateProjectedUserPp(basePp, projection.ppBaselineScores, projection.scores);
+  const keymodePp = await getPlayerKeymodePpKeyCounts(db, row.user_id);
 
   return {
     user,
     bestScores: projection.scores,
-    keymodeKeyCounts: (await getPlayerKeymodePpKeyCounts(db, row.user_id)).keyCounts,
+    keymodeKeyCounts: keymodePp.keyCounts,
+    keymodePlayCounts: keymodePp.playCounts,
     fetchedAt: row.fetched_at,
     userFetchedAt,
     isStale: forceStale || isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS),

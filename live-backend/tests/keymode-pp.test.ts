@@ -345,6 +345,29 @@ describe("getPlayerKeymodePpKeyCounts", () => {
     expect(keys.keyCounts).toEqual(tailKeyCounts);
   });
 
+  it("counts the plays behind each keymode, the way the tail does", async () => {
+    const db = await makeDb();
+    await addManiaBeatmap(db, 141, 4);
+    await addManiaBeatmap(db, 142, 4);
+    await addManiaBeatmap(db, 143, 7);
+    await addPlay(db, { userId: 14, beatmapId: 141, pp: 300 });
+    // A second day on the same map is one play, not two, in both answers.
+    await addPlay(db, { userId: 14, beatmapId: 141, pp: 280, day: "2026-01-02" });
+    await addPlay(db, { userId: 14, beatmapId: 142, pp: 200 });
+    await addPlay(db, { userId: 14, beatmapId: 143, pp: 100 });
+
+    const keys = await getPlayerKeymodePpKeyCounts(db, 14);
+    const tail = await getPlayerKeymodePpTail(db, 14);
+    const tailCounts = keys.keyCounts.map((keyCount) => ({
+      keyCount,
+      count: tail.plays.filter((play) => play.keyCount === keyCount).length,
+    }));
+
+    expect(keys.playCounts).toEqual([{ keyCount: 4, count: 2 }, { keyCount: 7, count: 1 }]);
+    // The chip strip ranks by these, so they have to describe the same lists.
+    expect(keys.playCounts).toEqual(tailCounts);
+  });
+
   it("leaves out a map no mania source can name a key count for", async () => {
     const db = await makeDb();
     await addManiaBeatmap(db, 111, 4);

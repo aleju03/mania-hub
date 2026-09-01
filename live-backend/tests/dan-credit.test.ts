@@ -45,8 +45,34 @@ describe("danCreditOffset", () => {
     expect(danCreditOffset(0.955, 0.96)).toBeCloseTo(-0.38375, 6);
     expect(danCreditOffset(0.94, 0.96)).toBeCloseTo(-0.755, 6);
     expect(danCreditOffset(0.92, 0.96)).toBeCloseTo(-1.25, 9);
-    expect(danCreditOffset(0.9199, 0.96)).toBeNull();
+    expect(danCreditOffset(0.91, 0.96)).toBeCloseTo(-1.5, 9);
+    expect(danCreditOffset(0.9099, 0.96)).toBeNull();
     expect(danCreditOffset(Number.NaN, 0.96)).toBeNull();
+  });
+
+  it("extends the rice decay to 91% without re-pricing what already credited", () => {
+    // The window went from four points to five (2026-08-31). The knee sits at
+    // the old edge, so every accuracy the four-point window credited credits
+    // exactly the same today and only the 91-92% band is new.
+    // The table as it stood before the widening: a straight line to -1.25 over
+    // four points.
+    const fourPointWindow = (accuracy: number) => danCreditOffset(accuracy, 0.96, {
+      belowBar: [[0, -0.26], [1, -1.25]],
+      belowBarWindow: 0.04,
+    });
+    for (const accuracy of [0.9599, 0.958, 0.955, 0.95, 0.94, 0.93, 0.92]) {
+      expect(danCreditOffset(accuracy, 0.96)).toBeCloseTo(fourPointWindow(accuracy)!, 9);
+    }
+    expect(fourPointWindow(0.91)).toBeNull();
+    expect(danCreditOffset(0.91, 0.96)).toBeCloseTo(-1.5, 9);
+  });
+
+  it("keeps the bonus on its own span when the decay window is wider than the headroom", () => {
+    // A 96% bar has four points of headroom and a five point window. The bonus
+    // scores against the four, so a 100% is still the full +1.5 rather than
+    // two thirds of the way up the table.
+    expect(danCreditOffset(1, 0.96)).toBeCloseTo(1.5, 9);
+    expect(danCreditOffset(0.98, 0.96)).toBeCloseTo(0.117647, 6);
   });
 
   it("prices a bottom-of-window scrape a bare level down: 92.09% on epsilon+ is delta", () => {
@@ -109,7 +135,7 @@ describe("near-bar cap", () => {
 });
 
 describe("LN decay windows", () => {
-  it("is one point on the stable LN ladders, 2.5 on 4K LN, four on rice", () => {
+  it("is three points on the stable LN ladders, 2.5 on 4K LN, five on rice", () => {
     expect(danCreditBelowBarWindowFor("ln", 4)).toBe(DAN_CREDIT_4K_LN_BELOW_BAR_WINDOW);
     expect(danCreditBelowBarWindowFor("ln", 6)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
     expect(danCreditBelowBarWindowFor("ln", 7)).toBe(DAN_CREDIT_LN_BELOW_BAR_WINDOW);
@@ -117,14 +143,39 @@ describe("LN decay windows", () => {
     expect(danCreditBelowBarWindowFor("rc", 7)).toBe(DAN_CREDIT_BELOW_BAR_WINDOW);
   });
 
-  it("stops 6K/7K LN credit one point under the 95% bar", () => {
-    // 94.1% still credits; 93.9% is past the window, where the shared four
-    // points used to keep crediting down to 91%.
-    expect(creditedDanFor(10, 0.941, 0.95, "ln", 7)).toBeCloseTo(10 - 1.151, 3);
-    expect(creditedDanFor(10, 0.939, 0.95, "ln", 7)).toBeNull();
-    expect(creditedDanFor(10, 0.939, 0.95, "ln", 6)).toBeNull();
+  it("stops 6K/7K LN credit three points under the 95% bar", () => {
+    // 92.1% still credits; 91.9% is past the window, where the shared table
+    // would have kept crediting down to 90%.
+    expect(creditedDanFor(10, 0.921, 0.95, "ln", 7)).toBeCloseTo(10 - 1.725, 4);
+    expect(creditedDanFor(10, 0.919, 0.95, "ln", 7)).toBeNull();
+    expect(creditedDanFor(10, 0.919, 0.95, "ln", 6)).toBeNull();
     // The bonus half still scores against the standard span: 100% is +1.5.
     expect(creditedDanFor(10, 1, 0.95, "ln", 7)).toBeCloseTo(11.5, 9);
+  });
+
+  it("extends the 6K/7K LN decay to 92% without re-pricing what already credited", () => {
+    // The window tripled (2026-08-31), but the knee at a third of it keeps the
+    // first point under the bar on the exact line the one-point window drew,
+    // so every accuracy that already credited credits the same today. Only the
+    // 92-94% band is new, and it extends a quarter level per point.
+    const at = (accuracy: number) => danCreditOffset(accuracy, 0.95, danCreditOptionsFor("ln", 7));
+    const onePointWindow = (accuracy: number) => danCreditOffset(accuracy, 0.95, {
+      nearBarCap: 0.26,
+      belowBar: [[0, -0.26], [1, -1.25]],
+      belowBarWindow: 0.01,
+    });
+    for (const accuracy of [0.9499, 0.949, 0.947, 0.945, 0.942, 0.94]) {
+      expect(at(accuracy)).toBeCloseTo(onePointWindow(accuracy)!, 9);
+    }
+    expect(at(0.949)).toBeCloseTo(-0.359, 6);
+    expect(at(0.945)).toBeCloseTo(-0.755, 6);
+    expect(at(0.94)).toBeCloseTo(-1.25, 6);
+    expect(at(0.935)).toBeCloseTo(-1.375, 6);
+    expect(at(0.93)).toBeCloseTo(-1.5, 6);
+    expect(at(0.92)).toBeCloseTo(-1.75, 6);
+    expect(at(0.9199)).toBeNull();
+    // 6K reads the same table, and 4K LN keeps its own.
+    expect(at(0.94)).toBeCloseTo(danCreditOffset(0.94, 0.95, danCreditOptionsFor("ln", 6))!, 9);
   });
 
   it("credits 2.5 points under the 97% ScoreV2 bar, in a straight line", () => {

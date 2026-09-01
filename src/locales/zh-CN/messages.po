@@ -1802,6 +1802,19 @@ msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
 
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "A clean pass here is {0} and this play got {1}, too far under it to count."
+#~ msgstr "这里的干净通过线为 {0}，而这次成绩为 {1}，低得太多，无法计入。"
+
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(minAccuracy)
+#. placeholder {2}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "A clean pass here is {0}, and a pass down to {1} still counts for a lower dan. This play got {2}, so it counts for nothing."
+#~ msgstr "这里的干净通过线为 {0}，低至 {1} 的通过仍可计入较低的段位。这次成绩为 {2}，因此不计入任何段位。"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "A collection needs at least {USER_COLLECTION_MIN_ITEMS} maps"
 msgstr "一个收藏册至少要有 {USER_COLLECTION_MIN_ITEMS} 张谱面"
@@ -2690,6 +2703,10 @@ msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata
 msgstr "谱面的音频、背景、标题、艺术家名、作者名、元数据，以及其它由用户提交或第三方提供的内容，权利仍归各自的所有者。本站展示可获取的公开元数据和衍生信息，供社区参考。"
 
 #: src/components/discord/CommandShowcase.tsx
+msgid "Beatmap card: stars, keys, status, BPM and length."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
 msgstr "谱面卡片：星级、键数、状态、BPM、时长和段位。"
 
@@ -2724,16 +2741,28 @@ msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "below 90%"
+#~ msgstr ""
+
+#: src/routes/dan-estimates.tsx
+msgid "below 91%"
+msgstr "低于 91%"
+
+#: src/routes/dan-estimates.tsx
 msgid "below 92%"
 msgstr "低于 92%"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "below 93%"
+#~ msgstr "低于 93%"
 
 #: src/routes/dan-estimates.tsx
 msgid "below 94.5%"
 msgstr "低于 94.5%"
 
 #: src/routes/dan-estimates.tsx
-msgid "below 94%"
-msgstr "低于 94%"
+#~ msgid "below 94%"
+#~ msgstr "低于 94%"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "below 96%"
@@ -3586,6 +3615,10 @@ msgstr "连接已断开，正在重连。"
 msgid "Contact"
 msgstr "联系方式"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Content"
+msgstr ""
+
 #: src/components/layout/CountrySelector.tsx
 msgid "Continents"
 msgstr "大洲"
@@ -4413,54 +4446,54 @@ msgid "does not count"
 msgstr "不计入"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan yet: the chart has not been analyzed."
-msgstr "暂不计入段位：该谱面尚未分析。"
+#~ msgid "Does not count for dan yet: the chart has not been analyzed."
+#~ msgstr "暂不计入段位：该谱面尚未分析。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
-msgstr "不计入段位：Easy 放宽了所有判定区间，准确率并非在段位通过所要求的判定下取得。"
+#~ msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
+#~ msgstr "不计入段位：Easy 放宽了所有判定区间，准确率并非在段位通过所要求的判定下取得。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: the accuracy is under the pass bar."
-msgstr "不计入段位：准确率低于通过线。"
+#~ msgid "Does not count for dan: the accuracy is under the pass bar."
+#~ msgstr "不计入段位：准确率低于通过线。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
-msgstr "不计入段位：该谱面在此倍速下没有段位评级。"
+#~ msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
+#~ msgstr "不计入段位：该谱面在此倍速下没有段位评级。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
-msgstr "不计入段位：这次游玩的判定 OD 低于段位认定所需的 OD。"
+#~ msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
+#~ msgstr "不计入段位：这次游玩的判定 OD 低于段位认定所需的 OD。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
-msgstr "不计入段位：该谱面的构成方式无法从通过成绩中读出段位水平。"
+#~ msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
+#~ msgstr "不计入段位：该谱面的构成方式无法从通过成绩中读出段位水平。"
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {1}: formatAccuracy(accuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
-msgstr "不计入段位：此次通过需要 {0} 的准确率，实际为 {1}。"
+#~ msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
+#~ msgstr "不计入段位：此次通过需要 {0} 的准确率，实际为 {1}。"
 
 #. placeholder {0}: formatAccuracy(minAccuracy)
 #. placeholder {1}: formatAccuracy(bar)
 #. placeholder {2}: formatAccuracy(accuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
-msgstr "不计入段位：此次通过需要 {0} 才能获得任何段位（通过线为 {1}），实际为 {2}。"
+#~ msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+#~ msgstr "不计入段位：此次通过需要 {0} 才能获得任何段位（通过线为 {1}），实际为 {2}。"
 
 #. placeholder {0}: od.toFixed(1)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
-msgstr "不计入段位：这次游玩的判定 OD 为 {0}，低于段位认定所需的 OD。"
+#~ msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
+#~ msgstr "不计入段位：这次游玩的判定 OD 为 {0}，低于段位认定所需的 OD。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
-msgstr "不计入段位：该成绩的判定数据已丢失，无法计算准确率。"
+#~ msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
+#~ msgstr "不计入段位：该成绩的判定数据已丢失，无法计算准确率。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan."
-msgstr "不计入段位。"
+#~ msgid "Does not count for dan."
+#~ msgstr "不计入段位。"
 
 #: src/routes/farm-helper.tsx
 msgid "done"
@@ -4667,6 +4700,10 @@ msgstr "在 {mapSlot} 上拿到 <0/>（<1/>）"
 #: src/routes/farm-helper.tsx
 msgid "easy"
 msgstr "易"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on."
+msgstr "Easy 放宽了所有判定区间，这个准确率并非在段位通过所依据的判定下取得。"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
@@ -4887,6 +4924,10 @@ msgstr "全部"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "压缩包里的其他所有文件"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Excludes all dan-related stuff from the website"
+msgstr ""
 
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
@@ -7311,6 +7352,13 @@ msgstr "最低 PP"
 msgid "Minimum pp per play"
 msgstr "单个成绩最低 pp"
 
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {0}: formatAccuracy(minAccuracy)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {0}. This play got {1}."
+msgstr "计入段位所需的最低准确率为 {0}。这次成绩为 {1}。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
 msgstr "镜像(往返)"
@@ -7796,6 +7844,10 @@ msgstr "这里还没有收藏册，来发布第一个吧。"
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
 msgstr "未找到国家/地区"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "No Dans"
+msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "no data"
@@ -12227,6 +12279,10 @@ msgstr "4K LN 课题本来就是要在 ScoreV2 下打的。问题是 osu!stable 
 #~ msgid "The 4K LN courses are written for the ScoreV2 mod, and osu! only files a play under that formula if you are on lazer. Most people are on stable, so the site works ScoreV2 accuracy out from your judgements rather than asking for a ScoreV2 play at all. On an old archived pass with nothing left but its accuracy, a stable play has to reach 97.5% instead of 97%, because the same hands read about half a point higher on the stable formula."
 #~ msgstr "4K LN 课题是按 ScoreV2 mod 设计的，而 osu! 只有在 lazer 上才会用那套算法记录成绩。大多数人玩的是 stable，所以本站不要求你必须用 ScoreV2 打，而是从你的判定里把 ScoreV2 准度算出来。对于只剩下准度的旧存档成绩，stable 的成绩需要达到 97.5% 而不是 97%，因为同样的手感在 stable 算法下会高出大约半个百分点。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "The accuracy is too far under this ladder's pass bar to count."
+#~ msgstr "准确率远低于该段位表的通过线，无法计入。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The accuracy shown by the game is not used. It is worked out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
 #~ msgstr "不会直接使用游戏显示的准确率，而是根据 300、200、100 等判定重新计算。mania 有两种判定加权方式：stable 公式和 lazer 显示的 ScoreV2 公式。每个段位表的通过线采用其中一种：4K 单点用 stable，4K LN 用 ScoreV2。两种公式会给同一成绩算出不同数值，重新计算才能保证这次成绩在两个客户端上是否达标的结论一致。"
@@ -12324,6 +12380,10 @@ msgstr "谱面段位 -0.51"
 #~ msgstr "谱面段位 -0.53"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.57"
+#~ msgstr "谱面段位 -0.57"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.61"
 #~ msgstr "谱面段位 -0.61"
 
@@ -12354,6 +12414,10 @@ msgstr "谱面段位 -0.76"
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.85"
 #~ msgstr "谱面段位 -0.85"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.88"
+#~ msgstr "谱面段位 -0.88"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.9"
@@ -12392,12 +12456,16 @@ msgid "the chart's level -1.39"
 msgstr "谱面段位 -1.39"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level -1.5"
-#~ msgstr "谱面段位 -1.5"
+msgid "the chart's level -1.5"
+msgstr "谱面段位 -1.5"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.55"
 msgstr "谱面段位 -1.55"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.75"
+msgstr "谱面段位 -1.75"
 
 #. placeholder {0}: formatCreditOffset(held)
 #: src/routes/dan-estimates.tsx
@@ -12548,6 +12616,10 @@ msgstr "直接用对应的 .osu 文件也可以。"
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
+msgstr "该成绩的判定数据已丢失，无法据此核对准确率。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -12885,6 +12957,18 @@ msgstr "他们已经是 GOAT 了。"
 msgid "This .osk could not be read."
 msgstr "无法读取这个 .osk。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart has no dan level at the rate it was played at."
+msgstr "该谱面在这次游玩的速度下没有段位评级。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart has not been analyzed yet, so there is no dan level to credit. It can count later."
+msgstr "该谱面尚未分析，因此没有可计入的段位评级。之后仍有机会计入。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart is not built in a way a dan level can be read off a clear of it."
+msgstr "该谱面的构成方式无法从通过成绩中读出段位水平。"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
 msgstr "这张谱面不在谱面库里，所以除了成绩本身没有别的可显示。"
@@ -12976,6 +13060,23 @@ msgstr "此页面不存在。"
 #: src/components/CountryWarming.tsx
 msgid "This page will load automatically once {name} is ready."
 msgstr "{name} 就绪后，此页面会自动加载。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play counts for nothing on the dan estimate."
+msgstr "这次成绩不计入段位估算。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play is under the minimum accuracy required for dan credit."
+msgstr "这次成绩低于计入段位所需的最低准确率。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play was judged at a lower OD than a dan clear has to be played at."
+msgstr "这次游玩的判定 OD 低于段位通过所需的 OD。"
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play was judged at OD {0}. A dan clear has to be played at a higher OD than that."
+msgstr "这次游玩的判定 OD 为 {0}，段位通过需要高于该 OD。"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "This play's strongest skillset"

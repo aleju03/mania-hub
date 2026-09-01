@@ -105,6 +105,7 @@ type PlayerSnapshotData = {
   user: OsuUser;
   bestScores: OsuScore[];
   keymodeKeyCounts?: number[];
+  keymodePlayCounts?: { keyCount: number; count: number }[];
   fetchedAt: string;
   userFetchedAt: string;
   isStale: boolean;
@@ -944,6 +945,8 @@ function fetchPlayerSnapshot(cacheKey: string, username: string): Promise<Player
       const data = {
         user: snapshot.user,
         bestScores: dedupeScores(snapshot.bestScores),
+        keymodeKeyCounts: snapshot.keymodeKeyCounts,
+        keymodePlayCounts: snapshot.keymodePlayCounts,
         fetchedAt: snapshot.fetchedAt,
         userFetchedAt: snapshot.userFetchedAt,
         isStale: snapshot.isStale,
@@ -1211,6 +1214,12 @@ export function PlayerProfilePage({
      what makes the standalone fetch below a fallback rather than a second
      source. */
   const [keyPpKeyCounts, setKeyPpKeyCounts] = useState<number[] | null>(() => loaderSnapshot?.keymodeKeyCounts ?? null);
+  /* Plays per keymode across the whole tail, which is what decides which chips
+     the strip keeps inline. It rides in with the snapshot and is never revised,
+     so the strip picks its chips once. */
+  const [keyPpPlayCounts, setKeyPpPlayCounts] = useState<{ keyCount: number; count: number }[] | null>(
+    () => loaderSnapshot?.keymodePlayCounts ?? null,
+  );
   /* "idle" until something asks for the tail, then "loading" until it answers.
      The modal shows nothing but a skeleton while it is loading: a total that
      lands and then grows is worse than a total that arrives late. */
@@ -1353,7 +1362,9 @@ export function PlayerProfilePage({
     let active = true;
     fetchLivePlayerKeymodePpKeysDirect(userId)
       .then((keys) => {
-        if (active) setKeyPpKeyCounts(keys.keyCounts);
+        if (!active) return;
+        setKeyPpKeyCounts(keys.keyCounts);
+        if (keys.playCounts) setKeyPpPlayCounts(keys.playCounts);
       })
       .catch(() => {});
     return () => { active = false; };
@@ -1443,6 +1454,7 @@ export function PlayerProfilePage({
       setBestWindowComplete(false);
       setKeyPpTail(null);
       setKeyPpKeyCounts(loaderSnapshot?.keymodeKeyCounts ?? null);
+      setKeyPpPlayCounts(loaderSnapshot?.keymodePlayCounts ?? null);
       keyPpTailRef.current = null;
       keyPpTailRequestedRef.current = null;
       setKeyPpTailState("idle");
@@ -1499,6 +1511,7 @@ export function PlayerProfilePage({
       setLoadingRankHistory(false);
       setWaitingForSnapshotBest(false);
       if (result.keymodeKeyCounts) setKeyPpKeyCounts(result.keymodeKeyCounts);
+      if (result.keymodePlayCounts) setKeyPpPlayCounts(result.keymodePlayCounts);
       if (result.bestScores.length > 0) {
         const dedupedScores = dedupeScores(result.bestScores);
         setBest((current) => scoreListsAreEquivalent(current, dedupedScores) ? current : dedupedScores);
@@ -1780,9 +1793,13 @@ export function PlayerProfilePage({
   }, [best]);
 
   /* How much of this profile each keymode actually is, used to decide which
-     chips are worth a tap when there are more keymodes than fit. The insights
-     count window plays and tracked ones together; before they land, the window
-     on its own ranks the same mains first. */
+     chips are worth a tap when there are more keymodes than fit. The tail's own
+     per-keymode counts are what rank them, not the insights': the insights are
+     recalculated as the window fills and again when the tail's plays arrive, and
+     two keymodes close together at the cutoff would trade the last inline chip
+     each time, minutes after the strip was drawn. The tail counts land with the
+     snapshot and never move. The window still speaks for a keymode played before
+     this site tracked the player, where the tail has less of it than osu! does. */
   const keyModePlayCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const score of best) {
@@ -1791,11 +1808,27 @@ export function PlayerProfilePage({
       const key = `${keyCount}k`;
       counts[key] = (counts[key] ?? 0) + 1;
     }
-    for (const bucket of profileInsights?.keyPp ?? []) {
-      counts[`${bucket.keyCount}k`] = bucket.count;
+    for (const bucket of keyPpPlayCounts ?? []) {
+      const key = `${bucket.keyCount}k`;
+      counts[key] = Math.max(counts[key] ?? 0, bucket.count);
     }
     return counts;
-  }, [best, profileInsights]);
+  }, [best, keyPpPlayCounts]);
+
+  /* Recent ranks its own chips by what the player has actually been playing.
+     The pp counts above are the wrong order here: a keymode whose plays are
+     all unranked is worth 0pp and would sit behind the overflow chip even on a
+     day it is every play on the page. */
+  const recentKeyModePlayCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const score of recent) {
+      const keyCount = getBeatmapKeyCount(score.beatmap);
+      if (keyCount == null) continue;
+      const key = `${keyCount}k`;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [recent]);
 
   /* Five keeps All plus the mains on one phone row. Past that the strip is
      wider than the screen and the chips at the end are unreachable without a
@@ -1805,15 +1838,32 @@ export function PlayerProfilePage({
      chips than a phone but still has to stop before it pushes About off. */
   const MAX_INLINE_KEY_MODES_WIDE = 8;
 
-  const availableKeyModes = useMemo(() => {
-    const modes = new Set([...bestFilters.keyModes, ...getAvailableKeyModes(recent)]);
+  /* Each tab offers the keymodes its own list holds, and no others: the two
+     lists are different sets of plays, so one strip over both puts up a chip
+     that filters to nothing on whichever tab does not have that keymode. */
+  const bestAvailableKeyModes = useMemo(() => {
+    const modes = new Set(bestFilters.keyModes);
     // A keymode can exist entirely below the osu! window (every 5K play worth
     // less than the 200th), and the chip has to be there or the list this site
     // can show has no way to be asked for.
     for (const keyCount of keyPpKeyCounts ?? []) modes.add(`${keyCount}k`);
     for (const play of keyPpTail?.plays ?? []) modes.add(`${play.keyCount}k`);
     return [...modes].sort((a, b) => Number(a.replace("k", "")) - Number(b.replace("k", "")));
-  }, [bestFilters.keyModes, keyPpKeyCounts, keyPpTail, recent]);
+  }, [bestFilters.keyModes, keyPpKeyCounts, keyPpTail]);
+  /* Recent is only what is on the page. A keymode nobody has played lately is
+     not a filter here even when the profile is full of it, and an unranked
+     play still counts, which is why the pp keymodes have no say. */
+  const recentAvailableKeyModes = useMemo(() => getAvailableKeyModes(recent), [recent]);
+  const availableKeyModes = tab === "recent" ? recentAvailableKeyModes : bestAvailableKeyModes;
+
+  /* The filter carries across tabs, so opening one with no plays in that
+     keymode would leave an empty list under a strip with nothing lit. Only on
+     a tab change: the lists themselves keep loading, and a keymode arriving
+     late must not take a pick away from whoever just made it. */
+  useEffect(() => {
+    setKeyFilter((current) => (current === "all" || availableKeyModes.includes(current) ? current : "all"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
   const displayedProfileInsights = profileInsights;
   const cachedAboutFallback = user ? readCachedPlayerAbout(user.id) : undefined;
   const displayedAboutHtml = aboutHtml ?? cachedAboutFallback?.html;
@@ -2951,7 +3001,7 @@ export function PlayerProfilePage({
               </div>
             </div>
             {(tab === "recent" || (tab === "best" && availableKeyModes.length > 1)) && (
-              <div className="hidden items-center gap-2 lg:flex">
+              <div className="hidden min-w-0 items-center gap-2 lg:flex">
                 {tab === "recent" && (
                   <RecentOsuSourceButton
                     loading={loadingOsuRecent}
@@ -2961,13 +3011,17 @@ export function PlayerProfilePage({
                   />
                 )}
                 {availableKeyModes.length > 1 && (
+                  /* Recent's overflow opens the rest of the strip in place, not
+                     the PP by Keymode modal: that modal only knows keymodes that
+                     earned pp, so a keymode played only on unranked maps would
+                     have no way to be filtered to. */
                   <KeyModeControl
                     availableKeyModes={availableKeyModes}
                     keyFilter={keyFilter}
                     onChangeKeyFilter={setKeyFilter}
                     maxVisible={MAX_INLINE_KEY_MODES_WIDE}
-                    playCounts={keyModePlayCounts}
-                    onOverflow={keyModeOverflowHandler}
+                    playCounts={tab === "recent" ? recentKeyModePlayCounts : keyModePlayCounts}
+                    onOverflow={tab === "recent" ? undefined : keyModeOverflowHandler}
                   />
                 )}
               </div>
@@ -3011,8 +3065,7 @@ export function PlayerProfilePage({
                   keyFilter={keyFilter}
                   onChangeKeyFilter={setKeyFilter}
                   maxVisible={MAX_INLINE_KEY_MODES}
-                  playCounts={keyModePlayCounts}
-                  onOverflow={keyModeOverflowHandler}
+                  playCounts={recentKeyModePlayCounts}
                 />
               )}
             </div>
@@ -5460,22 +5513,30 @@ function KeyModeControl({
   /** Chips to keep inline before the rest collapse. Unset keeps all of them. */
   maxVisible?: number;
   playCounts?: Record<string, number>;
-  /** Opens the fuller picker. Without one the strip keeps every chip. */
+  /** Opens a fuller picker instead of unfolding the rest of the strip in place. */
   onOverflow?: () => void;
 }) {
   const { t } = useLingui();
+  const [expanded, setExpanded] = useState(false);
   const visibleKeyModes = useMemo(() => (
-    maxVisible == null || !onOverflow
+    maxVisible == null || expanded
       ? availableKeyModes
       : selectVisibleKeyModes(availableKeyModes, keyFilter, playCounts ?? {}, maxVisible)
-  ), [availableKeyModes, keyFilter, maxVisible, onOverflow, playCounts]);
+  ), [availableKeyModes, expanded, keyFilter, maxVisible, playCounts]);
   const hiddenCount = availableKeyModes.length - visibleKeyModes.length;
 
   return (
     // Someone who plays every keymode makes this strip wider than a phone. It
     // scrolls inside its own box rather than running off the screen, and the
     // box never grows past its parent, so the sort buttons beside it stay put.
-    <div className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto scrollbar-hide rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1 lg:shrink-0">
+    // Unfolded it holds more chips than the row it sits in is wide, so it wraps
+    // onto as many lines as it needs instead of scrolling: a scrolling strip
+    // clips its last chip against the edge, and the point of unfolding is to
+    // see every keymode. It also gives up its desktop shrink-0 there, so it
+    // takes the width it can rather than squeezing the tabs beside it.
+    <div className={`inline-flex max-w-full min-w-0 items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1 ${
+      expanded ? "flex-wrap" : "overflow-x-auto scrollbar-hide lg:shrink-0"
+    }`}>
       {[["all", t`All`] as const, ...visibleKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
         <button
           key={value}
@@ -5488,13 +5549,14 @@ function KeyModeControl({
           {label}
         </button>
       ))}
-      {hiddenCount > 0 && onOverflow && (
-        /* The rest live in the PP by Keymode modal, which lists every keymode
-           with what it is worth and how many plays it holds - more to go on
-           than a menu of the same chips would give. */
+      {hiddenCount > 0 && (
+        /* On Best the rest live in the PP by Keymode modal, which lists every
+           keymode with what it is worth and how many plays it holds - more to
+           go on than a menu of the same chips would give. Everywhere else the
+           strip just unfolds, since a keymode with no pp still has plays. */
         <button
           type="button"
-          onClick={onOverflow}
+          onClick={onOverflow ?? (() => setExpanded(true))}
           title={t`All keymodes`}
           className="shrink-0 px-2 py-1.5 rounded-md text-[10px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l2 hover:bg-osu-b3/50 sm:px-3 sm:text-[11px]"
         >

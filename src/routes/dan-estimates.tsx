@@ -104,7 +104,7 @@ const CHART_EXAMPLES: Array<{ id: number; map: string; ladder: LadderKey; dan: s
   { id: 3729620, map: "jea - Makiba [4K Extra]", ladder: "4k-regular", dan: "alpha++", rawDan: 11.44 },
   { id: 2793593, map: "saikoro - far in the blue sky... [4K 42]", ladder: "4k-regular", dan: "delta+", rawDan: 14.25 },
   { id: 3629313, map: "youman - R.I.P. [4K cacophony 1.1x (297bpm)]", ladder: "4k-ln", dan: "10", rawDan: 10 },
-  { id: 538161, map: "Team Grimoire - C18H27NO3 [Arvie's 7K GRAVITY]", ladder: "7k-ln", dan: "9", rawDan: 9 },
+  { id: 1920630, map: "Minami - Kawaki Wo Ameku [7K Lovely]", ladder: "7k-ln", dan: "9+", rawDan: 9.2 },
   { id: 4596114, map: "-45 - G e n g a o z o [7K N G]", ladder: "7k-regular", dan: "gamma+", rawDan: 11.2 },
   { id: 1325722, map: "Kobaryo - Cartoon Candy [CS' 6K Milk Chocolate]", ladder: "6k-regular", dan: "terra+", rawDan: 9.5 },
 ];
@@ -1287,7 +1287,7 @@ function CreditCurveTabs() {
     },
     {
       label: t`6K/7K LN`,
-      ladder: { key: "6k7k-ln", bar: 0.95, side: "ln" as const, keyCount: 7, example: 538161 },
+      ladder: { key: "6k7k-ln", bar: 0.95, side: "ln" as const, keyCount: 7, example: 1920630 },
       head: [t`Stable-formula acc (95%)`, t`Credit`],
       note: stableFormulaNote,
       rows: [
@@ -1301,7 +1301,8 @@ function CreditCurveTabs() {
         ["94.5%", t`the chart's level -0.76`],
         ["94%", t`the chart's level -1.25`],
         ["93%", t`the chart's level -1.5`],
-        [t`below 93%`, t`nothing`],
+        ["92%", t`the chart's level -1.75`],
+        [t`below 92%`, t`nothing`],
       ],
     },
   ];

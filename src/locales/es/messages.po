@@ -1793,6 +1793,19 @@ msgstr "Un chart cuenta como LN cuando las notas largas son el 45% o más, y com
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "Un chart cuenta como LN cuando las notas largas son el 45% o más, y como regular por debajo de eso. Es la misma línea que usan las páginas de mapas para etiquetar un chart, así que un chart no puede contar para tu rating de LN y llevar una insignia regular a la vez."
 
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "A clean pass here is {0} and this play got {1}, too far under it to count."
+#~ msgstr "Aquí un pase limpio es {0} y esta jugada logró {1}, demasiado por debajo para contar."
+
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {1}: formatAccuracy(minAccuracy)
+#. placeholder {2}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "A clean pass here is {0}, and a pass down to {1} still counts for a lower dan. This play got {2}, so it counts for nothing."
+#~ msgstr "Aquí un pase limpio es {0}, y un pase hasta {1} todavía cuenta para un dan más bajo. Esta jugada logró {2}, así que no cuenta para nada."
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "A collection needs at least {USER_COLLECTION_MIN_ITEMS} maps"
 msgstr "Una colección necesita al menos {USER_COLLECTION_MIN_ITEMS} mapas"
@@ -2681,6 +2694,10 @@ msgid "Beatmap audio, backgrounds, titles, artist names, creator names, metadata
 msgstr "El audio, los fondos, los títulos, los nombres de artistas, los nombres de creadores, los metadatos y demás contenido enviado por usuarios o de terceros de los mapas siguen perteneciendo a sus respectivos propietarios. Este sitio muestra los metadatos públicos disponibles e información derivada como referencia para la comunidad."
 
 #: src/components/discord/CommandShowcase.tsx
+msgid "Beatmap card: stars, keys, status, BPM and length."
+msgstr ""
+
+#: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
 msgstr "Tarjeta de beatmap: estrellas, teclas, estado, BPM, duración y dan."
 
@@ -2715,16 +2732,28 @@ msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps jugados en {countryName}"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "below 90%"
+#~ msgstr ""
+
+#: src/routes/dan-estimates.tsx
+msgid "below 91%"
+msgstr "por debajo de 91%"
+
+#: src/routes/dan-estimates.tsx
 msgid "below 92%"
 msgstr "menos de 92%"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "below 93%"
+#~ msgstr "por debajo de 93%"
 
 #: src/routes/dan-estimates.tsx
 msgid "below 94.5%"
 msgstr "menos de 94.5%"
 
 #: src/routes/dan-estimates.tsx
-msgid "below 94%"
-msgstr "menos de 94%"
+#~ msgid "below 94%"
+#~ msgstr "menos de 94%"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "below 96%"
@@ -3577,6 +3606,10 @@ msgstr "Conexión perdida; reconectando."
 msgid "Contact"
 msgstr "Contacto"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Content"
+msgstr ""
+
 #: src/components/layout/CountrySelector.tsx
 msgid "Continents"
 msgstr "Continentes"
@@ -4404,54 +4437,54 @@ msgid "does not count"
 msgstr "no cuenta"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan yet: the chart has not been analyzed."
-msgstr "Todavía no cuenta para dan: el mapa no ha sido analizado."
+#~ msgid "Does not count for dan yet: the chart has not been analyzed."
+#~ msgstr "Todavía no cuenta para dan: el mapa no ha sido analizado."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
-msgstr "No cuenta para dan: Easy amplió todas las ventanas de acierto, así que la precisión no se logró con las ventanas que asume un pase de dan."
+#~ msgid "Does not count for dan: Easy widened every hit window, so the accuracy was not earned against the windows a dan pass assumes."
+#~ msgstr "No cuenta para dan: Easy amplió todas las ventanas de acierto, así que la precisión no se logró con las ventanas que asume un pase de dan."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: the accuracy is under the pass bar."
-msgstr "No cuenta para dan: la precisión está por debajo del mínimo para pasar."
+#~ msgid "Does not count for dan: the accuracy is under the pass bar."
+#~ msgstr "No cuenta para dan: la precisión está por debajo del mínimo para pasar."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
-msgstr "No cuenta para dan: el mapa no tiene calificación de dan a la velocidad con la que se jugó."
+#~ msgid "Does not count for dan: the chart has no dan rating at the rate this was played at."
+#~ msgstr "No cuenta para dan: el mapa no tiene calificación de dan a la velocidad con la que se jugó."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
-msgstr "No cuenta para dan: el OD con el que se jugó está por debajo del OD que el dan necesita."
+#~ msgid "Does not count for dan: the OD this was judged at is below the OD dan credit needs."
+#~ msgstr "No cuenta para dan: el OD con el que se jugó está por debajo del OD que el dan necesita."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
-msgstr "No cuenta para dan: este mapa no está construido de forma que un pase permita leer un nivel de dan."
+#~ msgid "Does not count for dan: this chart is not built in a way a dan level can be read off a clear of it."
+#~ msgstr "No cuenta para dan: este mapa no está construido de forma que un pase permita leer un nivel de dan."
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {1}: formatAccuracy(accuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
-msgstr "No cuenta para dan: este pase necesita {0} de precisión y obtuvo {1}."
+#~ msgid "Does not count for dan: this pass needs {0} accuracy and got {1}."
+#~ msgstr "No cuenta para dan: este pase necesita {0} de precisión y obtuvo {1}."
 
 #. placeholder {0}: formatAccuracy(minAccuracy)
 #. placeholder {1}: formatAccuracy(bar)
 #. placeholder {2}: formatAccuracy(accuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
-msgstr "No cuenta para dan: este pase necesita {0} para acreditar algo (barra de paso de {1}) y obtuvo {2}."
+#~ msgid "Does not count for dan: this pass needs {0} to credit anything ({1} pass bar) and got {2}."
+#~ msgstr "No cuenta para dan: este pase necesita {0} para acreditar algo (barra de paso de {1}) y obtuvo {2}."
 
 #. placeholder {0}: od.toFixed(1)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
-msgstr "No cuenta para dan: esta jugada se jugó con OD {0}, por debajo del OD que el dan necesita."
+#~ msgid "Does not count for dan: this play was judged at OD {0}, which is below the OD dan credit needs."
+#~ msgstr "No cuenta para dan: esta jugada se jugó con OD {0}, por debajo del OD que el dan necesita."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
-msgstr "No cuenta para dan: los conteos de juicios de esta jugada ya no están, así que no hay precisión que medir."
+#~ msgid "Does not count for dan: this play's judgement counts are gone, so there is no accuracy to measure."
+#~ msgstr "No cuenta para dan: los conteos de juicios de esta jugada ya no están, así que no hay precisión que medir."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Does not count for dan."
-msgstr "No cuenta para dan."
+#~ msgid "Does not count for dan."
+#~ msgstr "No cuenta para dan."
 
 #: src/routes/farm-helper.tsx
 msgid "done"
@@ -4658,6 +4691,10 @@ msgstr "Logra <0/> <1/> en {mapSlot}"
 #: src/routes/farm-helper.tsx
 msgid "easy"
 msgstr "fácil"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on."
+msgstr "Easy amplió todas las ventanas de acierto, así que esta precisión no se logró con las ventanas con las que se juzga un pase de dan."
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
@@ -4878,6 +4915,10 @@ msgstr "todo"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "todo lo demás que trae el archivo"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Excludes all dan-related stuff from the website"
+msgstr ""
 
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
@@ -7302,6 +7343,13 @@ msgstr "PP mínimo"
 msgid "Minimum pp per play"
 msgstr "pp mínimo por play"
 
+#. placeholder {0}: formatAccuracy(bar)
+#. placeholder {0}: formatAccuracy(minAccuracy)
+#. placeholder {1}: formatAccuracy(accuracy)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {0}. This play got {1}."
+msgstr "El mínimo para contar para dan es {0}. Esta jugada logró {1}."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
 msgstr "Espejar (ida y vuelta)"
@@ -7787,6 +7835,10 @@ msgstr "Todavía no hay colecciones. Publica la primera."
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
 msgstr "No se encontraron países"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "No Dans"
+msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "no data"
@@ -12218,6 +12270,10 @@ msgstr "Los dans de 4K LN están pensados para jugarse en ScoreV2. El problema e
 #~ msgid "The 4K LN courses are written for the ScoreV2 mod, and osu! only files a play under that formula if you are on lazer. Most people are on stable, so the site works ScoreV2 accuracy out from your judgements rather than asking for a ScoreV2 play at all. On an old archived pass with nothing left but its accuracy, a stable play has to reach 97.5% instead of 97%, because the same hands read about half a point higher on the stable formula."
 #~ msgstr "Los cursos de 4K LN están pensados para el mod ScoreV2, y osu! solo registra un play con esa fórmula si estás en lazer. La mayoría juega en stable, así que el sitio calcula la precisión de ScoreV2 a partir de tus judgements en vez de exigir un play con ScoreV2. En un pase viejo del archivo al que no le queda más que su precisión, un play de stable tiene que llegar a 97.5% en lugar de 97%, porque las mismas manos se leen medio punto más alto en la fórmula de stable."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "The accuracy is too far under this ladder's pass bar to count."
+#~ msgstr "La precisión está demasiado por debajo de la línea de pase de esta escala para contar."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The accuracy shown by the game is not used. It is worked out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
 #~ msgstr "No se usa la precisión que te mostró el juego. Se vuelve a calcular desde tus judgements, los 300, 200, 100 y demás. En mania hay dos formas de sumarlos, la fórmula de stable y la de ScoreV2 que muestra lazer. Cada escala pide su mínimo en una de las dos: 4K regular en la de stable, 4K LN en la de ScoreV2. Como las dos dan números distintos para la misma play, recalcular es lo que hace que esa play cuente, o no cuente, igual en cualquiera de los dos clientes."
@@ -12315,6 +12371,10 @@ msgstr "el nivel del chart -0.51"
 #~ msgstr "el nivel del chart -0.53"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.57"
+#~ msgstr "el nivel del chart -0.57"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.61"
 #~ msgstr "el nivel del chart -0.61"
 
@@ -12345,6 +12405,10 @@ msgstr "el nivel del chart -0.76"
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.85"
 #~ msgstr "el nivel del chart -0.85"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "the chart's level -0.88"
+#~ msgstr "el nivel del chart -0.88"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.9"
@@ -12383,12 +12447,16 @@ msgid "the chart's level -1.39"
 msgstr "el nivel del chart -1.39"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level -1.5"
-#~ msgstr "el nivel del chart -1.5"
+msgid "the chart's level -1.5"
+msgstr "el nivel del chart -1.5"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.55"
 msgstr "el nivel del chart -1.55"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -1.75"
+msgstr "el nivel del chart -1.75"
 
 #. placeholder {0}: formatCreditOffset(held)
 #: src/routes/dan-estimates.tsx
@@ -12539,6 +12607,10 @@ msgstr "El archivo .osu exacto también funciona."
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "La primera skin que subas aparecerá aquí."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
+msgstr "Los datos de judgement de esta jugada se perdieron, así que no hay precisión con la que comprobarla."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -12876,6 +12948,18 @@ msgstr "Ya es un GOAT."
 msgid "This .osk could not be read."
 msgstr "No se pudo leer este .osk."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart has no dan level at the rate it was played at."
+msgstr "Este mapa no tiene nivel de dan a la velocidad con la que se jugó."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart has not been analyzed yet, so there is no dan level to credit. It can count later."
+msgstr "Este mapa todavía no ha sido analizado, así que no hay nivel de dan que otorgar. Puede contar más adelante."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart is not built in a way a dan level can be read off a clear of it."
+msgstr "Este mapa no está construido de forma que un pase permita leer un nivel de dan."
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
 msgstr "Este mapa no está en el catálogo de mapas, así que no hay nada más que mostrar aparte del play."
@@ -12967,6 +13051,23 @@ msgstr "Esta página no existe."
 #: src/components/CountryWarming.tsx
 msgid "This page will load automatically once {name} is ready."
 msgstr "Esta página se cargará sola cuando {name} esté listo."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play counts for nothing on the dan estimate."
+msgstr "Esta jugada no cuenta para nada en la estimación de dan."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play is under the minimum accuracy required for dan credit."
+msgstr "Esta jugada está por debajo de la precisión mínima para contar para dan."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play was judged at a lower OD than a dan clear has to be played at."
+msgstr "Esta jugada se jugó con un OD más bajo del que necesita un pase de dan."
+
+#. placeholder {0}: od.toFixed(1)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play was judged at OD {0}. A dan clear has to be played at a higher OD than that."
+msgstr "Esta jugada se jugó con OD {0}. Un pase de dan tiene que jugarse con un OD más alto que ese."
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "This play's strongest skillset"

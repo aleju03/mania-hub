@@ -132,7 +132,7 @@ const ADMIN_TOOLS = [
   { to: "/valley", label: "Valley", accent: "#86efac", adminOnly: true },
   { to: "/admin/todos", label: "Todos", accent: "#fde047", adminOnly: true },
   { to: "/admin/bug-reports", label: "Bug reports", accent: "#fca5a5", adminOnly: true },
-  { to: "/admin/ghost", label: "Ghost", accent: "#c4b5fd", adminOnly: true },
+  { to: "/admin/ghost", label: "Ralsei", accent: "#c4b5fd", adminOnly: true },
   { to: "/admin/r2", label: "R2", accent: "#67e8f9", adminOnly: true, search: { prefix: "replay-cache/" } },
   { to: "/admin/collections", label: "Collections", accent: "#f9a8d4", adminOnly: true },
   { to: "/admin/bbcode-images", label: "BBCode images", accent: "#fdba74", adminOnly: true },
