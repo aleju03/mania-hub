@@ -1517,7 +1517,7 @@ msgstr "已选 <0>{selectedCount}</0> 个"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>{username} isn't tracked</0>, so only their ranked plays are rated here. Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
-msgstr ""
+msgstr "<0>{username} 未被追踪</0>，所以这里只对该玩家上架谱面的成绩评分。社区喜爱和坟场谱面的成绩只有通过追踪，或者有人用「添加缺失的成绩」添加后，才会出现在本站。"
 
 #: src/routes/discord.tsx
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
@@ -1593,7 +1593,7 @@ msgstr "在已追踪的 {1} 名 {2}K 主玩家中位列<0>前 {0}%</0>"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
-msgstr ""
+msgstr "<0>追踪已开启。</0>你最近的成绩正在导入，几分钟后就会在这里评分。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
@@ -1601,7 +1601,7 @@ msgstr ""
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
-msgstr ""
+msgstr "<0>你的成绩还没有被追踪。</0>登录不会自动开启追踪。开启后，社区喜爱和坟场谱面的新成绩才会计入你的技能评分。"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -1781,7 +1781,7 @@ msgstr "7K LN"
 
 #: src/routes/dan-estimates.tsx
 msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. Your Tech, Inverse and Release dans still show their own numbers; only the overall estimate is held near General."
-msgstr ""
+msgstr "7K LN 是唯一的例外。它的综合技能本身就混合了各种长条，所以无论技、反键和放手指向哪里，估计值都会保持在你综合段位的上下一级以内。对几乎所有人来说，这几项段位都远低于综合，可能是因为这类高难谱面本来就少，也可能是本站还没有识别出全部，所以它们不再单独决定这个数字。你的技、反键和放手段位仍会显示各自的数字，只有总体估计值被保持在综合附近。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
@@ -2753,7 +2753,7 @@ msgstr "谱面的音频、背景、标题、艺术家名、作者名、元数据
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM and length."
-msgstr ""
+msgstr "谱面卡片：星级、键数、状态、BPM 和长度。"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
@@ -3674,7 +3674,7 @@ msgstr "联系方式"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Content"
-msgstr ""
+msgstr "内容"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Continents"
@@ -4986,7 +4986,7 @@ msgstr "压缩包里的其他所有文件"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Excludes all dan-related stuff from the website"
-msgstr ""
+msgstr "在整个网站中隐藏所有与段位相关的内容"
 
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
@@ -7936,7 +7936,7 @@ msgstr "未找到国家/地区"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
-msgstr ""
+msgstr "隐藏段位"
 
 #: src/routes/farm-helper.tsx
 msgid "no data"

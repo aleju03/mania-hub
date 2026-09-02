@@ -1508,7 +1508,7 @@ msgstr "<0>{selectedCount}</0> seleccionadas"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>{username} isn't tracked</0>, so only their ranked plays are rated here. Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
-msgstr ""
+msgstr "<0>{username} no está trackeado</0>, así que aquí solo se califican sus jugadas en mapas ranked. Las jugadas en mapas loved y abandonados solo llegan a este sitio por el tracking, o cuando alguien las agrega con Agregar un score faltante."
 
 #: src/routes/discord.tsx
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
@@ -1584,7 +1584,7 @@ msgstr "<0>top {0}%</0> de {1} mains {2}K trackeados"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
-msgstr ""
+msgstr "<0>El tracking está activado.</0> Tus jugadas recientes se están importando y se calificarán aquí en unos minutos."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
@@ -1592,7 +1592,7 @@ msgstr ""
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
-msgstr ""
+msgstr "<0>Tus jugadas todavía no se están trackeando.</0> Iniciar sesión no activa el tracking. Actívalo para incluir tus nuevas jugadas en mapas loved y abandonados en tu nivel de habilidad."
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -1772,7 +1772,7 @@ msgstr "7K LN"
 
 #: src/routes/dan-estimates.tsx
 msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. Your Tech, Inverse and Release dans still show their own numbers; only the overall estimate is held near General."
-msgstr ""
+msgstr "7K LN es la única excepción. Su skill General ya mezcla todo tipo de long notes, así que la estimación se queda a un nivel como máximo de tu dan General, sin importar hacia dónde apunten Tech, Inverse y Release. Esos dans se quedan bastante por debajo de General para casi todo el mundo, ya sea porque existen pocos mapas difíciles de esos tipos o porque el sitio no reconoce todos, así que ya no deciden el número por su cuenta. Tus dans de Tech, Inverse y Release siguen mostrando sus propios números; solo la estimación general se mantiene cerca de General."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
@@ -2744,7 +2744,7 @@ msgstr "El audio, los fondos, los títulos, los nombres de artistas, los nombres
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM and length."
-msgstr ""
+msgstr "Tarjeta del beatmap: estrellas, teclas, estado, BPM y duración."
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
@@ -3665,7 +3665,7 @@ msgstr "Contacto"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Content"
-msgstr ""
+msgstr "Contenido"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Continents"
@@ -4977,7 +4977,7 @@ msgstr "todo lo demás que trae el archivo"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Excludes all dan-related stuff from the website"
-msgstr ""
+msgstr "Quita todo lo relacionado con dans del sitio"
 
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
@@ -7927,7 +7927,7 @@ msgstr "No se encontraron países"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
-msgstr ""
+msgstr "Sin dans"
 
 #: src/routes/farm-helper.tsx
 msgid "no data"
