@@ -568,14 +568,25 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
   const members = new Map<number, number>();
   let cursor = 0;
   for (;;) {
+    // Each user's newest ready row, the same rule the skill leaderboard ranks
+    // on. Reading only the current version would leave a freshly bumped
+    // version's curves to the handful of players the drip has redone, and a
+    // keymode nobody in that handful plays (10K after the v23 bump) would
+    // have no median at all: its board and profiles serve raw ratings, and a
+    // four-play pool sits on top of a 500-play one. The superseded row is a
+    // sound stand-in until the compute replaces it (PLAYER_SKILLS_SEED_VERSIONS
+    // says as much about its plays), and the board already shows it.
     const rows = (await exec(
       db,
-      `select user_id, modes_json from player_skill_ratings
-       where analysis_version = ? and status = 'ready' and user_id > ?
-         and user_id in (select distinct user_id from country_rosters)
-       order by user_id
+      `select r.user_id, r.modes_json from player_skill_ratings r
+       where r.status = 'ready' and r.modes_json is not null and r.user_id > ?
+         and r.analysis_version = (
+           select max(r2.analysis_version) from player_skill_ratings r2
+            where r2.user_id = r.user_id and r2.status = 'ready' and r2.modes_json is not null)
+         and r.user_id in (select distinct user_id from country_rosters)
+       order by r.user_id
        limit ?`,
-      [PLAYER_SKILLS_VERSION, cursor, EXACT_CURVES_USER_CHUNK],
+      [cursor, EXACT_CURVES_USER_CHUNK],
     )).rows;
     for (const row of rows) {
       cursor = Math.max(cursor, Number(row.user_id));
@@ -779,20 +790,14 @@ export async function enqueueSkillBaselineIfDue(db: Db, queue: JobQueue, interva
   ) {
     return false;
   }
-  // After a PLAYER_SKILLS_VERSION bump this check fires immediately, but the
-  // drip recomputes strongest players first, so curves rebuilt from its early
-  // arrivals would skew every percentile low for the whole refresh interval
-  // (the exact curves ARE those rows, so the same gate guards them). Keep
-  // serving the previous version's curves until the new version covers the
-  // majority of rated players.
-  if (stored || exactStored) {
-    const counts = (await exec(
-      db,
-      "select sum(case when analysis_version = ? then 1 else 0 end) as current, count(*) as total from player_skill_ratings where status = 'ready'",
-      [PLAYER_SKILLS_VERSION],
-    )).rows[0];
-    if (Number(counts?.current ?? 0) * 2 < Number(counts?.total ?? 0)) return false;
-  }
+  // After a PLAYER_SKILLS_VERSION bump this check fires at once. That used to
+  // wait for the new version to cover a majority of rated players, because
+  // the exact curves read current-version rows only and the drip redoes the
+  // strongest players first, so early curves skewed every percentile low.
+  // The curves now fold each player's newest ready row, so a bump changes
+  // nothing about who is in the population, and with bumps landing days
+  // apart and a full sweep taking two, the gate had kept prod on curves from
+  // several versions back (and from before 10K was rated at all).
   const pending = (await exec(
     db,
     "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",

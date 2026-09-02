@@ -12790,8 +12790,12 @@ msgid "The pool is your osu! top plays, everything recorded while you were track
 msgstr "El conjunto son tus top plays de osu!, todo lo registrado mientras tenías tracking y cualquier enlace de score agregado manualmente, quedándote solo con tu mejor play en cada chart a cada velocidad. El historial automático por debajo de tus top plays solo existe si estás en el roster de tu país, que incluye su top 100 y a cualquiera que haya activado el tracking por su cuenta, y empieza el día en que se activa el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
-msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
-msgstr "La base de comparación todavía no está construida, así que estos son ratings sin ajustar y no coincidirán con los números del perfil de cada jugador."
+msgid "The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should."
+msgstr "La base de comparación de este modo de teclas todavía no está construida, así que estos son ratings sin ajustar y los jugadores con pocas jugadas pueden aparecer más arriba de lo que deberían."
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+#~ msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
+#~ msgstr "La base de comparación todavía no está construida, así que estos son ratings sin ajustar y no coincidirán con los números del perfil de cada jugador."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx

@@ -396,6 +396,59 @@ describe("exact skill curves", () => {
     });
   });
 
+  it("folds each player's newest ready row, so a version bump keeps every keymode's median", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await seedRatedRoster(db);
+      const now = new Date().toISOString();
+      // Six 10K mains still on the previous version: the drip has not reached
+      // them, and nobody already redone plays 10K.
+      for (let user = 0; user < 6; user += 1) {
+        const userId = 3000 + user;
+        await exec(
+          db,
+          "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', ?, ?, 'test', 1, ?)",
+          [userId, 100 + user, now],
+        );
+        const summary = {
+          totalPlays: 80,
+          analyzedPlays: 80,
+          pendingPlays: 0,
+          unsupportedPlays: 0,
+          modes: [{ keyCount: 10, analyzedPlays: 80, ratings: { Overall: 15 + user }, patterns: [] }],
+        };
+        await exec(
+          db,
+          `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+           values (?, ?, 'ready', ?, ?, ?, ?)`,
+          [userId, PLAYER_SKILLS_VERSION - 1, JSON.stringify(summary), JSON.stringify({ plays: [] }), now, now],
+        );
+      }
+      // The chain is due right after the bump, not once a majority is redone.
+      expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(true);
+      await exec(db, "delete from jobs");
+      await runSkillBaselineJob(db, queue, { runId: "bump-run", cursor: 0 });
+
+      const exact = await readExactSkillCurves(db);
+      expect(exact!.users["10"]).toBe(6);
+      expect(exact!.curves["10"].Overall.median).toBeGreaterThan(0);
+      // A four-play 10K pool now shrinks toward that median on board and
+      // profile alike instead of ranking raw.
+      const thin = await decoratePlayerSkillBreakdown(db, 3999, {
+        status: "ready" as const,
+        version: PLAYER_SKILLS_VERSION,
+        computedAt: now,
+        totalPlays: 4,
+        analyzedPlays: 4,
+        pendingPlays: 0,
+        unsupportedPlays: 0,
+        modes: [{ keyCount: 10, analyzedPlays: 4, ratings: { Overall: 26.15 }, patterns: [] }],
+      });
+      expect(thin.modes[0].provisional).toBe(true);
+      expect(thin.modes[0].ratings.Overall).toBeLessThan(20);
+    });
+  });
+
   it("caches the served curves per database, not per process", async () => {
     await withDb(async (db) => {
       const queue = new JobQueue(db);

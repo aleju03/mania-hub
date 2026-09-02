@@ -12799,8 +12799,12 @@ msgid "The pool is your osu! top plays, everything recorded while you were track
 msgstr "成绩池由你的 osu! 最佳成绩、追踪期间记录的所有成绩，以及手动添加的成绩链接组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后，最佳成绩以下的历史成绩才会被自动记录；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
-msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
-msgstr "统计基准尚未建立，因此这里显示的是未经调整的原始评分，与玩家个人资料页上的数字不一致。"
+msgid "The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should."
+msgstr "该键位模式的统计基准尚未建立，因此这里显示的是未经调整的原始评分，游玩次数很少的玩家可能排得比应有的位置更高。"
+
+#: src/components/rankings/SkillLeaderboardBoard.tsx
+#~ msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
+#~ msgstr "统计基准尚未建立，因此这里显示的是未经调整的原始评分，与玩家个人资料页上的数字不一致。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx

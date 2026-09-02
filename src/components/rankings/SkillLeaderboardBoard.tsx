@@ -141,7 +141,7 @@ export function SkillLeaderboardBoard({
 
       {snapshot && !snapshot.shrunk && (
         <p className="text-[11px] text-osu-f1">
-          <Trans>The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles.</Trans>
+          <Trans>The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should.</Trans>
         </p>
       )}
 
