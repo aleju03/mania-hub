@@ -29,7 +29,7 @@ import {
   type LivePlayerSkillPlay,
 } from "#/lib/live-backend";
 import type { MyDataSkillMode } from "#/lib/my-data";
-import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
+import { formatAccuracy, formatAccuracyAgainst, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
 import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisMeta } from "#/lib/skill-axes";
 import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
@@ -976,9 +976,9 @@ function DanRejectedRow({
   const od = rejected.od;
   const reason = rejected.reason === "below_bar"
     ? (minAccuracy != null && bar != null && accuracy != null
-      ? t`Minimum required for dan credit is ${formatAccuracy(minAccuracy)}. This play got ${formatAccuracy(accuracy)}.`
+      ? t`Minimum required for dan credit is ${formatAccuracy(minAccuracy)}. This play got ${formatAccuracyAgainst(accuracy, minAccuracy)}.`
       : bar != null && accuracy != null
-        ? t`Minimum required for dan credit is ${formatAccuracy(bar)}. This play got ${formatAccuracy(accuracy)}.`
+        ? t`Minimum required for dan credit is ${formatAccuracy(bar)}. This play got ${formatAccuracyAgainst(accuracy, bar)}.`
         : t`This play is under the minimum accuracy required for dan credit.`)
     : rejected.reason === "low_od"
       ? (od != null

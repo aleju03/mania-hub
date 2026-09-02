@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  formatAccuracyAgainst,
   formatCompactCount,
   formatDate,
   formatDetailedTimeAgo,
@@ -156,5 +157,22 @@ describe("formatCompactCount", () => {
   it("floors fractions and never renders a negative count", () => {
     expect(formatCompactCount(12.7)).toBe("12");
     expect(formatCompactCount(-5)).toBe("0");
+  });
+});
+
+describe("formatAccuracyAgainst", () => {
+  it("keeps two decimals when the accuracy already reads apart from the threshold", () => {
+    expect(formatAccuracyAgainst(0.914571, 0.92)).toBe("91.46%");
+    expect(formatAccuracyAgainst(0.951, 0.95)).toBe("95.10%");
+  });
+
+  it("adds decimals until a near miss stops rounding onto the threshold", () => {
+    // Lovelyn's Kairikou pass: 91.99899% under a 92% floor printed as "92.00%".
+    expect(formatAccuracyAgainst(0.9199898973786356, 0.92)).toBe("91.999%");
+    expect(formatAccuracyAgainst(0.919996, 0.92)).toBe("91.9996%");
+  });
+
+  it("caps at four decimals for a gap smaller than that", () => {
+    expect(formatAccuracyAgainst(0.9199999, 0.92)).toBe("92.0000%");
   });
 });

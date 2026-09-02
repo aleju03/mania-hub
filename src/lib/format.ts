@@ -84,6 +84,22 @@ export function formatAccuracy(acc: number): string {
   return `${(acc * 100).toFixed(2)}%`;
 }
 
+/**
+ * An accuracy printed against a threshold it fell short of, with enough
+ * decimals to show the gap. A 91.99899% under a 92% floor rounds to "92.00%"
+ * at two decimals, which reads as a tie the rule then contradicts; this keeps
+ * adding decimals (to four) until the two strings differ, so it prints
+ * "91.999%". Uses toFixed only once the extra digit is needed: an accuracy
+ * that already reads apart from the threshold keeps the usual two decimals.
+ */
+export function formatAccuracyAgainst(acc: number, threshold: number): string {
+  for (let digits = 2; digits <= 4; digits += 1) {
+    const text = `${(acc * 100).toFixed(digits)}%`;
+    if (text !== `${(threshold * 100).toFixed(digits)}%`) return text;
+  }
+  return `${(acc * 100).toFixed(4)}%`;
+}
+
 export function formatPlayTime(seconds: number | null, locale: AppLocale = "en"): string {
   if (!seconds) return tr(locale, msg`0h`);
   const days = Math.floor(seconds / 86400);
