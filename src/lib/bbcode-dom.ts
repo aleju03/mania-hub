@@ -357,12 +357,76 @@ function wrapBlock(el: Element, open: string, close: string, fallback: string, i
     + (flags.afterClose ? "\n" : "");
 }
 
+/**
+ * The surface's own text color during a serialize. Copying rendered text and
+ * pasting it back brings that color along as an inline style, and it is not a
+ * choice anyone made, so a span carrying only it is not a [color].
+ */
+let surfaceColor: string | null = null;
+
+/** The color of an element that stands for a [color], or null. */
+function elementColor(el: Element): string | null {
+  if (el.tagName === "FONT") {
+    const color = el.getAttribute("color");
+    return color ? (cssColorToBB(color) ?? color) : null;
+  }
+  if (el.tagName !== "SPAN") return null;
+  const chosen = el.getAttribute("data-bb-color");
+  if (chosen) return chosen;
+  const styled = cssColorToBB((el as HTMLElement).style.color);
+  return styled && styled !== surfaceColor ? styled : null;
+}
+
+function hasNestedColor(el: Element): boolean {
+  return Array.from(el.querySelectorAll("span, font")).some((inner) => elementColor(inner) != null);
+}
+
+/**
+ * A [color] whose children hold another [color] is being distributed: osu!
+ * pairs an opener with the first closer after it, so one nested inside another
+ * prints as text. The outer color is instead written around each run of
+ * children that carry no color of their own, and the inner colors stand alone.
+ */
+let distributedColor: string | null = null;
+
 function serializeChildren(el: Node): string {
+  const color = distributedColor;
   let out = "";
+  if (!color) {
+    el.childNodes.forEach((child) => {
+      out += serializeNode(child, out);
+    });
+    return out;
+  }
+  let run = "";
+  const flush = () => {
+    if (run) out += `[color=${color}]${run}[/color]`;
+    run = "";
+  };
   el.childNodes.forEach((child) => {
-    out += serializeNode(child, out);
+    const isEl = child.nodeType === 1;
+    if (isEl && (elementColor(child as Element) != null || hasNestedColor(child as Element))) {
+      flush();
+      out += serializeNode(child, out);
+    } else {
+      run += serializeNode(child, out + run);
+    }
   });
+  flush();
   return out;
+}
+
+/** Serializes children under a [color], pushing it inward when they nest one. */
+function serializeColored(el: Element, color: string | null): string {
+  const previous = distributedColor;
+  const nested = color != null && hasNestedColor(el);
+  distributedColor = nested ? color : null;
+  try {
+    const inner = serializeChildren(el);
+    return color && !nested ? `[color=${color}]${inner}[/color]` : inner;
+  } finally {
+    distributedColor = previous;
+  }
 }
 
 function serializeList(el: Element): string {
@@ -396,8 +460,7 @@ function serializeSpanStyles(el: HTMLElement): string {
   const wrappers: Array<[string, string]> = [];
   if (el.classList.contains("spoiler")) wrappers.push(["[spoiler]", "[/spoiler]"]);
 
-  const color = el.getAttribute("data-bb-color") ?? cssColorToBB(el.style.color);
-  if (color) wrappers.push([`[color=${color}]`, "[/color]"]);
+  const color = elementColor(el);
 
   const sizeAttr = el.getAttribute("data-bb-size");
   const sizeMatch = sizeAttr ?? (/^(\d+)%$/.exec(el.style.fontSize)?.[1] ?? null);
@@ -410,7 +473,7 @@ function serializeSpanStyles(el: HTMLElement): string {
   if (decoration.includes("underline")) wrappers.push(["[u]", "[/u]"]);
   if (decoration.includes("line-through")) wrappers.push(["[s]", "[/s]"]);
 
-  let out = serializeChildren(el);
+  let out = serializeColored(el, color);
   for (let i = wrappers.length - 1; i >= 0; i--) {
     out = wrappers[i][0] + out + wrappers[i][1];
   }
@@ -472,11 +535,8 @@ function serializeNode(node: Node, prior: string): string {
       return `[u]${serializeChildren(el)}[/u]`;
     case "S": case "DEL": case "STRIKE":
       return `[s]${serializeChildren(el)}[/s]`;
-    case "FONT": {
-      const color = el.getAttribute("color");
-      const inner = serializeChildren(el);
-      return color ? `[color=${cssColorToBB(color) ?? color}]${inner}[/color]` : inner;
-    }
+    case "FONT":
+      return serializeColored(el, elementColor(el));
     case "A": {
       const href = el.getAttribute("href") ?? "";
       if (href.startsWith("mailto:")) return `[email=${href.slice(7)}]${serializeChildren(el)}[/email]`;
@@ -527,5 +587,10 @@ function serializeNode(node: Node, prior: string): string {
 
 /** contentEditable surface -> BBCode source. */
 export function serializeBBCodeDom(root: Element): string {
-  return serializeChildren(root).replace(/\u00a0/g, " ");
+  surfaceColor = typeof getComputedStyle === "function" ? cssColorToBB(getComputedStyle(root).color) : null;
+  try {
+    return serializeChildren(root).replace(/\u00a0/g, " ");
+  } finally {
+    surfaceColor = null;
+  }
 }

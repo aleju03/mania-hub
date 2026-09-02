@@ -46,6 +46,7 @@ import {
   Plus,
   Rainbow,
   Replace,
+  Scaling,
   Scissors,
   Strikethrough,
   TextQuote,
@@ -58,7 +59,7 @@ import {
 } from "lucide-react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import { buildGradientBBCode, containsBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, shiftHexHue, type BBAlign, type BBSourceSpan } from "../../../lib/bbcode";
+import { buildGradientBBCode, containsBBCode, findBBNodePathAtOffset, gradientCharColors, normalizeHexColor, parseBBCode, parseYoutubeInput, shiftHexHue, type BBAlign, type BBSourceSpan } from "../../../lib/bbcode";
 import {
   ALIGN_SELECTOR,
   applyColorSequence,
@@ -88,9 +89,9 @@ import {
   type ImageContentRect,
 } from "../../../lib/image-resize";
 import { OSU_PROFILE_COLUMN_WIDTH, columnFitScale, shouldOpenAtActualSize } from "../../../lib/bbcode-layout";
-import { pendingBlobUrls, stripPendingImages } from "../../../lib/bbcode-pending-images";
+import { pendingBlobUrls, resolvePendingBlobUrls, stripPendingImages } from "../../../lib/bbcode-pending-images";
 import { SearchInput } from "../../ui/SearchInput";
-import { BBCodePreview } from "./BBCodePreview";
+import { BBCodePreview, pickHighlightNode } from "./BBCodePreview";
 import { BBCodeContextMenu, type ContextMenuItem, type ContextMenuState } from "./BBCodeContextMenu";
 import { ImageEditorModal, type ImageEditorSource } from "./ImageEditorModal";
 
@@ -103,6 +104,10 @@ const VISUAL_SYNC_DEBOUNCE_MS = 300;
 // How long a resize may run before it is worth saying so. Below this it reads
 // as instant, and the status row would only make the docked inspector jump.
 const RESIZE_STATUS_DELAY_MS = 250;
+// A promise-backed ClipboardItem reserves permission while images upload, but
+// a browser is allowed to leave that write pending. Do not call that an upload
+// failure forever: fall back to writeText once the hosted source is ready.
+const CLIPBOARD_RESERVATION_TIMEOUT_MS = 1_500;
 
 const COLOR_SWATCHES = [
   "#FFFFFF", "#FF66AA", "#B14DE8", "#66A4FF", "#5EE08A",
@@ -214,6 +219,51 @@ function readElementSize(el: HTMLElement): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/** Pointer travel before a press on an image becomes a reorder drag. */
+const IMAGE_REORDER_THRESHOLD_PX = 6;
+
+function isLineBreak(node: Node | null): node is HTMLBRElement {
+  return node?.nodeType === 1 && (node as Element).tagName === "BR";
+}
+
+/**
+ * The node an image travels as when it is dragged to a new spot: the image,
+ * the link that wraps only it, and any align block that holds only that.
+ */
+function imageReorderUnit(img: HTMLImageElement, root: HTMLElement): HTMLElement {
+  let unit: HTMLElement = img;
+  while (unit.parentElement && unit.parentElement !== root) {
+    const parent = unit.parentElement;
+    if (!parent.matches('a[data-bb="url"], center, div[data-bb="align"]')) break;
+    const alone = Array.from(parent.childNodes).every((node) =>
+      node === unit || (node.nodeType === 3 && !(node.nodeValue ?? "").trim()));
+    if (!alone) break;
+    unit = parent;
+  }
+  return unit;
+}
+
+/** Images that can be reordered: real [img]s, not embed thumbnails or imagemaps. */
+function reorderableImages(root: HTMLElement): HTMLImageElement[] {
+  return Array.from(root.querySelectorAll<HTMLImageElement>("img"))
+    .filter((img) => !img.closest(".bbcode-editor-embed, .imagemap"));
+}
+
+/**
+ * Moves `unit` next to `target`. The line break that separated the moved image
+ * from its neighbours travels with it, so images stacked one per line stay
+ * one per line; an image set inline with other content moves alone.
+ */
+function moveImageUnit(unit: HTMLElement, target: HTMLElement, side: "before" | "after") {
+  let br: HTMLBRElement | null = null;
+  if (isLineBreak(unit.nextSibling)) br = unit.nextSibling;
+  else if (isLineBreak(unit.previousSibling)) br = unit.previousSibling;
+  br?.remove();
+  unit.remove();
+  if (side === "before") target.before(...(br ? [unit, br] : [unit]));
+  else target.after(...(br ? [br, unit] : [unit]));
+}
+
 /** caretRangeFromPoint with a Firefox (caretPositionFromPoint) fallback. */
 function caretRangeFromPoint(x: number, y: number): Range | null {
   const doc = document as Document & {
@@ -290,6 +340,23 @@ function clearStored(key: string) {
     window.localStorage.removeItem(key);
   } catch {
     // Ignore.
+  }
+}
+
+async function waitForReservedClipboardWrite(write: Promise<void>): Promise<void> {
+  let timeout: number | null = null;
+  try {
+    await Promise.race([
+      write,
+      new Promise<void>((_, reject) => {
+        timeout = window.setTimeout(
+          () => reject(new Error("Reserved clipboard write timed out.")),
+          CLIPBOARD_RESERVATION_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout != null) window.clearTimeout(timeout);
   }
 }
 
@@ -691,13 +758,17 @@ export function BBCodeEditor({
   const [imagemapSelection, setImagemapSelection] = useState<ImagemapSelection | null>(null);
   const [linkSelection, setLinkSelection] = useState<LinkSelection | null>(null);
   const [imageSelection, setImageSelection] = useState<ImageSelection | null>(null);
+  const [selectedImageCount, setSelectedImageCount] = useState(0);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [imageEditorState, setImageEditorState] = useState<{ source: ImageEditorSource } | null>(null);
   const [imageEditorBusy, setImageEditorBusy] = useState(false);
   // "resizing" is not an upload: re-cutting an image only re-reads the original
   // bytes and stages the result locally. Nothing leaves the browser until Copy
   // BBCode, so saying "uploading" here would be a lie about where the file is.
-  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "resizing" | "error"; message?: string } | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "copying" | "resizing" | "error"; message?: string } | null>(null);
+  // Kept separate from the delayed resize status: mutations must lock Copy and
+  // the resize handle immediately, even when they finish too fast to show UI.
+  const [imageMutationBusy, setImageMutationBusy] = useState(false);
   // Color/size of the current visual selection, for toolbar state + dialog prefill.
   const [selectionColor, setSelectionColor] = useState<string | null>(null);
   const [selectionSize, setSelectionSize] = useState<number | null>(null);
@@ -717,13 +788,28 @@ export function BBCodeEditor({
   const imagemapDragRef = useRef<ImagemapDragState | null>(null);
   const linkElementRef = useRef<HTMLAnchorElement | null>(null);
   const imageElementRef = useRef<HTMLImageElement | null>(null);
+  // Selection order matters: Ctrl/Cmd-click keeps the first image as the size
+  // reference and makes each later image a target for "Match sizes".
+  const selectedImageElementsRef = useRef<HTMLImageElement[]>([]);
   const visualFrameRef = useRef<HTMLDivElement | null>(null);
   const previewFrameRef = useRef<HTMLDivElement | null>(null);
   const resizeHandleRef = useRef<HTMLSpanElement | null>(null);
   const resizeReadoutRef = useRef<HTMLSpanElement | null>(null);
   const resizeOutlineRef = useRef<HTMLSpanElement | null>(null);
   const realignPaddedImageRef = useRef<((img: HTMLImageElement) => void) | null>(null);
+  const startImageReorderRef = useRef<((event: PointerEvent, img: HTMLImageElement) => void) | null>(null);
+  const imageReorderRef = useRef<{
+    img: HTMLImageElement;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+    target: { img: HTMLImageElement; side: "before" | "after" } | null;
+    line: HTMLSpanElement | null;
+  } | null>(null);
   const resizeStatusTimerRef = useRef<number | null>(null);
+  const imageMutationInFlightRef = useRef(false);
+  const copyInFlightRef = useRef(false);
   const imageResizeRef = useRef<{
     img: HTMLImageElement;
     startX: number;
@@ -761,6 +847,28 @@ export function BBCodeEditor({
   const hueShiftRef = useRef(0);
   const deferredSource = useDeferredValue(source);
   const deferredCaretOffset = useDeferredValue(caretOffset);
+  // Source range of the node the preview highlights, drawn behind the textarea
+  // so both panes mark the same thing.
+  const sourceHighlightSpan = useMemo<BBSourceSpan | null>(() => {
+    if (deferredCaretOffset == null || editMode !== "code") return null;
+    const nodes = parseBBCode(deferredSource, { spans: true });
+    const node = pickHighlightNode(findBBNodePathAtOffset(nodes, deferredCaretOffset));
+    const span = node?.span;
+    if (!span || span.end <= span.start) return null;
+    return span;
+  }, [deferredCaretOffset, deferredSource, editMode]);
+  const sourceBackdropRef = useRef<HTMLDivElement | null>(null);
+  const syncSourceBackdrop = useCallback(() => {
+    const el = textareaRef.current;
+    const backdrop = sourceBackdropRef.current;
+    if (!el || !backdrop) return;
+    backdrop.scrollTop = el.scrollTop;
+    backdrop.scrollLeft = el.scrollLeft;
+    backdrop.style.right = `${el.offsetWidth - el.clientWidth}px`;
+  }, []);
+  useEffect(() => {
+    syncSourceBackdrop();
+  }, [sourceHighlightSpan, syncSourceBackdrop]);
 
   // Dialog form state. One dialog is open at a time, so shared fields are fine.
   const [urlField, setUrlField] = useState("");
@@ -802,9 +910,11 @@ export function BBCodeEditor({
     imagemapElementRef.current = null;
     linkElementRef.current = null;
     imageElementRef.current = null;
+    selectedImageElementsRef.current = [];
     setImagemapSelection(null);
     setLinkSelection(null);
     setImageSelection(null);
+    setSelectedImageCount(0);
     setContextMenu(null);
   }, [editMode, visualEpoch]);
 
@@ -912,21 +1022,41 @@ export function BBCodeEditor({
     visualRef.current
       ?.querySelectorAll<HTMLImageElement>("img.is-selected")
       .forEach((img) => img.classList.remove("is-selected"));
+    selectedImageElementsRef.current = [];
     imageElementRef.current = null;
+    setSelectedImageCount(0);
     setImageSelection(null);
   }, []);
 
-  const selectImage = useCallback((img: HTMLImageElement) => {
+  const selectImage = useCallback((img: HTMLImageElement, additive = false) => {
     clearLinkSelection();
     clearImagemapSelection();
+    const connected = selectedImageElementsRef.current.filter((selected) => selected.isConnected);
+    let next: HTMLImageElement[];
+    if (additive) {
+      next = connected.includes(img)
+        ? connected.filter((selected) => selected !== img)
+        : [...connected, img];
+    } else {
+      next = [img];
+    }
+
     visualRef.current
       ?.querySelectorAll<HTMLImageElement>("img.is-selected")
-      .forEach((other) => other.classList.remove("is-selected"));
-    img.classList.add("is-selected");
-    imageElementRef.current = img;
-    const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+      .forEach((other) => other.classList.toggle("is-selected", next.includes(other)));
+    selectedImageElementsRef.current = next;
+    setSelectedImageCount(next.length);
+
+    const active = next.at(-1) ?? null;
+    imageElementRef.current = active;
+    if (!active) {
+      setImageSelection(null);
+      return;
+    }
+    active.classList.add("is-selected");
+    const anchor = active.closest<HTMLAnchorElement>('a[data-bb="url"]');
     setImageSelection({
-      src: img.getAttribute("src") ?? "",
+      src: active.getAttribute("src") ?? "",
       href: anchor?.getAttribute("href") ?? "",
     });
   }, [clearImagemapSelection, clearLinkSelection]);
@@ -940,6 +1070,16 @@ export function BBCodeEditor({
     const img = imageElementRef.current;
     const el = visualRef.current;
     if (!img || !img.isConnected || !el || !el.contains(img)) return false;
+    // Formatting actions operate on one DOM range. If several images were
+    // selected for size matching, keep the active one and make that scope
+    // change visible instead of silently wrapping just one of many highlights.
+    if (selectedImageElementsRef.current.length > 1) {
+      selectedImageElementsRef.current.forEach((selected) => {
+        if (selected !== img) selected.classList.remove("is-selected");
+      });
+      selectedImageElementsRef.current = [img];
+      setSelectedImageCount(1);
+    }
     el.focus({ preventScroll: true });
     const selection = window.getSelection();
     if (!selection) return false;
@@ -969,7 +1109,9 @@ export function BBCodeEditor({
       clearImageSelection();
       return;
     }
+    selectedImageElementsRef.current = [fresh];
     imageElementRef.current = fresh;
+    setSelectedImageCount(1);
     setImageSelection({
       src: fresh.getAttribute("src") ?? "",
       href: fresh.closest<HTMLAnchorElement>('a[data-bb="url"]')?.getAttribute("href") ?? "",
@@ -1079,7 +1221,9 @@ export function BBCodeEditor({
       const img = target.closest<HTMLImageElement>("img");
       if (img && root.contains(img) && !img.closest(".bbcode-editor-embed")) {
         event.preventDefault();
-        selectImage(img);
+        const additive = event.ctrlKey || event.metaKey;
+        selectImage(img, additive);
+        if (!additive) startImageReorderRef.current?.(event.nativeEvent, img);
         return;
       }
       if (imageSelection && root.contains(target)) clearImageSelection();
@@ -1874,54 +2018,125 @@ export function BBCodeEditor({
   }, [editMode]);
 
   const copyBBCode = useCallback(async () => {
-    let value = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
+    if (copyInFlightRef.current) return;
+    if (imageMutationInFlightRef.current) {
+      setUploadStatus({ kind: "error", message: t`Wait for the image resize to finish, then copy again.` });
+      return;
+    }
+    copyInFlightRef.current = true;
+    const initialValue = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
 
     // Upload every image that was pasted/dropped but deferred until now, and
-    // swap its blob: URL for the real hosted URL. Bail without copying if any
-    // upload fails, so a dead blob URL can never reach the clipboard.
-    const blobUrls = pendingBlobUrls(value);
-    if (blobUrls.length > 0) {
-      setUploadStatus({ kind: "uploading" });
+    // swap its blob: URL for the real hosted URL. ClipboardItem is started
+    // synchronously from the click and receives the eventual text as a Promise;
+    // that preserves browser clipboard permission across the network wait.
+    const blobUrls = pendingBlobUrls(initialValue);
+    if (blobUrls.length === 0) {
       try {
-        for (const blobUrl of blobUrls) {
-          const blob = pendingUploadsRef.current.get(blobUrl);
-          if (!blob) continue; // Staged in a prior session (blob gone); leave as-is.
-          const uploadedUrl = await uploadImageToCatbox(blob);
-          // Swapping the bare URL covers [img] and an imagemap's source line
-          // alike; a blob URL is a unique token, so nothing else can match it.
-          value = value.split(blobUrl).join(uploadedUrl);
-          visualRef.current
-            ?.querySelectorAll<HTMLImageElement>("img")
-            .forEach((img) => { if (img.getAttribute("src") === blobUrl) img.setAttribute("src", uploadedUrl); });
-          visualRef.current
-            ?.querySelectorAll<HTMLElement>('.imagemap[data-bb="imagemap"]')
-            .forEach((mapEl) => {
-              if (mapEl.getAttribute("data-src") !== blobUrl) return;
-              mapEl.setAttribute("data-src", uploadedUrl);
-              updateImagemapRaw(mapEl);
-            });
-          // Follow the resize original over to the hosted URL, so an image can
-          // still be dragged back up to full resolution after it is copied.
-          const origin = resizeOriginsRef.current.get(blobUrl);
-          if (origin) {
-            resizeOriginsRef.current.delete(blobUrl);
-            resizeOriginsRef.current.set(uploadedUrl, origin);
-          }
-          pendingUploadsRef.current.delete(blobUrl);
-          URL.revokeObjectURL(blobUrl);
-        }
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+        await navigator.clipboard.writeText(initialValue);
+        setCopied(true);
         setUploadStatus(null);
-      } catch (error) {
-        setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : t`Image upload failed.` });
-        return;
+      } catch {
+        setUploadStatus({ kind: "error", message: t`The browser blocked the clipboard. Try Copy BBCode again.` });
+      } finally {
+        copyInFlightRef.current = false;
       }
-      // Persist the resolved source so blob URLs stop lingering in state/draft.
-      value = stripPendingImages(value);
-      updateSource(value);
+      return;
     }
 
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(value).then(() => setCopied(true)).catch(() => {});
+    setUploadStatus({ kind: "uploading" });
+    const resolvedValuePromise = resolvePendingBlobUrls(initialValue, async (blobUrl) => {
+      const blob = pendingUploadsRef.current.get(blobUrl);
+      if (!blob) {
+        throw new Error(t`A pasted image is no longer available. Paste it again before copying.`);
+      }
+      const uploadedUrl = await uploadImageToCatbox(blob);
+      visualRef.current
+        ?.querySelectorAll<HTMLImageElement>("img")
+        .forEach((img) => {
+          if (img.getAttribute("src") !== blobUrl) return;
+          img.setAttribute("src", uploadedUrl);
+          if (imageElementRef.current === img) {
+            setImageSelection((selection) => selection ? { ...selection, src: uploadedUrl } : selection);
+          }
+        });
+      visualRef.current
+        ?.querySelectorAll<HTMLElement>('.imagemap[data-bb="imagemap"]')
+        .forEach((mapEl) => {
+          if (mapEl.getAttribute("data-src") !== blobUrl) return;
+          mapEl.setAttribute("data-src", uploadedUrl);
+          updateImagemapRaw(mapEl);
+        });
+      // Follow the resize original over to the hosted URL, so an image can
+      // still be dragged back up to full resolution after it is copied.
+      const origin = resizeOriginsRef.current.get(blobUrl);
+      if (origin) {
+        resizeOriginsRef.current.delete(blobUrl);
+        resizeOriginsRef.current.set(uploadedUrl, origin);
+      }
+      pendingUploadsRef.current.delete(blobUrl);
+      URL.revokeObjectURL(blobUrl);
+      // Keep each successful replacement durable even if a later image fails.
+      // This is essential in code mode, where there is no live DOM for the next
+      // Copy attempt to serialize and recover the already-hosted URL from.
+      if (editMode === "visual") flushVisual();
+      else updateSource(sourceRef.current.split(blobUrl).join(uploadedUrl));
+      return uploadedUrl;
+    });
+
+    let clipboardWrite: Promise<void> | null = null;
+    if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+      try {
+        const textBlob = resolvedValuePromise.then((value) => new Blob([value], { type: "text/plain" }));
+        clipboardWrite = navigator.clipboard.write([new ClipboardItem({ "text/plain": textBlob })]);
+        // The upload may reject before this promise is awaited below.
+        void clipboardWrite.catch(() => {});
+      } catch {
+        clipboardWrite = null;
+      }
+    }
+
+    let value: string;
+    try {
+      value = await resolvedValuePromise;
+      // Persist the fully resolved source. Never strip an unresolved image from
+      // copied output: a missing staged Blob is an error above, not permission
+      // to make that image disappear.
+      updateSource(value);
+      setUploadStatus({ kind: "copying" });
+    } catch (error) {
+      setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : t`Image upload failed.` });
+      copyInFlightRef.current = false;
+      return;
+    }
+
+    try {
+      if (clipboardWrite) {
+        try {
+          await waitForReservedClipboardWrite(clipboardWrite);
+        } catch {
+          // Chromium normally completes the reserved ClipboardItem once its
+          // Blob promise resolves. Local/dev browser policies can reject or
+          // strand it; the image is hosted now, so try the ordinary write too.
+          if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+          await navigator.clipboard.writeText(value);
+        }
+      } else {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+        await navigator.clipboard.writeText(value);
+      }
+      setUploadStatus(null);
+      setCopied(true);
+    } catch {
+      // The images are already uploaded and the source is now stable, so the
+      // retry is an immediate clipboard write and cannot omit the new image.
+      setUploadStatus({
+        kind: "error",
+        message: t`The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more.`,
+      });
+    } finally {
+      copyInFlightRef.current = false;
     }
   }, [editMode, flushVisual, t, updateSource]);
 
@@ -2087,6 +2302,118 @@ export function BBCodeEditor({
     }
   }, []);
 
+  // ---- drag to reorder images ----------------------------------------------
+  // A press on an image selects it; once the pointer travels far enough the
+  // press becomes a drag, and a line shows where the image will land relative
+  // to the nearest other image. Releasing moves it there.
+
+  const stopImageReorder = useCallback((event?: PointerEvent) => {
+    const drag = imageReorderRef.current;
+    if (!drag) return;
+    if (event && event.pointerId !== drag.pointerId) return;
+    imageReorderRef.current = null;
+    document.removeEventListener("pointermove", reorderListenersRef.current.move);
+    document.removeEventListener("pointerup", reorderListenersRef.current.up);
+    document.removeEventListener("pointercancel", reorderListenersRef.current.up);
+    drag.line?.remove();
+    drag.img.classList.remove("is-reorder-source");
+    visualFrameRef.current?.classList.remove("is-reordering");
+    const root = visualRef.current;
+    if (!drag.active || !drag.target || event?.type !== "pointerup" || !root) return;
+    const unit = imageReorderUnit(drag.img, root);
+    const targetUnit = imageReorderUnit(drag.target.img, root);
+    if (unit === targetUnit || unit.contains(targetUnit) || targetUnit.contains(unit)) return;
+    moveImageUnit(unit, targetUnit, drag.target.side);
+    flushVisual();
+    selectImage(drag.img);
+    window.requestAnimationFrame(positionResizeHandle);
+  }, [flushVisual, positionResizeHandle, selectImage]);
+
+  const handleImageReorderMove = useCallback((event: PointerEvent) => {
+    const drag = imageReorderRef.current;
+    const root = visualRef.current;
+    const frame = visualFrameRef.current;
+    if (!drag || !root || !frame || event.pointerId !== drag.pointerId) return;
+    if (!drag.active) {
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < IMAGE_REORDER_THRESHOLD_PX) return;
+      drag.active = true;
+      drag.img.classList.add("is-reorder-source");
+      frame.classList.add("is-reordering");
+      const line = document.createElement("span");
+      line.className = "bbcode-image-drop-line";
+      line.setAttribute("aria-hidden", "true");
+      line.style.display = "none";
+      frame.append(line);
+      drag.line = line;
+    }
+    // Nudge the pane when the pointer sits near its edge, so a long page can
+    // be crossed without letting go.
+    const frameRect = frame.getBoundingClientRect();
+    const edge = 40;
+    if (event.clientY < frameRect.top + edge) frame.scrollTop -= 12;
+    else if (event.clientY > frameRect.bottom - edge) frame.scrollTop += 12;
+
+    let best: { img: HTMLImageElement; side: "before" | "after"; rect: DOMRect; distance: number } | null = null;
+    for (const img of reorderableImages(root)) {
+      if (img === drag.img) continue;
+      const rect = imageReorderUnit(img, root).getBoundingClientRect();
+      if (rect.height === 0) continue;
+      const centre = rect.top + rect.height / 2;
+      const distance = Math.abs(event.clientY - centre);
+      if (!best || distance < best.distance) {
+        best = { img, side: event.clientY < centre ? "before" : "after", rect, distance };
+      }
+    }
+    drag.target = best ? { img: best.img, side: best.side } : null;
+    const line = drag.line;
+    if (!line) return;
+    if (!best) {
+      line.style.display = "none";
+      return;
+    }
+    const offsetLeft = frameRect.left + frame.clientLeft - frame.scrollLeft;
+    const offsetTop = frameRect.top + frame.clientTop - frame.scrollTop;
+    line.style.display = "block";
+    line.style.left = `${best.rect.left - offsetLeft}px`;
+    line.style.width = `${best.rect.width}px`;
+    line.style.top = `${(best.side === "before" ? best.rect.top : best.rect.bottom) - offsetTop}px`;
+  }, []);
+
+  // The document listeners are added in one callback and removed in another,
+  // possibly renders apart, so they are fixed wrappers over the latest handlers.
+  const handleImageReorderMoveRef = useRef(handleImageReorderMove);
+  const stopImageReorderRef = useRef(stopImageReorder);
+  useEffect(() => {
+    handleImageReorderMoveRef.current = handleImageReorderMove;
+    stopImageReorderRef.current = stopImageReorder;
+  }, [handleImageReorderMove, stopImageReorder]);
+  const reorderListenersRef = useRef({
+    move: (event: PointerEvent) => handleImageReorderMoveRef.current(event),
+    up: (event: PointerEvent) => stopImageReorderRef.current(event),
+  });
+
+  const startImageReorder = useCallback((event: PointerEvent, img: HTMLImageElement) => {
+    if (imageMutationInFlightRef.current || imageReorderRef.current) return;
+    imageReorderRef.current = {
+      img,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false,
+      target: null,
+      line: null,
+    };
+    document.addEventListener("pointermove", reorderListenersRef.current.move);
+    document.addEventListener("pointerup", reorderListenersRef.current.up);
+    document.addEventListener("pointercancel", reorderListenersRef.current.up);
+  }, []);
+
+  useEffect(() => {
+    startImageReorderRef.current = startImageReorder;
+  }, [startImageReorder]);
+
+  useEffect(() => () => stopImageReorderRef.current(), []);
+
   const handleImageResizeMove = useCallback((event: PointerEvent) => {
     const drag = imageResizeRef.current;
     if (!drag) return;
@@ -2104,6 +2431,105 @@ export function BBCodeEditor({
     if (readout) readout.textContent = `${next} px`;
   }, [positionResizeHandle]);
 
+  /** Re-encodes one image so its visible picture lands at `targetWidth`. */
+  const recutImageToWidth = useCallback(async (
+    img: HTMLImageElement,
+    targetWidth: number,
+    previousDisplayWidth?: number,
+  ) => {
+    const currentSrc = img.getAttribute("src") ?? "";
+    if (!currentSrc || targetWidth < 1) return;
+    const origin = resizeOriginsRef.current.get(currentSrc);
+    const currentRatio = contentRatios(origin?.layout).width;
+    // During a drag, inline preview width is already the target by the time the
+    // re-cut starts, so the caller supplies the width from pointerdown.
+    const currentDisplayWidth = previousDisplayWidth
+      ?? Math.max(1, Math.round(img.offsetWidth * currentRatio));
+    // Margins can only be added where nothing else sits on the image's line,
+    // and they go opposite whichever side the column holds the picture to. An
+    // enlargement is written directly at the requested width instead: padding
+    // is useful for preserving pixels while shrinking, but makes a tiny growth
+    // depend on a new transparent-margin ratio when it can simply be 786px.
+    const node = img.closest<HTMLElement>('a[data-bb="url"]') ?? img;
+    const pad = targetWidth < currentDisplayWidth
+      && isAloneOnItsLine(node)
+      && !img.closest(".imagemap");
+    const align = effectiveAlign(node);
+    // A staged image is already in hand. One that is already hosted has to be
+    // read back through our origin, because a canvas cannot read the pixels of
+    // a cross-origin image without being tainted by them. This downloads the
+    // file; nothing is uploaded until Copy BBCode.
+    const staged = origin?.blob ?? pendingUploadsRef.current.get(currentSrc);
+    const source = staged ?? await fetchImageBlobViaProxy(currentSrc).catch(() => {
+      throw new Error(t`Couldn't read the original image to resize it. Its host didn't answer.`);
+    });
+    // A file read back off a host may be one of ours, already carrying
+    // margins. The drag then sized its box, and the picture inside only ever
+    // filled the share of that box the margins leave over.
+    let sourceRect = origin?.sourceRect;
+    let displayWidth = targetWidth;
+    if (!staged) {
+      const measured = await measureImageContent(source);
+      if (measured.content.width > 0 && measured.content.width < measured.width) {
+        sourceRect = measured.content;
+        displayWidth = Math.max(1, Math.round(targetWidth * (measured.content.width / measured.width)));
+      }
+    }
+    let encoded = await encodeImageAtDisplayWidth(source, displayWidth, { align, pad, sourceRect });
+    // Transparent margins cost a PNG almost nothing, but a padded photo can
+    // still come out past the upload cap; then the smaller file is the one
+    // that can be posted at all.
+    if (encoded.padded && encoded.blob.size > MAX_IMAGE_UPLOAD_BYTES) {
+      encoded = await encodeImageAtDisplayWidth(source, displayWidth, { align, pad: false, sourceRect });
+    }
+    const blobUrl = registerPendingImage(encoded.blob);
+    // Carry the original bytes over to the new blob URL so the next drag still
+    // cuts from full resolution instead of from this smaller copy.
+    resizeOriginsRef.current.set(blobUrl, {
+      blob: origin?.blob ?? source,
+      naturalWidth: origin?.naturalWidth || sourceRect?.width || img.naturalWidth || targetWidth,
+      sourceRect,
+      layout: encoded.padded ? encoded : undefined,
+    });
+    await preloadImage(blobUrl);
+    if (!img.isConnected) {
+      releasePendingImage(blobUrl);
+      return;
+    }
+    // Pin the size according to the *new* file while the on-screen element
+    // adopts it. A detached preloader having decoded the URL does not guarantee
+    // every browser updates this element's naturalWidth in the same frame.
+    const encodedRatio = contentRatios(encoded.padded ? encoded : undefined).width;
+    img.style.width = `${encoded.displayWidth / encodedRatio}px`;
+    img.setAttribute("src", blobUrl);
+    try {
+      await img.decode();
+    } catch {
+      // The detached preload already had its chance; leave normal image loading
+      // as the fallback, while still releasing the preview on the next frame.
+    }
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    if (!img.isConnected) {
+      releasePendingImage(blobUrl);
+      return;
+    }
+    // Swap and release together only after this element has the new intrinsic
+    // size, so letting CSS take back over cannot flash or settle at the old one.
+    endResizePreview(img);
+    releasePendingImage(currentSrc);
+    if (imageElementRef.current === img) {
+      setImageSelection((sel) => (sel ? { ...sel, src: blobUrl } : sel));
+    }
+    flushVisual();
+    window.requestAnimationFrame(positionResizeHandle);
+  }, [
+    flushVisual,
+    positionResizeHandle,
+    registerPendingImage,
+    releasePendingImage,
+    t,
+  ]);
+
   const stopImageResize = useCallback((event: PointerEvent) => {
     void event;
     const drag = imageResizeRef.current;
@@ -2115,111 +2541,45 @@ export function BBCodeEditor({
     if (readout) readout.style.display = "none";
     if (!drag) return;
     const img = drag.img;
-    // The drag sizes the picture, in column px. That is not the image box on a
-    // padded file, and not the box on screen either, which may be scaled to fit
-    // the pane, so it is tracked through the drag rather than measured here.
     const targetWidth = drag.width;
     const currentSrc = img.getAttribute("src") ?? "";
-    // A click that didn't really drag shouldn't re-encode (and downscale) the image.
+    // A click that didn't really drag shouldn't re-encode the image.
     if (!currentSrc || targetWidth < 1 || Math.abs(targetWidth - drag.startWidth) < 2) {
       endResizePreview(img);
       window.requestAnimationFrame(positionResizeHandle);
       return;
     }
-    // Margins can only be added where nothing else sits on the image's line,
-    // and they go opposite whichever side the column holds the picture to.
-    const node = img.closest<HTMLElement>('a[data-bb="url"]') ?? img;
-    const pad = isAloneOnItsLine(node) && !img.closest(".imagemap");
-    const align = effectiveAlign(node);
-    // The dragged size stays pinned on screen until the re-encoded file has
-    // decoded in its place. Releasing it here instead would put the old, larger
-    // image back for however long the re-encode takes, and then snap.
-    //
-    // Only announce a resize slow enough to be worth announcing. The status
-    // renders as an extra row in the bottom-docked inspector, so showing it for
-    // a re-cut that finishes inside a frame just makes that panel jump up and
-    // back. Re-reading a hosted original is the case that actually waits.
+    if (imageMutationInFlightRef.current) {
+      endResizePreview(img);
+      window.requestAnimationFrame(positionResizeHandle);
+      return;
+    }
+
+    // Lock immediately. Without this, a quick second drag can race the first
+    // encode and the older result can land last, making the image snap back.
+    imageMutationInFlightRef.current = true;
+    setImageMutationBusy(true);
     showResizeStatusSoon();
-    void (async () => {
-      try {
-        const origin = resizeOriginsRef.current.get(currentSrc);
-        // A staged image is already in hand. One that is already hosted has to
-        // be read back through our origin, because a canvas cannot read the
-        // pixels of a cross-origin image without being tainted by them. This
-        // downloads the file; nothing is uploaded until Copy BBCode.
-        const staged = origin?.blob ?? pendingUploadsRef.current.get(currentSrc);
-        const source = staged ?? await fetchImageBlobViaProxy(currentSrc).catch(() => {
-          throw new Error(t`Couldn't read the original image to resize it. Its host didn't answer.`);
-        });
-        // A file read back off a host may be one of ours, already carrying
-        // margins. The drag then sized its box, and the picture inside only
-        // ever filled the share of that box the margins leave over.
-        let sourceRect = origin?.sourceRect;
-        let displayWidth = targetWidth;
-        if (!staged) {
-          const measured = await measureImageContent(source);
-          if (measured.content.width > 0 && measured.content.width < measured.width) {
-            sourceRect = measured.content;
-            displayWidth = Math.max(1, Math.round(targetWidth * (measured.content.width / measured.width)));
-          }
-        }
-        let encoded = await encodeImageAtDisplayWidth(source, displayWidth, { align, pad, sourceRect });
-        // Transparent margins cost a PNG almost nothing, but a padded photo can
-        // still come out past the upload cap; then the smaller file is the one
-        // that can be posted at all.
-        if (encoded.padded && encoded.blob.size > MAX_IMAGE_UPLOAD_BYTES) {
-          encoded = await encodeImageAtDisplayWidth(source, displayWidth, { align, pad: false, sourceRect });
-        }
-        const blobUrl = registerPendingImage(encoded.blob);
-        // Carry the original bytes over to the new blob URL so the next drag
-        // still cuts from full resolution instead of from this smaller copy,
-        // along with what the file that is going on screen is made of.
-        resizeOriginsRef.current.set(blobUrl, {
-          blob: origin?.blob ?? source,
-          naturalWidth: origin?.naturalWidth || sourceRect?.width || img.naturalWidth || targetWidth,
-          sourceRect,
-          layout: encoded.padded ? encoded : undefined,
-        });
-        await preloadImage(blobUrl);
-        if (!img.isConnected) {
-          settleResizeStatus(null);
-          return;
-        }
-        // Swap and release together, with the new pixels already decoded. The
-        // file lands the picture at exactly the dragged width once the column
-        // has fit it, so handing layout back to the file's own size is
-        // invisible: the image never leaves the size it was dragged to.
-        img.setAttribute("src", blobUrl);
-        endResizePreview(img);
-        // Only now is the old blob safe to revoke - doing it while it was still
-        // this element's src is a way to blank the very frame being protected.
-        releasePendingImage(currentSrc);
-        setImageSelection((sel) => (sel ? { ...sel, src: blobUrl } : sel));
-        flushVisual();
-        settleResizeStatus(null);
-        window.requestAnimationFrame(positionResizeHandle);
-      } catch (error) {
-        endResizePreview(img);
+    void recutImageToWidth(img, targetWidth, drag.startWidth)
+      .then(() => settleResizeStatus(null))
+      .catch((error) => {
         settleResizeStatus({
           kind: "error",
           message: error instanceof Error ? error.message : t`Could not resize the image.`,
         });
-      }
-    })();
-  }, [
-    flushVisual,
-    handleImageResizeMove,
-    positionResizeHandle,
-    registerPendingImage,
-    releasePendingImage,
-    settleResizeStatus,
-    showResizeStatusSoon,
-    t,
-  ]);
+      })
+      .finally(() => {
+        endResizePreview(img);
+        imageMutationInFlightRef.current = false;
+        setImageMutationBusy(false);
+        window.requestAnimationFrame(positionResizeHandle);
+      });
+  }, [handleImageResizeMove, positionResizeHandle, recutImageToWidth, settleResizeStatus, showResizeStatusSoon, t]);
 
   const startImageResize = useCallback((event: PointerEvent) => {
     event.preventDefault();
     event.stopPropagation(); // keep the surface's pointerdown from re-selecting/clearing
+    if (imageMutationInFlightRef.current) return;
     const img = imageElementRef.current;
     if (!img) return;
     // Everything below is in column pixels - the width osu! will lay the picture
@@ -2231,16 +2591,16 @@ export function BBCodeEditor({
     const startWidth = Math.max(1, Math.round(boxWidth * ratios.width));
     const rect = img.getBoundingClientRect();
     const scale = boxWidth > 0 ? rect.width / boxWidth : 1;
-    // Don't upscale past the source's own pixels (that only adds blur), and
-    // don't offer a width past the column, where osu! would clip it anyway.
-    const sourcePixels = origin?.naturalWidth || img.naturalWidth || OSU_PROFILE_COLUMN_WIDTH;
+    // osu! clips at the column. Upscaling a smaller file can soften it, but it
+    // is still preferable to a handle that appears to accept the drag and then
+    // snaps back; matching a neighboring image also needs the full range.
     imageResizeRef.current = {
       img,
       startX: event.clientX,
       startWidth,
       width: startWidth,
       minWidth: 40,
-      maxWidth: Math.max(40, Math.min(OSU_PROFILE_COLUMN_WIDTH, sourcePixels)),
+      maxWidth: OSU_PROFILE_COLUMN_WIDTH,
       contentRatio: ratios.width,
       scale: scale > 0 ? scale : 1,
     };
@@ -2255,6 +2615,45 @@ export function BBCodeEditor({
     document.addEventListener("pointerup", stopImageResize);
     document.addEventListener("pointercancel", stopImageResize);
   }, [handleImageResizeMove, stopImageResize]);
+
+  const matchSelectedImageSizes = useCallback(() => {
+    if (imageMutationInFlightRef.current) return;
+    const images = selectedImageElementsRef.current.filter((img) => img.isConnected);
+    if (images.length < 2) return;
+    selectedImageElementsRef.current = images;
+
+    const reference = images[0];
+    const referenceOrigin = resizeOriginsRef.current.get(reference.getAttribute("src") ?? "");
+    const referenceRatio = contentRatios(referenceOrigin?.layout).width;
+    const targetWidth = Math.max(1, Math.round(reference.offsetWidth * referenceRatio));
+    const targets = images.slice(1).filter((img) => {
+      const origin = resizeOriginsRef.current.get(img.getAttribute("src") ?? "");
+      const width = Math.round(img.offsetWidth * contentRatios(origin?.layout).width);
+      return Math.abs(width - targetWidth) >= 2;
+    });
+    if (targets.length === 0) return;
+
+    imageMutationInFlightRef.current = true;
+    setImageMutationBusy(true);
+    setUploadStatus({ kind: "resizing" });
+    void (async () => {
+      try {
+        // Keep the order deterministic and the UI responsive; these usually
+        // work from local blobs, while hosted images are fetched one at a time.
+        for (const img of targets) await recutImageToWidth(img, targetWidth);
+        settleResizeStatus(null);
+      } catch (error) {
+        settleResizeStatus({
+          kind: "error",
+          message: error instanceof Error ? error.message : t`Could not match the image sizes.`,
+        });
+      } finally {
+        imageMutationInFlightRef.current = false;
+        setImageMutationBusy(false);
+        window.requestAnimationFrame(positionResizeHandle);
+      }
+    })();
+  }, [positionResizeHandle, recutImageToWidth, settleResizeStatus, t]);
 
   /**
    * Re-cuts a padded image's margins onto the side its alignment now asks for.
@@ -2612,6 +3011,16 @@ export function BBCodeEditor({
     const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
     const items: ContextMenuItem[] = [
       { label: t`Resize / crop…`, icon: <Crop size={14} />, onSelect: () => openImageEditor(img) },
+    ];
+    if (selectedImageElementsRef.current.filter((selected) => selected.isConnected).length > 1) {
+      items.push({
+        label: t`Match sizes to first selected image`,
+        icon: <Scaling size={14} />,
+        disabled: imageMutationInFlightRef.current,
+        onSelect: matchSelectedImageSizes,
+      });
+    }
+    items.push(
       { label: t`Replace image…`, icon: <Replace size={14} />, onSelect: () => triggerReplaceImage(img) },
       {
         label: anchor ? t`Edit link…` : t`Add link…`,
@@ -2619,7 +3028,7 @@ export function BBCodeEditor({
         onSelect: () => { selectImage(img); setFocusImageLinkTick((tick) => tick + 1); },
       },
       { label: t`Make imagemap`, icon: <Map size={14} />, onSelect: () => convertImageToImagemap(img) },
-    ];
+    );
     if (anchor) {
       items.push({ label: t`Remove link`, icon: <Unlink size={14} />, onSelect: () => { selectImage(img); updateImageLink(""); } });
     }
@@ -2631,7 +3040,7 @@ export function BBCodeEditor({
       { label: t`Delete image`, icon: <Trash2 size={14} />, danger: true, onSelect: () => { selectImage(img); deleteSelectedImage(); } },
     );
     return items;
-  }, [convertImageToImagemap, deleteSelectedImage, openImageEditor, selectImage, t, triggerReplaceImage, updateImageLink]);
+  }, [convertImageToImagemap, deleteSelectedImage, matchSelectedImageSizes, openImageEditor, selectImage, t, triggerReplaceImage, updateImageLink]);
 
   const buildImagemapMenuItems = useCallback(
     (mapEl: HTMLElement, clientX: number, clientY: number): ContextMenuItem[] => {
@@ -2712,7 +3121,11 @@ export function BBCodeEditor({
     if (mapEl && root.contains(mapEl)) {
       items = buildImagemapMenuItems(mapEl, event.clientX, event.clientY);
     } else if (img && root.contains(img) && !img.closest(".bbcode-editor-embed")) {
-      selectImage(img);
+      // Right-clicking one member of a multi-selection must not collapse it
+      // before the size-matching command gets a chance to use the group.
+      if (!img.classList.contains("is-selected") || selectedImageElementsRef.current.length < 2) {
+        selectImage(img);
+      }
       items = buildImageMenuItems(img);
     } else if (anchor && root.contains(anchor)) {
       items = buildLinkMenuItems(anchor);
@@ -2787,6 +3200,24 @@ export function BBCodeEditor({
 
   const renderImageInspector = (): ReactNode => {
     if (!imageSelection) return null;
+    if (selectedImageCount > 1) {
+      return (
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
+          <div className="pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
+            <Plural value={selectedImageCount} one="# image selected" other="# images selected" />
+          </div>
+          <button
+            type="button"
+            onClick={matchSelectedImageSizes}
+            disabled={imageMutationBusy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-osu-h1/20 border border-osu-h1/40 text-[12px] font-semibold text-osu-c1 hover:bg-osu-h1/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+          >
+            <Scaling size={14} /> <Trans>Match sizes to first selected image</Trans>
+          </button>
+          <span className="text-[11px] text-osu-f1"><Trans>Ctrl/Cmd-click images to add or remove them.</Trans></span>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
         <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1"><Trans>Image</Trans></div>
@@ -3383,7 +3814,10 @@ export function BBCodeEditor({
             onClick={copyBBCode}
             // Also while resizing: that swaps an image's src when it lands, and
             // copying mid-swap would put the pre-resize file on the clipboard.
-            disabled={uploadStatus?.kind === "uploading" || uploadStatus?.kind === "resizing"}
+            disabled={imageMutationBusy
+              || uploadStatus?.kind === "uploading"
+              || uploadStatus?.kind === "copying"
+              || uploadStatus?.kind === "resizing"}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait ${
               copied
                 ? "bg-osu-green/20 border border-osu-green/40 text-osu-green"
@@ -3542,10 +3976,14 @@ export function BBCodeEditor({
                   uploadStatus.kind === "error" ? "text-osu-red" : "text-osu-l2"
                 }`}
               >
-                {uploadStatus.kind === "uploading" || uploadStatus.kind === "resizing" ? (
+                {uploadStatus.kind === "uploading" || uploadStatus.kind === "copying" || uploadStatus.kind === "resizing" ? (
                   <>
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-                    {uploadStatus.kind === "resizing" ? t`Resizing image...` : t`Uploading image...`}
+                    {uploadStatus.kind === "resizing"
+                      ? t`Resizing image...`
+                      : uploadStatus.kind === "copying"
+                        ? t`Copying BBCode...`
+                        : t`Uploading image...`}
                   </>
                 ) : (
                   <>
@@ -3616,22 +4054,40 @@ export function BBCodeEditor({
 
           <div className="grid lg:grid-cols-2">
             <div className={`${mobilePane === "write" ? "block" : "hidden"} lg:block lg:border-r border-osu-b3/30`}>
-              <textarea
-                ref={textareaRef}
-                value={source}
-                onChange={(event) => {
-                  updateSource(event.target.value);
-                  setCaretOffset(event.target.selectionStart);
-                }}
-                onSelect={(event) => setCaretOffset(event.currentTarget.selectionStart)}
-                onPaste={handlePaste}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                spellCheck={false}
-                placeholder={t`Write BBCode here, or paste your current me! page source...`}
-                style={{ paddingBottom: surfacePadBottom }}
-                className={`${paneHeightClass} w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed font-mono text-osu-l2 placeholder:text-osu-f1 focus:outline-none`}
-              />
+              <div className="relative">
+                <div
+                  ref={sourceBackdropRef}
+                  aria-hidden
+                  style={{ paddingBottom: surfacePadBottom }}
+                  className={`${paneHeightClass} bbcode-source-backdrop absolute inset-0 overflow-hidden px-4 py-3 text-[13px] leading-relaxed font-mono whitespace-pre-wrap break-words text-transparent pointer-events-none`}
+                >
+                  {sourceHighlightSpan ? (
+                    <>
+                      {source.slice(0, sourceHighlightSpan.start)}
+                      <mark className="bbcode-live-highlight">{source.slice(sourceHighlightSpan.start, sourceHighlightSpan.end)}</mark>
+                      {source.slice(sourceHighlightSpan.end)}
+                    </>
+                  ) : null}
+                  {"\n"}
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={source}
+                  onChange={(event) => {
+                    updateSource(event.target.value);
+                    setCaretOffset(event.target.selectionStart);
+                  }}
+                  onSelect={(event) => setCaretOffset(event.currentTarget.selectionStart)}
+                  onScroll={syncSourceBackdrop}
+                  onPaste={handlePaste}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  spellCheck={false}
+                  placeholder={t`Write BBCode here, or paste your current me! page source...`}
+                  style={{ paddingBottom: surfacePadBottom }}
+                  className={`${paneHeightClass} relative w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed font-mono text-osu-l2 placeholder:text-osu-f1 focus:outline-none`}
+                />
+              </div>
             </div>
             <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
               <div

@@ -27,6 +27,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-02", text: "BBCode editor: drag an image up or down to reorder it, and Copy BBCode no longer writes a color inside another color or the editor's own text color, both of which osu! showed as raw tags or the wrong color", to: "/bbcode" },
+  { date: "2026-09-01", text: "BBCode editor: fixed newly pasted image uploads sometimes being left out by Copy BBCode, stopped resizing from snapping back, and added Ctrl/Cmd-click to match several images to the first one's size", to: "/bbcode" },
   { date: "2026-09-01", text: "Farm helper: the popular tab has a difficulty filter, so you can narrow the list to a star range like on maps", to: "/farm-helper" },
   { date: "2026-09-01", text: "Skin previews: you can search a map by name and use its background instead of only the covers drawn at random", to: "/skins" },
   { date: "2026-09-01", text: "Removed the lazer badge from score rows" },

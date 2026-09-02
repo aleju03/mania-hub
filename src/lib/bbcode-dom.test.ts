@@ -352,3 +352,38 @@ describe("serializeBBCodeDom heuristics for browser-generated markup", () => {
     expect(serializeHtml(`${box.open}x${box.close}`)).toBe("[box=my box]\nx\n[/box]\n");
   });
 });
+
+describe("nested colors", () => {
+  it("writes an outer color around the runs its inner colors leave, never nested", () => {
+    const container = document.createElement("div");
+    container.innerHTML = '<span style="font-size:85%" data-bb-size="85">'
+      + '<span style="color:#B7A6D9" data-bb-color="#B7A6D9"><b><span style="color:#E280D8" data-bb-color="#E280D8">Monitor:</span></b> Samsung</span>'
+      + "</span>";
+    expect(serializeBBCodeDom(container)).toBe(
+      "[size=85][b][color=#E280D8]Monitor:[/color][/b][color=#B7A6D9] Samsung[/color][/size]",
+    );
+  });
+
+  it("keeps the outer color on text on either side of the inner one", () => {
+    const container = document.createElement("div");
+    container.innerHTML = '<span data-bb-color="#111111">a<span data-bb-color="#222222">b</span>c</span>';
+    expect(serializeBBCodeDom(container)).toBe("[color=#111111]a[/color][color=#222222]b[/color][color=#111111]c[/color]");
+  });
+
+  it("leaves a plain color span alone", () => {
+    const container = document.createElement("div");
+    container.innerHTML = '<span data-bb-color="#111111">a<b>b</b></span>';
+    expect(serializeBBCodeDom(container)).toBe("[color=#111111]a[b]b[/b][/color]");
+  });
+});
+
+describe("surface color", () => {
+  it("does not turn the surface's own text color, carried in by a paste, into a [color]", () => {
+    const container = document.createElement("div");
+    container.style.color = "rgb(183, 166, 217)";
+    document.body.appendChild(container);
+    container.innerHTML = '<span style="color: rgb(183, 166, 217);">plain</span> <span style="color: rgb(226, 128, 216);">pink</span>';
+    expect(serializeBBCodeDom(container)).toBe("plain [color=#E280D8]pink[/color]");
+    container.remove();
+  });
+});

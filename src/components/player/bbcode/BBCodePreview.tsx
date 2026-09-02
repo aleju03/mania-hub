@@ -273,7 +273,7 @@ const HIGHLIGHT_BLOCK_TYPES = new Set<BBNode["type"]>([
  * region readable (a single [color] span in a gradient run would be one
  * character), falling back to the top-level node for plain inline runs.
  */
-function pickHighlightNode(path: BBNode[]): BBNode | null {
+export function pickHighlightNode(path: BBNode[]): BBNode | null {
   for (let i = path.length - 1; i >= 0; i--) {
     const node = path[i];
     if (HIGHLIGHT_BLOCK_TYPES.has(node.type) || (node.type === "code" && !node.inline)) return node;

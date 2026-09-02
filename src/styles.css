@@ -512,6 +512,14 @@ html[data-custom-cursor="true"] * {
   background: color-mix(in srgb, var(--color-osu-h1) 9%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-osu-h1) 35%, transparent);
 }
+.bbcode-source-backdrop .bbcode-live-highlight {
+  color: transparent;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--color-osu-h1) 9%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-osu-h1) 35%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
 .bbcode-content .bbcode--profile-page { padding: 0; }
 .bbcode-content .bbcode--profile-page:first-child > *:first-child { margin-top: 0; }
 .bbcode-content .bbcode--profile-page:last-child > *:last-child { margin-bottom: 0; }
@@ -629,6 +637,12 @@ html[data-custom-cursor="true"] * {
   box-shadow: 0 0 0 1px rgba(255, 102, 170, 0.5);
 }
 .bbcode-editor-surface img { cursor: pointer; }
+/* Ctrl/Cmd-click can select several images for size matching. A drop-shadow
+   follows opaque pixels (including through transparent padding), so every
+   member remains visible without drawing a misleading full-column box. */
+.bbcode-editor-surface img.is-selected {
+  filter: drop-shadow(0 0 2px rgba(255, 102, 170, 0.9));
+}
 /* A selected image is ringed by .bbcode-image-outline in the frame, not by an
    outline on the element: an image sized by padding has a box that runs out to
    the whole column, and outlining that would ring transparent margins. */
@@ -637,6 +651,19 @@ html[data-custom-cursor="true"] * {
   outline: 2px solid var(--color-osu-pink);
   outline-offset: 1px;
   border-radius: 0.15rem;
+  pointer-events: none;
+  z-index: 14;
+}
+/* Drag-to-reorder: the picked-up image dims and a line marks where it lands. */
+.bbcode-editor-frame.is-reordering,
+.bbcode-editor-frame.is-reordering * { cursor: grabbing !important; }
+.bbcode-editor-surface img.is-reorder-source { opacity: 0.4; }
+.bbcode-image-drop-line {
+  position: absolute;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  background: var(--color-osu-pink);
   pointer-events: none;
   z-index: 14;
 }
