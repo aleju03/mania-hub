@@ -205,19 +205,16 @@ function devForceEternalPull(): boolean {
   return new URLSearchParams(window.location.search).has("forceEternal");
 }
 
-/* Dev only, the milestone event's two cards on the same terms:
+/* Dev only, the milestone event's golden card on the same terms:
    `/packs?forceMilestone=1` marks the hand's final slot as the golden card
-   (Eternal plus the event's badge and motif) and `/packs?forceFoil=1` as a 1M
-   foil. Display-only like forceEternal: no variant key is claimed, so the
+   (Eternal plus the event's badge and motif). Display-only like
+   forceEternal: no variant key is claimed, so the
    mint pass lands on the player's ordinary row and nothing is minted or
    synced. The badge and motif mirror PACK_MILESTONE in
    live-backend/src/features/pack-milestone.ts. */
-function devForcedMilestoneCard(): "golden" | "foil" | null {
-  if (!import.meta.env.DEV || typeof window === "undefined") return null;
-  const params = new URLSearchParams(window.location.search);
-  if (params.has("forceMilestone")) return "golden";
-  if (params.has("forceFoil")) return "foil";
-  return null;
+function devForceMilestoneCard(): boolean {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("forceMilestone");
 }
 
 const DEV_MILESTONE_MOTIF_URL = "https://mania-tracker.com/images/packs/milestone-1m.png";
@@ -226,12 +223,13 @@ const DEV_MILESTONE_MOTIF_URL = "https://mania-tracker.com/images/packs/mileston
 function devApplyForcedEternal(players: PackPlayer[]): PackPlayer[] {
   if (players.length === 0) return players;
   const last = players.length - 1;
-  const milestone = devForcedMilestoneCard();
-  if (milestone && !players.some((player) => player.cardKey || player.eternal)) {
-    const forced: Partial<PackPlayer> =
-      milestone === "golden"
-        ? { eternal: true, milestone: true, customLabel: "1,000,000th pack", motif: { url: DEV_MILESTONE_MOTIF_URL, scale: 1.35, opacity: 0.9, palette: "gold" as const } }
-        : { foil: true, customLabel: "1M", motif: { url: DEV_MILESTONE_MOTIF_URL, scale: 1, opacity: 0.55 } };
+  if (devForceMilestoneCard() && !players.some((player) => player.cardKey || player.eternal)) {
+    const forced: Partial<PackPlayer> = {
+      eternal: true,
+      milestone: true,
+      customLabel: "1,000,000th pack",
+      motif: { url: DEV_MILESTONE_MOTIF_URL, scale: 1.35, opacity: 0.9, palette: "gold" as const },
+    };
     return players.map((player, index) => (index === last ? { ...player, ...forced } : player));
   }
   if (!devForceEternalPull() || players.some((player) => player.eternal)) return players;
@@ -501,6 +499,9 @@ function PacksPage() {
   /* True once the server draw has spent for the pack on screen: the slash
      and the auto-open charge must not pay a second time locally. */
   const serverPaidRef = useRef(false);
+  /* Set synchronously when a deal lands so PackStage's delayed onOpened can
+     protect an Eternal even if its damage callback races the React render. */
+  const dealtPlayersRef = useRef<PackPlayer[] | null>(null);
   /* The in-flight labelling pass for the pack on screen. The summary's
      recycle waits on it: the dealt rows are tierless until it lands, and a
      recycle that outruns it would price every card as unrated. */
@@ -637,6 +638,7 @@ function PacksPage() {
     setDealError(false);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
+    dealtPlayersRef.current = null;
     mintPassRef.current = null;
     if (packId === 0) {
       const pending = readPendingPack();
@@ -660,6 +662,7 @@ function PacksPage() {
       // draw reports only its filtered slice, so it must not overwrite it.
       if (!type.keys) walletApi.notePoolTotal(poolTotal);
       preparedPackKeyRef.current = dealKey;
+      dealtPlayersRef.current = players;
       // An Eternal is once per account (the completion reward) or one open
       // in forty thousand (somebody else's card). If this was the unlucky pack
       // somebody sliced through, forgive the cut entirely so Eternal gets its
@@ -832,11 +835,12 @@ function PacksPage() {
        this delayed callback belongs to that dead pack, and firing it would
        consume the next pack's freshly armed trigger. */
     if (packId !== packIdRef.current) return;
-    setDamage(cutDamage);
+    const effectiveDamage = effectivePackDamage(dealtPlayersRef.current ?? [], cutDamage);
+    setDamage(effectiveDamage);
     setCutCommitted(false);
     /* Its own line in the feed, next to the open: the blade went past the foil
        and through the cards, so the whole hand came out in two pieces. */
-    if (cutDamage) {
+    if (effectiveDamage) {
       track("pack_cut", {
         pack_type: selectedType.id,
         pack_username: auth.viewer?.username,

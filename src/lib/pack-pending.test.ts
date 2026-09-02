@@ -35,14 +35,12 @@ describe("pack-pending", () => {
     expect(effectivePackDamage([{ ...makePlayer(1), eternal: true }], damage)).toBeNull();
   });
 
-  it("keeps a milestone card's key, badge and motif across a resume", () => {
-    const motif = { url: "https://mania-tracker.com/images/packs/milestone-1m.png", scale: 1, opacity: 0.55 };
-    const foil: PackPlayer = { ...makePlayer(7), foil: true, cardKey: "7:v3", customLabel: "1M", motif };
+  it("keeps the milestone card's key, badge and motif across a resume", () => {
+    const motif = { url: "https://mania-tracker.com/images/packs/milestone-1m.png", scale: 1.35, opacity: 0.9, palette: "gold" as const };
     const golden: PackPlayer = { ...makePlayer(8), eternal: true, milestone: true, cardKey: "8:v1", customLabel: "1,000,000th pack", motif };
-    writePendingPack([foil, golden]);
+    writePendingPack([golden]);
     const resumed = readPendingPack();
-    expect(resumed?.players[0]).toMatchObject({ foil: true, cardKey: "7:v3", customLabel: "1M", motif });
-    expect(resumed?.players[1]).toMatchObject({ eternal: true, milestone: true, cardKey: "8:v1" });
+    expect(resumed?.players[0]).toMatchObject({ eternal: true, milestone: true, cardKey: "8:v1", motif });
   });
 
   it("round-trips the unrevealed remainder", () => {

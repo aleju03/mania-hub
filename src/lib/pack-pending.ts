@@ -15,10 +15,10 @@ export interface PendingPack {
   damage: PackDamage | null;
 }
 
-/* An Eternal card overrides the cut-pack gag. The completion reward can
-   never be earned again and the 0.0025% pull is the rarest thing a pack deals,
-   so a hand containing either reveals intact and is never routed into the
-   summary's automatic recycler. */
+/* An Eternal card overrides the cut-pack gag. The completion reward and
+   golden milestone card can never be earned again, and the 0.0025% pull is
+   the rarest thing a pack deals, so a hand containing any of them reveals
+   intact and is never routed into the summary's automatic recycler. */
 export function effectivePackDamage(players: readonly PackPlayer[], damage: PackDamage | null): PackDamage | null {
   return players.some((player) => player.eternal) ? null : damage;
 }

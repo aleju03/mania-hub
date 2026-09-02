@@ -1659,11 +1659,6 @@ msgstr "0:00"
 msgid "12 PM"
 msgstr "12:00"
 
-#. placeholder {0}: dateLabel(state.foilClosesAt)
-#: src/components/packs/PackMilestone.tsx
-#~ msgid "1M foil cards drop in every pack until {0}."
-#~ msgstr "每个卡包都有机会开出 1M 闪卡，截止 {0}。"
-
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "200"

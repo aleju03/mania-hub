@@ -1,54 +1,40 @@
 /* The pack-count milestone event: what happens when the site's opened-packs
    total crosses a round number.
 
-   Two things are dealt, both from the draw route and nowhere else:
-
-   - The golden card. The signed-in open that finds the site-wide sum at or
-     past the target gets its opener's own card at the Eternal tier, on a
-     variant key of its own with the milestone's badge text and motif. One
-     collector, one card, ever: claimPackMilestoneOnce races a claim token
-     into pack_milestones exactly the way the completion reward does, so two
-     opens landing on the number together have one winner and the loser's
-     statements are all no-ops. An anonymous open still counts toward the
-     total (its wallet is browser-local and never reaches pack_wallets, so it
-     never did) but can never claim: the sum is read off pack_wallets, which
-     only signed-in accounts have rows in, and the claim needs an owner.
-
-   - The foil. For PACK_MILESTONE.foilWindowMs after the golden card lands,
-     every open of every type rolls PACK_MILESTONE.foilChance for a
-     commemorative variant of a random player from the pack's slice, appended
-     as a bonus slot so a hit never costs the hand a card. One variant per
-     player, registered in pack_milestone_cards, so every collector who pulls
-     a player's foil holds the same collectible and "in N collections" counts
-     them together. The card mints tierless like any dealt slot and the
-     reveal's mint pass labels it; its per-holding tier_label and motif are
-     what make it a foil, and applyPackCollectionCardMint leaves both alone.
+   The golden card is dealt from the draw route and nowhere else. The
+   signed-in open that finds the site-wide sum at or past the target gets its
+   opener's own card at the Eternal tier, on a variant key of its own with the
+   milestone's badge text and motif. One collector, one card, ever:
+   claimPackMilestoneOnce races a claim token into pack_milestones exactly the
+   way the completion reward does, so two opens landing on the number together
+   have one winner and the loser's statements are all no-ops. An anonymous
+   open never counts toward the total (its wallet is browser-local and never
+   reaches pack_wallets) and can never claim: the sum is read off pack_wallets,
+   which only signed-in accounts have rows in, and the claim needs an owner.
 
    A milestone card is never the completion reward (OWN_ETERNAL_CLAIM_SQL in
    pack-wallets.ts excludes every key in pack_milestone_cards) and never rides
    the 0.0025% Eternal pull (which deals ':eternal' keys only), so the golden
    card stays one of one.
 
-   Nothing announces any of this. There is no counter, no countdown and no
-   public route: the golden card and the foils are the announcement, and the
-   opened total already sits on /packs/collections for anyone counting.
+   Nothing announces this. There is no counter, no countdown and no public
+   route: the golden card is the announcement, and the opened total already
+   sits on /packs/collections for anyone counting.
 
    PACK_MILESTONE is hardcoded like GOAT_POLL: an event ships with a deploy
-   rather than a VPS .env edit. The two env overrides exist for local testing
-   only - a local database is hundreds of thousands of packs short of the
-   number, and a 2% foil is slow to see by hand. */
+   rather than a VPS .env edit. The target env override exists for local
+   testing only because a local database is hundreds of thousands of packs
+   short of the number. */
 import { randomUUID } from "node:crypto";
-import type { Db, DbStatement } from "../db.js";
+import type { Db } from "../db.js";
 import { exec, execBatch } from "../db.js";
 import { serializeCardMotif, type CardMotif } from "./card-motif.js";
-import { mintPackCardSerialStatement } from "./pack-serials.js";
 import {
   nextPackCardVariantNumber,
   normalizeAvatarUrl,
   normalizeCountryCode,
   PACK_CARD_MAX_PP,
   PACK_CARD_USERNAME_MAX_CHARS,
-  packCardTierSlot,
   packCardVariantKey,
   type PackUserIdentity,
 } from "./pack-wallets.js";
@@ -66,12 +52,6 @@ const GOLDEN_MOTIF: CardMotif = {
   palette: "gold",
 };
 
-const FOIL_MOTIF: CardMotif = {
-  url: "https://mania-tracker.com/images/packs/milestone-1m.png",
-  scale: 1,
-  opacity: 0.55,
-};
-
 export const PACK_MILESTONE = {
   enabled: true,
   /* Scopes the tables; a later milestone (10M) is a new id. */
@@ -80,14 +60,7 @@ export const PACK_MILESTONE = {
   target: envNumber("PACK_MILESTONE_TARGET") ?? 1_000_000,
   goldenLabel: "1,000,000th pack",
   goldenMotif: GOLDEN_MOTIF,
-  /* Per open, any pack type, while the foil window is open. */
-  foilChance: envNumber("PACK_MILESTONE_FOIL_CHANCE") ?? 0.02,
-  foilWindowMs: 7 * 24 * 60 * 60 * 1000,
-  foilLabel: "1M",
-  foilMotif: FOIL_MOTIF,
 } as const;
-
-export type PackMilestoneCardKind = "golden" | "foil";
 
 export interface PackMilestoneClaim {
   ownerUserId: number;
@@ -105,10 +78,6 @@ export interface PackMilestoneStatus {
   /* The sum as of this read; the frontend counts live pulls on top of it. */
   opened: number;
   claim: PackMilestoneClaim | null;
-  /* The foil window, once the milestone has landed; null before it. */
-  foilOpensAt: number | null;
-  foilClosesAt: number | null;
-  foilChance: number;
   serverNow: number;
 }
 
@@ -168,24 +137,10 @@ export async function getPackMilestoneStatus(db: Db, now = Date.now()): Promise<
     target: PACK_MILESTONE.target,
     opened,
     claim,
-    foilOpensAt: claim ? claim.dealtAt : null,
-    foilClosesAt: claim ? claim.dealtAt + PACK_MILESTONE.foilWindowMs : null,
-    foilChance: PACK_MILESTONE.foilChance,
     serverNow: now,
   };
   statusCache = { value, expiresAt: now + STATUS_CACHE_MS };
   return value;
-}
-
-/* Whether a foil may be dealt right now: the milestone has landed and its
-   window is still open. Read on a hit only, so an event that has not
-   happened yet (or is long over) costs the draw nothing. */
-export async function isPackMilestoneFoilWindowOpen(db: Db, now = Date.now()): Promise<boolean> {
-  if (!PACK_MILESTONE.enabled) return false;
-  const row = (await exec(db, "select dealt_at from pack_milestones where milestone_id = ?", [PACK_MILESTONE.id])).rows[0];
-  const dealtAt = Number(row?.dealt_at);
-  if (!Number.isFinite(dealtAt) || dealtAt <= 0) return false;
-  return now >= dealtAt && now < dealtAt + PACK_MILESTONE.foilWindowMs;
 }
 
 function clampPp(value: number): number {
@@ -294,108 +249,6 @@ export async function claimPackMilestoneOnce(
   const dealt = Number(results[0]?.rowsAffected ?? 0) > 0;
   if (dealt) statusCache = null;
   return { dealt, cardKey: dealt ? cardKey : null, isNew: dealt, packsOpened };
-}
-
-/* The foil variant key for one player, minted on first use. Two concurrent
-   first pulls of the same player both compute the next number and both
-   insert-or-ignore; the read-back is the one that won. */
-async function resolvePackMilestoneFoilKey(db: Db, cardUserId: number, now: number): Promise<string> {
-  const read = async () => {
-    const row = (await exec(
-      db,
-      "select card_key from pack_milestone_cards where milestone_id = ? and card_user_id = ? and kind = 'foil'",
-      [PACK_MILESTONE.id, cardUserId],
-    )).rows[0];
-    return typeof row?.card_key === "string" ? row.card_key : null;
-  };
-  const existing = await read();
-  if (existing) return existing;
-  const candidate = packCardVariantKey(cardUserId, await nextPackCardVariantNumber(db, cardUserId));
-  await exec(
-    db,
-    "insert or ignore into pack_milestone_cards (milestone_id, card_user_id, kind, card_key, created_at) values (?, ?, 'foil', ?, ?)",
-    [PACK_MILESTONE.id, cardUserId, candidate, now],
-  );
-  return (await read()) ?? candidate;
-}
-
-export interface PackMilestoneFoilDeal {
-  cardKey: string;
-  isNew: boolean;
-  customLabel: string;
-  motif: CardMotif;
-}
-
-/* Writes a dealt foil into the collection: one more copy of that player's
-   foil variant, tierless like every dealt slot (the reveal's mint pass labels
-   it), with the badge text and motif that make it a foil on the holding
-   itself. Same serial rule as the Eternal pull: the serial mints once and a
-   repeat re-arms the pending bit, so each deal buys one feed line. */
-export async function mintPackMilestoneFoilCard(
-  db: Db,
-  ownerUserId: number,
-  cardUserId: number,
-  identity: PackUserIdentity,
-  now = Date.now(),
-): Promise<PackMilestoneFoilDeal> {
-  const cardKey = await resolvePackMilestoneFoilKey(db, cardUserId, now);
-  const owned = (await exec(
-    db,
-    "select 1 from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
-    [ownerUserId, cardKey],
-  )).rows.length > 0;
-  const statements: DbStatement[] = [
-    {
-      sql: `insert or ignore into pack_cards (
-              card_key, tier, card_user_id, username, avatar_url, country_code, tier_label, updated_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        cardKey,
-        packCardTierSlot(null),
-        cardUserId,
-        identity.username.slice(0, PACK_CARD_USERNAME_MAX_CHARS),
-        normalizeAvatarUrl(identity.avatarUrl),
-        normalizeCountryCode(identity.countryCode),
-        PACK_MILESTONE.foilLabel,
-        now,
-      ],
-    },
-    {
-      sql: `insert into pack_collection_cards (
-              owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id, pp, global_rank,
-              copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, completion_eligible
-            ) values (?, ?, ?, null, ?, ?, null, ?, ?, 1, 0, ?, ?, ?, 1)
-            on conflict(owner_user_id, card_key) do update set
-              tier_label = coalesce(pack_collection_cards.tier_label, excluded.tier_label),
-              motif = coalesce(pack_collection_cards.motif, excluded.motif),
-              pp = case when excluded.pp > 0 then excluded.pp else pack_collection_cards.pp end,
-              global_rank = case when excluded.global_rank > 0 then excluded.global_rank else pack_collection_cards.global_rank end,
-              copies = pack_collection_cards.copies + 1,
-              first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
-              last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
-              updated_at = excluded.updated_at,
-              completion_eligible = 1`,
-      args: [
-        ownerUserId,
-        cardUserId,
-        cardKey,
-        PACK_MILESTONE.foilLabel,
-        serializeCardMotif(PACK_MILESTONE.foilMotif),
-        clampPp(identity.pp),
-        clampRank(identity.globalRank),
-        now,
-        now,
-        now,
-      ],
-    },
-    mintPackCardSerialStatement(cardKey, cardUserId, ownerUserId, now, { pullReportPending: true }),
-    {
-      sql: "update pack_card_serials set pull_report_pending = 1 where card_key = ? and owner_user_id = ?",
-      args: [cardKey, ownerUserId],
-    },
-  ];
-  await execBatch(db, statements);
-  return { cardKey, isNew: !owned, customLabel: PACK_MILESTONE.foilLabel, motif: PACK_MILESTONE.foilMotif };
 }
 
 /* The milestone keys this collector holds that a client may name in a pull

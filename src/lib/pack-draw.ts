@@ -29,12 +29,10 @@ export interface ServerPackDrawSlot {
      of existing Eternals for the pull), so neither can be provoked from the
      client. */
   eternal?: boolean;
-  /* A milestone event's cards (live-backend pack-milestone.ts): the foil is
-     a commemorative variant of a pool player, the golden card the opener's
-     own face at Eternal for the open that made the number. Both sit on a
-     variant key the tier cannot derive, which is why the slot carries it,
-     along with the badge text and motif the reveal draws. */
-  foil?: boolean;
+  /* The milestone's golden card (live-backend pack-milestone.ts): the
+     opener's own face at Eternal for the open that made the number. It sits
+     on a variant key the tier cannot derive, which is why the slot carries
+     it, along with the badge text and motif the reveal draws. */
   milestone?: boolean;
   cardKey?: string;
   customLabel?: string | null;

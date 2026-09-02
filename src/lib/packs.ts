@@ -59,13 +59,12 @@ export interface PackPlayer {
      row and refuses the tier from any client claim, so forging this flag
      paints a card only on the forger's own screen. */
   eternal?: boolean;
-  /* A milestone card (the foil, or the golden card, which is also an Eternal
-     slot). The server dealt it on a variant key it names here, with the
+  /* The golden milestone card, which is also an Eternal slot. The server
+     dealt it on a variant key it names here, with the
      badge text and motif the face is drawn with; the mint pass and the pull
      report address the holding by that key. Display-only on this side like
      the Eternal flag: the key is only believed server-side for a holding the
      collector already has. */
-  foil?: boolean;
   milestone?: boolean;
   cardKey?: string;
   customLabel?: string | null;
@@ -77,12 +76,11 @@ export interface PackPlayer {
    motif. */
 export function packPlayerVariantFields(slot: {
   userId: number;
-  foil?: boolean;
   milestone?: boolean;
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
-}): Pick<PackPlayer, "foil" | "milestone" | "cardKey" | "customLabel" | "motif"> {
+}): Pick<PackPlayer, "milestone" | "cardKey" | "customLabel" | "motif"> {
   const parsed = typeof slot.cardKey === "string" ? parsePackCardKey(slot.cardKey) : null;
   const cardKey = parsed && parsed.userId === slot.userId && parsed.variant > 0 ? slot.cardKey : undefined;
   if (!cardKey) return {};
@@ -91,7 +89,6 @@ export function packPlayerVariantFields(slot: {
     cardKey,
     customLabel,
     motif: parseCardMotif(slot.motif ?? null),
-    ...(slot.foil === true ? { foil: true as const } : {}),
     ...(slot.milestone === true ? { milestone: true as const } : {}),
   };
 }

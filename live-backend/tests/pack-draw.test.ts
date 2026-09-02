@@ -51,8 +51,6 @@ function makeDeps(entries: GlobalRankingEntry[], overrides: Partial<PackDrawDeps
     listOwnedCardKeys: async () => [],
     selectReadyUserIds: async (_db, ids) => [...ids],
     listEternalCards: async () => [],
-    isFoilWindowOpen: async () => false,
-    foilChance: 0,
     rng: rngQueue([]),
     ...overrides,
   };

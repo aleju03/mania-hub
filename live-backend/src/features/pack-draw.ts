@@ -28,7 +28,6 @@ import {
   type PackOpenCost,
   type PullableEternalCard,
 } from "./pack-wallets.js";
-import { isPackMilestoneFoilWindowOpen, PACK_MILESTONE } from "./pack-milestone.js";
 import { selectReadyPackCardUserIds } from "./player-profiles.js";
 
 /* Draw parameters and price per pack type, mirrored from PACK_TYPES in
@@ -110,8 +109,6 @@ export interface PackDrawSlotVariant {
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
-  /* The commemorative foil of a milestone event. */
-  foil?: boolean;
   /* The milestone's golden card: an Eternal slot that is also this. */
   milestone?: boolean;
 }
@@ -143,11 +140,6 @@ export interface PackDrawHand {
      slot yet: the route mints it and appends it to `players`, because the
      card is an ownership row rather than a roll over the pool. */
   eternalPullUserId: number;
-  /* The player whose milestone foil this open hit (pack-milestone.ts), with
-     the pool identity the slot renders under, or null. Like the Eternal, the
-     route mints it and appends it: the foil is a variant key the pool does
-     not know. */
-  foilPull: GlobalRankingEntry | null;
   /* Dealt ids with no stored score window (only when the slice had no ready
      replacement left); the route warms them so the client's cold path is a
      coalesced wait, not a fresh mint. */
@@ -173,10 +165,6 @@ export interface PackDrawDeps {
   listOwnedCardKeys: (db: Db, userId: number) => Promise<string[]>;
   selectReadyUserIds: (db: Db, userIds: readonly number[]) => Promise<number[]>;
   listEternalCards: (db: Db, ownerUserId: number) => Promise<PullableEternalCard[]>;
-  /* Whether the milestone's foil window is open; read only after the foil
-     roll hits, so an event that is not running costs the draw nothing. */
-  isFoilWindowOpen: (db: Db) => Promise<boolean>;
-  foilChance: number;
   rng: () => number;
 }
 
@@ -185,8 +173,6 @@ const defaultDeps: PackDrawDeps = {
   listOwnedCardKeys: listPackCollectionOwnedCardKeys,
   selectReadyUserIds: selectReadyPackCardUserIds,
   listEternalCards: listPullableEternalCards,
-  isFoilWindowOpen: isPackMilestoneFoilWindowOpen,
-  foilChance: PACK_MILESTONE.enabled ? PACK_MILESTONE.foilChance : 0,
   rng: Math.random,
 };
 
@@ -391,21 +377,7 @@ export async function drawPackHand(
     }
   }
 
-  /* The milestone foil, rolled after the Eternal for the same reason: it is a
-     bonus slot and cannot disturb the hand. The roll comes before the window
-     read so the 98% of opens that miss never touch the milestone table, and
-     an event that is over or not yet reached answers false to the 2% that
-     hit. The card is a random ready player from the pack's own slice who is
-     not already in the hand; a slice with nobody left deals no foil. */
-  let foilPull: GlobalRankingEntry | null = null;
-  if (deps.foilChance > 0 && rng() < deps.foilChance && (await deps.isFoilWindowOpen(db))) {
-    const sampled = shuffleInPlace(collectCandidates(entries, drawTotal, used, null), rng).slice(0, 24);
-    const readyIds = new Set(await deps.selectReadyUserIds(db, sampled.map((entry) => entry.user.id)));
-    foilPull = sampled.find((entry) => readyIds.has(entry.user.id)) ?? null;
-    if (foilPull) used.add(foilPull.user.id);
-  }
-
-  return { poolTotal, players, notReadyUserIds, eternalPullUserId, foilPull };
+  return { poolTotal, players, notReadyUserIds, eternalPullUserId };
 }
 
 /* Injectable reads for the completion check, so tests can drive it without a

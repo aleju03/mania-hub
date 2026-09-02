@@ -6,7 +6,7 @@ import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGues
 import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, getPullableEternalIdentity, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, mintPulledEternalCard, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
-import { claimPackMilestoneOnce, mintPackMilestoneFoilCard, PACK_MILESTONE } from "../../features/pack-milestone.js";
+import { claimPackMilestoneOnce, PACK_MILESTONE } from "../../features/pack-milestone.js";
 import { logInfo, logWarn } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
@@ -92,10 +92,9 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       (Array.isArray(body.userIds) ? body.userIds : [])
         .map(Number)
         .filter((id) => Number.isInteger(id) && id > 0),
-    // The largest pack (Wild) plus the three bonus slots: both Eternal deals
-    // (the opener's own completion card, the 0.0025% pull of somebody else's)
-    // and the milestone foil.
-    )].slice(0, 13);
+    // The largest pack (Wild) plus another collector's Eternal and the opener,
+    // whose completion and milestone cards share an id if both land at once.
+    )].slice(0, 12);
     if (userIds.length === 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
       return true;
@@ -290,46 +289,6 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         }
       } catch (error) {
         logWarn("pack_eternal_pull_failed", { userId: ownerUserId, error: String(error) });
-      }
-    }
-    /* The milestone foil (pack-milestone.ts): a commemorative variant of a
-       player from the pack's slice, dealt while the event's window is open.
-       Repeatable like the Eternal pull, and a failure here likewise returns
-       the paid hand. The slot carries its variant key, badge and motif because
-       the client cannot derive any of them from a tier. */
-    if (hand.foilPull) {
-      const entry = hand.foilPull;
-      try {
-        const foil = await mintPackMilestoneFoilCard(
-          writeDb,
-          ownerUserId,
-          entry.user.id,
-          {
-            username: entry.user.username,
-            avatarUrl: entry.user.avatar_url,
-            countryCode: entry.user.country_code,
-            pp: entry.pp,
-            globalRank: entry.global_rank ?? 0,
-          },
-          Date.now(),
-        );
-        hand.players.push({
-          foil: true,
-          userId: entry.user.id,
-          username: entry.user.username,
-          avatarUrl: entry.user.avatar_url,
-          countryCode: entry.user.country_code,
-          globalRank: entry.global_rank,
-          poolRank: entry.rank,
-          pp: entry.pp,
-          cardKey: foil.cardKey,
-          customLabel: foil.customLabel,
-          motif: foil.motif,
-        });
-        isNewByCardKey.set(foil.cardKey, foil.isNew);
-        logInfo("pack_milestone_foil", { ownerUserId, cardUserId: entry.user.id, cardKey: foil.cardKey, packType });
-      } catch (error) {
-        logWarn("pack_milestone_foil_failed", { userId: ownerUserId, error: String(error) });
       }
     }
     /* The opener's own face, resolved once for whichever of the two one-time

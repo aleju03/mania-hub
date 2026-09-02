@@ -1162,11 +1162,10 @@ create table if not exists pack_milestones (
   dealt_at integer not null
 );
 
--- The card keys a milestone minted: the one golden card ('golden') and one
--- commemorative variant per player ('foil'), so every collector who pulls a
--- player's foil holds the same collectible. A key listed here is never the
+-- The golden card key minted for a milestone. A key listed here is never the
 -- completion reward (see OWN_ETERNAL_CLAIM_SQL) and never circulates on the
--- Eternal pull slot, which only deals ':eternal' keys.
+-- Eternal pull slot, which only deals ':eternal' keys. `kind` keeps the
+-- registry extensible for future milestone rewards.
 create table if not exists pack_milestone_cards (
   milestone_id text not null,
   card_user_id integer not null,
