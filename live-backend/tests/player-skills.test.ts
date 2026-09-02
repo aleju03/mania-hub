@@ -23,6 +23,7 @@ import {
   parseNamedRate,
   ssrGoalForAccuracy,
   ssrGoalForScore,
+  RATE_VIBRO_CHECK_VERSION,
 } from "../src/features/player-skills.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -72,6 +73,23 @@ OverallDifficulty:8
 [HitObjects]
 ${notes}
 `;
+}
+
+// 163BPM 1/16 four-column rolls in 3-9-note-per-finger chunks with a 1/8 break
+// between them: 92ms per finger at 1.0x (a fast roll, not vibro at any tier),
+// 61ms per finger at 1.5x (chart-classifier's roll-vibro tier fires).
+function buildRollBeatmapFile(): string {
+  const lengths = [12, 16, 20, 24, 28, 28, 32, 32, 36];
+  const lines: string[] = [];
+  let time = 1000;
+  for (let chunk = 0; chunk < 90; chunk++) {
+    const length = lengths[chunk % lengths.length];
+    for (let index = 0; index < length; index++) {
+      lines.push(`${64 + (index % 4) * 128},192,${Math.round(time + index * 23)},1,0,0:0:0:0:`);
+    }
+    time += length * 23 + 184;
+  }
+  return buildStreamBeatmapFile().replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${lines.join("\n")}\n`);
 }
 
 // The stream chart with every note turned into a ~250ms hold: same heads, so
@@ -1692,6 +1710,61 @@ describe("computePlayerSkillRatings", () => {
       const trackedSourced = { ...result.plays[0], beatmapId: 106, source: "tracked" as const };
       const dropped = await computePlayerSkillRatings(db, failingOsu, [], [trackedSourced], {});
       expect(dropped.summary.analyzedPlays).toBe(0);
+    });
+  });
+
+  it("turns away rate plays on charts that are only vibro at the played rate", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildRollBeatmapFile(), { source: "test" });
+      await storeCachedBeatmapFile(db, 107, buildRollBeatmapFile(), { source: "test" });
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      for (const beatmapId of [106, 107]) {
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, vibro: false, patterns: [] }), new Date().toISOString()],
+        );
+      }
+      // The stored flag is 1.0x, where the roll chart is legit: the NoMod
+      // tracked play rates. The DT tracked play on the same chart is a shake
+      // and skips. Chart 107 has a top play at DT (pp-backed), so its tracked
+      // DT retry keeps the ranked trust and rates too.
+      const topScores = [play({ id: 1, beatmap_id: 107, accuracy: 0.9, mods: [{ acronym: "DT" }] })];
+      const trackedScores = [
+        play({ id: 2, beatmap_id: 106, accuracy: 0.99, pp: null }),
+        play({ id: 3, beatmap_id: 106, accuracy: 0.95, pp: null, mods: [{ acronym: "DT" }] }),
+        play({ id: 4, beatmap_id: 107, accuracy: 0.99, pp: null, mods: [{ acronym: "DT" }] }),
+      ];
+      const result = await computePlayerSkillRatings(db, failingOsu, topScores, [], { trackedScores });
+      const rated = result.plays.map((entry) => `${entry.beatmapId}@${entry.rate}`).sort();
+      expect(rated).toEqual(["106@1", "107@1.5"]);
+      expect(result.summary.unsupportedPlays).toBe(0);
+      // The NoMod play never ran the check (the stored flag covers 1.0x); the
+      // trusted DT play never needed it.
+      expect(result.plays.every((entry) => entry.rateVibroChecked == null)).toBe(true);
+
+      // Retention: a tracked DT play stored before the check existed drops on
+      // its next compute; a top-sourced one keeps its pp-backed trust.
+      const stale = { ...result.plays.find((entry) => entry.beatmapId === 107)!, beatmapId: 106, identity: "official:9", source: "tracked" as const };
+      const dropped = await computePlayerSkillRatings(db, failingOsu, [], [stale], {});
+      expect(dropped.plays.map((entry) => entry.beatmapId)).toEqual([]);
+      const trusted = await computePlayerSkillRatings(db, failingOsu, [], [{ ...stale, source: "top" as const }], {});
+      expect(trusted.plays.map((entry) => entry.beatmapId)).toEqual([106]);
+    });
+  });
+
+  it("stamps a rate play whose chart passes the check so it is parsed once", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
+      const trackedScores = [play({ id: 3, beatmap_id: 106, accuracy: 0.95, pp: null, mods: [{ acronym: "DT" }] })];
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores });
+      expect(result.plays).toHaveLength(1);
+      expect(result.plays[0].rateVibroChecked).toBe(RATE_VIBRO_CHECK_VERSION);
+      // A retained stamped play survives without the .osu around.
+      await exec(db, "delete from beatmap_osu_files where beatmap_id = 106");
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], result.plays, {});
+      expect(retained.plays).toHaveLength(1);
     });
   });
 

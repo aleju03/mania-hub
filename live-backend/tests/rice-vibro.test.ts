@@ -93,6 +93,38 @@ describe("detectRiceVibro", () => {
     expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
   });
 
+  it("flags 1/16 rolls only once the rate makes them a shake (tier 6)", () => {
+    // 163BPM 1/16 four-column rolls in 9-note chunks with a 1/8 break between
+    // them (the "Dr. Jakads" shape): 92ms per finger at 1.0x, a fast roll;
+    // 61ms per finger at 1.5x, vibro. Runs never reach tier 1, there are no
+    // chords, and the breaks keep the row rate under tier 4.
+    // Roll lengths vary like the real file's (3-9 notes per finger), so the
+    // 8+ runs stay a small share and the burst tier does not fire first.
+    const notes: Note[] = [];
+    let time = 1000;
+    const lengths = [12, 16, 20, 24, 28, 28, 32, 32, 36];
+    for (let chunk = 0; chunk < 90; chunk++) {
+      const length = lengths[chunk % lengths.length];
+      for (let index = 0; index < length; index++) notes.push({ column: index % 4, time: Math.round(time + index * 23) });
+      time += length * 23 + 184;
+    }
+    const map = parseManiaBeatmap(buildOsuFile(notes));
+    expect(detectRiceVibro(map)).toBe(false);
+    expect(detectRiceVibro(map, 1.5)).toBe(true);
+    // A 240BPM 1/4 jack file puts the same share of column gaps under 65ms
+    // but its rows are 62ms apart: jacks, not a roll, and not vibro here
+    // (tier 1 still owns sustained hammering).
+    const jacks: Note[] = [];
+    for (let burst = 0; burst < 120; burst++) {
+      for (let index = 0; index < 4; index++) jacks.push({ column: burst % 4, time: 1000 + burst * 500 + index * 62 });
+      jacks.push({ column: (burst + 2) % 4, time: 1000 + burst * 500 + 310 });
+    }
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(jacks)))).toBe(false);
+    // 7K keeps its 1.5x rolls: ranked 7K carries this per-finger interval.
+    const wide = parseManiaBeatmap(buildOsuFile(notes.map((note) => ({ ...note, column: note.column + 1 })), 7));
+    expect(detectRiceVibro(wide, 1.5)).toBe(false);
+  });
+
   it("flags 4K quad walls hammered at ~96ms (tier 2)", () => {
     // 120 consecutive quad rows at 96ms: too slow for tier 1, but a chord wall
     // no one jacks legitimately.

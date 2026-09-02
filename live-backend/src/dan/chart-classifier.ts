@@ -440,6 +440,33 @@ const RICE_VIBRO_MAX_ROWS_PER_SECOND = 65;
 const RICE_VIBRO_CHORD_WALL_GAP_MS = 70;
 const RICE_VIBRO_CHORD_WALL_MIN_RATIO = 0.02;
 
+// Tier 6 (4K only): roll vibro, the per-finger speed of the chart's rolls at
+// the played rate. A 163BPM 1/16 four-column roll hits each finger every 92ms
+// and breaks every 8-9 notes, which every tier above lets through (runs too
+// short for tiers 1 and 3, no chords for 2 and 5, the breaks hold tier 4 under
+// its row cap) - and at 1.5x it is a 61ms per-finger shake nobody rolls. Two
+// measures, both at the played rate, and both have to hold:
+//  - per-finger: the share of all column gaps at or under 65ms (~15/s per
+//    finger). Ranked and loved 4K at 1.0x (n=23,545) top out at 0.114; the
+//    motivating chart measures 0.47 at 1.5x and 0.00 at 1.0x.
+//  - roll: the share of row transitions at or under 20ms that move to other
+//    columns (same-column flams like skalop's 8ms doubles do not count). This
+//    is what keeps
+//    the per-finger measure honest: 230-240BPM 1/4 jack files and fast
+//    minijack charts also put a quarter of their column gaps under 65ms
+//    (Overdose Party [230JACK], The Finale (Zero), skalop) but their rows sit
+//    64ms+ apart - a jack is one finger, a roll is the whole hand cycling.
+//    Ranked and loved 4K at 1.0x stay under 0.30 (a loved chart tier 1
+//    already flags), p99.9 at 0.11; the motivating chart measures 0.67 at
+//    1.5x (23ms rows) and 0.00 at 1.0x.
+// No ranked or loved 4K chart meets both at 1.0x. 4K only: ranked 7K carries
+// 55ms column repeats routinely (0.48 on VIVID), so the per-finger measure
+// says nothing there.
+const RICE_VIBRO_ROLL_GAP_MS = 65;
+const RICE_VIBRO_ROLL_MIN_RATIO = 0.25;
+const RICE_VIBRO_ROLL_ROW_GAP_MS = 20;
+const RICE_VIBRO_ROLL_MIN_ROW_RATIO = 0.3;
+
 function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; ratio: number } {
   const byColumn = new Map<number, number[]>();
   for (const note of map.notes) {
@@ -471,6 +498,32 @@ function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; 
 
 // Same per-column scan, but measuring how much of the chart sits inside fast
 // runs of at least minRun hits (the tier-3 burst-soak signal).
+/**
+ * Share of row-to-row transitions at or under cutoffMs that move to other
+ * columns. A roll cycles the hand, so consecutive rows share no column; a
+ * same-column pair that close is a flam (skalop's 8ms doubles) or a stack,
+ * which is not the shape this measures.
+ */
+function fastRollRowShare(map: ManiaBeatmap, cutoffMs: number): number {
+  const rows = new Map<number, Set<number>>();
+  for (const note of map.notes) {
+    const columns = rows.get(note.time) ?? new Set<number>();
+    columns.add(note.column);
+    rows.set(note.time, columns);
+  }
+  const times = [...rows.keys()].sort((a, b) => a - b);
+  if (times.length < 2) return 0;
+  let fast = 0;
+  for (let index = 1; index < times.length; index++) {
+    if (times[index] - times[index - 1] > cutoffMs) continue;
+    const previous = rows.get(times[index - 1])!;
+    let shared = false;
+    for (const column of rows.get(times[index])!) if (previous.has(column)) { shared = true; break; }
+    if (!shared) fast++;
+  }
+  return fast / (times.length - 1);
+}
+
 function columnBurstRuns(map: ManiaBeatmap, cutoffMs: number, minRun: number): { runs: number; fraction: number } {
   const byColumn = new Map<number, number[]>();
   for (const note of map.notes) {
@@ -548,6 +601,21 @@ function peakRowsPerSecond(map: ManiaBeatmap, windowMs: number): number {
   return peak;
 }
 
+/**
+ * Tier 6 on its own, for the play-side check (player-skills rate vibro).
+ *
+ * This is the only tier that may be asked about a rate: its two measures
+ * were calibrated as "what a hand can do" and both scale with the rate. Tiers
+ * 1-5 scale their cutoffs too, but they were calibrated against the 1.0x
+ * corpus, and at 1.5x they call ranked 210-256BPM jack files (GRAVITY, WORLD'S
+ * END, the V2/Super/EXTREME set) vibro - real DT plays, not shakes.
+ */
+export function detectRollVibro(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || map.notes.length < RICE_VIBRO_MIN_NOTES) return false;
+  return columnFastGaps(map, RICE_VIBRO_ROLL_GAP_MS * rate).ratio >= RICE_VIBRO_ROLL_MIN_RATIO
+    && fastRollRowShare(map, RICE_VIBRO_ROLL_ROW_GAP_MS * rate) >= RICE_VIBRO_ROLL_MIN_ROW_RATIO;
+}
+
 export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
   if (map.notes.length >= RICE_VIBRO_MIN_NOTES) {
     const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
@@ -561,6 +629,7 @@ export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
         const fast = columnFastGaps(map, RICE_VIBRO_WALL_COLUMN_GAP_MS * rate);
         if (fast.ratio >= RICE_VIBRO_WALL_COLUMN_MIN_RATIO) return true;
       }
+      if (detectRollVibro(map, rate)) return true;
     }
   }
 

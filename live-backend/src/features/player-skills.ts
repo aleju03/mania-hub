@@ -14,7 +14,8 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
+import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor, detectRollVibro } from "../dan/chart-classifier.js";
+import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
@@ -731,6 +732,12 @@ export interface StoredPlaySsr {
   // that lowered it does not. Unset on every other play, which is judged at
   // whatever OD the chart currently stores.
   odOverride?: number | null;
+  // The rate-vibro detector version this play's chart was checked at, at the
+  // play's own rate (RATE_VIBRO_CHECK_VERSION). Only rate plays on charts
+  // without pp-backed trust carry it; a play the check turns away is never
+  // stored. Absent means unchecked (rated before the check existed), and the
+  // retention pass checks it on the next compute.
+  rateVibroChecked?: number;
 }
 
 interface StoredModesSummary {
@@ -2343,6 +2350,27 @@ const MAX_CALC_RUNS_PER_COMPUTE = 150;
 // the result is corpus-shared, so a backlog drains across computes quickly.
 const MAX_RATE_VERDICT_COMPUTES = 24;
 
+// The stored vibro flag is the chart at 1.0x, so a chart that only becomes
+// vibro under rate (a 163BPM 1/16 roll file is a 61ms per-finger shake at
+// 1.5x; chart-classifier's roll tier) rated as a legit hard play. Rate plays
+// on charts without pp-backed trust run the roll tier - only that tier, see
+// detectRollVibro for why the rest must stay at 1.0x - at the play's rate
+// from the cached .osu: parse only, no MinaCalc, and the verdict is stamped on
+// the stored play so a chart is checked once per detector version. Bump when
+// the tier changes so stored plays re-check on their next compute.
+export const RATE_VIBRO_CHECK_VERSION = 1;
+// Parses per compute, on top of the calc budget: a player with a long rate
+// history checks its backlog across a few computes rather than one long job.
+const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
+
+function chartVibroAtRate(osuText: string, rate: number): boolean | null {
+  try {
+    return detectRollVibro(parseManiaBeatmap(osuText), rate);
+  } catch {
+    return null;
+  }
+}
+
 interface PlayCandidate {
   score: OscScore;
   beatmapId: number;
@@ -2489,6 +2517,7 @@ export async function computePlayerSkillRatings(
   const analyzedByKey = new Map<string, StoredPlaySsr>();
   let calcRuns = 0;
   let calcRunsTotal = 0;
+  let rateVibroChecks = 0;
   for (const [key, candidate] of candidates) {
     const { score, beatmapId, rate, goal, identity, source } = candidate;
     if (candidate.chartOdPending) {
@@ -2543,12 +2572,25 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       continue;
     }
+    // Rate vibro, ahead of the calc so a shake never costs a MinaCalc run.
+    // Same trust rule as the stored flag: pp-backed charts are ranked and
+    // ranked does not admit vibro, so only tracked-history charts check.
+    let rateVibroChecked: number | undefined;
+    if (rate !== 1 && !ppBackedChartIds.has(beatmapId) && rateVibroChecks < MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
+      rateVibroChecks += 1;
+      const vibro = chartVibroAtRate(osuText, rate);
+      if (vibro) continue;
+      if (vibro === false) rateVibroChecked = RATE_VIBRO_CHECK_VERSION;
+    }
     const ssr = await computePlaySsrValues(osuText, { rate, keyCount, goal, lnRatio: infoByBeatmap.get(beatmapId)?.lnRatio ?? null });
     if (!ssr) {
       if (source === "top") unsupportedPlays += 1;
       continue;
     }
-    analyzedByKey.set(key, { identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: ssr.values, patterns: [], ...clearEvidence });
+    analyzedByKey.set(key, {
+      identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: ssr.values, patterns: [], ...clearEvidence,
+      ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
+    });
     // Each calc run is a short synchronous wasm burst; breathe between bursts
     // so a long first run does not starve the event loop.
     calcRuns += ssr.calcRuns;
@@ -2607,6 +2649,23 @@ export async function computePlayerSkillRatings(
     } else if (previous.goal > current.goal && previous.identity !== current.identity) {
       analyzedByKey.set(key, previous);
     }
+  }
+  // Rate vibro for the plays that skipped the calc loop (reused or retained
+  // SSRs): rated before the check existed, or under an older detector. Same
+  // trust rule as above; a top-sourced play keeps its pp-backed trust after
+  // dropping off the top-200. A chart whose .osu is not cached stays as it is
+  // and checks on a later compute, like a pending play.
+  for (const [key, play] of analyzedByKey) {
+    if (play.rate === 1 || play.source === "top" || ppBackedChartIds.has(play.beatmapId)) continue;
+    if (play.rateVibroChecked === RATE_VIBRO_CHECK_VERSION) continue;
+    if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) break;
+    const osuText = await loadOsuText(db, osu, play.beatmapId);
+    if (osuText == null) continue;
+    rateVibroChecks += 1;
+    const vibro = chartVibroAtRate(osuText, play.rate);
+    if (vibro) analyzedByKey.delete(key);
+    else if (vibro === false) analyzedByKey.set(key, { ...play, rateVibroChecked: RATE_VIBRO_CHECK_VERSION });
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   const analyzed = [...analyzedByKey.values()];
 
