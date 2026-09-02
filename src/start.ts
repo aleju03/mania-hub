@@ -114,6 +114,12 @@ function checkAppRateLimit(request: Request, bucket: AppRateBucket): { allowed: 
   return { allowed: true };
 }
 
+async function isAdminServerFnRequest(request: Request): Promise<boolean> {
+  if (!hasAuthCookieHeader(request.headers.get("cookie"))) return false;
+  const { isAdminRequest } = await import("./lib/auth-server");
+  return isAdminRequest(request);
+}
+
 const requestRateLimitMiddleware = createMiddleware().server(
   async ({ next, request }) => {
     if (!isRateLimitEnabled()) return next();
@@ -122,6 +128,10 @@ const requestRateLimitMiddleware = createMiddleware().server(
     if (!bucket) return next();
     const result = checkAppRateLimit(request, bucket);
     if (result.allowed) return next();
+    // Admin tooling (leaderboard imports, the admin pages) legitimately
+    // bursts past the visitor ceiling. The cookie is only verified once the
+    // bucket has already refused, so anonymous traffic never pays for it.
+    if (bucket === "serverFn" && await isAdminServerFnRequest(request)) return next();
     return new Response(JSON.stringify({
       error: "rate_limited",
       bucket,

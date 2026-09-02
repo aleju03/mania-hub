@@ -229,6 +229,17 @@ export async function readViewerFromRequest(request: Request): Promise<AuthViewe
   }
 }
 
+/** Whether an explicit Request carries an admin session, for middleware that
+    runs outside the server-function context. Same rules as readCurrentAuth,
+    so a request this admits would pass requireAdminAccess. Fails closed. */
+export async function isAdminRequest(request: Request): Promise<boolean> {
+  try {
+    return buildAuthState(await readViewerFromRequest(request), request).canUseAdminFeatures;
+  } catch {
+    return false;
+  }
+}
+
 export async function readCurrentAuth(): Promise<AuthState> {
   const request = getRequest();
   try {

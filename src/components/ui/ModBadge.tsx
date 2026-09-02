@@ -57,7 +57,7 @@ const iconInset: Record<string, number> = {
   NC: 1,
 };
 
-export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: number; rate?: number; color?: string }) {
+export function ModBadge({ mod, size = 1, rate, color, detail }: { mod: string; size?: number; rate?: number; color?: string; detail?: string }) {
   if (!mod) return null;
   const file = MOD_BADGE_FILE_NAMES[mod];
   const bg = color ?? MOD_BADGE_TYPE_COLORS[mod] ?? "#ff6666";
@@ -74,7 +74,9 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
 
   // Format matches osu-web: 2 decimals + "×" (U+00D7). E.g. 0.9 → "0.90×".
   const rateText = rate != null ? `${rate.toFixed(2)}×` : null;
-  const title = rateText != null ? `${mod} ${rateText}` : mod;
+  const title = [mod, rateText, detail].filter(Boolean).join(" ");
+  // The tail text: a rate for speed mods, otherwise a short setting like "OD 9".
+  const tailText = rateText ?? detail ?? null;
   // Spans, not divs: the badge also renders inside <p> prose (dan-estimates
   // explainer), where a div would make the SSR HTML invalid and break hydration.
   const iconPill = file ? (
@@ -105,14 +107,15 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
     </span>
   );
 
-  if (rateText != null) {
+  if (tailText != null) {
     // Dimensions cross-reference osu-web's .mod__extender (resources/css/bem/mod.less):
     // extender width = 2.2em, margin-left = -0.5em, padding-left = 0.5em, font-size = 0.5em
     // where 1em = height. Darker tail color = color-mix(in srgb, black, bg 26.3%)
     // which matches osu-framework's .Darken(2.8f).
     const extenderWidth = Math.round(height * 2.2);
     const overlap = Math.round(height * 0.5);
-    const fontSize = Math.round(height * 0.5);
+    // The tail is sized for a five-character rate; longer settings shrink to fit.
+    const fontSize = Math.round(height * 0.5 * Math.min(1, 5 / tailText.length));
     const darkerBg = `color-mix(in srgb, black, ${bg} 26.3%)`;
     return (
       <span className="inline-flex items-center flex-shrink-0 align-middle" title={title}>
@@ -137,8 +140,8 @@ export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: n
             WebkitMaskRepeat: "no-repeat",
           }}
         >
-          <span className="font-bold leading-none" style={{ fontSize, color: bg }}>
-            {rateText}
+          <span className="font-bold leading-none whitespace-nowrap" style={{ fontSize, color: bg }}>
+            {tailText}
           </span>
         </span>
       </span>

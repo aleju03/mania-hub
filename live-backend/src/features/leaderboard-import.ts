@@ -6,7 +6,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { logInfo } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { getScoreIdentity } from "../shared/score.js";
+import { getScoreIdentity, nowIso } from "../shared/score.js";
 import type { OscScore, OsuBeatmap, OsuBeatmapset } from "../shared/types.js";
 
 /**
@@ -25,6 +25,8 @@ import type { OscScore, OsuBeatmap, OsuBeatmapset } from "../shared/types.js";
 
 export const LEADERBOARD_IMPORT_SOURCE = "leaderboard_import";
 export const LEADERBOARD_IMPORT_JOB = "import_beatmap_leaderboard";
+export const LEADERBOARD_IMPORT_COOLDOWN_DAYS = 7;
+export const LEADERBOARD_IMPORT_COOLDOWN_MS = LEADERBOARD_IMPORT_COOLDOWN_DAYS * 24 * 60 * 60 * 1_000;
 
 export function leaderboardImportDedupeKey(beatmapId: number): string {
   return `leaderboard-import:${beatmapId}`;
@@ -32,10 +34,13 @@ export function leaderboardImportDedupeKey(beatmapId: number): string {
 
 /* The route enqueues and answers at once: an admin importing a hundred boards
    in a row must not hold a hundred osu! round-trips open, and the queue's
-   dedicated lane paces them. replaceDone so a repeat import of the same chart
-   runs again (it re-reads the board; already-stored scores are skipped). */
-export async function enqueueLeaderboardImport(queue: JobQueue, beatmapId: number): Promise<void> {
+   dedicated lane paces them. A durable successful-import receipt guards the
+   seven-day cooldown; replaceDone only lets a chart run again after that. */
+export async function enqueueLeaderboardImport(db: Db, queue: JobQueue, beatmapId: number): Promise<"queued" | "recent"> {
+  const [status] = await getLeaderboardImportStatuses(db, [beatmapId]);
+  if (status?.recent) return "recent";
   await queue.enqueue(LEADERBOARD_IMPORT_JOB, leaderboardImportDedupeKey(beatmapId), { beatmapId }, { priority: 60, replaceDone: true });
+  return "queued";
 }
 
 export type LeaderboardImportJobStatus = "queued" | "running" | "done" | "failed" | "none";
@@ -44,32 +49,93 @@ export interface LeaderboardImportStatus {
   beatmapId: number;
   status: LeaderboardImportJobStatus;
   error: string | null;
-  // Rows this chart has from imports so far, all runs included. The queue
-  // keeps no per-job result, and this is the one number an admin waits for.
+  // Rows still retained from imports, falling back to the latest durable
+  // receipt after raw score-event retention has removed them.
   stored: number;
+  // Successful imports get a seven-day cooldown. Job rows only live for two
+  // days, so this timestamp comes from durable history, with score_events and
+  // an extant done job as rollout fallbacks for imports made before the table.
+  lastImportedAt: string | null;
+  retryAt: string | null;
+  recent: boolean;
 }
 
 export async function getLeaderboardImportStatuses(db: Db, beatmapIds: number[]): Promise<LeaderboardImportStatus[]> {
-  const out: LeaderboardImportStatus[] = [];
-  for (const beatmapId of beatmapIds) {
-    const job = (await exec(db, "select status, last_error from jobs where dedupe_key = ?", [leaderboardImportDedupeKey(beatmapId)])).rows[0];
-    const stored = (await exec(
+  const ids = [...new Set(beatmapIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => "?").join(", ");
+  const dedupeKeys = ids.map(leaderboardImportDedupeKey);
+  const boardPaths = ids.map((beatmapId) => `/beatmaps/${beatmapId}/scores?mode=mania`);
+  const [jobRows, eventRows, historyRows, apiRows] = await Promise.all([
+    exec(db, `select dedupe_key, status, last_error, updated_at from jobs where dedupe_key in (${placeholders})`, dedupeKeys),
+    exec(
       db,
-      "select count(*) as cnt from score_events where beatmap_id = ? and source = ?",
-      [beatmapId, LEADERBOARD_IMPORT_SOURCE],
-    )).rows[0];
+      `select beatmap_id, count(*) as cnt, max(received_at) as last_imported_at
+       from score_events
+       where source = ? and beatmap_id in (${placeholders})
+       group by beatmap_id`,
+      [LEADERBOARD_IMPORT_SOURCE, ...ids],
+    ),
+    exec(
+      db,
+      `select beatmap_id, last_imported_at, last_stored
+       from leaderboard_import_history
+       where beatmap_id in (${placeholders})`,
+      ids,
+    ),
+    exec(
+      db,
+      `select t.path, max(l.started_at) as last_imported_at
+       from api_call_targets t
+       join api_call_log l on l.target_id = t.id
+       where t.provider = 'osu'
+         and t.caller = ?
+         and t.path in (${placeholders})
+         and l.status between 200 and 299
+       group by t.path`,
+      ["leaderboard-import", ...boardPaths],
+    ),
+  ]);
+  const jobs = new Map(jobRows.rows.map((row) => [String(row.dedupe_key), row]));
+  const events = new Map(eventRows.rows.map((row) => [Number(row.beatmap_id), row]));
+  const history = new Map(historyRows.rows.map((row) => [Number(row.beatmap_id), row]));
+  const apiCalls = new Map(apiRows.rows.map((row) => [String(row.path), row]));
+  const now = Date.now();
+  return ids.map((beatmapId) => {
+    const job = jobs.get(leaderboardImportDedupeKey(beatmapId));
+    const retained = events.get(beatmapId);
+    const receipt = history.get(beatmapId);
+    const apiCall = apiCalls.get(`/beatmaps/${beatmapId}/scores?mode=mania`);
     const raw = job ? String(job.status) : "none";
     const status: LeaderboardImportJobStatus = raw === "deferred_pressure" ? "queued"
       : raw === "queued" || raw === "running" || raw === "done" || raw === "failed" ? raw
         : "none";
-    out.push({
+    const candidates = [
+      receipt?.last_imported_at,
+      // A retained row is rollout evidence only when no unfinished job exists.
+      // If a worker crashed halfway through a board, its first stored score
+      // must not make that partial run look complete and suppress the retry.
+      status === "none" || status === "done" ? retained?.last_imported_at : null,
+      // The successful top-50 request covers pre-history imports that stored no
+      // rows because every player was already known or from an untracked
+      // country. As above, an unfinished job wins over this rollout fallback.
+      status === "none" || status === "done" ? apiCall?.last_imported_at : null,
+      status === "done" ? job?.updated_at : null,
+    ]
+      .map((value) => value == null ? null : String(value))
+      .filter((value): value is string => value != null && Number.isFinite(Date.parse(value)));
+    const lastImportedAt = candidates.sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
+    const retryAt = lastImportedAt ? new Date(Date.parse(lastImportedAt) + LEADERBOARD_IMPORT_COOLDOWN_MS).toISOString() : null;
+    return {
       beatmapId,
       status,
       error: status === "failed" && job?.last_error != null ? String(job.last_error) : null,
-      stored: Number(stored?.cnt ?? 0),
-    });
-  }
-  return out;
+      stored: Math.max(Number(retained?.cnt ?? 0), Number(receipt?.last_stored ?? 0)),
+      lastImportedAt,
+      retryAt,
+      recent: retryAt != null && Date.parse(retryAt) > now,
+    };
+  });
 }
 
 // Statuses osu! keeps a leaderboard for. Qualified boards exist but get wiped
@@ -189,6 +255,20 @@ export async function importBeatmapLeaderboard(
   // The skill recomputes ride the session-debounced enqueue the ingest
   // already did; nobody is watching one profile here, so nothing is yanked
   // forward the way a manual submission is.
+  const importedAt = nowIso();
+  await withWriteTurn(db, () => exec(
+    db,
+    `insert into leaderboard_import_history
+       (beatmap_id, last_imported_at, last_fetched, last_stored, last_already_tracked, last_untracked)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict(beatmap_id) do update set
+       last_imported_at = excluded.last_imported_at,
+       last_fetched = excluded.last_fetched,
+       last_stored = excluded.last_stored,
+       last_already_tracked = excluded.last_already_tracked,
+       last_untracked = excluded.last_untracked`,
+    [beatmapId, importedAt, scores.length, stored, alreadyTracked, untracked],
+  ));
   logInfo("leaderboard_imported", {
     beatmap_id: beatmapId,
     fetched: scores.length,

@@ -530,6 +530,18 @@ create table if not exists jobs (
   updated_at text not null
 );
 
+-- Jobs are short-lived queue bookkeeping, so a finished leaderboard import
+-- needs its own durable receipt. The admin importer uses this to avoid spending
+-- two osu! API calls on the same chart more than once in seven days.
+create table if not exists leaderboard_import_history (
+  beatmap_id integer primary key,
+  last_imported_at text not null,
+  last_fetched integer not null default 0,
+  last_stored integer not null default 0,
+  last_already_tracked integer not null default 0,
+  last_untracked integer not null default 0
+);
+
 create table if not exists live_event_log (
   sequence integer primary key autoincrement,
   event_id text not null unique,

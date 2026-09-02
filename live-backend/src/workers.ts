@@ -10,7 +10,7 @@ import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileGoalsForUser, reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob, upsertMapSearchIndexRow } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
-import { LEADERBOARD_IMPORT_JOB, importBeatmapLeaderboard } from "./features/leaderboard-import.js";
+import { LEADERBOARD_IMPORT_JOB, getLeaderboardImportStatuses, importBeatmapLeaderboard } from "./features/leaderboard-import.js";
 import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, runGlobalFarmedBoardRepackJob } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
@@ -940,6 +940,13 @@ export class WorkerRunner {
     }
     if (job.type === LEADERBOARD_IMPORT_JOB) {
       const payload = job.payload as { beatmapId: number };
+      // A process can die after the complete board and its durable receipt are
+      // written but before queue.complete(). On reclaim, honor the same
+      // seven-day guard as the HTTP route instead of spending both API calls a
+      // second time. Active jobs ignore the score-event rollout fallback, so a
+      // genuinely partial pre-receipt run still retries.
+      const [status] = await getLeaderboardImportStatuses(this.db, [payload.beatmapId]);
+      if (status?.recent) return;
       const result = await importBeatmapLeaderboard(this.db, this.queue, this.events, readConfig(), this.osu, payload.beatmapId);
       // A chart osu! turns down is a finished job, not a retry: the answer
       // will not change, and the dialog reads the reason off the job row.

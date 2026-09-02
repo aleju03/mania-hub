@@ -157,16 +157,59 @@ describe("leaderboard import HTTP route", () => {
     const status = await call(ctx, undefined, true, "GET", "/api/admin/leaderboard-imports?ids=501,502");
     expect(status.status).toBe(200);
     expect(status.body?.statuses).toEqual([
-      { beatmapId: 501, status: "queued", error: null, stored: 0 },
-      { beatmapId: 502, status: "none", error: null, stored: 0 },
+      { beatmapId: 501, status: "queued", error: null, stored: 0, lastImportedAt: null, retryAt: null, recent: false },
+      { beatmapId: 502, status: "none", error: null, stored: 0, lastImportedAt: null, retryAt: null, recent: false },
     ]);
 
-    // Re-queueing a finished import runs it again instead of being swallowed
-    // by the dedupe key.
+    // A successful done job is itself enough rollout history to prevent an
+    // immediate repeat, even before a durable receipt exists.
     await exec(db, "update jobs set status = 'done' where dedupe_key = ?", [leaderboardImportDedupeKey(501)]);
-    await call(ctx, { beatmapId: 501 });
+    const recent = await call(ctx, { beatmapId: 501 });
+    expect(recent.status).toBe(200);
+    expect(recent.body?.queued).toBe(false);
+    expect(recent.body?.recentBeatmapIds).toEqual([501]);
+    expect((await exec(db, "select status from jobs where dedupe_key = ?", [leaderboardImportDedupeKey(501)])).rows[0]?.status).toBe("done");
+
+    // Once the receipt is older than seven days, replaceDone makes the same
+    // dedupe row runnable again.
+    await exec(db, "update jobs set updated_at = ? where dedupe_key = ?", [new Date(Date.now() - 8 * 24 * 60 * 60 * 1_000).toISOString(), leaderboardImportDedupeKey(501)]);
+    const stale = await call(ctx, { beatmapId: 501 });
+    expect(stale.status).toBe(202);
     const again = (await exec(db, "select status from jobs where dedupe_key = ?", [leaderboardImportDedupeKey(501)])).rows[0];
     expect(again?.status).toBe("queued");
+  });
+
+  it("queues a whole set from one request, ignoring junk and repeats", async () => {
+    const ctx = context({ getBeatmap: async () => ({}), getBeatmapScores: async () => [] });
+    const result = await call(ctx, { beatmapIds: [601, "602", 601, "x", -1] });
+    expect(result.status).toBe(202);
+    expect(result.body?.beatmapIds).toEqual([601, 602]);
+    const rows = (await exec(db, "select dedupe_key from jobs where type = 'import_beatmap_leaderboard' and dedupe_key in (?, ?)", [leaderboardImportDedupeKey(601), leaderboardImportDedupeKey(602)])).rows;
+    expect(rows.length).toBe(2);
+  });
+
+  it("recognizes a recent pre-history import that stored no score rows", async () => {
+    const path = "/beatmaps/701/scores?mode=mania";
+    await exec(db, "insert into api_call_targets (provider, caller, path) values ('osu', 'leaderboard-import', ?)", [path]);
+    const target = (await exec(db, "select id from api_call_targets where provider = 'osu' and caller = 'leaderboard-import' and path = ?", [path])).rows[0];
+    await exec(
+      db,
+      "insert into api_call_log (provider, caller, path, target_id, started_at, duration_ms, status) values ('osu', '', '', ?, ?, 1, 200)",
+      [Number(target?.id), new Date().toISOString()],
+    );
+    const ctx = context({
+      getBeatmap: async () => { throw new Error("should not fetch"); },
+      getBeatmapScores: async () => { throw new Error("should not fetch"); },
+    });
+
+    const status = await call(ctx, undefined, true, "GET", "/api/admin/leaderboard-imports?ids=701");
+    expect(status.body?.statuses).toEqual([
+      expect.objectContaining({ beatmapId: 701, status: "none", stored: 0, recent: true, lastImportedAt: expect.any(String) }),
+    ]);
+    const guarded = await call(ctx, { beatmapId: 701 });
+    expect(guarded.status).toBe(200);
+    expect(guarded.body?.recentBeatmapIds).toEqual([701]);
+    expect((await exec(db, "select 1 from jobs where dedupe_key = ?", [leaderboardImportDedupeKey(701)])).rows).toHaveLength(0);
   });
 
   it("rejects a malformed chart id", async () => {
@@ -245,8 +288,26 @@ describe("importBeatmapLeaderboard (the job)", () => {
     expect(again.untracked).toBe(1);
     expect(Number((await exec(db, "select count(*) as cnt from score_events")).rows[0].cnt)).toBe(1);
 
-    // The status readout counts the chart's imported rows.
+    // The status readout counts the chart's imported rows and keeps a durable
+    // receipt after the short-lived queue row is gone.
     const status = await call(ctx, undefined, true, "GET", "/api/admin/leaderboard-imports?ids=501");
-    expect(status.body?.statuses).toEqual([{ beatmapId: 501, status: "none", error: null, stored: 1 }]);
+    expect(status.body?.statuses).toEqual([
+      expect.objectContaining({
+        beatmapId: 501,
+        status: "none",
+        error: null,
+        stored: 1,
+        recent: true,
+        lastImportedAt: expect.any(String),
+        retryAt: expect.any(String),
+      }),
+    ]);
+
+    await exec(db, "delete from score_events where beatmap_id = ?", [501]);
+    const guarded = await call(ctx, { beatmapId: 501 });
+    expect(guarded.status).toBe(200);
+    expect(guarded.body?.queued).toBe(false);
+    expect(guarded.body?.recentBeatmapIds).toEqual([501]);
+    expect((await exec(db, "select 1 from jobs where dedupe_key = ?", [leaderboardImportDedupeKey(501)])).rows).toHaveLength(0);
   });
 });

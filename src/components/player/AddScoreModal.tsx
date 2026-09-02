@@ -18,7 +18,12 @@ import { useLocale } from "../../lib/locale-context";
 import type { AppLocale } from "../../lib/locale";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useAuth } from "../../lib/auth-context";
-import { getLeaderboardImportStatuses, importBeatmapLeaderboard, type LeaderboardImportFailure } from "../../lib/leaderboard-import";
+import {
+  getLeaderboardImportStatuses,
+  importBeatmapLeaderboards,
+  type LeaderboardImportFailure,
+  type LeaderboardImportStatus,
+} from "../../lib/leaderboard-import";
 import { StatusChip } from "../maps/FilterChips";
 
 /*
@@ -363,13 +368,13 @@ const IMPORT_SEARCH_DEBOUNCE_MS = 250;
 const IMPORT_SEARCH_PAGE_SIZE = 60;
 
 /* sending: the enqueue request is in flight. queued/running: the backend job,
-   as the poll last saw it. done/failed: the job's end, with the rows the
-   chart has from imports (every run included) or the job's reason. */
+   as the poll last saw it. done/failed: the job's end, with the retained or
+   latest-run stored count and durable import time, or the job's reason. */
 type ImportState =
   | { kind: "sending" }
   | { kind: "queued" }
   | { kind: "running" }
-  | { kind: "done"; stored: number }
+  | { kind: "done"; stored: number; importedAt: string | null; recent: boolean }
   | { kind: "failed"; message: string };
 
 const IMPORT_POLL_MS = 2_500;
@@ -398,7 +403,31 @@ function jobErrorMessage(error: string | null): string {
   return error?.trim() || "The import failed.";
 }
 
+function importStateFromStatus(status: LeaderboardImportStatus): ImportState | null {
+  if (status.status === "queued") return { kind: "queued" };
+  if (status.status === "running") return { kind: "running" };
+  if (status.status === "failed") return { kind: "failed", message: jobErrorMessage(status.error) };
+  if (status.status === "done" || status.lastImportedAt) {
+    return {
+      kind: "done",
+      stored: status.stored,
+      importedAt: status.lastImportedAt,
+      recent: status.recent === true,
+    };
+  }
+  return null;
+}
+
+function importIsBusy(state: ImportState | undefined): boolean {
+  return state?.kind === "sending" || state?.kind === "queued" || state?.kind === "running";
+}
+
+function importIsCoolingDown(state: ImportState | undefined): boolean {
+  return state?.kind === "done" && state.recent;
+}
+
 function LeaderboardImportPanel() {
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ImportStatusFilter>("ranked");
@@ -465,23 +494,74 @@ function LeaderboardImportPanel() {
     return () => window.clearTimeout(timer);
   }, [open, query, status, sort, dir]);
 
-  const importOne = async (beatmapId: number) => {
-    setImports((current) => ({ ...current, [beatmapId]: { kind: "sending" } }));
-    let next: ImportState;
-    try {
-      const result = await importBeatmapLeaderboard({ data: { beatmapId } });
-      next = result.ok ? { kind: "queued" } : { kind: "failed", message: importFailureMessage(result.reason) };
-    } catch {
-      next = { kind: "failed", message: importFailureMessage("failed") };
-    }
-    if (mountedRef.current) setImports((current) => ({ ...current, [beatmapId]: next }));
-  };
+  /* Search results come from the map index, which knows nothing about import
+     jobs. Load the durable receipts separately so reopening the dialog still
+     marks boards imported during the last seven days. */
+  const resultBeatmapIds = results?.sets.flatMap((set) => set.charts.map((chart) => chart.beatmapId)) ?? [];
+  const resultBeatmapIdsKey = [...new Set(resultBeatmapIds)].join(",");
+  useEffect(() => {
+    if (!open || !resultBeatmapIdsKey) return;
+    let cancelled = false;
+    const ids = resultBeatmapIdsKey.split(",").map(Number);
+    const batches: number[][] = [];
+    for (let offset = 0; offset < ids.length; offset += 200) batches.push(ids.slice(offset, offset + 200));
+    void Promise.all(batches.map((beatmapIds) => getLeaderboardImportStatuses({ data: { beatmapIds } })))
+      .then((batchStatuses) => {
+        if (cancelled || !mountedRef.current) return;
+        setImports((current) => {
+          const next = { ...current };
+          for (const status of batchStatuses.flat()) {
+            // A click can race this background read. Never replace the newer
+            // in-flight state with the snapshot taken before that click.
+            if (importIsBusy(next[status.beatmapId])) continue;
+            const state = importStateFromStatus(status);
+            if (state) next[status.beatmapId] = state;
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, resultBeatmapIdsKey]);
 
-  /* Enqueueing is cheap, so a set's charts go out together; the backend's
-     lane runs them one at a time. */
-  const importMany = (beatmapIds: number[]) => {
-    for (const beatmapId of beatmapIds) void importOne(beatmapId);
+  /* One request for the whole list: enqueueing is cheap and the backend's
+     lane runs the jobs one at a time, so a set's charts go out together. */
+  const importMany = async (beatmapIds: number[]) => {
+    setImports((current) => {
+      const next = { ...current };
+      for (const beatmapId of beatmapIds) next[beatmapId] = { kind: "sending" };
+      return next;
+    });
+    try {
+      const result = await importBeatmapLeaderboards({ data: { beatmapIds } });
+      if (!mountedRef.current) return;
+      setImports((current) => {
+        const updated = { ...current };
+        if (!result.ok) {
+          const failed: ImportState = { kind: "failed", message: importFailureMessage(result.reason) };
+          for (const beatmapId of beatmapIds) updated[beatmapId] = failed;
+          return updated;
+        }
+        const byId = new Map(result.statuses.map((status) => [status.beatmapId, status]));
+        for (const beatmapId of beatmapIds) {
+          const status = byId.get(beatmapId);
+          updated[beatmapId] = status ? importStateFromStatus(status) ?? { kind: "queued" } : { kind: "queued" };
+        }
+        return updated;
+      });
+    } catch {
+      if (!mountedRef.current) return;
+      setImports((current) => {
+        const updated = { ...current };
+        const failed: ImportState = { kind: "failed", message: importFailureMessage("failed") };
+        for (const beatmapId of beatmapIds) updated[beatmapId] = failed;
+        return updated;
+      });
+    }
   };
+  const importOne = (beatmapId: number) => importMany([beatmapId]);
 
   /* Watches every queued or running job until it ends. The stored count is
      read off the job's chart, so the row can say what actually landed. */
@@ -501,9 +581,8 @@ function LeaderboardImportPanel() {
           for (const status of statuses) {
             const state = next[status.beatmapId];
             if (!state || (state.kind !== "queued" && state.kind !== "running")) continue;
-            if (status.status === "done") next[status.beatmapId] = { kind: "done", stored: status.stored };
-            else if (status.status === "failed") next[status.beatmapId] = { kind: "failed", message: jobErrorMessage(status.error) };
-            else if (status.status === "running") next[status.beatmapId] = { kind: "running" };
+            const updated = importStateFromStatus(status);
+            if (updated) next[status.beatmapId] = updated;
             else if (status.status === "none") next[status.beatmapId] = { kind: "failed", message: "The job went missing." };
           }
           return next;
@@ -587,10 +666,8 @@ function LeaderboardImportPanel() {
               : (
                 <div className="mt-3 max-h-[50vh] space-y-3 overflow-y-auto pr-1">
                   {results.sets.map((set) => {
-                    const anyBusy = set.charts.some((chart) => {
-                      const kind = imports[chart.beatmapId]?.kind;
-                      return kind === "sending" || kind === "queued" || kind === "running";
-                    });
+                    const anyBusy = set.charts.some((chart) => importIsBusy(imports[chart.beatmapId]));
+                    const availableCharts = set.charts.filter((chart) => !importIsCoolingDown(imports[chart.beatmapId]));
                     return (
                       <div key={set.beatmapsetId}>
                         <div className="flex items-center gap-2.5">
@@ -610,11 +687,11 @@ function LeaderboardImportPanel() {
                           {set.charts.length > 1 ? (
                             <button
                               type="button"
-                              disabled={anyBusy}
-                              onClick={() => importMany(set.charts.map((chart) => chart.beatmapId))}
+                              disabled={anyBusy || availableCharts.length === 0}
+                              onClick={() => importMany(availableCharts.map((chart) => chart.beatmapId))}
                               className="shrink-0 cursor-pointer rounded-full bg-osu-b3/60 px-2.5 py-1 text-[11px] font-bold text-osu-l2 transition hover:bg-osu-b3 disabled:cursor-default disabled:opacity-60"
                             >
-                              Add all {set.charts.length}
+                              {availableCharts.length === set.charts.length ? `Add all ${set.charts.length}` : `Add ${availableCharts.length} available`}
                             </button>
                           ) : null}
                         </div>
@@ -624,6 +701,7 @@ function LeaderboardImportPanel() {
                               key={chart.beatmapId}
                               chart={chart}
                               state={imports[chart.beatmapId]}
+                              locale={locale}
                               onImport={() => void importOne(chart.beatmapId)}
                             />
                           ))}
@@ -674,15 +752,19 @@ function groupBySet(items: LiveMapSearchEntry[]): ImportSet[] {
   });
 }
 
-function ImportChartRow({ chart, state, onImport }: { chart: LiveMapSearchEntry; state: ImportState | undefined; onImport: () => void }) {
+function ImportChartRow({ chart, state, locale, onImport }: { chart: LiveMapSearchEntry; state: ImportState | undefined; locale: AppLocale; onImport: () => void }) {
+  const unavailable = importIsBusy(state) || importIsCoolingDown(state);
   return (
     <div className="flex items-center gap-2.5 py-1.5 pl-[46px]">
       <span className="shrink-0 text-[11px] font-bold text-osu-yellow">{chart.keyCount}K</span>
       <span className="min-w-0 flex-1 truncate text-[12px] text-osu-l2">{chart.version}</span>
       <span className="shrink-0 text-[11px] tabular-nums text-osu-f1">{chart.stars.toFixed(2)}★</span>
       {state?.kind === "done" ? (
-        <span className="shrink-0 text-[11px] tabular-nums font-bold text-osu-green-light" title="rows this chart has from imports">
-          done · {state.stored} stored
+        <span
+          className={`shrink-0 text-[11px] tabular-nums font-bold ${state.recent ? "text-osu-green-light" : "text-osu-f1"}`}
+          title={state.recent ? "Already imported within the last 7 days" : "Previously imported; available to refresh"}
+        >
+          imported{state.importedAt ? ` ${formatTimeAgo(state.importedAt, locale)}` : ""} · {state.stored} stored
         </span>
       ) : state?.kind === "failed" ? (
         <span className="shrink-0 text-[11px] text-osu-red-light">{state.message}</span>
@@ -693,9 +775,9 @@ function ImportChartRow({ chart, state, onImport }: { chart: LiveMapSearchEntry;
       ) : null}
       <button
         type="button"
-        disabled={state?.kind === "sending" || state?.kind === "queued" || state?.kind === "running"}
+        disabled={unavailable}
         onClick={onImport}
-        aria-label={`Import the leaderboard of ${chart.version}`}
+        aria-label={importIsCoolingDown(state) ? `${chart.version} was imported within the last 7 days` : `Import the leaderboard of ${chart.version}`}
         className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
       >
         {state?.kind === "sending" || state?.kind === "queued" || state?.kind === "running"

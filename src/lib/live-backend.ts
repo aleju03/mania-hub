@@ -31,10 +31,15 @@ export interface LivePlayerSkillPlay {
   pp: number | null;
   accuracy: number | null;
   rate: number;
+  // Exact score mod acronyms. Missing only when retained evidence predates
+  // the full-mod projection; [] means the score is known to be NoMod.
+  mods?: string[];
   // "DT" | "NC" | "HT" | "DC" when the play's own mods are still known: the
   // rate cannot tell the pitch-shifting variants from the plain ones. Absent on
   // older backend payloads and on plays whose mods aged out of the cache.
   rateMod?: string | null;
+  // The OD a Difficulty Adjust play set. Absent on older backend payloads.
+  daOd?: number | null;
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;

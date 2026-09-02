@@ -1,6 +1,7 @@
 // The mod filter the play lists share: a chip per mod, cycling neutral ->
 // include -> exclude. Best Performance filters osu! score objects with it and
-// the Skills tab's plays explorer filters the rate mods its cohort carries, so
+// the Skills tab's plays explorer filters the full mod lists its cohort
+// carries, so
 // the rules (aliases, the synthetic NoMod chip, the cycle order) live here
 // rather than in whichever list happened to grow them first.
 

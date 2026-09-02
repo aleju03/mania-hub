@@ -621,14 +621,20 @@ function MsdPlaysList({
 
   // The chips on offer come from the whole cohort, not from what the other
   // filters left, so narrowing by mod never removes the chip that would undo it.
-  const cohortMods = useMemo(() => relevantModFilterKeys(cohort.map(playModAcronyms)), [cohort]);
+  const cohortMods = useMemo(
+    () => relevantModFilterKeys(cohort.flatMap((play) => {
+      const mods = playModAcronyms(play);
+      return mods ? [mods] : [];
+    })),
+    [cohort],
+  );
   useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
 
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     return cohort.filter((play) => {
       if (hideRanked && isRankedStatus(play.beatmapStatus ?? null)) return false;
-      if (!matchesModAcronymFilter(playModAcronyms(play), modFilter)) return false;
+      if (!matchesPlayModFilter(play, modFilter)) return false;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(play.beatmapId) ?? 0;
         if (seen >= maxPerChart) return false;
@@ -754,7 +760,13 @@ function DanPlaysList({
   const modKey = modFilterKey(modFilter);
   useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, showRejected, modKey]);
 
-  const cohortMods = useMemo(() => relevantModFilterKeys(cohort.map((row) => playModAcronyms(row.play))), [cohort]);
+  const cohortMods = useMemo(
+    () => relevantModFilterKeys(cohort.flatMap((row) => {
+      const mods = playModAcronyms(row.play);
+      return mods ? [mods] : [];
+    })),
+    [cohort],
+  );
   useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
 
   const { rows, hidden } = useMemo(() => {
@@ -763,7 +775,7 @@ function DanPlaysList({
     for (const row of cohort) {
       if (!showRejected && row.kind === "rejected") continue;
       if (hideRanked && isRankedStatus(row.play.beatmapStatus ?? null)) continue;
-      if (!matchesModAcronymFilter(playModAcronyms(row.play), modFilter)) continue;
+      if (!matchesPlayModFilter(row.play, modFilter)) continue;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(row.play.beatmapId) ?? 0;
         if (seen >= maxPerChart) continue;
@@ -1051,7 +1063,6 @@ function PlayRow({
 }) {
   const { t, i18n } = useLingui();
   const locale = useLocale();
-  const rateMod = rateModFor(play.rate, play.rateMod);
   // osu!'s own status colors, from the same table the maps grid draws, so a
   // green chip means the same thing on both surfaces.
   const status = play.beatmapStatus ? beatmapStatusPill(play.beatmapStatus) : null;
@@ -1100,7 +1111,7 @@ function PlayRow({
           {status ? (
             <span className={`rounded px-1 py-0.5 font-bold ${status.className}`}>{i18n._(status.label)}</span>
           ) : null}
-          {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.8} /> : null}
+          <PlayModBadges play={play} />
           {play.playedAt ? (
             <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt, locale)}>
               {formatTimeAgo(play.playedAt, locale)}
@@ -1490,13 +1501,47 @@ function HideControl({
    as loose words with a highlighted one among them. */
 const CONTROL_TRACK_CLASS = "rounded-full bg-osu-b5 ring-1 ring-inset ring-osu-b3/45";
 
-/* What a rated play carries as mods. The stored cohort keeps the rate and the
-   rate mod's acronym and nothing else, so this list is the speed mods (and the
-   empty list that means NoMod). It is what the rows themselves badge, so the
-   mod filter never offers a chip the list cannot show. */
-function playModAcronyms(play: LivePlayerSkillPlay): string[] {
+/* Every mod the score carried. A pre-full-mod retained play can still name its
+   speed mod from the old projection; a 1.0x play with no `mods` field is
+   unknown, not NoMod, because it may have carried MR/DA/etc. before the raw
+   score aged out. */
+function playModAcronyms(play: LivePlayerSkillPlay): string[] | null {
+  if (Array.isArray(play.mods)) {
+    return [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))];
+  }
   const rateMod = rateModFor(play.rate, play.rateMod);
-  return rateMod ? [rateMod.acronym] : [];
+  return rateMod ? [rateMod.acronym] : null;
+}
+
+function matchesPlayModFilter(play: LivePlayerSkillPlay, modFilter: ModFilterState): boolean {
+  const acronyms = playModAcronyms(play);
+  if (acronyms) return matchesModAcronymFilter(acronyms, modFilter);
+  // Unknown historical mods cannot satisfy a required chip. They remain when
+  // a chip is only being excluded because there is no evidence they used it.
+  return !Object.values(modFilter).includes("include");
+}
+
+function formatDaOd(od: number): string {
+  return Number.isInteger(od) ? String(od) : od.toFixed(1);
+}
+
+function PlayModBadges({ play, size = 0.8 }: { play: LivePlayerSkillPlay; size?: number }) {
+  const acronyms = playModAcronyms(play);
+  if (!acronyms || acronyms.length === 0) return null;
+  const rateMod = rateModFor(play.rate, play.rateMod);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-0.5">
+      {acronyms.map((mod) => (
+        <ModBadge
+          key={mod}
+          mod={mod}
+          rate={rateMod?.acronym === mod ? rateMod.rate : undefined}
+          detail={mod === "DA" && typeof play.daOd === "number" ? `OD ${formatDaOd(play.daOd)}` : undefined}
+          size={size}
+        />
+      ))}
+    </span>
+  );
 }
 
 /** The filter state as a value the reset effects can depend on. */

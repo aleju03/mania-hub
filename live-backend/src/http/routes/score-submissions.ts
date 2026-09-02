@@ -97,8 +97,8 @@ export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: Ser
 
 /**
  * The admin-only sibling: one chart's global leaderboard (osu!'s top 50)
- * through the same ingest, as a queued job. POST enqueues and answers at
- * once; GET ?ids= reports each job's state and how many rows the chart has
+ * through the same ingest, as a queued job. POST takes one id or a list
+ * (a whole set) and answers at once; GET ?ids= reports each job's state and how many rows the chart has
  * from imports, which is what the dialog polls. Admin because each run is two
  * osu! requests and up to fifty rows, so it sits behind the admin token
  * rather than the submission buckets; the frontend's server function checks
@@ -119,8 +119,12 @@ async function handleLeaderboardImport(req: IncomingMessage, res: ServerResponse
     return true;
   }
   const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
-  const beatmapId = Number(body.beatmapId);
-  if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+  // One request per set, not per chart: the dialog's "Add all" used to fire a
+  // server-function call per chart and tripped the frontend's per-visitor
+  // bucket halfway through a set. A single id still works.
+  const rawIds = Array.isArray(body.beatmapIds) ? body.beatmapIds : [body.beatmapId];
+  const beatmapIds = [...new Set(normalizeIdList(rawIds))].slice(0, 200);
+  if (beatmapIds.length === 0) {
     sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
     return true;
   }
@@ -129,7 +133,21 @@ async function handleLeaderboardImport(req: IncomingMessage, res: ServerResponse
     sendJson(req, res, ctx, 503, { error: "submissions_unavailable" });
     return true;
   }
-  await enqueueLeaderboardImport(queue, beatmapId);
-  sendJson(req, res, ctx, 202, { ok: true, queued: true, beatmapId });
+  const enqueueDb = ctx.serveWriteDb ?? ctx.db;
+  const queuedBeatmapIds: number[] = [];
+  const recentBeatmapIds: number[] = [];
+  for (const beatmapId of beatmapIds) {
+    const result = await enqueueLeaderboardImport(enqueueDb, queue, beatmapId);
+    (result === "queued" ? queuedBeatmapIds : recentBeatmapIds).push(beatmapId);
+  }
+  const statuses = await getLeaderboardImportStatuses(enqueueDb, beatmapIds);
+  sendJson(req, res, ctx, queuedBeatmapIds.length > 0 ? 202 : 200, {
+    ok: true,
+    queued: queuedBeatmapIds.length > 0,
+    beatmapIds,
+    queuedBeatmapIds,
+    recentBeatmapIds,
+    statuses,
+  });
   return true;
 }

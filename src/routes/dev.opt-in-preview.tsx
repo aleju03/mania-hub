@@ -4,6 +4,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { RosterOptInCard } from "../components/me/RosterOptInCard";
+import { SkillsUntrackedNotice } from "../components/player/SkillsUntrackedNotice";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { canUseDevFeatures } from "../lib/auth-shared";
 import type { RosterSelfTrackResult } from "../lib/roster-self-track";
@@ -105,6 +106,16 @@ function OptInPreviewPage() {
               <RosterOptInCard
                 key={`activity-${resetKey}`}
                 description="Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
+                performAction={makeFakeAction(scenario)}
+              />
+            </section>
+
+            <section className="space-y-2.5">
+              <div className="text-[13px] font-semibold text-osu-l2">Profile Skills tab - own untracked profile</div>
+              <SkillsUntrackedNotice
+                key={`skills-${resetKey}`}
+                username="aleju"
+                isOwner
                 performAction={makeFakeAction(scenario)}
               />
             </section>

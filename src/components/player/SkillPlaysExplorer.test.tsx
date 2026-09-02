@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { I18nProvider } from "@lingui/react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getI18n } from "#/lib/i18n";
 import type { LivePlayerSkillPlay } from "#/lib/live-backend";
@@ -79,6 +79,37 @@ afterEach(() => {
 });
 
 describe("SkillPlaysExplorer bounded cohorts", () => {
+  it("shows and filters every recorded mod, not only the rate mod", async () => {
+    fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
+      const order = options.sort === "recent" ? "Recent" : "Best";
+      return Promise.resolve({
+        items: [
+          { ...play(1, order), mods: ["MR", "DA"] },
+          { ...play(2, order), mods: [] },
+        ],
+        total: 2,
+        unfilteredTotal: 2,
+        limit: 200,
+        offset: 0,
+      });
+    });
+
+    render(
+      <I18nProvider i18n={getI18n("en")}>
+        <SkillPlaysExplorer userId={123456} username="mod-player" modes={[mode]} view="msd" />
+      </I18nProvider>,
+    );
+
+    const title = await screen.findByText("Best 1");
+    const row = title.closest("button");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByTitle("MR")).toBeTruthy();
+    expect(within(row!).getByTitle("DA")).toBeTruthy();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Click to require MR" }));
+    await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
+  });
+
   it("reveals 50 at a time and filters or swaps a prefetched order without another request", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
       const recent = options.sort === "recent";

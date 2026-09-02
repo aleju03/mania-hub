@@ -50,9 +50,10 @@ import { placeholderPng, renderSignature } from "../-renderers";
    stale-while-revalidate that used to sit beside it here. The result was that
    every expiry became a blocking origin fetch for whoever arrived first, which
    is the 1-2s first paint this header is supposed to prevent. Under plain
-   `max-age` the edge takes the same 5 minutes, and an expired copy now goes out
-   immediately while the revalidation happens behind it. */
-export const SIGNATURE_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=86400, stale-if-error=604800";
+   `max-age` the edge takes the same 5 minutes. For the next minute an expired
+   copy goes out immediately while revalidation happens behind it; after a
+   longer quiet gap, the request waits for the current render. */
+export const SIGNATURE_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=60, stale-if-error=604800";
 // A refusal is cached too, so a dead or guessed token cannot be used to poke
 // the origin in a loop.
 const SIGNATURE_REFUSAL_HEADER = "public, max-age=300";
