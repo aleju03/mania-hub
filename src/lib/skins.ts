@@ -1323,6 +1323,20 @@ export function pingSkinView(ref: string): void {
   void fetch(url, { method: "POST", credentials: "omit", keepalive: true }).catch(() => {});
 }
 
+// The grid's batch of the same, one request for every card a scroll showed.
+// The body goes as the default text/plain so the browser sends it without a
+// preflight, same as the single ping; the backend parses it as JSON anyway.
+export function skinViewsUrl(): string | null {
+  const base = getLiveBackendUrl();
+  return base ? `${base}/api/skins/views` : null;
+}
+
+export function pingSkinViews(refs: string[]): void {
+  const url = skinViewsUrl();
+  if (!url || refs.length === 0) return;
+  void fetch(url, { method: "POST", credentials: "omit", keepalive: true, body: JSON.stringify({ ids: refs }) }).catch(() => {});
+}
+
 // CORS-safe .osk fetch for in-page features (asset explorer, map preview):
 // the backend streams the stored object by filename without counting it as a
 // download the way /api/skins/download does. A private skin's oskUrl carries

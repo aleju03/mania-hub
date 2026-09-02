@@ -1417,6 +1417,29 @@ export async function recordSkinView(db: Db, ref: string, visitor: string): Prom
   return true;
 }
 
+// The most refs one grid impression batch may carry: a browse page is 27
+// cards, and the similar-skins strip on a skin page a handful more.
+export const SKIN_VIEW_BATCH_LIMIT = 60;
+
+// Counts skins a visitor scrolled past on a grid. A card that stayed in view
+// long enough is somebody looking at the skin the same way a settled hover
+// is, and one scroll of a page shows a couple dozen, so the browser sends
+// them together. Each ref goes through the same predicate and dedup as a
+// single view; refs that resolve to nothing are skipped rather than failing
+// the batch, since a skin can go private between the list and the scroll.
+// Returns how many moved.
+export async function recordSkinViews(db: Db, refs: string[], visitor: string): Promise<number> {
+  let counted = 0;
+  for (const ref of Array.from(new Set(refs)).slice(0, SKIN_VIEW_BATCH_LIMIT)) {
+    const row = await getSkinByRef(db, ref);
+    if (!row || row.status !== "published" || row.visibility !== "public") continue;
+    if (!viewDedup.shouldCount(row.id, visitor)) continue;
+    await exec(db, "update skins set view_count = view_count + 1 where id = ?", [row.id]);
+    counted += 1;
+  }
+  return counted;
+}
+
 export async function getSkin(db: Db, id: string): Promise<SkinRow | null> {
   const row = (await exec(db, "select * from skins where id = ?", [id])).rows[0];
   return row ? rowToSkin(row as Record<string, unknown>) : null;

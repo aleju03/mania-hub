@@ -6,24 +6,64 @@ import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins
 import { track } from "../../lib/analytics";
 import { formatCompactCount, formatTimeAgo } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
-import { formatSkinFileSize, keymodeLabel, pingSkinView, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
+import { queueSkinView } from "../../lib/skin-view-queue";
+import { formatSkinFileSize, keymodeLabel, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
 const MAX_KEYMODE_TAGS = 3;
 export const SKIN_FALLBACK_ACCENT = "#ff66ab";
 
-// A view can be earned from the grid, not just by opening the page: a hover
-// that settles on a card is somebody looking at the skin in the sense the
-// counter measures. (A download straight off the grid counts one too, but the
-// backend does that itself - every counted download moves the view count.)
-// The dwell filters the sweep of a mouse crossing the grid on its way
-// somewhere else; the set spares repeat requests for a card re-rendered by
-// filtering (what actually counts is the backend's 6h-per-IP dedup either
-// way). Touch has no hover and its tap fires pointerenter on the way to a
-// click, so touch is ignored here: the tap either opens the page, which
-// counts there, or hits the download button, which the backend counts.
+// A view can be earned from the grid, not just by opening the page. Two ways:
+// a card that holds most of itself in the viewport for a moment (people scroll
+// a page and look at every skin on it without touching one), or a hover that
+// settles on a card sooner than that. Both are somebody looking at the skin
+// in the sense the counter measures, and both go through the grid's queue so
+// a scroll is one request. (A download straight off the grid counts one too,
+// but the backend does that itself - every counted download moves the view
+// count.) The dwells filter a flick past the grid and the sweep of a mouse
+// crossing it on its way somewhere else. Touch has no hover and its tap fires
+// pointerenter on the way to a click, so touch is ignored on the hover path:
+// scrolling covers it.
 export const HOVER_VIEW_DWELL_MS = 400;
-const pingedViewRefs = new Set<string>();
+export const SEEN_VIEW_DWELL_MS = 2000;
+export const SEEN_VIEW_RATIO = 0.5;
+
+// One observer for every card on the page rather than one per card. The
+// callback fires on crossing the ratio either way, so the ratio is checked
+// rather than isIntersecting, which is still true on the way out.
+type SeenWatch = { timer: ReturnType<typeof setTimeout> | null; onSeen: () => void };
+const seenWatches = new Map<Element, SeenWatch>();
+let seenObserver: IntersectionObserver | null = null;
+
+function watchSeen(element: Element, onSeen: () => void): () => void {
+  if (typeof IntersectionObserver === "undefined") return () => {};
+  seenObserver ??= new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const watch = seenWatches.get(entry.target);
+        if (!watch) continue;
+        if (entry.intersectionRatio >= SEEN_VIEW_RATIO) {
+          watch.timer ??= setTimeout(() => {
+            watch.timer = null;
+            watch.onSeen();
+          }, SEEN_VIEW_DWELL_MS);
+        } else if (watch.timer != null) {
+          clearTimeout(watch.timer);
+          watch.timer = null;
+        }
+      }
+    },
+    { threshold: SEEN_VIEW_RATIO },
+  );
+  seenWatches.set(element, { timer: null, onSeen });
+  seenObserver.observe(element);
+  return () => {
+    const watch = seenWatches.get(element);
+    if (watch?.timer != null) clearTimeout(watch.timer);
+    seenWatches.delete(element);
+    seenObserver?.unobserve(element);
+  };
+}
 
 export function SkinKeymodeTags({ keymodes, specialKeymodes, overlay = false, max = MAX_KEYMODE_TAGS }: { keymodes: number[]; specialKeymodes?: number[]; overlay?: boolean; max?: number }) {
   const shown = keymodes.slice(0, max);
@@ -144,9 +184,7 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
   const viewCountable = skin.status === "published" && !isPrivate;
   const hoverViewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingView = useCallback(() => {
-    if (!viewCountable || pingedViewRefs.has(viewRef)) return;
-    pingedViewRefs.add(viewRef);
-    pingSkinView(viewRef);
+    if (viewCountable) queueSkinView(viewRef);
   }, [viewCountable, viewRef]);
   const cancelHoverView = useCallback(() => {
     if (hoverViewTimer.current != null) {
@@ -155,11 +193,17 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
     }
   }, []);
   useEffect(() => cancelHoverView, [cancelHoverView]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!viewCountable || !rootRef.current) return;
+    return watchSeen(rootRef.current, pingView);
+  }, [viewCountable, pingView]);
   return (
     // The download sits outside the card link (an anchor cannot nest in
     // another), overlaid on the preview's corner, so a skin can be grabbed
     // straight from the grid without opening its page.
     <div
+      ref={rootRef}
       className="group relative"
       onPointerEnter={(event) => {
         if (event.pointerType === "touch") return;

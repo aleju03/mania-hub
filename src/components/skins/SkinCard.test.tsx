@@ -29,7 +29,28 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
-const { SkinCard, SkinPreviewImage, HOVER_VIEW_DWELL_MS } = await import("./SkinCard");
+
+// jsdom has no IntersectionObserver. This stand-in records what each card
+// watches and lets a test scroll a card into or out of view by hand.
+type SeenCallback = (entries: IntersectionObserverEntry[]) => void;
+const observed = new Map<Element, SeenCallback>();
+class FakeIntersectionObserver {
+  constructor(private readonly callback: SeenCallback) {}
+  observe(element: Element) {
+    observed.set(element, this.callback);
+  }
+  unobserve(element: Element) {
+    observed.delete(element);
+  }
+  disconnect() {}
+}
+vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
+function scrollTo(element: Element, ratio: number) {
+  observed.get(element)?.([{ target: element, intersectionRatio: ratio, isIntersecting: ratio > 0 } as IntersectionObserverEntry]);
+}
+
+const { SkinCard, SkinPreviewImage, HOVER_VIEW_DWELL_MS, SEEN_VIEW_DWELL_MS } = await import("./SkinCard");
+const { SKIN_VIEW_FLUSH_MS, resetSkinViewQueue } = await import("../../lib/skin-view-queue");
 
 const SKIN: SkinSummary = {
   id: "6f1c0f6c-0000-4000-8000-000000000001",
@@ -171,14 +192,16 @@ function pointer(type: "pointerover" | "pointerout", pointerType: string) {
   return event;
 }
 
-// Grid views. Each test hovers a skin with its own slug: the card remembers
-// what it pinged for the life of the page, so a shared slug would make one
-// test's ping swallow the next one's.
+// Grid views. Each test uses a skin with its own slug: the queue remembers
+// what it sent for the life of the page, so a shared slug would make one
+// test's view swallow the next one's.
 describe("SkinCard grid views", () => {
-  const viewUrl = (slug: string) => `https://live.test/api/skins/view?id=${slug}`;
+  const viewsUrl = "https://live.test/api/skins/views";
+  const sentIds = () => fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).ids as string[]);
   let fetchSpy: MockInstance<typeof fetch>;
   beforeEach(() => {
     vi.useFakeTimers();
+    resetSkinViewQueue();
     fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
   });
   afterEach(() => {
@@ -192,13 +215,15 @@ describe("SkinCard grid views", () => {
 
     fireEvent(card, pointer("pointerover", "mouse"));
     expect(fetchSpy).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS);
-    expect(fetchSpy).toHaveBeenCalledWith(viewUrl("hover-settles"), expect.objectContaining({ method: "POST" }));
+    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
+    expect(fetchSpy).toHaveBeenCalledWith(viewsUrl, expect.objectContaining({ method: "POST", keepalive: true }));
+    expect(sentIds()).toEqual([["hover-settles"]]);
 
-    // Coming back to the same card sends nothing new.
+    // Coming back to the same card sends nothing new, nor does it being seen.
     fireEvent(card, pointer("pointerout", "mouse"));
     fireEvent(card, pointer("pointerover", "mouse"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2);
+    scrollTo(card, 1);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -209,23 +234,62 @@ describe("SkinCard grid views", () => {
     fireEvent(card, pointer("pointerover", "mouse"));
     vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS - 100);
     fireEvent(card, pointer("pointerout", "mouse"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2);
+    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("ignores the enter a touch tap fires on its way to a click", () => {
     const { container } = render(<SkinCard skin={{ ...SKIN, slug: "tapped" }} />);
     fireEvent(container.firstElementChild!, pointer("pointerover", "touch"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2);
+    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("counts every card a scroll settles on, as one request", () => {
+    const first = render(<SkinCard skin={{ ...SKIN, slug: "seen-first" }} />).container.firstElementChild!;
+    const second = render(<SkinCard skin={{ ...SKIN, slug: "seen-second" }} />).container.firstElementChild!;
+
+    scrollTo(first, 1);
+    vi.advanceTimersByTime(100);
+    scrollTo(second, 0.6);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS);
+    // Both dwelled; nothing has left yet because the queue waits for the rest.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(SKIN_VIEW_FLUSH_MS);
+    expect(sentIds()).toEqual([["seen-first", "seen-second"]]);
+  });
+
+  it("does not count a card flicked past or only half shown", () => {
+    const flicked = render(<SkinCard skin={{ ...SKIN, slug: "flicked" }} />).container.firstElementChild!;
+    const clipped = render(<SkinCard skin={{ ...SKIN, slug: "clipped" }} />).container.firstElementChild!;
+
+    scrollTo(flicked, 1);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS - 100);
+    scrollTo(flicked, 0.2);
+    scrollTo(clipped, 0.3);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("sends what is queued when the page hides, before the flush would", () => {
+    const card = render(<SkinCard skin={{ ...SKIN, slug: "left-early" }} />).container.firstElementChild!;
+    scrollTo(card, 1);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event("pagehide"));
+    expect(sentIds()).toEqual([["left-early"]]);
+    vi.advanceTimersByTime(SKIN_VIEW_FLUSH_MS * 2);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   // A download from the grid is a view too, but that is the backend's own
   // invariant (recordSkinDownload moves both counts), not a ping from here.
   it("never pings for a skin without a public number to move", () => {
     const { container } = render(<SkinCard skin={{ ...SKIN, slug: "kept-private", visibility: "private" }} />);
-    fireEvent(container.firstElementChild!, pointer("pointerover", "mouse"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2);
+    const card = container.firstElementChild!;
+    fireEvent(card, pointer("pointerover", "mouse"));
+    scrollTo(card, 1);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

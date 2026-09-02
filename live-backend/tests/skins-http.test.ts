@@ -356,6 +356,31 @@ describe("skins HTTP endpoints", () => {
     expect((await call(mockReq("POST", "/api/skins/view"))).status).toBe(404);
   });
 
+  it("counts a scrolled grid as one batch, skipping what has no public number", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    // A second skin still mid-upload: listed nowhere, so a ref to it is skipped.
+    const pending = await startUpload();
+
+    const seen = await call(bodyReq("POST", "/api/skins/views", JSON.stringify({ ids: [id, pending.id, "missing", id] }), { "cf-connecting-ip": "203.0.113.7" }));
+    expect(seen.status).toBe(204);
+    expect(seen.headers["cache-control"]).toBe("no-store");
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.viewCount).toBe(1);
+
+    // The batch shares the single view's dedup: the same visitor hovering
+    // after scrolling is still one view, another visitor's scroll is a second.
+    expect((await call(mockReq("POST", `/api/skins/view?id=${id}`, { "cf-connecting-ip": "203.0.113.7" }))).status).toBe(204);
+    await call(bodyReq("POST", "/api/skins/views", JSON.stringify({ ids: [id] }), { "cf-connecting-ip": "203.0.113.8" }));
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.viewCount).toBe(2);
+
+    // Garbage bodies are a no-op, never an error the browser would retry.
+    expect((await call(bodyReq("POST", "/api/skins/views", "not json"))).status).toBe(204);
+    expect((await call(bodyReq("POST", "/api/skins/views", JSON.stringify({ ids: "nope" })))).status).toBe(204);
+    expect((await call(mockReq("GET", "/api/skins/views"))).status).toBe(405);
+  });
+
   it("recommends lookalikes only for skins with a public page", async () => {
     // Two catalog skins by the same skin.ini author in the same colourway;
     // different keymode blocks keep the archives byte-distinct past the

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { pipeline } from "node:stream";
 import { parseJson } from "../../db.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, recordSkinView, removeSkinScreenshot, replaceSkinOsk, setSkinAccent, setSkinCover, setSkinScreenshotLabels, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinCoverTarget, type SkinRow } from "../../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSimilarSkins, listSkins, moveSkinOskKey, parseSkinsListSort, privateSkinSecretMatches, recordSkinDownload, recordSkinView, recordSkinViews, removeSkinScreenshot, replaceSkinOsk, setSkinAccent, setSkinCover, setSkinScreenshotLabels, setSkinSpecialKeymodes, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, updateSkinDetails, upsertSkinKeymodePreview, type SkinCoverTarget, type SkinRow } from "../../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../../features/user-replay-skins.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { clientIp } from "../abuse-guard.js";
@@ -238,6 +238,25 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
     }
+    sendCors(req, res, ctx);
+    res.statusCode = 204;
+    res.setHeader("cache-control", "no-store");
+    res.end();
+    return true;
+  }
+  if (url.pathname === "/api/skins/views") {
+    // The grid's batch of the same: skins a visitor scrolled into view, sent
+    // together so a page scroll is one request rather than 27. Always 204;
+    // an unknown or unlisted ref is skipped inside, not reported.
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ ids?: unknown }>((await readBody(req)) || "{}", {});
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 200)
+      : [];
+    if (ids.length > 0) await recordSkinViews(ctx.serveWriteDb ?? ctx.db, ids, clientIp(req, ctx.config));
     sendCors(req, res, ctx);
     res.statusCode = 204;
     res.setHeader("cache-control", "no-store");
