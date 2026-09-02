@@ -2680,200 +2680,36 @@ function scoreboardRow(
    these hex values; they only get names here because the playfield
    helper below needs them in a few places. */
 const OG_PINK = "#ff66aa";
-const OG_MUTED = "#a89cb4";
 
-// Surfaces named on the default card, in chip reading order. Not a
-// ranking, and not the full site map — just enough for someone seeing
-// the link preview to know what they'd be clicking into.
-const DEFAULT_OG_FEATURES = [
-  "rankings",
-  "live tracker",
-  "top plays",
-  "maps",
-  "replays",
+// The site's own note shapes, the same paths as public/images/notes/mania-*.svg
+// draw on the home page. Drawn inline so the card has no asset dependency.
+const MANIA_ARROW_PATHS = [
+  "M6 17.5h20a6.5 6.5 0 0 1 0 13H6a6.5 6.5 0 0 1 0-13Z",
+  "M18.8 2.8a6.5 6.5 0 0 1 9.2 0l17.2 17.2a6.5 6.5 0 0 1 0 9.2L28 46.2a6.5 6.5 0 0 1-9.2-9.2L31.5 24 18.8 11.8a6.5 6.5 0 0 1 0-9Z",
 ];
 
-// One chip is filled instead of outlined so the row has a focal point
-// and the card carries the accent colour below the fold of the title.
-function featureChip(label: string, key: string, accent = false) {
-  return h(
-    "div",
-    {
-      key,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        padding: "9px 16px",
-        marginRight: "10px",
-        marginTop: "10px",
-        background: accent ? OG_PINK : "rgba(255,255,255,0.06)",
-        border: `1px solid ${accent ? OG_PINK : "rgba(255,255,255,0.12)"}`,
-        borderRadius: "999px",
-        color: accent ? "#1a1317" : "#cfc6d8",
-        fontSize: "20px",
-        fontWeight: 900,
-        letterSpacing: "0.05em",
-      },
-    },
-    label,
-  );
-}
+type LaneNoteKind = "arrow" | "bar" | "circle";
 
-type ColumnNote = { y: number; ln?: number; accent?: boolean };
-
-// Note colours by lane, the way a 4K skin usually reads: pale outer
-// lanes, blue inner lanes. `accent` overrides both with the site pink
-// so a couple of notes carry the brand colour.
-const NOTE_STYLES = {
-  pale: { solid: "#f3ece4", soft: "rgba(243,236,228,0.30)", trail: "rgba(243,236,228,0.11)" },
-  blue: { solid: "#8ecbff", soft: "rgba(142,203,255,0.32)", trail: "rgba(142,203,255,0.15)" },
-  pink: { solid: OG_PINK, soft: "rgba(255,102,170,0.42)", trail: "rgba(255,102,170,0.20)" },
-};
-
-/* A stylised mania playfield: n columns of notes falling toward a lit
-   receptor line, with one lane caught mid-hit. Drawn with plain rects
-   (not skin sprites) so the palette stays on-brand and the render has
-   no asset dependency.
-
-   The motion trails behind each note are what sell it as a play in
-   progress rather than a static chart diagram, so they scale with note
-   size instead of being a fixed length. */
-function maniaColumns(props: {
+/* One note shape in a square box. Alpha rides the wrapper rather than the
+   fill: the arrow is two overlapping paths, and a translucent fill doubles
+   up where the shaft meets the head. */
+function laneNote(props: {
   key: string;
+  kind: LaneNoteKind;
+  size: number;
+  color: string;
+  opacity?: number;
+  rotate?: number;
   left: number;
   top: number;
-  width: number;
-  height: number;
-  columns: ColumnNote[][];
-  colWidth: number;
-  gap: number;
-  receptorY: number;
-  noteHeight: number;
-  // Lane index that just got hit: it gets column lighting, a flash on
-  // the receptor and a burst of sparks.
-  hitColumn?: number;
-  opacity?: number;
 }) {
-  const {
-    key, left, top, width, height, columns, colWidth, gap,
-    receptorY, noteHeight, hitColumn, opacity = 1,
-  } = props;
-  const bandWidth = columns.length * colWidth + (columns.length - 1) * gap;
-  const padLeft = Math.round((width - bandWidth) / 2);
-  const trailHeight = Math.round(noteHeight * 4.2);
-
-  const cols = columns.map((notes, ci) => {
-    const inner = ci > 0 && ci < columns.length - 1;
-    const lane = inner ? NOTE_STYLES.blue : NOTE_STYLES.pale;
-    const colLeft = padLeft + ci * (colWidth + gap);
-    const children: ReactNode[] = [];
-
-    for (const [ni, note] of notes.entries()) {
-      const style = note.accent ? NOTE_STYLES.pink : lane;
-      if (note.ln) {
-        children.push(
-          h("div", {
-            key: `ln-${ci}-${ni}`,
-            style: {
-              position: "absolute",
-              left: `${Math.round(colWidth * 0.16)}px`,
-              top: `${note.y - note.ln}px`,
-              width: `${Math.round(colWidth * 0.68)}px`,
-              // Like the trails, the body runs under the head so its
-              // rounded end doesn't show as a seam above the note.
-              height: `${note.ln + noteHeight}px`,
-              borderTopLeftRadius: "6px",
-              borderTopRightRadius: "6px",
-              background: style.soft,
-            },
-          }),
-        );
-      } else {
-        // Only tap notes get a trail; a held note's body already reads
-        // as length, and stacking the two just looks smeared.
-        children.push(
-          h("div", {
-            key: `tr-${ci}-${ni}`,
-            style: {
-              position: "absolute",
-              left: `${Math.round(colWidth * 0.2)}px`,
-              // Runs past the note's top edge so the note covers the
-              // trail's end; stopping at note.y leaves the rounded
-              // bottom poking out as a cup shape.
-              top: `${note.y - trailHeight}px`,
-              width: `${Math.round(colWidth * 0.6)}px`,
-              height: `${trailHeight + noteHeight}px`,
-              borderTopLeftRadius: `${Math.round(colWidth * 0.3)}px`,
-              borderTopRightRadius: `${Math.round(colWidth * 0.3)}px`,
-              background: `linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 46%, ${style.trail} 100%)`,
-            },
-          }),
-        );
-      }
-      children.push(
-        h("div", {
-          key: `n-${ci}-${ni}`,
-          style: {
-            position: "absolute",
-            left: "0px",
-            top: `${note.y}px`,
-            width: `${colWidth}px`,
-            height: `${noteHeight}px`,
-            borderRadius: "7px",
-            background: style.solid,
-          },
-        }),
-      );
-    }
-
-    // Hit lighting: the struck lane glows from the receptor upward.
-    if (ci === hitColumn) {
-      children.unshift(
-        h("div", {
-          key: `lit-${ci}`,
-          style: {
-            position: "absolute",
-            left: "0px",
-            top: `${receptorY - 260}px`,
-            width: `${colWidth}px`,
-            height: "260px",
-            background: "linear-gradient(to bottom, rgba(255,102,170,0) 0%, rgba(255,102,170,0.38) 100%)",
-          },
-        }),
-      );
-    }
-
-    return h(
-      "div",
-      {
-        key: `col-${ci}`,
-        style: {
-          position: "absolute",
-          left: `${colLeft}px`,
-          top: "0px",
-          width: `${colWidth}px`,
-          height: `${height}px`,
-          display: "flex",
-          background: inner ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.03)",
-        },
-      },
-      children,
-    );
-  });
-
-  const hitLeft = hitColumn == null ? 0 : padLeft + hitColumn * (colWidth + gap);
-  const hitCentre = hitLeft + colWidth / 2;
-  // Sparks thrown off the hit, biased upward the way an explosion frame
-  // reads at a single instant.
-  const sparks: Array<{ dx: number; dy: number; r: number; a: number }> = [
-    { dx: -0.72, dy: -46, r: 7, a: 0.85 },
-    { dx: 0.66, dy: -62, r: 5, a: 0.7 },
-    { dx: -0.34, dy: -96, r: 4, a: 0.5 },
-    { dx: 0.9, dy: -18, r: 6, a: 0.6 },
-    { dx: -1.02, dy: -12, r: 5, a: 0.45 },
-    { dx: 0.28, dy: -130, r: 3, a: 0.35 },
-  ];
-
+  const { key, kind, size, color, opacity = 1, rotate = 0, left, top } = props;
+  const inner =
+    kind === "arrow"
+      ? MANIA_ARROW_PATHS.map((d, i) => h("path", { key: `p-${i}`, d, fill: color }))
+      : kind === "bar"
+        ? [h("rect", { key: "r", x: 4, y: 16, width: 40, height: 16, rx: 6, fill: color })]
+        : [h("circle", { key: "c", cx: 24, cy: 24, r: 18, fill: color })];
   return h(
     "div",
     {
@@ -2882,147 +2718,160 @@ function maniaColumns(props: {
         position: "absolute",
         left: `${left}px`,
         top: `${top}px`,
-        width: `${width}px`,
-        height: `${height}px`,
+        width: `${size}px`,
+        height: `${size}px`,
         display: "flex",
-        overflow: "hidden",
         opacity,
+        transform: `rotate(${rotate}deg)`,
+      },
+    },
+    h("svg", { viewBox: "0 0 48 48", width: size, height: size }, inner),
+  );
+}
+
+/* The lockup as the site header draws it: the mania mode glyph from the
+   osu-extra font in pink, then the lowercase Torus wordmark with the
+   second word in pink. The whole group is what flex centres, as in the
+   header; centring the words alone left the glyph hanging too far out. */
+function brandLockup(key: string, top: number, fontSize: number) {
+  const glyphSize = Math.round(fontSize * 0.88);
+  const gap = Math.round(fontSize * 0.22);
+  const word = (text: string, color?: string) =>
+    h(
+      "div",
+      {
+        key: text,
+        style: {
+          display: "flex",
+          marginLeft: `${gap}px`,
+          fontSize: `${fontSize}px`,
+          fontWeight: 900,
+          lineHeight: 1,
+          letterSpacing: "-0.01em",
+          ...(color ? { color } : {}),
+        },
+      },
+      text,
+    );
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        left: "0px",
+        top: `${top}px`,
+        width: `${WIDTH}px`,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
       },
     },
     [
-      ...cols,
-      // Receptor glow, then the lit judgement line itself.
-      h("div", {
-        key: "glow",
-        style: {
-          position: "absolute",
-          left: `${padLeft - 20}px`,
-          top: `${receptorY - 170}px`,
-          width: `${bandWidth + 40}px`,
-          height: "180px",
-          background: "linear-gradient(to bottom, rgba(255,102,170,0) 0%, rgba(255,102,170,0.24) 100%)",
+      h(
+        "div",
+        {
+          key: "glyph",
+          style: {
+            display: "flex",
+            fontFamily: '"osu-extra"',
+            fontSize: `${glyphSize}px`,
+            lineHeight: 1,
+            color: OG_PINK,
+          },
         },
-      }),
-      h("div", {
-        key: "receptor",
-        style: {
-          position: "absolute",
-          left: `${padLeft}px`,
-          top: `${receptorY}px`,
-          width: `${bandWidth}px`,
-          height: "5px",
-          background: OG_PINK,
-        },
-      }),
-      hitColumn == null
-        ? null
-        : h("div", {
-            key: "burst",
-            style: {
-              position: "absolute",
-              left: `${Math.round(hitCentre - colWidth * 1.15)}px`,
-              top: `${receptorY - 84}px`,
-              width: `${Math.round(colWidth * 2.3)}px`,
-              height: "168px",
-              borderRadius: "50%",
-              background:
-                "radial-gradient(closest-side, rgba(255,255,255,0.55) 0%, rgba(255,102,170,0.45) 38%, rgba(255,102,170,0) 100%)",
-            },
-          }),
-      hitColumn == null
-        ? null
-        : h("div", {
-            key: "flash",
-            style: {
-              position: "absolute",
-              left: `${hitLeft}px`,
-              top: `${receptorY - 6}px`,
-              width: `${colWidth}px`,
-              height: "12px",
-              borderRadius: "6px",
-              background: "#ffffff",
-            },
-          }),
-      ...(hitColumn == null
-        ? []
-        : sparks.map((s, i) =>
-            h("div", {
-              key: `spark-${i}`,
-              style: {
-                position: "absolute",
-                left: `${Math.round(hitCentre + s.dx * colWidth * 0.5 - s.r)}px`,
-                top: `${receptorY + s.dy - s.r}px`,
-                width: `${s.r * 2}px`,
-                height: `${s.r * 2}px`,
-                borderRadius: "50%",
-                background: "#ffb3d5",
-                opacity: s.a,
-              },
-            }),
-          )),
-      // Notes fade in at the top rather than getting sliced by the
-      // canvas edge, which reads as depth instead of a crop.
-      h("div", {
-        key: "fade-top",
-        style: {
-          position: "absolute",
-          left: "0px",
-          top: "0px",
-          width: `${width}px`,
-          height: "150px",
-          background: `linear-gradient(to bottom, ${SURFACE_COLOR} 0%, rgba(26,22,32,0) 100%)`,
-        },
-      }),
-      // Everything past the judgement line fades out, so the eye stops
-      // at the receptor instead of running off the canvas.
-      h("div", {
-        key: "fade",
-        style: {
-          position: "absolute",
-          left: "0px",
-          top: `${receptorY + 8}px`,
-          width: `${width}px`,
-          height: `${height - receptorY - 8}px`,
-          background: "linear-gradient(to bottom, rgba(26,22,32,0.55) 0%, rgba(26,22,32,1) 70%)",
-        },
-      }),
+        "\ue802",
+      ),
+      word("mania"),
+      word("tracker", OG_PINK),
     ],
   );
 }
 
-/* Default layout: shown when nobody has selected a country (bare
-   site URL). Brand lockup on the left, a stylised 4K playfield
-   bleeding off the right edge. Deliberately not the scrapbook
-   language of the country/player cards: this one is the front door,
-   so it names the site and its surfaces instead of showing whoever
-   happens to be ranked today. It also takes no upstream data, so the
-   most-shared card of the site never waits on the osu! API.
+const DEFAULT_OG_LANES = 8;
+const DEFAULT_OG_NOTE_SIZE = 92;
+
+// The site's page background, --color-osu-b6 at the default theme
+// (hsl 333 10% 10%), so the card matches the header it is quoting.
+const DEFAULT_OG_SURFACE = "#1c171a";
+
+// Where each note sits: lane index, centre y, shape, colour, alpha and
+// rotation. Hand-placed rather than scattered so the middle band stays
+// clear for the lockup, pink lands on both halves, and no two heavy notes
+// sit in the same lane.
+const DEFAULT_OG_NOTES: Array<{
+  lane: number;
+  y: number;
+  kind: LaneNoteKind;
+  color: string;
+  opacity?: number;
+  rotate?: number;
+}> = [
+  { lane: 0, y: 118, kind: "arrow", color: "#ffffff", opacity: 0.16, rotate: 90 },
+  { lane: 1, y: 48, kind: "bar", color: "#ffffff" },
+  { lane: 2, y: 150, kind: "circle", color: OG_PINK, opacity: 0.38 },
+  { lane: 3, y: 80, kind: "arrow", color: OG_PINK },
+  { lane: 4, y: 140, kind: "bar", color: "#ffffff", opacity: 0.16 },
+  { lane: 5, y: 40, kind: "arrow", color: "#ffffff", rotate: 180 },
+  { lane: 6, y: 120, kind: "circle", color: "#ffffff", opacity: 0.55 },
+  { lane: 7, y: 60, kind: "bar", color: OG_PINK, opacity: 0.38 },
+  { lane: 0, y: 500, kind: "circle", color: "#ffffff" },
+  { lane: 1, y: 580, kind: "arrow", color: OG_PINK, opacity: 0.38, rotate: -90 },
+  { lane: 2, y: 470, kind: "bar", color: "#ffffff", opacity: 0.16 },
+  { lane: 3, y: 560, kind: "circle", color: "#ffffff", opacity: 0.16 },
+  { lane: 4, y: 490, kind: "arrow", color: "#ffffff", rotate: 90 },
+  { lane: 5, y: 590, kind: "bar", color: OG_PINK },
+  { lane: 6, y: 520, kind: "arrow", color: "#ffffff", opacity: 0.16 },
+  { lane: 7, y: 470, kind: "circle", color: OG_PINK, opacity: 0.38 },
+];
+
+/* Default layout: shown when nobody has selected a country (bare site
+   URL). It quotes the site rather than inventing a brand for the
+   preview: the header lockup every page opens with, centred, over eight
+   faint lanes with the home page's own note shapes falling upright in
+   them. The site is named once; the platform already shows the URL.
+   Deliberately not the scrapbook language of the country/player cards,
+   and it takes no upstream data, so the most-shared card of the site
+   never waits on the osu! API.
 
    Bump OG_IMAGE_VERSION in src/lib/seo.ts when this layout changes.
 */
 async function renderDefaultBrandOg(request: Request): Promise<Response> {
-  const [regularFont, heavyFont] = await loadOgFonts(request);
+  const [[regularFont, heavyFont], extraFont] = await Promise.all([
+    loadOgFonts(request),
+    getFont(request, "extra.ttf"),
+  ]);
 
-  // Lane 3 is caught exactly on the receptor, which is what the burst,
-  // flash and MAX judgement below are reacting to.
-  const FIELD_LEFT = 716;
-  const FIELD_WIDTH = 484;
-  const COL_WIDTH = 96;
-  const COL_GAP = 8;
-  const RECEPTOR_Y = 500;
-  const HIT_COLUMN = 2;
-  const bandWidth = 4 * COL_WIDTH + 3 * COL_GAP;
-  const bandLeft = FIELD_LEFT + Math.round((FIELD_WIDTH - bandWidth) / 2);
-  const hitCentre = bandLeft + HIT_COLUMN * (COL_WIDTH + COL_GAP) + COL_WIDTH / 2;
+  const laneWidth = WIDTH / DEFAULT_OG_LANES;
+  const size = DEFAULT_OG_NOTE_SIZE;
+  const LOCKUP_FONT_SIZE = 104;
 
-  // Reads as a real pattern rather than scattered blocks: a roll down
-  // the lanes up top, a chord, then a hold and the note being hit.
-  const columns: ColumnNote[][] = [
-    [{ y: -20 }, { y: 150 }, { y: 268 }, { y: 396 }],
-    [{ y: 60 }, { y: 208 }, { y: 340, ln: 88 }],
-    [{ y: 24 }, { y: 118 }, { y: 268 }, { y: RECEPTOR_Y - 13 }],
-    [{ y: 88 }, { y: 208 }, { y: 470, ln: 120, accent: true }],
-  ];
+  const dividers = Array.from({ length: DEFAULT_OG_LANES - 1 }, (_, i) =>
+    h("div", {
+      key: `lane-${i}`,
+      style: {
+        position: "absolute",
+        left: `${Math.round((i + 1) * laneWidth)}px`,
+        top: "0px",
+        width: "1px",
+        height: `${HEIGHT}px`,
+        background: "rgba(255,255,255,0.05)",
+      },
+    }),
+  );
+
+  const notes = DEFAULT_OG_NOTES.map((note, i) =>
+    laneNote({
+      key: `note-${i}`,
+      kind: note.kind,
+      size,
+      color: note.color,
+      opacity: note.opacity,
+      rotate: note.rotate,
+      left: Math.round(note.lane * laneWidth + laneWidth / 2 - size / 2),
+      top: Math.round(note.y - size / 2),
+    }),
+  );
 
   const response = new ImageResponse(
     h(
@@ -3034,188 +2883,25 @@ async function renderDefaultBrandOg(request: Request): Promise<Response> {
           display: "flex",
           position: "relative",
           overflow: "hidden",
-          background: SURFACE_COLOR,
+          background: DEFAULT_OG_SURFACE,
           fontFamily: '"Torus OG"',
           color: "#ffffff",
         },
       },
       [
-        // Two washes, warm on the lockup side and cool under the
-        // playfield, so the surface isn't a flat sheet of charcoal.
-        h("div", {
-          key: "wash",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background:
-              "radial-gradient(circle at 22% 38%, rgba(255,102,170,0.16) 0%, rgba(255,102,170,0) 55%)",
-          },
-        }),
-        h("div", {
-          key: "wash-cool",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background:
-              "radial-gradient(circle at 82% 88%, rgba(142,203,255,0.14) 0%, rgba(142,203,255,0) 52%)",
-          },
-        }),
-        maniaColumns({
-          key: "field",
-          left: FIELD_LEFT,
-          top: 0,
-          width: FIELD_WIDTH,
-          height: HEIGHT,
-          columns,
-          colWidth: COL_WIDTH,
-          gap: COL_GAP,
-          receptorY: RECEPTOR_Y,
-          noteHeight: 26,
-          hitColumn: HIT_COLUMN,
-        }),
-        // The judgement for the note being hit, popped next to the
-        // burst at in-game scale instead of as a caption over the card.
-        h(
-          "div",
-          {
-            key: "judgement",
-            style: {
-              position: "absolute",
-              left: `${Math.round(hitCentre - 80)}px`,
-              top: `${RECEPTOR_Y - 116}px`,
-              width: "160px",
-              display: "flex",
-              justifyContent: "center",
-              fontSize: "34px",
-              fontWeight: 900,
-              letterSpacing: "0.2em",
-              color: JUDGEMENT_COLORS.MAX,
-            },
-          },
-          "MAX",
-        ),
-        // Soft separator so the playfield band reads as a panel.
-        h("div", {
-          key: "edge",
-          style: {
-            position: "absolute",
-            left: `${FIELD_LEFT}px`,
-            top: "0px",
-            width: "1px",
-            height: `${HEIGHT}px`,
-            background: "rgba(255,255,255,0.10)",
-          },
-        }),
-        h(
-          "div",
-          {
-            key: "lockup",
-            style: {
-              position: "absolute",
-              left: "80px",
-              top: "86px",
-              width: "600px",
-              display: "flex",
-              flexDirection: "column",
-            },
-          },
-          [
-            h(
-              "div",
-              {
-                key: "eyebrow",
-                style: { display: "flex", alignItems: "center" },
-              },
-              [
-                h("img", {
-                  key: "logo",
-                  src: new URL("/logo512.png", getAssetOrigin(request)).toString(),
-                  style: { width: "54px", height: "54px", borderRadius: "50%" },
-                }),
-                h(
-                  "div",
-                  {
-                    key: "text",
-                    style: {
-                      display: "flex",
-                      marginLeft: "16px",
-                      fontSize: "22px",
-                      fontWeight: 900,
-                      letterSpacing: "0.26em",
-                      color: OG_PINK,
-                    },
-                  },
-                  "OSU!MANIA",
-                ),
-              ],
-            ),
-            h(
-              "div",
-              {
-                key: "title",
-                style: {
-                  display: "flex",
-                  marginTop: "16px",
-                  fontSize: "92px",
-                  fontWeight: 900,
-                  lineHeight: "1.0",
-                  letterSpacing: "-0.01em",
-                  // Satori supports background-clip: text, so the
-                  // wordmark can carry the accent instead of sitting
-                  // flat white next to a colourful playfield.
-                  backgroundImage: "linear-gradient(115deg, #ffffff 34%, #ff9ecd 100%)",
-                  backgroundClip: "text",
-                  WebkitBackgroundClip: "text",
-                  color: "transparent",
-                },
-              },
-              "Mania Tracker",
-            ),
-            h(
-              "div",
-              {
-                key: "sub",
-                style: {
-                  display: "flex",
-                  marginTop: "20px",
-                  fontSize: "27px",
-                  color: OG_MUTED,
-                  lineHeight: "1.25",
-                  maxWidth: "560px",
-                },
-              },
-              "Live scores, rankings and map tools for the mania community.",
-            ),
-            h(
-              "div",
-              {
-                key: "chips",
-                style: { display: "flex", flexWrap: "wrap", marginTop: "16px", maxWidth: "530px" },
-              },
-              DEFAULT_OG_FEATURES.map((f, i) =>
-                featureChip(f, `chip-${i}`, f === "live tracker"),
-              ),
-            ),
-            h(
-              "div",
-              {
-                key: "domain",
-                style: {
-                  display: "flex",
-                  marginTop: "26px",
-                  fontSize: "21px",
-                  fontWeight: 900,
-                  letterSpacing: "0.12em",
-                  color: "#6f6579",
-                },
-              },
-              "MANIA-TRACKER.COM",
-            ),
-          ],
-        ),
+        ...dividers,
+        ...notes,
+        brandLockup("lockup", Math.round((HEIGHT - LOCKUP_FONT_SIZE) / 2) - 6, LOCKUP_FONT_SIZE),
       ],
     ),
-    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      fonts: [
+        ...ogFontList(regularFont, heavyFont),
+        { name: "osu-extra", data: extraFont, style: "normal", weight: 400 },
+      ],
+    },
   );
 
   response.headers.set("Cache-Control", OG_CACHE_HEADER);

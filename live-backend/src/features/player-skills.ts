@@ -3477,7 +3477,7 @@ export interface PlayerSkillDanEvidence {
   skillsets: PlayerSkillDanSkillsetEvidence[];
   /** The tile the headline follows (DanSkillsetBucket.anchor), null on sides that average. */
   anchorSkillset: string | null;
-  /** Present only when a course clear set this side's headline. */
+  /** The best verified course pass on this side, when it set the headline or sits on the headline's level. */
   courseClear: PlayerSkillDanCourseEvidence | null;
   /** Present only when the read asked for it (`includeRejected`). */
   rejected?: PlayerSkillDanRejectedPlay[];
@@ -4045,7 +4045,15 @@ export async function getPlayerSkillDanEvidence(
     })
     : clears;
   const topClears = clearsForPage.slice(clearsOffset, clearsOffset + maxClears);
-  const courseSource = dan?.courseClear ? bestDanCourseClear(courseClears, keyCount, side) : null;
+  // The best verified course pass is shown when it set the headline or sits
+  // on the headline's own level: a pass on the Azimuth course is still the
+  // fact players want to see when their average reads azimuth+ on its own,
+  // while a 5th dan pass under a 6th dan estimate is old news and stays out.
+  const bestCourse = bestDanCourseClear(courseClears, keyCount, side);
+  const courseSource = bestCourse && dan
+    && (dan.courseClear != null || Math.round(bestCourse.rawDan) >= Math.round(dan.rawDan))
+    ? bestCourse
+    : null;
   const evidenceBeatmapIds = [
     ...(courseSource ? [courseSource.beatmapId] : []),
     ...topClears.map((clear) => clear.play.beatmapId),

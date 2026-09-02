@@ -1771,8 +1771,12 @@ msgstr "7K LN"
 #~ msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. La razón son los mapas: existen muy pocos mapas de Release o Inverse cerca de la cima, así que esos dan se detienen donde se detienen los mapas. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
 
 #: src/routes/dan-estimates.tsx
-msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
-msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. Esos dos dan se quedan bastante por debajo de General en casi todo el mundo, ya sea porque existen pocos mapas difíciles de ese tipo o porque el sitio no reconoce todos, así que ya no deciden el número por su cuenta. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. Esos dos dan se quedan bastante por debajo de General en casi todo el mundo, ya sea porque existen pocos mapas difíciles de ese tipo o porque el sitio no reconoce todos, así que ya no deciden el número por su cuenta. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
+msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. Esos dos dan se quedan bastante por debajo de General en casi todo el mundo, ya sea porque existen pocos mapas difíciles de ese tipo o porque el sitio no reconoce todos, así que ya no deciden el número por su cuenta. Las filas de skills no se tocan."
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -3030,8 +3034,8 @@ msgid "Canvas unavailable."
 msgstr "Canvas no disponible."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "capped"
-msgstr "limitada"
+#~ msgid "capped"
+#~ msgstr "limitada"
 
 #: src/lib/signature-shared.ts
 msgid "Card"
@@ -13336,8 +13340,8 @@ msgstr "muy fácil"
 
 #. placeholder {0}: anchorSection?.label ?? ""
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Too far under {0} to count its whole distance"
-msgstr "Demasiado por debajo de {0} para contar toda su distancia"
+#~ msgid "Too far under {0} to count its whole distance"
+#~ msgstr "Demasiado por debajo de {0} para contar toda su distancia"
 
 #: src/routes/farm-helper.tsx
 msgid "too hard"

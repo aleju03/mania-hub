@@ -205,7 +205,6 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         color,
         dan: evidence.dan,
         clears: evidence.totalClears,
-        headlineCapped: false,
         plays: moreClears.plays.length > 0 ? [...evidence.clears, ...moreClears.plays] : evidence.clears,
       },
       ...evidence.skillsets.map((skillset) => {
@@ -217,7 +216,6 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           dan: skillset.dan,
           clears: skillset.clears,
           plays: skillset.plays,
-          headlineCapped: skillset.dan?.headlineCapped === true,
         };
       }),
     ]
@@ -437,17 +435,6 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                               ? t`${section.clears}/${averageWindow} plays`
                               : t`${section.clears} plays`}
                           </span>
-                          {/* This tile sits too far from the anchor tile to
-                              pull the estimate its whole distance; the number
-                              above is still its own. */}
-                          {section.headlineCapped ? (
-                            <span
-                              className="text-[10px] italic text-osu-f1"
-                              title={t`Too far under ${anchorSection?.label ?? ""} to count its whole distance`}
-                            >
-                              <Trans>capped</Trans>
-                            </span>
-                          ) : null}
                           {open ? (
                             <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
                           ) : null}

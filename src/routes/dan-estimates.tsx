@@ -522,8 +522,8 @@ function DanEstimatesPage() {
               the estimate stays within one level of your General dan, whichever way Tech, Inverse and
               Release point. Those two dans stop well under General for almost everyone, whether because
               few hard maps of those kinds exist or because the site does not recognise all of them, so
-              they no longer get to decide the number on their own. A skill held back this
-              way is marked capped in the dan window; its own number is untouched.
+              they no longer get to decide the number on their own. The skill rows themselves
+              are untouched.
             </Trans>
           </P>
           <P>

@@ -1780,8 +1780,12 @@ msgstr "7K LN"
 #~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。原因在于谱面：顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
 
 #: src/routes/dan-estimates.tsx
-msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
-msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。几乎所有人的这两项段位都远低于 General，可能是因为这类高难度谱面很少，也可能是因为站点没有识别出全部，所以它们不再单独决定这个数字。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。几乎所有人的这两项段位都远低于 General，可能是因为这类高难度谱面很少，也可能是因为站点没有识别出全部，所以它们不再单独决定这个数字。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
+msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。几乎所有人的这两项段位都远低于 General，可能是因为这类高难度谱面很少，也可能是因为站点没有识别出全部，所以它们不再单独决定这个数字。各技能行本身不变。"
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -3039,8 +3043,8 @@ msgid "Canvas unavailable."
 msgstr "画布不可用。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "capped"
-msgstr "已封顶"
+#~ msgid "capped"
+#~ msgstr "已封顶"
 
 #: src/lib/signature-shared.ts
 msgid "Card"
@@ -13345,8 +13349,8 @@ msgstr "太简单"
 
 #. placeholder {0}: anchorSection?.label ?? ""
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Too far under {0} to count its whole distance"
-msgstr "比{0}低太多，不会按全部差距计算"
+#~ msgid "Too far under {0} to count its whole distance"
+#~ msgstr "比{0}低太多，不会按全部差距计算"
 
 #: src/routes/farm-helper.tsx
 msgid "too hard"

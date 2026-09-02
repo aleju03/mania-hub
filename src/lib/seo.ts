@@ -10,7 +10,9 @@ export const DEFAULT_DESCRIPTION =
 
 // 43: the replay card shows a stable play's accuracy on the stable scale,
 // matching the replay page instead of osu!'s lazer-weighted field.
-export const OG_IMAGE_VERSION = "43";
+// 46: the default card quotes the site header lockup over the home page's
+// own note shapes in lanes, replacing the old wordmark-and-chips layout.
+export const OG_IMAGE_VERSION = "46";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text

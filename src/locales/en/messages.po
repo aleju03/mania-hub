@@ -1771,8 +1771,12 @@ msgstr "7K LN"
 #~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
 
 #: src/routes/dan-estimates.tsx
-msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
-msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
+msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. The skill rows themselves are untouched."
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -3030,8 +3034,8 @@ msgid "Canvas unavailable."
 msgstr "Canvas unavailable."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "capped"
-msgstr "capped"
+#~ msgid "capped"
+#~ msgstr "capped"
 
 #: src/lib/signature-shared.ts
 msgid "Card"
@@ -13344,8 +13348,8 @@ msgstr "too easy"
 
 #. placeholder {0}: anchorSection?.label ?? ""
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Too far under {0} to count its whole distance"
-msgstr "Too far under {0} to count its whole distance"
+#~ msgid "Too far under {0} to count its whole distance"
+#~ msgstr "Too far under {0} to count its whole distance"
 
 #: src/routes/farm-helper.tsx
 msgid "too hard"
