@@ -153,6 +153,15 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("this.renderHandAccuracyOverlay(layout);");
   });
 
+  it("tags the side owning the middle lane on the L/R miss counter and toggles it on click", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain('this.keyCount % 2 === 1 ? { text: "+ THUMB"');
+    expect(source).toContain("if (thumbTag && item.hand === this.missThumbHand) {");
+    expect(source).toContain("if (this.isMissThumbTagPoint(x, y)) return \"pointer\";");
+    expect(source).toContain("this.setMissThumbHand(next);\n        this.onMissThumbHandChange?.(next);");
+  });
+
   it("keeps released hold remainders dimmed and scrolling past instead of despawning at the tail judgement", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
@@ -816,7 +825,7 @@ describe("ManiaReplayRenderer per-hand accuracy overlay", () => {
     }
     // Both hand overlays name the same colours, so a glance ties L to L.
     expect(source).toContain('const HAND_COLORS = { left: "#5a8fff", right: "#de31ae" } as const;');
-    expect(source).toContain('{ label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },');
+    expect(source).toContain('{ hand: "left" as const, label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },');
     // Digits and unit are separate glyphs, so the number keeps the size.
     expect(source).toContain("this.hudCachedLeftHandAccuracy = this.hudCachedLeftHandAccuracyValue.toFixed(2);");
   });

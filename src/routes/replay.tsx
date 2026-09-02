@@ -3694,6 +3694,7 @@ function ReplayViewer({
             overlaySettings: overlaySettingsRef.current,
             missThumbHand: missThumbHandRef.current,
             onOverlaySettingsChange: applyOverlaySettings,
+            onMissThumbHandChange: applyMissThumbHand,
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
             inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,

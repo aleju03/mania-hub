@@ -383,6 +383,8 @@ interface RendererOptions {
   // Which hand owns the middle lane of an odd keymode in per-hand stats.
   missThumbHand?: ReplayThumbHand;
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
+  // Fired when the "+ thumb" tag on the L/R miss counter is clicked.
+  onMissThumbHandChange?: (hand: ReplayThumbHand) => void;
   onContextLost?: (wasPlaying: boolean) => void;
   onContextRestored?: (resumed: boolean) => void;
 }
@@ -645,6 +647,7 @@ export class ManiaReplayRenderer {
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
+  private onMissThumbHandChange: ((hand: ReplayThumbHand) => void) | null = null;
   private onContextLost: ((wasPlaying: boolean) => void) | null = null;
   private onContextRestored: ((resumed: boolean) => void) | null = null;
   private handleContextLost: ((event: Event) => void) | null = null;
@@ -658,6 +661,11 @@ export class ManiaReplayRenderer {
   private judgementBuildMs: number | null = null;
   private overlayHitboxes: ReplayOverlayHitbox[] = [];
   private overlayCloseButtons: Array<{ id: ReplayOverlayId; x: number; y: number; radius: number }> = [];
+  // The "+ thumb" tag on the L/R miss counter of an odd keymode: it names the
+  // side that owns the middle lane and a click on it moves the thumb over.
+  private missThumbTagHitbox: { x: number; y: number; width: number; height: number } | null = null;
+  private missThumbTagHovered = false;
+  private missThumbTagPress: { pointerId: number; x: number; y: number } | null = null;
   // Set when a close button eats a press: the release then lands on bare
   // playfield (the overlay is gone) and must not read as click-to-pause.
   private suppressPlayfieldClickAt = -Infinity;
@@ -901,6 +909,7 @@ export class ManiaReplayRenderer {
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
     this.missThumbHand = normalizeReplayMissThumbHand(options?.missThumbHand);
     this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
+    this.onMissThumbHandChange = options?.onMissThumbHandChange ?? null;
     this.onContextLost = options?.onContextLost ?? null;
     this.onContextRestored = options?.onContextRestored ?? null;
     this.updateSkinCache();
@@ -2503,6 +2512,7 @@ export class ManiaReplayRenderer {
 
   private getOverlayPointerCursor(x: number, y: number): string {
     if (this.getOverlayCloseButtonAtPoint(x, y)) return "pointer";
+    if (this.isMissThumbTagPoint(x, y)) return "pointer";
     const hitbox = this.getOverlayAtPoint(x, y);
     if (!hitbox) return "";
     const direction = this.getOverlayResizeDirection(hitbox, x, y);
@@ -2558,6 +2568,11 @@ export class ManiaReplayRenderer {
     }
     const hitbox = this.getOverlayAtPoint(point.x, point.y);
     const desktopSelection = this.canUseDesktopOverlaySelection(event);
+    // A press on the thumb tag still arms the drag; the release decides
+    // between a click (toggle the hand) and a move.
+    this.missThumbTagPress = hitbox?.id === "misses" && this.isMissThumbTagPoint(point.x, point.y)
+      ? { pointerId: event.pointerId, ...point }
+      : null;
     if (!hitbox) {
       if (!desktopSelection) return;
       this.selectingOverlays = {
@@ -2756,11 +2771,22 @@ export class ManiaReplayRenderer {
       return;
     }
 
+    this.setMissThumbTagHovered(this.isMissThumbTagPoint(point.x, point.y));
     this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
   };
 
   private handleOverlayPointerEnd = (event: PointerEvent) => {
     this.activeOverlayPointers.delete(event.pointerId);
+    const point = this.getCanvasPointerPoint(event);
+    if (this.missThumbTagPress?.pointerId === event.pointerId) {
+      const press = this.missThumbTagPress;
+      this.missThumbTagPress = null;
+      if (Math.hypot(point.x - press.x, point.y - press.y) < 4 && this.isMissThumbTagPoint(point.x, point.y)) {
+        const next: ReplayThumbHand = this.missThumbHand === "left" ? "right" : "left";
+        this.setMissThumbHand(next);
+        this.onMissThumbHandChange?.(next);
+      }
+    }
     if (this.selectingOverlays?.pointerId === event.pointerId) {
       const marquee = this.getSelectionRect();
       if (marquee && marquee.width < 4 && marquee.height < 4 && !this.selectingOverlays.additive) {
@@ -2779,11 +2805,11 @@ export class ManiaReplayRenderer {
       this.draggingOverlay = null;
     }
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
-    const point = this.getCanvasPointerPoint(event);
     this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
   };
 
   private handleOverlayPointerLeave = () => {
+    this.setMissThumbTagHovered(false);
     if (!this.draggingOverlay && !this.resizingOverlay && !this.pinchingOverlay && !this.selectingOverlays) this.canvas.style.cursor = "";
   };
 
@@ -2968,6 +2994,7 @@ export class ManiaReplayRenderer {
     this.activeSkinSprites = this.hudSkinSprites;
     if (this.showHealthBar) this.renderHealthBar(layout);
     this.overlayHitboxes = [];
+    this.missThumbTagHitbox = null;
     if (!this.hideHud) {
       this.renderHUD(layout);
     } else {
@@ -4201,21 +4228,63 @@ export class ManiaReplayRenderer {
 
   private renderMissOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "misses");
-    const width = 128 * scale;
+    const labelFontSize = 9 * scale;
+    const items = [
+      { hand: "left" as const, label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },
+      { hand: "right" as const, label: "R MISS", value: this.hudCachedRightMisses, color: HAND_COLORS.right },
+    ];
+    // Odd keymodes tag the side that owns the middle lane, so the split the
+    // counter assumes is visible instead of a right-click surprise. Both
+    // boxes widen together so the pair stays symmetric.
+    const thumbTag = this.keyCount % 2 === 1 ? { text: "+ THUMB", fontSize: 7.5 * scale, gap: 5 * scale } : null;
+    const labelSpan = Math.max(...items.map((item) => this.measureTextWidth(item.label, labelFontSize, "700")));
+    const tagWidth = thumbTag ? this.measureTextWidth(thumbTag.text, thumbTag.fontSize, "700") : 0;
+    const boxWidth = Math.max(
+      60 * scale,
+      thumbTag ? 9 * scale + labelSpan + thumbTag.gap + tagWidth + 6 * scale : 0,
+    );
+    const pitch = boxWidth + 8 * scale;
+    const width = boxWidth * 2 + 8 * scale;
     const height = 36 * scale;
     const frame = this.getOverlayFrame(layout, "misses", width, height);
     if (!frame) return;
 
-    [
-      { label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },
-      { label: "R MISS", value: this.hudCachedRightMisses, color: HAND_COLORS.right },
-    ].forEach((item, index) => {
-      const x = frame.x + index * 68 * scale;
-      this.fillRect(x, frame.y, 60 * scale, height, "#0a0a12", 0.78);
+    items.forEach((item, index) => {
+      const x = frame.x + index * pitch;
+      this.fillRect(x, frame.y, boxWidth, height, "#0a0a12", 0.78);
       this.fillRect(x, frame.y, 3 * scale, height, item.color, 1);
-      this.addText(item.label, x + 9 * scale, frame.y + 5 * scale, { fontSize: 9 * scale, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
+      this.addText(item.label, x + 9 * scale, frame.y + 5 * scale, { fontSize: labelFontSize, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
       this.addText(item.value, x + 9 * scale, frame.y + 28 * scale, { fontSize: 16 * scale, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
+      if (thumbTag && item.hand === this.missThumbHand) {
+        const tagX = x + 9 * scale + labelSpan + thumbTag.gap;
+        const tagY = frame.y + 5 * scale + (labelFontSize - thumbTag.fontSize) * 0.5;
+        this.addText(thumbTag.text, tagX, tagY, {
+          fontSize: thumbTag.fontSize,
+          fill: this.missThumbTagHovered ? "#ffffff" : item.color,
+          alpha: this.missThumbTagHovered ? 0.95 : 0.85,
+          fontWeight: "700",
+        });
+        // Generous hit area: the whole label row from the tag to the box edge.
+        this.missThumbTagHitbox = {
+          x: tagX - 3 * scale,
+          y: frame.y,
+          width: boxWidth - (tagX - x) + 3 * scale,
+          height: 16 * scale,
+        };
+      }
     });
+  }
+
+  private isMissThumbTagPoint(x: number, y: number): boolean {
+    const tag = this.missThumbTagHitbox;
+    if (!tag || this.hideHud) return false;
+    return x >= tag.x && x <= tag.x + tag.width && y >= tag.y && y <= tag.y + tag.height;
+  }
+
+  private setMissThumbTagHovered(hovered: boolean) {
+    if (this.missThumbTagHovered === hovered) return;
+    this.missThumbTagHovered = hovered;
+    if (!this._isPlaying) this.render();
   }
 
   private getHandAccuracyRows() {
