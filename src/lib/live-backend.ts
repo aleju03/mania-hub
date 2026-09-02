@@ -105,7 +105,9 @@ export interface LivePlayerDanEvidencePlay {
 export interface LivePlayerDanSkillsetEvidence {
   id: string;
   clears: number;
-  dan: { rawDan: number; label: string; beyondTable?: boolean } | null;
+  /** headlineCapped: this tile sits further from the anchor tile than the
+   *  headline lets one tile pull it, so it moved the headline by the cap only. */
+  dan: { rawDan: number; label: string; beyondTable?: boolean; headlineCapped?: boolean } | null;
   plays: LivePlayerDanEvidencePlay[];
 }
 
@@ -165,6 +167,9 @@ export interface LivePlayerDanEvidence {
   totalClears: number;
   clears: LivePlayerDanEvidencePlay[];
   skillsets: LivePlayerDanSkillsetEvidence[];
+  /** The skillset the headline follows (7K LN: General); null or absent on
+   *  sides whose headline is the plain mean of their skillsets. */
+  anchorSkillset?: string | null;
   /** Present only when the read asked for it (`includeRejected`). */
   rejected?: LivePlayerDanRejectedPlay[];
   /** How many rejected plays this side has, before the page cap. */

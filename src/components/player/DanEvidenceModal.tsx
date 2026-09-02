@@ -205,6 +205,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         color,
         dan: evidence.dan,
         clears: evidence.totalClears,
+        headlineCapped: false,
         plays: moreClears.plays.length > 0 ? [...evidence.clears, ...moreClears.plays] : evidence.clears,
       },
       ...evidence.skillsets.map((skillset) => {
@@ -216,10 +217,18 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           dan: skillset.dan,
           clears: skillset.clears,
           plays: skillset.plays,
+          headlineCapped: skillset.dan?.headlineCapped === true,
         };
       }),
     ]
     : [];
+  // 7K LN's headline follows General rather than averaging the four tiles,
+  // because the scene makes almost no release (or inverse) charts near the
+  // top and those tiles top out where the maps do. Named here so the caveat
+  // under the columns can say which tile the estimate follows.
+  const anchorSection = evidence?.anchorSkillset
+    ? sections.find((section) => section.id === evidence.anchorSkillset) ?? null
+    : null;
   const openedSection = sections.find((section) => section.id === openSection) ?? null;
   // The loading state stands in for the same column strip the loaded window
   // opens on, so nothing jumps when the estimate lands. Only 7K LN has skill
@@ -428,6 +437,17 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                               ? t`${section.clears}/${averageWindow} plays`
                               : t`${section.clears} plays`}
                           </span>
+                          {/* This tile sits too far from the anchor tile to
+                              pull the estimate its whole distance; the number
+                              above is still its own. */}
+                          {section.headlineCapped ? (
+                            <span
+                              className="text-[10px] italic text-osu-f1"
+                              title={t`Too far under ${anchorSection?.label ?? ""} to count its whole distance`}
+                            >
+                              <Trans>capped</Trans>
+                            </span>
+                          ) : null}
                           {open ? (
                             <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
                           ) : null}
@@ -443,6 +463,14 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                         Each skillset is the average of your {averageWindow} best clears in it. With
                         fewer than {averageWindow} it averages what you have, so the number is less
                         accurate until you reach {averageWindow}.
+                      </Trans>
+                    </div>
+                  ) : null}
+                  {anchorSection && sections.length > 2 ? (
+                    <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                      <Trans>
+                        The estimate starts at your {anchorSection.label} dan. The other skillsets
+                        can pull it up or down, but never by more than one level.
                       </Trans>
                     </div>
                   ) : null}

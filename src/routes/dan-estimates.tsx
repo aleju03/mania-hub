@@ -228,7 +228,7 @@ function DanEstimatesPage() {
               chart: tracking never notices you are playing, so nothing from that session is recorded
               either.{' '}
               <a
-                href="#what-the-number-is-not"
+                href="#limitations"
                 className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
               >
                 Why that is
@@ -371,20 +371,13 @@ function DanEstimatesPage() {
               same time.
             </Trans>
           </P>
-          <P>
-            <Trans>
-              The split matters because the two say nothing about each other. Accuracy on an LN chart is
-              earned almost entirely on the holds and the releases, so passing it is not evidence about
-              your regular level, and the other way around.
-            </Trans>
-          </P>
         </Section>
 
         <Section title={t`Step 3: which of your plays count`}>
           <P>
             <Trans>
               The pool is your osu! top plays, everything recorded while you were tracked, and any score
-              links added manually, deduplicated down to your best play on each chart at each speed.
+              links added manually, keeping only your best play on each chart at each speed.
               Automatic history below your top plays only exists if you are on your country's roster,
               which is its top 100 plus anyone who turned tracking on themselves, and it starts the day
               tracking does. Charts flagged as vibro are thrown out everywhere, because the rating
@@ -422,13 +415,6 @@ function DanEstimatesPage() {
           <CreditCurveTabs />
           <P>
             <Trans>
-              A sub-bar credit is always at least a step under the chart's own level, so a near miss
-              never reads as the full clear. On 4K LN that step is at least three quarters of a
-              level.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
               Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x,
               at <ModPill mod="DT" /> or <ModPill mod="NC" /> (1.5x), at <ModPill mod="HT" /> or{' '}
               <ModPill mod="DC" /> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited
@@ -459,36 +445,15 @@ function DanEstimatesPage() {
               Some charts are two of those things at once, and those count in both. A chart lands in two
               skills when the reading is genuinely split between speed and tech, or when it is a jack chart
               long enough that the endurance is half of what it asks for, which puts it in jack and stamina.
-              About one 4K chart in nine is one of these. A pass on a chart like that counts toward both
-              skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a
-              skill you already have and cannot start one on its own.
+              A pass on a chart like that counts toward both skills' levels, but only toward the four-pass
+              minimum of the stronger one, so it can raise a skill you already have and cannot start one
+              on its own.
             </Trans>
           </P>
           <P>
             <Trans>
-              Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is
-              jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to
-              jack. It replaces the MSD choice rather than adding to it.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill,
-              which feels a lot more like tech than like speed, so pairing it with Stream put charts like
-              Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real
-              gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide
-              margin.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Speed and tech are told apart by the notes rather than by the ratings. On dense charts
-              Stream and Technical rate within a fraction of each other and whichever edges ahead is close
-              to a coin flip, so the chart analysis measures the movement instead: how much of the chart is
-              two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against
-              how much of it rolls across the hands. Checked against 738 charts from 170 named speed and
-              tech practice packs, with whole packs held out of the check, that reading agrees with the pack
-              names far more often than the ratings alone do. When it is not sure, the chart counts as both.
+              Speed and tech are told apart by how the chart is played rather than by the ratings, and
+              when the reading is not sure the chart counts as both.
             </Trans>
           </P>
           <P>
@@ -553,30 +518,19 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              It used to be the 4th best pass across all your skills at once, and in practice that was
-              just whatever you specialise in. Measured across 12,974 4K regular estimates,
-              the old number sat a median of 0.14 levels above the player's single strongest skill, and
-              84% of players were within half a level of theirs. It was measuring your best pattern and
-              calling that your dan. A real course does not work that way: it makes you clear a mix in
-              one sitting. Averaging asks the same question.
+              7K LN is the one exception. Its General skill already mixes every kind of long note, so
+              the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or
+              down by at most one level in total. The reason is the maps: very few Release or Inverse
+              maps exist near the top, so those dans stop where the maps stop. A skill held back this
+              way is marked capped in the dan window; its own number is untouched.
             </Trans>
           </P>
           <P>
             <Trans>
               Skills you do not have four passes in are left out of the average rather than counted as
               zero, because a missing skill is nearly always a short play history rather than a hole in
-              your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past
-              200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K
-              regular estimates, at a median of 23 analysed plays - are read off the same average over
+              your playing. Players with fewer than two rated skills are read off the same average over
               their 20 best passes overall.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              How much this moves you depends on how uneven your skills are, which is the point. The typical
-              4K player drops about a level, and the gap between a player's best and worst skill runs a
-              median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be
-              invisible.
             </Trans>
           </P>
         </Section>
@@ -592,11 +546,9 @@ function DanEstimatesPage() {
           </P>
           <P>
             <Trans>
-              It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is
-              beyond you is still an open question, so if your skills already average higher, the
-              average stands. The skill rows underneath are untouched either way, which is why they can
-              read lower than the number above them. A course throws a mix at you, so it cannot tell you
-              which of your skills got you through it.
+              It only ever raises the number. If your skills already average higher, the average stands.
+              The skill rows underneath are untouched either way, which is why they can read lower than
+              the number above them.
             </Trans>
           </P>
           <P>
@@ -620,9 +572,7 @@ function DanEstimatesPage() {
             <Trans>
               A few difficulties inside those packs are left out, because they sit below the first level
               their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN
-              Phase I. None of this changes how a chart is rated either. The estimator never looks at
-              what a map is called or who made it; the list above exists at your end of the calculation,
-              not the chart's, and all it does is credit you with a course you actually passed.
+              Phase I.
             </Trans>
           </P>
           <P>
@@ -640,16 +590,7 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section id="what-the-number-is-not" title={t`What the number is not`}>
-          <P>
-            <Trans>
-              No ladder recognizes this number, and titles still only come from clearing a real course.
-              A player who never farms accuracy will land below their
-              actual level. The number can also change on its own, because the rating engines and the
-              chart analysis get updated, and when a recompute moves a chart up or down a level,
-              everyone whose passes rely on that chart moves with it.
-            </Trans>
-          </P>
+        <Section id="limitations" title={t`Limitations`}>
           <P>
             <Trans>
               The estimate only sees scores it has. Your osu! top plays are always included, and history

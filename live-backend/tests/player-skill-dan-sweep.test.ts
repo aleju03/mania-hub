@@ -354,7 +354,7 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v23'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v24'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
@@ -374,7 +374,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
     // A job queued by older code is guarded at execution time too.
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v23'", [])).rows).toHaveLength(0);
+    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v24'", [])).rows).toHaveLength(0);
 
     await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);

@@ -56,14 +56,19 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v22 (current): no pipeline change at all - the bump exists so the
+// v23 (current): stores every mod acronym beside each rated play, rather than
+// only the rate mod, so the Skills play lists can show and filter the exact
+// mod combination (MR/DA/etc. as well as DT/HT). SSR values and eligibility
+// are unchanged, so every earlier post-v15 row remains a sound compute seed.
+//
+// v22: no pipeline change at all - the bump exists so the
 // version-stale drip re-walks the roster after MinaCalc gained 5K and 8-18K
 // (MSD_SUPPORTED_KEYS). Rows recomputed between the v21 deploy and that one are
 // stamped current but hold no mode outside 4/6/7K, and the drip only picks
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 22;
+export const PLAYER_SKILLS_VERSION = 23;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -85,7 +90,7 @@ export const PLAYER_SKILLS_VERSION = 22;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -473,6 +478,13 @@ export interface PlayerSkillDanVerdict {
   label: string;
   clears: number;
   /**
+   * On a skillset verdict of an anchored side: this tile sits further from
+   * the anchor tile than the headline lets one tile pull it, so the headline
+   * took the capped distance rather than the whole (anchoredSkillsetDans).
+   * The tile's own number is untouched. Absent everywhere else.
+   */
+  headlineCapped?: boolean;
+  /**
    * The estimate sits at or above the top of this keymode's dan table, so the
    * label is the ladder's last level and the real level is at least that (6K
    * regular stops at 9th, so a stronger player pins there). Absent means the
@@ -619,10 +631,17 @@ export interface PlayerSkillPlay {
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;
+  // Every mod acronym the score carried. Optional only for stored plays from
+  // before v23 whose score payload has already aged out; an empty array is a
+  // known NoMod play and is deliberately distinct from an absent value.
+  mods?: string[];
   // "DT" | "NC" | "HT" | "DC" when the play's own mods are still known; null on
   // plays cached before the field existed (and on unmodded plays), where the
   // rate alone has to stand in.
   rateMod: string | null;
+  // The OD Difficulty Adjust set, so the DA badge can say what it changed.
+  // Null when the play carried no DA or set no OD.
+  daOd: number | null;
   // The play's highest non-Overall MSD skillset. A skillset list ranks by one
   // component of every play, so a dense LN file can lead "top Chordjack plays"
   // purely by riding a big overall (MinaCalc reads stacked hold heads as
@@ -696,6 +715,10 @@ export interface StoredPlaySsr {
   // of the clear evidence; retained plays cached before the field existed stay
   // undefined and their consumers fall back to the rate's sign.
   rateMod?: string | null;
+  // Full score mod list for play-card badges and filtering. Optional because
+  // retained pre-v23 evidence may no longer have a raw score to backfill from;
+  // [] is known NoMod, while undefined means the mod combination is unknown.
+  mods?: string[];
   // True when EZ widened the play's hit windows (ezWindowScale > 1, both
   // clients). The wife goal already prices that in for the skill rating, but
   // a dan clear is accuracy against the bar, so these plays credit no dan.
@@ -2064,6 +2087,64 @@ function averageSkillsetDans(
   };
 }
 
+// How far one tile may sit from the anchor tile before the headline stops
+// following it (levels), and how much of that capped distance the headline
+// takes. The pull is applied to the mean of the other tiles' capped distances,
+// so with three other tiles the whole of them can move the headline by at most
+// DAN_ANCHOR_CLAMP * DAN_ANCHOR_PULL = one level either way.
+//
+// Measured over the local corpus on 2026-09-01 (scripts/dev/ln-anchor-impact.ts,
+// 1,543 rated 7K LN sides): Release sits a median 3.75 levels UNDER General
+// among the 203 players who have the tile at all, 80% of them two or more
+// under, and the gap widens with level (median -0.4 under General 6, -2.8 at
+// 6-9, -4.3 at 9-12, -5.2 at 12-15) while Tech tracks General within 0.14.
+// That is chart supply, not skill: the scene makes few release charts and
+// almost none at the top, so a release tile's window fills from what exists
+// (median 6 of its 20 clears) and tops out where the maps do. Under a plain
+// mean a player at zenith on General, Tech and Inverse with a 10 on Release
+// printed azimuth. Anchored, 115 of 1,168 uncoursed 7K LN sides change label,
+// every one upward, by up to 2.05 levels; the median side does not move.
+const DAN_ANCHOR_CLAMP = 2;
+const DAN_ANCHOR_PULL = 0.5;
+
+/**
+ * The headline of a side whose buckets declare an anchor tile: the anchor's
+ * own dan, pulled toward the other rated tiles by DAN_ANCHOR_PULL of their
+ * mean distance from it, each distance capped at DAN_ANCHOR_CLAMP. A tile the
+ * cap bit is flagged headlineCapped in place so the modal can say so.
+ *
+ * Null when the side has no anchor, the anchor tile is not rated, or fewer
+ * than DAN_SKILLSET_AVERAGE_MIN_BUCKETS tiles are rated: those sides keep the
+ * plain mean or the side-wide average, exactly as before.
+ */
+function anchoredSkillsetDans(
+  skillsets: Record<string, PlayerSkillDanVerdict>,
+  clearDans: number[],
+  side: "rc" | "ln",
+  keyCount: number,
+  buckets: DanSkillsetBucket[],
+): PlayerSkillDanVerdict | null {
+  const anchorId = buckets.find((bucket) => bucket.anchor)?.id;
+  const anchor = anchorId == null ? undefined : skillsets[anchorId];
+  if (anchorId == null || anchor == null) return null;
+  const others = Object.entries(skillsets).filter(([id]) => id !== anchorId);
+  if (others.length + 1 < DAN_SKILLSET_AVERAGE_MIN_BUCKETS) return null;
+  let distance = 0;
+  for (const [id, verdict] of others) {
+    const raw = verdict.rawDan - anchor.rawDan;
+    const capped = Math.max(-DAN_ANCHOR_CLAMP, Math.min(DAN_ANCHOR_CLAMP, raw));
+    if (capped !== raw) skillsets[id] = { ...verdict, headlineCapped: true };
+    distance += capped;
+  }
+  const rawDan = Math.round((anchor.rawDan + DAN_ANCHOR_PULL * (distance / others.length)) * 100) / 100;
+  return {
+    rawDan,
+    label: danLabelFor(rawDan, side, keyCount),
+    clears: clearDans.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
+    ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
+  };
+}
+
 /**
  * One side's whole verdict: the skillset dans and the headline averaged from
  * them. Shared by the stored compute and the on-demand evidence window so the
@@ -2097,7 +2178,9 @@ function danSideFromClears(
     const bucketDan = danFromClears(bucketClears.map((clear) => clear.creditedDan), side, keyCount);
     if (bucketDan) skillsets[id] = bucketDan;
   }
-  const headline = averageSkillsetDans(skillsets, clearDans, side, keyCount) ?? quorumDan;
+  const headline = anchoredSkillsetDans(skillsets, clearDans, side, keyCount, danSkillsetBuckets(keyCount, side))
+    ?? averageSkillsetDans(skillsets, clearDans, side, keyCount)
+    ?? quorumDan;
   const withCourse = applyDanCourseFloor(headline, best, side, keyCount, clearDans);
   // A course clear hands the player the level outright, so a floored headline
   // has no window left to fill and carries none.
@@ -2430,6 +2513,7 @@ export async function computePlayerSkillRatings(
       missShare: getMissShare(score.statistics),
       endedAt: score.ended_at ?? score.created_at ?? null,
       rateMod: getRateModAcronym(score.mods),
+      mods: getModAcronyms(score.mods, false),
       ezWindows: ezWindowScale(score) > 1,
       odOverride: difficultyAdjustOd(score.mods),
     };
@@ -3221,6 +3305,21 @@ async function readPlayerSkillPlayStatuses(db: Db, beatmapIds: number[]): Promis
 
 const RATE_MOD_ACRONYMS = new Set(["DT", "NC", "HT", "DC"]);
 
+function storedModAcronyms(mods: unknown): string[] | undefined {
+  if (!Array.isArray(mods)) return undefined;
+  const acronyms: string[] = [];
+  const seen = new Set<string>();
+  for (const value of mods) {
+    if (typeof value !== "string") continue;
+    const acronym = value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,8}$/.test(acronym) || seen.has(acronym)) continue;
+    seen.add(acronym);
+    acronyms.push(acronym);
+    if (acronyms.length >= 32) break;
+  }
+  return acronyms;
+}
+
 function buildPlayerSkillPlay(
   play: StoredPlaySsr,
   rating: number,
@@ -3232,6 +3331,11 @@ function buildPlayerSkillPlay(
   const scoreId = officialId ? Number(officialId[1]) : null;
   const accuracy = Number(play.accuracy);
   const pp = Number(play.pp);
+  const mods = storedModAcronyms(play.mods);
+  const storedRateMod = String(play.rateMod ?? "");
+  const rateMod = RATE_MOD_ACRONYMS.has(storedRateMod)
+    ? storedRateMod
+    : mods?.find((mod) => RATE_MOD_ACRONYMS.has(mod)) ?? null;
   return {
     beatmapId: play.beatmapId,
     beatmapsetId: map?.beatmapsetId ?? null,
@@ -3250,7 +3354,9 @@ function buildPlayerSkillPlay(
     playedAt: typeof play.endedAt === "string" && Number.isFinite(Date.parse(play.endedAt)) ? play.endedAt : null,
     source: play.source === "top" ? "top" : "tracked",
     scoreId: scoreId != null && Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
-    rateMod: RATE_MOD_ACRONYMS.has(String(play.rateMod ?? "")) ? String(play.rateMod) : null,
+    ...(mods ? { mods } : {}),
+    rateMod,
+    daOd: typeof play.odOverride === "number" && Number.isFinite(play.odOverride) ? play.odOverride : null,
     topSkillset: dominantSkillset(play.values),
   };
 }
@@ -3291,7 +3397,8 @@ export interface PlayerSkillDanSkillsetEvidence {
   clears: number;
   // This skillset's own best-clears average, one of the terms the headline
   // dan averages; null while the skillset has fewer than quorum clears.
-  dan: { rawDan: number; label: string } | null;
+  // headlineCapped: see PlayerSkillDanVerdict.
+  dan: { rawDan: number; label: string; headlineCapped?: boolean } | null;
   plays: PlayerSkillDanEvidencePlay[];
 }
 
@@ -3368,6 +3475,8 @@ export interface PlayerSkillDanEvidence {
   totalClears: number;
   clears: PlayerSkillDanEvidencePlay[];
   skillsets: PlayerSkillDanSkillsetEvidence[];
+  /** The tile the headline follows (DanSkillsetBucket.anchor), null on sides that average. */
+  anchorSkillset: string | null;
   /** Present only when a course clear set this side's headline. */
   courseClear: PlayerSkillDanCourseEvidence | null;
   /** Present only when the read asked for it (`includeRejected`). */
@@ -3416,6 +3525,13 @@ interface DanSkillsetBucket {
    * chordjack over-firing where chordstream under-fired.
    */
   clusterFamily?: "jack" | "stream" | "tech";
+  /**
+   * This tile is the side's anchor: the headline follows it and the other
+   * tiles only nudge it (anchoredSkillsetDans). Declared where one tile
+   * already samples every skill the others isolate, so the isolated tiles
+   * cannot contradict it on chart supply alone.
+   */
+  anchor?: boolean;
 }
 
 /**
@@ -3522,7 +3638,9 @@ function danSkillsetBuckets(keyCount: number, side: "rc" | "ln"): DanSkillsetBuc
   if (side === "ln") {
     if (keyCount === 7) {
       return [
-        { id: "lngeneral", tags: ["lngeneral", "ln"] },
+        // General wears the bare "ln" tag too, so it holds the side's whole
+        // body of LN work and anchors the headline (anchoredSkillsetDans).
+        { id: "lngeneral", tags: ["lngeneral", "ln"], anchor: true },
         { id: "lntech", tags: ["lntech"] },
         { id: "lninverse", tags: ["lninverse"] },
         { id: "lnrelease", tags: ["lnrelease"] },
@@ -3966,7 +4084,9 @@ export async function getPlayerSkillDanEvidence(
       return {
         id: bucket.id,
         clears: list.length,
-        dan: skillsetDan ? { rawDan: skillsetDan.rawDan, label: skillsetDan.label } : null,
+        dan: skillsetDan
+          ? { rawDan: skillsetDan.rawDan, label: skillsetDan.label, ...(skillsetDan.headlineCapped ? { headlineCapped: true } : {}) }
+          : null,
         plays: list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => toEvidencePlay(clear, bucket.id)),
       };
     })
@@ -3984,6 +4104,7 @@ export async function getPlayerSkillDanEvidence(
     totalClears: clears.length,
     clears: topClears.map((clear) => toEvidencePlay(clear)),
     skillsets,
+    anchorSkillset: buckets.find((bucket) => bucket.anchor)?.id ?? null,
     courseClear: courseSource ? toCourseEvidence(courseSource, side, keyCount, metadata) : null,
     ...(rejectSink
       ? {
@@ -5033,7 +5154,11 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v23 (current): a 4K stamina marathon whose base skillset is the speed/tech
+// v24 (current): 7K LN's headline follows the General tile, with the other
+// three tiles pulling it by at most a level between them
+// (anchoredSkillsetDans, 2026-09-01). Only the fold over stored tiles
+// changes, so this is the same plays_json re-derivation as every earlier bump.
+// v23: a 4K stamina marathon whose base skillset is the speed/tech
 // axis and whose notes read tech now files under tech as well
 // (resolveTilesForClear, 2026-09-01). Nothing about a play's rating or credit
 // moves, only which tiles a stored clear is evidence for, so the fold is the
@@ -5054,7 +5179,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v23";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v24";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

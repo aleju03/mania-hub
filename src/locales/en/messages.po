@@ -1342,9 +1342,9 @@ msgstr "{username} is around <0>{0}</0>"
 msgid "{username} is beyond <0>{0}</0>"
 msgstr "{username} is beyond <0>{0}</0>"
 
-#: src/routes/player/$username.tsx
-msgid "{username} isn't tracked, so only their ranked plays are rated here"
-msgstr "{username} isn't tracked, so only their ranked plays are rated here"
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "{username} isn't tracked, so only their ranked plays are rated here"
+#~ msgstr "{username} isn't tracked, so only their ranked plays are rated here"
 
 #: src/routes/player/$username.tsx
 #~ msgid "{username} isn't tracked, so only their ranked plays are rated here. Loved and graveyard plays count once a player is tracked, or when added with Add a missing score."
@@ -1506,6 +1506,10 @@ msgstr "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total}
 msgid "<0>{selectedCount}</0> selected"
 msgstr "<0>{selectedCount}</0> selected"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+msgid "<0>{username} isn't tracked</0>, so only their ranked plays are rated here. Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+msgstr "<0>{username} isn't tracked</0>, so only their ranked plays are rated here. Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+
 #: src/routes/discord.tsx
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
@@ -1578,9 +1582,17 @@ msgstr "<0>Page</0><1/><2>of {totalPages}</2>"
 msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "<0>top {0}%</0> of {1} tracked {2}K mains"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
+msgstr "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
 #~ msgstr "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
+
+#: src/components/player/SkillsUntrackedNotice.tsx
+msgid "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
+msgstr "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -1747,6 +1759,14 @@ msgid "7K LN"
 msgstr "7K LN"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate follows your General dan, and Tech, Inverse and Release only nudge it: each moves it by half its distance from General, that distance is capped at two levels, and the three are averaged, so together they move it by at most one level either way. The reason is the maps, not the players. Very few Release or Inverse maps exist near the top, so those dans stop where the maps stop: Release sits a median of 3.75 levels under General among the players who have it rated, and 5.2 levels under once General reaches azimuth. Under a plain average, three skills at zenith and a Release at 10 read as azimuth. A skill the cap bit is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate follows your General dan, and Tech, Inverse and Release only nudge it: each moves it by half its distance from General, that distance is capped at two levels, and the three are averaged, so together they move it by at most one level either way. The reason is the maps, not the players. Very few Release or Inverse maps exist near the top, so those dans stop where the maps stop: Release sits a median of 3.75 levels under General among the players who have it rated, and 5.2 levels under once General reaches azimuth. Under a plain average, three skills at zenith and a Release at 10 read as azimuth. A skill the cap bit is marked capped in the dan window; its own number is untouched."
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+
+#: src/routes/dan-estimates.tsx
 msgid "7K regular"
 msgstr "7K regular"
 
@@ -1831,8 +1851,12 @@ msgid "A dan course is a fixed set of charts, played back to back in one sitting
 msgstr "A dan course is a fixed set of charts, played back to back in one sitting, with an accuracy bar you have to finish above. Clearing the course awards you that level. Each keymode has its own community ladder, run by different people: 4K regular uses DDMythical's Reform courses, 4K LN uses the _Underjoy courses, 7K uses the JinJin courses, and 6K has two of its own, Arkman's ladder on the regular side and sunnyxxy's on the LN side."
 
 #: src/routes/dan-estimates.tsx
-msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
-msgstr "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
+msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I."
+msgstr "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
+#~ msgstr "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
@@ -1925,8 +1949,8 @@ msgid "A snipe is one country's player overtaking another on a board, so it only
 msgstr "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 
 #: src/routes/dan-estimates.tsx
-msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
-msgstr "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
+#~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
+#~ msgstr "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 
 #: src/routes/farm-helper.tsx
 msgid "a while"
@@ -2155,6 +2179,7 @@ msgid "added"
 msgstr "added"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Adding you…"
 msgstr "Adding you…"
@@ -2995,6 +3020,10 @@ msgstr "Cancel"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Canvas unavailable."
 msgstr "Canvas unavailable."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "capped"
+msgstr "capped"
 
 #: src/lib/signature-shared.ts
 msgid "Card"
@@ -3993,6 +4022,7 @@ msgid "Couldn't start the comparison"
 msgstr "Couldn't start the comparison"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "Couldn't turn on tracking right now. Try again in a moment."
@@ -5885,8 +5915,8 @@ msgstr "How many plays of the same chart the list may repeat"
 #~ msgstr "How much this moves you depends on how lopsided you are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 
 #: src/routes/dan-estimates.tsx
-msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
-msgstr "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+#~ msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+#~ msgstr "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 
 #: src/routes/maps.tsx
 msgid "How to pick"
@@ -6162,16 +6192,20 @@ msgstr "It may have been taken down, or it is still waiting for approval."
 #~ msgstr "It moves over time, because the rating engines and the chart analysis keep getting improved, and a recompute that shifts a chart by a step shifts everyone whose evidence sat on that chart."
 
 #: src/routes/dan-estimates.tsx
-msgid "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
-msgstr "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
+#~ msgid "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
+#~ msgstr "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It only ever raises the number. Clearing epsilon proves epsilon is within reach, not that zeta is out of it, so if your skills already average above the course you cleared, the average stands. The skill rows underneath are left alone either way, which is why they can read lower than the headline sitting above them. A course is a mix rather than one pattern, so it says nothing about which of your skills carried it."
 #~ msgstr "It only ever raises the number. Clearing epsilon proves epsilon is within reach, not that zeta is out of it, so if your skills already average above the course you cleared, the average stands. The skill rows underneath are left alone either way, which is why they can read lower than the headline sitting above them. A course is a mix rather than one pattern, so it says nothing about which of your skills carried it."
 
 #: src/routes/dan-estimates.tsx
-msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
-msgstr "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+msgid "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
+msgstr "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+#~ msgstr "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs - it was not a summary of your playing, it was your best pattern restated. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
@@ -6283,8 +6317,8 @@ msgid "Jumpstream"
 msgstr "Jumpstream"
 
 #: src/routes/dan-estimates.tsx
-msgid "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
-msgstr "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+#~ msgid "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+#~ msgstr "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "jumpstream, warmup, ..."
@@ -6618,6 +6652,10 @@ msgstr "Liked"
 msgid "lime"
 msgstr "lime"
 
+#: src/routes/dan-estimates.tsx
+msgid "Limitations"
+msgstr "Limitations"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Link"
@@ -6924,8 +6962,8 @@ msgid "Log in to see your data"
 msgstr "Log in to see your data"
 
 #: src/routes/player/$username.tsx
-msgid "Log in to track yourself"
-msgstr "Log in to track yourself"
+#~ msgid "Log in to track yourself"
+#~ msgstr "Log in to track yourself"
 
 #: src/routes/skins.tsx
 msgid "Log in to upload"
@@ -7017,9 +7055,9 @@ msgstr "loved"
 msgid "Loved"
 msgstr "Loved"
 
-#: src/routes/player/$username.tsx
-msgid "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
-msgstr "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+#~ msgstr "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Low PP"
@@ -7919,8 +7957,8 @@ msgstr "No key data"
 #~ msgstr "No ladder recognizes this number, and titles still come from clearing a real course. It also makes a poor ranking, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It is not fixed either: the rating engines and the chart analysis keep getting better, and a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
 
 #: src/routes/dan-estimates.tsx
-msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
-msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+#~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+#~ msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
@@ -11340,6 +11378,10 @@ msgstr "Signed in as"
 msgid "Signed in as {0}"
 msgstr "Signed in as {0}"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
+#~ msgstr "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
+
 #: src/routes/player/$username.tsx
 msgid "Sim busy day"
 msgstr "Sim busy day"
@@ -11420,8 +11462,8 @@ msgid "Skills"
 msgstr "Skills"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
-msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
+#~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
+#~ msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
@@ -11430,6 +11472,10 @@ msgstr "Skills you do not have four passes in are left out of the average rather
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
 #~ msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
+
+#: src/routes/dan-estimates.tsx
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
+msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -11541,8 +11587,12 @@ msgid "Solid"
 msgstr "Solid"
 
 #: src/routes/dan-estimates.tsx
-msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
-msgstr "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+msgstr "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+#~ msgstr "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
 
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -11630,8 +11680,12 @@ msgid "Speed"
 msgstr "Speed"
 
 #: src/routes/dan-estimates.tsx
-msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
-msgstr "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
+msgid "Speed and tech are told apart by how the chart is played rather than by the ratings, and when the reading is not sure the chart counts as both."
+msgstr "Speed and tech are told apart by how the chart is played rather than by the ratings, and when the reading is not sure the chart counts as both."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
+#~ msgstr "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
 
 #: src/components/maps/SearchCard.tsx
 msgid "Speedjack"
@@ -11642,8 +11696,8 @@ msgstr "Speedjack"
 #~ msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice instead of counting in two skills."
 
 #: src/routes/dan-estimates.tsx
-msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
-msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
+#~ msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
+#~ msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -12626,6 +12680,16 @@ msgstr "The engine gives back a continuous number, and the number is what everyt
 msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts. A {barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less."
 msgstr "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts. A {barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less."
 
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "The estimate follows {0}. The other skillsets move it by at most one level in total, because few hard maps are made for them, and a skillset marked capped sits too far below to count its whole distance."
+#~ msgstr "The estimate follows {0}. The other skillsets move it by at most one level in total, because few hard maps are made for them, and a skillset marked capped sits too far below to count its whole distance."
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "The estimate follows {0}. The other skillsets move it by at most one level in total."
+#~ msgstr "The estimate follows {0}. The other skillsets move it by at most one level in total."
+
 #: src/routes/dan-estimates.tsx
 msgid "The estimate only sees scores it has. Your osu! top plays are always included, and history below them is recorded automatically while you are tracked. Missing older scores are not permanently lost: open the Skills tab on your profile, choose <0>Add a missing score</0>, and paste the osu! score link. A player who quit years ago may start with a low estimate from their top 200 alone, but qualifying old clears can be added instead of replayed."
 msgstr "The estimate only sees scores it has. Your osu! top plays are always included, and history below them is recorded automatically while you are tracked. Missing older scores are not permanently lost: open the Skills tab on your profile, choose <0>Add a missing score</0>, and paste the osu! score link. A player who quit years ago may start with a low estimate from their top 200 alone, but qualifying old clears can be added instead of replayed."
@@ -12633,6 +12697,11 @@ msgstr "The estimate only sees scores it has. Your osu! top plays are always inc
 #: src/routes/dan-estimates.tsx
 #~ msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+msgstr "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
@@ -12700,8 +12769,12 @@ msgstr "the player's"
 #~ msgstr "The pool is your osu! top plays plus everything recorded while you were tracked, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
 
 #: src/routes/dan-estimates.tsx
-msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
-msgstr "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+#~ msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+#~ msgstr "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+
+#: src/routes/dan-estimates.tsx
+msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, keeping only your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+msgstr "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, keeping only your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
@@ -12886,8 +12959,8 @@ msgid "The skins list could not be loaded."
 msgstr "The skins list could not be loaded."
 
 #: src/routes/dan-estimates.tsx
-msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
-msgstr "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
+#~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
+#~ msgstr "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -13019,6 +13092,7 @@ msgid "This collection is gone, or the link is wrong."
 msgstr "This collection is gone, or the link is wrong."
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "This country's opt-in list is full right now. Check back later."
@@ -13255,6 +13329,11 @@ msgstr "Toggles"
 msgid "too easy"
 msgstr "too easy"
 
+#. placeholder {0}: anchorSection?.label ?? ""
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Too far under {0} to count its whole distance"
+msgstr "Too far under {0} to count its whole distance"
+
 #: src/routes/farm-helper.tsx
 msgid "too hard"
 msgstr "too hard"
@@ -13383,6 +13462,7 @@ msgid "tournaments, mapping, casual"
 msgstr "tournaments, mapping, casual"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Track my plays"
 msgstr "Track my plays"
@@ -13408,6 +13488,10 @@ msgstr "Tracked runs on {0}"
 #: src/components/layout/Nav.tsx
 msgid "tracker"
 msgstr "tracker"
+
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Tracking is on"
+#~ msgstr "Tracking is on"
 
 #: src/components/me/TrackingToasts.tsx
 msgid "tracking on"
@@ -14148,8 +14232,8 @@ msgid "What seems wrong?"
 msgstr "What seems wrong?"
 
 #: src/routes/dan-estimates.tsx
-msgid "What the number is not"
-msgstr "What the number is not"
+#~ msgid "What the number is not"
+#~ msgstr "What the number is not"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -14422,8 +14506,8 @@ msgid "you're logged out, log in again to save marks"
 msgstr "you're logged out, log in again to save marks"
 
 #: src/routes/player/$username.tsx
-msgid "You're not tracked, so only your ranked plays are rated here"
-msgstr "You're not tracked, so only your ranked plays are rated here"
+#~ msgid "You're not tracked, so only your ranked plays are rated here"
+#~ msgstr "You're not tracked, so only your ranked plays are rated here"
 
 #: src/routes/player/$username.tsx
 #~ msgid "You're not tracked, so only your ranked plays are rated here. Loved and graveyard plays count once you're tracked, or when added with Add a missing score."
@@ -14472,6 +14556,7 @@ msgid "Your best score on the last map someone showed in the channel (from /rece
 msgstr "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
 msgstr "Your country isn't tracked yet, so there's nothing to record your plays against."
@@ -14528,6 +14613,10 @@ msgstr "Your plays"
 msgid "Your plays are being recorded now"
 msgstr "Your plays are being recorded now"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Your plays are not being tracked yet"
+#~ msgstr "Your plays are not being tracked yet"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
 msgstr "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
@@ -14540,9 +14629,9 @@ msgstr "Your private skins"
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Your private skins are on the shelf above; anything you publish lands here."
 
-#: src/routes/player/$username.tsx
-msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
-msgstr "Your recent plays are being pulled in and will be rated here in a few minutes."
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
+#~ msgstr "Your recent plays are being pulled in and will be rated here in a few minutes."
 
 #: src/routes/player/$username.tsx
 msgid "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."

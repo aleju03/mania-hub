@@ -451,6 +451,7 @@ describe("computePlayerSkillRatings", () => {
       // The OD it set rides on the stored play, which is what the dan floor
       // reads; a DA that left the slider alone sets no override.
       expect(top.plays[0].odOverride).toBe(9);
+      expect(top.plays[0].mods).toEqual(["DA"]);
       const untouched = await computePlayerSkillRatings(
         db,
         failingOsu,
@@ -1329,6 +1330,51 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("follows the General tile on 7K LN and caps how far a thin subtype tile can pull it", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // Four general charts at 13 (zenith) and four release charts at 9: the
+      // arcwinolivirus shape, where the scene has no release charts near the
+      // top and a plain mean printed azimuth under three zenith tiles.
+      const seed = async (beatmapId: number, tag: string, rawDan: number) => exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (?, ?, 'ready', ?, ?)`,
+        [beatmapId, CHART_ANALYSIS_VERSION,
+          JSON.stringify({ lnRatio: 0.8, patterns: [{ id: tag, score: 0.9 }], ln: { rawDan } }), new Date().toISOString()],
+      );
+      for (const id of [321, 322, 323, 324]) await seed(id, "lngeneral", 13);
+      for (const id of [325, 326, 327, 328]) await seed(id, "lnrelease", 9);
+      for (const id of [329, 330, 331, 332]) await seed(id, "lntech", 12.5);
+      const { danSideFromClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const ids = Array.from({ length: 12 }, (_, index) => 321 + index);
+      const info = await loadChartSkillInfo(db, ids);
+      const clearPlay = (beatmapId: number) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 7, rate: 1, goal: 0.95, pp: 100,
+        values: { Overall: 25 }, patterns: [], accuracy: 0.96, stableAccuracy: 0.96,
+      });
+
+      const side = danSideFromClearsForTest(7, "ln", ids.slice(0, 8).map(clearPlay), info)!;
+      expect(side.skillsets?.lngeneral?.rawDan).toBe(13);
+      expect(side.skillsets?.lnrelease?.rawDan).toBe(9);
+      // General 13, release four under: the headline takes half of a capped
+      // two, not half of four, and never the plain mean (11).
+      expect(side.rawDan).toBe(12);
+      expect(side.skillsets?.lnrelease?.headlineCapped).toBe(true);
+      expect(side.skillsets?.lngeneral?.headlineCapped).toBeUndefined();
+
+      // A tile inside the cap pulls by half its real distance and is not flagged.
+      const near = danSideFromClearsForTest(7, "ln", [...ids.slice(0, 4), ...ids.slice(8)].map(clearPlay), info)!;
+      expect(near.skillsets?.lntech?.rawDan).toBe(12.5);
+      expect(near.rawDan).toBe(12.75);
+      expect(near.skillsets?.lntech?.headlineCapped).toBeUndefined();
+
+      // All three: the capped release and the near tech average their pulls.
+      const all = danSideFromClearsForTest(7, "ln", ids.map(clearPlay), info)!;
+      expect(all.rawDan).toBe(12.38);
+    });
+  });
+
   it("floors the side estimate at a verified dan course clear without touching the skillsets", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
@@ -2169,7 +2215,7 @@ describe("getPlayerSkillPlays", () => {
       // tag here and cannot reach the top LN plays surface.
       const plays = [
         { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95, pp: 200, values: { Overall: 22, Stream: 24 }, patterns: ["stream"], source: "top", accuracy: 0.97, endedAt: "2026-08-01T00:00:00Z" },
-        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z", rateMod: "NC" },
+        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z", rateMod: "NC", mods: ["NC", "MR", "DA"] },
         { identity: "official:3", beatmapId: 103, keyCount: 7, rate: 1, goal: 0.94, pp: 250, values: { Overall: 30, Stream: 31 }, patterns: ["stream"], source: "top", accuracy: 0.96, endedAt: "2026-08-03T00:00:00Z" },
         { identity: "official:4", beatmapId: 104, keyCount: 4, rate: 1, goal: 0.97, pp: 210, values: { Overall: 27, Stream: 20 }, patterns: ["stamina"], source: "top", accuracy: 0.99, endedAt: "2026-08-04T00:00:00Z" },
       ];
@@ -2196,12 +2242,14 @@ describe("getPlayerSkillPlays", () => {
         // The play's own mod, not one inferred from the rate: 1.5x alone
         // cannot say whether the audio was pitched.
         rateMod: "NC",
+        mods: ["NC", "MR", "DA"],
       });
 
       const second = await getPlayerSkillPlays(db, 99, 4, "Stream", { limit: 1, offset: 1 });
       // Cached before the mod was stored beside the rate: null, and consumers
       // fall back to the rate's sign rather than a made-up acronym.
       expect(second.items[0]).toMatchObject({ beatmapId: 101, rating: 24, rateMod: null });
+      expect(second.items[0].mods).toBeUndefined();
 
       const ln = await getPlayerSkillPlays(db, 99, 4, "pattern:ln");
       // The LN list is exactly the ln-tagged plays, ranked by Overall, so it

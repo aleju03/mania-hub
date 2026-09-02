@@ -1351,9 +1351,9 @@ msgstr "{username} 大约在 <0>{0}</0>"
 msgid "{username} is beyond <0>{0}</0>"
 msgstr "{username} 高于 <0>{0}</0>"
 
-#: src/routes/player/$username.tsx
-msgid "{username} isn't tracked, so only their ranked plays are rated here"
-msgstr "{username} 没有被追踪，所以这里只评了 ranked 成绩"
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "{username} isn't tracked, so only their ranked plays are rated here"
+#~ msgstr "{username} 没有被追踪，所以这里只评了 ranked 成绩"
 
 #: src/routes/player/$username.tsx
 #~ msgid "{username} isn't tracked, so only their ranked plays are rated here. Loved and graveyard plays count once a player is tracked, or when added with Add a missing score."
@@ -1515,6 +1515,10 @@ msgstr "已评分成绩中有 <0>{percent}%</0> 是 LN 谱面（{lnPlays}/{total
 msgid "<0>{selectedCount}</0> selected"
 msgstr "已选 <0>{selectedCount}</0> 个"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+msgid "<0>{username} isn't tracked</0>, so only their ranked plays are rated here. Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+msgstr ""
+
 #: src/routes/discord.tsx
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> 会把每个新的 {country} 最佳成绩发到运行该命令的频道里。其他 feed 还有狙击和新刷分谱面，<1>min_pp</1> 可以跳过低于阈值的成绩。<2>/subscriptions</2> 列出服务器已启用的 feed，<3>/unsubscribe</3> 停止其中一个。订阅需要「管理服务器」权限。"
@@ -1587,9 +1591,17 @@ msgstr "<0>第</0><1/><2>页 / 共 {totalPages} 页</2>"
 msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "在已追踪的 {1} 名 {2}K 主玩家中位列<0>前 {0}%</0>"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>Unranked plays only count once the site knows you are playing.</0> It finds that out from your first score on a ranked, qualified or loved chart. After that it checks your recent plays every couple of minutes until you stop, and everything you play in that window counts, unranked charts included. Start on a graveyard map and none of it is kept until that first leaderboard score lands."
 #~ msgstr "<0>未上架谱面的成绩要等本站知道你在玩才算数。</0> 它靠你在上架、过审或社区喜爱谱面上的第一个成绩来判断。之后每隔几分钟检查一次你的最近成绩，直到你停下为止，这段时间里你打的一切都会计入，未上架的谱面也算。如果你从坟场谱面开打，在第一个带排行榜的成绩出现之前，什么都不会保留。"
+
+#: src/components/player/SkillsUntrackedNotice.tsx
+msgid "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
+msgstr ""
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -1756,6 +1768,14 @@ msgid "7K LN"
 msgstr "7K LN"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate follows your General dan, and Tech, Inverse and Release only nudge it: each moves it by half its distance from General, that distance is capped at two levels, and the three are averaged, so together they move it by at most one level either way. The reason is the maps, not the players. Very few Release or Inverse maps exist near the top, so those dans stop where the maps stop: Release sits a median of 3.75 levels under General among the players who have it rated, and 5.2 levels under once General reaches azimuth. Under a plain average, three skills at zenith and a Release at 10 read as azimuth. A skill the cap bit is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以估计值以你的 General 段位为准，Tech、Inverse 和 Release 只会小幅推动它：每项按它与 General 差距的一半推动，差距最多按两个段位计算，三项取平均，因此三项合计最多让它变动一个段位。原因在于谱面，而不是玩家。顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步：在有 Release 评级的玩家中，Release 中位数比 General 低 3.75 个段位，General 达到 azimuth 后则低 5.2 个段位。按简单平均，三项 zenith 加一项 Release 10 段会读作 azimuth。被封顶的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以估计值从你的 General 段位出发，Tech、Inverse 和 Release 合计最多把它拉高或拉低一个段位。原因在于谱面：顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+
+#: src/routes/dan-estimates.tsx
 msgid "7K regular"
 msgstr "7K 单点"
 
@@ -1840,8 +1860,12 @@ msgid "A dan course is a fixed set of charts, played back to back in one sitting
 msgstr "一个段位课题是一组固定的谱面，一口气连着打完，最后准确率要高于一条线。通过课题就拿到那个段位。每种键数都有自己的社区段位表，各由不同的人维护：4K 单点用 DDMythical 的 Reform 段位表，4K LN 用 _Underjoy 的段位表，7K 用 JinJin 的段位表，6K 自己有两套，单点这边是 Arkman 的，LN 这边是 sunnyxxy 的。"
 
 #: src/routes/dan-estimates.tsx
-msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
-msgstr "这些图包里有几个难度没被算进来，因为它们低于各自段位系统能测到的第一级：REFORM 的三个 INTRO 课题，以及 Jinjin LN Phase I 的 0 段到 2 段。这一切同样不会改变谱面本身怎么评级。估算器从不看一张图叫什么、是谁做的；上面这份名单在计算的你这一端，而不是谱面那一端，它做的只是把你真正打过的课题记在你名下。"
+msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I."
+msgstr "这些图包里有几个难度没被算进来，因为它们低于各自段位系统能测到的第一级：REFORM 的三个 INTRO 课题，以及 Jinjin LN Phase I 的 0 段到 2 段。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "A few difficulties inside those packs are left out, because they sit below the first level their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN Phase I. None of this changes how a chart is rated either. The estimator never looks at what a map is called or who made it; the list above exists at your end of the calculation, not the chart's, and all it does is credit you with a course you actually passed."
+#~ msgstr "这些图包里有几个难度没被算进来，因为它们低于各自段位系统能测到的第一级：REFORM 的三个 INTRO 课题，以及 Jinjin LN Phase I 的 0 段到 2 段。这一切同样不会改变谱面本身怎么评级。估算器从不看一张图叫什么、是谁做的；上面这份名单在计算的你这一端，而不是谱面那一端，它做的只是把你真正打过的课题记在你名下。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A few passes are left out of the average: up to three in a skill that sit more than five levels below the average of your best five in it. That is usually an easy map you played for accuracy rather than anything that measures your level. They still show in the dan window, marked <0>not counted</0>. Never more than three, and never enough to take a skill under the four passes it needs, so a genuinely wide spread of passes still averages in full."
@@ -1934,8 +1958,8 @@ msgid "A snipe is one country's player overtaking another on a board, so it only
 msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
 
 #: src/routes/dan-estimates.tsx
-msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
-msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
+#~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
+#~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
 
 #: src/routes/farm-helper.tsx
 msgid "a while"
@@ -2164,6 +2188,7 @@ msgid "added"
 msgstr "已添加"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Adding you…"
 msgstr "正在加入…"
@@ -3004,6 +3029,10 @@ msgstr "取消"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Canvas unavailable."
 msgstr "画布不可用。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "capped"
+msgstr "已封顶"
 
 #: src/lib/signature-shared.ts
 msgid "Card"
@@ -4002,6 +4031,7 @@ msgid "Couldn't start the comparison"
 msgstr "无法开始对比"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "现在无法开启追踪。请稍后再试。"
@@ -5886,8 +5916,8 @@ msgstr "同一张谱面在列表中最多重复几次成绩"
 #~ msgstr "同一张谱面在列表中最多重复几次成绩。点击可切换。"
 
 #: src/routes/dan-estimates.tsx
-msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
-msgstr "这个改动对你影响多大，取决于你有多偏科，而这正是重点所在。典型的 4K 玩家会掉一级左右。玩家最强与最弱技能之间的差距，中位数是 1.7 级，到 90 分位则达到 4.3 级，而这个差距过去是完全看不见的。"
+#~ msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
+#~ msgstr "这个改动对你影响多大，取决于你有多偏科，而这正是重点所在。典型的 4K 玩家会掉一级左右。玩家最强与最弱技能之间的差距，中位数是 1.7 级，到 90 分位则达到 4.3 级，而这个差距过去是完全看不见的。"
 
 #: src/routes/maps.tsx
 msgid "How to pick"
@@ -6163,16 +6193,20 @@ msgstr "它可能已被下架，或者还在等待审核。"
 #~ msgstr "它会随时间变动，因为评分算法和谱面分析一直在改进，一次重算把某张谱面挪动一级，靠这张谱面作为依据的所有人也会跟着动。"
 
 #: src/routes/dan-estimates.tsx
-msgid "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
-msgstr "它只会把数字往上抬。通过 epsilon 说明你打得动 epsilon；zeta 是不是超出你的能力，仍然没有答案，所以如果你的技能平均值本来就更高，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的数字低。课题扔给你的是一套混合内容，所以它说不出是哪个技能把你带过去的。"
+#~ msgid "It only ever raises the number. Clearing epsilon means you can do epsilon; whether zeta is beyond you is still an open question, so if your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them. A course throws a mix at you, so it cannot tell you which of your skills got you through it."
+#~ msgstr "它只会把数字往上抬。通过 epsilon 说明你打得动 epsilon；zeta 是不是超出你的能力，仍然没有答案，所以如果你的技能平均值本来就更高，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的数字低。课题扔给你的是一套混合内容，所以它说不出是哪个技能把你带过去的。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It only ever raises the number. Clearing epsilon proves epsilon is within reach, not that zeta is out of it, so if your skills already average above the course you cleared, the average stands. The skill rows underneath are left alone either way, which is why they can read lower than the headline sitting above them. A course is a mix rather than one pattern, so it says nothing about which of your skills carried it."
 #~ msgstr "它只会把数字往上抬。通过 epsilon 说明 epsilon 在你能力之内，并不说明 zeta 不在，所以如果你的技能平均值本来就高于你通过的课题，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的总评低。课题考的是混合而不是单一型式，所以它说不出是哪个技能把你带过去的。"
 
 #: src/routes/dan-estimates.tsx
-msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
-msgstr "旧算法会把所有技能混在一起，取第四好的通过成绩；实际结果通常只是你最擅长的谱型。对 12,974 个 4K 单点估算进行测量后，旧数值比玩家最强的单项技能高出 0.14 级（中位数），84% 的玩家与自己的最强技能相差不到半级。它其实是在测你最强的谱型，却把结果叫作你的段位。真正的课题不会这样：它要求你一次打完多种谱型。取平均值问的是同一个问题。"
+msgid "It only ever raises the number. If your skills already average higher, the average stands. The skill rows underneath are untouched either way, which is why they can read lower than the number above them."
+msgstr "它只会把数字往上抬。如果你的技能平均值本来就更高，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的数字低。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
+#~ msgstr "旧算法会把所有技能混在一起，取第四好的通过成绩；实际结果通常只是你最擅长的谱型。对 12,974 个 4K 单点估算进行测量后，旧数值比玩家最强的单项技能高出 0.14 级（中位数），84% 的玩家与自己的最强技能相差不到半级。它其实是在测你最强的谱型，却把结果叫作你的段位。真正的课题不会这样：它要求你一次打完多种谱型。取平均值问的是同一个问题。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs - it was not a summary of your playing, it was your best pattern restated. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
@@ -6284,8 +6318,8 @@ msgid "Jumpstream"
 msgstr "双押切"
 
 #: src/routes/dan-estimates.tsx
-msgid "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
-msgstr "把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
+#~ msgid "Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
+#~ msgstr "把 Jumpstream 放进技是有意为之。MinaCalc 的 Jumpstream 在密集对拍上会飙得很高，而那种谱面打起来更像技而不是速度，所以一旦把它和 Stream 归在一起，Blastix Riotz [GRAVITY] 这类谱面就会被贴到速度那一格。拿一个装了 25 张真正 gamma 速度谱的谱包来验证，只用 Stream 能把这 25 张全部选中，并且以很大的差距把对拍谱排除掉。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "jumpstream, warmup, ..."
@@ -6619,6 +6653,10 @@ msgstr "已喜欢"
 msgid "lime"
 msgstr "柠檬绿"
 
+#: src/routes/dan-estimates.tsx
+msgid "Limitations"
+msgstr "限制"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Link"
@@ -6925,8 +6963,8 @@ msgid "Log in to see your data"
 msgstr "登录后查看你的数据"
 
 #: src/routes/player/$username.tsx
-msgid "Log in to track yourself"
-msgstr "登录以追踪自己"
+#~ msgid "Log in to track yourself"
+#~ msgstr "登录以追踪自己"
 
 #: src/routes/skins.tsx
 msgid "Log in to upload"
@@ -7018,9 +7056,9 @@ msgstr "社区喜爱"
 msgid "Loved"
 msgstr "社区喜爱"
 
-#: src/routes/player/$username.tsx
-msgid "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
-msgstr "社区喜爱和坟场谱面的成绩只有在被追踪之后才会进入本站，或者由某人通过“添加缺失的成绩”添加。"
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Loved and graveyard plays only reach this site through tracking, or when someone adds them with Add a missing score."
+#~ msgstr "社区喜爱和坟场谱面的成绩只有在被追踪之后才会进入本站，或者由某人通过“添加缺失的成绩”添加。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Low PP"
@@ -7920,8 +7958,8 @@ msgstr "无键数数据"
 #~ msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。它当排名也不好用，段位榜上差一级的两个人并没有真的差一级，从不刷准度的人看起来会比实际水平低。它也不是定死的：评级算法和谱面分析一直在改进，一次重算把某张谱面挪一级，就会带动所有把证据压在这张谱面上的人。"
 
 #: src/routes/dan-estimates.tsx
-msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
-msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
+#~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. A player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+#~ msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
@@ -11341,6 +11379,10 @@ msgstr "当前登录为"
 msgid "Signed in as {0}"
 msgstr "当前登录为 {0}"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
+#~ msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "Sim busy day"
 msgstr "模拟高强度一天"
@@ -11421,8 +11463,8 @@ msgid "Skills"
 msgstr "技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
-msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人按同样的平均来读，取全部通过里最好的 20 次。"
+#~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 20 best passes overall."
+#~ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人按同样的平均来读，取全部通过里最好的 20 次。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - are read off the same average over their 5 best passes overall."
@@ -11431,6 +11473,10 @@ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按
 #: src/routes/dan-estimates.tsx
 #~ msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Below 25 analysed plays only 18% of 4K players have two skills rated; past 200 plays every single one does. Players with fewer than two rated skills - 7.6% of the 4K regular estimates, at a median of 23 analysed plays - keep the old rule and are read off their 4th best pass overall."
 #~ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。已分析成绩不到 25 个时，只有 18% 的 4K 玩家能评出两个技能；超过 200 个之后，每一个玩家都能。评出的技能不到两个的玩家占 4K 单点估算的 7.6%，他们的已分析成绩中位数是 23 个，这部分人仍按旧规则来，取全部通过里第四好的那次。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
+msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。评出的技能不到两个的玩家按同样的平均来读，取全部通过里最好的 20 次。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -11542,8 +11588,12 @@ msgid "Solid"
 msgstr "纯色"
 
 #: src/routes/dan-estimates.tsx
-msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
-msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能。当速度与技之间的判断确实难分伯仲，或者一张叠谱长到耐力已占了一半的要求（这会同时归入叠和耐力）时，谱面就会落在两个技能里。大约每九张 4K 谱面就有一张是这种情况。这类通过会同时计入两个技能的等级，但只计入其中较强一方的四次通过门槛，因此它能拉高你已有的技能，却无法凭一己之力开启一个新技能。"
+msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能。当速度与技之间的判断确实难分伯仲，或者一张叠谱长到耐力已占了一半的要求（这会同时归入叠和耐力）时，谱面就会落在两个技能里。这类通过会同时计入两个技能的等级，但只计入其中较强一方的四次通过门槛，因此它能拉高你已有的技能，却无法凭一己之力开启一个新技能。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
+#~ msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能。当速度与技之间的判断确实难分伯仲，或者一张叠谱长到耐力已占了一半的要求（这会同时归入叠和耐力）时，谱面就会落在两个技能里。大约每九张 4K 谱面就有一张是这种情况。这类通过会同时计入两个技能的等级，但只计入其中较强一方的四次通过门槛，因此它能拉高你已有的技能，却无法凭一己之力开启一个新技能。"
 
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -11631,8 +11681,12 @@ msgid "Speed"
 msgstr "速度"
 
 #: src/routes/dan-estimates.tsx
-msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
-msgstr "速度与技的区分靠的是音符本身，而不是评分。在高密度谱面上，Stream 和 Technical 的评分往往只差一点点，谁略微领先几乎是抛硬币的结果，所以谱面分析改为衡量动作：谱面中有多少是双键交互、小叠和不规则节奏（这些要靠转动手腕来打），又有多少是在两手之间铺开的楼梯。在来自 170 个速度与技练习包的 738 张谱面上验证过，且验证时会整包排除在外，这种判断与包名吻合的比例远高于只看评分。当它无法确定时，该谱面会同时计入两者。"
+msgid "Speed and tech are told apart by how the chart is played rather than by the ratings, and when the reading is not sure the chart counts as both."
+msgstr "速度与技的区分靠的是谱面怎么打，而不是评分；当无法确定时，该谱面会同时计入两者。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
+#~ msgstr "速度与技的区分靠的是音符本身，而不是评分。在高密度谱面上，Stream 和 Technical 的评分往往只差一点点，谁略微领先几乎是抛硬币的结果，所以谱面分析改为衡量动作：谱面中有多少是双键交互、小叠和不规则节奏（这些要靠转动手腕来打），又有多少是在两手之间铺开的楼梯。在来自 170 个速度与技练习包的 738 张谱面上验证过，且验证时会整包排除在外，这种判断与包名吻合的比例远高于只看评分。当它无法确定时，该谱面会同时计入两者。"
 
 #: src/components/maps/SearchCard.tsx
 msgid "Speedjack"
@@ -11643,8 +11697,8 @@ msgstr "速叠"
 #~ msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是让同一次通过计入两个技能。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
-msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是在其之上再加一项。"
+#~ msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
+#~ msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是在其之上再加一项。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -12627,6 +12681,16 @@ msgstr "算法给回来的是一个连续的数值，后面所有东西用的都
 msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts. A {barAccuracyPercent}%+ pass credits the chart's full level; anything under that credits less."
 msgstr "在已评定段位的谱面上取得 {quorum} 次准确率 {minAccuracyPercent}% 以上的通过后，就会给出估算。准确率 {barAccuracyPercent}% 以上的通过按谱面的完整段位计入，低于这条线的计入会更少。"
 
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "The estimate follows {0}. The other skillsets move it by at most one level in total, because few hard maps are made for them, and a skillset marked capped sits too far below to count its whole distance."
+#~ msgstr ""
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "The estimate follows {0}. The other skillsets move it by at most one level in total."
+#~ msgstr "估计值以{0}为准。其他技能合计最多只能让它变动一个段位。"
+
 #: src/routes/dan-estimates.tsx
 msgid "The estimate only sees scores it has. Your osu! top plays are always included, and history below them is recorded automatically while you are tracked. Missing older scores are not permanently lost: open the Skills tab on your profile, choose <0>Add a missing score</0>, and paste the osu! score link. A player who quit years ago may start with a low estimate from their top 200 alone, but qualifying old clears can be added instead of replayed."
 msgstr "估算只能看到本站已有的成绩。你的 osu! 最佳成绩一定会计入；低于它们的历史成绩，会在你被追踪期间自动记录。缺失的旧成绩并非永远丢失：打开个人主页的“技能”标签页，选择 <0>添加缺失的成绩</0>，再粘贴 osu! 成绩链接。退坑多年的玩家一开始可能只靠 top 200 而估算偏低，但符合条件的旧通过可以直接补上，不必重打。"
@@ -12634,6 +12698,11 @@ msgstr "估算只能看到本站已有的成绩。你的 osu! 最佳成绩一定
 #: src/routes/dan-estimates.tsx
 #~ msgid "The estimate only sees the recorded pool. Your osu! top plays are always included. Anything below them is included only while you are tracked, which happens if you are in your country's top 100 or if you turn tracking on yourself, and only from that day onward. A player who quit years ago is judged on their top 200 alone, so their estimate comes out low."
 #~ msgstr "估算只能读取已记录的成绩池。你的 osu! 最佳成绩始终会被计入，更低的成绩只有在你被追踪期间才会计入：你进入所在国家/地区前 100 名或自行开启追踪后才会被追踪，而且只从当天开始。已经退坑多年的玩家只能按其前 200 个最佳成绩估算，因此结果会偏低。"
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+msgstr "估计值从你的{0}段位出发。其他技能可以把它拉高或拉低，但最多不超过一个段位。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
@@ -12701,7 +12770,11 @@ msgstr "该玩家的"
 #~ msgstr "成绩池由你的 osu! 最佳成绩和追踪期间记录的所有成绩组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后才有追踪得到的那部分数据；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+#~ msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, deduplicated down to your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
+#~ msgstr "成绩池由你的 osu! 最佳成绩、追踪期间记录的所有成绩，以及手动添加的成绩链接组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后，最佳成绩以下的历史成绩才会被自动记录；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
+
+#: src/routes/dan-estimates.tsx
+msgid "The pool is your osu! top plays, everything recorded while you were tracked, and any score links added manually, keeping only your best play on each chart at each speed. Automatic history below your top plays only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
 msgstr "成绩池由你的 osu! 最佳成绩、追踪期间记录的所有成绩，以及手动添加的成绩链接组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后，最佳成绩以下的历史成绩才会被自动记录；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
@@ -12887,8 +12960,8 @@ msgid "The skins list could not be loaded."
 msgstr "皮肤列表加载失败。"
 
 #: src/routes/dan-estimates.tsx
-msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
-msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
+#~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
+#~ msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -13020,6 +13093,7 @@ msgid "This collection is gone, or the link is wrong."
 msgstr "这个收藏册不在了，或者链接不对。"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
@@ -13256,6 +13330,11 @@ msgstr "开关"
 msgid "too easy"
 msgstr "太简单"
 
+#. placeholder {0}: anchorSection?.label ?? ""
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Too far under {0} to count its whole distance"
+msgstr "比{0}低太多，不会按全部差距计算"
+
 #: src/routes/farm-helper.tsx
 msgid "too hard"
 msgstr "太难"
@@ -13384,6 +13463,7 @@ msgid "tournaments, mapping, casual"
 msgstr "比赛、制谱、休闲"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Track my plays"
 msgstr "追踪我的成绩"
@@ -13409,6 +13489,10 @@ msgstr "{0} 上已追踪的成绩"
 #: src/components/layout/Nav.tsx
 msgid "tracker"
 msgstr "追踪器"
+
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Tracking is on"
+#~ msgstr ""
 
 #: src/components/me/TrackingToasts.tsx
 msgid "tracking on"
@@ -14149,8 +14233,8 @@ msgid "What seems wrong?"
 msgstr "哪里看起来不对？"
 
 #: src/routes/dan-estimates.tsx
-msgid "What the number is not"
-msgstr "这个数字不是什么"
+#~ msgid "What the number is not"
+#~ msgstr "这个数字不是什么"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -14423,8 +14507,8 @@ msgid "you're logged out, log in again to save marks"
 msgstr "你已退出登录，重新登录后才能保存标记"
 
 #: src/routes/player/$username.tsx
-msgid "You're not tracked, so only your ranked plays are rated here"
-msgstr "你没有被追踪，所以这里只评了你的 ranked 成绩"
+#~ msgid "You're not tracked, so only your ranked plays are rated here"
+#~ msgstr "你没有被追踪，所以这里只评了你的 ranked 成绩"
 
 #: src/routes/player/$username.tsx
 #~ msgid "You're not tracked, so only your ranked plays are rated here. Loved and graveyard plays count once you're tracked, or when added with Add a missing score."
@@ -14473,6 +14557,7 @@ msgid "Your best score on the last map someone showed in the channel (from /rece
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
 msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的成绩。"
@@ -14529,6 +14614,10 @@ msgstr "你的成绩"
 msgid "Your plays are being recorded now"
 msgstr "你的成绩已经开始被记录"
 
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Your plays are not being tracked yet"
+#~ msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play."
 msgstr "你的成绩还没有被记录，因为你不在本国家/地区的前 100 名里。把自己加进追踪器，这个页面就活起来了：实时的成绩流、你的打法特征和各项记录。之后你还可以设定目标，打图时自动完成。"
@@ -14541,9 +14630,9 @@ msgstr "你的私有皮肤"
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在这里。"
 
-#: src/routes/player/$username.tsx
-msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
-msgstr "正在拉取你最近的成绩，几分钟后会在这里评分。"
+#: src/components/player/SkillsUntrackedNotice.tsx
+#~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
+#~ msgstr "正在拉取你最近的成绩，几分钟后会在这里评分。"
 
 #: src/routes/player/$username.tsx
 msgid "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."

@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-01", text: "7K LN dan now follows your General dan, and Tech, Inverse and Release can only move it by up to one level in total. Very few hard Release and Inverse maps exist, so those dans stop early and used to drag a zenith General down to azimuth", to: "/dan-estimates" },
   { date: "2026-09-01", text: "5K, 8K, 9K, 10K and every keymode above now show the same Etterna skillsets 4K has (Stream, Jumpstream, Chordjack...) instead of the site's own Chordstream, Bracket, Delay and so on, which were often wrong there. 4K, 6K and 7K are unchanged", to: "/my-stats" },
   { date: "2026-08-31", text: "Lowered the minimum accuracy a pass needs to count for dan: 91% on regular and 92% on 7K LN, worth less the lower they are", to: "/dan-estimates" },
   { date: "2026-08-31", text: "New No Dans switch in the settings filters tab to exclude everything dan-related from the website" },
