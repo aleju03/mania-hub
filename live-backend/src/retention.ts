@@ -36,7 +36,10 @@ function createRetentionPruner(): (prune: () => Promise<number>) => Promise<numb
   };
 }
 
-export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "rankSnapshotRetentionDays" | "activityRetentionYears" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes"> & SkinStorageConfig): Promise<Record<string, number>> {
+// `journalDb` is the journal database (journal.ts), where the event log and
+// the osu! call log live; it defaults to `db` for tests that keep every table
+// in one file.
+export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "rankSnapshotRetentionDays" | "activityRetentionYears" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes"> & SkinStorageConfig, journalDb: Db = db): Promise<Record<string, number>> {
   const scoreCutoff = daysAgo(config.scoreEventRetentionDays);
   const liveCutoff = daysAgo(config.liveEventRetentionDays);
   const doneJobCutoff = daysAgo(config.doneJobRetentionDays);
@@ -91,7 +94,7 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   const results = {
     skinsPendingExpired,
     scoreEvents: await prune(() => deleteInBatches(db, "score_events", "received_at < ?", [scoreCutoff])),
-    liveEvents: await prune(() => deleteInBatches(db, "live_event_log", "created_at < ?", [liveCutoff])),
+    liveEvents: await prune(() => deleteInBatches(journalDb, "live_event_log", "created_at < ?", [liveCutoff])),
     doneJobs: await prune(() => deleteInBatches(db, "jobs", "status = 'done' and updated_at < ?", [doneJobCutoff])),
     parkedOnDemandJobs: await prune(() => deleteInBatches(
       db,
@@ -101,7 +104,7 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
          and type in (${PARKED_ON_DEMAND_JOB_TYPES.map(() => "?").join(", ")})`,
       [parkedOnDemandCutoff, ...PARKED_ON_DEMAND_JOB_TYPES],
     )),
-    apiCalls: await prune(() => deleteInBatches(db, "api_call_log", "started_at < ?", [apiCutoff])),
+    apiCalls: await prune(() => deleteInBatches(journalDb, "api_call_log", "started_at < ?", [apiCutoff])),
     replayVideoJobs: await prune(() => deleteInBatches(db, "replay_video_exports", "status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff])),
     rankSnapshots: await prune(() => deleteInBatches(db, "country_rank_snapshots", "captured_at < ?", [rankSnapshotCutoff])),
     // With a window set, activity rolls off by calendar year, but the day alone
@@ -169,11 +172,11 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   return results;
 }
 
-export function startRetentionScheduler(db: Db, config: Config): () => void {
+export function startRetentionScheduler(db: Db, config: Config, journalDb: Db = db): () => void {
   let stopped = false;
   const tick = async () => {
     if (stopped) return;
-    await runRetention(db, config).catch((error) => {
+    await runRetention(db, config, journalDb).catch((error) => {
       console.warn("[retention] failed", error);
     });
     if (!stopped) setTimeout(tick, config.retentionIntervalMs).unref();
@@ -270,6 +273,8 @@ export interface StorageFootprint {
   dbShm: number | null;
   analytics: number | null;
   analyticsWal: number | null;
+  journal: number | null;
+  journalWal: number | null;
   backups: number | null;
   replayVideoWork: number | null;
 }
@@ -311,22 +316,25 @@ export async function getDbDiskUsage(config: Pick<Config, "databaseUrl">): Promi
 // so every path is derived defensively; a null means "not configured or absent"
 // (an absent replay-video work dir is the signal that it stayed disabled).
 export async function getStorageFootprint(
-  config: Pick<Config, "databaseUrl"> & Partial<Pick<Config, "analyticsDatabaseUrl" | "replayVideoWorkDir">>,
+  config: Pick<Config, "databaseUrl"> & Partial<Pick<Config, "analyticsDatabaseUrl" | "journalDatabaseUrl" | "replayVideoWorkDir">>,
 ): Promise<StorageFootprint> {
   const dbPath = localDbFilePath(config.databaseUrl);
   const analyticsPath = localDbFilePath(config.analyticsDatabaseUrl);
+  const journalPath = localDbFilePath(config.journalDatabaseUrl);
   const backupsDir = dbPath ? join(dirname(dbPath), BACKUPS_DIR_NAME) : null;
   const workDir = config.replayVideoWorkDir ? resolve(config.replayVideoWorkDir) : null;
-  const [db, dbWal, dbShm, analytics, analyticsWal, backups, replayVideoWork] = await Promise.all([
+  const [db, dbWal, dbShm, analytics, analyticsWal, journal, journalWal, backups, replayVideoWork] = await Promise.all([
     optionalFileSize(dbPath),
     optionalFileSize(dbPath && `${dbPath}-wal`),
     optionalFileSize(dbPath && `${dbPath}-shm`),
     optionalFileSize(analyticsPath),
     optionalFileSize(analyticsPath && `${analyticsPath}-wal`),
+    optionalFileSize(journalPath),
+    optionalFileSize(journalPath && `${journalPath}-wal`),
     optionalDirSize(backupsDir),
     optionalDirSize(workDir),
   ]);
-  return { db, dbWal, dbShm, analytics, analyticsWal, backups, replayVideoWork };
+  return { db, dbWal, dbShm, analytics, analyticsWal, journal, journalWal, backups, replayVideoWork };
 }
 
 // Index-building migrations can transiently need a large multiple of the table
@@ -734,9 +742,9 @@ async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<
 async function pruneForLocalDbLimit(db: Db, config: Pick<Config, "targetLocalDbBytes">, storage: LocalDbStorage): Promise<Record<string, number>> {
   const deleted: Record<string, number> = {};
   let currentBytes = (storage.bytes ?? 0) + (storage.walBytes ?? 0);
+  // The event log and the osu! call log live in the journal file now, so
+  // deleting them would not move this file's size.
   const prunePlan = [
-    ["api_call_log", "started_at"],
-    ["live_event_log", "created_at"],
     ["score_events", "received_at"],
     ["country_rank_snapshots", "captured_at"],
     ["jobs", "updated_at", "status in ('done', 'failed')"],

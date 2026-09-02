@@ -39,7 +39,7 @@ async function publishGoatPollChange(ctx: HttpContext, pollId: string, nomineeId
   try {
     const nominee = await getGoatPollNominee(ctx.db, pollId, nomineeId);
     if (!nominee) return;
-    await ctx.events.append("goat_poll", null, { pollId, nominee }, undefined, ctx.serveWriteDb ?? undefined);
+    await ctx.events.append("goat_poll", null, { pollId, nominee });
   } catch (error) {
     logWarn("goat_poll_event_failed", { pollId, nomineeId, error: error instanceof Error ? error.message : String(error) });
   }

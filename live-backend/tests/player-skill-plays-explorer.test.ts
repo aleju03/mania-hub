@@ -337,6 +337,22 @@ describe("getPlayerSkillPlays filters", () => {
     });
   });
 
+  it("labels a chart loved when only its metadata_json knows, and keeps a settled column over an in-flux JSON", async () => {
+    await withDb(async (db) => {
+      const { getPlayerSkillPlays } = await import("../src/features/player-skills.js");
+      await seed(db);
+      // 401: the column still says pending from first sight, the enrich job's JSON says loved.
+      await exec(db, `update beatmaps set status = 'pending', metadata_json = '{"status":"loved"}' where beatmap_id = 401`);
+      // 402: the farmed path moved the column to ranked while the JSON still says qualified.
+      await exec(db, `update beatmaps set metadata_json = '{"status":"qualified"}' where beatmap_id = 402`);
+      const page = await getPlayerSkillPlays(db, 77, 4, "Overall");
+      const byId = new Map(page.items.map((item) => [item.beatmapId, item.beatmapStatus]));
+      expect(byId.get(401)).toBe("loved");
+      expect(byId.get(402)).toBe("ranked");
+      expect(byId.get(403)).toBe("loved");
+    });
+  });
+
   it("caps the rates of one chart before the page is sliced, so no page comes back short", async () => {
     await withDb(async (db) => {
       const { getPlayerSkillPlays } = await import("../src/features/player-skills.js");

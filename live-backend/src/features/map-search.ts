@@ -698,6 +698,28 @@ export function buildMapStatusPropagationStatement(
   };
 }
 
+// Periodic backstop for the column itself. The API-backed enrich job used to
+// refresh only metadata_json on conflict, so a map that settled after it was
+// first stored kept its original column value (pending, or graveyard for a
+// revived set) while the JSON said loved. Every reader of beatmaps.status
+// (skill plays, tracker, my-data, the Discord feed) showed the stale label.
+// Copies a settled JSON status onto a column that is not settled; never the
+// reverse, so a fresher settled column survives an older in-flux JSON. Pure DB
+// work; returns the rows healed.
+export async function reconcileBeatmapStatusColumns(db: Db): Promise<number> {
+  const settled = SETTLED_MAP_STATUSES.map(() => "?").join(", ");
+  const result = await exec(
+    db,
+    `update beatmaps
+        set status = lower(json_extract(metadata_json, '$.status'))
+      where json_valid(metadata_json)
+        and lower(coalesce(json_extract(metadata_json, '$.status'), '')) in (${settled})
+        and lower(coalesce(status, '')) not in (${settled})`,
+    [...SETTLED_MAP_STATUSES, ...SETTLED_MAP_STATUSES],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
 // Periodic backstop: heal index rows still marked in-flux for maps the
 // beatmaps.status column already knows have settled (rows that went stale before
 // the propagation hook shipped, or after a full rebuild re-materialized the old

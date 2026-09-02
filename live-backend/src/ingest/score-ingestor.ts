@@ -388,7 +388,7 @@ export class ScoreIngestor {
       statements.push({
         sql: `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
               values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              on conflict(beatmap_id) do update set version = excluded.version, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`,
+              on conflict(beatmap_id) do update set version = excluded.version, status = excluded.status, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`,
         args: [score.beatmap.id, score.beatmap.beatmapset_id, score.beatmap.mode, score.beatmap.status ?? null, score.beatmap.cs, score.beatmap.difficulty_rating, score.beatmap.bpm, score.beatmap.max_combo ?? null, score.beatmap.version, score.beatmap.url, json(score.beatmap), now],
       });
     }

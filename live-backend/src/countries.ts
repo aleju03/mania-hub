@@ -230,11 +230,13 @@ export async function setCountryFeatureTier(
   return row;
 }
 
-export async function deleteCountryData(db: Db, country: string): Promise<Record<string, number>> {
+// `journalDb` is the journal database (journal.ts), home of live_event_log;
+// tests that keep every table in one file leave it defaulted.
+export async function deleteCountryData(db: Db, country: string, journalDb: Db = db): Promise<Record<string, number>> {
   const normalized = normalizeCountry(country);
   const deleted: Record<string, number> = {};
-  const deleteFrom = async (table: string, column = "country") => {
-    deleted[table] = Number((await exec(db, `delete from ${table} where ${column} = ?`, [normalized])).rowsAffected ?? 0);
+  const deleteFrom = async (table: string, column = "country", on: Db = db) => {
+    deleted[table] = Number((await exec(on, `delete from ${table} where ${column} = ?`, [normalized])).rowsAffected ?? 0);
   };
 
   await deleteFrom("country_registry");
@@ -262,7 +264,7 @@ export async function deleteCountryData(db: Db, country: string): Promise<Record
   await deleteFrom("player_activity_score_refs");
   await deleteFrom("player_activity_days");
   await deleteFrom("player_activity_maps");
-  await deleteFrom("live_event_log");
+  await deleteFrom("live_event_log", "country", journalDb);
   deleted.farm_helper_user_key_stats = Number((await exec(db, "delete from farm_helper_user_key_stats")).rowsAffected ?? 0);
   const mapsMetaDeleted = Number((await exec(
     db,

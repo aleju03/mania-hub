@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb, migrate } from "../src/db.js";
+import { adoptJournalFromMain, ensureJournalSchema } from "../src/journal.js";
 
 // Booting src/server.ts *as an entrypoint* is the only way to exercise its
 // top-level-await block: `import.meta.url === file://${process.argv[1]}` is
@@ -30,6 +31,12 @@ describe("server entrypoint boot", () => {
       // scratch database here: the child must get past waitForSchema and listen.
       const db = await createDb({ databaseUrl: `file:${join(dir, "boot.db")}`, sqliteCacheMb: 2, sqliteMmapMb: 0 });
       await migrate(db);
+      // Same for the journal: a server-role process waits for the worker's
+      // one-time adoption too.
+      const journal = await createDb({ databaseUrl: `file:${join(dir, "journal.db")}`, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+      await ensureJournalSchema(journal);
+      await adoptJournalFromMain(db, journal);
+      journal.close();
       db.close();
 
       child = spawn(process.execPath, ["--import", "tsx", "src/server.ts"], {
@@ -41,6 +48,7 @@ describe("server entrypoint boot", () => {
           // its DATABASE_URL pointing at the real, dev-server-held database).
           DATABASE_URL: `file:${join(dir, "boot.db")}`,
           ANALYTICS_DATABASE_URL: `file:${join(dir, "analytics.db")}`,
+          JOURNAL_DATABASE_URL: `file:${join(dir, "journal.db")}`,
           LIVE_BACKEND_ROLE: "server",
           PORT: String(port),
           NODE_ENV: "test",

@@ -1107,7 +1107,7 @@ export class WorkerRunner {
       this.db,
       `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       on conflict(beatmap_id) do update set metadata_json = excluded.metadata_json, version = excluded.version, updated_at = excluded.updated_at`,
+       on conflict(beatmap_id) do update set metadata_json = excluded.metadata_json, status = excluded.status, version = excluded.version, updated_at = excluded.updated_at`,
       [
         beatmapId,
         beatmapsetId,

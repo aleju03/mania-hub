@@ -11,11 +11,24 @@ export type EventSink = (event: LiveEvent) => void;
 
 const TAIL_BATCH_LIMIT = 200;
 
+/**
+ * The SSE event journal. Rows live in the journal database (journal.ts):
+ * `journal` is this process's read handle for tailing and replay, and
+ * `journalWriter` is what append() writes on (the serving process's coalesced
+ * write handle; the worker's plain one). `db` stays the main database, which
+ * replay needs to rehydrate compacted tracker-score and pack-pull payloads.
+ * Tests pass one connection for all three.
+ */
 export class LiveEventLog {
   private sinks = new Set<EventSink>();
   private tailing = false;
+  private readonly journal: Db;
+  private readonly journalWriter: Db;
 
-  constructor(private readonly db: Db) {}
+  constructor(private readonly db: Db, journal?: Db, journalWriter?: Db) {
+    this.journal = journal ?? db;
+    this.journalWriter = journalWriter ?? this.journal;
+  }
 
   subscribe(sink: EventSink): () => void {
     this.sinks.add(sink);
@@ -79,30 +92,32 @@ export class LiveEventLog {
     };
   }
 
-  // `via` lets a serving-process caller write through its dedicated write
-  // connection (HttpContext.serveWriteDb) instead of the read-serving one, per
-  // the never-write-on-the-serving-connection rule. Delivery is unaffected:
-  // the row lands in the same database, so the tail poller (server role) or
-  // the direct dispatch below (all role) picks it up either way.
-  async append(type: string, country: string | null, payload: unknown, eventId?: string, via?: Db): Promise<LiveEvent> {
-    const db = via ?? this.db;
+  async append(type: string, country: string | null, payload: unknown, eventId?: string): Promise<LiveEvent> {
     const createdAt = nowIso();
     const stableId = eventId ?? `${type}:${country ?? "global"}:${createdAt}:${Math.random().toString(36).slice(2)}`;
     const storedPayload = compactLiveEventPayload(type, country, payload);
     const result = await exec(
-      db,
+      this.journalWriter,
       `insert or ignore into live_event_log (event_id, type, country, payload_json, created_at)
        values (?, ?, ?, ?, ?)`,
       [stableId, type, country, json(storedPayload), createdAt],
     );
-    const row = (await exec(db, "select * from live_event_log where event_id = ?", [stableId])).rows[0];
-    const event = Number(result.rowsAffected ?? 0) > 0
-      ? rowToLiveEventWithPayload(row, payload)
-      : await this.rowToLiveEvent(row);
-    if (Number(result.rowsAffected ?? 0) > 0 && !this.tailing) {
-      this.dispatch(event);
+    if (Number(result.rowsAffected ?? 0) > 0) {
+      // One write, no read-back: the insert reports the sequence it took.
+      const event: LiveEvent = {
+        sequence: Number(result.lastInsertRowid),
+        event_id: stableId,
+        type,
+        country,
+        payload,
+        created_at: createdAt,
+      };
+      if (!this.tailing) this.dispatch(event);
+      return event;
     }
-    return event;
+    // A duplicate event id: hand back the row that already won.
+    const row = (await exec(this.journal, "select * from live_event_log where event_id = ?", [stableId])).rows[0];
+    return this.rowToLiveEvent(row);
   }
 
   /** `country` scopes the replay: null = every country, an array = any of them
@@ -113,7 +128,7 @@ export class LiveEventLog {
       ? `(country is null or country in (${codes.map(() => "?").join(",")}))`
       : "1 = 1";
     const result = await exec(
-      this.db,
+      this.journal,
       `select * from live_event_log
        where sequence > ? and ${countryClause}
        order by sequence asc
@@ -124,7 +139,7 @@ export class LiveEventLog {
   }
 
   async latestSequence(): Promise<number> {
-    const row = (await exec(this.db, "select coalesce(max(sequence), 0) as sequence from live_event_log")).rows[0];
+    const row = (await exec(this.journal, "select coalesce(max(sequence), 0) as sequence from live_event_log")).rows[0];
     return Number(row?.sequence ?? 0);
   }
 

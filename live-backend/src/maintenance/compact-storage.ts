@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { readConfig } from "../config.js";
 import { createDb, exec, json, migrate } from "../db.js";
+import { ensureJournalSchema } from "../journal.js";
 import { compactCountryMapsSnapshots } from "../features/maps.js";
 import { toStoredScoreEvent } from "../ingest/score-ingestor.js";
 import { compactLiveEventLogPayloadForStorage } from "../live/event-log.js";
@@ -26,8 +27,11 @@ const TMPFS_MAGIC = 0x01021994;
 const options = readOptions(process.argv.slice(2));
 const config = readConfig();
 const db = await createDb(config);
+// The event log and the osu! call log live in the journal database (journal.ts).
+const journalDb = await createDb({ databaseUrl: config.journalDatabaseUrl, sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs, sqliteCacheMb: 8, sqliteMmapMb: 0 });
 
 await migrate(db);
+await ensureJournalSchema(journalDb);
 
 // Checked up front rather than at the VACUUM itself: the compaction passes
 // below take the better part of an hour on a multi-GB database and free pages
@@ -197,7 +201,7 @@ async function compactLiveEventLog(batchSize: number): Promise<{ scanned: number
 
   while (true) {
     const rows = (await exec(
-      db,
+      journalDb,
       `select sequence, type, country, payload_json
        from live_event_log
        where type in ('tracker_score', 'pack_pull')
@@ -223,7 +227,7 @@ async function compactLiveEventLog(batchSize: number): Promise<{ scanned: number
         continue;
       }
       await exec(
-        db,
+        journalDb,
         "update live_event_log set payload_json = ? where sequence = ?",
         [json(compact), Number(row.sequence)],
       );
@@ -288,13 +292,13 @@ async function releaseMemory(): Promise<void> {
 
 async function compactApiCallLog(): Promise<{ compactedTargets: number; compactedRows: number }> {
   await exec(
-    db,
+    journalDb,
     `create index if not exists idx_api_call_log_compact_source
        on api_call_log(provider, caller, path)
        where target_id is null and (caller <> '' or path <> '')`,
   );
   const compactedTargets = Number((await exec(
-    db,
+    journalDb,
     `select count(*) as count
      from (
        select 1
@@ -305,7 +309,7 @@ async function compactApiCallLog(): Promise<{ compactedTargets: number; compacte
      )`,
   )).rows[0]?.count ?? 0);
   await exec(
-    db,
+    journalDb,
     `insert or ignore into api_call_targets (provider, caller, path)
      select provider, caller, path
      from api_call_log
@@ -314,7 +318,7 @@ async function compactApiCallLog(): Promise<{ compactedTargets: number; compacte
      group by provider, caller, path`,
   );
   const result = await exec(
-    db,
+    journalDb,
     `update api_call_log
      set target_id = (
            select t.id
@@ -328,7 +332,7 @@ async function compactApiCallLog(): Promise<{ compactedTargets: number; compacte
      where target_id is null
        and (caller <> '' or path <> '')`,
   );
-  await exec(db, "drop index if exists idx_api_call_log_compact_source");
+  await exec(journalDb, "drop index if exists idx_api_call_log_compact_source");
 
   return { compactedTargets, compactedRows: Number(result.rowsAffected ?? 0) };
 }
@@ -337,7 +341,7 @@ async function pruneOrphanApiCallTargets(): Promise<{ pruned: number }> {
   let pruned = 0;
   while (true) {
     const result = await exec(
-      db,
+      journalDb,
       `delete from api_call_targets
        where id in (
          select t.id

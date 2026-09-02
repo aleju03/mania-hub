@@ -385,7 +385,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     if (pullResult.eventIds.length > 0) {
       try {
         for (const entry of await listPackPullsByIds(ctx.db, pullResult.eventIds)) {
-          await ctx.events.append("pack_pull", null, entry, `pack_pull:${entry.id}`, ctx.serveWriteDb);
+          await ctx.events.append("pack_pull", null, entry, `pack_pull:${entry.id}`);
         }
       } catch {
         // Covered by the poll backstop.

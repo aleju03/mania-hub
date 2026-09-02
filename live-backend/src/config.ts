@@ -1,4 +1,14 @@
+import { dirname, resolve } from "node:path";
+
 export type BackendRole = "all" | "server" | "worker";
+
+/** The journal database's default location: beside the main database file. */
+export function defaultJournalDatabaseUrl(databaseUrl: string): string {
+  if (!databaseUrl.startsWith("file:")) return "file:./data/mania-hub-journal.db";
+  const raw = databaseUrl.slice("file:".length);
+  if (!raw || raw === ":memory:") return "file:./data/mania-hub-journal.db";
+  return `file:${resolve(dirname(raw), "mania-hub-journal.db")}`;
+}
 
 export interface Config {
   port: number;
@@ -47,6 +57,16 @@ export interface Config {
   // never contends with the main serving DB.
   analyticsDatabaseUrl: string;
   analyticsRetentionDays: number;
+  // The journal: a second SQLite file for the hot append-only tables (osu!
+  // limiter reservations, osu! call log, SSE event log). Defaults to sitting
+  // beside the main database file. See journal.ts.
+  journalDatabaseUrl: string;
+  // Fixed batching window for the serving process's coalesced writer, on top
+  // of its batch-while-busy behaviour; 0 means flush on the next loop turn.
+  serveWriteCoalesceMs: number;
+  // Run the serving process's writes on a dedicated worker thread (compiled
+  // dist only; source mode always runs inline). Off = the old inline path.
+  enableServeWriteThread: boolean;
   osuClientId?: string;
   osuClientSecret?: string;
   oscBaseUrl: string;
@@ -331,6 +351,9 @@ export function readConfig(): Config {
     databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
     analyticsDatabaseUrl: process.env.ANALYTICS_DATABASE_URL ?? "file:./data/mania-hub-analytics.db",
     analyticsRetentionDays: readBoundedInt("ANALYTICS_RETENTION_DAYS", 90, 7, 3650),
+    journalDatabaseUrl: process.env.JOURNAL_DATABASE_URL ?? defaultJournalDatabaseUrl(process.env.DATABASE_URL ?? "file:./data/mania-hub-live.db"),
+    serveWriteCoalesceMs: readBoundedInt("SERVE_WRITE_COALESCE_MS", 0, 0, 100),
+    enableServeWriteThread: readBool("ENABLE_SERVE_WRITE_THREAD", true),
     osuClientId: process.env.OSU_CLIENT_ID || undefined,
     osuClientSecret: process.env.OSU_CLIENT_SECRET || undefined,
     oscBaseUrl: process.env.OSC_BASE_URL ?? "https://osc.kaysting.dev",

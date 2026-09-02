@@ -1,5 +1,6 @@
 import { readConfig } from "../config.js";
 import { createDb, exec, json, logApiCall, migrate } from "../db.js";
+import { ensureJournalSchema } from "../journal.js";
 import {
   OSU_FILE_REPAIR_META_KEY,
   OSU_FILE_REPAIR_PROGRESS_META_KEY,
@@ -24,7 +25,8 @@ const dryRun = process.argv.includes("--dry-run");
 
 const config = readConfig();
 const db = await createDb(config);
-const rateLimitDb = await createDb(config);
+const rateLimitDb = await createDb({ databaseUrl: config.journalDatabaseUrl, sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+await ensureJournalSchema(rateLimitDb);
 await migrate(db);
 const queue = new JobQueue(db);
 
@@ -34,7 +36,7 @@ const sharedLimiter = new SqliteSharedRateLimiter(rateLimitDb, {
   hardPerMinute: config.osuApiHardPerMinute,
 });
 const osu = new OsuApiClient(config, fetch, (entry) => {
-  void logApiCall(db, {
+  void logApiCall(rateLimitDb, {
     provider: "osu",
     caller: entry.caller,
     path: entry.path,

@@ -35,6 +35,8 @@ export interface SqliteSharedRateLimiterOptions {
   backgroundReservedPerMinute?: number;
 }
 
+// `db` is a journal handle (journal.ts): the reservation table and the pause
+// key both live there, shared by every process that spends osu! budget.
 export class SqliteSharedRateLimiter implements SharedLimiter {
   private readonly provider: string;
   private readonly targetPerMinute: number;
@@ -85,11 +87,11 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     const pausedUntil = now + Math.ceil(ms);
     await exec(
       this.db,
-      `insert into live_meta (key, value_json, updated_at)
+      `insert into journal_meta (key, value_json, updated_at)
        values (?, ?, ?)
        on conflict(key) do update set
          value_json = case
-           when coalesce(json_extract(live_meta.value_json, '$.until'), cast(live_meta.value_json as integer)) > ? then live_meta.value_json
+           when coalesce(json_extract(journal_meta.value_json, '$.until'), cast(journal_meta.value_json as integer)) > ? then journal_meta.value_json
            else excluded.value_json
          end,
          updated_at = excluded.updated_at`,
@@ -208,7 +210,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
   }
 
   private async readPause(): Promise<{ until: number; at: number }> {
-    const row = (await exec(this.db, "select value_json from live_meta where key = ?", [PAUSE_KEY])).rows[0];
+    const row = (await exec(this.db, "select value_json from journal_meta where key = ?", [PAUSE_KEY])).rows[0];
     const value = parseJson<number | { until?: number; at?: number }>(row?.value_json, 0);
     if (typeof value === "number") {
       // Legacy shape: a bare pausedUntil timestamp. The pause start is unknown,

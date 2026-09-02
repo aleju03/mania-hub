@@ -1,5 +1,6 @@
 import { readConfig } from "../config.js";
 import { createDb, exec, logApiCall, migrate, type Db } from "../db.js";
+import { ensureJournalSchema } from "../journal.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { OsuApiClient } from "../osu/client.js";
 import { SqliteSharedRateLimiter } from "../osu/shared-rate-limiter.js";
@@ -21,7 +22,8 @@ interface BackfillResult {
 const options = readOptions(process.argv.slice(2));
 const config = readConfig();
 const db = await createDb(config);
-const rateLimitDb = await createDb(config);
+const rateLimitDb = await createDb({ databaseUrl: config.journalDatabaseUrl, sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+await ensureJournalSchema(rateLimitDb);
 
 await migrate(db);
 
@@ -40,7 +42,7 @@ const sharedLimiter = new SqliteSharedRateLimiter(rateLimitDb, {
   hardPerMinute: config.osuApiHardPerMinute,
 });
 const osu = new OsuApiClient(config, fetch, (entry) => {
-  void logApiCall(db, {
+  void logApiCall(rateLimitDb, {
     provider: "osu",
     caller: entry.caller,
     path: entry.path,

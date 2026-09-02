@@ -111,7 +111,7 @@ async function handleLeaderboardImport(req: IncomingMessage, res: ServerResponse
   }
   if (req.method === "GET") {
     const ids = normalizeIdList((url.searchParams.get("ids") ?? "").split(",")).slice(0, 200);
-    sendJson(req, res, ctx, 200, { ok: true, statuses: await getLeaderboardImportStatuses(ctx.db, ids) });
+    sendJson(req, res, ctx, 200, { ok: true, statuses: await getLeaderboardImportStatuses(ctx.db, ids, ctx.journalDb ?? ctx.db) });
     return true;
   }
   if (req.method !== "POST") {
@@ -140,7 +140,7 @@ async function handleLeaderboardImport(req: IncomingMessage, res: ServerResponse
     const result = await enqueueLeaderboardImport(enqueueDb, queue, beatmapId);
     (result === "queued" ? queuedBeatmapIds : recentBeatmapIds).push(beatmapId);
   }
-  const statuses = await getLeaderboardImportStatuses(enqueueDb, beatmapIds);
+  const statuses = await getLeaderboardImportStatuses(enqueueDb, beatmapIds, ctx.journalDb ?? enqueueDb);
   sendJson(req, res, ctx, queuedBeatmapIds.length > 0 ? 202 : 200, {
     ok: true,
     queued: queuedBeatmapIds.length > 0,

@@ -161,7 +161,7 @@ describe("sqlite shared osu! rate limiter", () => {
     const { db, first } = await setupLimiters({ targetPerMinute: 1000, hardPerMinute: 1000 });
     await exec(
       db,
-      "insert into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      "insert into journal_meta (key, value_json, updated_at) values (?, ?, ?)",
       ["control:osu_rate_limit_paused_until", json(Date.now() + 30_000), new Date().toISOString()],
     );
 

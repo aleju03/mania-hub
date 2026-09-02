@@ -4862,6 +4862,16 @@ function dominantSkillset(values: Record<string, number> | undefined): string | 
   return best;
 }
 
+// The status column and metadata_json.$.status drift apart: the enrich job
+// used to refresh only the JSON, the farmed score path refreshes only the
+// column. Whichever half names a settled status is the one that moved forward
+// (statuses only ever settle), so read that one. Same rule as the column heal
+// in map-search.ts, which fixes the rows themselves on its hourly tick.
+function settledBeatmapStatusSql(alias: string): string {
+  const jsonStatus = `lower(coalesce(json_extract(${alias}.metadata_json, '$.status'), ''))`;
+  return `case when ${jsonStatus} in ('ranked', 'approved', 'loved') then ${jsonStatus} else ${alias}.status end`;
+}
+
 interface PlayerSkillPlayMetadata {
   beatmapsetId: number | null;
   title: string;
@@ -4875,7 +4885,8 @@ interface PlayerSkillPlayMetadata {
 async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promise<Map<number, PlayerSkillPlayMetadata>> {
   const rows = await selectRowsByIntegerSet(
     db,
-    `select b.beatmap_id, b.beatmapset_id, b.version, b.status, s.title, s.artist, s.creator, s.covers_json
+    `select b.beatmap_id, b.beatmapset_id, b.version, ${settledBeatmapStatusSql("b")} as status,
+            s.title, s.artist, s.creator, s.covers_json
      from beatmaps b left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
      where b.beatmap_id in`,
     beatmapIds,

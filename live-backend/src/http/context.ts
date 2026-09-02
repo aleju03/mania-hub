@@ -12,6 +12,7 @@ import type { GhostHub } from "../live/ghost.js";
 import type { OscStatus } from "../osc/client.js";
 import type { OsuApiClient } from "../osu/client.js";
 import type { DiscordRuntime } from "../discord/index.js";
+import type { WriteThreadStatus } from "../write-thread.js";
 import type { AbuseGuard } from "./abuse-guard.js";
 
 export interface HttpContext {
@@ -25,6 +26,16 @@ export interface HttpContext {
   // in which case the serving path stays read-only and skips the bookkeeping.
   serveWriteDb?: Db;
   serveWriteQueue?: JobQueue;
+  // The journal database (journal.ts): the SSE event log, the osu! call log
+  // and the shared limiter's reservations. `journalDb` is this process's read
+  // handle; `journalWriteDb` is the coalesced write handle in a serving
+  // process. Both absent in tests, where one file holds every table and the
+  // main handles stand in.
+  journalDb?: Db;
+  journalWriteDb?: Db;
+  // The serving writer's transport (write-thread.ts): thread or inline, and
+  // whether the thread is alive. Admin status only.
+  serveWriteStatus?: () => WriteThreadStatus;
   events: LiveEventLog;
   config: Config;
   abuse?: AbuseGuard;

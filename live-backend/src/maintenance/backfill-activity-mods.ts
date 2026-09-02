@@ -22,6 +22,7 @@
 
 import { readConfig } from "../config.js";
 import { createDb, exec, json, logApiCall, migrate } from "../db.js";
+import { ensureJournalSchema } from "../journal.js";
 import { nowIso } from "../shared/score.js";
 import { OsuApiClient } from "../osu/client.js";
 import { SqliteSharedRateLimiter } from "../osu/shared-rate-limiter.js";
@@ -64,7 +65,8 @@ let keepAlive: NodeJS.Timeout | null = null;
 const options = readOptions(process.argv.slice(2));
 const config = readConfig();
 const db = await createDb(config);
-const rateLimitDb = await createDb(config);
+const rateLimitDb = await createDb({ databaseUrl: config.journalDatabaseUrl, sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+await ensureJournalSchema(rateLimitDb);
 await migrate(db);
 
 const progress = options.restart
@@ -219,7 +221,7 @@ function buildOsuClient(): OsuApiClient {
     hardPerMinute: config.osuApiHardPerMinute,
   });
   return new OsuApiClient(config, fetch, (entry) => {
-    void logApiCall(db, {
+    void logApiCall(rateLimitDb, {
       provider: "osu",
       caller: entry.caller,
       path: entry.path,

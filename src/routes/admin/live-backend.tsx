@@ -320,6 +320,8 @@ interface StorageFootprint {
   dbShm: number | null;
   analytics: number | null;
   analyticsWal: number | null;
+  journal?: number | null;
+  journalWal?: number | null;
   backups: number | null;
   replayVideoWork: number | null;
 }
@@ -2006,6 +2008,8 @@ function StoragePathRows({ paths }: { paths: StorageFootprint | null | undefined
     { label: "Database -shm", bytes: paths.dbShm },
     { label: "Analytics database", bytes: paths.analytics },
     { label: "Analytics WAL", bytes: paths.analyticsWal },
+    { label: "Journal database", bytes: paths.journal ?? null },
+    { label: "Journal WAL", bytes: paths.journalWal ?? null },
     { label: "Backups directory", bytes: paths.backups },
     { label: "Replay video work dir", bytes: paths.replayVideoWork },
   ];

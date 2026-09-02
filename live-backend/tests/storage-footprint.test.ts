@@ -100,6 +100,8 @@ describe("getStorageFootprint", () => {
       dbShm: 32,
       analytics: 1024,
       analyticsWal: 512,
+      journal: null,
+      journalWal: null,
       backups: 8192,
       replayVideoWork: 64,
     });
@@ -116,6 +118,8 @@ describe("getStorageFootprint", () => {
       dbShm: null,
       analytics: null,
       analyticsWal: null,
+      journal: null,
+      journalWal: null,
       // No backups dir and no work dir: null, not zero.
       backups: null,
       replayVideoWork: null,

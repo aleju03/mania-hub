@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { activateCountry, deleteCountryData, isCountryFeatureAtLeast, isSyntheticCountryScope, setCountryFeatureTier, setCountryPaused, setCountryStatus } from "../../countries.js";
 import { exec, parseJson, type Db } from "../../db.js";
+import { JOURNAL_TABLES } from "../../journal.js";
 import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../../features/admin-todos.js";
@@ -154,7 +155,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
     }
     let result;
     try {
-      result = await wipeUserProjections(ctx.serveWriteDb ?? ctx.db, userId);
+      result = await wipeUserProjections(ctx.serveWriteDb ?? ctx.db, userId, ctx.journalWriteDb ?? ctx.journalDb ?? ctx.serveWriteDb ?? ctx.db);
     } catch (error) {
       if (error instanceof UserWipeLookupError && error.code === "user_has_account_data") {
         sendJson(req, res, ctx, 409, { error: error.code });
@@ -346,7 +347,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       // drop the row now rather than keeping a removed nomination on screen
       // until their next poll.
       await ctx.events
-        .append("goat_poll", null, { pollId: window.pollId, removedId: nomineeId }, undefined, ctx.serveWriteDb ?? undefined)
+        .append("goat_poll", null, { pollId: window.pollId, removedId: nomineeId })
         .catch((error) => logWarn("goat_poll_event_failed", { nomineeId, ...errorContext(error) }));
       logInfo("goat_poll_nominee_removed", {
         pollId: window.pollId,
@@ -467,7 +468,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
     }
     const writeDb = ctx.serveWriteDb ?? ctx.db;
     const writeQueue = ctx.serveWriteQueue ?? ctx.queue;
-    const deleted = await deleteCountryData(writeDb, country);
+    const deleted = await deleteCountryData(writeDb, country, ctx.journalWriteDb ?? ctx.journalDb ?? writeDb);
     await enqueueGlobalMapsRefresh(writeQueue, { priority: 90, replaceDone: true });
     sendJson(req, res, ctx, 200, { ok: true, country, deleted });
     return true;
@@ -559,7 +560,10 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, deleted: await runRetention(ctx.serveWriteDb ?? ctx.db, ctx.config) });
+    sendJson(req, res, ctx, 200, {
+      ok: true,
+      deleted: await runRetention(ctx.serveWriteDb ?? ctx.db, ctx.config, ctx.journalWriteDb ?? ctx.journalDb ?? ctx.serveWriteDb ?? ctx.db),
+    });
     return true;
   }
   if (url.pathname === "/api/admin/osc-smoke") {
@@ -1143,8 +1147,6 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       "player_activity_days",
       "player_activity_maps",
       "player_activity_backfill_cursors",
-      "live_event_log",
-      "api_call_log",
       "live_meta",
       "country_rosters",
       "users",
@@ -1154,6 +1156,11 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
     const deleted: Record<string, number> = {};
     for (const table of tables) {
       deleted[table] = Number((await exec(ctx.serveWriteDb ?? ctx.db, `delete from ${table}`)).rowsAffected ?? 0);
+    }
+    // The journal database (journal.ts) holds its own transient tables.
+    const journalDb = ctx.journalWriteDb ?? ctx.journalDb ?? ctx.serveWriteDb ?? ctx.db;
+    for (const table of JOURNAL_TABLES) {
+      deleted[table] = Number((await exec(journalDb, `delete from ${table}`)).rowsAffected ?? 0);
     }
     sendJson(req, res, ctx, 200, { ok: true, deleted });
     return true;

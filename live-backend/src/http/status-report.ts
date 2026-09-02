@@ -114,6 +114,9 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
   // The reads are independent, so they run concurrently: latency is the slowest
   // query, and a write-lock window is waited out once rather than once per
   // query down a sequential chain.
+  // The event log, the osu! call history and the shared limiter's
+  // reservations live in the journal database (journal.ts).
+  const journalDb = ctx.journalDb ?? ctx.db;
   const [
     db,
     lastEvent,
@@ -134,7 +137,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     storagePaths,
   ] = await Promise.all([
     dbHealth(ctx.db),
-    exec(ctx.db, "select created_at from live_event_log order by sequence desc limit 1"),
+    exec(journalDb, "select created_at from live_event_log order by sequence desc limit 1"),
     getLocalDbStorage(ctx.config),
     ctx.queue.depth(),
     ctx.queue.pressure(),
@@ -143,11 +146,11 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     analysisStats(ctx.db),
     getBeatmapOsuFileBackfillStatus(ctx.db, { cacheCounts: true }),
     scoresFallbackStatus(ctx, mirror),
-    apiCallHistory(ctx.db),
+    apiCallHistory(journalDb),
     countryRegistryStatus(ctx),
     countryCatchupStatus(ctx),
     options.snapshotCountry ? adminSnapshotStats(ctx.db, options.snapshotCountry) : Promise.resolve(undefined),
-    sharedRateBreakdown(ctx.db),
+    sharedRateBreakdown(journalDb),
     // Filesystem pressure and where the disk went. Admin-only, and only paid
     // for on an admin build: statfs is cheap, and the per-path walk behind
     // getStorageFootprint carries its own memo.
@@ -173,6 +176,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
   // The serve-write gate: queue depth / wait EWMA is the write-saturation
   // signal (see withWriteGate), and sheds counts the 429s it handed out.
   const writeGate = getWriteGateStats(ctx.serveWriteDb);
+  const writeThread = ctx.serveWriteStatus?.() ?? null;
   // Same server/worker shape as sqliteBusy. The worker's copy rides the
   // live_meta mirror; a worker still running code that does not write it leaves
   // the field undefined, which must read as "unknown", not as a crash. In the
@@ -208,6 +212,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     rate,
     sqliteBusy,
     writeGate,
+    writeThread,
     scoresFallback,
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: apiCallNames ? { ...apiCalls, names: apiCallNames } : apiCalls,

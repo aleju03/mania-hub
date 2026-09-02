@@ -89,14 +89,14 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
 // only reopening the connection does. That is the 2026-07-18/19 server write
 // freeze. The reconnect hook below lets the busy-retry path swap the underlying
 // client in place, invisibly to every holder of the Db reference.
-const RECONNECT = Symbol("mania.sqliteReconnect");
+export const RECONNECT = Symbol("mania.sqliteReconnect");
 const RECONNECT_MIN_INTERVAL_MS = 5_000;
 // Why a connection is being reopened. "wedge" is the stale-snapshot recovery
 // above; "migration" is migrate() discarding a connection that lost the write
 // lock; "batch" is a .batch() that surfaced SQLITE_BUSY and left the
 // connection poisoned. They are counted and rate-limited differently.
-type ReconnectReason = "wedge" | "migration" | "batch";
-type ReconnectHook = (reason: ReconnectReason) => Promise<boolean>;
+export type ReconnectReason = "wedge" | "migration" | "batch";
+export type ReconnectHook = (reason: ReconnectReason) => Promise<boolean>;
 
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
   const isFile = config.databaseUrl.startsWith("file:");
@@ -235,7 +235,11 @@ export async function migrate(db: Db, options: MigrateOptions = {}): Promise<voi
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
   const sql = await readFile(new URL("../migrations/001_initial.sql", import.meta.url), "utf8");
-  const statements = splitSql(sql);
+  // The journal tables (journal.ts) are created in the main file as well:
+  // tests keep every table in one database, and in production the empty
+  // copies are what let a rollback boot against the same file.
+  const journalSql = await readFile(new URL("../migrations/journal.sql", import.meta.url), "utf8");
+  const statements = [...splitSql(sql), ...splitSql(journalSql)];
   let delayMs = MIGRATION_PASS_RETRY_INITIAL_DELAY_MS;
   for (;;) {
     const passStartedAt = Date.now();
@@ -561,7 +565,7 @@ export async function exec(db: Db, sql: string, args: InValue[] = [], options?: 
   return withSqliteBusyRetry(() => db.execute({ sql, args }), { recoverDb: db });
 }
 
-export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write") {
+export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write", options?: ExecOptions) {
   if (statements.length === 0) return [];
   const results: ResultSet[] = [];
   // Inside migrate() the statements go through .execute() ONE AT A TIME, with no
@@ -592,7 +596,9 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
     const chunk = statements
       .slice(index, index + EXEC_BATCH_MAX_STATEMENTS)
       .map(({ sql, args = [] }) => ({ sql, args }));
-    results.push(...await withSqliteBusyRetry(() => db.batch(chunk, mode), { recoverDb: db, reopenBeforeRetry: true }));
+    results.push(...await withSqliteBusyRetry(() => db.batch(chunk, mode), options?.bestEffort
+      ? { recoverDb: db, reopenBeforeRetry: true, budgetMs: SQLITE_BEST_EFFORT_WRITE_BUDGET_MS, bestEffort: true }
+      : { recoverDb: db, reopenBeforeRetry: true }));
   }
   return results;
 }
@@ -668,28 +674,37 @@ export async function writeVariantPps(db: Db, userId: number, statistics: unknow
  * saturation signal the shed check below reads, instead of the site freezing.
  * ---------------------------------------------------------------------- */
 
-const WRITE_GATE = Symbol("mania.writeGate");
+export const WRITE_GATE = Symbol("mania.writeGate");
 
 export interface WriteGateStats {
-  /** Calls queued or executing right now. */
+  /** Statement groups queued or executing right now. */
   depth: number;
   peakDepth: number;
   gatedCalls: number;
-  /** Requests refused by isWriteGateOverloaded since boot. */
+  /** Requests refused by checkWriteGateOverloaded since boot. */
   sheds: number;
   lastWaitMs: number;
-  /** Exponential moving average of gate wait, the shed check's signal. */
+  /** Exponential moving average of queue wait, the shed check's signal. */
   ewmaWaitMs: number;
+  /** Transactions sent to SQLite; groupsFlushed / flushes is the coalescing ratio. */
+  flushes: number;
+  groupsFlushed: number;
 }
 
-interface WriteGateState extends WriteGateStats {
-  tail: Promise<void>;
+/**
+ * What a coalesced write connection (write-coalescer.ts) hangs off itself
+ * under WRITE_GATE: the stats above plus the write-turn hooks withWriteTurn
+ * drives. A plain connection carries none of this, and every helper below
+ * treats that as "no gate".
+ */
+export interface WriteGateState extends WriteGateStats {
   turnToken: object | null;
+  acquireTurn(): Promise<() => void>;
 }
 
 // A write turn (withWriteTurn) marks its async context so the statements it
-// issues bypass the queue they already hold the head of.
-const writeTurnContext = new AsyncLocalStorage<object>();
+// issues run straight away on the connection the turn already holds.
+export const writeTurnContext = new AsyncLocalStorage<object>();
 
 // Shed thresholds: refuse discretionary writes when the queue is deep or a
 // write has been waiting seconds for its turn. Both require a non-trivial
@@ -699,110 +714,47 @@ const WRITE_GATE_SHED_EWMA_MS = 2_000;
 // At or under the pack-draw client's PACK_DRAW_RETRY_MAX_WAIT_MS (1500ms in
 // src/lib/packs.ts), so a shed draw auto-retries invisibly instead of erroring.
 const WRITE_GATE_SHED_RETRY_AFTER_MS = 1_500;
-const WRITE_GATE_EWMA_ALPHA = 0.2;
 
-function writeGateState(db: Db): WriteGateState | null {
+export function writeGateState(db: Db): WriteGateState | null {
   return ((db as unknown as Record<symbol, unknown>)[WRITE_GATE] as WriteGateState | undefined) ?? null;
 }
 
-async function acquireWriteGate(state: WriteGateState): Promise<() => void> {
-  const queuedAt = Date.now();
-  state.depth += 1;
-  if (state.depth > state.peakDepth) state.peakDepth = state.depth;
-  const previous = state.tail;
-  let release!: () => void;
-  state.tail = new Promise<void>((r) => { release = r; });
-  await previous;
-  const waited = Date.now() - queuedAt;
-  state.gatedCalls += 1;
-  state.lastWaitMs = waited;
-  state.ewmaWaitMs = state.ewmaWaitMs * (1 - WRITE_GATE_EWMA_ALPHA) + waited * WRITE_GATE_EWMA_ALPHA;
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    state.depth -= 1;
-    release();
-  };
-}
-
 /**
- * Wrap a connection so its execute/batch calls serialize through the gate.
- * Everything else (the RECONNECT hook included) passes through, so the busy
- * retry and wedge recovery machinery keep working; a retry re-enters the gate,
- * which is deliberate — between attempts, queued writers get their turn.
- */
-export function withWriteGate(db: Db): Db {
-  const state: WriteGateState = {
-    depth: 0,
-    peakDepth: 0,
-    gatedCalls: 0,
-    sheds: 0,
-    lastWaitMs: 0,
-    ewmaWaitMs: 0,
-    tail: Promise.resolve(),
-    turnToken: null,
-  };
-  const gated = async <T>(run: () => Promise<T>): Promise<T> => {
-    const turn = writeTurnContext.getStore();
-    if (turn != null && turn === state.turnToken) return run();
-    const releaseGate = await acquireWriteGate(state);
-    try {
-      return await run();
-    } finally {
-      releaseGate();
-    }
-  };
-  return new Proxy(db, {
-    get(_target, prop) {
-      if (prop === WRITE_GATE) return state;
-      if (prop === "execute") {
-        return (...args: unknown[]) => gated(() => (db.execute as (...a: unknown[]) => Promise<ResultSet>)(...args));
-      }
-      if (prop === "batch") {
-        return (...args: unknown[]) => gated(() => (db.batch as (...a: unknown[]) => Promise<ResultSet[]>)(...args));
-      }
-      const value = (db as unknown as Record<string | symbol, unknown>)[prop];
-      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(db) : value;
-    },
-  }) as Db;
-}
-
-/**
- * Hold one gate turn across a multi-statement action (a score ingest), so its
- * writes go down contiguously instead of interleaving with every other
- * writer's. Reads on other connections are unaffected. On an ungated db this
- * is a plain call, so tests and the worker role need no special casing;
- * nested turns on the held gate just run.
+ * Hold the coalesced connection exclusively across a multi-statement action (a
+ * score ingest), so its statements go down contiguously and immediately
+ * instead of interleaving with, or waiting in, the coalescing queue. Reads on
+ * other connections are unaffected. On a plain connection this is a plain
+ * call, so tests and the worker role need no special casing; nested turns on
+ * the held connection just run.
  */
 export async function withWriteTurn<T>(db: Db, fn: () => Promise<T>): Promise<T> {
   const state = writeGateState(db);
   if (!state) return fn();
   const current = writeTurnContext.getStore();
   if (current != null && current === state.turnToken) return fn();
-  const releaseGate = await acquireWriteGate(state);
+  const releaseTurn = await state.acquireTurn();
   const token = {};
   state.turnToken = token;
   try {
     return await writeTurnContext.run(token, fn);
   } finally {
     state.turnToken = null;
-    releaseGate();
+    releaseTurn();
   }
 }
 
 export function getWriteGateStats(db: Db | null | undefined): WriteGateStats | null {
   const state = db ? writeGateState(db) : null;
   if (!state) return null;
-  const { depth, peakDepth, gatedCalls, sheds, lastWaitMs, ewmaWaitMs } = state;
-  return { depth, peakDepth, gatedCalls, sheds, lastWaitMs, ewmaWaitMs: Math.round(ewmaWaitMs) };
+  const { depth, peakDepth, gatedCalls, sheds, lastWaitMs, ewmaWaitMs, flushes, groupsFlushed } = state;
+  return { depth, peakDepth, gatedCalls, sheds, lastWaitMs, ewmaWaitMs: Math.round(ewmaWaitMs), flushes, groupsFlushed };
 }
 
 /**
  * The shed check for discretionary write endpoints (pack draws, manual score
  * submissions): under write pressure they get a 429 with retry-after instead
- * of joining the pile-up. Null means "not overloaded" (including an ungated
- * db, where there is no signal to read).
+ * of joining the pile-up. Null means "not overloaded" (including a plain
+ * connection, where there is no signal to read).
  */
 export function checkWriteGateOverloaded(db: Db | null | undefined): { retryAfterMs: number } | null {
   const state = db ? writeGateState(db) : null;
@@ -1007,33 +959,31 @@ function readBoundedEnvInt(name: string, fallback: number, min: number, max: num
 
 // Diagnostics, not bookkeeping the system depends on: the osu! budget is held
 // by api_rate_limit_reservations, and this table only feeds the admin call
-// history. So both writes are best-effort — a call log row is never worth
-// holding a connection for the full 15s durable budget, which on the serving
-// connection means holding every page-load read queued behind it (the 3cc0638
-// rule: request-path writes stay off ctx.db, and they stay short).
+// history. Both live in the journal database (journal.ts), so `db` is a
+// journal handle. Both writes are best-effort: a call log row is never worth
+// a durable-write budget, and the two statements travel as one group so a
+// coalesced connection spends one transaction on them.
 export async function logApiCall(
   db: Db,
   entry: { provider: string; caller: string; path: string; startedAt: string; durationMs?: number | null; status?: number | null },
 ): Promise<void> {
-  await exec(
+  await execBatch(
     db,
-    `insert or ignore into api_call_targets (provider, caller, path)
-     values (?, ?, ?)`,
-    [entry.provider, entry.caller, entry.path],
-    { bestEffort: true },
-  );
-  const row = (await exec(
-    db,
-    "select id from api_call_targets where provider = ? and caller = ? and path = ?",
-    [entry.provider, entry.caller, entry.path],
-  )).rows[0];
-  // The target insert was skipped (busy writer): drop this line rather than
-  // inventing a target id.
-  if (row?.id == null) return;
-  await exec(
-    db,
-    "insert into api_call_log (provider, caller, path, target_id, started_at, duration_ms, status) values (?, '', '', ?, ?, ?, ?)",
-    [entry.provider, Number(row.id), entry.startedAt, entry.durationMs ?? null, entry.status ?? null],
+    [
+      {
+        sql: `insert or ignore into api_call_targets (provider, caller, path)
+              values (?, ?, ?)`,
+        args: [entry.provider, entry.caller, entry.path],
+      },
+      {
+        sql: `insert into api_call_log (provider, caller, path, target_id, started_at, duration_ms, status)
+              select ?, '', '', id, ?, ?, ?
+              from api_call_targets
+              where provider = ? and caller = ? and path = ?`,
+        args: [entry.provider, entry.startedAt, entry.durationMs ?? null, entry.status ?? null, entry.provider, entry.caller, entry.path],
+      },
+    ],
+    "write",
     { bestEffort: true },
   );
 }

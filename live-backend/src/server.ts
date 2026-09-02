@@ -2,7 +2,9 @@ import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
-import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS, withWriteGate } from "./db.js";
+import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "./db.js";
+import { adoptJournalFromMain, drainJournalTablesFromMain, ensureJournalSchema, isJournalAdopted } from "./journal.js";
+import { createServeWriteConnections } from "./write-thread.js";
 import { AnalyticsStore } from "./features/analytics.js";
 import { routeHttp, sendNotFound, warmGlobalMapsFarmedBoard, warmStatusBodyCache } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -10,7 +12,7 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue, registerGlobalFarmedBoardDiskCache, registerGlobalFarmedBoardRepackDelegation } from "./features/maps.js";
-import { cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
+import { cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileBeatmapStatusColumns, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
 import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackDemandRecomputeSeeded, ensureNkeyMsdSeeded, ensureJackTagRecomputeSeeded, ensureMotionFeaturesRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnLeoblackRecomputeSeeded, ensureLn7PrimaryRepinSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureOsuFileRepairSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
@@ -64,7 +66,6 @@ import { createDiscordRuntime } from "./discord/index.js";
 // runs during module evaluation (avoids a temporal-dead-zone reference).
 const REQUIRED_SCHEMA_TABLES = [
   "country_registry",
-  "live_event_log",
   "live_meta",
   "jobs",
   "users",
@@ -79,7 +80,6 @@ const REQUIRED_SCHEMA_TABLES = [
   "profile_section_cache",
   "player_activity_days",
   "pack_collection_cards",
-  "api_rate_limit_reservations",
   "user_goals",
   "farm_helper_feedback",
   "beatmap_osu_files",
@@ -145,12 +145,25 @@ export async function createApp() {
   // that lets a restart start warm instead of making the first visitor wait
   // out a cold scan.
   registerPackCommunitySnapshots(db, config);
+  // The journal database (journal.ts): the SSE event log, the osu! call log
+  // and the shared limiter's reservations, in their own file so none of them
+  // ever queues on the main file's write lock. Every role opens it; the
+  // schema is idempotent, so every role applies it.
+  const journalDb = await createDb({
+    databaseUrl: config.journalDatabaseUrl,
+    sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs,
+    sqliteSynchronous: config.sqliteSynchronous,
+    sqliteCacheMb: 4,
+    sqliteMmapMb: 0,
+  });
+  await ensureJournalSchema(journalDb);
   // Exactly one process owns schema DDL. A "server"-role process attaches to a
   // DB the worker process migrates, so it waits for readiness instead of racing
   // the worker on concurrent ALTER/CREATE (which would throw duplicate-column).
   const isServerRole = config.role === "server";
   if (isServerRole) {
     await waitForSchema(db);
+    await waitForJournalAdopted(journalDb);
   } else {
     // A migration that builds an index needs transient room well beyond the
     // rows it covers, and a half-applied migration on a full disk is worse
@@ -260,26 +273,51 @@ export async function createApp() {
        Re-running three `if not exists` statements every boot is what makes that
        self-healing. */
     await bootWrite("pack_community_rollup_triggers", () => ensurePackCommunityRollupTriggers(db));
+    // One-time move of the journal tables' tails out of the main file, with
+    // the sequence counters carried over so live SSE cursors keep meaning
+    // what they meant. The main file's copies drain behind boot.
+    await bootWrite("adopt_journal", async () => {
+      const adoption = await adoptJournalFromMain(db, journalDb);
+      if (!adoption) return;
+      void drainJournalTablesFromMain(db)
+        .then((drained) => logInfo("journal_drained_from_main", { ...drained }))
+        .catch((error) => logWarn("journal_drain_failed", errorContext(error)));
+    });
   }
-  // The shared osu! limiter only touches api_rate_limit_reservations (a few
-  // hundred rows, pruned to a 60s window) and one live_meta key. Inheriting the
-  // main connection's SQLITE_CACHE_MB/SQLITE_MMAP_MB would map a 256 MiB window
-  // of a multi-GB database in every process for that, so pin it small — same
-  // shape as serveWriteDb below.
-  const rateLimitDb = await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
-  // A tiny dedicated write connection (+ its own queue) for the page-serving
-  // path's best-effort bookkeeping (country touch, refresh scheduling). Keeping
-  // those writes off the `db` connection that serves page-load reads is the
-  // invariant that stops a busy single WAL writer from freezing the whole site:
-  // a stuck write here can never queue in front of a read. Small cache/mmap — it
-  // only runs a handful of one-row writes. The pure worker role never serves
-  // HTTP, so it does not need one.
-  // Gated and on a short busy_timeout: request-path writes queue in JS (async,
-  // shed-able) instead of each blocking the event loop inside SQLite's busy
-  // wait — the 2026-08-29 saturation freeze mechanism. See withWriteGate.
-  const serveWriteDb = config.role === "worker"
+  // The serving path's write connections: one coalescing writer per target
+  // (main file, journal), on a dedicated worker thread in production
+  // (write-thread.ts). Keeping request-path writes off the `db` connection
+  // that serves page-load reads is the invariant that stops a busy single WAL
+  // writer from freezing the whole site: a stuck write here can never queue in
+  // front of a read. Queued in JS (async, shed-able) and executed off the event
+  // loop, so SQLite's busy wait never parks the process — the 2026-08-29
+  // saturation freeze mechanism. Small cache/mmap: they only run small writes.
+  // The pure worker role never serves HTTP and writes on its own connections.
+  const serveWrite = config.role === "worker"
     ? null
-    : withWriteGate(await createDb({ ...config, sqliteBusyTimeoutMs: config.sqliteServeWriteBusyTimeoutMs, sqliteCacheMb: 2, sqliteMmapMb: 0 }));
+    : await createServeWriteConnections({
+      targets: {
+        main: {
+          databaseUrl: config.databaseUrl,
+          databaseAuthToken: config.databaseAuthToken,
+          sqliteBusyTimeoutMs: config.sqliteServeWriteBusyTimeoutMs,
+          sqliteSynchronous: config.sqliteSynchronous,
+          sqliteCacheMb: 2,
+          sqliteMmapMb: 0,
+        },
+        journal: {
+          databaseUrl: config.journalDatabaseUrl,
+          sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs,
+          sqliteSynchronous: config.sqliteSynchronous,
+          sqliteCacheMb: 2,
+          sqliteMmapMb: 0,
+        },
+      },
+    }, { coalesceMs: config.serveWriteCoalesceMs, useThread: config.enableServeWriteThread });
+  const serveWriteDb = serveWrite?.main ?? null;
+  // Journal writes: the serving process's coalesced journal handle, or the
+  // worker's plain one.
+  const journalWriteDb = serveWrite?.journal ?? journalDb;
   const serveWriteQueue = serveWriteDb ? new JobQueue(serveWriteDb) : null;
   // Two-process split only: the serving process never runs the ~1.4GB full
   // GLOBAL board pack itself — it asks the worker process (via the dedicated
@@ -335,7 +373,7 @@ export async function createApp() {
     }
   }
   const queue = new JobQueue(db);
-  const events = new LiveEventLog(db);
+  const events = new LiveEventLog(db, journalDb, journalWriteDb);
   // Startup writes belong to the ingest/worker side; a serving process stays
   // read-mostly so it never contends with the worker on these at boot.
   if (!isServerRole) {
@@ -357,12 +395,10 @@ export async function createApp() {
     await ensurePinnedCountries(serveWriteDb, config).catch(() => undefined);
   }
   const logOsuCall = (entry: { caller: string; path: string; startedAt: number; durationMs?: number | null; status?: number | null }) => {
-    // Never the serving connection: every osu! call logs, including the ones a
-    // page load triggered through the proxy, and libsql runs one connection's
-    // operations serially — a call-log write that lands mid-contention would
-    // stall every read queued behind it (3cc0638). The worker role has no
-    // serving connection to protect and keeps using its own.
-    void logApiCall(serveWriteDb ?? db, {
+    // The call log lives in the journal database, written through the
+    // serving process's coalesced journal handle (never the connection that
+    // serves page-load reads, 3cc0638) or the worker's own.
+    void logApiCall(journalWriteDb, {
       provider: "osu",
       caller: entry.caller,
       path: entry.path,
@@ -371,7 +407,7 @@ export async function createApp() {
       status: entry.status,
     }).catch(() => {});
   };
-  const sharedOsuLimiter = new SqliteSharedRateLimiter(rateLimitDb, {
+  const sharedOsuLimiter = new SqliteSharedRateLimiter(journalWriteDb, {
     provider: "osu",
     targetPerMinute: config.osuApiTargetPerMinute,
     hardPerMinute: config.osuApiHardPerMinute,
@@ -415,6 +451,9 @@ export async function createApp() {
     queue: serveWriteQueue ?? queue,
     serveWriteDb: serveWriteDb ?? undefined,
     serveWriteQueue: serveWriteQueue ?? undefined,
+    serveWriteStatus: serveWrite ? () => serveWrite.status() : undefined,
+    journalDb,
+    journalWriteDb,
     events,
     config,
     abuse,
@@ -464,7 +503,7 @@ export async function createApp() {
     warmSkillLeaderboardBoard(db);
     startPackCommunitySnapshotRefresh(db);
   }
-  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics, ghost };
+  return { server, db, journalDb, journalWriteDb, serveWrite, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics, ghost };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -569,7 +608,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startVariantPpDripScheduler(app.db, app.queue);
       startPlayerSkillsDripScheduler(app.db, app.queue);
     }
-    startRetentionScheduler(app.db, app.config);
+    startRetentionScheduler(app.db, app.config, app.journalDb);
     // /communities invite health: pure Discord lookups, no osu! API budget, so
     // it sits with retention rather than behind the scheduled-refresh gate.
     startCommunityInviteScheduler(app.db, app.config);
@@ -585,6 +624,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // Active WAL brake: keeps the -wal file bounded so it can never grow into the
     // read-pin death-spiral. Worker/all role only (never the serving process).
     startWalCheckpointer(app.config);
+    startWalCheckpointer(app.config, app.config.journalDatabaseUrl);
     startMapSearchStatusReconciler(app.db, app.queue);
     startQueuePressureScheduler(app.queue);
     if (app.config.enableOscBackfill) {
@@ -778,6 +818,34 @@ async function waitForSchema(db: Awaited<ReturnType<typeof createDb>>, timeoutMs
         timeout_ms: timeoutMs,
         missing_tables: missing.length,
         missing: missing.slice(0, 5).join(", "),
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+// The journal half of waitForSchema: a server-role process must not tail an
+// event log the worker has not yet seeded from the main file, or every copied
+// row would replay into the SSE sinks and the Discord feeds as new.
+async function waitForJournalAdopted(journalDb: Awaited<ReturnType<typeof createDb>>, timeoutMs = SCHEMA_WAIT_TIMEOUT_MS): Promise<void> {
+  const startedAt = Date.now();
+  let loggedAt = 0;
+  for (;;) {
+    try {
+      if (await isJournalAdopted(journalDb)) return;
+    } catch {
+      // journal_meta should always be readable; treat a failure as not-ready.
+    }
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs > timeoutMs) {
+      throw new Error(`journal not adopted after ${timeoutMs}ms (is a worker/all-role process running to seed it?)`);
+    }
+    if (elapsedMs - loggedAt >= SCHEMA_WAIT_LOG_INTERVAL_MS) {
+      loggedAt = elapsedMs;
+      logWarn("journal_wait_pending", {
+        detail: "waiting for a worker/all-role process to adopt the journal from the main database",
+        elapsed_ms: elapsedMs,
+        timeout_ms: timeoutMs,
       });
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1010,6 +1078,11 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
 // retention).
 function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
   const tick = async () => {
+    const columns = await reconcileBeatmapStatusColumns(db).catch((error) => {
+      console.warn("[map-search] beatmap status column reconcile failed", error);
+      return 0;
+    });
+    if (columns > 0) console.log(`[map-search] copied ${columns} settled status(es) from beatmap metadata onto the status column`);
     const healed = await reconcileMapSearchIndexStatuses(db).catch((error) => {
       console.warn("[map-search] status reconcile failed", error);
       return 0;

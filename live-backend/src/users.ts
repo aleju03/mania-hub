@@ -225,11 +225,23 @@ export async function getUserWipePreview(
 // tracking-derived row and public history reference is removed. Independent
 // account-owned data is never guessed away: the preview detects it and this
 // function refuses the wipe if any appeared between preview and confirmation.
-export async function wipeUserProjections(db: Db, userId: number): Promise<WipeUserProjectionsResult> {
+// `journalDb` is the journal database (journal.ts), where live_event_log
+// lives; tests that keep every table in one file leave it defaulted.
+export async function wipeUserProjections(db: Db, userId: number, journalDb: Db = db): Promise<WipeUserProjectionsResult> {
   const safeUserId = Math.floor(userId);
   if (!Number.isSafeInteger(safeUserId) || safeUserId <= 0) throw new Error("Invalid user id");
   const preview = await getUserWipePreview(db, safeUserId);
   if (!preview.canWipe) throw new UserWipeLookupError("user_has_account_data");
+
+  // The event journal lives in its own database, so the references it needs
+  // (score identities, pack pull ids) are read here first and its delete goes
+  // down ahead of the main transaction; a 7-day SSE replay log is the one
+  // table whose purge is allowed to land separately.
+  const scoreIdentities = (await exec(db, "select score_identity from score_events where user_id = ?", [safeUserId])).rows
+    .map((row) => String(row.score_identity));
+  const packPullIds = (await exec(db, "select id from pack_pull_events where card_user_id = ?", [safeUserId])).rows
+    .map((row) => Number(row.id));
+  const deletedLiveEvents = await deleteUserLiveEvents(journalDb, safeUserId, scoreIdentities, packPullIds);
 
   // Collect the touched beatmaps BEFORE deleting so the global farmed
   // projection can be reconciled per beatmap instead of forcing a full reseed.
@@ -263,26 +275,6 @@ export async function wipeUserProjections(db: Db, userId: number): Promise<WipeU
     { sql: "insert or ignore into pack_community_dirty_cards (card_user_id) values (?)", args: [safeUserId] },
   ];
   const deletions: Array<{ name: string; statement: DbStatement }> = [
-    {
-      name: "live_event_log",
-      statement: {
-        sql: `delete from live_event_log
-              where (type = 'tracker_score' and (
-                       (json_extract(payload_json, '$.ref') = 'tracker_score'
-                        and json_extract(payload_json, '$.scoreIdentity') in (select score_identity from score_events where user_id = ?))
-                       or cast(json_extract(payload_json, '$.user_id') as integer) = ?
-                       or cast(json_extract(payload_json, '$.user.id') as integer) = ?))
-                 or (type = 'top_play' and (cast(json_extract(payload_json, '$.user.id') as integer) = ?
-                                             or cast(json_extract(payload_json, '$.score.user_id') as integer) = ?))
-                 or (type = 'snipe' and (cast(json_extract(payload_json, '$.sniper.id') as integer) = ?
-                                         or cast(json_extract(payload_json, '$.victim.id') as integer) = ?))
-                 or (type = 'maps_farmed_update' and cast(json_extract(payload_json, '$.userId') as integer) = ?)
-                 or (type = 'goal_completed' and cast(json_extract(payload_json, '$.userId') as integer) = ?)
-                 or (type = 'pack_pull' and cast(json_extract(payload_json, '$.id') as integer) in
-                       (select id from pack_pull_events where card_user_id = ?))`,
-        args: Array(10).fill(safeUserId),
-      },
-    },
     { name: "score_events", statement: { sql: "delete from score_events where user_id = ?", args: [safeUserId] } },
     { name: "country_rank_snapshots", statement: { sql: "delete from country_rank_snapshots where user_id = ?", args: [safeUserId] } },
     { name: "country_beatmap_scores", statement: { sql: "delete from country_beatmap_scores where user_id = ?", args: [safeUserId] } },
@@ -338,10 +330,13 @@ export async function wipeUserProjections(db: Db, userId: number): Promise<WipeU
   const results = await execBatch(db, [...setup, ...deletions.map((entry) => entry.statement)]);
   // results[1] is the country_rosters untrack, the second setup statement.
   const untrackedRosters = Number(results[1]?.rowsAffected ?? 0);
-  const deleted = Object.fromEntries(deletions.map((entry, index) => [
-    entry.name,
-    Number(results[setup.length + index]?.rowsAffected ?? 0),
-  ]));
+  const deleted: Record<string, number> = {
+    live_event_log: deletedLiveEvents,
+    ...Object.fromEntries(deletions.map((entry, index) => [
+      entry.name,
+      Number(results[setup.length + index]?.rowsAffected ?? 0),
+    ])),
+  };
 
   // The target rows are already gone atomically. These follow-up rebuilds only
   // repair shared derivatives and publish their revisions; they never delete a
@@ -386,4 +381,50 @@ export async function setUserActive(db: Db, userId: number, active: boolean, rea
   }
   const result = await reactivateUser(db, userId);
   return { userId, username, active: true, ...result };
+}
+
+// SQLite takes a bounded number of bound parameters per statement, so the
+// identity lists go down in slices.
+const LIVE_EVENT_WIPE_CHUNK = 500;
+
+async function deleteUserLiveEvents(journalDb: Db, userId: number, scoreIdentities: string[], packPullIds: number[]): Promise<number> {
+  let deleted = 0;
+  const byUser = await exec(
+    journalDb,
+    `delete from live_event_log
+     where (type = 'tracker_score' and (cast(json_extract(payload_json, '$.user_id') as integer) = ?
+                                        or cast(json_extract(payload_json, '$.user.id') as integer) = ?))
+        or (type = 'top_play' and (cast(json_extract(payload_json, '$.user.id') as integer) = ?
+                                    or cast(json_extract(payload_json, '$.score.user_id') as integer) = ?))
+        or (type = 'snipe' and (cast(json_extract(payload_json, '$.sniper.id') as integer) = ?
+                                or cast(json_extract(payload_json, '$.victim.id') as integer) = ?))
+        or (type = 'maps_farmed_update' and cast(json_extract(payload_json, '$.userId') as integer) = ?)
+        or (type = 'goal_completed' and cast(json_extract(payload_json, '$.userId') as integer) = ?)`,
+    Array(8).fill(userId),
+  );
+  deleted += Number(byUser.rowsAffected ?? 0);
+  for (let index = 0; index < scoreIdentities.length; index += LIVE_EVENT_WIPE_CHUNK) {
+    const chunk = scoreIdentities.slice(index, index + LIVE_EVENT_WIPE_CHUNK);
+    const result = await exec(
+      journalDb,
+      `delete from live_event_log
+       where type = 'tracker_score'
+         and json_extract(payload_json, '$.ref') = 'tracker_score'
+         and json_extract(payload_json, '$.scoreIdentity') in (${chunk.map(() => "?").join(", ")})`,
+      chunk,
+    );
+    deleted += Number(result.rowsAffected ?? 0);
+  }
+  for (let index = 0; index < packPullIds.length; index += LIVE_EVENT_WIPE_CHUNK) {
+    const chunk = packPullIds.slice(index, index + LIVE_EVENT_WIPE_CHUNK);
+    const result = await exec(
+      journalDb,
+      `delete from live_event_log
+       where type = 'pack_pull'
+         and cast(json_extract(payload_json, '$.id') as integer) in (${chunk.map(() => "?").join(", ")})`,
+      chunk,
+    );
+    deleted += Number(result.rowsAffected ?? 0);
+  }
+  return deleted;
 }

@@ -60,7 +60,9 @@ export interface LeaderboardImportStatus {
   recent: boolean;
 }
 
-export async function getLeaderboardImportStatuses(db: Db, beatmapIds: number[]): Promise<LeaderboardImportStatus[]> {
+// `journalDb` is the journal database (journal.ts), where the osu! call log
+// lives; tests that keep every table in one file leave it defaulted.
+export async function getLeaderboardImportStatuses(db: Db, beatmapIds: number[], journalDb: Db = db): Promise<LeaderboardImportStatus[]> {
   const ids = [...new Set(beatmapIds.filter((id) => Number.isInteger(id) && id > 0))];
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(", ");
@@ -84,7 +86,7 @@ export async function getLeaderboardImportStatuses(db: Db, beatmapIds: number[])
       ids,
     ),
     exec(
-      db,
+      journalDb,
       `select t.path, max(l.started_at) as last_imported_at
        from api_call_targets t
        join api_call_log l on l.target_id = t.id

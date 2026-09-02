@@ -16,8 +16,8 @@ import { errorContext, logInfo, logWarn } from "./logger.js";
 //
 // Only meaningful for a local file: database (Turso/remote manage the WAL
 // server-side); returns a no-op stop() otherwise.
-export function startWalCheckpointer(config: Config): () => void {
-  const walPath = walFilePath(config.databaseUrl);
+export function startWalCheckpointer(config: Config, databaseUrl: string = config.databaseUrl): () => void {
+  const walPath = walFilePath(databaseUrl);
   if (!walPath) return () => {};
 
   const FIRST_TICK_MS = 5_000;
@@ -32,7 +32,7 @@ export function startWalCheckpointer(config: Config): () => void {
         // A dedicated connection with busy_timeout=0 (never wait on a lock) and
         // tiny cache/mmap (this box has no swap). Opened lazily so an idle WAL
         // costs nothing.
-        if (!db) db = await createDb({ ...config, sqliteBusyTimeoutMs: 0, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+        if (!db) db = await createDb({ ...config, databaseUrl, sqliteBusyTimeoutMs: 0, sqliteCacheMb: 2, sqliteMmapMb: 0 });
         const startedAt = Date.now();
         const { busy, checkpointed } = await runWalTruncateCheckpoint(db);
         const durationMs = Date.now() - startedAt;
