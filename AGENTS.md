@@ -3,7 +3,7 @@
 Mania Hub (mania-tracker.com) is an osu!mania community site with two cooperating parts:
 
 - **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset, self-hosted on the VPS; the Vercel preset only builds when `process.env.VERCEL` is set, kept as a rollback target).
-- **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from Kayla's oSC Socket.IO feed, keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227).
+- **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227).
 
 Countries are dynamic, not hardcoded: the backend's `country_registry` tracks per-country status (cold -> warm -> active, pausable) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 

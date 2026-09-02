@@ -5,7 +5,7 @@ Architecture guide for the always-on `live-backend/` service. Paths below are re
 The live backend is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Browsers fetch a snapshot on page entry, then subscribe to SSE (`/api/live?country=XX`) for deltas; SSE is one-way and browsers never talk to oSC. Reconnects replay missed events via `Last-Event-ID` against `live_event_log`.
 
 Ingest flow (`src/ingest/score-ingestor.ts`):
-1. Scores arrive from three sources: oSC Socket.IO (`src/osc/client.ts`, real-time), oSC JSON backfill (`src/osc/backfill.ts`, catch-up), and an osu! API recent-scores fallback poller (`src/osc/scores-fallback.ts`).
+1. Scores arrive from three sources. The osu! API recent-scores poller (`src/osc/scores-fallback.ts`) is the de facto ingest path today, and the admin monitor labels it "Ingest"; the legacy oSC Socket.IO client (`src/osc/client.ts`) and its JSON backfill (`src/osc/backfill.ts`) sit behind it, and the poller is gated on socket staleness in code, so do not describe the socket as alive in UI copy.
 2. Filter to mania; detect country via `country_rosters` (oSC payloads lack country).
 3. Raw rows land in `score_events`; metadata upserts into `users` / `beatmaps` / `beatmapsets`; projections and follow-up jobs fan out per enabled feature tier.
 

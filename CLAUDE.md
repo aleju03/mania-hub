@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Mania Hub (mania-tracker.com) is an osu!mania community site with two cooperating parts:
 
 - **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset, self-hosted on the VPS; the Vercel preset only builds when `process.env.VERCEL` is set, kept as a rollback target). File-based routes in `src/routes/`; `src/routeTree.gen.ts` is generated, do not hand-edit.
-- **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from Kayla's oSC Socket.IO feed, keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE.
+- **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE.
 
 Countries are dynamic, not hardcoded: the backend keeps a `country_registry` with per-country status (cold -> warm -> active, can pause) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 
@@ -23,7 +23,7 @@ Minimum verification: for live backend changes run `npm test` and `npx tsc --noE
 
 ## Live Backend Architecture
 
-The always-on `live-backend/` service (osu! score ingest from Kayla's oSC feed, durable SQLite projections, a DB-backed job queue, and SSE streaming to browsers) is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its architecture guide lives in `live-backend/CLAUDE.md` (loads when you work under that directory); `docs/backend.md` and `docs/features.md` have the fuller per-feature detail.
+The always-on `live-backend/` service (osu! score ingest, durable SQLite projections, a DB-backed job queue, and SSE streaming to browsers) is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its architecture guide lives in `live-backend/CLAUDE.md` (loads when you work under that directory); `docs/backend.md` and `docs/features.md` have the fuller per-feature detail.
 
 ## Frontend Architecture
 
