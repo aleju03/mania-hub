@@ -59,8 +59,9 @@ interface LiveBackendStatus {
   };
   lastEventAt: string | null;
   queueDepth: number;
-  // The serving process's write gate (db.ts withWriteGate): queue depth and
-  // wait EWMA are the write-saturation signal, sheds the 429s it handed out.
+  // The serving process's write queue (write-coalescer.ts): queue depth and
+  // wait EWMA are the write-saturation signal, sheds the 429s it handed out,
+  // and groupsFlushed / flushes is how many writes each transaction carried.
   writeGate?: {
     depth: number;
     peakDepth: number;
@@ -68,6 +69,20 @@ interface LiveBackendStatus {
     sheds: number;
     lastWaitMs: number;
     ewmaWaitMs: number;
+    flushes?: number;
+    groupsFlushed?: number;
+  } | null;
+  // The queue's transport (write-thread.ts): the dedicated writer thread in
+  // production, inline in source mode. exits > 0 means it has died and been
+  // respawned since boot.
+  writeThread?: {
+    mode: "thread" | "inline";
+    alive: boolean;
+    spawns: number;
+    exits: number;
+    lastExitCode: number | null;
+    lastError: string | null;
+    inFlight: number;
   } | null;
   queuePressure?: {
     depth: number;
@@ -649,10 +664,10 @@ function LiveBackendPage() {
                 icon={<Signal className="h-4 w-4" />}
               />
               <KpiCard
-                label="Write gate"
+                label="Write queue"
                 value={status?.writeGate ? `${formatNumber(status.writeGate.ewmaWaitMs)}ms` : "—"}
-                hint={status?.writeGate ? `depth ${formatNumber(status.writeGate.depth)} (peak ${formatNumber(status.writeGate.peakDepth)}), ${formatNumber(status.writeGate.sheds)} shed` : "avg wait for the write lock queue"}
-                tone={status?.writeGate && (status.writeGate.sheds > 0 || status.writeGate.ewmaWaitMs > 2000) ? "warn" : "neutral"}
+                hint={status?.writeGate ? writeQueueHint(status.writeGate, status.writeThread) : "avg wait in the serving write queue"}
+                tone={status?.writeGate && (status.writeGate.sheds > 0 || status.writeGate.ewmaWaitMs > 2000 || (status.writeThread?.exits ?? 0) > 0) ? "warn" : "neutral"}
                 icon={<Database className="h-4 w-4" />}
               />
             </div>
@@ -1998,6 +2013,19 @@ function diskTone(disk: DiskUsage | null | undefined): StatusTone {
   if (disk.usedPct >= criticalPct) return "bad";
   if (disk.usedPct >= warnPct) return "warn";
   return "good";
+}
+
+function writeQueueHint(gate: NonNullable<LiveBackendStatus["writeGate"]>, thread: LiveBackendStatus["writeThread"]): string {
+  const parts = [`depth ${formatNumber(gate.depth)} (peak ${formatNumber(gate.peakDepth)}), ${formatNumber(gate.sheds)} shed`];
+  if (gate.flushes && gate.groupsFlushed != null) {
+    parts.push(`${(gate.groupsFlushed / gate.flushes).toLocaleString("en-US", { maximumFractionDigits: 1 })} writes/txn`);
+  }
+  if (thread) {
+    parts.push(thread.mode === "thread"
+      ? (thread.exits > 0 ? `thread respawned ${formatNumber(thread.exits)}x` : "thread")
+      : "inline");
+  }
+  return parts.join(" · ");
 }
 
 function StoragePathRows({ paths }: { paths: StorageFootprint | null | undefined }) {
