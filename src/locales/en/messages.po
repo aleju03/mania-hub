@@ -1763,8 +1763,16 @@ msgstr "7K LN"
 #~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate follows your General dan, and Tech, Inverse and Release only nudge it: each moves it by half its distance from General, that distance is capped at two levels, and the three are averaged, so together they move it by at most one level either way. The reason is the maps, not the players. Very few Release or Inverse maps exist near the top, so those dans stop where the maps stop: Release sits a median of 3.75 levels under General among the players who have it rated, and 5.2 levels under once General reaches azimuth. Under a plain average, three skills at zenith and a Release at 10 read as azimuth. A skill the cap bit is marked capped in the dan window; its own number is untouched."
 
 #: src/routes/dan-estimates.tsx
-msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
-msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+msgstr "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -12700,8 +12708,13 @@ msgstr "The estimate only sees scores it has. Your osu! top plays are always inc
 
 #. placeholder {0}: anchorSection.label
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
-msgstr "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+#~ msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+#~ msgstr "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate stays within one level of your {0} dan, whichever way the other skillsets point."
+msgstr "The estimate stays within one level of your {0} dan, whichever way the other skillsets point."
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"

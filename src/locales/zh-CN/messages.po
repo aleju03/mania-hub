@@ -1772,8 +1772,16 @@ msgstr "7K LN"
 #~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以估计值以你的 General 段位为准，Tech、Inverse 和 Release 只会小幅推动它：每项按它与 General 差距的一半推动，差距最多按两个段位计算，三项取平均，因此三项合计最多让它变动一个段位。原因在于谱面，而不是玩家。顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步：在有 Release 评级的玩家中，Release 中位数比 General 低 3.75 个段位，General 达到 azimuth 后则低 5.2 个段位。按简单平均，三项 zenith 加一项 Release 10 段会读作 azimuth。被封顶的技能会在段位窗口中标为已封顶，它自身的数字不变。"
 
 #: src/routes/dan-estimates.tsx
-msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
-msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以估计值从你的 General 段位出发，Tech、Inverse 和 Release 合计最多把它拉高或拉低一个段位。原因在于谱面：顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以估计值从你的 General 段位出发，Tech、Inverse 和 Release 合计最多把它拉高或拉低一个段位。原因在于谱面：顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。原因在于谱面：顶端附近的 Release 和 Inverse 谱面极少，所以这些段位在谱面止步的地方止步。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+msgstr "7K LN 是唯一的例外。它的 General 技能本身已经混合了各种长条，所以无论 Tech、Inverse 和 Release 偏向哪边，估计值都不会偏离你的 General 段位超过一个段位。几乎所有人的这两项段位都远低于 General，可能是因为这类高难度谱面很少，也可能是因为站点没有识别出全部，所以它们不再单独决定这个数字。被这样限制的技能会在段位窗口中标为已封顶，它自身的数字不变。"
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -12701,8 +12709,13 @@ msgstr "估算只能看到本站已有的成绩。你的 osu! 最佳成绩一定
 
 #. placeholder {0}: anchorSection.label
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
-msgstr "估计值从你的{0}段位出发。其他技能可以把它拉高或拉低，但最多不超过一个段位。"
+#~ msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+#~ msgstr "估计值从你的{0}段位出发。其他技能可以把它拉高或拉低，但最多不超过一个段位。"
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate stays within one level of your {0} dan, whichever way the other skillsets point."
+msgstr "无论其他技能偏向哪边，估计值都不会偏离你的{0}段位超过一个段位。"
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"

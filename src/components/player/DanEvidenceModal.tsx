@@ -469,8 +469,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   {anchorSection && sections.length > 2 ? (
                     <div className="px-2 pt-2 text-[11px] text-osu-f1">
                       <Trans>
-                        The estimate starts at your {anchorSection.label} dan. The other skillsets
-                        can pull it up or down, but never by more than one level.
+                        The estimate stays within one level of your {anchorSection.label} dan,
+                        whichever way the other skillsets point.
                       </Trans>
                     </div>
                   ) : null}

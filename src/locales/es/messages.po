@@ -1763,8 +1763,16 @@ msgstr "7K LN"
 #~ msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación sigue tu dan de General, y Tech, Inverse y Release solo la empujan un poco: cada una la mueve la mitad de su distancia a General, esa distancia se limita a dos niveles y las tres se promedian, así que entre las tres la mueven como mucho un nivel en cualquier dirección. La razón son los mapas, no los jugadores. Existen muy pocos mapas de Release o Inverse cerca de la cima, así que esos dan se detienen donde se detienen los mapas: Release queda una mediana de 3.75 niveles por debajo de General entre los jugadores que lo tienen calificado, y 5.2 niveles por debajo cuando General llega a azimuth. Con un promedio simple, tres habilidades en zenith y un Release en 10 se leían como azimuth. Una habilidad afectada por el límite aparece marcada como limitada en la ventana de dan; su propio número no cambia."
 
 #: src/routes/dan-estimates.tsx
-msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
-msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación parte de tu dan de General, y Tech, Inverse y Release pueden subirla o bajarla como mucho un nivel en total. La razón son los mapas: existen muy pocos mapas de Release o Inverse cerca de la cima, así que esos dan se detienen donde se detienen los mapas. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or down by at most one level in total. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación parte de tu dan de General, y Tech, Inverse y Release pueden subirla o bajarla como mucho un nivel en total. La razón son los mapas: existen muy pocos mapas de Release o Inverse cerca de la cima, así que esos dan se detienen donde se detienen los mapas. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. The reason is the maps: very few Release or Inverse maps exist near the top, so those dans stop where the maps stop. A skill held back this way is marked capped in the dan window; its own number is untouched."
+#~ msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. La razón son los mapas: existen muy pocos mapas de Release o Inverse cerca de la cima, así que esos dan se detienen donde se detienen los mapas. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
+
+#: src/routes/dan-estimates.tsx
+msgid "7K LN is the one exception. Its General skill already mixes every kind of long note, so the estimate stays within one level of your General dan, whichever way Tech, Inverse and Release point. Those two dans stop well under General for almost everyone, whether because few hard maps of those kinds exist or because the site does not recognise all of them, so they no longer get to decide the number on their own. A skill held back this way is marked capped in the dan window; its own number is untouched."
+msgstr "7K LN es la única excepción. Su habilidad General ya mezcla todo tipo de notas largas, así que la estimación se queda a un nivel como mucho de tu dan de General, apunten hacia donde apunten Tech, Inverse y Release. Esos dos dan se quedan bastante por debajo de General en casi todo el mundo, ya sea porque existen pocos mapas difíciles de ese tipo o porque el sitio no reconoce todos, así que ya no deciden el número por su cuenta. Una habilidad frenada así aparece marcada como limitada en la ventana de dan; su propio número no cambia."
 
 #: src/routes/dan-estimates.tsx
 msgid "7K regular"
@@ -12692,8 +12700,13 @@ msgstr "La estimación solo ve los scores que tiene. Tus top plays de osu! siemp
 
 #. placeholder {0}: anchorSection.label
 #: src/components/player/DanEvidenceModal.tsx
-msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
-msgstr "La estimación parte de tu dan de {0}. Las otras habilidades pueden subirla o bajarla, pero nunca más de un nivel."
+#~ msgid "The estimate starts at your {0} dan. The other skillsets can pull it up or down, but never by more than one level."
+#~ msgstr "La estimación parte de tu dan de {0}. Las otras habilidades pueden subirla o bajarla, pero nunca más de un nivel."
+
+#. placeholder {0}: anchorSection.label
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The estimate stays within one level of your {0} dan, whichever way the other skillsets point."
+msgstr "La estimación se queda a un nivel como mucho de tu dan de {0}, apunten hacia donde apunten las otras habilidades."
 
 #: src/routes/dan-estimates.tsx
 msgid "The estimator downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"

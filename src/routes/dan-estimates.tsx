@@ -519,9 +519,10 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               7K LN is the one exception. Its General skill already mixes every kind of long note, so
-              the estimate starts at your General dan, and Tech, Inverse and Release can pull it up or
-              down by at most one level in total. The reason is the maps: very few Release or Inverse
-              maps exist near the top, so those dans stop where the maps stop. A skill held back this
+              the estimate stays within one level of your General dan, whichever way Tech, Inverse and
+              Release point. Those two dans stop well under General for almost everyone, whether because
+              few hard maps of those kinds exist or because the site does not recognise all of them, so
+              they no longer get to decide the number on their own. A skill held back this
               way is marked capped in the dan window; its own number is untouched.
             </Trans>
           </P>
