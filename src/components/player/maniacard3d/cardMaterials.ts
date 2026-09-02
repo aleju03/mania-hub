@@ -55,7 +55,7 @@ export function createOverlayMaterial(
   motif: PreparedCardMotif | null = null,
 ) {
   const avatar = layout.masks.avatar;
-  const cosmic = getCosmicTierPalette(data.tier);
+  const cosmic = getCosmicTierPalette(data.tier, data.motif);
   return new ShaderMaterial({
     transparent: true,
     depthWrite: false,

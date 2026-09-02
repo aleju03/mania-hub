@@ -205,10 +205,36 @@ function devForceEternalPull(): boolean {
   return new URLSearchParams(window.location.search).has("forceEternal");
 }
 
-/* Applies the dev force above to a dealt hand, whoever dealt it. */
+/* Dev only, the milestone event's two cards on the same terms:
+   `/packs?forceMilestone=1` marks the hand's final slot as the golden card
+   (Eternal plus the event's badge and motif) and `/packs?forceFoil=1` as a 1M
+   foil. Display-only like forceEternal: no variant key is claimed, so the
+   mint pass lands on the player's ordinary row and nothing is minted or
+   synced. The badge and motif mirror PACK_MILESTONE in
+   live-backend/src/features/pack-milestone.ts. */
+function devForcedMilestoneCard(): "golden" | "foil" | null {
+  if (!import.meta.env.DEV || typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("forceMilestone")) return "golden";
+  if (params.has("forceFoil")) return "foil";
+  return null;
+}
+
+const DEV_MILESTONE_MOTIF_URL = "https://mania-tracker.com/images/packs/milestone-1m.png";
+
+/* Applies the dev forces above to a dealt hand, whoever dealt it. */
 function devApplyForcedEternal(players: PackPlayer[]): PackPlayer[] {
-  if (!devForceEternalPull() || players.length === 0 || players.some((player) => player.eternal)) return players;
+  if (players.length === 0) return players;
   const last = players.length - 1;
+  const milestone = devForcedMilestoneCard();
+  if (milestone && !players.some((player) => player.cardKey || player.eternal)) {
+    const forced: Partial<PackPlayer> =
+      milestone === "golden"
+        ? { eternal: true, milestone: true, customLabel: "1,000,000th pack", motif: { url: DEV_MILESTONE_MOTIF_URL, scale: 1.35, opacity: 0.9, palette: "gold" as const } }
+        : { foil: true, customLabel: "1M", motif: { url: DEV_MILESTONE_MOTIF_URL, scale: 1, opacity: 0.55 } };
+    return players.map((player, index) => (index === last ? { ...player, ...forced } : player));
+  }
+  if (!devForceEternalPull() || players.some((player) => player.eternal)) return players;
   return players.map((player, index) => (index === last ? { ...player, eternal: true } : player));
 }
 
@@ -1071,7 +1097,7 @@ function PacksPage() {
                           // draw's own answer wins; the local wallet only
                           // speaks for anonymous (and resumed) packs.
                           return (
-                            serverIsNewRef.current?.get(packCardKey(pull.userId, pull.tier)) ?? localIsNew
+                            serverIsNewRef.current?.get(pull.cardKey ?? packCardKey(pull.userId, pull.tier)) ?? localIsNew
                           );
                         }}
                         onComplete={(pulls, handoff) => {
@@ -1086,7 +1112,7 @@ function PacksPage() {
                             const mints = pulls
                               .filter((pull) => pull.skills)
                               .map((pull) => ({
-                                cardKey: packCardKey(pull.player.user.id, pull.tier),
+                                cardKey: pull.player.cardKey ?? packCardKey(pull.player.user.id, pull.tier),
                                 tier: pull.tier,
                                 tierLabel: pull.tierLabel,
                                 skills: pull.skills,
@@ -1106,6 +1132,7 @@ function PacksPage() {
                                 packType: selectedType.id,
                                 cards: pulls.map((pull) => ({
                                   userId: pull.player.user.id,
+                                  ...(pull.player.cardKey ? { cardKey: pull.player.cardKey } : {}),
                                   username: pull.player.user.username,
                                   countryCode: pull.player.user.country_code,
                                   tier: pull.tier,

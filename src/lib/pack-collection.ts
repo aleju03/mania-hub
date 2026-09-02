@@ -74,6 +74,8 @@ export interface PackWallet {
 
 export interface PulledCard {
   userId: number;
+  /* The holding's key when the tier cannot derive it (a milestone card). */
+  cardKey?: string;
   username: string;
   avatarUrl: string;
   countryCode: string;
@@ -301,7 +303,7 @@ export function recordPull(
   pull: PulledCard,
   now: number,
 ): { wallet: PackWallet; isNew: boolean } {
-  const key = packCardKey(pull.userId, pull.tier);
+  const key = pull.cardKey ?? packCardKey(pull.userId, pull.tier);
   const existing = wallet.cards[key];
   if (!existing) {
     const card: CollectedCard = { ...pull, copies: 1, recycledCopies: 0, firstPulledAt: now, lastPulledAt: now };

@@ -823,6 +823,32 @@ describe("startBoundedPrefetches", () => {
 describe("mapServerPackDraw", () => {
   const score = { pp: 321 } as OsuScore;
 
+  it("carries a milestone slot's variant key, badge and motif, and drops a key that is not this player's variant", () => {
+    const motif = { url: "https://mania-tracker.com/images/packs/milestone-1m.png", scale: 1, opacity: 0.55 };
+    const mapped = mapServerPackDraw({
+      poolTotal: 4200,
+      players: [
+        { userId: 11, isNew: true, foil: true, cardKey: "11:v2", customLabel: "1M", motif, username: "alpha", avatarUrl: "", countryCode: "CR", globalRank: 900, poolRank: 12, pp: 5000 },
+        // The golden card: an Eternal slot on a variant key.
+        { userId: 22, isNew: true, eternal: true, milestone: true, cardKey: "22:v1", customLabel: "1,000,000th pack", motif, username: "bravo", avatarUrl: "", countryCode: "AR", pp: 4000, globalRank: 50 },
+        // A key naming another player, or a derived form, is not a variant this slot may claim.
+        { userId: 33, isNew: false, cardKey: "11:v2", customLabel: "nope", username: "charlie", avatarUrl: "", countryCode: "CR", globalRank: 70, poolRank: 3, pp: 6000 },
+        { userId: 44, isNew: false, cardKey: "44:goat", customLabel: "nope", username: "delta", avatarUrl: "", countryCode: "CR", globalRank: 80, poolRank: 4, pp: 6000 },
+      ],
+      cards: [],
+      wallet: null,
+    });
+    const [foil, golden, plain, derived] = mapped.draw.players;
+    expect(foil).toMatchObject({ foil: true, cardKey: "11:v2", customLabel: "1M", motif });
+    expect(golden).toMatchObject({ eternal: true, milestone: true, cardKey: "22:v1", customLabel: "1,000,000th pack" });
+    expect(plain.cardKey).toBeUndefined();
+    expect(plain.customLabel).toBeUndefined();
+    expect(derived.cardKey).toBeUndefined();
+    expect(mapped.isNewByCardKey.get("11:v2")).toBe(true);
+    expect(mapped.isNewByCardKey.get("22:v1")).toBe(true);
+    expect(mapped.isNewByCardKey.get("33")).toBe(false);
+  });
+
   it("maps ranked slots into pack players and seeds only non-empty stored windows", () => {
     const mapped = mapServerPackDraw({
       poolTotal: 4200,

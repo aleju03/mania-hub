@@ -6,6 +6,7 @@ import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGues
 import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, getPullableEternalIdentity, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, mintPulledEternalCard, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
+import { claimPackMilestoneOnce, mintPackMilestoneFoilCard, PACK_MILESTONE } from "../../features/pack-milestone.js";
 import { logInfo, logWarn } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
@@ -91,9 +92,10 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       (Array.isArray(body.userIds) ? body.userIds : [])
         .map(Number)
         .filter((id) => Number.isInteger(id) && id > 0),
-    // The largest pack (Wild) plus both Eternal bonus slots: the opener's
-    // own completion card and the 0.0025% pull of somebody else's.
-    )].slice(0, 12);
+    // The largest pack (Wild) plus the three bonus slots: both Eternal deals
+    // (the opener's own completion card, the 0.0025% pull of somebody else's)
+    // and the milestone foil.
+    )].slice(0, 13);
     if (userIds.length === 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
       return true;
@@ -290,40 +292,90 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         logWarn("pack_eternal_pull_failed", { userId: ownerUserId, error: String(error) });
       }
     }
+    /* The milestone foil (pack-milestone.ts): a commemorative variant of a
+       player from the pack's slice, dealt while the event's window is open.
+       Repeatable like the Eternal pull, and a failure here likewise returns
+       the paid hand. The slot carries its variant key, badge and motif because
+       the client cannot derive any of them from a tier. */
+    if (hand.foilPull) {
+      const entry = hand.foilPull;
+      try {
+        const foil = await mintPackMilestoneFoilCard(
+          writeDb,
+          ownerUserId,
+          entry.user.id,
+          {
+            username: entry.user.username,
+            avatarUrl: entry.user.avatar_url,
+            countryCode: entry.user.country_code,
+            pp: entry.pp,
+            globalRank: entry.global_rank ?? 0,
+          },
+          Date.now(),
+        );
+        hand.players.push({
+          foil: true,
+          userId: entry.user.id,
+          username: entry.user.username,
+          avatarUrl: entry.user.avatar_url,
+          countryCode: entry.user.country_code,
+          globalRank: entry.global_rank,
+          poolRank: entry.rank,
+          pp: entry.pp,
+          cardKey: foil.cardKey,
+          customLabel: foil.customLabel,
+          motif: foil.motif,
+        });
+        isNewByCardKey.set(foil.cardKey, foil.isNew);
+        logInfo("pack_milestone_foil", { ownerUserId, cardUserId: entry.user.id, cardKey: foil.cardKey, packType });
+      } catch (error) {
+        logWarn("pack_milestone_foil_failed", { userId: ownerUserId, error: String(error) });
+      }
+    }
+    /* The opener's own face, resolved once for whichever of the two one-time
+       deals below needs it: the stored/fetched profile snapshot for the
+       numbers, the users row and the verified osu! cookie identity as the
+       name/avatar fallbacks. */
+    let selfIdentity: PackUserIdentity | null = null;
+    const resolveSelfIdentity = async (reason: string): Promise<PackUserIdentity> => {
+      if (selfIdentity) return selfIdentity;
+      let selfSnapshots = await getCachedPackCardSnapshots(ctx.db, [ownerUserId]);
+      if (selfSnapshots.length === 0) {
+        try {
+          await fetchAndStoreProfileSnapshotShared(
+            writeDb,
+            ctx.osu,
+            String(ownerUserId),
+            "userId",
+            reason,
+          );
+          selfSnapshots = await getCachedPackCardSnapshots(writeDb, [ownerUserId]);
+        } catch {
+          // The signed osu! cookie identity below still gives the card its
+          // correct face; the normal reveal cold path can retry the scores.
+        }
+      }
+      const storedIdentity = await getPackUserIdentity(writeDb, ownerUserId);
+      const verifiedIdentity = {
+        username: typeof body.viewerUsername === "string" ? body.viewerUsername.slice(0, 40) : "",
+        avatarUrl: normalizeAvatarUrl(body.viewerAvatarUrl),
+        countryCode: normalizeCountryCode(typeof body.viewerCountryCode === "string" ? body.viewerCountryCode : ""),
+      };
+      selfIdentity = eternalSelfIdentity(
+        ownerUserId,
+        selfSnapshots[0]?.user ?? null,
+        storedIdentity,
+        verifiedIdentity,
+      );
+      return selfIdentity;
+    };
     /* Eligibility is a read, but the award is a database claim: parallel draw
        requests may both arrive here as candidates, and exactly one random
        claim token wins the primary key while minting the card in that same
        transaction. Only that winner appends the bonus to its response. */
     if (eternalSelfCandidate) {
       try {
-        let selfSnapshots = await getCachedPackCardSnapshots(ctx.db, [ownerUserId]);
-        if (selfSnapshots.length === 0) {
-          try {
-            await fetchAndStoreProfileSnapshotShared(
-              writeDb,
-              ctx.osu,
-              String(ownerUserId),
-              "userId",
-              "api:pack_eternal_self",
-            );
-            selfSnapshots = await getCachedPackCardSnapshots(writeDb, [ownerUserId]);
-          } catch {
-            // The signed osu! cookie identity below still gives the card its
-            // correct face; the normal reveal cold path can retry the scores.
-          }
-        }
-        const storedIdentity = await getPackUserIdentity(writeDb, ownerUserId);
-        const verifiedIdentity = {
-          username: typeof body.viewerUsername === "string" ? body.viewerUsername.slice(0, 40) : "",
-          avatarUrl: normalizeAvatarUrl(body.viewerAvatarUrl),
-          countryCode: normalizeCountryCode(typeof body.viewerCountryCode === "string" ? body.viewerCountryCode : ""),
-        };
-        const identity = eternalSelfIdentity(
-          ownerUserId,
-          selfSnapshots[0]?.user ?? null,
-          storedIdentity,
-          verifiedIdentity,
-        );
+        const identity = await resolveSelfIdentity("api:pack_eternal_self");
         const eternal = await mintEternalSelfCardOnce(writeDb, ownerUserId, identity, Date.now());
         if (eternal.dealt) {
           // Appended after the honorary machinery, so this remains the hand's
@@ -338,6 +390,43 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         logWarn("pack_eternal_deal_failed", { userId: ownerUserId, error: String(error) });
       }
     }
+    /* The milestone's golden card (pack-milestone.ts): this open's spend is
+       already banked, so the sum it reads includes this pack, and the pack
+       that makes the number is the pack that wins it. One row read while the
+       milestone is unclaimed and nothing at all once it is. Last of all, so
+       the millionth pack ends on it. */
+    if (PACK_MILESTONE.enabled) {
+      try {
+        const milestone = await claimPackMilestoneOnce(
+          writeDb,
+          ownerUserId,
+          () => resolveSelfIdentity("api:pack_milestone"),
+          Date.now(),
+        );
+        if (milestone.dealt && milestone.cardKey) {
+          const identity = await resolveSelfIdentity("api:pack_milestone");
+          hand.players.push({
+            eternal: true,
+            milestone: true,
+            userId: ownerUserId,
+            ...identity,
+            cardKey: milestone.cardKey,
+            customLabel: PACK_MILESTONE.goldenLabel,
+            motif: PACK_MILESTONE.goldenMotif,
+          });
+          isNewByCardKey.set(milestone.cardKey, true);
+          logInfo("pack_milestone_claimed", {
+            milestoneId: PACK_MILESTONE.id,
+            ownerUserId,
+            cardKey: milestone.cardKey,
+            packsOpened: milestone.packsOpened,
+            packType,
+          });
+        }
+      } catch (error) {
+        logWarn("pack_milestone_claim_failed", { userId: ownerUserId, error: String(error) });
+      }
+    }
     // Dealt because the slice had no ready replacement left: start their
     // fetch now so the reveal's cold path joins an in-flight warm.
     if (hand.notReadyUserIds.length > 0) {
@@ -346,7 +435,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     const cards = await getCachedPackCardSnapshots(ctx.db, hand.players.map((player) => player.userId));
     const players = hand.players.map((slot) => ({
       ...slot,
-      isNew: isNewByCardKey.get(packCardKey(slot.userId, slot.honorary ? "goat" : slot.eternal ? "eternal" : null)) ?? false,
+      isNew: isNewByCardKey.get(slot.cardKey ?? packCardKey(slot.userId, slot.honorary ? "goat" : slot.eternal ? "eternal" : null)) ?? false,
     }));
     await sendAccentEnrichedJson(req, res, ctx, 200, {
       poolTotal: hand.poolTotal,
@@ -885,7 +974,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       // every server-dealt open).
       if (body.mode === "mint") {
         if (Array.isArray(body.cards)) {
-          const mints = body.cards.slice(0, 12); // Wild pack plus both Eternal bonus slots.
+          const mints = body.cards.slice(0, 13); // Wild pack plus the three bonus slots.
           let applied = 0;
           for (const raw of mints) {
             const mint = (raw ?? {}) as Record<string, unknown>;

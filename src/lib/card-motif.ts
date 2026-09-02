@@ -17,6 +17,14 @@
    against is a stored value that is old, hand-edited or simply wrong: parse
    returns null rather than handing a half-formed motif to a canvas. */
 
+/* A palette a holding's look may swap in for its tier's own: the whole card
+   wash, starfield, rim and badge colours, not just the floating image. Today
+   only the milestone's golden card uses one. Kept on the motif rather than as
+   a column of its own because the motif is already "how this holding looks",
+   and every surface that carries a motif carries this with it for free. */
+export const CARD_MOTIF_PALETTES = ["gold"] as const;
+export type CardMotifPalette = (typeof CARD_MOTIF_PALETTES)[number];
+
 export interface CardMotif {
   /** https URL of the image. Loaded through /api/card-motif, never directly. */
   url: string;
@@ -24,6 +32,8 @@ export interface CardMotif {
   scale: number;
   /** How strongly the shape reads over the card background. */
   opacity: number;
+  /** Colour scheme replacing the tier's, when the holding has one. */
+  palette?: CardMotifPalette;
 }
 
 export const CARD_MOTIF_URL_MAX_CHARS = 400;
@@ -66,10 +76,14 @@ export function parseCardMotif(value: unknown): CardMotif | null {
   const raw = value as Record<string, unknown>;
   const url = normalizeCardMotifUrl(raw.url);
   if (!url) return null;
+  const palette = (CARD_MOTIF_PALETTES as readonly string[]).includes(String(raw.palette))
+    ? (raw.palette as CardMotifPalette)
+    : undefined;
   return {
     url,
     scale: clamp(raw.scale, CARD_MOTIF_SCALE_RANGE, 1),
     opacity: clamp(raw.opacity, CARD_MOTIF_OPACITY_RANGE, 1),
+    ...(palette ? { palette } : {}),
   };
 }
 
@@ -91,5 +105,5 @@ export function cardMotifImageSrc(motif: CardMotif): string {
 /* Identity of a motif for cache keys and render signatures. A card whose motif
    changed has to repaint, and its cached thumbnail has to miss. */
 export function cardMotifSignature(motif: CardMotif | null | undefined): string {
-  return motif ? `${motif.url}|${motif.scale}|${motif.opacity}` : "";
+  return motif ? `${motif.url}|${motif.scale}|${motif.opacity}${motif.palette ? `|${motif.palette}` : ""}` : "";
 }

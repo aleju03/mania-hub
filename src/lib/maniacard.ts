@@ -835,6 +835,30 @@ export interface ManiaCardTierStyle {
   badgeGlyphShadow: string;
 }
 
+/* The card-surface style for a holding whose motif names a palette
+   (CardMotif.palette), everything but the label, which stays the tier's. */
+export const MANIA_PALETTE_STYLES: Record<"gold", Omit<ManiaCardTierStyle, "label">> = {
+  gold: {
+    background: "from-black via-yellow-950 to-zinc-950",
+    border: "border-yellow-100/95",
+    glow: "shadow-[0_18px_90px_rgba(246,195,67,0.55)]",
+    edgeFill: "rgba(74, 52, 6, 0.97)",
+    glowColor: "rgba(246, 195, 67, 0.5)",
+    starColor: "text-yellow-100",
+    badgeColor: "text-yellow-50",
+    badgeGradient:
+      "linear-gradient(142deg, #fff3b0 0%, #f6c343 34%, #b8860b 70%, #0d0903 100%)",
+    badgeHalo: "rgba(246,195,67,0.72)",
+    badgeGlyphShadow: "rgba(74,52,6,0.58)",
+  },
+};
+
+/* A tier's style, with the holding's palette swapped in when it has one. */
+export function resolveManiaTierStyle(tier: ManiaCardTier, motif?: { palette?: keyof typeof MANIA_PALETTE_STYLES } | null): ManiaCardTierStyle {
+  const base = MANIA_TIER_STYLES[tier];
+  return motif?.palette ? { ...MANIA_PALETTE_STYLES[motif.palette], label: base.label } : base;
+}
+
 export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
   common: {
     label: "Common",

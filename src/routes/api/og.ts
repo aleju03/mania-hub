@@ -1649,8 +1649,10 @@ async function renderPulledCardOg(
      fetched simply leaves the tier's own pattern in place. */
   const motif = parseCardMotif(card.motif);
   const inlinedMotif = motif ? await cardMotifDataUrl(motif) : null;
+  // The palette rides the motif and applies whether or not the image could
+  // be fetched; the sprites need the image (maniaTierCardElement checks both).
+  if (motif) art.motif = motif;
   if (motif && inlinedMotif) {
-    art.motif = motif;
     art.motifUrl = inlinedMotif.dataUrl;
     art.motifAspect = inlinedMotif.aspect;
   }

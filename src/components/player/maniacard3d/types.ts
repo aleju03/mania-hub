@@ -63,5 +63,8 @@ export interface ManiaCardRenderInput {
   user: ManiaCardPanelProps["user"];
   scores: OsuScore[];
   tierOverride?: ManiaCardTier;
+  /* Badge text in place of the tier's name, for a holding that carries its
+     own (a milestone card dealt by the server); see labelOverride below. */
+  labelOverride?: string | null;
   motifOverride?: CardMotif | null;
 }

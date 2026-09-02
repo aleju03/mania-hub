@@ -12,6 +12,8 @@ import {
   type LiveGlobalRankingEntry,
 } from "./live-backend";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
+import { parseCardMotif, type CardMotif } from "./card-motif";
+import { parsePackCardKey } from "./pack-collection";
 import { HONORARY_PACK_POOL, honoraryPlayerById, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
 import { getUserScoresBestWindow } from "./osu";
 import { drawServerPack, type ServerPackDrawResult, type ServerWalletState } from "./pack-draw";
@@ -57,6 +59,41 @@ export interface PackPlayer {
      row and refuses the tier from any client claim, so forging this flag
      paints a card only on the forger's own screen. */
   eternal?: boolean;
+  /* A milestone card (the foil, or the golden card, which is also an Eternal
+     slot). The server dealt it on a variant key it names here, with the
+     badge text and motif the face is drawn with; the mint pass and the pull
+     report address the holding by that key. Display-only on this side like
+     the Eternal flag: the key is only believed server-side for a holding the
+     collector already has. */
+  foil?: boolean;
+  milestone?: boolean;
+  cardKey?: string;
+  customLabel?: string | null;
+  motif?: CardMotif | null;
+}
+
+/* The variant fields a server slot may carry, bounded: a key that is not a
+   variant of this player is dropped, and a motif that does not parse is no
+   motif. */
+export function packPlayerVariantFields(slot: {
+  userId: number;
+  foil?: boolean;
+  milestone?: boolean;
+  cardKey?: string;
+  customLabel?: string | null;
+  motif?: CardMotif | null;
+}): Pick<PackPlayer, "foil" | "milestone" | "cardKey" | "customLabel" | "motif"> {
+  const parsed = typeof slot.cardKey === "string" ? parsePackCardKey(slot.cardKey) : null;
+  const cardKey = parsed && parsed.userId === slot.userId && parsed.variant > 0 ? slot.cardKey : undefined;
+  if (!cardKey) return {};
+  const customLabel = typeof slot.customLabel === "string" && slot.customLabel.trim() ? slot.customLabel.slice(0, 60) : null;
+  return {
+    cardKey,
+    customLabel,
+    motif: parseCardMotif(slot.motif ?? null),
+    ...(slot.foil === true ? { foil: true as const } : {}),
+    ...(slot.milestone === true ? { milestone: true as const } : {}),
+  };
 }
 
 // The booster lineup. Standard burns a regenerating pack charge; the rest
@@ -757,9 +794,10 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }),
   );
   for (const slot of result.players) {
+    const variant = packPlayerVariantFields(slot);
     if (typeof slot.isNew === "boolean") {
       isNewByCardKey.set(
-        slot.honorary ? `${slot.userId}:goat` : slot.eternal ? `${slot.userId}:eternal` : String(slot.userId),
+        variant.cardKey ?? (slot.honorary ? `${slot.userId}:goat` : slot.eternal ? `${slot.userId}:eternal` : String(slot.userId)),
         slot.isNew,
       );
     }
@@ -778,6 +816,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
       const globalRank = slot.globalRank ?? snapshot?.statistics?.global_rank ?? null;
       players.push({
         eternal: true,
+        ...variant,
         user: {
           id: slot.userId,
           username: slot.username || snapshot?.username || `User ${slot.userId}`,
@@ -791,6 +830,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
       continue;
     }
     players.push({
+      ...variant,
       user: {
         id: slot.userId,
         username: slot.username ?? `User ${slot.userId}`,

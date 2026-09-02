@@ -4,7 +4,7 @@ import { buildFaceLayout } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 import { cardMotifImageSrc, type CardMotif } from "#/lib/card-motif";
-import { COSMIC_TIERS } from "#/lib/maniacard-cosmic";
+import { getCosmicTierPalette as cosmicPaletteFor } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
 const FONT = "Torus, Arial, sans-serif";
@@ -224,7 +224,7 @@ function drawFront(
   drawTierBackground(context, data, { starfield: !withMotif });
   // Cosmic tiers skip the triangle flecks entirely - their front is a clean
   // starfield (static here, drifting/twinkling in the overlay shader).
-  const cosmic = COSMIC_TIERS[data.tier];
+  const cosmic = cosmicPaletteFor(data.tier, data.motif);
   if (cosmic) {
     if (cosmic.laurelWatermark) drawLaurelWatermark(context, data, laurel);
     drawCosmicFoilAccents(context, cosmic);
@@ -782,7 +782,7 @@ function drawTierBackground(
   data: ManiaCardReadyData,
   options: { starfield?: boolean } = {},
 ) {
-  const cosmic = COSMIC_TIERS[data.tier];
+  const cosmic = cosmicPaletteFor(data.tier, data.motif);
   if (cosmic) {
     drawCosmicBackground(context, cosmic, options.starfield !== false);
     return;

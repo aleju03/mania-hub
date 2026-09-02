@@ -18,7 +18,7 @@ import { createElement as h } from "react";
 
 import { formatOgInt } from "./og-render";
 import { getAssetOrigin } from "./origin";
-import { MANIA_TIER_STYLES } from "./maniacard";
+import { MANIA_TIER_STYLES, resolveManiaTierStyle } from "./maniacard";
 import type { ManiaCardTier } from "./maniacard";
 import type { CardMotif } from "./card-motif";
 import { readImageSize, sniffImageMime } from "./image-sniff";
@@ -357,8 +357,8 @@ export const MANIACARD_FOOTER_H = 72;
 
 export function maniaTierCardElement(art: ManiaTierCardArt) {
   const { skills, tier, avatarUrl } = art;
-  const style = MANIA_TIER_STYLES[tier];
-  const cosmic = getCosmicTierPalette(tier);
+  const style = resolveManiaTierStyle(tier, art.motif);
+  const cosmic = getCosmicTierPalette(tier, art.motif);
   const statRows: Array<[string, number]> = [
     ["Control", skills.fingerControl],
     ["Speed", skills.speed],

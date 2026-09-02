@@ -1,5 +1,5 @@
 import { sanitizePackDamage, type PackDamage } from "./pack-damage";
-import type { PackPlayer } from "./packs";
+import { packPlayerVariantFields, type PackPlayer } from "./packs";
 
 /* The pack a viewer paid for but has not fully revealed yet. The charge is
    spent the moment the pack is slashed, so the unrevealed cards must survive
@@ -55,6 +55,10 @@ function sanitizePlayer(value: unknown): PackPlayer | null {
        server minted (or didn't mint) the ":eternal" row at draw time and
        refuses the tier from every client claim. */
     ...(raw.eternal === true ? { eternal: true as const } : {}),
+    /* A milestone card's key, badge and motif, on the same terms: the server
+       already minted the holding, so this only decides what the resumed
+       reveal draws and which key its mint pass names. */
+    ...packPlayerVariantFields({ userId: user.id, ...raw }),
   };
 }
 

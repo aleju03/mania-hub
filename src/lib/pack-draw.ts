@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { CardMotif } from "./card-motif";
 import { liveBridgeToken } from "./live-backend-tokens";
 import type { OsuScore } from "./types";
 
@@ -28,6 +29,16 @@ export interface ServerPackDrawSlot {
      of existing Eternals for the pull), so neither can be provoked from the
      client. */
   eternal?: boolean;
+  /* A milestone event's cards (live-backend pack-milestone.ts): the foil is
+     a commemorative variant of a pool player, the golden card the opener's
+     own face at Eternal for the open that made the number. Both sit on a
+     variant key the tier cannot derive, which is why the slot carries it,
+     along with the badge text and motif the reveal draws. */
+  foil?: boolean;
+  milestone?: boolean;
+  cardKey?: string;
+  customLabel?: string | null;
+  motif?: CardMotif | null;
   isNew?: boolean;
   username?: string;
   avatarUrl?: string;

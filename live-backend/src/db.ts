@@ -1942,6 +1942,7 @@ async function migratePackEternalRewards(db: Db): Promise<void> {
       on s.card_key = c.card_key and s.owner_user_id = c.owner_user_id
     where pc.tier = 'eternal'
       and (c.card_key not like '%:eternal' or c.card_user_id = c.owner_user_id)
+      and c.card_key not in (select card_key from pack_milestone_cards)
     group by c.owner_user_id
   `);
 }

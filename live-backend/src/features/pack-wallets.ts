@@ -884,7 +884,11 @@ const WALLET_MAX_OPENED_PACKS = 10_000_000;
    they pulled, not the reward for finishing the game, and counting it would
    quietly retire a completion reward they never received. */
 const OWN_ETERNAL_CLAIM_SQL =
-  "tier = 'eternal' and (card_key not like '%:eternal' or card_user_id = owner_user_id)";
+  "tier = 'eternal' and (card_key not like '%:eternal' or card_user_id = owner_user_id)" +
+  /* A milestone card (pack-milestone.ts) is Eternal-tier and may well be the
+     collector's own face, but it is the prize for opening the millionth pack,
+     not for finishing the collection: holding it must not retire that reward. */
+  " and card_key not in (select card_key from pack_milestone_cards)";
 
 /* Whether the one-time completion reward is still unclaimed. The durable
    registry, not a JSON read followed by a later JSON write, is what makes two
@@ -1810,14 +1814,16 @@ export async function resolvePackCardVariantKey(
 /* One past the highest variant number this player has ever had, counting the
    catalog as well as the collections: a variant whose only holder recycled it
    away keeps its number rather than handing it to a different card. */
-async function nextPackCardVariantNumber(db: Db, cardUserId: number): Promise<number> {
+export async function nextPackCardVariantNumber(db: Db, cardUserId: number): Promise<number> {
   const prefix = `${cardUserId}:v`;
   const rows = (await exec(
     db,
     `select card_key from pack_collection_cards where card_user_id = ? and card_key like ?
      union
-     select card_key from pack_cards where card_user_id = ? and card_key like ?`,
-    [cardUserId, `${prefix}%`, cardUserId, `${prefix}%`],
+     select card_key from pack_cards where card_user_id = ? and card_key like ?
+     union
+     select card_key from pack_milestone_cards where card_user_id = ? and card_key like ?`,
+    [cardUserId, `${prefix}%`, cardUserId, `${prefix}%`, cardUserId, `${prefix}%`],
   )).rows;
   let highest = 0;
   for (const row of rows) {

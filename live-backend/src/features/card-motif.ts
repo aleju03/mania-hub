@@ -11,10 +11,15 @@
    Bounded here rather than trusted, because these URLs are handed to browsers
    and to the OG renderer, and a stored row can be older than the rules. */
 
+export const CARD_MOTIF_PALETTES = ["gold"] as const;
+export type CardMotifPalette = (typeof CARD_MOTIF_PALETTES)[number];
+
 export interface CardMotif {
   url: string;
   scale: number;
   opacity: number;
+  /* A colour scheme replacing the tier's (the milestone's golden card). */
+  palette?: CardMotifPalette;
 }
 
 export const CARD_MOTIF_URL_MAX_CHARS = 400;
@@ -51,10 +56,14 @@ export function parseCardMotif(value: unknown): CardMotif | null {
   const raw = value as Record<string, unknown>;
   const url = normalizeCardMotifUrl(raw.url);
   if (!url) return null;
+  const palette = (CARD_MOTIF_PALETTES as readonly string[]).includes(String(raw.palette))
+    ? (raw.palette as CardMotifPalette)
+    : undefined;
   return {
     url,
     scale: clamp(raw.scale, 0.25, 4, 1),
     opacity: clamp(raw.opacity, 0.05, 1, 1),
+    ...(palette ? { palette } : {}),
   };
 }
 

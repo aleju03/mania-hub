@@ -77,7 +77,7 @@ interface HandGroup {
 function groupHand(cards: RevealedCard[]): HandGroup[] {
   const groups = new Map<string, HandGroup>();
   cards.forEach((card, position) => {
-    const cardKey = packCardKey(card.player.user.id, card.tier);
+    const cardKey = card.player.cardKey ?? packCardKey(card.player.user.id, card.tier);
     const group = groups.get(cardKey);
     if (group) group.positions.push(position);
     else groups.set(cardKey, { cardKey, tier: card.tier, positions: [position], isFirstCopy: card.isNew });
@@ -90,11 +90,14 @@ function groupHand(cards: RevealedCard[]): HandGroup[] {
 function toSpotlightCard(card: RevealedCard): CollectedCard {
   return {
     userId: card.player.user.id,
+    ...(card.player.cardKey ? { cardKey: card.player.cardKey } : {}),
     username: card.player.user.username,
     avatarUrl: card.player.user.avatar_url,
     countryCode: card.player.user.country_code,
     tier: card.tier,
     tierLabel: card.tierLabel,
+    customLabel: card.player.customLabel ?? null,
+    motif: card.player.motif ?? null,
     skills: card.skills,
     pp: card.player.pp,
     globalRank: card.player.globalRank,
@@ -737,7 +740,7 @@ export function PackSummary({
                   <span className="text-osu-f1 tabular-nums">#{card.player.globalRank.toLocaleString("en-US")}</span>
                 </div>
                 {(() => {
-                  const mint = serials?.get(packCardKey(card.player.user.id, card.tier));
+                  const mint = serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier));
                   // "First ever" is the server's call, not serial 1: a repull
                   // of a card you already hold hands back your old serial, so
                   // a serial-1 holding resurfacing months later must not read

@@ -462,6 +462,48 @@ function playSynthesizedEternalFanfare(ctx: AudioContext) {
   playNoise(ctx, { at: landing + 0.55, duration: 1.9, gain: 0.03, startFreq: 11000, q: 0.9 });
 }
 
+/* The millionth pack. Not the Eternal cue in another key: that one is a
+   trailer riser into a dark braaam. This is a tally landing on a round number
+   and the room going gold, so it is built as ticks that speed up under the
+   rolling counter, one hard hit on the lock, and then a bright major chord
+   with bells over it, held. The beats match MilestoneBurst. */
+const MILESTONE_COUNT_S = 1.7;
+const MILESTONE_IMPACT_AT = 1.8;
+const MILESTONE_TICKS = 30;
+/* G major, voiced up where the Eternal's D minor was voiced down: the same
+   stack, the opposite mood. */
+const MILESTONE_CHORD = [196, 246.94, 293.66, 392, 493.88];
+const MILESTONE_BELLS = [1567.98, 1975.53, 2349.32, 3135.96];
+
+export function playMilestoneFanfare() {
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+
+  /* The count. Ticks bunching up toward the lock, each a hair higher than the
+     last, over a soft rising bed so the lock lands on something. */
+  for (let index = 0; index < MILESTONE_TICKS; index += 1) {
+    const at = MILESTONE_COUNT_S * Math.pow(index / MILESTONE_TICKS, 1.7);
+    const freq = 880 * Math.pow(2, index / MILESTONE_TICKS);
+    playTone(ctx, { at, freq, duration: 0.06, gain: 0.05 + (index / MILESTONE_TICKS) * 0.03, type: "square", attack: 0.002 });
+    playNoise(ctx, { at, duration: 0.02, gain: 0.02, startFreq: 5000, q: 1.2 });
+  }
+  playTone(ctx, { freq: 98, endFreq: 196, duration: MILESTONE_IMPACT_AT, gain: 0.07, type: "sine", attack: 0.3 });
+  playNoise(ctx, { duration: MILESTONE_IMPACT_AT, gain: 0.05, startFreq: 300, endFreq: 6000, q: 0.6 });
+
+  /* The lock. Kick and crash, and the chord opening on the same instant. */
+  playImpactHit(ctx, MILESTONE_IMPACT_AT, { gain: 0.4, tail: 2.2 });
+  playNoise(ctx, { at: MILESTONE_IMPACT_AT, duration: 1.3, gain: 0.13, startFreq: 9000, endFreq: 600, q: 0.4 });
+  playChordStack(ctx, { at: MILESTONE_IMPACT_AT, freqs: MILESTONE_CHORD, duration: 2.5, gain: 0.08, detune: 0.006, attack: 0.03, sub: true });
+
+  /* Bells cascading over the chord, then a shimmer left in the room. */
+  MILESTONE_BELLS.forEach((freq, index) => {
+    const at = MILESTONE_IMPACT_AT + 0.28 + index * 0.11;
+    playTone(ctx, { at, freq, duration: 1.9 - index * 0.2, gain: 0.08, type: "sine" });
+    playTone(ctx, { at, freq: freq * 1.5, duration: 0.7, gain: 0.02, type: "sine" });
+  });
+  playNoise(ctx, { at: MILESTONE_IMPACT_AT + 0.5, duration: 2.2, gain: 0.03, startFreq: 11000, q: 0.9 });
+}
+
 /* A pentatonic ladder for the higher-or-lower game: no two rungs can clash, so
    a run of right answers reads as one climbing phrase however long it gets. */
 const STREAK_LADDER = [523.25, 587.33, 659.25, 783.99, 880];

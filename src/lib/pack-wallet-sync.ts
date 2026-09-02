@@ -340,6 +340,9 @@ export interface PackPullMint {
 
 export interface PackPullRecordCard {
   userId: number;
+  /* The holding's key when the tier cannot derive it (a milestone card);
+     the backend believes it only for a variant the reporter holds. */
+  cardKey?: string;
   username: string;
   countryCode: string;
   tier: ManiaCardTier | null;
@@ -354,13 +357,15 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 12) // The largest pack (Wild) plus both Eternal bonus slots.
+      .slice(0, 13) // The largest pack (Wild) plus the three bonus slots.
       .map((raw: unknown) => {
         const card = raw as Partial<PackPullRecordCard> | null;
         const userId = Math.floor(Number(card?.userId) || 0);
         if (userId <= 0 || typeof card?.username !== "string" || !card.username) return null;
+        const cardKey = typeof card.cardKey === "string" ? sanitizeCardKey(card.cardKey) : null;
         return {
           userId,
+          ...(cardKey ? { cardKey } : {}),
           username: card.username.slice(0, 40),
           countryCode: typeof card.countryCode === "string" ? card.countryCode.slice(0, 2) : "",
           tier: typeof card.tier === "string" ? (card.tier as ManiaCardTier) : null,
@@ -627,7 +632,7 @@ export interface PackPullMintCard {
 export const mintServerPackCollectionCards = createServerFn({ method: "POST" })
   .validator((input: { cards?: unknown }) => {
     const cards: PackPullMintCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 12) // The largest pack (Wild) plus both Eternal bonus slots.
+      .slice(0, 13) // The largest pack (Wild) plus the three bonus slots.
       .map((raw: unknown): PackPullMintCard | null => {
         const card = raw as Partial<PackPullMintCard> | null;
         const cardKey = typeof card?.cardKey === "string" ? sanitizeCardKey(card.cardKey) : null;

@@ -1146,3 +1146,33 @@ create table if not exists player_skill_baseline (
   updated_at text not null,
   primary key (user_id, key_count, baseline_version)
 );
+
+-- The pack-count milestone event (features/pack-milestone.ts). One row per
+-- milestone, written by the draw that claimed it: the signed-in open that
+-- found the site-wide opened-packs sum at or past the target. The claim token
+-- is what makes two concurrent opens race for one primary key; every card
+-- statement in that transaction is conditional on it.
+create table if not exists pack_milestones (
+  milestone_id text primary key,
+  target integer not null,
+  owner_user_id integer not null,
+  claim_token text not null,
+  card_key text not null,
+  packs_opened integer not null,
+  dealt_at integer not null
+);
+
+-- The card keys a milestone minted: the one golden card ('golden') and one
+-- commemorative variant per player ('foil'), so every collector who pulls a
+-- player's foil holds the same collectible. A key listed here is never the
+-- completion reward (see OWN_ETERNAL_CLAIM_SQL) and never circulates on the
+-- Eternal pull slot, which only deals ':eternal' keys.
+create table if not exists pack_milestone_cards (
+  milestone_id text not null,
+  card_user_id integer not null,
+  kind text not null,
+  card_key text not null,
+  created_at integer not null,
+  primary key(milestone_id, card_user_id, kind)
+);
+create index if not exists idx_pack_milestone_cards_key on pack_milestone_cards(card_key);

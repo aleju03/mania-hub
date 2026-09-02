@@ -1,7 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch } from "../db.js";
-import { HONORARY_USER_IDS, normalizePackCardKey, packCardKey, packCardKeyUserId, tierRank, tierRankSql } from "./pack-wallets.js";
+import { HONORARY_USER_IDS, isPackCardVariantKey, normalizePackCardKey, packCardKey, packCardKeyUserId, tierRank, tierRankSql } from "./pack-wallets.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
 import { mintPackCardSerialStatement, settlePackCardPullReportStatement } from "./pack-serials.js";
 
@@ -62,6 +62,11 @@ export interface PackPullCardInput {
   countryCode: string;
   tier: string | null;
   isNew: boolean;
+  /* The holding's key when the tier cannot derive it: a milestone card
+     (pack-milestone.ts) sits on a ":v<n>" variant. Believed only for a
+     variant key the reporter actually holds; otherwise the report falls back
+     to the key the tier derives, like a report from before keys existed. */
+  cardKey?: string;
 }
 
 export interface PackPullFeedEntry {
@@ -124,12 +129,18 @@ function normalizePullCard(value: unknown): PackPullCardInput | null {
   // live SSE stream and the share page's goatPull banner.
   const claimed = typeof raw.tier === "string" && VALID_TIERS.has(raw.tier) ? raw.tier : null;
   const tier = claimed === "goat" && !HONORARY_USER_IDS.has(userId) ? null : claimed;
+  const claimedKey = normalizePackCardKey(raw.cardKey);
+  const cardKey =
+    claimedKey !== null && isPackCardVariantKey(claimedKey) && packCardKeyUserId(claimedKey) === userId
+      ? claimedKey
+      : undefined;
   return {
     userId,
     username: raw.username.slice(0, 40),
     countryCode: typeof raw.countryCode === "string" ? raw.countryCode.slice(0, 2).toUpperCase() : "",
     tier,
     isNew: raw.isNew === true,
+    ...(cardKey ? { cardKey } : {}),
   };
 }
 
@@ -282,11 +293,18 @@ export async function recordPackPullEvents(
      being refused, like every other rejected tier claim, so a tampered report
      still cannot put "pulled Eternal <anyone>" on the feed or mint a serial
      under that key. */
-  const eternalClaims = [...new Set(
-    normalized.filter((card) => card.tier === "eternal").map((card) => card.userId),
+  /* A variant key stands on the same terms: the reporter holds it, and that
+     deal is still unreported. A milestone card is the only variant a draw
+     deals (the grant desk's are given, never pulled), and an unheld or
+     already-reported one drops the key rather than the card. */
+  const claimedVariantKeys = [...new Set(
+    normalized.flatMap((card) => (card.cardKey ? [card.cardKey] : [])),
   )];
-  if (eternalClaims.length > 0) {
-    const heldKeys = eternalClaims.map((userId) => `${userId}:eternal`);
+  const eternalClaims = [...new Set(
+    normalized.filter((card) => card.tier === "eternal" && !card.cardKey).map((card) => card.userId),
+  )];
+  if (eternalClaims.length > 0 || claimedVariantKeys.length > 0) {
+    const heldKeys = [...eternalClaims.map((userId) => `${userId}:eternal`), ...claimedVariantKeys];
     const held = new Set((await exec(
       db,
       `select c.card_key as card_key from pack_collection_cards c
@@ -296,9 +314,14 @@ export async function recordPackPullEvents(
          and c.card_key in (${heldKeys.map(() => "?").join(", ")})`,
       [ownerUserId, ...heldKeys],
     )).rows.map((row) => String(row.card_key)));
-    normalized = normalized.map((card) =>
-      card.tier === "eternal" && !held.has(`${card.userId}:eternal`) ? { ...card, tier: null } : card,
-    );
+    normalized = normalized.map((card) => {
+      if (card.cardKey) {
+        if (held.has(card.cardKey)) return card;
+        const { cardKey: _dropped, ...rest } = card;
+        return rest.tier === "eternal" ? { ...rest, tier: null } : rest;
+      }
+      return card.tier === "eternal" && !held.has(`${card.userId}:eternal`) ? { ...card, tier: null } : card;
+    });
   }
 
   const hourAgo = now - 60 * 60 * 1000;
@@ -330,7 +353,7 @@ export async function recordPackPullEvents(
   // transaction before the batch too, and the flag is social flavor, never
   // economy.
   const cardUserIds = [...new Set(normalized.map((card) => card.userId))];
-  const pulledKeys = new Set(normalized.map((card) => packCardKey(card.userId, card.tier)));
+  const pulledKeys = new Set(normalized.map((card) => card.cardKey ?? packCardKey(card.userId, card.tier)));
   const withPriorSerials = new Set(
     (await exec(
       db,
@@ -360,7 +383,7 @@ export async function recordPackPullEvents(
   const pending: { card: PackPullCardInput; cardKey: string; isFirstGlobal: boolean; eventIndex: number }[] = [];
   const seenInPull = new Set<string>();
   for (const card of normalized) {
-    const cardKey = packCardKey(card.userId, card.tier);
+    const cardKey = card.cardKey ?? packCardKey(card.userId, card.tier);
     const isFirstGlobal =
       !withPriorSerials.has(cardKey) && !withOtherOwners.has(cardKey) && !seenInPull.has(cardKey);
     seenInPull.add(cardKey);

@@ -659,6 +659,11 @@ msgstr "{0} subfamilies"
 msgid "{0} to {1}"
 msgstr "{0} to {1}"
 
+#. placeholder {0}: formatNumber(remaining, locale)
+#: src/components/packs/PackMilestone.tsx
+#~ msgid "{0} to go. The {target}th pack wins a golden card."
+#~ msgstr "{0} to go. The {target}th pack wins a golden card."
+
 #. placeholder {0}: formatOrdinal(mint.serial, locale)
 #: src/components/packs/PackSummary.tsx
 msgid "{0} to pull this"
@@ -1304,6 +1309,10 @@ msgstr "{speedLabel} speed"
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 
+#: src/components/packs/PackMilestone.tsx
+#~ msgid "{target} packs opened"
+#~ msgstr "{target} packs opened"
+
 #: src/components/farm-helper/FarmersList.tsx
 msgid "{total, plural, one {# player farmed this} other {# players farmed this}}"
 msgstr "{total, plural, one {# player farmed this} other {# players farmed this}}"
@@ -1640,6 +1649,11 @@ msgstr "12 AM"
 #: src/routes/player/$username.tsx
 msgid "12 PM"
 msgstr "12 PM"
+
+#. placeholder {0}: dateLabel(state.foilClosesAt)
+#: src/components/packs/PackMilestone.tsx
+#~ msgid "1M foil cards drop in every pack until {0}."
+#~ msgstr "1M foil cards drop in every pack until {0}."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7486,7 +7500,8 @@ msgstr "Minimum pp per play"
 
 #. placeholder {0}: formatAccuracy(bar)
 #. placeholder {0}: formatAccuracy(minAccuracy)
-#. placeholder {1}: formatAccuracy(accuracy)
+#. placeholder {1}: formatAccuracyAgainst(accuracy, bar)
+#. placeholder {1}: formatAccuracyAgainst(accuracy, minAccuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Minimum required for dan credit is {0}. This play got {1}."
 msgstr "Minimum required for dan credit is {0}. This play got {1}."
@@ -8854,6 +8869,15 @@ msgstr "open to"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Open your own packs"
 msgstr "Open your own packs"
+
+#: src/components/packs/PackMilestone.tsx
+#~ msgid "opened"
+#~ msgstr "opened"
+
+#. placeholder {0}: dateLabel(claim.dealtAt)
+#: src/components/packs/PackMilestone.tsx
+#~ msgid "opened the {target}th pack on {0}"
+#~ msgstr "opened the {target}th pack on {0}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Opening a dan badge on a player's Skills tab shows the same estimate run again over slices of the same passes. Your jack dan is the level your jack passes demonstrate, under exactly the same rules and the same count of four."
@@ -10539,6 +10563,10 @@ msgstr "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data
 #: src/lib/replay-overlays.ts
 msgid "Rings"
 msgstr "Rings"
+
+#: src/components/packs/PackMilestone.tsx
+#~ msgid "Road to {target} packs"
+#~ msgstr "Road to {target} packs"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another."

@@ -6,7 +6,7 @@ import {
   getHonoraryTier,
   getManiaCardTier,
   getNextManiaCardTier,
-  MANIA_TIER_STYLES,
+  resolveManiaTierStyle,
   type ManiaCardTier,
   type ManiaSkills,
 } from "#/lib/maniacard";
@@ -47,7 +47,7 @@ export function maniaCardAvatarUrl(user: { id: number; avatar_url?: string }): s
   return avatarImageSrc(user.avatar_url, user.id, { proxy: true }) ?? `/api/avatar?u=${user.id}`;
 }
 
-export function buildManiaCardRenderData({ user, scores, tierOverride, motifOverride }: ManiaCardRenderInput): ManiaCardRenderData {
+export function buildManiaCardRenderData({ user, scores, tierOverride, labelOverride, motifOverride }: ManiaCardRenderInput): ManiaCardRenderData {
   const skills = computeManiaSkills(
     scores.map((score) => ({
       ...score,
@@ -66,13 +66,14 @@ export function buildManiaCardRenderData({ user, scores, tierOverride, motifOver
         skills: ETERNAL_COLLECTOR_SKILLS,
         scores,
         tierOverride,
+        labelOverride,
         motifOverride,
       });
     }
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 
-  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride, motifOverride });
+  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride, labelOverride, motifOverride });
 }
 
 /* Rebuilds renderable card data from an already computed skills snapshot.
@@ -103,7 +104,7 @@ export function buildManiaCardRenderDataFromSkills({
 }): ManiaCardReadyData {
   const honoraryTier = getHonoraryTier(user.id);
   const tier = tierOverride ?? honoraryTier ?? getManiaCardTier(skills.cardPower);
-  const baseStyle = MANIA_TIER_STYLES[tier];
+  const baseStyle = resolveManiaTierStyle(tier, motifOverride);
   // Card-art overrides for the honorary roster: a name the community knows the
   // player by, and a personalised badge. They apply to the card only - the
   // profile link keeps the real username - and never to a forced tier.

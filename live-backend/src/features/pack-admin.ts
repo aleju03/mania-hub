@@ -644,6 +644,7 @@ export async function removeAdminPackCard(
                 select 1 from pack_collection_cards
                 where owner_user_id = ? and tier = 'eternal'
                   and (card_key not like '%:eternal' or card_user_id = owner_user_id)
+                  and card_key not in (select card_key from pack_milestone_cards)
               )`,
       args: [ownerUserId, ownerUserId],
     });

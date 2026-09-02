@@ -1,3 +1,4 @@
+import type { CardMotifPalette } from "./card-motif";
 import type { ManiaCardTier } from "./maniacard";
 
 /* Tiers at the top of the ladder drop the tier gradient and triangle flecks for
@@ -103,6 +104,39 @@ export const COSMIC_TIERS: Partial<Record<ManiaCardTier, CosmicTierPalette>> = {
   },
 };
 
-export function getCosmicTierPalette(tier: ManiaCardTier) {
+/* Palettes a holding can carry in place of its tier's (CardMotif.palette).
+   Gold is the milestone's golden card: the 1M emblem's own colours, warmer
+   and yellower than the GOAT's amber so the two never read as one tier. */
+export const COSMIC_PALETTES: Record<CardMotifPalette, CosmicTierPalette> = {
+  gold: {
+    base: [[0, "#0d0903"], [0.38, "#1c1305"], [0.72, "#140d03"], [1, "#000000"]],
+    foilA: ["rgba(246, 195, 67, 0.34)", "rgba(184, 134, 11, 0.16)"],
+    foilB: ["rgba(255, 243, 176, 0.2)", "rgba(202, 138, 4, 0.1)"],
+    aurora: [
+      "rgba(133, 77, 14, 0)",
+      "rgba(246, 195, 67, 0.15)",
+      "rgba(255, 243, 176, 0.09)",
+      "rgba(184, 134, 11, 0.12)",
+      "rgba(133, 77, 14, 0)",
+    ],
+    stars: ["255, 243, 176", "246, 195, 67", "255, 255, 255", "253, 224, 71"],
+    starTint: [1.0, 0.86, 0.45],
+    rainbow: 0.2,
+    rim: [
+      [0, "rgba(255,243,176,0.8)"],
+      [0.18, "rgba(246,195,67,0.95)"],
+      [0.5, "rgba(253,224,71,0.3)"],
+      [0.78, "rgba(184,134,11,0.8)"],
+      [1, "rgba(255,243,176,0.7)"],
+    ],
+    rimGlow: "rgba(246,195,67,0.58)",
+    glint: "rgba(255,250,220,0.95)",
+  },
+};
+
+/* The palette a card paints with: the holding's own when its motif names
+   one, else its tier's, else none (a tier below the cosmic ladder). */
+export function getCosmicTierPalette(tier: ManiaCardTier, motif?: { palette?: CardMotifPalette } | null) {
+  if (motif?.palette) return COSMIC_PALETTES[motif.palette];
   return COSMIC_TIERS[tier] ?? null;
 }
