@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   drawSkinPreviewBackdrops,
+  searchSkinPreviewBackdrops,
   type BackdropScope,
   type PreviewBackdrop,
   type SkinBackdropCandidate,
@@ -107,6 +109,128 @@ export function useSkinBackdropPool(active: boolean): SkinBackdropPool {
   return { candidates, drawing, shuffle, drop, prefetch, image, decoded: imagesRef.current };
 }
 
+// A typed title, artist or mapper swaps the drawn covers for the maps that
+// match it, for someone who has one map's art in mind and would otherwise
+// shuffle until it happened to come up. The search sits in front of whatever
+// pool the surface keeps: the results borrow its prefetch (any set id loads
+// the same way) and only the results themselves are held here, so clearing
+// the box lands back on the covers that were drawn before.
+export interface SkinBackdropSearch {
+  query: string;
+  setQuery: (query: string) => void;
+  // The row to show instead of the pool while a query is typed; null when the
+  // box is empty.
+  row: SkinBackdropRowPool | null;
+  // Whether the last search could not reach the catalog.
+  failed: boolean;
+}
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+export function useSkinBackdropSearch(pool: SkinBackdropRowPool): SkinBackdropSearch {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SkinBackdropCandidate[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const requestRef = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim();
+    requestRef.current += 1;
+    const request = requestRef.current;
+    if (!q) {
+      setResults([]);
+      setSearching(false);
+      setFailed(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      searchSkinPreviewBackdrops(q)
+        .then((found) => {
+          if (requestRef.current !== request) return;
+          setResults(found);
+          setFailed(false);
+        })
+        .catch(() => {
+          if (requestRef.current !== request) return;
+          setResults([]);
+          setFailed(true);
+        })
+        .finally(() => {
+          if (requestRef.current === request) setSearching(false);
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const drop = useCallback((setId: number) => {
+    setResults((current) => current.filter((candidate) => candidate.setId !== setId));
+  }, []);
+
+  const row = useMemo<SkinBackdropRowPool | null>(() => {
+    if (!query.trim()) return null;
+    return {
+      candidates: results,
+      drawing: searching,
+      // A shuffle while searching is handled by the header, which clears the
+      // query first; the row itself never draws.
+      shuffle: () => {},
+      drop,
+      prefetch: pool.prefetch,
+    };
+  }, [query, results, searching, drop, pool.prefetch]);
+
+  return { query, setQuery, row, failed };
+}
+
+export function SkinBackdropSearchBox({
+  search,
+  disabled,
+}: {
+  search: SkinBackdropSearch;
+  disabled: boolean;
+}) {
+  const { t } = useLingui();
+  return (
+    <label
+      className={`flex h-[22px] items-center gap-1 rounded border border-osu-b3/40 bg-osu-b5 px-1.5 text-[10px] text-osu-l2 transition-colors focus-within:border-osu-pink/60 ${
+        disabled ? "opacity-50" : "hover:border-osu-f1/40"
+      }`}
+    >
+      <Search size={11} aria-hidden="true" className="shrink-0 text-osu-f1/55" />
+      <input
+        type="search"
+        value={search.query}
+        disabled={disabled}
+        onChange={(event) => search.setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && search.query) {
+            event.preventDefault();
+            search.setQuery("");
+          }
+        }}
+        placeholder={t`find a map`}
+        aria-label={t`Search maps for a backdrop`}
+        autoComplete="off"
+        spellCheck={false}
+        className="w-24 bg-transparent font-bold text-osu-l1 outline-none transition-[width] placeholder:font-normal placeholder:text-osu-f1/45 focus:w-36 disabled:cursor-default [&::-webkit-search-cancel-button]:hidden"
+      />
+      {search.query && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => search.setQuery("")}
+          aria-label={t`Clear map search`}
+          className="shrink-0 text-osu-f1/55 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
+        >
+          <X size={11} aria-hidden="true" />
+        </button>
+      )}
+    </label>
+  );
+}
+
 // Scope of a pick: every keymode, or just the one on screen. Picking on "all"
 // also clears the per-keymode choices, so it is the way back to a single
 // shared backdrop.
@@ -153,11 +277,21 @@ export function SkinBackdropRow({
   selected,
   onPick,
   disabled,
+  // What to say when the row comes up empty and nothing is being drawn:
+  // a search that matched no map, or one that could not reach the catalog.
+  // The drawn pool says nothing, since a failed draw falls back to baked
+  // covers instead of an empty row.
+  emptyNotice,
+  // What the row says while it is empty and still loading; the drawn pool's
+  // wording by default.
+  busyNotice,
 }: {
   pool: SkinBackdropRowPool;
   selected: PreviewBackdrop | null;
   onPick: (choice: PreviewBackdrop) => void;
   disabled: boolean;
+  emptyNotice?: React.ReactNode;
+  busyNotice?: React.ReactNode;
 }) {
   const { t } = useLingui();
   return (
@@ -201,7 +335,10 @@ export function SkinBackdropRow({
         </button>
       ))}
       {pool.candidates.length === 0 && pool.drawing && (
-        <span className="text-[10px] text-osu-f1/50"><Trans>drawing covers</Trans></span>
+        <span className="text-[10px] text-osu-f1/50">{busyNotice ?? <Trans>drawing covers</Trans>}</span>
+      )}
+      {pool.candidates.length === 0 && !pool.drawing && emptyNotice && (
+        <span className="text-[10px] text-osu-f1/50">{emptyNotice}</span>
       )}
     </>
   );

@@ -57,6 +57,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
+import { StarRangePill } from "../components/maps/StarRangePill";
 import { ModBadge } from "../components/ui/ModBadge";
 import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
@@ -388,6 +389,8 @@ function FarmHelperPage() {
   // search.page is the serialized 1-based value; work with the 0-based index.
   const page = search.page && search.page > 0 ? search.page - 1 : 0;
   const [query, setQuery] = useState("");
+  // Popular-view star filter; 0 means unset, like the /maps pill.
+  const [starRange, setStarRange] = useState<{ min: number; max: number }>({ min: 0, max: 0 });
   const isXl = useMediaQuery("(min-width: 1280px)");
   const requestKey = farmHelperRequestKey(subjectKey, keyMode, view);
   // Their own board is the only one that comes back with their marks on it.
@@ -673,15 +676,20 @@ function FarmHelperPage() {
   const queryFilteredRecs = useMemo(() => {
     if (!visibleSnapshot) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return visibleSnapshot.recs;
+    const starMin = view === "popular" ? starRange.min : 0;
+    const starMax = view === "popular" ? starRange.max : 0;
+    if (!q && !starMin && !starMax) return visibleSnapshot.recs;
     return visibleSnapshot.recs.filter(
       (rec) =>
-        rec.title.toLowerCase().includes(q)
-        || rec.artist.toLowerCase().includes(q)
-        || rec.creator.toLowerCase().includes(q)
-        || rec.version.toLowerCase().includes(q),
+        (!starMin || rec.stars >= starMin)
+        && (!starMax || rec.stars <= starMax)
+        && (!q
+          || rec.title.toLowerCase().includes(q)
+          || rec.artist.toLowerCase().includes(q)
+          || rec.creator.toLowerCase().includes(q)
+          || rec.version.toLowerCase().includes(q)),
     );
-  }, [visibleSnapshot, query]);
+  }, [visibleSnapshot, query, view, starRange]);
 
   // Skillboost rows are earned into the default view: until the player lands
   // (or nearly lands) one of the suggested targets, the backend reports
@@ -721,7 +729,8 @@ function FarmHelperPage() {
 
   // Only meaningful when no client-side filter narrows the list; then recs is
   // exactly the server's (possibly truncated) slice and "X of Y" is honest.
-  const isClientFiltered = reasonFilter !== "all" || query.trim().length > 0;
+  const isClientFiltered = reasonFilter !== "all" || query.trim().length > 0
+    || (view === "popular" && (starRange.min > 0 || starRange.max > 0));
   const totalQualifying = visibleSnapshot?.totalQualifying ?? 0;
   const serverTruncated = !isClientFiltered && totalQualifying > (visibleSnapshot?.recs.length ?? 0);
 
@@ -901,6 +910,11 @@ function FarmHelperPage() {
                       if (page !== 0) navigateFarmHelper({ page: 0 });
                     }}
                     showReason={view === "gain"}
+                    starRange={view === "popular" ? starRange : null}
+                    onStarRange={(min, max) => {
+                      setStarRange({ min, max });
+                      if (page !== 0) navigateFarmHelper({ page: 0 });
+                    }}
                     reasonFilter={reasonFilter}
                     onReason={(next) => {
                       navigateFarmHelper({ reason: next, page: 0 });
@@ -1323,6 +1337,8 @@ function BoardToolbar({
   query,
   onQuery,
   showReason,
+  starRange,
+  onStarRange,
   reasonFilter,
   onReason,
   counts,
@@ -1334,6 +1350,9 @@ function BoardToolbar({
   query: string;
   onQuery: (next: string) => void;
   showReason: boolean;
+  // Null hides the difficulty pill (the gain board has no use for it).
+  starRange: { min: number; max: number } | null;
+  onStarRange: (min: number, max: number) => void;
   reasonFilter: ReasonFilter;
   onReason: (next: ReasonFilter) => void;
   counts: Record<ReasonFilter, number>;
@@ -1381,6 +1400,24 @@ function BoardToolbar({
           </div>
         )}
 
+        {starRange ? (
+          /* Shares the row with the search and sort from lg up; phones give
+             the pill its own row so the rail keeps a usable drag width. */
+          <div className="order-last flex w-full items-center gap-3 lg:order-none lg:w-auto">
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
+              <Trans>Difficulty</Trans>
+            </span>
+            <StarRangePill
+              lo={0}
+              hi={15}
+              min={starRange.min}
+              max={starRange.max}
+              step={0.1}
+              ariaLabel={t`Star rating`}
+              onChange={onStarRange}
+            />
+          </div>
+        ) : null}
         <div className="flex w-full items-center gap-2 sm:w-auto">
           {showReason && countLabel ? (
             <span className="hidden text-[11px] tabular-nums text-osu-f1 lg:inline">{countLabel}</span>

@@ -66,7 +66,6 @@ import { StarRatingBadge } from "../../components/ui/StarRating";
 import { getManiaJudgementStats } from "../../components/ui/ManiaJudgementStats";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { ModFilterChip } from "../../components/ui/ModFilterChip";
-import { LazerBadge } from "../../components/ui/LazerBadge";
 import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
@@ -6009,14 +6008,12 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
 type ScoreRowLayout = {
   /** Badge count of the widest mod set on screen; 0 drops the column. */
   modColumns: number;
-  showLazer: boolean;
   showPp: boolean;
   showReplay: boolean;
 };
 
 const EMPTY_SCORE_ROW_LAYOUT: ScoreRowLayout = {
   modColumns: 0,
-  showLazer: false,
   showPp: false,
   showReplay: false,
 };
@@ -6028,8 +6025,7 @@ const MOD_BADGE_GAP = 2;
 /* Every visible row, not just the window ones. A keymode list can be all
    tracked rows, and reading the layout off the window scores alone gave that
    list modColumns: 0 and showPp: false, which drops the mods and the feature's
-   own number on desktop while mobile still shows both. showLazer stays a
-   window-only signal: a tracked row has no lazer badge to align. */
+   own number on desktop while mobile still shows both. */
 export function getScoreRowLayout(rows: BestListRow[]): ScoreRowLayout {
   const layout = { ...EMPTY_SCORE_ROW_LAYOUT };
   for (const row of rows) {
@@ -6042,7 +6038,6 @@ export function getScoreRowLayout(rows: BestListRow[]): ScoreRowLayout {
     }
     const { score } = row;
     layout.modColumns = Math.max(layout.modColumns, getModDisplayList(score.mods).length);
-    if (getScoreDisplayValues(score).isLazer) layout.showLazer = true;
     if (score.pp != null) layout.showPp = true;
     if (scoreHasReplay(score)) layout.showReplay = true;
   }
@@ -6161,7 +6156,6 @@ function TrackedScoreRow({
               ))}
             </div>
           )}
-          {layout.showLazer && <div className="w-11 flex-shrink-0" />}
           <div className="flex items-center gap-2">
             <span className="w-14 text-right text-xs tabular-nums text-osu-l2">
               {play.accuracy != null ? formatAccuracy(play.accuracy) : "-"}
@@ -6290,9 +6284,6 @@ function ScoreRow({
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
           </div>
-        )}
-        {layout.showLazer && (
-          <div className="flex w-11 flex-shrink-0 justify-end">{display.isLazer && <LazerBadge />}</div>
         )}
         {/* Accuracy, combo and pp read as one cluster, so they sit tighter
             together than the badge cells beside them. */}
@@ -6460,12 +6451,11 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                   {score.beatmapset?.creator ? ` · ${t`mapped by ${score.beatmapset.creator}`}` : ""}
                 </div>
               </div>
-              {(mods.length > 0 || display.isLazer) && (
+              {mods.length > 0 && (
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1 pb-0.5">
                   {mods.map((m) => (
                     <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
                   ))}
-                  {display.isLazer && <LazerBadge />}
                 </div>
               )}
             </div>

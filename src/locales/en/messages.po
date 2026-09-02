@@ -3292,6 +3292,10 @@ msgstr "Clear filters"
 msgid "Clear formatting"
 msgstr "Clear formatting"
 
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Clear map search"
+msgstr "Clear map search"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Clear marks"
 msgstr "Clear marks"
@@ -4405,6 +4409,7 @@ msgid "difficulty"
 msgstr "difficulty"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
 msgid "Difficulty"
 msgstr "Difficulty"
@@ -5231,6 +5236,10 @@ msgstr "Find a collector"
 #: src/components/packs/CardCollectors.tsx
 msgid "find a collector..."
 msgstr "find a collector..."
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "find a map"
+msgstr "find a map"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "find a missing player..."
@@ -7271,6 +7280,10 @@ msgstr "Map completion percentage."
 msgid "Map search"
 msgstr "Map search"
 
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "map search unavailable"
+msgstr "map search unavailable"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Map shape"
 msgstr "Map shape"
@@ -7991,6 +8004,10 @@ msgstr "No mania difficulty selected"
 #: src/components/me/GoalsPanel.tsx
 msgid "No mania maps found."
 msgstr "No mania maps found."
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "no maps match"
+msgstr "no maps match"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "No maps match these filters."
@@ -9299,8 +9316,8 @@ msgid "Played {0} on {1}"
 msgstr "Played {0} on {1}"
 
 #: src/components/ui/LazerBadge.tsx
-msgid "Played on osu!lazer"
-msgstr "Played on osu!lazer"
+#~ msgid "Played on osu!lazer"
+#~ msgstr "Played on osu!lazer"
 
 #. placeholder {0}: lazer ? "Lazer" : "Stable"
 #: src/routes/top-plays.tsx
@@ -10808,6 +10825,10 @@ msgstr "Search languages"
 msgid "Search maps"
 msgstr "Search maps"
 
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Search maps for a backdrop"
+msgstr "Search maps for a backdrop"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "search maps..."
 msgstr "search maps..."
@@ -10871,6 +10892,10 @@ msgstr "Search your servers"
 #: src/components/layout/CountrySelector.tsx
 msgid "Search..."
 msgstr "Search..."
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "searching"
+msgstr "searching"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
@@ -11762,6 +11787,7 @@ msgid "Standard"
 msgstr "Standard"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
 msgid "Star rating"
 msgstr "Star rating"

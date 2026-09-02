@@ -128,8 +128,6 @@ describe("Best Performance rows with tracked plays", () => {
     expect(layout.showPp).toBe(true);
     // No stored replay id, so no button and no reserved slot for one.
     expect(layout.showReplay).toBe(false);
-    // A tracked row never draws a lazer badge, so it must not open that cell.
-    expect(layout.showLazer).toBe(false);
   });
 });
 

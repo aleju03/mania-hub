@@ -12,7 +12,6 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { FilterField, SegmentedControl, type SegmentedOption } from "../components/ui/SegmentedControl";
-import { LazerBadge } from "../components/ui/LazerBadge";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
@@ -776,7 +775,6 @@ function SnipeRow({
               {event.mods.map((m) => (
                 <ModBadge key={m} mod={m} />
               ))}
-              {event.isLazer && <LazerBadge />}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-xs text-osu-l2">{formatAccuracy(event.accuracy)}</span>
@@ -805,7 +803,6 @@ function SnipeRow({
               <ModBadge key={m} mod={m} />
             ))}
           </div>
-          {event.isLazer && <LazerBadge />}
           <span className="text-xs text-osu-l2 tabular-nums">{formatAccuracy(event.accuracy)}</span>
           <span className="text-sm font-bold tabular-nums">{formatPP(event.pp)}</span>
           {replaySearch && (
@@ -1079,7 +1076,6 @@ function SnipeBoardRow({
         {entry.mods.map((mod) => (
           <ModBadge key={mod} mod={mod} size={0.55} />
         ))}
-        {entry.isLazer && <LazerBadge />}
       </button>
       <div className="flex flex-shrink-0 items-center gap-2.5 tabular-nums">
         <span className="text-[10px] text-osu-f1 hidden sm:inline">{formatAccuracy(entry.accuracy)}</span>

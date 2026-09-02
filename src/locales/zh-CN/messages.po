@@ -3301,6 +3301,10 @@ msgstr "清除筛选"
 msgid "Clear formatting"
 msgstr "清除格式"
 
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Clear map search"
+msgstr "清除谱面搜索"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Clear marks"
 msgstr "清除标记"
@@ -4414,6 +4418,7 @@ msgid "difficulty"
 msgstr "难度"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
 msgid "Difficulty"
 msgstr "难度"
@@ -5236,6 +5241,10 @@ msgstr "查找收藏者"
 #: src/components/packs/CardCollectors.tsx
 msgid "find a collector..."
 msgstr "查找收藏者…"
+
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "find a map"
+msgstr "找谱面"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "find a missing player..."
@@ -7272,6 +7281,10 @@ msgstr "谱面完成度百分比。"
 msgid "Map search"
 msgstr "谱面搜索"
 
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "map search unavailable"
+msgstr "谱面搜索不可用"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Map shape"
 msgstr "谱面构成"
@@ -7992,6 +8005,10 @@ msgstr "未选择 mania 难度"
 #: src/components/me/GoalsPanel.tsx
 msgid "No mania maps found."
 msgstr "没有找到 mania 谱面。"
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "no maps match"
+msgstr "没有匹配的谱面"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "No maps match these filters."
@@ -9300,8 +9317,8 @@ msgid "Played {0} on {1}"
 msgstr "{0}在 {1} 上游玩"
 
 #: src/components/ui/LazerBadge.tsx
-msgid "Played on osu!lazer"
-msgstr "在 osu!lazer 上游玩"
+#~ msgid "Played on osu!lazer"
+#~ msgstr "在 osu!lazer 上游玩"
 
 #. placeholder {0}: lazer ? "Lazer" : "Stable"
 #: src/routes/top-plays.tsx
@@ -10809,6 +10826,10 @@ msgstr "搜索语言"
 msgid "Search maps"
 msgstr "搜索谱面"
 
+#: src/components/skins/SkinBackdropPicker.tsx
+msgid "Search maps for a backdrop"
+msgstr "搜索谱面作为背景"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "search maps..."
 msgstr "搜索谱面…"
@@ -10872,6 +10893,10 @@ msgstr "搜索你的服务器"
 #: src/components/layout/CountrySelector.tsx
 msgid "Search..."
 msgstr "搜索..."
+
+#: src/components/skins/SkinPreviewPickers.tsx
+msgid "searching"
+msgstr "搜索中"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
@@ -11763,6 +11788,7 @@ msgid "Standard"
 msgstr "标准"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
 msgid "Star rating"
 msgstr "星级"

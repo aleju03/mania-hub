@@ -167,3 +167,34 @@ export async function drawSkinPreviewBackdrops(
   }
   return fallbackPool(count, exclude);
 }
+
+// How many covers a search hands back: one row's worth, most-played first,
+// which is enough for a title someone has in mind to land near the front.
+export const SKIN_BACKDROP_SEARCH_SIZE = 12;
+
+// Covers matching a typed title, artist or mapper, for someone who wants one
+// particular map's art rather than whatever the shuffle turns up. Every
+// status is fair game here: the draw sticks to ranked and loved so random
+// covers look curated, but a map someone asks for by name is their choice.
+// Throws when the catalog is unreachable, so the row can say so.
+export async function searchSkinPreviewBackdrops(query: string): Promise<SkinBackdropCandidate[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const result = await fetchLiveMapSearch({
+    ...CATALOG_QUERY,
+    q,
+    statuses: [],
+    page: 0,
+    pageSize: SKIN_BACKDROP_SEARCH_SIZE,
+  });
+  const seen = new Set<number>();
+  const found: SkinBackdropCandidate[] = [];
+  for (const entry of result?.items ?? []) {
+    const setId = entry?.beatmapsetId;
+    if (typeof setId !== "number" || !Number.isFinite(setId) || setId <= 0) continue;
+    if (seen.has(setId)) continue;
+    seen.add(setId);
+    found.push({ setId, label: `${entry.artist ?? ""} - ${entry.title ?? ""}`.trim() });
+  }
+  return found;
+}

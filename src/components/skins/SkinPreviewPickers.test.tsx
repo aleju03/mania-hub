@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@lingui/react";
 import { getI18n } from "../../lib/i18n";
 import type { SkinBackdropCandidate } from "../../lib/skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import { SkinPreviewPickers } from "./SkinPreviewPickers";
+
+const searchSkinPreviewBackdrops = vi.hoisted(() => vi.fn(async (_query: string): Promise<SkinBackdropCandidate[]> => []));
+vi.mock("../../lib/skin-preview-backdrops", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/skin-preview-backdrops")>()),
+  searchSkinPreviewBackdrops,
+}));
 
 const COVER: SkinBackdropCandidate = { setId: 1234, label: "Camellia - Ghost" };
 const SNIPPET: SkinPreviewChartSnippet = {
@@ -59,7 +65,12 @@ function renderPickers(overrides: {
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  searchSkinPreviewBackdrops.mockReset();
+  searchSkinPreviewBackdrops.mockResolvedValue([]);
+  vi.useRealTimers();
+});
 
 describe("SkinPreviewPickers", () => {
   it("shows one row at a time, backdrops first", () => {
@@ -101,5 +112,44 @@ describe("SkinPreviewPickers", () => {
     fireEvent.click(screen.getByRole("button", { name: /shuffle/ }));
     expect(patternShuffle).toHaveBeenCalledTimes(1);
     expect(backdropShuffle).toHaveBeenCalledTimes(1);
+  });
+
+  it("swaps the drawn covers for the maps a typed name matches, and back on clear", async () => {
+    vi.useFakeTimers();
+    searchSkinPreviewBackdrops.mockResolvedValue([{ setId: 555, label: "xi - Blue Zenith" }]);
+    const backdropShuffle = vi.fn();
+    renderPickers({ backdropShuffle });
+
+    fireEvent.change(screen.getByRole("searchbox", { name: /Search maps/ }), { target: { value: "zenith" } });
+    // Debounced: nothing is asked of the catalog per keystroke.
+    expect(searchSkinPreviewBackdrops).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+
+    expect(searchSkinPreviewBackdrops).toHaveBeenCalledWith("zenith");
+    expect(screen.getByRole("button", { name: /Blue Zenith/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Camellia - Ghost/ })).toBeNull();
+    // Flat stays on offer either way.
+    expect(screen.getByRole("button", { name: "flat" })).toBeTruthy();
+
+    // Shuffling while searching drops the query and draws fresh covers.
+    fireEvent.click(screen.getByRole("button", { name: /shuffle/ }));
+    expect(backdropShuffle).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Camellia - Ghost/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Blue Zenith/ })).toBeNull();
+  });
+
+  it("says when a search matches nothing", async () => {
+    vi.useFakeTimers();
+    renderPickers();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: /Search maps/ }), { target: { value: "nope" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+
+    expect(screen.getByText("no maps match")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Camellia - Ghost/ })).toBeNull();
   });
 });

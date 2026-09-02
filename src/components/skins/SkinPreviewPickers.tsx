@@ -3,7 +3,13 @@ import { Shuffle } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { BackdropScope, PreviewBackdrop } from "../../lib/skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
-import { SkinBackdropRow, SkinBackdropScopeToggle, type SkinBackdropRowPool } from "./SkinBackdropPicker";
+import {
+  SkinBackdropRow,
+  SkinBackdropScopeToggle,
+  SkinBackdropSearchBox,
+  useSkinBackdropSearch,
+  type SkinBackdropRowPool,
+} from "./SkinBackdropPicker";
 import { SkinPatternRow, type SkinPatternPool } from "./SkinPatternPicker";
 
 // What a rendered preview is dressed with: a backdrop behind the playfield and
@@ -40,7 +46,24 @@ export function SkinPreviewPickers({
 }) {
   const { t } = useLingui();
   const [tab, setTab] = useState<PickerTab>("backdrop");
-  const showing = tab === "backdrop" ? backdrop.pool : pattern.pool;
+  // Typing a map name swaps the drawn covers for the matches; the drawn pool
+  // is untouched underneath and comes back when the box is cleared.
+  const search = useSkinBackdropSearch(backdrop.pool);
+  const backdropRow = search.row ?? backdrop.pool;
+  // The shuffle button reads the drawn pool, not the search: a search in
+  // flight is the row's business and must not sit the button out.
+  const drawing = tab === "backdrop" ? backdrop.pool.drawing : pattern.pool.drawing;
+
+  const shuffle = () => {
+    if (tab === "pattern") {
+      pattern.pool.shuffle();
+      return;
+    }
+    // A shuffle while searching means "back to random covers", so it drops
+    // the query rather than reshuffling a row it never drew.
+    if (search.row) search.setQuery("");
+    backdrop.pool.shuffle();
+  };
 
   return (
     <div className="mt-3 flex flex-col gap-1.5">
@@ -69,15 +92,16 @@ export function SkinPreviewPickers({
             disabled={disabled}
           />
         )}
+        {tab === "backdrop" && <SkinBackdropSearchBox search={search} disabled={disabled} />}
         <button
           type="button"
-          disabled={disabled || showing.drawing}
-          onClick={() => showing.shuffle()}
+          disabled={disabled || drawing}
+          onClick={shuffle}
           title={tab === "backdrop" ? t`Draw a different set of map covers` : t`Draw a different set of charts`}
           className="flex items-center gap-1 rounded border border-osu-b3/40 bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 disabled:cursor-default disabled:opacity-50"
         >
           <Shuffle size={11} aria-hidden="true" />
-          {showing.drawing ? <Trans>drawing</Trans> : <Trans>shuffle</Trans>}
+          {drawing ? <Trans>drawing</Trans> : <Trans>shuffle</Trans>}
         </button>
         {tab === "backdrop" && backdrop.hint}
       </div>
@@ -87,10 +111,14 @@ export function SkinPreviewPickers({
       <div className="flex flex-wrap items-center gap-1.5">
         {tab === "backdrop" ? (
           <SkinBackdropRow
-            pool={backdrop.pool}
+            pool={backdropRow}
             selected={backdrop.selected}
             onPick={backdrop.onPick}
             disabled={disabled}
+            busyNotice={search.row ? <Trans>searching</Trans> : undefined}
+            emptyNotice={search.row
+              ? (search.failed ? <Trans>map search unavailable</Trans> : <Trans>no maps match</Trans>)
+              : undefined}
           />
         ) : (
           <SkinPatternRow
