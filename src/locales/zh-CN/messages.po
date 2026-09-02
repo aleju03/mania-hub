@@ -1238,6 +1238,10 @@ msgstr "{score} Ranked 分数"
 msgid "{secs}s ago"
 msgstr "{secs} 秒前"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{selectedImageCount, plural, one {# image selected} other {# images selected}}"
+msgstr ""
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{selectedKeymode}K preview"
@@ -1892,8 +1896,8 @@ msgid "A fresh rating is being computed from the latest plays; these numbers may
 msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会变动"
 
 #: src/routes/__root.tsx
-msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
-msgstr "刚部署的资源加载失败。应用会尝试一次干净的刷新；如果又回到这里，说明预览部署缺少构建资源。"
+#~ msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
+#~ msgstr "刚部署的资源加载失败。应用会尝试一次干净的刷新；如果又回到这里，说明预览部署缺少构建资源。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -1912,6 +1916,22 @@ msgstr "从补充包中抽到的 maniacard。打开你自己的卡包，建立�
 #: src/lib/goal-format.ts
 msgid "a map"
 msgstr "某张谱面"
+
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "A new update just came in. Refresh to load it."
+msgstr "刚刚有新更新。刷新以加载。"
+
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "A new update just came in. Refreshing..."
+msgstr "刚刚有新更新。正在刷新..."
+
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "A new version went live while this page was open, but reloading didn't pick it up. Try once more, or go home."
+#~ msgstr "此页面打开期间上线了新版本，但刷新后仍未加载到。请再试一次，或返回首页。"
+
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "A new version went live while this page was open. Reloading to pick it up."
+#~ msgstr "此页面打开期间上线了新版本。正在刷新以加载它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
@@ -1940,6 +1960,10 @@ msgstr "某张谱面"
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
 #~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样。准确率高于通过线会计入更多；差一点没到也仍有计入：从通过线往下 4 个百分点以内，成绩会按更低的段位计为通过，最低比谱面段位低整整一级。在 96% 的段位表上就是："
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "A pasted image is no longer available. Paste it again before copying."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -3742,6 +3766,10 @@ msgstr "复制链接地址"
 msgid "Copy share code"
 msgstr "复制分享码"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copying BBCode..."
+msgstr ""
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
 msgstr "无法核对这个邀请链接，请再试一次。"
@@ -3808,6 +3836,10 @@ msgstr "无法加载这些成绩。"
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Could not load this leaderboard."
 msgstr "无法加载该排行榜。"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Could not match the image sizes."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Could not reach Discord to check that invite. Try again in a moment."
@@ -4123,6 +4155,10 @@ msgstr "克罗地亚语"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "crop {0}×{1}"
 msgstr "裁剪 {0}×{1}"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Ctrl/Cmd-click images to add or remove them."
+msgstr ""
 
 #: src/routes/player/$username.tsx
 msgid "Cumulative"
@@ -5554,6 +5590,7 @@ msgstr "再来一次"
 msgid "go back"
 msgstr "返回"
 
+#: src/components/layout/StaleBuildNotice.tsx
 #: src/routes/__root.tsx
 msgid "Go home"
 msgstr "回到首页"
@@ -7161,6 +7198,10 @@ msgstr "管理员"
 #~ msgid "Mania Hub downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 #~ msgstr "Mania Hub 会下载谱面文件，读取音符，把谱型交给评分引擎来评。用哪个引擎取决于键数，因为没有哪个引擎在所有键数上都最好："
 
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "Mania Hub just updated"
+#~ msgstr "Mania Hub 刚刚更新了"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -7362,6 +7403,10 @@ msgstr "已标记太易"
 #: src/routes/farm-helper.tsx
 msgid "marked hard"
 msgstr "已标记太难"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Match sizes to first selected image"
+msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -10104,9 +10149,17 @@ msgstr "红色"
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "重做（Ctrl+Shift+Z）"
 
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "Refresh"
+msgstr "刷新"
+
 #: src/routes/player/$username.tsx
 msgid "Refresh failed or otherwise missed plays from osu!'s latest recent history."
 msgstr "从 osu! 最近成绩里刷新失败或漏掉的记录。"
+
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "Refresh now"
+msgstr "立即刷新"
 
 #: src/routes/maps.tsx
 msgid "Refreshing maps..."
@@ -10146,6 +10199,10 @@ msgstr "单点与长条"
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "放手"
+
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "Reload now"
+#~ msgstr "立即刷新"
 
 #: src/routes/__root.tsx
 msgid "Reload page"
@@ -12429,6 +12486,10 @@ msgstr "无法读取压缩包。点击重试。"
 msgid "The board is not answering right now."
 msgstr "排行榜暂时没有响应。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "The browser blocked the clipboard. Try Copy BBCode again."
+msgstr ""
+
 #: src/routes/privacy.tsx
 msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
 msgstr "浏览器会在 localStorage 里存储偏好和缓存，包括主题设置、所选国家/地区、隐藏的用户、回放查看器偏好、谱面筛选条件，以及类似的客户端状态。你可以通过浏览器的存储控制清除这些数据。"
@@ -12762,6 +12823,10 @@ msgstr "直接用对应的 .osu 文件也可以。"
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
+msgstr ""
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
@@ -14168,6 +14233,10 @@ msgstr "投票已结束。感谢你的选择。"
 #: src/routes/snipes.tsx
 msgid "vs"
 msgstr "vs"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Wait for the image resize to finish, then copy again."
+msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"

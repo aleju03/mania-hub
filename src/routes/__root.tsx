@@ -11,6 +11,7 @@ import { ManiaRain } from "../components/home/ManiaRain";
 import { Nav } from "../components/layout/Nav";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
+import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { AuthContext } from "../lib/auth-context";
@@ -446,9 +447,13 @@ function RootErrorComponent({ error }: { error: Error }) {
   // error may be the provider tree failing), and the error page must never
   // throw. useLocale defaults to en without a provider; getI18n always works.
   const i = getI18n(useLocale());
+  // Assume the auto-reload will fire until the effect learns otherwise, so a
+  // stale tab never flashes the "reload by hand" copy on its way out.
+  const [reloading, setReloading] = useState(import.meta.env.PROD && staleBuildError);
 
   useEffect(() => {
     const autoReloading = import.meta.env.PROD && staleBuildError && recoverFromChunkLoadError(error, true);
+    setReloading(autoReloading);
     // stale build + auto_reloading:false means the reload loop guard tripped,
     // i.e. a refresh did not clear it and the user is stuck on this screen.
     track("route_error", {
@@ -460,22 +465,28 @@ function RootErrorComponent({ error }: { error: Error }) {
     });
   }, [chunkLoadError, staleBuildError, staleRouteError, error]);
 
+  if (staleBuildError) {
+    return (
+      <StaleBuildNotice
+        reloading={reloading}
+        onReload={() => {
+          if (!recoverFromChunkLoadError(error, true)) window.location.reload();
+        }}
+        detail={import.meta.env.DEV ? error?.message : null}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-24 text-center">
       <div className="text-5xl font-bold text-white">{i._(msg`Something broke`)}</div>
       <div className="max-w-md text-sm text-osu-f1">
-        {staleBuildError
-          ? i._(msg`A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset.`)
-          : i._(msg`The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions.`)}
+        {i._(msg`The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions.`)}
       </div>
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => {
-            if (!staleBuildError || !recoverFromChunkLoadError(error, true)) {
-              window.location.reload();
-            }
-          }}
+          onClick={() => window.location.reload()}
           className="rounded-md bg-osu-pink/20 px-4 py-2 text-xs font-semibold text-white hover:bg-osu-pink/30 transition-colors"
         >
           {i._(msg`Reload page`)}

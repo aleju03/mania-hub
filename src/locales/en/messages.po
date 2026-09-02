@@ -1229,6 +1229,10 @@ msgstr "{score} ranked score"
 msgid "{secs}s ago"
 msgstr "{secs}s ago"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{selectedImageCount, plural, one {# image selected} other {# images selected}}"
+msgstr "{selectedImageCount, plural, one {# image selected} other {# images selected}}"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{selectedKeymode}K preview"
@@ -1883,8 +1887,8 @@ msgid "A fresh rating is being computed from the latest plays; these numbers may
 msgstr "A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
 
 #: src/routes/__root.tsx
-msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
-msgstr "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
+#~ msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
+#~ msgstr "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
 
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -1903,6 +1907,22 @@ msgstr "A maniacard pulled from a booster pack. Open your own packs and build a 
 #: src/lib/goal-format.ts
 msgid "a map"
 msgstr "a map"
+
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "A new update just came in. Refresh to load it."
+msgstr "A new update just came in. Refresh to load it."
+
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "A new update just came in. Refreshing..."
+msgstr "A new update just came in. Refreshing..."
+
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "A new version went live while this page was open, but reloading didn't pick it up. Try once more, or go home."
+#~ msgstr "A new version went live while this page was open, but reloading didn't pick it up. Try once more, or go home."
+
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "A new version went live while this page was open. Reloading to pick it up."
+#~ msgstr "A new version went live while this page was open. Reloading to pick it up."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
@@ -1931,6 +1951,10 @@ msgstr "a map"
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
 #~ msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would. Accuracy above the bar credits more, and a near miss under it still credits something: from 4 points under the bar, a play counts as a clear of a lower level, bottoming out one full level down. On the 96% ladders that reads:"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "A pasted image is no longer available. Paste it again before copying."
+msgstr "A pasted image is no longer available. Paste it again before copying."
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -3733,6 +3757,10 @@ msgstr "Copy link URL"
 msgid "Copy share code"
 msgstr "Copy share code"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Copying BBCode..."
+msgstr "Copying BBCode..."
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
 msgstr "Could not check that invite. Try again."
@@ -3799,6 +3827,10 @@ msgstr "Could not load these plays."
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Could not load this leaderboard."
 msgstr "Could not load this leaderboard."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Could not match the image sizes."
+msgstr "Could not match the image sizes."
 
 #: src/components/communities/field-options.tsx
 msgid "Could not reach Discord to check that invite. Try again in a moment."
@@ -4114,6 +4146,10 @@ msgstr "Croatian"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "crop {0}×{1}"
 msgstr "crop {0}×{1}"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Ctrl/Cmd-click images to add or remove them."
+msgstr "Ctrl/Cmd-click images to add or remove them."
 
 #: src/routes/player/$username.tsx
 msgid "Cumulative"
@@ -5549,6 +5585,7 @@ msgstr "go again"
 msgid "go back"
 msgstr "go back"
 
+#: src/components/layout/StaleBuildNotice.tsx
 #: src/routes/__root.tsx
 msgid "Go home"
 msgstr "Go home"
@@ -7160,6 +7197,10 @@ msgstr "manager"
 #~ msgid "Mania Hub downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 #~ msgstr "Mania Hub downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "Mania Hub just updated"
+#~ msgstr "Mania Hub just updated"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania maps"
@@ -7361,6 +7402,10 @@ msgstr "marked easy"
 #: src/routes/farm-helper.tsx
 msgid "marked hard"
 msgstr "marked hard"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Match sizes to first selected image"
+msgstr "Match sizes to first selected image"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -10103,9 +10148,17 @@ msgstr "Red"
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Redo (Ctrl+Shift+Z)"
 
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "Refresh"
+msgstr "Refresh"
+
 #: src/routes/player/$username.tsx
 msgid "Refresh failed or otherwise missed plays from osu!'s latest recent history."
 msgstr "Refresh failed or otherwise missed plays from osu!'s latest recent history."
+
+#: src/components/layout/StaleBuildNotice.tsx
+msgid "Refresh now"
+msgstr "Refresh now"
 
 #: src/routes/maps.tsx
 msgid "Refreshing maps..."
@@ -10145,6 +10198,10 @@ msgstr "Regular and LN"
 #: src/lib/skill-axes.ts
 msgid "Release"
 msgstr "Release"
+
+#: src/components/layout/StaleBuildNotice.tsx
+#~ msgid "Reload now"
+#~ msgstr "Reload now"
 
 #: src/routes/__root.tsx
 msgid "Reload page"
@@ -12428,6 +12485,10 @@ msgstr "The archive could not be read. Tap to try again."
 msgid "The board is not answering right now."
 msgstr "The board is not answering right now."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "The browser blocked the clipboard. Try Copy BBCode again."
+msgstr "The browser blocked the clipboard. Try Copy BBCode again."
+
 #: src/routes/privacy.tsx
 msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
 msgstr "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
@@ -12761,6 +12822,10 @@ msgstr "The exact .osu file works too."
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "The first uploaded skin lands here."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
+msgstr "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
@@ -14167,6 +14232,10 @@ msgstr "Voting's closed. Thanks for the picks."
 #: src/routes/snipes.tsx
 msgid "vs"
 msgstr "vs"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Wait for the image resize to finish, then copy again."
+msgstr "Wait for the image resize to finish, then copy again."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
