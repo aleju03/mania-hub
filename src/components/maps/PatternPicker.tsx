@@ -16,8 +16,8 @@ import type { TriStateMode } from "../../lib/maps-random-filter";
 const PATTERN_OPTIONS = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"];
 
 const SUBFAMILIES: Record<string, string[]> = {
-  jack: ["speedjack", "handjack"],
-  stream: ["dumpstream", "quadstream", "chordstream", "delay", "bracket"],
+  jack: ["speedjack", "handjack", "quadstream"],
+  stream: ["dumpstream", "chordstream", "delay", "bracket"],
   ln: ["lngeneral", "lnrelease", "lninverse", "lntech"],
 };
 
@@ -37,8 +37,8 @@ const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
 
 const KEYMODE_SUBFAMILIES: Record<string, Record<string, string[]>> = {
   "4k": {
-    jack: ["speedjack", "handjack"],
-    stream: ["dumpstream", "quadstream"],
+    jack: ["speedjack", "handjack", "quadstream"],
+    stream: ["dumpstream"],
     ln: ["lngeneral", "lninverse", "lntech"],
   },
   "7k": { ln: ["lngeneral", "lnrelease", "lninverse", "lntech"] },

@@ -74,8 +74,8 @@ export const PATTERN_COLOR: Record<string, string> = {
   // subfamilies inherit their family's color
   speedjack: "#ec6a9c",
   handjack: "#ec6a9c",
+  quadstream: "#ec6a9c",
   dumpstream: "#5ab2f2",
-  quadstream: "#5ab2f2",
   chordstream: "#5ab2f2",
   delay: "#5ab2f2",
   bracket: "#5ab2f2",
