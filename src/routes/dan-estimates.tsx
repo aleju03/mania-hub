@@ -520,10 +520,10 @@ function DanEstimatesPage() {
             <Trans>
               7K LN is the one exception. Its General skill already mixes every kind of long note, so
               the estimate stays within one level of your General dan, whichever way Tech, Inverse and
-              Release point. Those two dans stop well under General for almost everyone, whether because
+              Release point. Those dans stop well under General for almost everyone, whether because
               few hard maps of those kinds exist or because the site does not recognise all of them, so
-              they no longer get to decide the number on their own. The skill rows themselves
-              are untouched.
+              they no longer get to decide the number on their own. Your Tech, Inverse and Release dans
+              still show their own numbers; only the overall estimate is held near General.
             </Trans>
           </P>
           <P>
