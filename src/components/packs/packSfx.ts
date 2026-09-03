@@ -374,22 +374,43 @@ const ETERNAL_RESOLVE_CHORD = [73.42, 110, 146.83, 220, 293.66];
    null means "asked and cannot have it" (missing, blocked, undecodable), which
    pins the synth fallback rather than refetching on every play. */
 const ETERNAL_SAMPLE_URL = "/audio/packs/eternal-pull.mp3";
-let eternalBuffer: AudioBuffer | null = null;
-let eternalBufferLoad: Promise<void> | null = null;
+const MILESTONE_SAMPLE_URL = "/audio/packs/milestone-pull.mp3";
 
-function loadEternalSample(ctx: AudioContext): Promise<void> {
-  if (!eternalBufferLoad) {
-    eternalBufferLoad = (async () => {
+interface SampleSlot {
+  url: string;
+  buffer: AudioBuffer | null;
+  load: Promise<void> | null;
+}
+
+const eternalSample: SampleSlot = { url: ETERNAL_SAMPLE_URL, buffer: null, load: null };
+const milestoneSample: SampleSlot = { url: MILESTONE_SAMPLE_URL, buffer: null, load: null };
+
+function loadSample(ctx: AudioContext, slot: SampleSlot): Promise<void> {
+  if (!slot.load) {
+    slot.load = (async () => {
       try {
-        const response = await fetch(ETERNAL_SAMPLE_URL);
+        const response = await fetch(slot.url);
         if (!response.ok) return;
-        eternalBuffer = await ctx.decodeAudioData(await response.arrayBuffer());
+        slot.buffer = await ctx.decodeAudioData(await response.arrayBuffer());
       } catch {
-        // Left null: the synthesized cue below covers it.
+        // Left null: the synthesized cue covers it.
       }
     })();
   }
-  return eternalBufferLoad;
+  return slot.load;
+}
+
+/* Plays the decoded file under the shared master. The files are already
+   mastered to sit above the rest of the pack flow, so the gain only trims
+   them rather than shaping them. */
+function playSample(ctx: AudioContext, buffer: AudioBuffer) {
+  if (!master) return;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = 0.9;
+  source.connect(gain).connect(master);
+  source.start();
 }
 
 /* Called as soon as a dealt hand is known to contain the Eternal card, which
@@ -400,29 +421,29 @@ function loadEternalSample(ctx: AudioContext): Promise<void> {
    suspended context still decodes. */
 export function prefetchEternalFanfare(): void {
   const ctx = ensureAudio();
-  if (!ctx || eternalBuffer) return;
-  void loadEternalSample(ctx);
+  if (!ctx || eternalSample.buffer) return;
+  void loadSample(ctx, eternalSample);
+}
+
+/* Same for the millionth pack's card: one per site, ever. */
+export function prefetchMilestoneFanfare(): void {
+  const ctx = ensureAudio();
+  if (!ctx || milestoneSample.buffer) return;
+  void loadSample(ctx, milestoneSample);
 }
 
 export function playEternalFanfare() {
   const ctx = ensureAudio();
   if (!ctx || !master) return;
 
-  if (eternalBuffer) {
-    const source = ctx.createBufferSource();
-    source.buffer = eternalBuffer;
-    const gain = ctx.createGain();
-    // The file is already mastered to sit above the rest of the pack flow, so
-    // this only trims it under the shared master rather than shaping it.
-    gain.gain.value = 0.9;
-    source.connect(gain).connect(master);
-    source.start();
+  if (eternalSample.buffer) {
+    playSample(ctx, eternalSample.buffer);
     return;
   }
 
   /* Not loaded (yet, or at all): the synthesized cue. Same shape and the same
      4.4 seconds, so the burst stays in step with whichever one plays. */
-  void loadEternalSample(ctx);
+  void loadSample(ctx, eternalSample);
   playSynthesizedEternalFanfare(ctx);
 }
 
@@ -464,9 +485,11 @@ function playSynthesizedEternalFanfare(ctx: AudioContext) {
 
 /* The millionth pack. Not the Eternal cue in another key: that one is a
    trailer riser into a dark braaam. This is a tally landing on a round number
-   and the room going gold, so it is built as ticks that speed up under the
-   rolling counter, one hard hit on the lock, and then a bright major chord
-   with bells over it, held. The beats match MilestoneBurst. */
+   and the room going gold: ticks that speed up under the rolling counter, one
+   hard hit on the lock, and a bright major bell chord left ringing.
+   Like the Eternal cue it is a rendered file (see public/audio/packs/README.md
+   for the sources, all CC0), with the WebAudio version below as the fallback.
+   The beats match MilestoneBurst. */
 const MILESTONE_COUNT_S = 1.7;
 const MILESTONE_IMPACT_AT = 1.8;
 const MILESTONE_TICKS = 30;
@@ -479,6 +502,15 @@ export function playMilestoneFanfare() {
   const ctx = ensureAudio();
   if (!ctx || !master) return;
 
+  if (milestoneSample.buffer) {
+    playSample(ctx, milestoneSample.buffer);
+    return;
+  }
+  void loadSample(ctx, milestoneSample);
+  playSynthesizedMilestoneFanfare(ctx);
+}
+
+function playSynthesizedMilestoneFanfare(ctx: AudioContext) {
   /* The count. Ticks bunching up toward the lock, each a hair higher than the
      last, over a soft rising bed so the lock lands on something. */
   for (let index = 0; index < MILESTONE_TICKS; index += 1) {

@@ -2,8 +2,8 @@
 
 Everything else in the pack flow is synthesized at runtime (`src/components/packs/packSfx.ts`,
 no assets). This folder is the exception: the Eternal card is the one-time reward for
-completing the whole collection, and a WebAudio approximation of a cinematic hit read as
-artificial next to the moment it marks.
+completing the whole collection and the golden card goes to the millionth pack, and a
+WebAudio approximation of a cinematic hit read as artificial next to the moments they mark.
 
 ## eternal-pull.mp3
 
@@ -30,8 +30,37 @@ strike on the same frame, mixed, faded out from 3.95s, loudness-normalized to ab
 LUFS with a -1 dBTP ceiling, and encoded to 128 kbps stereo MP3 (~70 KB). MP3 rather than
 OGG so Safari plays it without a second copy.
 
-Playback is best effort, like every other sound on the site: `playEternalFanfare` prefers
-this buffer and falls back to the synthesized cue if the file is missing, blocked or fails
-to decode, so deleting it degrades the moment instead of breaking it. `prefetchEternalFanfare`
-is fired the moment a dealt hand is known to contain the card, which is what guarantees it
-is decoded before the reveal reaches it.
+## milestone-pull.mp3
+
+The millionth-pack reveal cue. 4.6 seconds, matching `MILESTONE_CEREMONY_MS` in
+`src/components/packs/MilestoneBurst.tsx`: ticks bunching up under the rolling counter, a
+swell, the lock landing at **1.8s** (the frame the counter stops and the flash fires), then
+a bell chord ringing out under the falling gold.
+
+Assembled from **CC0** sources, one on OpenGameArt and the rest from Kenney's packs
+(Impact Sounds, Interface Sounds, Sci-Fi Sounds), all CC0 1.0:
+
+| Layer | Source | Author | Where |
+| --- | --- | --- | --- |
+| Counter ticks | Interface Sounds `tick_001/002/004` | Kenney | [kenney.nl](https://kenney.nl/assets/interface-sounds) |
+| Sub swell into the lock, and the boom on it | Sci-Fi Sounds `lowFrequency_explosion_000` (reversed, then forward) | Kenney | [kenney.nl](https://kenney.nl/assets/sci-fi-sounds) |
+| Crashes on the lock (one reversed into it) | Impact Sounds `impactPlate_heavy_000/001` | Kenney | [kenney.nl](https://kenney.nl/assets/impact-sounds) |
+| Debris under the crash | Sci-Fi Sounds `explosionCrunch_000` | Kenney | same |
+| Bell strike on the lock | Impact Sounds `impactBell_heavy_003`, pitched to C | Kenney | same |
+| Bell chord, the climbing cascade and the high shimmer after it (one ding pitched per note), and reversed as the swell | "4 Metal Dings/Rings" (`ding.1/2/3.ogg`) | StarNinjas | [OpenGameArt](https://opengameart.org/content/4-metal-dingsrings) |
+
+Processing: 30 ticks placed on the same accelerating curve the burst's counter uses, each
+a hair higher than the last; the reversed boom, bell and crash ending on 1.8s; the boom,
+crashes, debris and bell strike on that frame; the ding pitched to C, E, G and the octave
+and staggered over the next 300ms, then a cascade of nine bells climbing two and a half
+octaves out of the chord and a high shimmer fading through the gold fall. Mixed in mono, limited, brought to about -13 LUFS like
+the Eternal cue, and encoded to 128 kbps stereo MP3 (~75 KB).
+
+## Playback
+
+Playback is best effort, like every other sound on the site: `playEternalFanfare` and
+`playMilestoneFanfare` prefer their buffer and fall back to the synthesized cue if the file
+is missing, blocked or fails to decode, so deleting one degrades the moment instead of
+breaking it. `prefetchEternalFanfare` / `prefetchMilestoneFanfare` fire the moment a dealt
+hand is known to contain the card, which is what guarantees it is decoded before the reveal
+reaches it.

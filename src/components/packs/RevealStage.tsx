@@ -26,7 +26,7 @@ import {
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
 import { getCachedCardBackCanvas, getCachedCardBackDataUrl } from "./packArt";
-import { playCardDraw, playCardSlice, playEternalFanfare, playFlipWhoosh, playGoatFanfare, playMilestoneFanfare, playRevealChime, prefetchEternalFanfare } from "./packSfx";
+import { playCardDraw, playCardSlice, playEternalFanfare, playFlipWhoosh, playGoatFanfare, playMilestoneFanfare, playRevealChime, prefetchEternalFanfare, prefetchMilestoneFanfare } from "./packSfx";
 import { EternalBurst, ETERNAL_CEREMONY_MS, ETERNAL_WINDUP_S } from "./EternalBurst";
 import { MilestoneBurst, MILESTONE_CEREMONY_MS, MILESTONE_IMPACT_S } from "./MilestoneBurst";
 import { GoatBurst } from "./GoatBurst";
@@ -658,13 +658,14 @@ export function RevealStage({
     };
   }, []);
 
-  /* The Eternal cue is a file rather than a synth patch, so it has to be
-     fetched and decoded before the card it belongs to turns. The hand is known
-     the moment this stage mounts, which is several seconds of reveal ahead of
-     the flip; this card is dealt once per collector, so a ceremony that starts
-     silent and catches up late is not a recoverable mistake. */
+  /* The Eternal and milestone cues are files rather than synth patches, so
+     they have to be fetched and decoded before the card they belong to turns.
+     The hand is known the moment this stage mounts, which is several seconds
+     of reveal ahead of the flip; these cards are dealt once, so a ceremony
+     that starts silent and catches up late is not a recoverable mistake. */
   useEffect(() => {
     if (cards.some((card) => card.player.eternal)) prefetchEternalFanfare();
+    if (cards.some((card) => card.player.milestone)) prefetchMilestoneFanfare();
   }, [cards]);
 
   // Warm the avatar cache while the cards are still face-down: the texture
