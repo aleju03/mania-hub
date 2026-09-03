@@ -27,7 +27,6 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-03", text: "Maps: a map that goes from qualified to ranked shows up at the top of Newest again, as if it had just been ranked", to: "/maps" },
   { date: "2026-09-03", text: "Maniacards: rebalanced the Precision stat. It comes from the accuracy of your top plays, and the old curve was tuned for 99%+ plays, so the plays under 99%, which are 9 in 10 of all top plays on the site, scored low, and difficulty scaled the result down harder than it does for Control and Speed. That is why Precision was usually the lowest of the three. Now a 98% play is worth about what a 99% play was, difficulty weighs less, 5 misses on a 3000-note map used to cost as much as 5 misses on a 500-note one and now cost far less, and one very clean play no longer lifts the stat much on its own, the whole top 200 does. Also fixed a rounding issue where a stat pinned at 1500 pulled the other two down, so a maxed card can finally show 1500 on all three. Cards already in packs keep their old numbers, new pulls and profile cards use the new formula" },
   { date: "2026-09-02", text: "BBCode editor: drag an image up or down to reorder it", to: "/bbcode" },
   { date: "2026-09-01", text: "BBCode editor: fixed pasted images sometimes missing from the copied BBCode, stopped resizing from snapping back, and added Ctrl/Cmd-click to match several images to the first one's size", to: "/bbcode" },
