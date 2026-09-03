@@ -420,7 +420,9 @@ describe("computeManiaSkills", () => {
       score({ id: 2, accuracy: 0.995, pp: 480 }),
     ]);
 
-    expect(withCleanPeak?.accuracy).toBeGreaterThan((steady?.accuracy ?? 0) + 200);
+    // 2026-09-03 recentering flattened the acc curve (1.55 -> 1.1 power), so a
+    // clean peak still lifts the visible trait clearly, just not by the old margin.
+    expect(withCleanPeak?.accuracy).toBeGreaterThan((steady?.accuracy ?? 0) + 150);
   });
 
   test("uses MAX to 300 judgement ratio as a precision signal when counts exist", () => {

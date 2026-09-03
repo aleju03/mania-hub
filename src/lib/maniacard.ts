@@ -238,6 +238,12 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const comboRatio = maxCombo > 0 ? clamp(score.max_combo / maxCombo) : 1;
   const missCount = score.statistics.count_miss ?? score.statistics.miss ?? 0;
   const missPenalty = clamp(1 - missCount * 0.035, 0.75, 1);
+  // Precision reads misses as a share of the chart, not a flat count: accuracy
+  // has already priced every miss in, and a flat 3.5% per miss put 8 misses on
+  // a 3000-note chart (0.27% of notes) at the same 0.75 floor as 8 on 600. Ten
+  // times the miss rate: 0.27% reads 0.97, 1% reads 0.90. Polish and apex
+  // keep the flat count on purpose, a miss on a scoreboard-top run is a miss.
+  const missRatePenalty = clamp(1 - (missCount / Math.max(1, objects)) * 10, 0.75, 1);
   const comboGate = 0.82 + curve(comboRatio, 0.65) * 0.18;
   const accGate = getAccuracyGate(acc);
   const acronyms = getModAcronyms(score.mods);
@@ -254,7 +260,12 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const lengthScore = curve(normalize(length, ...baseline.length), 0.8);
   const objectScore = curve(normalize(objects, ...baseline.objects), 0.75);
   const ppScore = curve(normalize(score.pp ?? 0, ...baseline.pp), 0.7);
-  const precisionBase = curve(normalize(acc, 0.94, 0.999), 1.55);
+  // Recentered 2026-09-03: the old 94..99.9 band with a convex 1.55 power put
+  // a 98% play at 0.55 while speed/control read the same play through
+  // concave curves, so precision was the lowest of the three visible skills on
+  // 93% of stored 4K cards and 95% of 7K ones. A pp-sorted pool is already the
+  // player's messiest plays; the curve should not punish that a second time.
+  const precisionBase = curve(normalize(acc, 0.93, 0.995), 1.1);
   const maxJudgementRatioScore = getMaxJudgementRatioScore(score.statistics);
   const precisionDifficultyGate = 0.34 + srScore * 0.66;
   // Lazer scores an LN as two judgements (head + tail), and tails skew toward
@@ -269,10 +280,14 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
     (maxJudgementRatioScore ?? 0) * precisionDifficultyGate * ratioWeight;
   const speedRateGate = rate < 1 ? Math.pow(rate, 0.72) : 1;
 
+  // Same recentering: the high-acc bonus opens at 97.5 instead of 98.5 so it
+  // is not dead weight for most plays, and difficulty is a softer multiplier
+  // here (it stays an additive term in speed/control, and the ratio term above
+  // already carries its own gate).
   const precision = clamp(
-    (judgementPrecision * 0.7 + curve(normalize(acc, 0.985, 1), 1.1) * 0.18 + odScore * 0.12) *
-      (0.34 + srScore * 0.66) *
-      missPenalty,
+    (judgementPrecision * 0.7 + curve(normalize(acc, 0.975, 1), 1.1) * 0.18 + odScore * 0.12) *
+      (0.6 + srScore * 0.4) *
+      missRatePenalty,
   );
 
   const speed = clamp(
@@ -360,7 +375,11 @@ function toProfile(keyMode: number, sums: TraitSums): KeymodeProfile | null {
   if (sums.weight <= 0 || sums.count <= 0) return null;
 
   const averagePrecision = sums.precision / sums.weight;
-  const precision = averagePrecision * 0.72 + sums.precisionPeak * 0.28;
+  // The single best play used to carry 28% of precision, a band-aid from when
+  // the acc curve read a 98% play as weak. With the 2026-09-03 recentering
+  // that made one clean score half of the stat for a 96%-average profile, so
+  // it is a nudge now: a standout play shows, it does not decide the number.
+  const precision = averagePrecision * 0.9 + sums.precisionPeak * 0.1;
   const speed = sums.speed / sums.weight;
   const control = sums.control / sums.weight;
   const stamina = sums.stamina / sums.weight;
@@ -484,7 +503,29 @@ function calibrateDisplaySkillValues(cardPower: number, values: number[]): numbe
   const currentMean = values.reduce((sum, value) => sum + value, 0) / values.length;
   if (!Number.isFinite(currentMean) || currentMean <= 0) return values;
 
-  const scale = targetMean / currentMean;
+  // Solve for the scale after the clamp, not before: with a plain
+  // targetMean / currentMean scale, every point a value lost to the 1500 cap
+  // was gone from the displayed mean, so a card with one pinned stat read
+  // below its own power and a maxed card could never show three 1500s (no
+  // stored snapshot ever had). Walk the values from the top and, for each
+  // count k of pinned values, ask what scale puts the remaining ones at the
+  // mean the pinned ones leave over; the first consistent k wins. A maxed
+  // card pins all three.
+  const sorted = [...values].sort((a, b) => b - a);
+  const n = sorted.length;
+  let scale = targetMean / currentMean;
+  for (let pinned = 0; pinned < n; pinned++) {
+    const restSum = sorted.slice(pinned).reduce((sum, value) => sum + value, 0);
+    if (restSum <= 0) break;
+    const candidate = (targetMean * n - DISPLAY_SKILL_SCALE * pinned) / restSum;
+    const topRestPinned = sorted[pinned] * candidate >= DISPLAY_SKILL_SCALE;
+    const lastPinnedHolds = pinned === 0 || sorted[pinned - 1] * candidate >= DISPLAY_SKILL_SCALE;
+    if (!topRestPinned && lastPinnedHolds) {
+      scale = candidate;
+      break;
+    }
+    if (pinned === n - 1 && topRestPinned) scale = Number.POSITIVE_INFINITY;
+  }
   return values.map((value) => Math.round(clamp(value * scale, 0, DISPLAY_SKILL_SCALE)));
 }
 
