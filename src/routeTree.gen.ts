@@ -68,6 +68,7 @@ import { Route as CommunitiesReviewRouteImport } from './routes/communities_.rev
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
+import { Route as ReplayCommunityRouteImport } from './routes/replay_.community'
 import { Route as ReplayUploadsRouteImport } from './routes/replay_.uploads'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
@@ -381,6 +382,11 @@ const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   path: '/player/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReplayCommunityRoute = ReplayCommunityRouteImport.update({
+  id: '/replay_/community',
+  path: '/replay/community',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReplayUploadsRoute = ReplayUploadsRouteImport.update({
   id: '/replay_/uploads',
   path: '/replay/uploads',
@@ -523,6 +529,7 @@ export interface FileRoutesByFullPath {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
+  '/replay/community': typeof ReplayCommunityRoute
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
@@ -600,6 +607,7 @@ export interface FileRoutesByTo {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
+  '/replay/community': typeof ReplayCommunityRoute
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
@@ -678,6 +686,7 @@ export interface FileRoutesById {
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
+  '/replay_/community': typeof ReplayCommunityRoute
   '/replay_/uploads': typeof ReplayUploadsRoute
   '/skins_/$id': typeof SkinsIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
@@ -757,6 +766,7 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/packs/collections'
     | '/player/$username'
+    | '/replay/community'
     | '/replay/uploads'
     | '/skins/$id'
     | '/api/auth/discord'
@@ -834,6 +844,7 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/packs/collections'
     | '/player/$username'
+    | '/replay/community'
     | '/replay/uploads'
     | '/skins/$id'
     | '/api/auth/discord'
@@ -911,6 +922,7 @@ export interface FileRouteTypes {
     | '/dev/opt-in-preview'
     | '/packs_/collections'
     | '/player/$username'
+    | '/replay_/community'
     | '/replay_/uploads'
     | '/skins_/$id'
     | '/api/auth/discord'
@@ -989,6 +1001,7 @@ export interface RootRouteChildren {
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
+  ReplayCommunityRoute: typeof ReplayCommunityRoute
   ReplayUploadsRoute: typeof ReplayUploadsRoute
   SkinsIdRoute: typeof SkinsIdRoute
   ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
@@ -1414,6 +1427,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/replay_/community': {
+      id: '/replay_/community'
+      path: '/replay/community'
+      fullPath: '/replay/community'
+      preLoaderRoute: typeof ReplayCommunityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/replay_/uploads': {
       id: '/replay_/uploads'
       path: '/replay/uploads'
@@ -1645,6 +1665,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
+  ReplayCommunityRoute: ReplayCommunityRoute,
   ReplayUploadsRoute: ReplayUploadsRoute,
   SkinsIdRoute: SkinsIdRoute,
   ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,

@@ -62,6 +62,23 @@ export async function getUploadedReplayRow(db: Db, id: string): Promise<Uploaded
   return row ? toRow(row as Record<string, unknown>) : null;
 }
 
+// Up to a page's worth of rows by id, for the public gallery to name each
+// card's uploader without one round trip per card. Unknown ids are skipped.
+export async function getUploadedReplayRows(db: Db, ids: string[]): Promise<UploadedReplayRow[]> {
+  const unique = Array.from(new Set(ids)).slice(0, 100);
+  if (unique.length === 0) return [];
+  const placeholders = unique.map(() => "?").join(", ");
+  return (await exec(
+    db,
+    `select r.id, r.owner_user_id, r.original_filename, r.uploaded_at,
+            coalesce(nullif(r.owner_username, ''), u.username, '') as owner_username
+       from uploaded_replays r
+       left join users u on u.user_id = r.owner_user_id
+      where r.id in (${placeholders})`,
+    unique,
+  )).rows.map((row) => toRow(row as Record<string, unknown>));
+}
+
 export interface UploadedReplayListOptions {
   /** Null only together with allOwners: nobody's shelf is "everyone's". */
   ownerUserId: number | null;

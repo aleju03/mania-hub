@@ -421,6 +421,16 @@ function UploadReplayBrowser({
           entries={communityUploads}
           title={t`Recently Uploaded by the Community`}
           showRemove={false}
+          action={
+            // The nine newest are a preview; every upload ever lives on its own page.
+            <Link
+              to="/replay/community"
+              className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b4 hover:text-white"
+            >
+              <Trans>All uploads</Trans>
+              <ChevronRight className="h-3 w-3" aria-hidden="true" />
+            </Link>
+          }
           onOpen={onOpenRecentReplay}
           onRemove={() => {}}
           onClear={() => {}}

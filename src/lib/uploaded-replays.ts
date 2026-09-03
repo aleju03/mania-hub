@@ -165,16 +165,18 @@ export const deleteUploadedReplay = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Both memory tiers that would keep describing a file that no longer exists.
-// Per-instance only, which is enough: the community list is rebuilt from an R2
-// listing the deleted object has already left, so the other instances drop it
-// on their own next rebuild.
+// Every memory tier that would keep serving a file that no longer exists.
+// Per-instance only, which is enough: the community lists are rebuilt from an
+// R2 listing the deleted object has already left, so the other instances drop
+// it on their own next rebuild, and the packed artifact left R2 with the file.
 async function forgetDeletedUpload(id: string): Promise<void> {
   const { invalidatePersistentCache } = await import("./api");
   const { DESCRIPTION_VERSION } = await import("./uploaded-replay-describe");
-  const { COMMUNITY_UPLOADS_CACHE_KEY } = await import("./uploaded-replay-community");
+  const { UPLOADED_REPLAY_PACKED_VERSION } = await import("./uploaded-replay-payload");
+  const { invalidateCommunityUploads } = await import("./uploaded-replay-community-server");
   await invalidatePersistentCache(`uploaded-replay-desc:v${DESCRIPTION_VERSION}:${id}`);
-  await invalidatePersistentCache(COMMUNITY_UPLOADS_CACHE_KEY);
+  await invalidatePersistentCache(`uploaded-replay-packed:v${UPLOADED_REPLAY_PACKED_VERSION}:${id}`);
+  invalidateCommunityUploads();
 }
 
 export interface UploadOwnerBackfillResult {

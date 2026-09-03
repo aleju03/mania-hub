@@ -241,10 +241,24 @@ describe("replay upload POST", () => {
       filenameHeader: encodeURIComponent("my replay.osr"),
     }));
     expect(response.status).toBe(200);
-    const body = await response.json() as { id: string; url: string; storage: string; ownerUserId: number };
+    const body = await response.json() as {
+      id: string;
+      url: string;
+      storage: string;
+      ownerUserId: number;
+      filename: string | null;
+      replay: { framesPacked: { count: number }; keyCount: number; mods: unknown[]; scoreId: number | null };
+      beatmap: unknown;
+    };
     expect(body.storage).toBe("local");
     expect(body.url).toContain(`uploadId=${body.id}`);
     expect(body.ownerUserId).toBe(viewerId);
+    expect(body.filename).toBe("my replay.osr");
+    // The viewer opens straight off this response: the parse the validation
+    // paid for rides along, packed. No osu! proxy here, so the chart is null.
+    expect(body.replay.framesPacked.count).toBeGreaterThan(0);
+    expect(body.replay.keyCount).toBeGreaterThanOrEqual(4);
+    expect(body.beatmap).toBeNull();
 
     const files = await readdir(uploadDir);
     expect(files).toContain(`${body.id}.osr`);

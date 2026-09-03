@@ -6,7 +6,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import { getI18n } from "../lib/i18n";
-import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, submitCommunityBeatmap } from "../lib/osu";
 import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
@@ -61,7 +61,9 @@ import {
 } from "../lib/replay-overlays";
 import type { ReplayHandAccuracyStyle, ReplayThumbHand } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
-import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
+import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
+import { getUploadedReplayBeatmapResolution, getUploadedReplayOpenData } from "../lib/uploaded-replay-open";
+import { unpackUploadedReplay, type UploadedReplayBeatmapResolution, type UploadedReplayPacked } from "../lib/uploaded-replay-payload";
 import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
 import { getCommunityBeatmapAssetUrl, uploadCommunityBeatmapAssets } from "../lib/community-beatmap-assets";
 import type { BeatmapChecksumLookupResult } from "../lib/osu/replay";
@@ -267,12 +269,13 @@ type ReplayUploadResponse = {
   url: string;
   storage?: "r2" | "local";
   ownerUserId?: number | null;
+  filename?: string | null;
+  // The server parsed the file to validate it, so the viewer opens from this
+  // instead of decoding the .osr again in the browser.
+  replay?: UploadedReplayPacked;
+  // Null when osu! could not be reached during the upload; retried separately.
+  beatmap?: UploadedReplayBeatmapResolution | null;
   error?: string;
-};
-
-type UploadedReplayDownload = {
-  buffer: ArrayBuffer;
-  filename: string | null;
 };
 
 type ReplayLoadingStep = "score" | "assets" | "viewer" | "upload" | "shared-upload";
@@ -444,19 +447,6 @@ async function postUploadedReplay(buffer: ArrayBuffer, filename?: string): Promi
     throw new Error(payload?.error || "Failed to save replay upload.");
   }
   return payload;
-}
-
-async function fetchUploadedReplayBuffer(uploadId: string): Promise<UploadedReplayDownload> {
-  const response = await fetch(`/api/replay-upload?id=${encodeURIComponent(uploadId)}`);
-  if (!response.ok) {
-    const message = await response.text().catch(() => "");
-    throw new Error(message || "Failed to load shared replay.");
-  }
-  const filenameHeader = response.headers.get("x-replay-filename");
-  return {
-    buffer: await response.arrayBuffer(),
-    filename: filenameHeader ? decodeURIComponent(filenameHeader) : null,
-  };
 }
 
 async function getRecentReplayVideoJob(scoreId: number): Promise<ReplayVideoJobPayload | null> {
@@ -1314,11 +1304,15 @@ function ReplayPage() {
     return { uploadedScore, mods, beatmapsetId };
   }, [applyLocalBeatmapAssets]);
 
-  const openUploadedReplayBuffer = useCallback(async (
-    buffer: ArrayBuffer,
+  // The server already parsed the replay and took the chart as far as it
+  // could (osu!'s copy, or a contributed one when osu!'s is missing or is
+  // another revision), so opening is a decision, not a fetch: which copy to
+  // load, or that the viewer has to be asked for the map.
+  const openUploadedReplay = useCallback(async (
+    uploaded: UploadedReplayParseResult,
+    resolved: UploadedReplayBeatmapResolution,
     options: UploadedReplayOpenOptions,
   ) => {
-    const uploaded = await parseUploadedReplayBuffer(buffer);
     const checksum = uploaded.replay.header.beatmapHash;
     if (!checksum) {
       throw new Error(t`This replay does not include a beatmap checksum.`);
@@ -1348,7 +1342,7 @@ function ReplayPage() {
     // Someone who had this map may have already contributed it; use their copy
     // instead of asking again. Returns true once it has loaded the viewer.
     const tryCommunityBeatmap = async (beatmapMeta: BeatmapChecksumLookupResult | null): Promise<boolean> => {
-      const community = await getCommunityBeatmapFile({ data: { checksum } }).catch(() => null);
+      const community = resolved.community;
       if (!community?.content) return false;
       setReplayBeatmapFileStatus("fetched");
       // The song and background a contributor dropped with the .osz, when
@@ -1377,32 +1371,26 @@ function ReplayPage() {
       return true;
     };
 
-    const beatmapMeta = await lookupBeatmapByChecksum({ data: { checksum } });
+    const beatmapMeta = resolved.meta;
     if (!beatmapMeta) {
       if (await tryCommunityBeatmap(null)) return;
       enterPendingBeatmapUpload("unlisted", null);
       return;
     }
 
-    const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
-
-    let bmResult: Awaited<ReturnType<typeof getBeatmapFile>>;
-    try {
-      // The replay's own chart checksum: prefer the exact revision the play
-      // was made on when deciding whether the cached .osu is the right one.
-      bmResult = await getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId, checksum } });
-      // Wrong revision (a stale cache the backend couldn't refresh yet): a
-      // contributed community copy is keyed by this exact checksum, so it is
-      // strictly better when it exists. Otherwise the fetched file is still
-      // this map, just not this revision - watchable, judged approximately.
-      if (bmResult.checksumMatched === false && await tryCommunityBeatmap(beatmapMeta)) return;
-      setReplayBeatmapFileStatus(bmResult.cacheStatus === "hit" ? "cached" : "fetched");
-    } catch {
+    const bmResult = resolved.file;
+    if (!bmResult) {
       if (await tryCommunityBeatmap(beatmapMeta)) return;
       setReplayBeatmapFileStatus("unavailable");
       enterPendingBeatmapUpload("file-unavailable", beatmapMeta);
       return;
     }
+    // Wrong revision (a stale cache the backend couldn't refresh yet): a
+    // contributed community copy is keyed by this exact checksum, so it is
+    // strictly better when it exists. Otherwise the fetched file is still
+    // this map, just not this revision - watchable, judged approximately.
+    if (bmResult.checksumMatched === false && await tryCommunityBeatmap(beatmapMeta)) return;
+    setReplayBeatmapFileStatus(bmResult.cacheStatus === "hit" ? "cached" : "fetched");
 
     const { beatmapsetId: loadedBeatmapsetId } = await finishBeatmapLoad({
       content: bmResult.content,
@@ -1494,9 +1482,12 @@ function ReplayPage() {
     applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
 
     try {
-      const upload = await fetchUploadedReplayBuffer(id);
+      // One round trip: the packed replay and its chart together, the same
+      // way an ingested replay loads.
+      const data = await getUploadedReplayOpenData({ data: { uploadId: id } });
+      if (!data) throw new Error(t`Replay upload not found`);
       const shareUrl = new URL(`/replay?uploadId=${encodeURIComponent(id)}`, window.location.origin).toString();
-      await openUploadedReplayBuffer(upload.buffer, { uploadId: id, shareUrl, source: "shared", filename: upload.filename });
+      await openUploadedReplay(unpackUploadedReplay(data.replay), data.beatmap, { uploadId: id, shareUrl, source: "shared", filename: data.filename });
     } catch (e) {
       setReplay(null);
       setBeatmap(null);
@@ -1510,7 +1501,7 @@ function ReplayPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyLocalBeatmapAssets, openUploadedReplayBuffer]);
+  }, [applyLocalBeatmapAssets, openUploadedReplay]);
 
   const handleUploadReplay = async (file: File) => {
     setError(null);
@@ -1541,13 +1532,31 @@ function ReplayPage() {
     applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
 
     try {
-      const buffer = await file.arrayBuffer();
-      await parseUploadedReplayBuffer(buffer.slice(0));
-      const saved = await postUploadedReplay(buffer, file.name);
+      // The POST validates by parsing the file, so its response carries the
+      // parsed replay and the resolved chart: the viewer opens straight off
+      // it, with no decode in the browser and no further lookups.
+      const saved = await postUploadedReplay(await file.arrayBuffer(), file.name);
       if (saved.ownerUserId != null) {
         setUploadedReplayOwner({ uploadId: saved.id, userId: saved.ownerUserId });
       }
-      await openUploadedReplayBuffer(buffer.slice(0), { uploadId: saved.id, shareUrl: saved.url, source: "owner", filename: file.name });
+      let uploaded: UploadedReplayParseResult;
+      let resolved: UploadedReplayBeatmapResolution | null | undefined = saved.beatmap;
+      if (saved.replay) {
+        uploaded = unpackUploadedReplay(saved.replay);
+      } else {
+        // An older server build answered without the parse; read it back the
+        // way a share link does.
+        const data = await getUploadedReplayOpenData({ data: { uploadId: saved.id } });
+        if (!data) throw new Error(t`Failed to load uploaded replay`);
+        uploaded = unpackUploadedReplay(data.replay);
+        resolved = data.beatmap;
+      }
+      if (!resolved) {
+        // osu! could not be reached while the file was being stored; the
+        // upload itself is done, only the chart is retried.
+        resolved = await getUploadedReplayBeatmapResolution({ data: { checksum: uploaded.replay.header.beatmapHash ?? "" } });
+      }
+      await openUploadedReplay(uploaded, resolved, { uploadId: saved.id, shareUrl: saved.url, source: "owner", filename: saved.filename ?? file.name });
       navigate({ to: "/replay", search: { uploadId: saved.id }, replace: true });
     } catch (e) {
       setReplay(null);

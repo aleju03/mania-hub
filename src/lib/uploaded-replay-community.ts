@@ -1,61 +1,45 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { getPersistentCacheEntry, setPersistentCache } from "./api";
-import { getCommunityBeatmapAssets } from "./community-beatmap-store";
-import { describeUploadedReplayById, type UploadedReplayDescription } from "./uploaded-replay-describe";
-import { fetchUploadedReplayIndexRow } from "./uploaded-replay-index";
-import { listRecentUploadedReplays } from "./uploaded-replay-store";
+import { edgeCache } from "./osu/server";
+import type { CommunityUploadEntry } from "./uploaded-replay-payload";
 
-// The Upload tab's community list: the newest uploads with their derived
-// descriptions. Everything shown is already public - any upload is reachable
-// at /replay?uploadId=<id> - so the list only surfaces what the share links
-// expose, it grants nothing new. The uploader's name comes from the owner
-// index and is deliberately public here: the card names the player in the
-// replay, and without the uploader beside it viewers would have to assume the
-// two are always the same person.
+// The Upload tab's community list and the gallery behind it: every upload,
+// newest first, with its derived description. Everything shown is already
+// public - any upload is reachable at /replay?uploadId=<id> - so the lists
+// only surface what the share links expose, they grant nothing new. The work
+// lives in uploaded-replay-community-server.ts, imported inside the handlers.
 
-export type CommunityUploadEntry = UploadedReplayDescription & {
-  uploadedAt: number;
-  /** Null when the owner index has no row (pre-index upload, or index down). */
-  uploadedBy: { userId: number; username: string } | null;
-  /** A map osu! doesn't know whose background a contributor supplied; the
-   *  card draws it where a submitted map's cover would go. */
-  communityBackground: boolean;
-};
+export type { CommunityUploadEntry } from "./uploaded-replay-payload";
 
-const COMMUNITY_UPLOADS_LIMIT = 9;
-export const COMMUNITY_UPLOADS_CACHE_KEY = "community-uploads:v2";
-// Short: the list should pick up fresh uploads within a couple of minutes, and
-// a rebuild is one R2 LIST plus per-upload describes that are cached themselves.
-const COMMUNITY_UPLOADS_CACHE_TTL = 2 * 60 * 1000;
+export interface CommunityUploadsPage {
+  uploads: CommunityUploadEntry[];
+  /** Every upload there is, not just the ones on this page. */
+  total: number;
+  page: number;
+  hasMore: boolean;
+}
+
+const RECENT_COMMUNITY_UPLOADS_LIMIT = 9;
+export const COMMUNITY_UPLOADS_PAGE_SIZE = 24;
 
 export const getRecentCommunityUploads = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ uploads: CommunityUploadEntry[] }> => {
-    const cached = await getPersistentCacheEntry<CommunityUploadEntry[]>(COMMUNITY_UPLOADS_CACHE_KEY);
-    if (cached.hit) return { uploads: cached.value };
-
-    const listed = await listRecentUploadedReplays(COMMUNITY_UPLOADS_LIMIT);
-    const uploads = (await Promise.all(
-      listed.map(async (entry) => {
-        // Null descriptions (corrupt or just-deleted files) drop out silently.
-        const [description, owner] = await Promise.all([
-          describeUploadedReplayById(entry.id),
-          fetchUploadedReplayIndexRow(entry.id),
-        ]);
-        if (!description) return null;
-        const communityBackground = !description.beatmap && description.beatmapHash
-          ? (await getCommunityBeatmapAssets(description.beatmapHash)).background
-          : false;
-        return {
-          ...description,
-          uploadedAt: entry.uploadedAt,
-          uploadedBy: owner ? { userId: owner.ownerUserId, username: owner.ownerUsername } : null,
-          communityBackground,
-        };
-      }),
-    )).filter((entry): entry is CommunityUploadEntry => entry !== null);
-
-    await setPersistentCache(COMMUNITY_UPLOADS_CACHE_KEY, uploads, COMMUNITY_UPLOADS_CACHE_TTL);
-    return { uploads };
+  async (): Promise<{ uploads: CommunityUploadEntry[]; total: number }> => {
+    const { getUploadsSlice } = await import("./uploaded-replay-community-server");
+    return getUploadsSlice(0, RECENT_COMMUNITY_UPLOADS_LIMIT);
   },
 );
+
+// A page of the gallery at /replay/community. Public data, so the edge may
+// hold a page briefly; the server tier is what actually paces the rebuilds.
+export const getCommunityUploadsPage = createServerFn({ method: "GET" })
+  .validator((data: { page?: unknown } | undefined) => {
+    const page = Math.floor(Number(data?.page ?? 0));
+    return { page: Number.isFinite(page) && page > 0 ? Math.min(page, 1000) : 0 };
+  })
+  .handler(async ({ data }): Promise<CommunityUploadsPage> => {
+    edgeCache(60, 120);
+    const { getUploadsSlice } = await import("./uploaded-replay-community-server");
+    const offset = data.page * COMMUNITY_UPLOADS_PAGE_SIZE;
+    const { uploads, total } = await getUploadsSlice(offset, COMMUNITY_UPLOADS_PAGE_SIZE);
+    return { uploads, total, page: data.page, hasMore: offset + COMMUNITY_UPLOADS_PAGE_SIZE < total };
+  });

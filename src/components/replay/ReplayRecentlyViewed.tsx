@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -17,6 +18,7 @@ export function ReplayRecentlyViewed({
   variant = "grid",
   title,
   showRemove = true,
+  action,
   className = "",
 }: {
   entries: RecentReplayEntry[];
@@ -29,6 +31,9 @@ export function ReplayRecentlyViewed({
   title?: string;
   /** Off where the list is a picker, not the user's own history to prune. */
   showRemove?: boolean;
+  /** Sits where the Clear button would: a link onward from a list that is
+   *  only a preview of something longer. */
+  action?: ReactNode;
   className?: string;
 }) {
   const { t } = useLingui();
@@ -44,7 +49,7 @@ export function ReplayRecentlyViewed({
         <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
           {heading}
         </h4>
-        {showRemove && (
+        {showRemove ? (
           <button
             type="button"
             onClick={onClear}
@@ -52,7 +57,9 @@ export function ReplayRecentlyViewed({
           >
             <Trans>Clear</Trans>
           </button>
-        )}
+        ) : action ? (
+          <div className={sidebar ? "-mr-2" : "absolute right-0"}>{action}</div>
+        ) : null}
       </div>
 
       <div

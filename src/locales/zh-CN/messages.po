@@ -2341,6 +2341,10 @@ msgstr "所有玩家"
 msgid "All rows"
 msgstr "全部记录"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "All uploads"
+msgstr "全部上传"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "快好了..."
@@ -3673,6 +3677,10 @@ msgstr "常见选择"
 msgid "Community"
 msgstr "社区"
 
+#: src/routes/replay_.community.tsx
+msgid "Community Replays"
+msgstr "社区回放"
+
 #: src/components/communities/field-options.tsx
 msgid "Community server"
 msgstr "社区服务器"
@@ -4003,6 +4011,7 @@ msgstr "无法加载这一天的完整详情。"
 msgid "Couldn't load the song audio for this replay."
 msgstr "无法加载这个回放的歌曲音频。"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
 msgstr "无法加载上传列表，刷新重试。"
@@ -4986,6 +4995,10 @@ msgstr "所有 osu!mania 查询都做成了斜杠命令，还有实时 feed 把�
 #: src/routes/discord.tsx
 msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
 msgstr "所有 osu!mania 查询都做成了斜杠命令。用 <0>/link</0> 关联一次账号，<1>/recent</1> 这类命令就不用再输用户名。实时 feed 会把新的最佳成绩、狙击和刷分谱面自动发到任意频道。"
+
+#: src/routes/replay_.community.tsx
+msgid "Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher."
+msgstr "所有上传到 Mania Hub 的 osu!mania 回放，按最新排序。可在回放播放器中打开任意一个。"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
@@ -7025,6 +7038,7 @@ msgstr "加载中…"
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
 msgid "Loading..."
@@ -8335,6 +8349,10 @@ msgstr "还没有人挑选卡片，你可以是第一个。"
 #: src/components/packs/CardCollectors.tsx
 msgid "Nobody has pulled your card yet."
 msgstr "还没有人抽到你的卡片。"
+
+#: src/routes/replay_.community.tsx
+msgid "Nobody has uploaded a replay yet."
+msgstr "还没有人上传回放。"
 
 #: src/components/packs/GoatPollVoters.tsx
 msgid "Nobody has voted on this row."
@@ -10412,6 +10430,10 @@ msgstr "回放设置"
 msgid "Replay skin"
 msgstr "回放皮肤"
 
+#: src/routes/replay.tsx
+msgid "Replay upload not found"
+msgstr "未找到上传的回放"
+
 #: src/routes/replay_.uploads.tsx
 msgid "Replay Uploads"
 msgstr "回放上传"
@@ -10420,6 +10442,7 @@ msgstr "回放上传"
 msgid "Replay video export options"
 msgstr "回放视频导出选项"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Replays"
 msgstr "回放"
@@ -11358,6 +11381,7 @@ msgstr "显示更多"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Show more"
 msgstr "显示更多"
@@ -13843,6 +13867,7 @@ msgid "unknown artist"
 msgstr "未知艺术家"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay.tsx
 msgid "Unknown beatmap"
 msgstr "未知谱面"
@@ -13959,6 +13984,7 @@ msgstr "更新中"
 msgid "Upload"
 msgstr "上传"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
 msgstr "上传回放"
@@ -13996,6 +14022,14 @@ msgstr "上传者"
 #: src/components/skins/SkinCard.tsx
 msgid "uploaded by <0>{0}</0>"
 msgstr "由 <0>{0}</0> 上传"
+
+#: src/routes/replay_.community.tsx
+msgid "Uploaded by the Community"
+msgstr "社区上传"
+
+#: src/routes/replay_.community.tsx
+msgid "Uploaded by the Community ({total})"
+msgstr "社区上传（{total}）"
 
 #: src/routes/skins.tsx
 msgid "uploader"

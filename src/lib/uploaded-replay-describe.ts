@@ -119,6 +119,19 @@ function maniaGrade(accuracy: number, mods: string[]): string {
   return "D";
 }
 
+export function toUploadedReplayBeatmap(lookup: BeatmapChecksumLookupResult): UploadedReplayBeatmap {
+  return {
+    beatmapId: Number.isFinite(lookup.id) ? lookup.id : null,
+    beatmapsetId: Number.isFinite(lookup.beatmapset_id) ? lookup.beatmapset_id : null,
+    artist: lookup.beatmapset?.artist ?? "",
+    title: lookup.beatmapset?.title ?? "",
+    version: lookup.version ?? "",
+    creator: lookup.beatmapset?.creator ?? null,
+    starRating: Number.isFinite(lookup.difficulty_rating) ? lookup.difficulty_rating : null,
+    mode: lookup.mode ?? "mania",
+  };
+}
+
 async function lookupUploadedReplayBeatmap(checksum: string): Promise<UploadedReplayBeatmap | null> {
   if (!checksum) return null;
   try {
@@ -128,16 +141,7 @@ async function lookupUploadedReplayBeatmap(checksum: string): Promise<UploadedRe
       { caller: "describeUploadedReplay" },
     );
     if (!lookup) return null;
-    return {
-      beatmapId: Number.isFinite(lookup.id) ? lookup.id : null,
-      beatmapsetId: Number.isFinite(lookup.beatmapset_id) ? lookup.beatmapset_id : null,
-      artist: lookup.beatmapset?.artist ?? "",
-      title: lookup.beatmapset?.title ?? "",
-      version: lookup.version ?? "",
-      creator: lookup.beatmapset?.creator ?? null,
-      starRating: Number.isFinite(lookup.difficulty_rating) ? lookup.difficulty_rating : null,
-      mode: lookup.mode ?? "mania",
-    };
+    return toUploadedReplayBeatmap(lookup);
   } catch {
     // 404 means the checksum is unknown to osu! (unsubmitted or deleted map);
     // any lookup failure just means we show the player + score without the map.
@@ -216,12 +220,15 @@ export async function describeUploadedReplayById(id: string): Promise<UploadedRe
 }
 
 // Upload-time fast path: the upload handler already fully parsed the replay
-// during validation, so the description costs one beatmap lookup here and the
-// community list never has to re-download and re-parse the .osr it just saw.
+// during validation and usually resolved its map too, so the description
+// costs no lookup here and the community list never has to re-download and
+// re-parse the .osr it just saw. `beatmap` undefined means "look it up";
+// null means the handler already learned osu! does not know the checksum.
 export async function persistUploadedReplayDescription(
   id: string,
   parsed: UploadedReplayParseResult,
   originalFilename: string | null | undefined,
+  beatmap?: BeatmapChecksumLookupResult | null,
 ): Promise<void> {
   const normalized = normalizeUploadedReplayId(id);
   if (!normalized) return;
@@ -229,6 +236,7 @@ export async function persistUploadedReplayDescription(
     normalized,
     parsed,
     normalizeUploadedReplayFilename(originalFilename) ?? null,
+    beatmap,
   );
   await persistDescription(normalized, description);
 }
@@ -252,6 +260,7 @@ async function buildUploadedReplayDescription(
   normalized: string,
   parsed: UploadedReplayParseResult,
   originalFilename: string | null,
+  resolvedBeatmap?: BeatmapChecksumLookupResult | null,
 ): Promise<UploadedReplayDescription> {
   const header = parsed.replay.header;
   const judgements: UploadedReplayJudgements = {
@@ -281,7 +290,9 @@ async function buildUploadedReplayDescription(
     scoreId: parsed.scoreId,
     originalFilename,
     ...(modRate != null ? { modRate } : {}),
-    beatmap: await lookupUploadedReplayBeatmap(header.beatmapHash ?? ""),
+    beatmap: resolvedBeatmap === undefined
+      ? await lookupUploadedReplayBeatmap(header.beatmapHash ?? "")
+      : resolvedBeatmap && toUploadedReplayBeatmap(resolvedBeatmap),
     beatmapHash: header.beatmapHash ?? "",
     computedAt: Date.now(),
     version: DESCRIPTION_VERSION,

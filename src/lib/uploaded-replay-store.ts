@@ -115,37 +115,57 @@ export async function saveUploadedReplay(
 
 export type UploadedReplayListEntry = { id: string; uploadedAt: number };
 
-// Newest-first upload ids, for the community recent-uploads list on /replay's
-// Upload tab. R2 is the durable store; the local-disk directory only backs
-// development. Listing failures read as "nothing recent", never an error.
+async function listR2UploadedReplays(): Promise<UploadedReplayListEntry[]> {
+  const entries: UploadedReplayListEntry[] = [];
+  for (const object of await listUploadedReplayObjects()) {
+    const base = object.key.split("/").pop() ?? "";
+    if (!/\.osr$/i.test(base)) continue;
+    const id = normalizeUploadedReplayId(base.slice(0, -4));
+    if (!id) continue;
+    entries.push({ id, uploadedAt: object.uploadedAt });
+  }
+  return entries;
+}
+
+async function listLocalUploadedReplays(): Promise<UploadedReplayListEntry[]> {
+  const entries: UploadedReplayListEntry[] = [];
+  const dir = getLocalUploadDir();
+  for (const name of await readdir(dir)) {
+    if (!name.endsWith(".osr")) continue;
+    const id = normalizeUploadedReplayId(name.slice(0, -4));
+    if (!id) continue;
+    const stats = await stat(path.join(dir, name));
+    entries.push({ id, uploadedAt: stats.mtimeMs });
+  }
+  return entries;
+}
+
+// Newest-first upload ids, for the community lists on /replay. R2 is the
+// durable store; the local-disk directory only backs development. Development
+// lists both, so the community pages look the way they do on the live site
+// with its uploads (reads fall through to R2 anyway, and nothing here writes),
+// with the local drops on top. Listing failures read as "nothing", never an
+// error.
 export async function listRecentUploadedReplays(limit: number): Promise<UploadedReplayListEntry[]> {
   const entries: UploadedReplayListEntry[] = [];
+  const seen = new Set<string>();
+  const add = (list: UploadedReplayListEntry[]) => {
+    for (const entry of list) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      entries.push(entry);
+    }
+  };
 
   if (uploadedReplaysUseR2()) {
     try {
-      for (const object of await listUploadedReplayObjects()) {
-        const base = object.key.split("/").pop() ?? "";
-        if (!/\.osr$/i.test(base)) continue;
-        const id = normalizeUploadedReplayId(base.slice(0, -4));
-        if (!id) continue;
-        entries.push({ id, uploadedAt: object.uploadedAt });
-      }
+      add(await listR2UploadedReplays());
     } catch {
       return [];
     }
   } else {
-    try {
-      const dir = getLocalUploadDir();
-      for (const name of await readdir(dir)) {
-        if (!name.endsWith(".osr")) continue;
-        const id = normalizeUploadedReplayId(name.slice(0, -4));
-        if (!id) continue;
-        const stats = await stat(path.join(dir, name));
-        entries.push({ id, uploadedAt: stats.mtimeMs });
-      }
-    } catch {
-      return [];
-    }
+    add(await listLocalUploadedReplays().catch(() => []));
+    if (isR2ReplayCacheConfigured()) add(await listR2UploadedReplays().catch(() => []));
   }
 
   return entries.sort((a, b) => b.uploadedAt - a.uploadedAt).slice(0, Math.max(0, limit));

@@ -2332,6 +2332,10 @@ msgstr "Todos los jugadores"
 msgid "All rows"
 msgstr "Todas las filas"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "All uploads"
+msgstr "Todas las subidas"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "Casi listo..."
@@ -3664,6 +3668,10 @@ msgstr "elección común"
 msgid "Community"
 msgstr "Comunidad"
 
+#: src/routes/replay_.community.tsx
+msgid "Community Replays"
+msgstr "Replays de la comunidad"
+
 #: src/components/communities/field-options.tsx
 msgid "Community server"
 msgstr "Servidor de comunidad"
@@ -3994,6 +4002,7 @@ msgstr "No se pudo cargar el detalle completo del día."
 msgid "Couldn't load the song audio for this replay."
 msgstr "No se pudo cargar el audio de la canción para este replay."
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
 msgstr "No se pudieron cargar las subidas; actualiza para reintentar."
@@ -4977,6 +4986,10 @@ msgstr "Todas las búsquedas de osu!mania como comando de barra, además de feed
 #: src/routes/discord.tsx
 msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
 msgstr "Todas las búsquedas de osu!mania como comando de barra. Vincula tu cuenta una vez con <0>/link</0> y comandos como <1>/recent</1> funcionan sin nombre de usuario. Los feeds en vivo publican automáticamente nuevos top plays, snipes y mapas de farm directamente en cualquier canal."
+
+#: src/routes/replay_.community.tsx
+msgid "Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher."
+msgstr "Todos los replays de osu!mania subidos a Mania Hub, del más reciente al más antiguo. Abre cualquiera en el visor de replays."
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
@@ -7016,6 +7029,7 @@ msgstr "cargando..."
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
 msgid "Loading..."
@@ -8327,6 +8341,10 @@ msgstr "Nadie ha elegido cartas todavía. La tuya sería la primera."
 msgid "Nobody has pulled your card yet."
 msgstr "Nadie ha sacado tu carta todavía."
 
+#: src/routes/replay_.community.tsx
+msgid "Nobody has uploaded a replay yet."
+msgstr "Nadie ha subido un replay todavía."
+
 #: src/components/packs/GoatPollVoters.tsx
 msgid "Nobody has voted on this row."
 msgstr "Nadie ha votado en esta fila."
@@ -9222,7 +9240,7 @@ msgstr "Pausar preview"
 
 #: src/routes/player/$username.tsx
 msgid "Peak"
-msgstr "Pico"
+msgstr "Peak"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
@@ -10403,6 +10421,10 @@ msgstr "Ajustes del replay"
 msgid "Replay skin"
 msgstr "Skin del replay"
 
+#: src/routes/replay.tsx
+msgid "Replay upload not found"
+msgstr "No se encontró el replay subido"
+
 #: src/routes/replay_.uploads.tsx
 msgid "Replay Uploads"
 msgstr "Replays subidos"
@@ -10411,6 +10433,7 @@ msgstr "Replays subidos"
 msgid "Replay video export options"
 msgstr "Opciones de exportación de video del replay"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Replays"
 msgstr "Replays"
@@ -11349,6 +11372,7 @@ msgstr "mostrar más"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Show more"
 msgstr "Mostrar más"
@@ -13834,6 +13858,7 @@ msgid "unknown artist"
 msgstr "artista desconocido"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay.tsx
 msgid "Unknown beatmap"
 msgstr "Beatmap desconocido"
@@ -13950,6 +13975,7 @@ msgstr "actualizando"
 msgid "Upload"
 msgstr "Subir"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
 msgstr "Subir un replay"
@@ -13987,6 +14013,14 @@ msgstr "subida por"
 #: src/components/skins/SkinCard.tsx
 msgid "uploaded by <0>{0}</0>"
 msgstr "subida por <0>{0}</0>"
+
+#: src/routes/replay_.community.tsx
+msgid "Uploaded by the Community"
+msgstr "Subidos por la comunidad"
+
+#: src/routes/replay_.community.tsx
+msgid "Uploaded by the Community ({total})"
+msgstr "Subidos por la comunidad ({total})"
 
 #: src/routes/skins.tsx
 msgid "uploader"

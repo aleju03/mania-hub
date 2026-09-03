@@ -12,9 +12,12 @@
 import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
+import { invalidateCommunityUploads } from "./uploaded-replay-community-server";
 import { persistUploadedReplayDescription } from "./uploaded-replay-describe";
 import { recordUploadedReplayOwner } from "./uploaded-replay-index";
+import { packUploadedReplay, persistUploadedReplayPacked, resolveUploadedReplayBeatmap } from "./uploaded-replay-open-server";
 import {
+  normalizeUploadedReplayFilename,
   normalizeUploadedReplayId,
   readUploadedReplay,
   ReplayStorageUnavailableError,
@@ -299,37 +302,49 @@ export async function handleReplayUploadPost(request: Request): Promise<Response
   const uploaderId = uploader.viewer?.id ?? null;
   const uploadedAt = new Date().toISOString();
   try {
-    const saved = await saveUploadedReplay(buffer, {
-      originalFilename,
-      uploaderId,
-      uploadedAt,
-    });
-    // Index the uploader so the file turns up on their own "your uploads"
-    // shelf and they can delete it later. Awaited, not fired off: the viewer
-    // asks whether it may delete this upload as soon as the response lands, and
-    // that answer comes from this row. Never fatal - the object carries the
-    // same uploader id in its metadata, so a missed row is recoverable by the
-    // admin backfill and costs the upload itself nothing.
-    if (uploader.viewer) {
-      await recordUploadedReplayOwner({
-        id: saved.id,
-        userId: uploader.viewer.id,
-        username: uploader.viewer.username,
+    // The chart is resolved while the file is being stored, not after: the
+    // response carries it, so the viewer opens straight off this POST instead
+    // of looking the map up and fetching the .osu in two more round trips.
+    // Null when osu! hiccups; the client retries just that part.
+    const [saved, beatmap] = await Promise.all([
+      saveUploadedReplay(buffer, {
         originalFilename,
+        uploaderId,
         uploadedAt,
-      });
-    }
-    // Store the derived description while the parse is in hand, so the
-    // community list reads it back instead of re-downloading and re-parsing
-    // the .osr. Best-effort: the upload already succeeded, and a miss just
-    // means the first list rebuild derives it the slow way.
-    if (saved.storage === "r2") {
-      try {
-        await persistUploadedReplayDescription(saved.id, validated.parsed, originalFilename);
-      } catch {
-        // Descriptions are derived data; never fail the upload over one.
-      }
-    }
+      }),
+      resolveUploadedReplayBeatmap(validated.beatmapHash).catch(() => null),
+    ]);
+    const replay = packUploadedReplay(validated.parsed);
+    const filename = normalizeUploadedReplayFilename(originalFilename) ?? null;
+    await Promise.all([
+      // Index the uploader so the file turns up on their own "your uploads"
+      // shelf and they can delete it later. Awaited, not fired off: the viewer
+      // asks whether it may delete this upload as soon as the response lands, and
+      // that answer comes from this row. Never fatal - the object carries the
+      // same uploader id in its metadata, so a missed row is recoverable by the
+      // admin backfill and costs the upload itself nothing.
+      uploader.viewer
+        ? recordUploadedReplayOwner({
+          id: saved.id,
+          userId: uploader.viewer.id,
+          username: uploader.viewer.username,
+          originalFilename,
+          uploadedAt,
+        })
+        : Promise.resolve(false),
+      // Store the derived description and the packed replay while the parse
+      // is in hand, so the community list and the share link read them back
+      // instead of re-downloading and re-parsing the .osr. Best-effort: the
+      // upload already succeeded, and a miss just means the first read derives
+      // it the slow way.
+      saved.storage === "r2"
+        ? persistUploadedReplayDescription(saved.id, validated.parsed, originalFilename, beatmap ? beatmap.meta : undefined).catch(() => {})
+        : Promise.resolve(),
+      persistUploadedReplayPacked(saved.id, replay, filename).catch(() => {}),
+    ]);
+    // The community list on this instance shows the new upload right away;
+    // the other instances pick it up on their next listing.
+    invalidateCommunityUploads();
     return Response.json({
       id: saved.id,
       url: getShareUrl(request, saved.id),
@@ -337,6 +352,9 @@ export async function handleReplayUploadPost(request: Request): Promise<Response
       // Lets the just-uploaded replay select its uploader's skin immediately,
       // without waiting for a round trip through the owner index it just wrote.
       ownerUserId: uploaderId,
+      filename,
+      replay,
+      beatmap,
     });
   } catch (error) {
     if (error instanceof ReplayStorageUnavailableError) {

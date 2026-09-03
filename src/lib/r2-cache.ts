@@ -499,6 +499,15 @@ export function getUploadedReplayDescStorageKey(id: string): string {
   return `${UPLOADED_REPLAY_DESC_PREFIX}${safeId}.json.gz`;
 }
 
+// The packed (server-parsed) form of an uploaded replay, the same artifact an
+// ingested replay gets under parsed/. Kept under that prefix on purpose so the
+// bucket's age-based lifecycle rule for parsed replays covers it too.
+export function getUploadedReplayPackedStorageKey(version: number, id: string): string {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 64);
+  if (!safeId) throw new Error("Invalid uploaded replay id.");
+  return `${PARSED_REPLAY_PREFIX}uploads/v${version}/${safeId}.json.gz`;
+}
+
 async function getZlib(): Promise<typeof import("node:zlib")> {
   return import("node:zlib");
 }
@@ -1513,19 +1522,28 @@ export async function deleteUploadedReplayObjects(id: string): Promise<void> {
     Key: storageKey,
   }));
 
-  const descKey = getUploadedReplayDescStorageKey(id);
-  assertReplayCacheKey(descKey);
-  try {
-    await r2.send(new DeleteObjectCommand({
-      Bucket: REPLAY_CACHE_BUCKET,
-      Key: descKey,
-    }));
-  } catch {
-    // Derived data: an orphaned description describes nothing anyone can reach,
-    // and the next write of this id (there is none - ids are random) would
-    // replace it anyway.
+  const derivedKeys = [
+    getUploadedReplayDescStorageKey(id),
+    ...UPLOADED_REPLAY_PACKED_VERSIONS.map((version) => getUploadedReplayPackedStorageKey(version, id)),
+  ];
+  for (const derivedKey of derivedKeys) {
+    assertReplayCacheKey(derivedKey);
+    try {
+      await r2.send(new DeleteObjectCommand({
+        Bucket: REPLAY_CACHE_BUCKET,
+        Key: derivedKey,
+      }));
+    } catch {
+      // Derived data: an orphaned description describes nothing anyone can reach,
+      // and the next write of this id (there is none - ids are random) would
+      // replace it anyway.
+    }
   }
 }
+
+// Every packed-artifact version a delete has to sweep; add to it when
+// UPLOADED_REPLAY_PACKED_VERSION in uploaded-replay-payload.ts bumps.
+const UPLOADED_REPLAY_PACKED_VERSIONS = [1];
 
 export async function putCachedReplay(
   scoreId: number,

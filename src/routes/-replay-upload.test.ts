@@ -9,6 +9,7 @@ describe("replay upload mode", () => {
     const uploadSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload.ts"), "utf8");
     const apiSource = fs.readFileSync(path.resolve(__dirname, "api/replay-upload.ts"), "utf8");
     const ogSource = fs.readFileSync(path.resolve(__dirname, "api/og.ts"), "utf8");
+    const openSource = fs.readFileSync(path.resolve(__dirname, "../lib/uploaded-replay-open.ts"), "utf8");
 
     expect(browseSource).toContain('export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload"');
     expect(browseSource).toContain('{ mode: "upload", label: msg`Upload` }');
@@ -17,9 +18,10 @@ describe("replay upload mode", () => {
     expect(browseSource).toContain("Uploading gives you a share link");
     expect(routeSource).toContain("tab: isReplayBrowseTab(s.tab) ? s.tab : undefined");
     expect(routeSource).toContain("uploadId: typeof s.uploadId");
-    expect(routeSource).toContain("postUploadedReplay(buffer, file.name)");
-    expect(routeSource).toContain("fetchUploadedReplayBuffer(id)");
-    expect(routeSource).toContain("parseUploadedReplayBuffer(buffer");
+    expect(routeSource).toContain("postUploadedReplay(await file.arrayBuffer(), file.name)");
+    expect(routeSource).toContain("getUploadedReplayOpenData({ data: { uploadId: id } })");
+    expect(routeSource).toContain("unpackUploadedReplay(data.replay)");
+    expect(routeSource).toContain("unpackUploadedReplay(saved.replay)");
     expect(routeSource).toContain("extractReplayScoreIdFromFilename(options.filename)");
     expect(routeSource).toContain('"X-Replay-Filename": encodeURIComponent(filename)');
     expect(routeSource).toContain("uploaded.scoreId");
@@ -36,7 +38,10 @@ describe("replay upload mode", () => {
     expect(uploadSource).toContain("export function scoreMatchesUploadedReplay");
     expect(routeSource).toContain("const mods = uploadedScore?.mods ?? uploaded.mods");
     expect(routeSource).toContain("setUploadedReplayMods(mods)");
-    expect(routeSource).toContain("lookupBeatmapByChecksum({ data: { checksum } })");
+    expect(routeSource).toContain("const beatmapMeta = resolved.meta");
+    expect(openSource).toContain("export const getUploadedReplayOpenData");
+    expect(openSource).toContain('await import("./uploaded-replay-open-server")');
+    expect(openSource).toContain("resolveUploadedReplayBeatmap(stored.replay.header.beatmapHash");
     expect(routeSource).toContain("replayMods={uploadedReplayMods}");
     expect(routeSource).toContain("uploadShareUrl: uploaded ? uploadedReplayShareUrl : null");
     const uploadServerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload-server.ts"), "utf8");
@@ -59,6 +64,7 @@ describe("replay upload mode", () => {
     const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
     const lookupSource = fs.readFileSync(path.resolve(__dirname, "../lib/osu/replay.ts"), "utf8");
     const localSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-local-beatmap.ts"), "utf8");
+    const openSource = fs.readFileSync(path.resolve(__dirname, "../lib/uploaded-replay-open-server.ts"), "utf8");
 
     // A checksum unknown to osu! resolves to null instead of throwing a raw
     // 404, so the route can branch into the recovery flow.
@@ -75,7 +81,8 @@ describe("replay upload mode", () => {
     // dropping the .osz covers everyone who opens the replay afterwards.
     expect(routeSource).toContain("tryCommunityBeatmap(null)");
     expect(routeSource).toContain("tryCommunityBeatmap(beatmapMeta)");
-    expect(routeSource).toContain("getCommunityBeatmapFile({ data: { checksum } })");
+    expect(routeSource).toContain("const community = resolved.community");
+    expect(openSource).toContain("file.checksumMatched === false ? await readCommunityCopy(checksum)");
     expect(routeSource).toContain("submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } })");
     expect(lookupSource).toContain("export const getCommunityBeatmapFile");
     expect(lookupSource).toContain("export const submitCommunityBeatmap");
@@ -108,7 +115,9 @@ describe("replay upload mode", () => {
 
     // The row is written before the response, because the viewer asks whether
     // it may delete the upload as soon as that response lands.
-    expect(uploadServerSource).toContain("await recordUploadedReplayOwner({");
+    expect(uploadServerSource).toContain("? recordUploadedReplayOwner({");
+    const postHandler = uploadServerSource.slice(uploadServerSource.indexOf("export async function handleReplayUploadPost"));
+    expect(postHandler.indexOf("recordUploadedReplayOwner({")).toBeLessThan(postHandler.indexOf("ownerUserId: uploaderId,"));
 
     // Ownership is the backend's call, and the file only goes after the row it
     // was authorized against.

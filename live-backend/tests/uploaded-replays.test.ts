@@ -287,6 +287,18 @@ describe("/api/uploaded-replays routes", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("answers a page's worth of owner rows at once for the gallery", async () => {
+    await seed(UPLOAD_A, OWNER, "2026-08-01T00:00:00.000Z");
+    await seed(UPLOAD_B, OTHER, "2026-08-09T00:00:00.000Z");
+
+    const rows = await call(mockReq("GET", `/api/uploaded-replays/rows?ids=${UPLOAD_A},${UPLOAD_B},cccccccccccccccc,bad`, ADMIN));
+    expect(rows.status).toBe(200);
+    expect(rows.body.uploads.map((upload: { id: string; ownerUserId: number }) => [upload.id, upload.ownerUserId]).sort())
+      .toEqual([[UPLOAD_A, OWNER], [UPLOAD_B, OTHER]]);
+    expect((await call(mockReq("GET", "/api/uploaded-replays/rows?ids=", ADMIN))).body.uploads).toEqual([]);
+    expect((await call(mockReq("GET", `/api/uploaded-replays/rows?ids=${UPLOAD_A}`))).status).toBe(401);
+  });
+
   it("refuses the wrong method and an unknown sub-route", async () => {
     expect((await call(bodyReq("POST", "/api/uploaded-replays/list", "{}", ADMIN))).status).toBe(405);
     expect((await call(mockReq("GET", "/api/uploaded-replays/record", ADMIN))).status).toBe(405);

@@ -122,6 +122,22 @@ export async function fetchUploadedReplayIndexRow(id: string): Promise<UploadedR
   }
 }
 
+// Owner rows for a page of uploads at once (the gallery names the uploader on
+// every card); ids the index never saw are simply absent from the map.
+export async function fetchUploadedReplayIndexRows(ids: string[]): Promise<Map<string, UploadedReplayIndexRow>> {
+  const rows = new Map<string, UploadedReplayIndexRow>();
+  if (ids.length === 0) return rows;
+  try {
+    const response = await callIndex(`/api/uploaded-replays/rows?ids=${encodeURIComponent(ids.join(","))}`);
+    if (!response?.ok) return rows;
+    const body = (await response.json()) as { uploads?: UploadedReplayIndexRow[] };
+    for (const row of body.uploads ?? []) rows.set(row.id, row);
+    return rows;
+  } catch {
+    return rows;
+  }
+}
+
 export type UploadedReplayIndexDeleteResult =
   | { ok: true; indexed: boolean }
   | { ok: false; error: "not_found" | "unavailable" };

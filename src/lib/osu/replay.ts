@@ -31,6 +31,7 @@ import {
 } from "./validators";
 import { getOsuScoreModeName, getScoreEndpointOrder } from "./score-endpoint-order";
 import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "../replay-frames";
+import { packReplayFrames } from "../replay-pack";
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 
@@ -202,31 +203,19 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
         .sort((a, b) => a.time - b.time);
 
-      // Pack frames into typed arrays to shrink the wire payload ~20x vs JSON.
-      // Little-endian host is assumed (every x86/ARM server and client is LE).
       // For mania, column bitmask is in mouseX (position.x), NOT buttonState.
-      const frameCount = frames.length;
-      const times = new Int32Array(frameCount);
-      const keys = new Uint32Array(frameCount);
-      for (let i = 0; i < frameCount; i++) {
-        const frame = frames[i];
-        times[i] = frame.time | 0;
-        keys[i] = frame.keyState;
-      }
+      const framesPacked = packReplayFrames(frames);
 
       // Detect key count: prefer beatmap CS from score API, fall back to OR of all frames
       let keyCount = data.keyCount ?? 0;
       if (!keyCount) {
         let allBits = 0;
-        for (let i = 0; i < frameCount; i++) allBits |= keys[i];
+        for (const frame of frames) allBits |= frame.keyState;
         let maxBit = 0;
         let tmp = allBits;
         while (tmp > 0) { maxBit++; tmp >>= 1; }
         keyCount = Math.max(maxBit, 4);
       }
-
-      const timesB64 = Buffer.from(times.buffer, times.byteOffset, times.byteLength).toString("base64");
-      const keysB64 = Buffer.from(keys.buffer, keys.byteOffset, keys.byteLength).toString("base64");
 
       const response: ParsedReplayResponse = {
         header: {
@@ -246,7 +235,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
           isPerfect: info?.perfect ?? false,
         },
         lifeBarFrames,
-        framesPacked: { count: frameCount, times: timesB64, keys: keysB64 },
+        framesPacked,
         keyCount,
         stableScrollSpeedScale: stableScrollSpeedScale ?? undefined,
       };

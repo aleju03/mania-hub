@@ -3,6 +3,7 @@ import { parseJson } from "../../db.js";
 import {
   deleteUploadedReplayRow,
   getUploadedReplayRow,
+  getUploadedReplayRows,
   listUploadedReplays,
   recordUploadedReplay,
 } from "../../features/uploaded-replays.js";
@@ -72,6 +73,24 @@ export async function handleUploadedReplayRoutes(
     const id = readId(url.searchParams.get("id"));
     const row = id ? await getUploadedReplayRow(ctx.db, id) : null;
     sendJson(req, res, ctx, row ? 200 : 404, row ? { upload: row } : { error: "not_found" });
+    return true;
+  }
+
+  if (url.pathname === "/api/uploaded-replays/rows") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    // Public attribution for a page of the community gallery: the uploader's
+    // name is already on every community card, this just answers for many
+    // ids at once. Ids that fail the pattern are dropped, not rejected.
+    res.setHeader("cache-control", "private, no-store");
+    const ids = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((value) => readId(value))
+      .filter((value): value is string => value !== null)
+      .slice(0, 100);
+    sendJson(req, res, ctx, 200, { uploads: await getUploadedReplayRows(ctx.db, ids) });
     return true;
   }
 

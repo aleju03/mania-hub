@@ -2332,6 +2332,10 @@ msgstr "All players"
 msgid "All rows"
 msgstr "All rows"
 
+#: src/components/replay/ReplayBrowseView.tsx
+msgid "All uploads"
+msgstr "All uploads"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "Almost there..."
@@ -3664,6 +3668,10 @@ msgstr "common pick"
 msgid "Community"
 msgstr "Community"
 
+#: src/routes/replay_.community.tsx
+msgid "Community Replays"
+msgstr "Community Replays"
+
 #: src/components/communities/field-options.tsx
 msgid "Community server"
 msgstr "Community server"
@@ -3994,6 +4002,7 @@ msgstr "Couldn't load the full day detail."
 msgid "Couldn't load the song audio for this replay."
 msgstr "Couldn't load the song audio for this replay."
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
 msgstr "Couldn't load the uploads; refresh to retry."
@@ -4981,6 +4990,10 @@ msgstr "Every osu!mania lookup as a slash command, plus live feeds that post new
 #: src/routes/discord.tsx
 msgid "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
 msgstr "Every osu!mania lookup as a slash command. Link your account once with <0>/link</0> and commands like <1>/recent</1> work with no username. Live feeds auto-post new top plays, snipes and farm maps straight into any channel."
+
+#: src/routes/replay_.community.tsx
+msgid "Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher."
+msgstr "Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher."
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
@@ -7024,6 +7037,7 @@ msgstr "loading..."
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 #: src/routes/snipes.tsx
 msgid "Loading..."
@@ -8334,6 +8348,10 @@ msgstr "Nobody has picked cards yet. Yours would be the first."
 #: src/components/packs/CardCollectors.tsx
 msgid "Nobody has pulled your card yet."
 msgstr "Nobody has pulled your card yet."
+
+#: src/routes/replay_.community.tsx
+msgid "Nobody has uploaded a replay yet."
+msgstr "Nobody has uploaded a replay yet."
 
 #: src/components/packs/GoatPollVoters.tsx
 msgid "Nobody has voted on this row."
@@ -10411,6 +10429,10 @@ msgstr "Replay settings"
 msgid "Replay skin"
 msgstr "Replay skin"
 
+#: src/routes/replay.tsx
+msgid "Replay upload not found"
+msgstr "Replay upload not found"
+
 #: src/routes/replay_.uploads.tsx
 msgid "Replay Uploads"
 msgstr "Replay Uploads"
@@ -10419,6 +10441,7 @@ msgstr "Replay Uploads"
 msgid "Replay video export options"
 msgstr "Replay video export options"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Replays"
 msgstr "Replays"
@@ -11357,6 +11380,7 @@ msgstr "show more"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Show more"
 msgstr "Show more"
@@ -13842,6 +13866,7 @@ msgid "unknown artist"
 msgstr "unknown artist"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/replay.tsx
 msgid "Unknown beatmap"
 msgstr "Unknown beatmap"
@@ -13958,6 +13983,7 @@ msgstr "updating"
 msgid "Upload"
 msgstr "Upload"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
 msgstr "Upload a replay"
@@ -13995,6 +14021,14 @@ msgstr "uploaded by"
 #: src/components/skins/SkinCard.tsx
 msgid "uploaded by <0>{0}</0>"
 msgstr "uploaded by <0>{0}</0>"
+
+#: src/routes/replay_.community.tsx
+msgid "Uploaded by the Community"
+msgstr "Uploaded by the Community"
+
+#: src/routes/replay_.community.tsx
+msgid "Uploaded by the Community ({total})"
+msgstr "Uploaded by the Community ({total})"
 
 #: src/routes/skins.tsx
 msgid "uploader"
