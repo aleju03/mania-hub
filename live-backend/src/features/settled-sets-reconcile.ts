@@ -7,7 +7,7 @@ import { logInfo, logWarn } from "../logger.js";
 import { nowIso } from "../shared/score.js";
 import { persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
-import { normalizeMapSetStatus, shapeManiaDiffScores } from "./qualified-maps-watch.js";
+import { normalizeMapSetStatus, normalizeRankedDate, shapeManiaDiffScores } from "./qualified-maps-watch.js";
 
 // Settled-sets reconcile -----------------------------------------------------
 //
@@ -203,6 +203,9 @@ async function resolveSet(db: Db, osu: OsuApiClient, setId: number, updatedAt: s
     payloadStatuses.set(diffId, normalizeMapSetStatus(diff.status) || setStatus);
   }
 
+  // The payload's ranked_date rides along: osu! stamps it at the loved or
+  // ranked moment, so a revived set lands on the Newest sort like a new one.
+  const rankedDate = normalizeRankedDate(set.ranked_date);
   const statements: DbStatement[] = [];
   let updatedRows = 0;
   let deletedRows = 0;
@@ -211,8 +214,8 @@ async function resolveSet(db: Db, osu: OsuApiClient, setId: number, updatedAt: s
     if (alive) {
       if (alive === indexStatus) continue;
       statements.push({
-        sql: "update map_search_index set status = ?, updated_at = ? where beatmap_id = ?",
-        args: [alive, updatedAt, beatmapId],
+        sql: "update map_search_index set status = ?, ranked_date = ?, updated_at = ? where beatmap_id = ?",
+        args: [alive, rankedDate, updatedAt, beatmapId],
       });
       updatedRows++;
     } else {

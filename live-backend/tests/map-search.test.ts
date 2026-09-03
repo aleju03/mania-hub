@@ -1238,6 +1238,22 @@ describe("map search ranked date reconciliation", () => {
     expect((await getMapSearchSetEntry(db, 2))?.rankedDate).toBe("2021-02-03T00:00:00Z");
     expect(await reconcileMapSearchIndexRankedDates(db)).toBe(0);
     expect(await enqueueRankedDateEnrichment(db, queue)).toBe(0);
+
+    // The set ranks after a stint at qualified: osu! moves ranked_date to the
+    // ranking moment and the sweep follows it, so the map reads as new.
+    await exec(db, "update beatmapsets set metadata_json = json_set(metadata_json, '$.ranked_date', '2021-02-10T00:00:00Z') where beatmapset_id = 10");
+    expect(await reconcileMapSearchIndexRankedDates(db)).toBe(2);
+    expect((await getMapSearchSetEntry(db, 2))?.rankedDate).toBe("2021-02-10T00:00:00Z");
+    expect((await getMapSearchSetEntry(db, 3))?.rankedDate).toBe("2019-05-05T00:00:00Z");
+
+    // A dated index row over a set row without a date (the propagation flip
+    // strips it) still goes to the enrich job for the real date.
+    await exec(db, "update beatmapsets set metadata_json = json_remove(metadata_json, '$.ranked_date') where beatmapset_id = 30");
+    expect(await reconcileMapSearchIndexRankedDates(db)).toBe(0);
+    expect((await getMapSearchSetEntry(db, 3))?.rankedDate).toBe("2019-05-05T00:00:00Z");
+    expect(await enqueueRankedDateEnrichment(db, queue)).toBe(1);
+    const again = (await exec(db, "select dedupe_key from jobs where type = 'enrich_beatmap' order by dedupe_key")).rows.map((row) => String(row.dedupe_key));
+    expect(again).toEqual(["beatmap:1", "beatmap:3"]);
   });
 });
 
@@ -1290,19 +1306,30 @@ describe("map search status reconciliation", () => {
     await seedMap(db, { beatmapId: 2, beatmapsetId: 10, status: "qualified", primary: "jack", patterns: { jack: 1 } });
     await buildAll(db);
 
-    const stmt = buildMapStatusPropagationStatement(10, "ranked", "2026-07-06T00:00:00Z");
-    expect(stmt).not.toBeNull();
-    await exec(db, stmt!.sql, stmt!.args);
+    const stmts = buildMapStatusPropagationStatement(10, "ranked", "2026-07-06T00:00:00Z");
+    expect(stmts).not.toBeNull();
+    await execBatch(db, stmts!);
     expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
     expect((await getMapSearchSetEntry(db, 2))?.status).toBe("ranked");
+    // osu! re-stamps ranked_date at the ranking moment, so the flip dates the
+    // rows to now (Newest sort surfaces the map like a new one) and strips the
+    // set's qualify-era date so the hourly sweep fetches the real one.
+    expect((await getMapSearchSetEntry(db, 1))?.rankedDate).toBe("2026-07-06T00:00:00Z");
+    expect((await getMapSearchSetEntry(db, 2))?.rankedDate).toBe("2026-07-06T00:00:00Z");
+    const stripped = (await exec(db, "select json_extract(metadata_json, '$.ranked_date') as d from beatmapsets where beatmapset_id = 10")).rows[0];
+    expect(stripped.d).toBeNull();
 
     // A non-settled or empty payload is a no-op, and a settled payload never
-    // overwrites a row that has already settled.
+    // overwrites a row that has already settled, nor strips the set's date again.
     expect(buildMapStatusPropagationStatement(10, "pending", "t")).toBeNull();
     expect(buildMapStatusPropagationStatement(10, "", "t")).toBeNull();
-    const loved = buildMapStatusPropagationStatement(10, "loved", "2026-07-06T00:00:00Z")!;
-    await exec(db, loved.sql, loved.args);
+    await exec(db, "update beatmapsets set metadata_json = json_set(metadata_json, '$.ranked_date', '2026-07-06T00:00:00Z') where beatmapset_id = 10");
+    const loved = buildMapStatusPropagationStatement(10, "loved", "2026-08-01T00:00:00Z")!;
+    await execBatch(db, loved);
     expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+    expect((await getMapSearchSetEntry(db, 1))?.rankedDate).toBe("2026-07-06T00:00:00Z");
+    const kept = (await exec(db, "select json_extract(metadata_json, '$.ranked_date') as d from beatmapsets where beatmapset_id = 10")).rows[0];
+    expect(kept.d).toBe("2026-07-06T00:00:00Z");
   });
 });
 

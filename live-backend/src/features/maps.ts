@@ -6409,7 +6409,7 @@ async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[],
       if (!propagatedSets.has(score.beatmapset.id)) {
         propagatedSets.add(score.beatmapset.id);
         const propagation = buildMapStatusPropagationStatement(score.beatmapset.id, score.beatmapset.status, updatedAt);
-        if (propagation) statements.push(propagation);
+        if (propagation) statements.push(...propagation);
       }
     }
 

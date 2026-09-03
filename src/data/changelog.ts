@@ -27,6 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-03", text: "Maps: a map that goes from qualified to ranked shows up at the top of Newest again, as if it had just been ranked", to: "/maps" },
   { date: "2026-09-02", text: "BBCode editor: drag an image up or down to reorder it", to: "/bbcode" },
   { date: "2026-09-01", text: "BBCode editor: fixed pasted images sometimes missing from the copied BBCode, stopped resizing from snapping back, and added Ctrl/Cmd-click to match several images to the first one's size", to: "/bbcode" },
   { date: "2026-09-01", text: "Farm helper: the popular tab has a difficulty filter, so you can narrow the list to a star range like on maps", to: "/farm-helper" },

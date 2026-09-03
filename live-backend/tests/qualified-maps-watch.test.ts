@@ -43,11 +43,16 @@ function maniaDiff(id: number, setId: number, status: string, extra: Record<stri
   };
 }
 
-function set(id: number, status: string, beatmaps: Record<string, unknown>[]): Record<string, unknown> {
+function set(id: number, status: string, beatmaps: Record<string, unknown>[], extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id, status, title: `Set ${id}`, artist: "A", creator: "C", covers: {},
-    last_updated: "2026-07-06T00:00:00Z", beatmaps,
+    last_updated: "2026-07-06T00:00:00Z", beatmaps, ...extra,
   };
+}
+
+async function indexRankedDate(db: Db, beatmapsetId: number): Promise<string | null> {
+  const row = (await exec(db, "select ranked_date from map_search_index where beatmapset_id = ? limit 1", [beatmapsetId])).rows[0];
+  return row?.ranked_date == null ? null : String(row.ranked_date);
 }
 
 async function indexStatus(db: Db, beatmapsetId: number): Promise<string | null> {
@@ -69,6 +74,8 @@ describe("runQualifiedMapsWatch", () => {
     await seedIndexRow(db, 1000, 100, "pending"); // will be promoted to qualified
     await seedIndexRow(db, 2000, 200, "qualified"); // dropped off the list -> ranks
     await seedIndexRow(db, 2500, 250, "qualified"); // dropped off -> dequalified to pending
+    // Both carry their qualify date, the one osu! replaces at ranking time.
+    await exec(db, "update map_search_index set ranked_date = '2026-07-01T00:00:00Z' where beatmapset_id in (200, 250)");
     await seedIndexRow(db, 3000, 300, "qualified"); // stays qualified
 
     const osu = {
@@ -89,8 +96,8 @@ describe("runQualifiedMapsWatch", () => {
         };
       },
       async getBeatmapset(id: number) {
-        if (id === 200) return set(200, "ranked", [maniaDiff(2000, 200, "ranked")]);
-        if (id === 250) return set(250, "pending", [maniaDiff(2500, 250, "pending")]);
+        if (id === 200) return set(200, "ranked", [maniaDiff(2000, 200, "ranked")], { ranked_date: "2026-07-08T12:00:00Z" });
+        if (id === 250) return set(250, "pending", [maniaDiff(2500, 250, "pending")], { ranked_date: null });
         throw new Error(`unexpected getBeatmapset(${id})`);
       },
     } as unknown as OsuApiClient;
@@ -103,6 +110,10 @@ describe("runQualifiedMapsWatch", () => {
     // Drop-off resolution in both directions.
     expect(await indexStatus(db, 200)).toBe("ranked"); // qualified -> ranked
     expect(await indexStatus(db, 250)).toBe("pending"); // qualified -> pending (dequalify)
+    // The ranked set takes osu!'s re-stamped date (Newest sort shows it as new);
+    // the dequalified one has none anymore.
+    expect(await indexRankedDate(db, 200)).toBe("2026-07-08T12:00:00Z");
+    expect(await indexRankedDate(db, 250)).toBeNull();
     // New set has no index row yet (awaits analysis) but its metadata is stored.
     expect(await indexStatus(db, 400)).toBeNull();
 

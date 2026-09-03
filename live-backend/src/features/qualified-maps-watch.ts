@@ -146,7 +146,7 @@ async function resolveLeftSet(db: Db, osu: OsuApiClient, setId: number, updatedA
   if (!status) return false;
   const shaped = shapeManiaDiffScores(set);
   if (shaped.scores.length > 0) await persistScoresDisplayMetadata(db, shaped.scores, updatedAt);
-  const statement = authoritativeIndexStatusStatement(setId, status, updatedAt);
+  const statement = authoritativeIndexStatusStatement(setId, status, updatedAt, normalizeRankedDate(set.ranked_date));
   await exec(db, statement.sql, statement.args);
   return true;
 }
@@ -154,12 +154,27 @@ async function resolveLeftSet(db: Db, osu: OsuApiClient, setId: number, updatedA
 // Authoritative, unguarded index write: unlike buildMapStatusPropagationStatement
 // (guarded to in-flux -> settled against stale score payloads), this trusts the
 // osu! API as current truth and moves every index row of the set to `status` in
-// any direction, including the settled -> in-flux dequalify path.
-function authoritativeIndexStatusStatement(beatmapsetId: number, status: string, updatedAt: string): DbStatement {
+// any direction, including the settled -> in-flux dequalify path. A resolved
+// set also carries osu!'s ranked_date, re-stamped to the ranking moment when a
+// qualified set ranks, so the Newest sort surfaces it like a new map; the
+// current-list promotions (step 3) leave the date alone, the search payload
+// dates a qualified set too but the hourly sweep copies it from the set row.
+function authoritativeIndexStatusStatement(beatmapsetId: number, status: string, updatedAt: string, rankedDate?: string | null): DbStatement {
+  if (rankedDate === undefined) {
+    return {
+      sql: "update map_search_index set status = ?, updated_at = ? where beatmapset_id = ?",
+      args: [status.toLowerCase(), updatedAt, Math.floor(beatmapsetId)],
+    };
+  }
   return {
-    sql: "update map_search_index set status = ?, updated_at = ? where beatmapset_id = ?",
-    args: [status.toLowerCase(), updatedAt, Math.floor(beatmapsetId)],
+    sql: "update map_search_index set status = ?, ranked_date = ?, updated_at = ? where beatmapset_id = ?",
+    args: [status.toLowerCase(), rankedDate, updatedAt, Math.floor(beatmapsetId)],
   };
+}
+
+export function normalizeRankedDate(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return text ? text : null;
 }
 
 // The index is the materialized truth users see (beatmapsets.status column is

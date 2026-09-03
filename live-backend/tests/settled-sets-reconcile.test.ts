@@ -63,10 +63,10 @@ function maniaDiff(id: number, setId: number, status: string, extra: Record<stri
   };
 }
 
-function set(id: number, status: string, beatmaps: Record<string, unknown>[]): Record<string, unknown> {
+function set(id: number, status: string, beatmaps: Record<string, unknown>[], extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id, status, title: `Set ${id}`, artist: "A", creator: "C", covers: {},
-    last_updated: "2026-07-06T00:00:00Z", beatmaps,
+    last_updated: "2026-07-06T00:00:00Z", beatmaps, ...extra,
   };
 }
 
@@ -107,7 +107,7 @@ describe("runSettledSetsReconcile", () => {
       async getBeatmapset(id: number) {
         fetched.push(id);
         if (id === 100) return set(100, "loved", [maniaDiff(1001, 100, "loved"), maniaDiff(1002, 100, "loved")]);
-        if (id === 200) return set(200, "loved", [maniaDiff(2000, 200, "loved")]);
+        if (id === 200) return set(200, "loved", [maniaDiff(2000, 200, "loved")], { ranked_date: "2026-07-05T00:00:00Z" });
         if (id === 500) return set(500, "loved", [maniaDiff(5000, 500, "graveyard"), maniaDiff(5001, 500, "loved")]);
         throw new Error(`unexpected getBeatmapset(${id})`);
       },
@@ -124,8 +124,11 @@ describe("runSettledSetsReconcile", () => {
     expect(String(dead.status)).toBe("graveyard");
     expect(JSON.parse(String(dead.metadata_json)).status).toBe("deleted");
 
-    // Set 200: alive diff healed in place.
+    // Set 200: alive diff healed in place, dated to the loved moment so the
+    // Newest sort shows it like a new map.
     expect(await indexStatuses(db, 200)).toEqual({ 2000: "loved" });
+    const dated = (await exec(db, "select ranked_date from map_search_index where beatmap_id = 2000")).rows[0];
+    expect(String(dated.ranked_date)).toBe("2026-07-05T00:00:00Z");
     // Fresh metadata persisted for the alive diff (future rebuilds see loved).
     const alive = (await exec(db, "select status, metadata_json from beatmaps where beatmap_id = 2000")).rows[0];
     expect(String(alive.status)).toBe("loved");

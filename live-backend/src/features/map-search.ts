@@ -678,24 +678,44 @@ function normalizeMapStatus(status: string | null | undefined): string {
 }
 
 // Event-driven upgrade: a fresh score payload reported a set's current status.
-// If it names a settled status, returns a statement that flips any still-in-flux
+// If it names a settled status, returns the statements that flip any still-in-flux
 // index rows for that set to it (seeks idx_map_search_set on beatmapset_id).
 // Returns null when there is nothing to do, so callers can skip the write.
+//
+// osu! re-stamps ranked_date at the moment a set ranks (or is loved), so a
+// qualified set carries its qualify date until then and the Newest sort would
+// leave the freshly-ranked map a week deep, where it sat while qualified. The
+// flip stamps the index date to now, which puts the map back on page one at
+// once, and strips the set's stored ranked_date (a compact score payload never
+// carries one), so the hourly ranked-date sweep sends the set to enrich_beatmap
+// for the real date; that write and the sweep replace the stamp. The strip is
+// guarded on the index still showing the set in flux, so a score on a long-ranked
+// map never triggers a refetch, and it runs first because the flip is what
+// clears that guard.
 export function buildMapStatusPropagationStatement(
   beatmapsetId: number,
   status: string | null | undefined,
   updatedAt: string,
-): DbStatement | null {
+): DbStatement[] | null {
   const setId = Math.floor(Number(beatmapsetId));
   if (!Number.isFinite(setId) || setId <= 0) return null;
   const next = normalizeMapStatus(status);
   if (!SETTLED_MAP_STATUSES.includes(next as (typeof SETTLED_MAP_STATUSES)[number])) return null;
   const placeholders = IN_FLUX_MAP_STATUSES.map(() => "?").join(", ");
-  return {
-    sql: `update map_search_index set status = ?, updated_at = ?
-           where beatmapset_id = ? and status in (${placeholders})`,
-    args: [next, updatedAt, setId, ...IN_FLUX_MAP_STATUSES],
-  };
+  return [
+    {
+      sql: `update beatmapsets set metadata_json = json_remove(metadata_json, '$.ranked_date')
+             where beatmapset_id = ? and json_valid(metadata_json)
+               and exists (select 1 from map_search_index i
+                            where i.beatmapset_id = beatmapsets.beatmapset_id and i.status in (${placeholders}))`,
+      args: [setId, ...IN_FLUX_MAP_STATUSES],
+    },
+    {
+      sql: `update map_search_index set status = ?, ranked_date = ?, updated_at = ?
+             where beatmapset_id = ? and status in (${placeholders})`,
+      args: [next, updatedAt, updatedAt, setId, ...IN_FLUX_MAP_STATUSES],
+    },
+  ];
 }
 
 // Periodic backstop for the column itself. The API-backed enrich job used to
@@ -747,9 +767,13 @@ export async function reconcileMapSearchIndexStatuses(db: Db): Promise<number> {
 // score payload carries osu!'s compact beatmapset, which has no ranked_date,
 // and ingest never overwrites metadata_json on conflict, so the index row
 // stays dateless until an enrich_beatmap run stores the full set. Step one
-// copies dates the beatmapsets row has since gained (pure DB); step two hands
-// the rest to the enrich job, one diff per set and a bounded batch per tick,
-// since each is an osu! call. Returns the rows dated.
+// copies dates the beatmapsets row has since gained, or re-stamped: osu! moves
+// ranked_date to the ranking moment when a qualified set ranks, so a settled
+// index row whose date disagrees with a dated set row takes the set's (pure
+// DB, ~120ms over 150k rows). Step two hands the sets still without a date
+// (on either side, since the propagation flip strips the set's) to the enrich
+// job, one diff per set and a bounded batch per tick, since each is an osu!
+// call. Returns the rows dated.
 export async function reconcileMapSearchIndexRankedDates(db: Db): Promise<number> {
   const result = await exec(
     db,
@@ -757,10 +781,11 @@ export async function reconcileMapSearchIndexRankedDates(db: Db): Promise<number
         set ranked_date = (select json_extract(s.metadata_json, '$.ranked_date') from beatmapsets s
                             where s.beatmapset_id = map_search_index.beatmapset_id),
             updated_at = ?
-      where ranked_date is null
-        and exists (select 1 from beatmapsets s
+      where exists (select 1 from beatmapsets s
                      where s.beatmapset_id = map_search_index.beatmapset_id
-                       and json_extract(s.metadata_json, '$.ranked_date') is not null)`,
+                       and json_extract(s.metadata_json, '$.ranked_date') is not null
+                       and (map_search_index.ranked_date is null
+                            or map_search_index.ranked_date != json_extract(s.metadata_json, '$.ranked_date')))`,
     [nowIso()],
   );
   return Number(result.rowsAffected ?? 0);
@@ -771,7 +796,10 @@ export async function enqueueRankedDateEnrichment(db: Db, queue: JobQueue, limit
   const rows = (await exec(
     db,
     `select min(beatmap_id) as beatmap_id from map_search_index
-      where ranked_date is null and status in (${settled})
+      where status in (${settled})
+        and (ranked_date is null
+             or (select json_extract(s.metadata_json, '$.ranked_date') from beatmapsets s
+                  where s.beatmapset_id = map_search_index.beatmapset_id) is null)
       group by beatmapset_id
       order by beatmapset_id asc
       limit ?`,
