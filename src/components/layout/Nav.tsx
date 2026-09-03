@@ -107,18 +107,24 @@ for (const top of NAV_TOP) {
 
 const ALL_LEAVES = Object.values(NAV_LEAVES);
 
-/* Nav links to /maps and /snipes target routes whose validateSearch has
-   many required fields. Passing only `{ country }` would be a partial and
-   TanStack Router types the object form strictly. The reducer form is
-   permissive at runtime (validateSearch fills in the rest from defaults),
-   but its `prev` is typed loosely across all routes, so we cast the
-   return to `never` to stop TS from demanding every field. */
+/* Country changes made while already on /maps or /snipes preserve that
+   route's filters. Keep this reducer away from links into another route:
+   `prev` is the current route's validated search, so using it for a
+   skins -> maps link would copy every normalized skin default into the URL. */
 function preserveSearchWithCountry(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country })) as never;
 }
 
 function preserveSearchWithCountryOnFirstPage(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country, page: 0 })) as never;
+}
+
+/* /maps validates a fully populated MapsSearch, while a nav link only needs
+   the country and lets validateSearch supply the defaults. Cast the partial
+   object instead of using a search reducer: a reducer would inherit unrelated
+   params from whichever page the reader is leaving. */
+export function freshMapsSearch(country: string) {
+  return { country } as never;
 }
 
 /* The dev-tools menu, listed once and rendered by both the desktop dropdown
@@ -424,7 +430,7 @@ export function Nav() {
       case "top-plays":
         return { country: selectedCountry, range: topPlaysRangeForLink };
       case "maps":
-        return preserveSearchWithCountryOnFirstPage(selectedCountry);
+        return freshMapsSearch(selectedCountry);
       case "snipes":
         return { country: selectedCountry, ...snipesFiltersForLink, page: 0 };
       default:
@@ -524,7 +530,7 @@ export function Nav() {
     // Snipes is not a Global surface (Global is not a country). Switching to
     // Global from /snipes moves the reader to Maps, the headline Global view.
     if (isGlobalScope(country) && location.pathname === "/snipes") {
-      navigate({ to: "/maps", search: preserveSearchWithCountryOnFirstPage(country), replace: true });
+      navigate({ to: "/maps", search: freshMapsSearch(country), replace: true });
       return;
     }
 
