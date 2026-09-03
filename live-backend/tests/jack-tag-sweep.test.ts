@@ -29,13 +29,13 @@ async function makeDb(): Promise<Db> {
   return db;
 }
 
-function build7kOsuFile(pattern: number[][], title: string, intervalMs = 100, repeats = 60): string {
+function build8kOsuFile(pattern: number[][], title: string, intervalMs = 100, repeats = 60): string {
   const rows: string[] = [];
   for (let cycle = 0; cycle < repeats; cycle += 1) {
     pattern.forEach((columns, index) => {
       const time = 1000 + (cycle * pattern.length + index) * intervalMs;
       for (const column of columns) {
-        const x = Math.floor(((column + 0.5) * 512) / 7);
+        const x = Math.floor(((column + 0.5) * 512) / 8);
         rows.push(`${x},192,${time},1,0,0:0:0:0:`);
       }
     });
@@ -50,10 +50,10 @@ Mode: 3
 Title: ${title}
 Artist: Test
 Creator: Mapper
-Version: 7K
+Version: 8K
 
 [Difficulty]
-CircleSize:7
+CircleSize:8
 OverallDifficulty:8
 
 [TimingPoints]
@@ -69,12 +69,12 @@ ${rows.join("\n")}
 // re-hits, but wall-to-wall two-row alternation - exactly the stale-corpus
 // shape this sweep exists to backfill a jack tag onto.
 function buildTrillOsuFile(): string {
-  return build7kOsuFile([[1, 2], [4, 5]], "Trill Sweep Test");
+  return build8kOsuFile([[1, 2], [4, 5]], "Trill Sweep Test");
 }
 
 // Rolls that never re-hit a column within two rows: no jack under any arm.
 function buildRollOsuFile(): string {
-  return build7kOsuFile([[0], [2], [4], [6], [1], [3], [5]], "Roll Sweep Test");
+  return build8kOsuFile([[0], [2], [4], [6], [1], [3], [5], [7]], "Roll Sweep Test");
 }
 
 interface SeedOptions {
@@ -101,7 +101,7 @@ async function seedAnalyzedChart(db: Db, beatmapId: number, osuText: string, opt
     `insert into beatmap_chart_analysis
        (beatmap_id, analysis_version, status, key_count, primary_label, primary_family, raw_dan, classification_json, computed_at, updated_at)
      values (?, ?, 'ready', ?, '4-', 'tech', 4, ?, ?, ?)`,
-    [beatmapId, CHART_ANALYSIS_VERSION, options.keyCount ?? 7, JSON.stringify(classification), now, now],
+    [beatmapId, CHART_ANALYSIS_VERSION, options.keyCount ?? 8, JSON.stringify(classification), now, now],
   );
 }
 

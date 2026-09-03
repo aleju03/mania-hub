@@ -5509,6 +5509,8 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // the derived jack tag folded in before the baseline can mint pattern:jack
 // curves for the keymode.
 export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v2";
+// The keymodes whose tags moved since the previous stamp (v1 walked 6K/7K).
+const PATTERN_SWEEP_KEY_COUNTS = [8];
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;
 
 export interface PlayerSkillPatternSweepChunkResult {
@@ -5523,14 +5525,16 @@ export async function recomputePlayerSkillPatternChunk(
   cursor: number,
   limit = PLAYER_SKILL_PATTERN_SWEEP_CHUNK,
 ): Promise<PlayerSkillPatternSweepChunkResult> {
-  // Only rows with a keymode the re-tag touched: the 4K pipeline is
-  // deliberately bit-identical, so pure-4K rows cannot change. The LIKE terms
-  // bound the scan on the small modes_json column.
+  // Only rows with a keymode the re-tag touched (PATTERN_SWEEP_KEY_COUNTS):
+  // every other keymode's tags are unchanged since the last stamp, so those
+  // rows would fold to what they already hold. The LIKE terms bound the scan
+  // on the small modes_json column.
+  const keyCountClause = PATTERN_SWEEP_KEY_COUNTS.map((keyCount) => `modes_json like '%"keyCount":${keyCount}%'`).join(" or ");
   const rows = (await exec(
     db,
     `select user_id, modes_json, plays_json, updated_at from player_skill_ratings
      where user_id > ? and analysis_version = ? and status = 'ready'
-       and (modes_json like '%"keyCount":6%' or modes_json like '%"keyCount":7%')
+       and (${keyCountClause})
      order by user_id
      limit ?`,
     [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],

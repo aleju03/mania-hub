@@ -31,20 +31,20 @@ async function seedChart(db: Db, beatmapId: number, patterns: Array<{ id: string
   await exec(
     db,
     `insert into beatmap_chart_analysis (beatmap_id, analysis_version, key_count, status, classification_json, updated_at)
-     values (?, ?, 7, 'ready', json(?), ?)`,
+     values (?, ?, 8, 'ready', json(?), ?)`,
     [beatmapId, CHART_ANALYSIS_VERSION, json({ lnRatio: 0, patterns }), "2026-08-27T00:00:00.000Z"],
   );
 }
 
 function play(beatmapId: number, patterns: string[]) {
   return {
-    identity: `s${beatmapId}`, beatmapId, keyCount: 7, rate: 1, goal: 0.93, pp: 100,
+    identity: `s${beatmapId}`, beatmapId, keyCount: 8, rate: 1, goal: 0.93, pp: 100,
     values: { Overall: 22 }, patterns,
   };
 }
 
 // A row folded before the jack re-tag: its charts carried only a tech tag.
-async function seedRow(db: Db, userId: number, beatmapIds: number[], keyCount = 7): Promise<void> {
+async function seedRow(db: Db, userId: number, beatmapIds: number[], keyCount = 8): Promise<void> {
   await exec(
     db,
     `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
@@ -129,7 +129,7 @@ describe("recomputePlayerSkillPatternChunk", () => {
         await realExecute({
           sql: "update player_skill_ratings set modes_json = json(?), updated_at = ? where user_id = ?",
           args: [
-            json({ modes: [{ keyCount: 7, patterns: [{ id: "jack", rating: 30, plays: 9 }] }] }),
+            json({ modes: [{ keyCount: 8, patterns: [{ id: "jack", rating: 30, plays: 9 }] }] }),
             "2026-08-28T00:00:00.000Z",
             41,
           ],

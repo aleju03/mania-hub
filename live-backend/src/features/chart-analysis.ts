@@ -1542,9 +1542,12 @@ async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Pr
 export const JACK_TAG_RECOMPUTE_JOB = "recompute_jack_tag_sweep";
 // v2 (2026-09-02): 8K charts moved into the analyzer's 6K/7K detector branch
 // (bracket, delay, jack), so every stored 8K verdict needs the comparison.
+// The keymode list is the set this stamp still owes, not everything the
+// analyzer branch covers: v1 already walked 6K and 7K and nothing changed
+// for them since, so re-scanning them would only cost reads.
 export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v2";
 const JACK_TAG_CHUNK = 50;
-const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7, 8];
+const JACK_TAG_SWEEP_KEY_COUNTS = [8];
 
 export interface JackTagChunkResult {
   nextCursor: number;
