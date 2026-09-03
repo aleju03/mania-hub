@@ -64,7 +64,7 @@ export function isDanLeaderboardKeyCount(value: number): boolean {
 
 /**
  * Axes a keymode publishes, mirroring skillModeEntries on the frontend and
- * percentileAxes in skill-baseline: 6K and 7K (PATTERN_AXIS_KEY_COUNTS) speak
+ * percentileAxes in skill-baseline: 6K, 7K and 8K (PATTERN_AXIS_KEY_COUNTS) speak
  * the in-house pattern vocabulary only, because the calc's skillset names are
  * 4K-born and mislead there; every other supported keymode speaks MinaCalc's
  * native skillsets plus the grafted LN pattern axis.

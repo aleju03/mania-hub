@@ -1540,9 +1540,11 @@ async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Pr
 // random 7K charts mint a visible jack entry, so most of the scan is
 // compare-and-skip.
 export const JACK_TAG_RECOMPUTE_JOB = "recompute_jack_tag_sweep";
-export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v1";
+// v2 (2026-09-02): 8K charts moved into the analyzer's 6K/7K detector branch
+// (bracket, delay, jack), so every stored 8K verdict needs the comparison.
+export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v2";
 const JACK_TAG_CHUNK = 50;
-const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7];
+const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7, 8];
 
 export interface JackTagChunkResult {
   nextCursor: number;

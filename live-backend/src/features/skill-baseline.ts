@@ -921,7 +921,7 @@ export function axisPercentile(entry: { count: number; curve: number[]; tail?: n
   return percentileFromCurve(entry.curve, value);
 }
 
-// Axes eligible for a percentile per keymode: the pattern keymodes (6K/7K,
+// Axes eligible for a percentile per keymode: the pattern keymodes (6K/7K/8K,
 // PATTERN_AXIS_KEY_COUNTS) publish Overall + pattern axes only, since
 // MinaCalc's skillset names mislead there; every other keymode speaks the
 // native MSD skillsets (plus pattern axes).

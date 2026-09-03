@@ -38,8 +38,8 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // MinaCalc's skillset taxonomy is 4K-born, so each keymode additionally gets
 // per-pattern ratings in our own vocabulary: the play's Overall SSRs
 // aggregated over the chart-analysis pattern tags of the charts they were set
-// on ("your rating on chordstream charts"). Only the 6K and 7K cards show
-// those; every other keymode (4K, 5K, 8K and up) shows the native MSD
+// on ("your rating on chordstream charts"). Only the 6K, 7K and 8K cards show
+// those; every other keymode (4K, 5K, 9K and up) shows the native MSD
 // skillsets, see PATTERN_AXIS_KEY_COUNTS.
 //
 // Rates come from the rate mods: DT/NC 1.5x and HT/DC 0.75x by default, or
@@ -108,12 +108,18 @@ export const SKILL_RATING_SKILLSETS = [
 // Keymodes whose skill card, percentiles and leaderboards speak the in-house
 // pattern vocabulary (chordstream, bracket, delay, ...) instead of MinaCalc's
 // skillsets. 6K and 7K are the two where the pattern detector was validated
-// against mapper-named packs and the calc's 4K-born names mislead; 5K and
-// 8K-18K tried the same tiles and read as inaccurate (2026-09-01 reports), so
+// against mapper-named packs and the calc's 4K-born names mislead; 8K joined
+// them on 2026-09-02 because its charts are 7K's vocabulary (often mapped as
+// 7K+1) and the analyzer now runs its 6K/7K detectors on them: of the 586
+// analyzed 8K charts locally, 282 tag chordstream, 225 tech, 140 delay, 72
+// bracket and 47 jack, where the generic branch had said only chordstream
+// and tech. 5K and
+// 9K-18K tried the same tiles and read as inaccurate (2026-09-01 reports), so
 // they show what the calc rates, the same way 4K does. The pattern ratings are
 // still computed and stored for every keymode; this only decides what is
-// published.
-export const PATTERN_AXIS_KEY_COUNTS: ReadonlySet<number> = new Set([6, 7]);
+// published, plus the derived whole-jack tag (chartIsJack) those keymodes
+// need for their Jack axis.
+export const PATTERN_AXIS_KEY_COUNTS: ReadonlySet<number> = new Set([6, 7, 8]);
 
 export function usesPatternSkillAxes(keyCount: number): boolean {
   return PATTERN_AXIS_KEY_COUNTS.has(keyCount);
@@ -224,7 +230,7 @@ function patternTagMinScore(patternId: string): number {
 // these tags, and what its tags do feed (skill-baseline cohort vectors) was
 // not re-measured, so the pipeline stays bit-identical there.
 function chartIsJack(keyCount: number | null, chordjackScore: number, jackScore: number, jackShare: number | null): boolean {
-  if (keyCount !== 6 && keyCount !== 7) return chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
+  if (keyCount == null || !usesPatternSkillAxes(keyCount)) return chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
   if (jackScore >= PATTERN_TAG_MIN_SCORE) return true;
   return jackShare != null
     ? jackShare >= CLUSTER_SHARE_MIN
@@ -247,7 +253,7 @@ function chartIsJack(keyCount: number | null, chordjackScore: number, jackScore:
 // ~1% of charts with no cluster evidence.
 const JACK_TECH_VETO_MIN_SCORE = 0.8;
 function jackVetoesTech(keyCount: number | null, chordjackScore: number, jackScore: number, jackShare: number | null): boolean {
-  if (keyCount !== 6 && keyCount !== 7) return chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
+  if (keyCount == null || !usesPatternSkillAxes(keyCount)) return chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
   if (jackScore >= JACK_TECH_VETO_MIN_SCORE) return true;
   return jackShare != null
     ? jackShare >= CLUSTER_SHARE_MIN
@@ -1076,7 +1082,7 @@ function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
 
 // "Your rating on chordstream charts": the Overall SSRs of the plays whose
 // charts carry a pattern tag, aggregated per tag. This is the published axis
-// set for the PATTERN_AXIS_KEY_COUNTS keymodes (6K/7K), where MinaCalc's
+// set for the PATTERN_AXIS_KEY_COUNTS keymodes (6K/7K/8K), where MinaCalc's
 // 4K-born skillset names mislead; other keymodes store it unpublished.
 function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPatternRating[] {
   const playsByPattern = new Map<string, StoredPlaySsr[]>();
@@ -1478,7 +1484,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       // The derived whole-jack tag (see chartIsJack). The chordjack tag stays
       // beside it for the consumers that mean chord jack specifically; 4K
       // keeps its native analyzer tags untouched.
-      if ((keyCount === 6 || keyCount === 7) && isJack && !patternIds.includes("jack")) patternIds.push("jack");
+      if (keyCount != null && usesPatternSkillAxes(keyCount) && isJack && !patternIds.includes("jack")) patternIds.push("jack");
       const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
       const dtRawDan = readRawDan(danDt ?? undefined);
       const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
@@ -5499,7 +5505,10 @@ async function enqueuePlayerSkillDanSweep(
 export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sweep";
 // Exported for the skill-baseline due-check: curves computed before this
 // stamp cannot carry the refolded axes and read as stale.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v1";
+// v2 (2026-09-02): 8K joined PATTERN_AXIS_KEY_COUNTS, so its stored rows need
+// the derived jack tag folded in before the baseline can mint pattern:jack
+// curves for the keymode.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v2";
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;
 
 export interface PlayerSkillPatternSweepChunkResult {

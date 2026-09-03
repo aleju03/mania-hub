@@ -98,8 +98,8 @@ describe("leaderboardAxesFor", () => {
     expect([5, 8, 18].some(isDanLeaderboardKeyCount)).toBe(false);
   });
 
-  it("gives 4K, 5K and 8K+ the MSD skillsets plus the grafted LN pattern axis", () => {
-    for (const keyCount of [4, 5, 8, 10, 18]) {
+  it("gives 4K, 5K and 9K+ the MSD skillsets plus the grafted LN pattern axis", () => {
+    for (const keyCount of [4, 5, 9, 10, 18]) {
       const axes = leaderboardAxesFor(keyCount);
       expect(axes).toContain("Chordjack");
       expect(axes).toContain("JackSpeed");
@@ -109,12 +109,12 @@ describe("leaderboardAxesFor", () => {
     }
   });
 
-  it("gives 6K and 7K the pattern vocabulary only", () => {
-    for (const keyCount of [6, 7]) {
+  it("gives 6K, 7K and 8K the pattern vocabulary only", () => {
+    for (const keyCount of [6, 7, 8]) {
       const axes = leaderboardAxesFor(keyCount);
       expect(axes).toContain("pattern:jack");
       expect(axes).toContain("pattern:chordstream");
-      // MinaCalc's skillset names are 4K-born and mislead on 6K/7K.
+      // MinaCalc's skillset names are 4K-born and mislead on 6K/7K/8K.
       expect(axes).not.toContain("Chordjack");
       // The jack tile absorbed chordjack; publishing both would rank the
       // same charts twice under two names.

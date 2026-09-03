@@ -119,13 +119,13 @@ export interface SkillAxisEntry extends SkillAxisMeta {
 // Keymodes whose card speaks the in-house pattern vocabulary. Mirrors the
 // backend's PATTERN_AXIS_KEY_COUNTS (player-skills.ts), which decides what
 // percentiles and leaderboards publish: 6K and 7K are where the pattern tiles
-// were validated; 5K and 8K-18K tried them and read as inaccurate, so they
-// show what MinaCalc rates, like 4K.
+// were validated, and 8K speaks the same vocabulary; 5K and 9K-18K tried them
+// and read as inaccurate, so they show what MinaCalc rates, like 4K.
 export function usesPatternSkillAxes(keyCount: number): boolean {
-  return keyCount === 6 || keyCount === 7;
+  return keyCount === 6 || keyCount === 7 || keyCount === 8;
 }
 
-// 6K/7K speak the in-house pattern vocabulary (falling back to the MSD names
+// 6K/7K/8K speak the in-house pattern vocabulary (falling back to the MSD names
 // while tags are missing); every other keymode speaks MinaCalc's skillsets.
 export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   if (usesPatternSkillAxes(mode.keyCount)) {

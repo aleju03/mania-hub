@@ -636,7 +636,12 @@ export function analyzeManiaPatterns(
         pressure(metrics.sustainedNps10s, 12, 25),
       ), dataConfidence, `${compactPercent(fourPlusRatio)} quad rows in stream`),
     );
-  } else if (metrics.keyCount === 6 || metrics.keyCount === 7) {
+  } else if (metrics.keyCount >= 6 && metrics.keyCount <= 8) {
+    // 8K joined this branch on 2026-09-02: its charts are 7K's vocabulary
+    // (many are mapped as 7K+1 with a quiet scratch column), and the generic
+    // branch below could never say bracket, delay or jack about them. [8K]
+    // Abyss 8 (3992501) is the case that named it: a bracket file that stored
+    // as chordstream 1.00 because the branch had no bracket detector.
     const nonLnFlowGate = clamp01((0.3 - metrics.holdRatio) / 0.22);
     const nonLnPatternGate = clamp01((0.68 - metrics.holdRatio) / 0.56);
     // Brackets are dense chords that move across the columns, so consecutive
