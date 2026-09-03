@@ -5513,11 +5513,13 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // v2 (2026-09-02): 8K joined PATTERN_AXIS_KEY_COUNTS, so its stored rows need
 // the derived jack tag folded in before the baseline can mint pattern:jack
 // curves for the keymode.
-// v3 (2026-09-03): v2 refolded the summary only and left plays_json on the
-// pre-sweep tags, so the sweep re-walks 8K to store the per-play tags too.
+// v3 (2026-09-03): v1 and v2 refolded the summary only and left plays_json
+// on the pre-sweep tags, so the sweep re-walks every pattern keymode to store
+// the per-play tags too (1,498 of 7,586 6K/7K rows had not recomputed since
+// v1 when this shipped).
 export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v3";
-// The keymodes whose tags moved since the previous stamp (v1 walked 6K/7K).
-const PATTERN_SWEEP_KEY_COUNTS = [8];
+// The keymodes whose stored per-play tags may still predate their summary.
+const PATTERN_SWEEP_KEY_COUNTS = [6, 7, 8];
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;
 
 export interface PlayerSkillPatternSweepChunkResult {
