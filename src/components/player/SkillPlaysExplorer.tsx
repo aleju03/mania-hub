@@ -1425,7 +1425,8 @@ function FiltersToggle({
  * It wears the toolbar's track rather than sitting loose beside it, because
  * the chips alone would read as badges on the row above rather than as a
  * control. Only the mods the visible cohort was played with get a chip, so an
- * empty answer is never on offer.
+ * empty answer is never on offer. The chips wrap inside the track: a player
+ * with many mods on a phone would otherwise push the whole page sideways.
  */
 function ModsControl({
   mods,
@@ -1439,7 +1440,11 @@ function ModsControl({
   const { t } = useLingui();
   const any = Object.keys(modFilter).length > 0;
   return (
-    <div role="group" aria-label={t`Mods`} className={`inline-flex items-center gap-1 p-1 pl-2 ${CONTROL_TRACK_CLASS}`}>
+    <div
+      role="group"
+      aria-label={t`Mods`}
+      className={`inline-flex max-w-full flex-wrap items-center gap-1 p-1 pl-2 ${CONTROL_TRACK_CLASS}`}
+    >
       <span className={`mr-0.5 shrink-0 text-[11px] ${any ? "text-osu-pink-light" : "text-osu-f1"}`}>
         <Trans>Mods</Trans>
       </span>
