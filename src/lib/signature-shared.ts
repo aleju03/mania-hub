@@ -90,7 +90,7 @@ export const SIGNATURE_TYPE_LABELS: Record<SignatureType, MessageDescriptor> = {
    propagates within one edge TTL. Bump it when a layout changes, and when
    the encoding does - a stored object is immutable for its key, so an old one
    would otherwise be served under the new content type. */
-export const SIGNATURE_RENDER_VERSION = "24";
+export const SIGNATURE_RENDER_VERSION = "26";
 
 export function isSignatureType(value: string): value is SignatureType {
   return (SIGNATURE_TYPES as readonly string[]).includes(value);

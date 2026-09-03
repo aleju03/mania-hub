@@ -1580,6 +1580,7 @@ function insightCells(
   totalWidth: number,
   accent: string,
   dim: string,
+  modBadge: RenderModBadge | null,
 ): ReactNode[] {
   const [keyWidth, modWidth, bpmWidth, ppWidth] = insightCellWidths(totalWidth, insights.keySplit.length);
   const mod = insights.mostUsedMod;
@@ -1605,7 +1606,16 @@ function insightCells(
       "Most used mod",
       dim,
       mod
-        ? h("div", { key: "v", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1 } }, mod.label)
+        ? modBadge
+          /* The badge stands in the same 26px line box as the numerals in the
+             other cells, which is tight enough that satori shrinks it, so the
+             box is fixed and the badge is placed inside it: its top on the
+             numerals' cap line, a touch taller than their caps so it reads as
+             heavy as they do, and centred between the label and the bar. */
+          ? h("div", { key: "v", style: { display: "flex", position: "relative", width: "41px", height: "26px", flexShrink: 0 } }, [
+            h("div", { key: "b", style: { display: "flex", position: "absolute", top: "4px", left: "0" } }, [renderModBadge(modBadge, 0, 27)]),
+          ])
+          : h("div", { key: "v", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1 } }, mod.label)
         : insightMissing("No mod preference", dim),
       mod
         ? h("div", { key: "f", style: { display: "flex", alignItems: "center", gap: "8px" } }, [
@@ -1716,12 +1726,12 @@ async function loadRenderModBadges(request: Request, mods: string[]): Promise<Re
   }));
 }
 
-function renderModBadge(badge: RenderModBadge, index: number): ReactNode {
-  // The browser badge is 36x24 with a 100:70 mask centred inside it. This is
-  // its 0.7x profile-card size, including the small transparent side gutters.
-  const width = 25.2;
-  const height = 16.8;
-  const artWidth = 24;
+/* The browser badge is 36x24 with a 100:70 mask centred inside it. The default
+   is its 0.7x profile-card size, including the small transparent side gutters;
+   the stat cells pass a taller badge so it stands where the headline text did. */
+function renderModBadge(badge: RenderModBadge, index: number, height = 16.8): ReactNode {
+  const width = height * 1.5;
+  const artWidth = (height * 10) / 7;
   const artLeft = (width - artWidth) / 2;
   return h("div", {
     key: `${badge.acronym}-${index}`,
@@ -1745,7 +1755,7 @@ function renderModBadge(badge: RenderModBadge, index: number): ReactNode {
       })
       : h("div", {
         key: "glyph",
-        style: { position: "relative", fontSize: "8px", lineHeight: 1, fontWeight: 900, color: modGlyphColor(badge.color) },
+        style: { position: "relative", fontSize: `${Math.round(height * 0.48)}px`, lineHeight: 1, fontWeight: 900, color: modGlyphColor(badge.color) },
       }, badge.acronym),
   ]);
 }
@@ -1875,7 +1885,7 @@ function topPlayCard(
           clamp(`${snapshot.artist} [${snapshot.version}]`, compact ? 40 : 56)),
         modBadges.length > 0 || date
           ? h("div", { key: "m", style: { display: "flex", alignItems: "center", gap: "4px", height: "18px", color: secondary } }, [
-            ...modBadges.map(renderModBadge),
+            ...modBadges.map((badge, index) => renderModBadge(badge, index)),
             date ? h("div", {
               key: "date",
               style: { marginLeft: modBadges.length > 0 ? "3px" : "0", fontSize: "10.5px", whiteSpace: "nowrap" },
@@ -2065,11 +2075,14 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
   const inner = spec.width - (ctx.design === 3 ? 48 : 56);
   /* Design 2 carries no top play, so it pays for no cover: this is a fetch and
      a sharp pass, cheap once per version and pointless every time. */
-  const [cover, modBadges] = await Promise.all([
+  const [cover, modBadges, [mostUsedModBadge = null]] = await Promise.all([
     play && ctx.design !== 2
       ? beatmapCoverBandDataUrl(play.coverUrl, inner, TOP_PLAY_CARD_HEIGHT)
       : Promise.resolve(null),
     play && ctx.design !== 2 ? loadRenderModBadges(ctx.request, play.mods) : Promise.resolve([]),
+    // The most used mod is drawn as the same badge the site shows on plays,
+    // not as its letters.
+    insights.mostUsedMod ? loadRenderModBadges(ctx.request, [insights.mostUsedMod.label]) : Promise.resolve([]),
   ]);
 
   if (ctx.design === 2) {
@@ -2081,7 +2094,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
       h("div", {
         key: "body",
         style: { display: "flex", alignItems: "stretch", padding: "18px 28px", width: "100%" },
-      }, insightCells(insights, inner, accent, dim)),
+      }, insightCells(insights, inner, accent, dim, mostUsedModBadge)),
       wordmark(ctx.style, 12, 8),
     ]));
   }
@@ -2117,7 +2130,9 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
             key: "v",
             style: { display: "flex", alignItems: "baseline", gap: "6px" },
           }, [
-            h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, insights.mostUsedMod?.label ?? "-"),
+            mostUsedModBadge
+              ? renderModBadge(mostUsedModBadge, 0, 18)
+              : h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, insights.mostUsedMod?.label ?? "-"),
             insights.mostUsedMod
               ? h("div", { key: "p", style: { fontSize: "11px", color: dim } }, `${modPct}%`)
               : h("div", { key: "p" }),
@@ -2161,7 +2176,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
         }, "Profile stats"),
       ], "10px"),
       h("div", { key: "cells", style: { display: "flex", alignItems: "stretch", height: "62px" } },
-        insightCells(insights, inner, accent, dim)),
+        insightCells(insights, inner, accent, dim, mostUsedModBadge)),
       play
         ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
           topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges),
