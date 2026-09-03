@@ -601,19 +601,37 @@ function peakRowsPerSecond(map: ManiaBeatmap, windowMs: number): number {
   return peak;
 }
 
-/**
- * Tier 6 on its own, for the play-side check (player-skills rate vibro).
- *
- * This is the only tier that may be asked about a rate: its two measures
- * were calibrated as "what a hand can do" and both scale with the rate. Tiers
- * 1-5 scale their cutoffs too, but they were calibrated against the 1.0x
- * corpus, and at 1.5x they call ranked 210-256BPM jack files (GRAVITY, WORLD'S
- * END, the V2/Super/EXTREME set) vibro - real DT plays, not shakes.
- */
+/** Tier 6 on its own; detectRateVibro combines the play-side-safe tiers. */
 export function detectRollVibro(map: ManiaBeatmap, rate = 1): boolean {
   if (map.keyCount !== 4 || map.notes.length < RICE_VIBRO_MIN_NOTES) return false;
   return columnFastGaps(map, RICE_VIBRO_ROLL_GAP_MS * rate).ratio >= RICE_VIBRO_ROLL_MIN_RATIO
     && fastRollRowShare(map, RICE_VIBRO_ROLL_ROW_GAP_MS * rate) >= RICE_VIBRO_ROLL_MIN_ROW_RATIO;
+}
+
+// A rate can also turn ordinary chordjack into vibro without ever looking like
+// a roll: 128BPM chord walls become 218BPM at 1.7x, and in the reported shape
+// 68% of all row transitions are then near-full chords inside tier 5's 70ms
+// window. The ordinary tier-5 floor (2%) is deliberately too broad for
+// play-side rate checks: scaling it catches a small fast chordjack burst in
+// otherwise legit DT files. Requiring half of the whole chart says the
+// superhuman chord wall IS the chart. Measured over 24,407 stored uprate pairs,
+// this reaches five pairs (three from one short vibro-pack chart) rather than
+// the 165 the 2% floor reaches, while retaining 0.18 margin under the reported
+// chart's 0.68.
+const RATE_VIBRO_CHORD_WALL_MIN_RATIO = 0.5;
+
+/**
+ * Rate-induced vibro shapes safe to use for player-skill eligibility.
+ *
+ * Do not replace this with detectRiceVibro(map, rate). Tiers 1-4 were
+ * calibrated at 1.0x and the widened cutoffs call real 210-256BPM DT jack
+ * clears vibro. The roll tier is rate-calibrated directly; the chord-wall arm
+ * adds only chart-soaked near-full walls, leaving localized bursts alone.
+ */
+export function detectRateVibro(map: ManiaBeatmap, rate = 1): boolean {
+  if (detectRollVibro(map, rate)) return true;
+  if (map.notes.length < RICE_VIBRO_BURST_MIN_NOTES) return false;
+  return chordWallRatio(map, RICE_VIBRO_CHORD_WALL_GAP_MS * rate) >= RATE_VIBRO_CHORD_WALL_MIN_RATIO;
 }
 
 export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {

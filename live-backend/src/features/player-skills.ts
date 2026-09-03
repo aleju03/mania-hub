@@ -14,7 +14,7 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor, detectRollVibro } from "../dan/chart-classifier.js";
+import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor, detectRateVibro } from "../dan/chart-classifier.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
@@ -57,7 +57,12 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v23 (current): stores every mod acronym beside each rated play, rather than
+// v24 (current): re-walks stored rate plays through the expanded rate-vibro
+// check, which now catches chart-soaked chord walls as well as roll shakes.
+// The per-play detector stamp changes eligibility without changing any SSR,
+// so v23 and every earlier post-v15 row remain sound compute seeds.
+//
+// v23: stores every mod acronym beside each rated play, rather than
 // only the rate mod, so the Skills play lists can show and filter the exact
 // mod combination (MR/DA/etc. as well as DT/HT). SSR values and eligibility
 // are unchanged, so every earlier post-v15 row remains a sound compute seed.
@@ -69,7 +74,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 23;
+export const PLAYER_SKILLS_VERSION = 24;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -91,7 +96,7 @@ export const PLAYER_SKILLS_VERSION = 23;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -2359,19 +2364,20 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // The stored vibro flag is the chart at 1.0x, so a chart that only becomes
 // vibro under rate (a 163BPM 1/16 roll file is a 61ms per-finger shake at
 // 1.5x; chart-classifier's roll tier) rated as a legit hard play. Rate plays
-// on charts without pp-backed trust run the roll tier - only that tier, see
-// detectRollVibro for why the rest must stay at 1.0x - at the play's rate
+// on charts without pp-backed trust run the rate-safe roll and chart-soaked
+// chord-wall tiers - see detectRateVibro for why the rest stay at 1.0x - at
+// the play's rate
 // from the cached .osu: parse only, no MinaCalc, and the verdict is stamped on
 // the stored play so a chart is checked once per detector version. Bump when
 // the tier changes so stored plays re-check on their next compute.
-export const RATE_VIBRO_CHECK_VERSION = 1;
+export const RATE_VIBRO_CHECK_VERSION = 2;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
 
 function chartVibroAtRate(osuText: string, rate: number): boolean | null {
   try {
-    return detectRollVibro(parseManiaBeatmap(osuText), rate);
+    return detectRateVibro(parseManiaBeatmap(osuText), rate);
   } catch {
     return null;
   }

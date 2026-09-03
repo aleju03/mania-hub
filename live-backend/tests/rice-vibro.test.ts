@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
-import { detectRiceVibro } from "../src/dan/chart-classifier.js";
+import { detectRateVibro, detectRiceVibro, detectRollVibro } from "../src/dan/chart-classifier.js";
 
 // Synthetic charts for the rice-vibro detector. Thresholds were calibrated on
 // the real corpus (see chart-classifier.ts); these tests pin the behaviour at
@@ -255,6 +255,50 @@ describe("detectRiceVibro", () => {
     const map = parseManiaBeatmap(buildOsuFile(notes));
     expect(detectRiceVibro(map)).toBe(false);
     expect(detectRiceVibro(map, 1.5)).toBe(true);
+  });
+
+  it("rejects chart-soaked rate chord walls without treating localized bursts or single jacks as vibro", () => {
+    // 117ms near-full chord rows are ordinary 128BPM chordjack at 1.0x, but
+    // 69ms at 1.7x. This is the reported shape: the chord wall occupies nearly
+    // the whole chart, so it is played by shaking rather than jacking.
+    const wall: Note[] = [];
+    for (let row = 0; row < 800; row++) {
+      for (let column = 0; column < 4; column++) {
+        if (column !== row % 4) wall.push({ column, time: 1000 + row * 117 });
+      }
+    }
+    const wallMap = parseManiaBeatmap(buildOsuFile(wall));
+    expect(detectRiceVibro(wallMap)).toBe(false);
+    expect(detectRollVibro(wallMap, 1.7)).toBe(false);
+    expect(detectRateVibro(wallMap, 1.7)).toBe(true);
+
+    // The full classifier still warns about a localized superhuman burst, but
+    // the play-side check requires chart-wide soak so a real DT file with one
+    // hard moment is retained.
+    const localized: Note[] = [...ordinary()];
+    for (let row = 0; row < 40; row++) {
+      for (let column = 0; column < 4; column++) {
+        if (column !== row % 4) localized.push({ column, time: 200_000 + row * 117 });
+      }
+    }
+    const localizedMap = parseManiaBeatmap(buildOsuFile(localized));
+    expect(detectRiceVibro(localizedMap, 1.7)).toBe(true);
+    expect(detectRateVibro(localizedMap, 1.7)).toBe(false);
+
+    // Likewise, scaling the broad same-column tier catches sustained 210BPM
+    // DT jack, but the rate-safe detector deliberately does not: it is neither
+    // a roll nor a near-full chord wall.
+    const jacks: Note[] = [];
+    for (let burst = 0; burst < 12; burst++) {
+      const start = 1000 + burst * 5000;
+      for (let index = 0; index < 32; index++) {
+        jacks.push({ column: burst % 4, time: start + index * 105 });
+      }
+    }
+    const jackMap = parseManiaBeatmap(buildOsuFile(jacks));
+    expect(detectRiceVibro(jackMap)).toBe(false);
+    expect(detectRiceVibro(jackMap, 1.5)).toBe(true);
+    expect(detectRateVibro(jackMap, 1.5)).toBe(false);
   });
 
   it("ignores tiny charts", () => {

@@ -92,6 +92,21 @@ function buildRollBeatmapFile(): string {
   return buildStreamBeatmapFile().replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${lines.join("\n")}\n`);
 }
 
+// Near-full chord rows at 117ms: ordinary 128BPM chordjack at 1.0x and a
+// chart-soaked 69ms chord-wall shake at 1.7x. Unlike buildRollBeatmapFile this
+// never trips the roll tier because adjacent rows share columns.
+function buildRateChordWallBeatmapFile(): string {
+  const lines: string[] = [];
+  for (let row = 0; row < 800; row++) {
+    for (let column = 0; column < 4; column++) {
+      if (column !== row % 4) {
+        lines.push(`${64 + column * 128},192,${1000 + row * 117},1,0,0:0:0:0:`);
+      }
+    }
+  }
+  return buildStreamBeatmapFile().replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${lines.join("\n")}\n`);
+}
+
 // The stream chart with every note turned into a ~250ms hold: same heads, so
 // the head-only calc sees the identical chart, while the tail-aware pass sees
 // the release rows.
@@ -1751,6 +1766,46 @@ describe("computePlayerSkillRatings", () => {
       expect(dropped.plays.map((entry) => entry.beatmapId)).toEqual([]);
       const trusted = await computePlayerSkillRatings(db, failingOsu, [], [{ ...stale, source: "top" as const }], {});
       expect(trusted.plays.map((entry) => entry.beatmapId)).toEqual([106]);
+    });
+  });
+
+  it("turns away a tracked chart-soaked chord wall that becomes vibro at 1.7x", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 108, buildRateChordWallBeatmapFile(), { source: "test" });
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+         values (?, ?, 'ready', ?, ?)`,
+        [108, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, vibro: false, patterns: [] }), new Date().toISOString()],
+      );
+
+      const trackedScores = [
+        play({ id: 5, beatmap_id: 108, accuracy: 0.95, pp: null }),
+        play({
+          id: 6,
+          beatmap_id: 108,
+          accuracy: 0.95,
+          pp: null,
+          mods: [{ acronym: "DT", settings: { speed_change: 1.7 } }],
+        }),
+      ];
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores });
+      expect(result.plays.map((entry) => `${entry.beatmapId}@${entry.rate}`)).toEqual(["108@1"]);
+
+      // A retained rate play stamped by the previous detector version is
+      // rechecked and removed, which is how existing player rows heal after
+      // deployment rather than only protecting newly ingested scores.
+      const staleRatePlay = {
+        ...result.plays[0],
+        identity: "official:7",
+        rate: 1.7,
+        rateMod: "DT",
+        source: "tracked" as const,
+        rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      };
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [result.plays[0], staleRatePlay], {});
+      expect(retained.plays.map((entry) => `${entry.beatmapId}@${entry.rate}`)).toEqual(["108@1"]);
     });
   });
 
