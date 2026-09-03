@@ -5496,8 +5496,13 @@ async function enqueuePlayerSkillDanSweep(
 // otherwise refreshes only when a profile view or a new top play triggers a
 // recompute - which is nobody inactive, so the population would take weeks to
 // grow enough jack entries for the baseline to mint a pattern:jack percentile
-// curve. This rewrites just the patterns block of modes_json from plays_json
-// plus a fresh tag lookup - no MinaCalc, no osu! API, the dan sweep's shape.
+// curve. This rewrites the patterns block of modes_json from plays_json plus
+// a fresh tag lookup, and stores the refreshed per-play tags back into
+// plays_json - no MinaCalc, no osu! API, the dan sweep's shape. Both halves
+// have to move together: the per-axis explorer (getPlayerSkillPlays) filters
+// the stored plays by their stored tag, so a fold that only touched the
+// summary showed a jack tile with N plays over an empty jack list until a
+// profile view past the 12h TTL recomputed the row.
 // Seeded only once the chart sweep stamps done, so it folds final tags rather
 // than a moving set; on its own finishing chunk the dispatcher forces a
 // skill-baseline rebuild so the percentile curves learn the new axis in the
@@ -5508,7 +5513,9 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // v2 (2026-09-02): 8K joined PATTERN_AXIS_KEY_COUNTS, so its stored rows need
 // the derived jack tag folded in before the baseline can mint pattern:jack
 // curves for the keymode.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v2";
+// v3 (2026-09-03): v2 refolded the summary only and left plays_json on the
+// pre-sweep tags, so the sweep re-walks 8K to store the per-play tags too.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v3";
 // The keymodes whose tags moved since the previous stamp (v1 walked 6K/7K).
 const PATTERN_SWEEP_KEY_COUNTS = [8];
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;
@@ -5542,7 +5549,7 @@ export async function recomputePlayerSkillPatternChunk(
 
   let nextCursor = cursor;
   let rewritten = 0;
-  const parsed: Array<{ userId: number; summary: StoredModesSummary; plays: StoredPlaySsr[]; readAt: string }> = [];
+  const parsed: Array<{ userId: number; summary: StoredModesSummary; stored: object; plays: StoredPlaySsr[]; readAt: string }> = [];
   const beatmapIds: number[] = [];
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
     if (rowIndex > 0 && rowIndex % PLAYER_SKILL_DAN_SWEEP_PARSE_YIELD === 0) {
@@ -5556,30 +5563,35 @@ export async function recomputePlayerSkillPatternChunk(
     const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
       .filter((play) => play && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
     if (!summary || !Array.isArray(summary.modes) || summary.modes.length === 0 || plays.length === 0) continue;
-    parsed.push({ userId, summary, plays, readAt: String(row.updated_at ?? "") });
+    parsed.push({ userId, summary, stored: stored ?? {}, plays, readAt: String(row.updated_at ?? "") });
     for (const play of plays) beatmapIds.push(play.beatmapId);
   }
   const infoByBeatmap = await loadChartSkillInfo(db, beatmapIds);
 
-  for (const { userId, summary, plays, readAt } of parsed) {
+  for (const { userId, summary, stored, plays, readAt } of parsed) {
     // Same tag policy as the compute: fresh tags where an analysis row
     // exists, the stored ones where it does not (a straggler still waiting on
     // its post-sweep re-analysis heals on the row's next ordinary recompute).
     const playsByKeyCount = new Map<number, StoredPlaySsr[]>();
-    for (const play of plays) {
+    let tagsMoved = false;
+    const refreshedPlays = plays.map((play) => {
       const info = infoByBeatmap.get(play.beatmapId);
       const refreshed = info ? { ...play, patterns: info.patterns } : play;
+      if (info && json(info.patterns) !== json(play.patterns ?? [])) tagsMoved = true;
       const list = playsByKeyCount.get(play.keyCount);
       if (list) list.push(refreshed);
       else playsByKeyCount.set(play.keyCount, [refreshed]);
-    }
+      return refreshed;
+    });
     const modes = summary.modes.map((mode) => ({
       ...mode,
       patterns: aggregateModePatternRatings(playsByKeyCount.get(mode.keyCount) ?? []),
     }));
     // Most rows fold to the tags they already hold; skip the no-op writes so
-    // the sweep costs reads, not a table-wide rewrite.
-    const unchanged = modes.every((mode, index) =>
+    // the sweep costs reads, not a table-wide rewrite. A row whose summary
+    // already folded (v2) but whose plays still carry the old tags is not a
+    // no-op: the explorer reads those tags.
+    const unchanged = !tagsMoved && modes.every((mode, index) =>
       json(mode.patterns) === json(summary.modes[index]?.patterns ?? []));
     if (unchanged) continue;
     // updated_at guard, same as the dan sweep: a normal recompute in another
@@ -5588,9 +5600,9 @@ export async function recomputePlayerSkillPatternChunk(
     const written = await exec(
       db,
       `update player_skill_ratings
-       set modes_json = json(?), updated_at = ?
+       set modes_json = json(?), plays_json = json(?), updated_at = ?
        where user_id = ? and analysis_version = ? and updated_at = ?`,
-      [json({ ...summary, modes }), nowIso(), userId, PLAYER_SKILLS_VERSION, readAt],
+      [json({ ...summary, modes }), json({ ...stored, plays: refreshedPlays }), nowIso(), userId, PLAYER_SKILLS_VERSION, readAt],
     );
     if (Number(written.rowsAffected ?? 0) > 0) rewritten += 1;
   }

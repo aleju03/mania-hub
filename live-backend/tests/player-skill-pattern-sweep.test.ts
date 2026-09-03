@@ -75,7 +75,7 @@ describe("recomputePlayerSkillPatternChunk", () => {
     const result = await recomputePlayerSkillPatternChunk(db, 0);
     expect(result).toMatchObject({ scanned: 1, rewritten: 1, done: true });
 
-    const row = (await exec(db, "select modes_json, computed_at from player_skill_ratings where user_id = 11", [])).rows[0];
+    const row = (await exec(db, "select modes_json, plays_json, computed_at from player_skill_ratings where user_id = 11", [])).rows[0];
     const summary = parseJson<{ modes: Array<{ ratings: Record<string, number>; patterns: Array<{ id: string; plays: number; rating: number }> }> }>(String(row.modes_json ?? ""), { modes: [] });
     const patterns = new Map(summary.modes[0].patterns.map((entry) => [entry.id, entry]));
     // The stale tech fold is gone with its tag; the jack axis appears.
@@ -84,6 +84,30 @@ describe("recomputePlayerSkillPatternChunk", () => {
     expect(patterns.get("tech")).toBeUndefined();
     expect(summary.modes[0].ratings.Overall).toBe(22);
     expect(String(row.computed_at)).toBe("2026-08-20T00:00:00.000Z");
+    // The per-play tags move with the summary: the explorer filters on them.
+    const stored = parseJson<{ plays: Array<{ patterns: string[] }> }>(String(row.plays_json ?? ""), { plays: [] });
+    expect(stored.plays.map((entry) => entry.patterns)).toEqual([["jack"], ["jack"], ["jack"]]);
+    db.close();
+  });
+
+  it("rewrites a row whose summary already folded but whose plays still carry the old tags", async () => {
+    const db = await makeDb();
+    for (const beatmapId of [701, 702, 703]) await seedChart(db, beatmapId, [{ id: "jack", score: 0.9 }]);
+    await seedRow(db, 12, [701, 702, 703]);
+    // What the v2 sweep left behind: a jack summary over tech-tagged plays.
+    const folded = await recomputePlayerSkillPatternChunk(db, 0);
+    expect(folded.rewritten).toBe(1);
+    await exec(
+      db,
+      "update player_skill_ratings set plays_json = json(?) where user_id = 12",
+      [json({ plays: [701, 702, 703].map((id) => play(id, ["tech"])) })],
+    );
+
+    const result = await recomputePlayerSkillPatternChunk(db, 0);
+    expect(result).toMatchObject({ scanned: 1, rewritten: 1, done: true });
+    const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 12", [])).rows[0];
+    const stored = parseJson<{ plays: Array<{ patterns: string[] }> }>(String(row.plays_json ?? ""), { plays: [] });
+    expect(stored.plays.map((entry) => entry.patterns)).toEqual([["jack"], ["jack"], ["jack"]]);
     db.close();
   });
 
@@ -173,7 +197,7 @@ describe("ensurePlayerSkillPatternSweepSeeded", () => {
     // The finishing chunk stamps done and reports it, so the dispatcher can
     // force the baseline rebuild.
     expect(await runPlayerSkillPatternSweepJob(db, queue, { cursor: 0 })).toBe(true);
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_pattern_sweep_done:v2'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_pattern_sweep_done:v3'", [])).rows[0];
     expect(done).toBeTruthy();
 
     await ensurePlayerSkillPatternSweepSeeded(db, queue);
