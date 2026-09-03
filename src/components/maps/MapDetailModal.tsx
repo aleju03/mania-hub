@@ -17,8 +17,10 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import { useNoDans } from "../../store";
 import {
+  FamilyPatternChip,
   PATTERN_COLOR,
   SubPatternChip,
+  familyPatternTags,
   entryDiffs,
   mapCoverUrl,
   osuBeatmapUrl,
@@ -472,9 +474,10 @@ export function MapDetailModal({
 
   // The active diff's detected subfamily tags (bracket, speedjack, ...), all
   // of them: the modal is the exhaustive view, unlike the cards' capped strip.
+  const familyTags = useMemo(() => (active ? familyPatternTags(active) : []), [active]);
   const subTags = useMemo(
-    () => (active ? subPatternTags([active], [active.primaryPattern], Infinity) : []),
-    [active],
+    () => (active ? subPatternTags([active], familyTags, Infinity) : []),
+    [active, familyTags],
   );
 
   // Chart-analysis detail per diff, fetched lazily so the modal can show the
@@ -683,12 +686,16 @@ export function MapDetailModal({
                 ) : pending ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
-                {/* Detected subfamily tags from the in-house analyzer: chart
-                    attributes (bracket, speedjack, ...), distinct from the
-                    family identity chips and the BPM cluster readout above. */}
-                {subTags.length > 0 && (
+                {/* The same chips as the search card: filled family identity
+                    (primary first, from the index) then the analyzer's outlined
+                    subfamily attributes (bracket, speedjack, ...), distinct from
+                    the BPM cluster readout above. */}
+                {(familyTags.length > 0 || subTags.length > 0) && (
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
                     <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Tags`}</span>
+                    {familyTags.map((pattern, index) => (
+                      <FamilyPatternChip key={pattern} pattern={pattern} primary={index === 0} />
+                    ))}
                     {subTags.map((pattern) => (
                       <SubPatternChip key={pattern} pattern={pattern} />
                     ))}
