@@ -77,7 +77,27 @@ interface LnPatternStats {
   coordinatedReleaseRatio: number;
   heldWhileReleaseRatio: number;
   holdDurationP50: number;
+  // Share of 8-second windows (with enough same-column hold pairs to judge)
+  // whose holds are mostly re-pressed within their own length of the release.
+  // Sections carry the inverse tag where the whole-chart ratio would average
+  // them away under rice.
+  inverseWindowCoverage: number;
 }
+
+// Windowed inverse: the whole-chart inverseReleaseRatio averages an inverse
+// section against everything around it, so an LN coordination chart whose
+// FLN passages are a third of its length reads as 30-40% inverse and never
+// tags. Per window the question is looser on purpose: the release gap only
+// has to fit inside the hold's own length (1/4-spaced inverse has gap == hold,
+// which the 0.7 chart-level rule rejects), and a window counts once most of
+// its same-column pairs look like that. Ramps measured 2026-09-03 over 1158
+// 7K charts whose title/diff/tags say inverse or FLN against 14.3k unlabelled
+// 7K LN charts: coverage at the 0.65 window cut is AUC 0.964, labelled p10
+// 0.78, unlabelled p75 0.09 / p90 0.28.
+const INVERSE_WINDOW_MS = 8000;
+const INVERSE_WINDOW_MIN_PAIRS = 20;
+const INVERSE_WINDOW_MIN_WINDOWS = 3;
+const INVERSE_WINDOW_RATIO = 0.65;
 
 function rowColumns(rowNotes: ManiaNote[]): number[] {
   return [...new Set(rowNotes.map((note) => note.column))].sort((a, b) => a - b);
@@ -331,6 +351,7 @@ function getLnPatternStats(
   let coordinatedReleaseHolds = 0;
   let heldWhileReleaseHolds = 0;
   const holdDurations: number[] = [];
+  const windowPairs = new Map<number, { pairs: number; inverse: number }>();
 
   for (const columnNotes of notesByColumn) {
     columnNotes.sort((left, right) => left.time - right.time || left.endTime - right.endTime);
@@ -346,6 +367,11 @@ function getLnPatternStats(
       if (nextNote && gap >= 0) {
         sameColumnNextHolds++;
         sameColumnGaps.push(gap);
+        const windowKey = Math.floor(note.time / INVERSE_WINDOW_MS);
+        const window = windowPairs.get(windowKey) ?? { pairs: 0, inverse: 0 };
+        window.pairs++;
+        if (gap <= gapCap && gap <= holdDuration) window.inverse++;
+        windowPairs.set(windowKey, window);
       }
 
       // The release doubles as the cue to press the same column again, so the
@@ -365,6 +391,14 @@ function getLnPatternStats(
   const releaseRowCount = releaseRows.size;
   const holdCount = Math.max(1, holdDurations.length);
 
+  let judgedWindows = 0;
+  let inverseWindows = 0;
+  for (const window of windowPairs.values()) {
+    if (window.pairs < INVERSE_WINDOW_MIN_PAIRS) continue;
+    judgedWindows++;
+    if (window.inverse / window.pairs >= INVERSE_WINDOW_RATIO) inverseWindows++;
+  }
+
   return {
     inverseReleaseRatio: sameColumnNextHolds ? inverseLikeHolds / sameColumnNextHolds : 0,
     sameColumnReleaseGapP50: quantile(sameColumnGaps, 0.5),
@@ -376,6 +410,7 @@ function getLnPatternStats(
     coordinatedReleaseRatio: coordinatedReleaseHolds / holdCount,
     heldWhileReleaseRatio: heldWhileReleaseHolds / holdCount,
     holdDurationP50: quantile(holdDurations, 0.5),
+    inverseWindowCoverage: judgedWindows >= INVERSE_WINDOW_MIN_WINDOWS ? inverseWindows / judgedWindows : 0,
   };
 }
 
@@ -465,14 +500,29 @@ export function analyzeManiaPatterns(
   // population (measured over the 63k cached 4K charts that carry long notes).
   const lnSubtypeKeys = metrics.keyCount === 7 || metrics.keyCount === 4;
   const lnSubtypeGate = lnSubtypeKeys ? pressure(lnScore, 0.18, 0.58) : 0;
+  // Two ways in. The whole-chart leg is the original: most same-column
+  // releases are inverse re-presses and the chart is nearly all LN (a 16%
+  // mixed-row ceiling). The windowed leg is for charts that are inverse in
+  // sections: enough 8s windows read as inverse, under a looser mixed-row
+  // ceiling, since the rice sits in the other sections. At 0.35-0.75
+  // coverage and the 0.2-0.45 mixed ramp the inverse-labelled corpus goes
+  // 89% -> 96% tagged and unlabelled LN charts 4.8% -> 6.5% (2026-09-03).
+  // 7K only: the window cut was measured there, and on 4K the looser gap rule
+  // reads dense short-hold chording as inverse (a 100ms hold re-pressed 100ms
+  // later in one of four columns is most of what 4K LN chords look like).
+  const lnInverseShape = Math.max(
+    pressure(lnStats.inverseReleaseRatio, 0.24, 0.62) * clamp01((0.16 - lnStats.mixedRowRatio) / 0.16),
+    metrics.keyCount === 7
+      ? pressure(lnStats.inverseWindowCoverage, 0.35, 0.75) * clamp01((0.45 - lnStats.mixedRowRatio) / 0.25)
+      : 0,
+  );
   const lnInverseScore = lnSubtypeGate * minGate(
-    pressure(lnStats.inverseReleaseRatio, 0.24, 0.62),
+    lnInverseShape,
     pressure(metrics.lnDensity, 0.12, 0.5),
     Math.max(
       pressure(metrics.lnOverlapPressure, 1.1, 3.1),
       pressure(metrics.lnHoldDurationP90, 260, 520),
     ),
-    clamp01((0.16 - lnStats.mixedRowRatio) / 0.16),
   );
   // Release is about where the release lands, not how many of them there are.
   // The old gate asked for isolated release rows (no note head at the same
@@ -496,14 +546,35 @@ export function analyzeManiaPatterns(
   // presses, and the dense all-LN one, where tails are short but every release
   // happens under other holds.
   //
+  // The dense leg's ramps were lowered 2026-09-03: the 7K LN dan release
+  // practice charts release on half-beat tails at 175-190 BPM (p50 95-180ms),
+  // which the slow leg cannot see, and sit at 53-62% released under other
+  // holds against the leg's old 0.6 start. Against 150 release-named charts
+  // and 14.3k unlabelled 7K LN charts, 0.45-0.7 takes recall at 0.5 from 45%
+  // to 51% (the pack's 6th-10th from 0.12-0.67 to 0.51-1.0) for +1.9 points
+  // of unlabelled hits.
+  //
+  // A third shape, the release wall: nearly all LN, 32+ releases a second,
+  // half of them under other holds, not inverse. The Zenith and Stellium dan
+  // release diffs are this and nothing else scores them (active releases sit
+  // at 0.62, under the 0.55-0.88 entry gate, because a third of their holds
+  // are re-pressed within a quarter beat). The leg is allowed past that gate.
+  // It costs 51 unlabelled charts, every one a 7-12 star LN wall.
+  //
   // Still 7K-only, but no longer for the old reason (4K release-only rows were
   // manufactured by short-hold vibro): these ramps are measured on 7K, where
   // the scene names the skillset and the corpus exists, and neither the maps
   // picker nor the player skill buckets offer a 4K release axis to fill.
+  const lnReleaseWall = minGate(
+    pressure(metrics.holdRatio, 0.85, 0.97),
+    pressure(lnStats.heldWhileReleaseRatio, 0.45, 0.65),
+    pressure(metrics.lnReleasePressure, 32, 46),
+    clamp01((0.5 - lnStats.inverseReleaseRatio) / 0.15),
+  );
   const lnReleaseScore = metrics.keyCount === 7
     ? lnSubtypeGate * minGate(
       pressure(metrics.holdRatio, 0.2, 0.46),
-      pressure(lnStats.activeReleaseRatio, 0.55, 0.88),
+      Math.max(pressure(lnStats.activeReleaseRatio, 0.55, 0.88), lnReleaseWall),
       // Low floor on purpose: enough releases that the chart puts them in front
       // of you, ramped under the labelled charts' p02 rather than over their
       // p90 the way the old 12/sec term was.
@@ -517,10 +588,11 @@ export function analyzeManiaPatterns(
           ),
         ),
         minGate(
-          pressure(lnStats.heldWhileReleaseRatio, 0.6, 0.85),
+          pressure(lnStats.heldWhileReleaseRatio, 0.45, 0.7),
           pressure(metrics.holdRatio, 0.6, 0.85),
           pressure(lnStats.activeReleaseRatio, 0.7, 0.9),
         ),
+        lnReleaseWall,
       ),
     )
     : 0;
@@ -570,10 +642,16 @@ export function analyzeManiaPatterns(
       pressure(chordRatio, 0.28, 0.62),
     ),
   );
+  // General is the LN chart that is not one of the specialties, so it yields
+  // to them fully: the old damper floored at 0.35, which left a visible
+  // (>= 0.2) LN General tag on every saturated release or inverse chart.
+  // With this ramp a specialty at 0.62+ removes it; across 7K, charts with a
+  // specialty at 0.5+ go from 44% to 4.5% co-tagged, and no LN chart loses
+  // its only subtype (2026-09-03).
   const lnSpecialtyScore = Math.max(lnInverseScore, lnReleaseScore, lnTechScore);
   const lnGeneralScore = lnSubtypeGate
     * lnGeneralCoverage
-    * (0.35 + 0.65 * clamp01((0.78 - lnSpecialtyScore) / 0.38));
+    * clamp01((0.7 - lnSpecialtyScore) / 0.4);
 
   candidates.push(hit(
     "ln",
@@ -584,7 +662,7 @@ export function analyzeManiaPatterns(
   if (lnSubtypeKeys) {
     candidates.push(
       hit("lngeneral", lnGeneralScore, dataConfidence, `${compactPercent(metrics.lnChordPressure)} LN chord rows, ${compactPercent(lnStats.headTailSwitchRatio)} head/tail switches`),
-      hit("lninverse", lnInverseScore, dataConfidence, `${compactPercent(lnStats.inverseReleaseRatio)} short same-column release gaps, p50 gap ${Math.round(lnStats.sameColumnReleaseGapP50)}ms`),
+      hit("lninverse", lnInverseScore, dataConfidence, `${compactPercent(lnStats.inverseReleaseRatio)} short same-column release gaps, p50 gap ${Math.round(lnStats.sameColumnReleaseGapP50)}ms, ${compactPercent(lnStats.inverseWindowCoverage)} of the chart in inverse sections`),
       hit("lntech", lnTechScore, dataConfidence, `${compactPercent(lnStats.tapWhileHoldingRatio)} tap-with-hold rows, burst pressure ${metrics.rowBurstPressure.toFixed(1)}`),
     );
     if (metrics.keyCount === 7) {

@@ -280,6 +280,57 @@ describe("analyzeManiaPatterns", () => {
     expect(analysis.primary?.id).toBe(analysis.allPatterns[0]?.id);
   });
 
+  it("drops the LN General tag once a specialty carries the chart", () => {
+    // General is the LN chart that is none of the specialties. The old damper
+    // floored at 0.35, so a saturated release chart still carried a visible
+    // LN General tag next to LN Release.
+    const releaseRows = Array.from({ length: 7 * 36 }, (_, index) => [
+      { column: index % 7, holdMs: 450 },
+    ]);
+    const analysis = analyzeManiaPatterns(makeMixedMap(7, releaseRows, 150));
+    expect(analysis.primary?.id).toBe("lnrelease");
+    expect(analysis.allPatterns.find((pattern) => pattern.id === "lngeneral")?.score).toBeLessThan(0.2);
+    expect(analysis.patterns.map((pattern) => pattern.id)).not.toContain("lngeneral");
+  });
+
+  it("tags 7K inverse from inverse sections when rice elsewhere breaks the whole-chart ceiling", () => {
+    // 25s of inverse followed by 18s of LN mixed with taps. Over the whole
+    // chart the release gaps still read inverse, but a fifth of the rows are
+    // mixed, past the 16% ceiling the whole-chart leg allows; the windowed leg
+    // sees three inverse windows out of five and tags it anyway.
+    const inverseRows = Array.from({ length: 7 * 36 }, (_, index) => [
+      { column: index % 7, holdMs: 610 },
+    ]);
+    const mixedRows = Array.from({ length: 180 }, (_, index) => (index % 2 === 0
+      ? [{ column: index % 7, holdMs: 250 }, (index + 3) % 7]
+      : [(index + 5) % 7]));
+    const sectioned = analyzeManiaPatterns(makeMixedMap(7, [...inverseRows, ...mixedRows], 100));
+    const inverse = sectioned.allPatterns.find((pattern) => pattern.id === "lninverse");
+    expect(inverse?.score).toBeGreaterThanOrEqual(0.5);
+    expect(inverse?.evidence).toContain("60% of the chart in inverse sections");
+    expect(sectioned.patterns.map((pattern) => pattern.id)).toContain("lninverse");
+    // The mixed tail on its own is not inverse, so the tag comes from the
+    // sections, not from the tail's shape leaking through the looser gap rule.
+    const tail = analyzeManiaPatterns(makeMixedMap(7, mixedRows, 100));
+    expect(tail.allPatterns.find((pattern) => pattern.id === "lninverse")?.score).toBe(0);
+  });
+
+  it("tags 7K release on half-beat tails when the release lands under other holds", () => {
+    // Rows every 100ms cycling the columns; 55% of the holds outlast the next
+    // row's head so their release lands under it, the rest let go into empty
+    // space. Tails of 80-120ms are what the dan release charts run at 175+
+    // BPM, far under the slow leg's 150-330ms ramp, so only the dense leg can
+    // see this, and its old 0.6 start sat above these charts.
+    const rows = Array.from({ length: 7 * 40 }, (_, index) => [
+      { column: index % 7, holdMs: index % 20 < 11 ? 120 : 80 },
+    ]);
+    const analysis = analyzeManiaPatterns(makeMixedMap(7, rows, 100));
+    const release = analysis.allPatterns.find((pattern) => pattern.id === "lnrelease");
+    expect(release?.score).toBeGreaterThanOrEqual(0.3);
+    expect(analysis.patterns.map((pattern) => pattern.id)).toContain("lnrelease");
+    expect(analysis.allPatterns.find((pattern) => pattern.id === "lninverse")?.score).toBe(0);
+  });
+
   it("detects slow-tempo LN inverse whose beat-fraction release gaps exceed 120ms", () => {
     // 1/4-beat inverse gaps at 80 BPM are 150ms+; the old fixed 120ms cap read
     // these charts as not-inverse (JJ's 7K dan 6th, 79 BPM, 127ms gaps).

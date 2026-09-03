@@ -31,7 +31,7 @@ async function makeDb(): Promise<Db> {
 
 // Inverse chart at 80 BPM: one hold per row cycling the columns, each hold
 // filling most of its column period and releasing a short 1/4-beat-ish gap
-// before the next press. 7K is the sweep's scope as of v3 (the lnrelease
+// before the next press. 7K is the sweep's scope since v3 (the lnrelease
 // rebuild is 7K-only); the 4K build is the out-of-band control.
 function buildInverseOsuFile(keyCount = 7): string {
   const holdMs = keyCount === 7 ? 760 : 420;
