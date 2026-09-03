@@ -216,6 +216,12 @@ interface LiveBackendStatus {
     // older code writes no sample at all.
     worker: ProcessMemorySample | null;
   };
+  // Event loop stalls per process (shared/event-loop.ts). Same server/worker
+  // shape and the same "null means not reported" rule as memory.
+  eventLoop?: {
+    server: EventLoopStatus | null;
+    worker: EventLoopStatus | null;
+  };
   mapsSnapshotThread?: MapsSnapshotThreadStatus;
   // Same shape as the maps thread, since it is the same pattern.
   packCommunityThread?: MapsSnapshotThreadStatus;
@@ -248,6 +254,31 @@ interface ProcessMemorySample {
   hint?: string;
 }
 
+interface EventLoopWindow {
+  count: number;
+  totalMs: number;
+  maxMs: number;
+}
+
+// One process's event loop: how late a 100ms heartbeat fired. A stall is the
+// thread held by one synchronous job (libsql query, JSON.parse) for that long,
+// during which every request and SSE write waits.
+interface EventLoopStatus {
+  role: string;
+  pid: number;
+  at: string;
+  sampledForSec: number;
+  stallThresholdMs: number;
+  logThresholdMs: number;
+  lastMinute: { p50Ms: number; p99Ms: number; maxMs: number; meanMs: number } | null;
+  stalls: {
+    lastHour: EventLoopWindow;
+    sinceStart: EventLoopWindow;
+    recent: Array<{ at: string; ms: number }>;
+  };
+  hint?: string;
+}
+
 interface MapsSnapshotThreadStatus {
   enabled: boolean;
   disabledReason: string | null;
@@ -263,6 +294,9 @@ interface MapsSnapshotThreadStatus {
   timeouts: number;
   lastBuildMs: number | null;
   lastBuildAt: string | null;
+  // Which request the last build answered (a maps page or one of the board
+  // computes); absent from a backend running older code.
+  lastBuildKind?: string | null;
   lastBuildBytes: number | null;
   lastErrorAt: string | null;
   lastError: string | null;
@@ -1941,6 +1975,58 @@ function getMemoryView(status: LiveBackendStatus | null): MemoryView {
   return { server, worker, singleProcess, serverTone, workerTone, tone: worstTone(serverTone, workerTone) };
 }
 
+/* A stall over a second is a page visibly hanging; anything recorded at all in
+   the last hour is worth a look. A process that has not sampled a full hour
+   yet is graded on what it has. */
+function eventLoopTone(sample: EventLoopStatus | null): StatusTone {
+  if (!sample) return "neutral";
+  const hour = sample.stalls.lastHour;
+  if (hour.maxMs >= 1000) return "bad";
+  if (hour.count > 0) return "warn";
+  return "good";
+}
+
+function eventLoopSummary(sample: EventLoopStatus | null): string {
+  if (!sample) return "—";
+  const hour = sample.stalls.lastHour;
+  if (hour.count === 0) return "no stalls (1h)";
+  return `${formatNumber(hour.count)} stalls · ${formatCallMs(hour.totalMs)} lost (1h)`;
+}
+
+function EventLoopRows({ label, sample, tone }: { label: string; sample: EventLoopStatus | null; tone: StatusTone }) {
+  if (!sample) return <DetailRow label={label} value="not reported by this backend" />;
+  const hour = sample.stalls.lastHour;
+  const lifetime = sample.stalls.sinceStart;
+  const minute = sample.lastMinute;
+  return (
+    <>
+      <DetailRow
+        label={`${label} stalls (1h)`}
+        value={hour.count === 0 ? "none" : `${formatNumber(hour.count)} · ${formatCallMs(hour.totalMs)} lost · longest ${formatCallMs(hour.maxMs)}`}
+        tone={tone}
+      />
+      <DetailRow
+        label={`${label} stalls (since start)`}
+        value={lifetime.count === 0 ? "none" : `${formatNumber(lifetime.count)} · ${formatCallMs(lifetime.totalMs)} lost · longest ${formatCallMs(lifetime.maxMs)}`}
+      />
+      <DetailRow
+        label={`${label} loop delay (1 min)`}
+        value={minute ? `p50 ${formatCallMs(minute.p50Ms)} · p99 ${formatCallMs(minute.p99Ms)} · max ${formatCallMs(minute.maxMs)}` : "no samples yet"}
+      />
+      <DetailRow
+        label={`${label} process`}
+        value={`pid ${sample.pid} · role ${sample.role} · sampling ${formatUptime(sample.sampledForSec)} · stall from ${formatCallMs(sample.stallThresholdMs)} · logged from ${formatCallMs(sample.logThresholdMs)}`}
+      />
+      {sample.stalls.recent.length > 0 ? (
+        <DetailRow
+          label={`${label} recent`}
+          value={sample.stalls.recent.slice(0, 8).map((stall) => `${formatCallMs(stall.ms)} ${formatTimeAgo(stall.at)}`).join(" · ")}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function formatUptime(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "unknown";
   const days = Math.floor(seconds / 86_400);
@@ -2067,6 +2153,12 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
   const fallbackUpdated = status?.scoresFallback?.updatedAt ? formatTimeAgo(status.scoresFallback.updatedAt) : "never";
 
   const memory = getMemoryView(status);
+  const eventLoopServer = status?.eventLoop?.server ?? null;
+  const eventLoopWorker = status?.eventLoop?.worker ?? null;
+  const eventLoopSingleProcess = eventLoopServer != null && eventLoopWorker != null && eventLoopServer.pid === eventLoopWorker.pid;
+  const eventLoopServerTone = eventLoopTone(eventLoopServer);
+  const eventLoopWorkerTone = eventLoopSingleProcess ? eventLoopServerTone : eventLoopTone(eventLoopWorker);
+  const eventLoopCardTone = worstTone(eventLoopServerTone, eventLoopWorkerTone);
   const globalRefresh = status?.globalMapsRefresh ?? null;
   const thread = status?.mapsSnapshotThread;
   const threadView = getSnapshotThreadView(thread);
@@ -2238,6 +2330,35 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
       ),
     },
     {
+      key: "eventLoop",
+      title: "Event loop",
+      tone: eventLoopCardTone,
+      stats: eventLoopSingleProcess
+        ? [
+          { label: "Process", value: eventLoopSummary(eventLoopServer), tone: eventLoopServerTone },
+          { label: "p99", value: eventLoopServer?.lastMinute ? formatCallMs(eventLoopServer.lastMinute.p99Ms) : "—" },
+        ]
+        : [
+          { label: "Server", value: eventLoopSummary(eventLoopServer), tone: eventLoopServerTone },
+          { label: "Worker", value: eventLoopSummary(eventLoopWorker), tone: eventLoopWorkerTone },
+        ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            How late a 100ms heartbeat fired in each process. A stall is one synchronous job (a libsql query, a JSON.parse) holding the thread for that long, and every request and SSE write in the process waits it out. Stalls over the log threshold also land in the journal as event_loop_stall with their length.
+          </div>
+          {eventLoopSingleProcess ? (
+            <EventLoopRows label="Process" sample={eventLoopServer} tone={eventLoopServerTone} />
+          ) : (
+            <>
+              <EventLoopRows label="Server" sample={eventLoopServer} tone={eventLoopServerTone} />
+              <EventLoopRows label="Worker" sample={eventLoopWorker} tone={eventLoopWorkerTone} />
+            </>
+          )}
+        </>
+      ),
+    },
+    {
       key: "mapsServing",
       title: "Maps serving",
       tone: threadView.tone,
@@ -2262,7 +2383,7 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
               <DetailRow
                 label="Last build"
                 value={thread.lastBuildAt
-                  ? `${formatTimeAgo(thread.lastBuildAt)}${thread.lastBuildMs == null ? "" : ` · ${formatCallMs(thread.lastBuildMs)}`}${thread.lastBuildBytes == null ? "" : ` · ${formatBytes(thread.lastBuildBytes)}`}`
+                  ? `${formatTimeAgo(thread.lastBuildAt)}${thread.lastBuildKind ? ` · ${thread.lastBuildKind}` : ""}${thread.lastBuildMs == null ? "" : ` · ${formatCallMs(thread.lastBuildMs)}`}${thread.lastBuildBytes == null ? "" : ` · ${formatBytes(thread.lastBuildBytes)}`}`
                   : "none yet"}
               />
               {thread.lastError ? (

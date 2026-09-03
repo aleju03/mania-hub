@@ -1,6 +1,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
+import { computeOnMapsSnapshotThread } from "../http/maps-snapshot-thread.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
 import { getRegion } from "../regions.js";
@@ -341,11 +342,13 @@ const packPoolBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
    real pp within minutes, so a genuine player waits, rather than being kept
    out.)
 
-   Roster-driven on purpose: country_rosters has no standalone user_id index,
-   so a users-driven correlated EXISTS scans the whole roster once per
-   pp-carrying user - ~7s of synchronous CPU on the serving connection. Driving
-   from the small unranked set (one roster scan, then PK lookups) returns the
-   same rows in milliseconds. */
+   Roster-driven on purpose: driving from users would run the ranked-slot check
+   once per pp-carrying user instead of once per unranked member. The check
+   itself rides idx_country_rosters_user (user_id, is_tracked, rank); before
+   that index existed each one was a full roster scan, and the ~5k
+   score-discovered members turned the rebuild into a 5s main-thread freeze
+   every minute. In production this runs on the maps snapshot worker thread
+   (see buildPackPoolBoard); the worker entry calls it directly. */
 export async function readUnrankedPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
   const rows = (await exec(
     db,
@@ -397,7 +400,10 @@ export function mergePackPoolEntries(
 
 async function buildPackPoolBoard(db: Db, board: GlobalBoardCache): Promise<GlobalBoardCache> {
   try {
-    const unranked = await readUnrankedPoolEntries(db);
+    // Off the event loop when a thread runs here; inline otherwise (tests,
+    // source-mode dev, the headless worker).
+    const unranked = (await computeOnMapsSnapshotThread<GlobalRankingEntry[]>(db, { kind: "pack-pool-unranked" }))
+      ?? (await readUnrankedPoolEntries(db));
     const pool: GlobalBoardCache = { entries: mergePackPoolEntries(board.entries, unranked), builtAt: board.builtAt };
     packPoolCacheByDb.set(db, { board: pool, boardBuiltAt: board.builtAt, checkedAt: Date.now() });
     return pool;

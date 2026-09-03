@@ -52,6 +52,8 @@ import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { assertMigrationDiskHeadroom, startRetentionScheduler } from "./retention.js";
 import { startCommunityInviteScheduler } from "./communities/refresh.js";
+import { registerOffThreadBoardBuilds } from "./http/maps-snapshot-thread.js";
+import { eventLoopStatus, startEventLoopMonitor } from "./shared/event-loop.js";
 import { readProcessMemory } from "./shared/process-memory.js";
 import { packGlobalBoard } from "./features/global-rankings.js";
 import { startWalCheckpointer } from "./wal-checkpointer.js";
@@ -145,6 +147,14 @@ export async function createApp() {
   // that lets a restart start warm instead of making the first visitor wait
   // out a cold scan.
   registerPackCommunitySnapshots(db, config);
+  // The pack pool's unranked-member read and the skill leaderboard build run
+  // on the maps snapshot thread in a serving process; the headless worker
+  // never builds either, and keeps no thread.
+  if (config.role !== "worker") registerOffThreadBoardBuilds(db, config);
+  // Records this thread's event loop stalls for /api/admin/status and the
+  // journal (event_loop_stall); every role, since each process has its own
+  // loop and the worker mirrors its copy below.
+  startEventLoopMonitor(config.role ?? "all");
   // The journal database (journal.ts): the SSE event log, the osu! call log
   // and the shared limiter's reservations, in their own file so none of them
   // ever queues on the main file's write lock. Every role opens it; the
@@ -652,6 +662,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         // The serving process answers /api/admin/status and cannot read this
         // process's RSS any other way.
         memory: readProcessMemory("worker"),
+        eventLoop: eventLoopStatus(),
       }),
       5_000,
     );

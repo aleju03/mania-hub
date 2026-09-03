@@ -33,6 +33,12 @@ create table if not exists country_rosters (
   primary key (country, user_id)
 );
 
+-- The pack pool and the skill board ask "is this user ranked anywhere?" once
+-- per user. Without a user_id-led index each of those is a full roster scan,
+-- which added up to a multi-second freeze of the serving thread per rebuild.
+create index if not exists idx_country_rosters_user
+  on country_rosters(user_id, is_tracked, rank);
+
 create table if not exists country_rank_snapshots (
   id integer primary key autoincrement,
   country text not null,
@@ -442,6 +448,30 @@ create table if not exists dan_estimates (
   computed_at text not null,
   updated_at text not null,
   primary key (estimator_version, beatmap_id, rate_percent)
+);
+
+-- dan_estimates for a chart as a lazer mod rewrites it before play (today only
+-- Invert, mod_variant 'IN'; dan/invert-mod.ts). Same columns, keyed once more
+-- by the mod, so a rewritten chart's verdict can never be read as the chart's
+-- own. Written by the player dan clear rules and their job, read by them alone.
+create table if not exists dan_mod_estimates (
+  estimator_version integer not null,
+  beatmap_id integer not null,
+  rate_percent integer not null,
+  mod_variant text not null,
+  status text not null,
+  label text,
+  variant text,
+  display_name text,
+  raw_dan real,
+  family text,
+  confidence real,
+  star_rating real,
+  error text,
+  msd_json text,
+  computed_at text not null,
+  updated_at text not null,
+  primary key (estimator_version, beatmap_id, rate_percent, mod_variant)
 );
 
 create table if not exists beatmap_skill_vectors (

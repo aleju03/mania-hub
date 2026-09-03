@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getMapsSnapshotThread, mapsSnapshotThreadStatus } from "../src/http/maps-snapshot-thread.js";
+import { computeOnMapsSnapshotThread, getMapsSnapshotThread, mapsSnapshotThreadStatus, registerOffThreadBoardBuilds } from "../src/http/maps-snapshot-thread.js";
+import type { Db } from "../src/db.js";
 
 // Under vitest (and under `npm run dev`) this module is loaded from source, so
 // the thread is permanently disabled with reason "source_mode": its worker
@@ -32,6 +33,7 @@ describe("mapsSnapshotThreadStatus", () => {
       timeouts: 0,
       lastBuildMs: null,
       lastBuildAt: null,
+      lastBuildKind: null,
       lastBuildBytes: null,
       lastErrorAt: null,
       lastError: null,
@@ -57,5 +59,23 @@ describe("mapsSnapshotThreadStatus", () => {
       expect(mapsSnapshotThreadStatus({ databaseUrl }).spawned).toBe(false);
     }
     expect(mapsSnapshotThreadStatus({ databaseUrl }).requested).toBe(0);
+  });
+});
+
+describe("computeOnMapsSnapshotThread", () => {
+  // The board builders (pack pool, skill leaderboard) call this first and build
+  // inline on null. Both of these are the null case: an unregistered connection
+  // (tests, the headless worker) and a registered one where no thread can run.
+  it("returns null for a connection that never registered", async () => {
+    const db = {} as Db;
+    await expect(computeOnMapsSnapshotThread(db, { kind: "skill-board" })).resolves.toBeNull();
+  });
+
+  it("returns null, without spawning, when the thread is disabled here", async () => {
+    const db = {} as Db;
+    const databaseUrl = "file:/tmp/mania-hub-thread-compute.db";
+    registerOffThreadBoardBuilds(db, { databaseUrl });
+    await expect(computeOnMapsSnapshotThread(db, { kind: "pack-pool-unranked" })).resolves.toBeNull();
+    expect(mapsSnapshotThreadStatus({ databaseUrl })).toMatchObject({ enabled: false, spawned: false, requested: 0 });
   });
 });

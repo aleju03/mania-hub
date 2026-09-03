@@ -22,10 +22,15 @@ export interface RuntimeStatusSnapshot {
   // Absent on rows written by a worker running older code, so every reader
   // must treat it as optional rather than assume a rolling deploy is atomic.
   memory?: unknown;
+  // The worker process's event loop stalls (shared/event-loop.ts); same
+  // optionality as memory.
+  eventLoop?: unknown;
   updatedAt: string;
 }
 
-export async function writeRuntimeStatus(db: Db, status: Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate" | "sqliteBusy" | "memory">): Promise<void> {
+type RuntimeStatusFields = Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate" | "sqliteBusy" | "memory" | "eventLoop">;
+
+export async function writeRuntimeStatus(db: Db, status: RuntimeStatusFields): Promise<void> {
   const payload: RuntimeStatusSnapshot = { ...status, updatedAt: nowIso() };
   await exec(
     db,
@@ -45,7 +50,7 @@ export async function readRuntimeStatus(db: Db): Promise<RuntimeStatusSnapshot |
 // Mirror the worker's status to the DB on an interval. Returns a stop function.
 export function startRuntimeStatusMirror(
   db: Db,
-  snapshot: () => Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate" | "sqliteBusy" | "memory">,
+  snapshot: () => RuntimeStatusFields,
   intervalMs: number,
 ): () => void {
   let stopped = false;

@@ -7,6 +7,7 @@ import { packCommunityThreadStatus } from "../features/pack-community-thread.js"
 import { readJobMemoryMetric, readRuntimeStatus, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { getDbDiskUsage, getLocalDbStorage, getStorageFootprint } from "../retention.js";
+import { eventLoopStatus, type EventLoopStatus } from "../shared/event-loop.js";
 import { readProcessMemory, type ProcessMemorySample } from "../shared/process-memory.js";
 import { OSU_API_BOUND_JOB_TYPES } from "../workers.js";
 import type { HttpContext } from "./context.js";
@@ -188,6 +189,16 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
         ?? (ctx.config.role === "server" ? null : readProcessMemory(ctx.config.role ?? "all")),
     }
     : undefined;
+  // Event loop stalls, same server/worker shape and the same "undefined means
+  // unknown" rule as memory. Null on the server side when the monitor was
+  // never started (tests build a context without booting the process).
+  const eventLoop = options.includeWorkerActivity
+    ? {
+      server: eventLoopStatus(),
+      worker: (mirror?.eventLoop as EventLoopStatus | null | undefined)
+        ?? (ctx.config.role === "server" ? null : eventLoopStatus()),
+    }
+    : undefined;
   // filePath is an absolute path on the server's filesystem and nothing public
   // renders it, so the public body gets everything except that.
   const publicStorage = {
@@ -221,6 +232,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
     ...(memory ? { memory } : {}),
+    ...(eventLoop ? { eventLoop } : {}),
     ...(options.includeWorkerActivity
       ? {
         // Asking for the thread's status must never be what constructs it.

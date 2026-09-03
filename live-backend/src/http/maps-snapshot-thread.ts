@@ -5,7 +5,13 @@
 // crash, timeout) rejects with a plain Error so callers can fall back to the
 // inline build; a genuine build failure inside the feature code rejects with
 // MapsSnapshotBuildError, which callers propagate instead of retrying inline.
+//
+// The same thread also hosts the other whole-roster board builds the serving
+// process needs (the pack pool's unranked members, the skill leaderboard), see
+// computeOnMapsSnapshotThread: each of those is seconds of synchronous libsql
+// and JSON work that used to freeze every request while it ran.
 import { Worker } from "node:worker_threads";
+import type { Db } from "../db.js";
 import { logWarn, errorContext } from "../logger.js";
 import type { MapsPageQuery } from "../features/maps.js";
 import type { PreparedJsonResponse } from "./prepared-json.js";
@@ -18,10 +24,21 @@ export type MapsSnapshotThreadBuildRequest = {
   maxAgeMs: number;
 };
 
-export type MapsSnapshotThreadRequest = MapsSnapshotThreadBuildRequest & { id: number };
+/* Board builds that come back as a value (structured clone, typed-array
+   buffers transferred) rather than as a prepared HTTP response. The caller
+   caches the value exactly as it would its own inline build. */
+export type MapsSnapshotThreadComputeRequest =
+  | { kind: "pack-pool-unranked" }
+  | { kind: "skill-board" };
+
+export type MapsSnapshotThreadRequest = (MapsSnapshotThreadBuildRequest | MapsSnapshotThreadComputeRequest) & { id: number };
+
+export type MapsSnapshotThreadOkResponse =
+  | { id: number; ok: true; kind: "maps-page"; status: number; encoding: "br" | "gzip" | null; vary: boolean; body: Uint8Array }
+  | { id: number; ok: true; kind: "compute"; value: unknown };
 
 export type MapsSnapshotThreadResponse =
-  | { id: number; ok: true; status: number; encoding: "br" | "gzip" | null; vary: boolean; body: Uint8Array }
+  | MapsSnapshotThreadOkResponse
   | { id: number; ok: false; error: string };
 
 /** The build itself failed (feature-code error); do not retry inline. */
@@ -40,10 +57,11 @@ interface MapsSnapshotThreadConfig {
 }
 
 interface PendingBuild {
-  resolve: (result: PreparedJsonResponse) => void;
+  resolve: (response: MapsSnapshotThreadOkResponse) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
   startedAt: number;
+  kind: MapsSnapshotThreadRequest["kind"];
 }
 
 export interface MapsSnapshotThreadStatus {
@@ -61,6 +79,9 @@ export interface MapsSnapshotThreadStatus {
   timeouts: number;
   lastBuildMs: number | null;
   lastBuildAt: string | null;
+  /** Which request the last build answered: a maps page or one of the board computes. */
+  lastBuildKind: string | null;
+  /** Body size of the last maps-page build; null after a compute, which has no body. */
   lastBuildBytes: number | null;
   lastErrorAt: string | null;
   lastError: string | null;
@@ -97,6 +118,7 @@ export class MapsSnapshotThread {
   private timeouts = 0;
   private lastBuildMs: number | null = null;
   private lastBuildAt: number | null = null;
+  private lastBuildKind: string | null = null;
   private lastBuildBytes: number | null = null;
   private lastErrorAt: number | null = null;
   private lastError: string | null = null;
@@ -121,6 +143,7 @@ export class MapsSnapshotThread {
       timeouts: this.timeouts,
       lastBuildMs: this.lastBuildMs,
       lastBuildAt: this.lastBuildAt == null ? null : new Date(this.lastBuildAt).toISOString(),
+      lastBuildKind: this.lastBuildKind,
       lastBuildBytes: this.lastBuildBytes,
       lastErrorAt: this.lastErrorAt == null ? null : new Date(this.lastErrorAt).toISOString(),
       lastError: this.lastError,
@@ -139,12 +162,34 @@ export class MapsSnapshotThread {
     return !this.everOnline;
   }
 
-  build(request: MapsSnapshotThreadBuildRequest): Promise<PreparedJsonResponse> {
+  async build(request: MapsSnapshotThreadBuildRequest): Promise<PreparedJsonResponse> {
+    const response = await this.dispatch(request);
+    if (response.kind !== "maps-page") {
+      throw new MapsSnapshotBuildError(`maps snapshot thread answered ${request.kind} with a ${response.kind} response`);
+    }
+    return {
+      status: response.status,
+      encoding: response.encoding,
+      vary: response.vary,
+      body: Buffer.from(response.body.buffer, response.body.byteOffset, response.body.byteLength),
+    };
+  }
+
+  /** A board build whose result is a value, cached by the caller like an inline build. */
+  async compute<T>(request: MapsSnapshotThreadComputeRequest): Promise<T> {
+    const response = await this.dispatch(request);
+    if (response.kind !== "compute") {
+      throw new MapsSnapshotBuildError(`maps snapshot thread answered ${request.kind} with a ${response.kind} response`);
+    }
+    return response.value as T;
+  }
+
+  private dispatch(request: MapsSnapshotThreadBuildRequest | MapsSnapshotThreadComputeRequest): Promise<MapsSnapshotThreadOkResponse> {
     const worker = this.ensureWorker();
     if (!worker) return Promise.reject(new Error("maps snapshot thread unavailable"));
     const id = this.nextId++;
     this.requested += 1;
-    return new Promise<PreparedJsonResponse>((resolve, reject) => {
+    return new Promise<MapsSnapshotThreadOkResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         this.timeouts += 1;
@@ -152,7 +197,7 @@ export class MapsSnapshotThread {
         reject(new MapsSnapshotBuildError("maps snapshot thread timed out"));
       }, BUILD_TIMEOUT_MS);
       timer.unref();
-      this.pending.set(id, { resolve, reject, timer, startedAt: Date.now() });
+      this.pending.set(id, { resolve, reject, timer, startedAt: Date.now(), kind: request.kind });
       worker.postMessage({ ...request, id } satisfies MapsSnapshotThreadRequest);
     });
   }
@@ -192,6 +237,7 @@ export class MapsSnapshotThread {
     clearTimeout(pending.timer);
     this.lastBuildMs = Date.now() - pending.startedAt;
     this.lastBuildAt = Date.now();
+    this.lastBuildKind = pending.kind;
     if (!response.ok) {
       this.failedBuilds += 1;
       this.lastBuildBytes = null;
@@ -202,13 +248,8 @@ export class MapsSnapshotThread {
       return;
     }
     this.okBuilds += 1;
-    this.lastBuildBytes = response.body.byteLength;
-    pending.resolve({
-      status: response.status,
-      encoding: response.encoding,
-      vary: response.vary,
-      body: Buffer.from(response.body.buffer, response.body.byteOffset, response.body.byteLength),
-    });
+    this.lastBuildBytes = response.kind === "maps-page" ? response.body.byteLength : null;
+    pending.resolve(response);
   }
 
   private fail(error: unknown, reason: string): void {
@@ -318,10 +359,45 @@ export function mapsSnapshotThreadStatus(config: { databaseUrl?: string }): Maps
     timeouts: 0,
     lastBuildMs: null,
     lastBuildAt: null,
+    lastBuildKind: null,
     lastBuildBytes: null,
     lastErrorAt: null,
     lastError: null,
     lastFailureReason: null,
   };
   return { enabled: disabledReason == null, disabledReason, ...counters };
+}
+
+// Connections whose whole-roster board builds (pack pool, skill leaderboard)
+// run on the thread. Registered by the serving process at boot; absent for
+// tests and the headless worker, which build inline as before.
+const boardThreadConfigByDb = new WeakMap<Db, Parameters<typeof getMapsSnapshotThread>[0]>();
+
+export function registerOffThreadBoardBuilds(db: Db, config: Parameters<typeof getMapsSnapshotThread>[0]): void {
+  boardThreadConfigByDb.set(db, config);
+}
+
+/* Runs a board build on the thread when one can run here. Null means the
+   thread genuinely cannot (connection not registered, not a file database,
+   disabled, or it never managed to spawn - e.g. under vitest) and the caller
+   should build inline. Anything that went wrong after the thread has been
+   online throws MapsSnapshotBuildError instead: re-running a whole-roster scan
+   on the event loop is the stall the thread exists to prevent, and every
+   caller already keeps serving its previous board through a failed refresh. */
+export async function computeOnMapsSnapshotThread<T>(db: Db, request: MapsSnapshotThreadComputeRequest): Promise<T | null> {
+  const config = boardThreadConfigByDb.get(db);
+  if (!config) return null;
+  const thread = getMapsSnapshotThread(config);
+  if (!thread) return null;
+  if (!thread.available()) {
+    if (thread.inlineFallbackAllowed()) return null;
+    throw new MapsSnapshotBuildError("maps snapshot thread cooling down");
+  }
+  try {
+    return await thread.compute<T>(request);
+  } catch (error) {
+    if (error instanceof MapsSnapshotBuildError) throw error;
+    logWarn("maps_snapshot_thread_inline_fallback", { kind: request.kind, ...errorContext(error) });
+    return null;
+  }
 }

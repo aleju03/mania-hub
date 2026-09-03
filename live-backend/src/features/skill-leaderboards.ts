@@ -2,6 +2,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { resolveCountryScope } from "../countries.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
+import { computeOnMapsSnapshotThread } from "../http/maps-snapshot-thread.js";
 import { BOARD_WARMUP_DELAY_MS, unrefDelay, waitForQuietSchema } from "../warmup.js";
 import {
   PLAYER_SKILLS_VERSION,
@@ -30,7 +31,12 @@ import {
 // the drip scheduler, so this module adds no ingest, no job and no table.
 //
 // The board is built once and cached per Db, exactly like the pp board in
-// global-rankings.ts, and scope/keymode/axis are slices of it. What it must NOT
+// global-rankings.ts, and scope/keymode/axis are slices of it. In production
+// the build itself runs on the maps snapshot worker thread (a full scan of
+// player_skill_ratings with a JSON.parse per player measured 2-15s of
+// main-thread CPU every five minutes; see computeOnMapsSnapshotThread) and
+// arrives here as a structured clone; where no thread can run it builds
+// inline, in yielding chunks. What it must NOT
 // do is materialize one entry object per (player, keymode, axis) - that becomes
 // hundreds of thousands of objects on the real roster. Instead each keymode
 // holds one shared player record set plus, per axis, three typed arrays: the
@@ -238,7 +244,7 @@ interface KeymodeBoard {
   dan: Map<string, DanColumn>;
 }
 
-interface SkillBoardCache {
+export interface SkillBoardCache {
   keymodes: Map<number, KeymodeBoard>;
   curves: ExactSkillCurves | null;
   coverage: { current: number; total: number };
@@ -340,9 +346,9 @@ function sortedOrder(values: number[]): Int32Array {
   return Int32Array.from(slots);
 }
 
-async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
+/** The full board scan. Exported for the maps snapshot worker thread; everything in this process goes through getSkillBoard. */
+export async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
   const startedAt = Date.now();
-  boardBuilds += 1;
   const curvesRaw = await readExactSkillCurves(db);
   const curves = exactCurvesUsable(curvesRaw) ? curvesRaw : null;
 
@@ -563,8 +569,12 @@ async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
 }
 
 async function refreshSkillBoard(db: Db): Promise<SkillBoardCache> {
+  boardBuilds += 1;
   try {
-    const built = await buildSkillBoard(db);
+    // On the thread when one runs here (production), inline otherwise (tests,
+    // source-mode dev). A thread failure after it has been online throws, and
+    // lands in the same stale-board handling as an inline failure.
+    const built = (await computeOnMapsSnapshotThread<SkillBoardCache>(db, { kind: "skill-board" })) ?? (await buildSkillBoard(db));
     boardCacheByDb.set(db, { board: built, freshUntil: Date.now() + SKILL_BOARD_CACHE_TTL_MS });
     boardFailureByDb.delete(db);
     scopeViewCacheByDb.delete(db);

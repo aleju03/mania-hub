@@ -5,10 +5,16 @@
 // while it happens. The thread opens its own libsql connection to the same
 // database file (WAL handles the concurrency, exactly like the split worker
 // process does).
+//
+// The pack pool's unranked-member read and the skill leaderboard build run
+// here too, for the same reason: each is a whole-roster scan plus JSON parsing
+// that measured seconds of main-thread CPU per rebuild in production.
 import { parentPort, workerData } from "node:worker_threads";
 import { createDb } from "../db.js";
 import { JobQueue } from "../jobs/queue.js";
+import { readUnrankedPoolEntries } from "../features/global-rankings.js";
 import { enqueueGlobalFarmedBoardRepack, getMapsPageSnapshot, registerGlobalFarmedBoardDiskCache, registerGlobalFarmedBoardRepackDelegation } from "../features/maps.js";
+import { buildSkillBoard } from "../features/skill-leaderboards.js";
 import { prepareJsonResponse } from "./prepared-json.js";
 import type { MapsSnapshotThreadRequest, MapsSnapshotThreadResponse } from "./maps-snapshot-thread.js";
 
@@ -51,6 +57,18 @@ async function handle(request: MapsSnapshotThreadRequest): Promise<void> {
   };
   try {
     const { db, queue } = await connection;
+    if (request.kind === "pack-pool-unranked") {
+      respond({ id: request.id, ok: true, kind: "compute", value: await readUnrankedPoolEntries(db) });
+      return;
+    }
+    if (request.kind === "skill-board") {
+      const board = await buildSkillBoard(db);
+      // The board is mostly typed-array columns; moving their buffers instead
+      // of copying them keeps the hand-over to the main thread at the cost of
+      // cloning the player records, not the numbers.
+      respond({ id: request.id, ok: true, kind: "compute", value: board }, transferableBuffers(board));
+      return;
+    }
     const snapshot = await getMapsPageSnapshot(db, queue, request.country, request.maxAgeMs, request.query);
     const status = snapshot.value ? 200 : 202;
     const prepared = await prepareJsonResponse(status, snapshot, request.encoding);
@@ -61,6 +79,7 @@ async function handle(request: MapsSnapshotThreadRequest): Promise<void> {
       {
         id: request.id,
         ok: true,
+        kind: "maps-page",
         status: prepared.status,
         encoding: prepared.encoding,
         vary: prepared.vary,
@@ -71,4 +90,42 @@ async function handle(request: MapsSnapshotThreadRequest): Promise<void> {
   } catch (error) {
     respond({ id: request.id, ok: false, error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+/* Every ArrayBuffer backing a typed array anywhere in the value, once each. A
+   view that shares its buffer with another view (or one sliced from a larger
+   allocation) stays out of the list, because transferring it would detach
+   memory the other view still needs; those few get cloned instead. */
+function transferableBuffers(value: unknown): ArrayBuffer[] {
+  const owners = new Map<ArrayBuffer, number>();
+  const seen = new Set<object>();
+  const walk = (node: unknown): void => {
+    if (node == null || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (ArrayBuffer.isView(node)) {
+      const buffer = node.buffer;
+      if (!(buffer instanceof ArrayBuffer)) return;
+      const wholeBuffer = node.byteOffset === 0 && node.byteLength === buffer.byteLength;
+      owners.set(buffer, (owners.get(buffer) ?? 0) + (wholeBuffer ? 1 : 2));
+      return;
+    }
+    if (node instanceof Map) {
+      for (const [key, entry] of node) {
+        walk(key);
+        walk(entry);
+      }
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const entry of node) walk(entry);
+      return;
+    }
+    for (const entry of Object.values(node)) walk(entry);
+  };
+  walk(value);
+  const buffers: ArrayBuffer[] = [];
+  for (const [buffer, views] of owners) {
+    if (views === 1) buffers.push(buffer);
+  }
+  return buffers;
 }
