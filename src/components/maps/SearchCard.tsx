@@ -148,6 +148,30 @@ export function osuDirectUrl(beatmapsetId: number): string {
 // 302s to a healthy one; the archive bytes still flow mirror-to-browser.
 export { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 
+// Family identity chips for one diff: the primary first, then up to two
+// other families at the "has this pattern" bar. Shared by the card and the
+// detail modal so the two never disagree on what a chart is.
+export function familyPatternTags(entry: LiveMapSearchEntry): string[] {
+  return [entry.primaryPattern, ...secondaryPatterns(entry)];
+}
+
+// Filled family chip: the primary reads as the chart's identity, the rest as
+// families it also carries. Outlined SubPatternChip is for attributes.
+export function FamilyPatternChip({ pattern, primary }: { pattern: string; primary: boolean }) {
+  const label = usePatternLabel();
+  return (
+    <span
+      className={
+        primary
+          ? "px-2 py-1 rounded bg-osu-pink/20 text-osu-pink-light text-[10px] font-semibold leading-none"
+          : "px-2 py-1 rounded bg-osu-b3/50 text-osu-f1 text-[10px] leading-none"
+      }
+    >
+      {label(pattern)}
+    </span>
+  );
+}
+
 function secondaryPatterns(entry: LiveMapSearchEntry): string[] {
   return Object.entries(entry.patterns)
     .filter(([key, value]) => key !== entry.primaryPattern && value >= 0.5)
@@ -216,14 +240,13 @@ export function SearchCard({
   preview?: MapPreviewAudio;
 }) {
   const { t, i18n } = useLingui();
-  const patternName = usePatternLabel();
   const pill = beatmapStatusPill(entry.status);
   const [coverFailed, setCoverFailed] = useState(false);
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;
   const starLo = Math.min(...diffs.map((diff) => diff.stars));
   const starHi = Math.max(...diffs.map((diff) => diff.stars));
-  const familyTags = multi ? setPatterns(diffs) : [entry.primaryPattern, ...secondaryPatterns(entry)];
+  const familyTags = multi ? setPatterns(diffs) : familyPatternTags(entry);
   const subTags = subPatternTags(diffs, familyTags);
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
   const clickable = !!onOpen;
@@ -305,16 +328,7 @@ export function SearchCard({
 
         <div className="flex flex-wrap items-center gap-1">
           {familyTags.map((pattern, index) => (
-            <span
-              key={pattern}
-              className={
-                index === 0
-                  ? "px-2 py-1 rounded bg-osu-pink/20 text-osu-pink-light text-[10px] font-semibold leading-none"
-                  : "px-2 py-1 rounded bg-osu-b3/50 text-osu-f1 text-[10px] leading-none"
-              }
-            >
-              {patternName(pattern)}
-            </span>
+            <FamilyPatternChip key={pattern} pattern={pattern} primary={index === 0} />
           ))}
           {subTags.map((pattern) => (
             <SubPatternChip key={pattern} pattern={pattern} />

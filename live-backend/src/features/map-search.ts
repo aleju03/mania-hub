@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
+import { PATTERN_AXIS_KEY_COUNTS } from "./player-skills.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -30,9 +31,13 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // endurance-length - the rider is capped ~0.45% above the best base skillset,
 // so the win measured length, not identity; r11: note_bpm column, the
 // note-weighted song tempo, so the modal can show the real tempo beside a
-// gimmick nominal bpm).
+// gimmick nominal bpm; r12: 6K/7K/8K primaries come from the chart
+// analyzer's jack/chordjack/tech verdicts when it detects one - the
+// skill-vector engine reads jack as same-column speed, which an 8-column
+// chord chart never shows it, so 8K jack files indexed as stamina while the
+// skill cards, built on the analyzer, listed them under Jack).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 11;
+const BUILD_REVISION = 12;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -245,6 +250,15 @@ function analyzerPatternScore(classification: { patterns?: unknown } | null, id:
 // Same "has this pattern" bar the exclude filters apply to pat_* scores.
 const CHORDJACK_CORROBORATION_MIN = 0.5;
 
+// The analyzer ids that are also index families. On the pattern keymodes
+// (PATTERN_AXIS_KEY_COUNTS) the analyzer names the chart's identity and the
+// skill cards, percentiles and rankings already speak it; the index primary
+// follows so a chart a player's Jack list credits is a jack chart on /maps
+// too. The analyzer's other ids (delay, chordstream, bracket, LN subtypes) are
+// sub-tags, stored in pattern_tags, and LN routes on lnRatio below.
+const ANALYZER_PRIMARY_FAMILIES = ["jack", "chordjack", "tech"] as const;
+const ANALYZER_PRIMARY_MIN_SCORE = 0.5;
+
 // MinaCalc's Technical is not a pattern detector, it is the residual: it tracks
 // the chart's base difficulty and wins the argmax whenever no shape-gated
 // skillset fires. And the skillsets it buries hardest are the jack pair on the
@@ -393,6 +407,28 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
           scores.chordjack = 1;
           scores.tech = Math.min(scores.tech, analyzerPatternScore(classification, "tech"));
         }
+      }
+    }
+  }
+  if (intOr(row.cs) !== 4 && PATTERN_AXIS_KEY_COUNTS.has(intOr(row.cs)) && classification != null) {
+    // Analyzer-led primary for the pattern keymodes: the strongest detected
+    // family at the detection bar takes the primary at 1.0, the other two
+    // keep their measured scores so their chips and excludes track the same
+    // "has this pattern" bar the corroboration gate uses. Below the bar for
+    // all three, the skill-vector primary stands and the gates below apply.
+    let best: string | null = null;
+    let bestScore = 0;
+    for (const family of ANALYZER_PRIMARY_FAMILIES) {
+      const score = analyzerPatternScore(classification, family);
+      if (score >= ANALYZER_PRIMARY_MIN_SCORE && score > bestScore) {
+        best = family;
+        bestScore = score;
+      }
+    }
+    if (best) {
+      result = best;
+      for (const family of ANALYZER_PRIMARY_FAMILIES) {
+        scores[family] = family === best ? 1 : analyzerPatternScore(classification, family);
       }
     }
   }
