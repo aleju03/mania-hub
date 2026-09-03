@@ -45,8 +45,8 @@ async function seedWallet(userId: number, username: string, openedPacks = 5) {
 }
 
 /* A shelf with enough shape to tell the two paths apart: duplicates, recycled
-   copies, a GOAT off the honorary roster and one off it, several tiers, a card
-   two people hold and a card only one does. */
+   copies, a GOAT off the honorary roster and one off it, several tiers, an
+   Eternal, a card two people hold and a card only one does. */
 async function seedEconomy() {
   await seedWallet(BIG, "bigcollector", 40);
   await seedWallet(SMALL, "smallcollector", 3);
@@ -58,6 +58,7 @@ async function seedEconomy() {
   await seedCollectionCard(db, SMALL, 11, { copies: 1, tier: "rare", firstPulledAt: 3000 });
   await seedCollectionCard(db, SMALL, 13, { copies: 4, tier: null, firstPulledAt: 3200 });
   await seedCollectionCard(db, THIRD, 12, { copies: 1, tier: "legendary", firstPulledAt: 4000 });
+  await seedCollectionCard(db, THIRD, THIRD, { copies: 1, tier: "eternal", firstPulledAt: 4100 });
   await exec(
     db,
     "insert or replace into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at) values (?, ?, ?, 1, 1000)",
@@ -82,7 +83,10 @@ describe("pack community roll-ups", () => {
     const result = await reconcilePackCommunityRollups(db, { now: NOW });
     expect(result).toMatchObject({ ready: true, blocked: null, rebuilt: true, backlog: 0 });
 
-    expect(await snapshots()).toEqual(scanned);
+    const rolled = await snapshots();
+    expect(rolled).toEqual(scanned);
+    // The Eternal count comes off the per-tier table on this path.
+    expect(rolled.collectors.collectors.find((row) => row.userId === THIRD)?.eternals).toBe(1);
   });
 
   it("keeps up with a pull, a duplicate and a card recycled to nothing", async () => {
@@ -169,7 +173,7 @@ describe("pack community roll-ups", () => {
     await seedCollectionCard(db, THIRD, 99, { copies: 1, tier: "rare" });
 
     const collectors = (await buildPackCollectorSnapshotWire(db, NOW)).collectors;
-    expect(collectors.find((collector) => collector.userId === THIRD)?.cards).toBe(2);
+    expect(collectors.find((collector) => collector.userId === THIRD)?.cards).toBe(3);
     expect(await reconcilePackCommunityRollups(db, { now: NOW })).toMatchObject({
       ready: false,
       blocked: "no_triggers",

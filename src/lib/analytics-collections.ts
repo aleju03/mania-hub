@@ -25,6 +25,7 @@ const COLLECTOR_SORT_LABELS: Record<string, string> = {
   copies: "most copies",
   packs: "most packs",
   goats: "most GOATs",
+  eternals: "exclusive holders",
 };
 
 function trimmed(value: string | null | undefined, max: number): string | null {

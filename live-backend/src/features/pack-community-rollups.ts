@@ -64,6 +64,9 @@ export interface PackCommunityOwnerRollup {
   duplicates: number;
   recycled: number;
   goats: number;
+  /* Copies held at the Eternal tier. Not a stored column: the per-tier table
+     already carries it, so both readers take it from there. */
+  eternals: number;
   joinedAt: number;
   lastPulledAt: number;
 }
@@ -271,6 +274,7 @@ const OWNER_SELECT = `
     coalesce(sum(case when copies > 1 then copies - 1 else 0 end), 0) as duplicates,
     coalesce(sum(recycled_copies), 0) as recycled,
     coalesce(sum(case when card_key like '%:goat' and card_user_id in (${HONORARY_ID_LIST}) then 1 else 0 end), 0) as goats,
+    coalesce(sum(case when tier = 'eternal' then copies else 0 end), 0) as eternals,
     coalesce(min(case when first_pulled_at > 0 then first_pulled_at else null end), 0) as joined_at,
     coalesce(max(last_pulled_at), 0) as last_pulled_at
   from pack_collection_cards
@@ -517,6 +521,7 @@ function toOwnerRollup(row: Record<string, unknown>): PackCommunityOwnerRollup {
     duplicates: Number(row.duplicates) || 0,
     recycled: Number(row.recycled) || 0,
     goats: Number(row.goats) || 0,
+    eternals: Number(row.eternals) || 0,
     joinedAt: Number(row.joined_at) || 0,
     lastPulledAt: Number(row.last_pulled_at) || 0,
   };
@@ -628,8 +633,11 @@ export async function readPackCommunityHeadlineCounts(db: Db): Promise<PackCommu
 async function readOwnerStats(db: Db): Promise<PackCommunityOwnerRollup[]> {
   const rows = (await exec(
     db,
-    `select owner_user_id, cards, players, copies, duplicates, recycled, goats, joined_at, last_pulled_at
-     from pack_community_owner_stats`,
+    `select s.owner_user_id, s.cards, s.players, s.copies, s.duplicates, s.recycled, s.goats,
+       coalesce(t.copies, 0) as eternals, s.joined_at, s.last_pulled_at
+     from pack_community_owner_stats s
+     left join pack_community_owner_tier_stats t
+       on t.owner_user_id = s.owner_user_id and t.tier = 'eternal'`,
   )).rows;
   return rows.map(toOwnerRollup);
 }

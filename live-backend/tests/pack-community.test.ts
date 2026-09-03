@@ -254,6 +254,21 @@ describe("pack community stats", () => {
     });
   });
 
+  it("lists only Eternal holders under the eternals ordering", async () => {
+    await seedCollector(BIG, "bigcollector");
+    await seedCollector(SMALL, "smallcollector");
+    await seedCollectionCard(db, BIG, 11, { tier: "rare" });
+    await seedCollectionCard(db, SMALL, 11, { tier: "rare" });
+    await seedCollectionCard(db, SMALL, SMALL, { tier: "eternal" });
+
+    const directory = await listPackCollectors(db, { page: 0, pageSize: 10, sort: "eternals" });
+
+    expect(directory.total).toBe(1);
+    expect(directory.collectors[0]).toMatchObject({ userId: SMALL, eternals: 1 });
+    // Every other ordering still lists everyone.
+    expect((await listPackCollectors(db, { page: 0, pageSize: 10, sort: "cards" })).total).toBe(2);
+  });
+
   it("keeps ranked honorary players in the GOAT roster instead of the ordinary pool ratio", async () => {
     await seedCollector(BIG, "bigcollector");
     await seedPoolPlayer(GOAT_ID, 5000);

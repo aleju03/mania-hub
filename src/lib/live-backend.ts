@@ -2865,6 +2865,8 @@ export interface LivePackCollector {
   players: number;
   copies: number;
   goats: number;
+  /* Eternal-tier copies held. */
+  eternals: number;
   duplicates: number;
   recycled: number;
   firstFinds: number;
@@ -2925,7 +2927,7 @@ export interface LivePackCommunityStats {
   computedAt: number;
 }
 
-export type LivePackCollectorSort = "cards" | "copies" | "packs" | "goats";
+export type LivePackCollectorSort = "cards" | "copies" | "packs" | "goats" | "eternals";
 
 export interface LivePackCollectorProfile {
   collector: LivePackCollector;

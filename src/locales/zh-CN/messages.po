@@ -4935,6 +4935,14 @@ msgstr "在分析该玩家更多成绩之前，估算会比较粗略"
 msgid "Estonian"
 msgstr "爱沙尼亚语"
 
+#: src/components/packs/collections/RecordBoards.tsx
+#~ msgid "eternal holders"
+#~ msgstr "Eternal 持有者"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+#~ msgid "Eternals"
+#~ msgstr "Eternal"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Europe, Central America, France"
 msgstr "欧洲、中美洲、法国"
@@ -5037,6 +5045,10 @@ msgstr "在整个网站中隐藏所有与段位相关的内容"
 #: src/components/maps/PatternPicker.tsx
 msgid "Excluding (click to clear)"
 msgstr "已排除(点击清除)"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Exclusives"
+msgstr "专属"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/replay.tsx
@@ -8347,6 +8359,14 @@ msgstr "这里还没有人拥有足够的达标通过记录。"
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody here is called \"{debounced}\"."
 msgstr "这里没有叫「{debounced}」的人。"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+#~ msgid "Nobody holds an Eternal yet."
+#~ msgstr "还没有人持有 Eternal。"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Nobody holds an exclusive card yet."
+msgstr "还没有人持有专属卡。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."

@@ -27,6 +27,7 @@ const collector = {
   players: 12591,
   copies: 40000,
   goats: 24,
+  eternals: 1,
   duplicates: 0,
   recycled: 0,
   firstFinds: 3,

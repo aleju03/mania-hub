@@ -4926,6 +4926,14 @@ msgstr "estimates are rough until we've analyzed more of this player's plays"
 msgid "Estonian"
 msgstr "Estonian"
 
+#: src/components/packs/collections/RecordBoards.tsx
+#~ msgid "eternal holders"
+#~ msgstr "eternal holders"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+#~ msgid "Eternals"
+#~ msgstr "Eternals"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Europe, Central America, France"
 msgstr "Europe, Central America, France"
@@ -5032,6 +5040,10 @@ msgstr "Excludes all dan-related stuff from the website"
 #: src/components/maps/PatternPicker.tsx
 msgid "Excluding (click to clear)"
 msgstr "Excluding (click to clear)"
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Exclusives"
+msgstr "Exclusives"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/replay.tsx
@@ -8346,6 +8358,14 @@ msgstr "Nobody here has enough qualifying clears yet."
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Nobody here is called \"{debounced}\"."
 msgstr "Nobody here is called \"{debounced}\"."
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+#~ msgid "Nobody holds an Eternal yet."
+#~ msgstr "Nobody holds an Eternal yet."
+
+#: src/components/packs/collections/CollectorDirectory.tsx
+msgid "Nobody holds an exclusive card yet."
+msgstr "Nobody holds an exclusive card yet."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."

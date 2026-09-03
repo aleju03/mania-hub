@@ -88,6 +88,9 @@ export interface PackCollectorSummary extends PackCollectorIdentity {
   players: number;
   copies: number;
   goats: number;
+  /* Eternal-tier copies. Almost always one, the completion reward, but an
+     admin grant can add another. */
+  eternals: number;
   duplicates: number;
   recycled: number;
   firstFinds: number;
@@ -191,7 +194,7 @@ const CARD_TTL_MS = 30 * 60_000;
  * on their own short clock and the boards keep theirs. */
 const TOTALS_TTL_MS = 20_000;
 
-export type PackCollectorSort = "cards" | "copies" | "packs" | "goats";
+export type PackCollectorSort = "cards" | "copies" | "packs" | "goats" | "eternals";
 
 /* One comparator per sort, used by both the directory and the boards so a
    collector's position is the same wherever they are printed. */
@@ -200,6 +203,7 @@ const COMPARATORS: Record<PackCollectorSort, (a: PackCollectorSummary, b: PackCo
   copies: (a, b) => b.copies - a.copies || b.cards - a.cards || a.joinedAt - b.joinedAt,
   packs: (a, b) => (b.packsOpened ?? -1) - (a.packsOpened ?? -1) || b.cards - a.cards || a.joinedAt - b.joinedAt,
   goats: (a, b) => b.goats - a.goats || b.cards - a.cards || a.joinedAt - b.joinedAt,
+  eternals: (a, b) => b.eternals - a.eternals || b.cards - a.cards || a.joinedAt - b.joinedAt,
 };
 
 /* hasOwn, not `raw in COMPARATORS`: an inherited key ("toString",
@@ -395,6 +399,7 @@ export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promi
       players: owner.players,
       copies: owner.copies,
       goats: owner.goats,
+      eternals: owner.eternals,
       duplicates: owner.duplicates,
       recycled: owner.recycled,
       firstFinds: firstFinds.get(userId) ?? 0,
@@ -423,7 +428,7 @@ export async function buildPackCollectorSnapshotWire(db: Db, now: number): Promi
   };
 }
 
-/* The lookup and the five orderings every read wants, built once per snapshot.
+/* The lookup and the six orderings every read wants, built once per snapshot.
    Cheap next to the scans that produced the array (a couple of thousand
    entries), which is why the wire shape carries neither. */
 function indexCollectorSnapshot(wire: PackCollectorSnapshotWire): CollectorSnapshot {
@@ -436,6 +441,9 @@ function indexCollectorSnapshot(wire: PackCollectorSnapshotWire): CollectorSnaps
       copies: [...collectors].sort(COMPARATORS.copies),
       packs: [...collectors].sort(COMPARATORS.packs),
       goats: [...collectors].sort(COMPARATORS.goats),
+      /* Holders only. This ordering exists to answer who has an Eternal, and
+         the few thousand who do not would be a tail of zeros behind them. */
+      eternals: collectors.filter((collector) => collector.eternals > 0).sort(COMPARATORS.eternals),
     },
   };
 }

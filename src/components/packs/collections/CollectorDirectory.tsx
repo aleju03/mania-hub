@@ -81,6 +81,8 @@ const SORTS: Array<{ id: LivePackCollectorSort; label: ReturnType<typeof msg> }>
   { id: "copies", label: msg`Copies` },
   { id: "packs", label: msg`Packs` },
   { id: "goats", label: msg`GOATs` },
+  // Holders only: the backend drops everyone without one from this ordering.
+  { id: "eternals", label: msg`Exclusives` },
 ];
 
 /* Whichever column the list is ordered by is the one it prints. Showing the
@@ -97,6 +99,8 @@ function sortedValue(
       return collector.packsOpened === null ? i18n._(msg`unknown`) : formatNumber(collector.packsOpened);
     case "goats":
       return `${collector.goats}/${collector.completion.goatsTotal}`;
+    case "eternals":
+      return formatNumber(collector.eternals);
     default:
       return formatNumber(collector.cards);
   }
@@ -260,7 +264,11 @@ export function CollectorDirectory() {
           Array.from({ length: PAGE_SIZE }, (_, index) => <RowSkeleton key={index} variant="directory" />)
         ) : shown.collectors.length === 0 ? (
           <div className="py-10 text-center text-[12px] text-osu-f1">
-            {debounced ? t`Nobody here is called "${debounced}".` : t`Nobody has opened a pack yet.`}
+            {debounced
+              ? t`Nobody here is called "${debounced}".`
+              : sort === "eternals"
+                ? t`Nobody holds an exclusive card yet.`
+                : t`Nobody has opened a pack yet.`}
           </div>
         ) : (
           shown.collectors.map((collector) => (
