@@ -35,9 +35,10 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // analyzer's jack/chordjack/tech verdicts when it detects one - the
 // skill-vector engine reads jack as same-column speed, which an 8-column
 // chord chart never shows it, so 8K jack files indexed as stamina while the
-// skill cards, built on the analyzer, listed them under Jack).
+// skill cards, built on the analyzer, listed them under Jack; r13: OD from
+// beatmaps.metadata_json so map detail stats do not need to fetch the .osu).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 12;
+const BUILD_REVISION = 13;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -125,6 +126,9 @@ export interface MapSearchEntry {
   keyCount: number;
   stars: number;
   bpm: number;
+  /** Overall Difficulty from the stored osu! beatmap metadata. Null when the
+   *  map has not received a full metadata enrichment yet. */
+  od: number | null;
   /** Note-weighted song tempo at 1.0x (dan/note-bpm.ts): the tempo under the
    *  notes, with gimmick timing folded back to the song. Null until the chart
    *  analysis lands; differs from `bpm` on gimmick-timed and variable-tempo charts. */
@@ -558,6 +562,7 @@ const SOURCE_SELECT = `
     b.cs as cs,
     b.difficulty_rating as difficulty_rating,
     b.bpm as bpm,
+    json_extract(b.metadata_json, '$.accuracy') as od,
     b.version as version,
     b.status as beatmap_status,
     json_extract(b.metadata_json, '$.playcount') as play_count,
@@ -603,6 +608,12 @@ function realOr(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function readOd(value: unknown): number | null {
+  if (value == null) return null;
+  const od = Number(value);
+  return Number.isFinite(od) && od >= 0 && od <= 10 ? od : null;
+}
+
 function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
   const beatmapId = intOr(row.beatmap_id);
   const beatmapsetId = intOr(row.beatmapset_id);
@@ -626,6 +637,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     intOr(row.cs),
     realOr(row.difficulty_rating),
     realOr(row.bpm),
+    readOd(row.od),
     // Read via the total_length alias: libsql rows are array-like, so a column
     // selected as `length` is shadowed by the row's own length property (the
     // column count), which silently wrote 19 for every map.
@@ -659,17 +671,17 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
   return {
     sql: `insert into map_search_index (
         beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version,
-        search_text, key_count, stars, bpm, length, status, play_count, pass_count, ln_count,
+        search_text, key_count, stars, bpm, od, length, status, play_count, pass_count, ln_count,
         primary_pattern, pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina,
         pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date,
         dan_label, dan_family, raw_dan, msd_json, msd_overall, msd_ln_json, pattern_tags, vibro, note_bpm, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(beatmap_id) do update set
         beatmapset_id = excluded.beatmapset_id,
         analysis_version = excluded.analysis_version,
         title = excluded.title, artist = excluded.artist, creator = excluded.creator, version = excluded.version,
         search_text = excluded.search_text, key_count = excluded.key_count, stars = excluded.stars,
-        bpm = excluded.bpm, length = excluded.length, status = excluded.status,
+        bpm = excluded.bpm, od = excluded.od, length = excluded.length, status = excluded.status,
         play_count = excluded.play_count, pass_count = excluded.pass_count, ln_count = excluded.ln_count,
         primary_pattern = excluded.primary_pattern,
         pat_jack = excluded.pat_jack, pat_stream = excluded.pat_stream, pat_jumpstream = excluded.pat_jumpstream,
@@ -1080,7 +1092,7 @@ export async function getMapSearchIndexStamp(db: Db): Promise<string> {
 // row.length would return the column count instead of the column.
 const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
-  stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
+  stars, bpm, od, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
   pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro, note_bpm, ranked_date`;
 
@@ -1820,6 +1832,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     keyCount,
     stars: realOr(row.stars),
     bpm: realOr(row.bpm),
+    od: readOd(row.od),
     noteBpm: row.note_bpm == null || !(realOr(row.note_bpm) > 0) ? null : realOr(row.note_bpm),
     length: intOr(row.length_seconds),
     playCount: intOr(row.play_count),

@@ -103,9 +103,16 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
     }
     const row = (await exec(
       ctx.db,
-      `select status, key_count, classification_json, msd_json, msd_ln_json from beatmap_chart_analysis
-       where beatmap_id = ? and analysis_version = ? limit 1`,
-      [beatmapId, CHART_ANALYSIS_VERSION],
+      `select a.status, a.key_count, a.classification_json, a.msd_json, a.msd_ln_json,
+              case when json_valid(b.metadata_json)
+                then json_extract(b.metadata_json, '$.accuracy')
+                else null
+              end as od
+       from beatmaps b
+       left join beatmap_chart_analysis a
+         on a.beatmap_id = b.beatmap_id and a.analysis_version = ?
+       where b.beatmap_id = ? limit 1`,
+      [CHART_ANALYSIS_VERSION, beatmapId],
     )).rows[0];
     const classification = row?.status === "ready"
       ? parseJson<Record<string, unknown> | null>(String(row.classification_json ?? ""), null)
@@ -118,10 +125,13 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
     const msdLn = row?.status === "ready"
       ? lnAdjustedMsd(readMsdValues(row.msd_json), readMsdValues(row.msd_ln_json), Number(row.key_count ?? 0))
       : null;
+    const rawOd = row?.od == null ? Number.NaN : Number(row.od);
+    const od = Number.isFinite(rawOd) && rawOd >= 0 && rawOd <= 10 ? rawOd : null;
     sendJson(req, res, ctx, 200, {
       beatmapId,
-      status: row ? String(row.status) : "missing",
+      status: row?.status == null ? "missing" : String(row.status),
       keyCount: row?.key_count == null ? null : Number(row.key_count),
+      od,
       patterns: Array.isArray(classification?.patterns) ? classification.patterns : [],
       clusters: Array.isArray(classification?.clusters) ? classification.clusters : [],
       clusterCategory: typeof classification?.clusterCategory === "string" ? classification.clusterCategory : null,

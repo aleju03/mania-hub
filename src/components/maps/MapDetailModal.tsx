@@ -514,6 +514,7 @@ export function MapDetailModal({
     };
   }, [activeBeatmapId, analysisByBeatmap]);
   const activeAnalysis = activeBeatmapId != null ? analysisByBeatmap[activeBeatmapId] ?? null : null;
+  const activeOd = active?.od ?? activeAnalysis?.od ?? null;
   // True while a freshly selected diff's analysis is still being fetched (its
   // slot is `undefined`, not `null`). Used to hold the Patterns row's height so
   // the async result landing can't grow the card and re-center the modal.
@@ -657,16 +658,21 @@ export function MapDetailModal({
 
                 {/* Stats */}
                 {numbersKnown || pending ? (
-                  <div className="grid grid-cols-4 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
+                  <div className="grid grid-cols-5 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
                     {numbersKnown ? (
                       <>
                         <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} aside={realBpmStat ? t`timed at ${Math.round(active.bpm)}` : null} />
                         <Stat label={t`Length`} value={formatDuration(active.length)} />
                         <Stat label={t`Plays`} value={formatNumber(active.playCount)} />
                         <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />
+                        {active.od == null && analysisPending ? (
+                          <PendingStat label={t`OD`} />
+                        ) : (
+                          <Stat label={t`OD`} value={activeOd == null ? "—" : activeOd.toFixed(1)} />
+                        )}
                       </>
                     ) : (
-                      [t`BPM`, t`Length`, t`Plays`, t`LN notes`].map((label) => <PendingStat key={label} label={label} />)
+                      [t`BPM`, t`Length`, t`Plays`, t`LN notes`, t`OD`].map((label) => <PendingStat key={label} label={label} />)
                     )}
                   </div>
                 ) : null}

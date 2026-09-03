@@ -3179,6 +3179,7 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
       key_count integer not null,
       stars real not null,
       bpm real not null,
+      od real,
       length integer not null,
       status text not null,
       play_count integer not null default 0,
@@ -3216,6 +3217,7 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
   if (!mapSearchColumns.has("dan_family")) await db.execute("alter table map_search_index add column dan_family text");
   if (!mapSearchColumns.has("raw_dan")) await db.execute("alter table map_search_index add column raw_dan real");
   if (!mapSearchColumns.has("msd_json")) await db.execute("alter table map_search_index add column msd_json text");
+  if (!mapSearchColumns.has("od")) await db.execute("alter table map_search_index add column od real");
   if (!mapSearchColumns.has("pattern_tags")) await db.execute("alter table map_search_index add column pattern_tags text not null default ''");
   if (!mapSearchColumns.has("vibro")) {
     await db.execute("alter table map_search_index add column vibro integer not null default 0");

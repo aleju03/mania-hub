@@ -2089,6 +2089,9 @@ export interface LiveMapSearchEntry {
   keyCount: number;
   stars: number;
   bpm: number;
+  // Overall Difficulty from stored osu! metadata. Optional for cached payloads
+  // produced before this field shipped; null when metadata is incomplete.
+  od?: number | null;
   // Note-weighted song tempo at 1.0x with gimmick timing folded back to the
   // song (a 999-timed chart reads 249.75). Null until the chart analysis
   // lands, absent on older cached payloads.
@@ -2336,6 +2339,9 @@ export interface LiveChartAnalysisDetail {
   beatmapId: number;
   status: string;
   keyCount: number | null;
+  // Direct metadata fallback for detail views whose map-search index row has
+  // not yet been refreshed with OD.
+  od?: number | null;
   patterns: LiveChartAnalysisPatternHit[];
   clusters: LiveChartAnalysisCluster[];
   clusterCategory: string | null;

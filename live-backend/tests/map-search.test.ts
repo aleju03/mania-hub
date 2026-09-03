@@ -33,6 +33,7 @@ interface SeedMap {
   cs?: number;
   stars?: number;
   bpm?: number;
+  od?: number;
   status?: string;
   title?: string;
   artist?: string;
@@ -86,6 +87,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
         passcount: 100,
         count_sliders: map.lnCount ?? 50,
         total_length: map.totalLength ?? 120,
+        ...(map.od != null ? { accuracy: map.od } : {}),
         status: map.status ?? "ranked",
         convert: map.convert ?? false,
       }),
@@ -110,6 +112,21 @@ async function buildAll(db: Db): Promise<void> {
 }
 
 describe("map search index", () => {
+  it("exposes OD from enriched metadata on bulk and detail entries", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, od: 7.3, primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+
+    const page = await getMapSearchPage(db, baseQuery());
+    expect(page.items.find((item) => item.beatmapId === 1)?.od).toBe(7.3);
+    expect(page.items.find((item) => item.beatmapId === 2)?.od).toBeNull();
+
+    const detail = await getMapSearchSetEntry(db, 1);
+    expect(detail?.od).toBe(7.3);
+    expect(detail?.diffs[0]?.od).toBe(7.3);
+  });
+
   it("indexes ready skill vectors and filters by primary pattern + key", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 4, primary: "stream", patterns: { stream: 1, jack: 0.3 } });
@@ -669,7 +686,7 @@ describe("map search index", () => {
 describe("map search + collections HTTP", () => {
   it("serves /api/snapshots/maps-search globally and /map-collection", async () => {
     const db = await makeDb();
-    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 4, stars: 4.2, primary: "stream", patterns: { stream: 0.95 } });
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 4, stars: 4.2, od: 7.3, primary: "stream", patterns: { stream: 0.95 } });
     await seedMap(db, { beatmapId: 2, beatmapsetId: 20, cs: 7, stars: 5.0, primary: "jack", patterns: { jack: 1 } });
     // Enough chordjack maps to publish a pack (MIN_MEMBERS); chordjack so the
     // stream search assertion above stays at one hit.
@@ -695,6 +712,13 @@ describe("map search + collections HTTP", () => {
     const searchBody = JSON.parse(search.writes.join(""));
     expect(searchBody.total).toBe(1);
     expect(searchBody.items[0].beatmapId).toBe(1);
+
+    // The detail modal already requests chart analysis. It carries OD straight
+    // from beatmap metadata even if the denormalized search row is still stale.
+    const analysis = mockRes();
+    await routeHttp(mockReq("GET", "/api/chart-analysis?beatmapId=1"), analysis.res, ctx);
+    const analysisBody = JSON.parse(analysis.writes.join(""));
+    expect(analysisBody.od).toBe(7.3);
 
     const list = mockRes();
     await routeHttp(mockReq("GET", "/api/snapshots/map-collections"), list.res, ctx);
