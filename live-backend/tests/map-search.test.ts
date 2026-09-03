@@ -1011,6 +1011,52 @@ describe("map search primary derivation", () => {
     expect(byId.get(1)?.patterns.chordjack).toBe(1);
   });
 
+  it("takes 6K/7K/8K primaries from the chart analyzer when it detects a family", async () => {
+    const db = await makeDb();
+    // Kori's 8K Pack #2 shape (5717598): the skill-vector engine reads jack as
+    // same-column speed, which eight columns of chords never show it, and
+    // indexed the chart as stamina; the analyzer, which the player's Jack
+    // list is built on, detects chordjack 0.63 / tech 0.58 / jack 0.505.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 8, primary: "stamina", patterns: { stamina: 1, handstream: 0.67, tech: 0.65, chordjack: 0.57, jack: 0.31 } });
+    await seedAnalysis(db, 1, {
+      lnRatio: 0.004,
+      patterns: [{ id: "delay", score: 0.972 }, { id: "chordjack", score: 0.627 }, { id: "tech", score: 0.579 }, { id: "jack", score: 0.505 }, { id: "chordstream", score: 0.5 }],
+    });
+    // Same keymode, analyzer below the bar on every family: the skill-vector
+    // primary stands.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, cs: 8, primary: "stamina", patterns: { stamina: 1, stream: 0.7 } });
+    await seedAnalysis(db, 2, {
+      lnRatio: 0.01,
+      patterns: [{ id: "delay", score: 0.9 }, { id: "tech", score: 0.4 }, { id: "chordjack", score: 0.2 }],
+    });
+    // 4K keeps the MinaCalc path even when the analyzer names a family.
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, primary: "stream", patterns: { stream: 1 } });
+    await seedAnalysis(db, 3, {
+      msdValues: { Overall: 20, Stream: 20, Jumpstream: 15, Handstream: 14, Stamina: 18, JackSpeed: 10, Chordjack: 9, Technical: 16 },
+      lnRatio: 0.01,
+      patterns: [{ id: "jack", score: 0.8 }],
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    const byId = new Map(all.items.flatMap((item) => item.diffs.length ? item.diffs.map((d) => [d.beatmapId, d] as const) : [[item.beatmapId, item] as const]));
+    expect(byId.get(1)?.primaryPattern).toBe("chordjack");
+    expect(byId.get(1)?.patterns.chordjack).toBe(1);
+    // The other analyzer families keep their measured scores: jack clears the
+    // exclude bar, so an "exclude jack" search drops the chart.
+    expect(byId.get(1)?.patterns.jack).toBeCloseTo(0.505, 3);
+    expect(byId.get(1)?.patterns.tech).toBeCloseTo(0.579, 3);
+    expect(byId.get(2)?.primaryPattern).toBe("stamina");
+    expect(byId.get(3)?.primaryPattern).toBe("stream");
+
+    const chordjack = await getMapSearchPage(db, { ...baseQuery(), keys: ["8k"], patterns: ["chordjack"] });
+    expect(chordjack.items.map((item) => item.beatmapId)).toEqual([1]);
+    const stamina = await getMapSearchPage(db, { ...baseQuery(), keys: ["8k"], patterns: ["stamina"] });
+    expect(stamina.items.map((item) => item.beatmapId)).toEqual([2]);
+    const noJack = await getMapSearchPage(db, { ...baseQuery(), keys: ["8k"], patternsExclude: ["jack"] });
+    expect(noJack.items.map((item) => item.beatmapId)).toEqual([2]);
+  });
+
   it("re-labels 4K Technical primaries both other engines call a chordjack", async () => {
     const db = await makeDb();
     // CANDY CANES "stab stab stab" (896752): 511 straight quads at 169ms, so
