@@ -20,7 +20,6 @@ import {
   FamilyPatternChip,
   PATTERN_COLOR,
   SubPatternChip,
-  familyPatternTags,
   entryDiffs,
   mapCoverUrl,
   osuBeatmapUrl,
@@ -474,7 +473,9 @@ export function MapDetailModal({
 
   // The active diff's detected subfamily tags (bracket, speedjack, ...), all
   // of them: the modal is the exhaustive view, unlike the cards' capped strip.
-  const familyTags = useMemo(() => (active ? familyPatternTags(active) : []), [active]);
+  // Just the primary: the modal's Pattern profile already lists every family
+  // with its number, so secondary chips here would say it twice.
+  const familyTags = useMemo(() => (active ? [active.primaryPattern] : []), [active]);
   const subTags = useMemo(
     () => (active ? subPatternTags([active], familyTags, Infinity) : []),
     [active, familyTags],
@@ -686,10 +687,9 @@ export function MapDetailModal({
                 ) : pending ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
-                {/* The same chips as the search card: filled family identity
-                    (primary first, from the index) then the analyzer's outlined
-                    subfamily attributes (bracket, speedjack, ...), distinct from
-                    the BPM cluster readout above. */}
+                {/* The card's filled primary chip (the index's family verdict)
+                    then the analyzer's outlined subfamily attributes (bracket,
+                    speedjack, ...), distinct from the BPM cluster readout above. */}
                 {(familyTags.length > 0 || subTags.length > 0) && (
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
                     <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`Tags`}</span>
