@@ -28,9 +28,11 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // MinaCalc buries its own Chordjack rating on chord-wall files; r10: a 4K
 // Stamina argmax win no longer takes the primary unless the chart is
 // endurance-length - the rider is capped ~0.45% above the best base skillset,
-// so the win measured length, not identity).
+// so the win measured length, not identity; r11: note_bpm column, the
+// note-weighted song tempo, so the modal can show the real tempo beside a
+// gimmick nominal bpm).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 10;
+const BUILD_REVISION = 11;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -118,6 +120,10 @@ export interface MapSearchEntry {
   keyCount: number;
   stars: number;
   bpm: number;
+  /** Note-weighted song tempo at 1.0x (dan/note-bpm.ts): the tempo under the
+   *  notes, with gimmick timing folded back to the song. Null until the chart
+   *  analysis lands; differs from `bpm` on gimmick-timed and variable-tempo charts. */
+  noteBpm: number | null;
   length: number;
   playCount: number;
   // ISO ranked (or loved) date from the set's metadata; null while pending.
@@ -535,7 +541,8 @@ const SOURCE_SELECT = `
     ca.msd_overall as ca_msd_overall,
     ca.msd_ln_json as ca_msd_ln_json,
     ca.classification_json as ca_classification_json,
-    json_extract(ca.classification_json, '$.vibro') as ca_vibro
+    json_extract(ca.classification_json, '$.vibro') as ca_vibro,
+    json_extract(ca.classification_json, '$.noteBpm') as ca_note_bpm
   from beatmap_skill_vectors sv
   join beatmaps b on b.beatmap_id = sv.beatmap_id
   join beatmapsets s on s.beatmapset_id = b.beatmapset_id
@@ -610,6 +617,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     row.ca_msd_ln_json == null ? null : String(row.ca_msd_ln_json),
     readPatternTags(row.ca_classification_json),
     intOr(row.ca_vibro) === 1 ? 1 : 0,
+    row.ca_note_bpm == null || !(realOr(row.ca_note_bpm) > 0) ? null : realOr(row.ca_note_bpm),
     nowIso(),
   ];
   return {
@@ -618,8 +626,8 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         search_text, key_count, stars, bpm, length, status, play_count, pass_count, ln_count,
         primary_pattern, pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina,
         pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date,
-        dan_label, dan_family, raw_dan, msd_json, msd_overall, msd_ln_json, pattern_tags, vibro, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dan_label, dan_family, raw_dan, msd_json, msd_overall, msd_ln_json, pattern_tags, vibro, note_bpm, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(beatmap_id) do update set
         beatmapset_id = excluded.beatmapset_id,
         analysis_version = excluded.analysis_version,
@@ -635,7 +643,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         dan_label = excluded.dan_label, dan_family = excluded.dan_family, raw_dan = excluded.raw_dan,
         msd_json = excluded.msd_json, msd_overall = excluded.msd_overall,
         msd_ln_json = excluded.msd_ln_json,
-        pattern_tags = excluded.pattern_tags, vibro = excluded.vibro,
+        pattern_tags = excluded.pattern_tags, vibro = excluded.vibro, note_bpm = excluded.note_bpm,
         updated_at = excluded.updated_at`,
     args,
   };
@@ -1038,7 +1046,7 @@ const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
   stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
-  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro, ranked_date`;
+  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro, note_bpm, ranked_date`;
 
 const KEY_CLAUSES: Record<string, (p: string) => string> = {
   "4k": (p) => `${p}key_count = 4`,
@@ -1776,6 +1784,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     keyCount,
     stars: realOr(row.stars),
     bpm: realOr(row.bpm),
+    noteBpm: row.note_bpm == null || !(realOr(row.note_bpm) > 0) ? null : realOr(row.note_bpm),
     length: intOr(row.length_seconds),
     playCount: intOr(row.play_count),
     rankedDate: row.ranked_date == null ? null : String(row.ranked_date),

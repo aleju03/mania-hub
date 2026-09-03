@@ -944,11 +944,18 @@ export const NOTE_BPM_RECOMPUTE_JOB = "recompute_note_bpm_sweep";
 // v1 and v2 passes, both burned by a dev-watch restart booting between the key
 // bump and the scan change: a key bump must ship in the same write as the scan
 // change it depends on.
-const NOTE_BPM_RECOMPUTE_META_KEY = "note_bpm_recompute_done:v3";
+// v4: snap-grid fold depth (dan/note-bpm.ts) - a 999-timed set folds to
+// 249.75, not 333, and the map search index now carries note_bpm.
+const NOTE_BPM_RECOMPUTE_META_KEY = "note_bpm_recompute_done:v4";
 const NOTE_BPM_RECOMPUTE_CHUNK = 50;
-// Keep in sync with FOLD_TRIGGER_BPM (dan/note-bpm.ts): stored medians above
-// it are the only ones a fold-rule change can move.
-const NOTE_BPM_RESCAN_MIN_BPM = 300;
+// Rows a fold-rule change can move: the fold only touches sections timed above
+// FOLD_TRIGGER_BPM (dan/note-bpm.ts), and an earlier fold of such a section
+// landed above half of it, so a stored median at or under 150 is untouched.
+// Of the rest, only charts whose nominal osu! bpm or stored median sits above
+// the trigger can hold such a section (3.3k rows locally versus 110k above
+// 150 alone).
+const NOTE_BPM_RESCAN_MIN_BPM = 150;
+const NOTE_BPM_RESCAN_TRIGGER_BPM = 300;
 
 export interface NoteBpmRecomputeChunkResult {
   nextCursor: number;
@@ -964,22 +971,33 @@ export async function recomputeNoteBpmChunk(
 ): Promise<NoteBpmRecomputeChunkResult> {
   // json_extract as a scan filter is fine here: this is the background sweep,
   // not a serving query, and it lets an interrupted chain skip already-patched
-  // rows. Rows with a stored value above the fold trigger re-match so sweep
-  // version bumps can apply fold-rule changes; the cursor only moves forward,
-  // so each run still visits each row once.
+  // rows. Rows a fold-rule change can move re-match (see the RESCAN
+  // constants) so sweep version bumps can apply it; the cursor only moves
+  // forward, so each run still visits each row once.
   const rows = (await exec(
     db,
-    `select beatmap_id
-     from beatmap_chart_analysis
-     where analysis_version = ? and status = 'ready'
-       and beatmap_id > ?
+    `select ca.beatmap_id
+     from beatmap_chart_analysis ca
+     left join beatmaps b on b.beatmap_id = ca.beatmap_id
+     where ca.analysis_version = ? and ca.status = 'ready'
+       and ca.beatmap_id > ?
        and (
-         json_extract(classification_json, '$.noteBpm') is null
-         or json_extract(classification_json, '$.noteBpm') > ?
+         json_extract(ca.classification_json, '$.noteBpm') is null
+         or (
+           json_extract(ca.classification_json, '$.noteBpm') > ?
+           and (json_extract(ca.classification_json, '$.noteBpm') > ? or coalesce(b.bpm, 0) > ?)
+         )
        )
-     order by beatmap_id
+     order by ca.beatmap_id
      limit ?`,
-    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), NOTE_BPM_RESCAN_MIN_BPM, Math.max(1, Math.floor(limit))],
+    [
+      CHART_ANALYSIS_VERSION,
+      Math.max(0, Math.floor(cursor)),
+      NOTE_BPM_RESCAN_MIN_BPM,
+      NOTE_BPM_RESCAN_TRIGGER_BPM,
+      NOTE_BPM_RESCAN_TRIGGER_BPM,
+      Math.max(1, Math.floor(limit)),
+    ],
   )).rows;
 
   let nextCursor = cursor;
@@ -999,6 +1017,11 @@ export async function recomputeNoteBpmChunk(
       [JSON.stringify(noteBpm), beatmapId, CHART_ANALYSIS_VERSION],
     );
     if (noteBpm != null) patched.push(beatmapId);
+    // The search index copies noteBpm at upsert time (map-search.ts), so the
+    // patched row has to reach it too or the modal keeps the old value.
+    await import("./map-search.js")
+      .then((module) => module.upsertMapSearchIndexRow(db, beatmapId))
+      .catch(() => undefined);
     // Light work per chart, but the chunk still yields so ingest/SSE keep moving.
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
@@ -1201,8 +1224,15 @@ async function enqueueDanFloorPinRecompute(queue: JobQueue, cursor: number): Pro
 // stored 7K lnrelease tag predates the new definition in both directions - the
 // old gate tagged ~530 charts with a median of 8.32*, the new one tags roughly
 // 1,600 with a median of 4.6*.
+//
+// v4 (2026-09-03), still 7K only: lngeneral now yields fully to a specialty
+// (its 0.35 floor left the tag on every saturated release/inverse chart),
+// lninverse gained a windowed leg so charts that are inverse in sections tag,
+// and lnrelease's dense leg was lowered plus a release-wall leg added for the
+// Zenith-style dan diffs. Roughly 3k stored 7K verdicts lose the general
+// co-tag and a few hundred gain inverse or release.
 export const LN_SUBTYPE_RECOMPUTE_JOB = "recompute_ln_subtype_sweep";
-const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v3";
+const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v4";
 const LN_SUBTYPE_SWEEP_KEY_COUNTS = [7];
 const LN_SUBTYPE_CHUNK = 50;
 // Subtype scores are gated on the composite LN score, which needs some hold

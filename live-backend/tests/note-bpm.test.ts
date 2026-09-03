@@ -87,6 +87,17 @@ describe("computeNoteBpm", () => {
     expect(computeNoteBpm(osuText)).toBe(150);
   });
 
+  it("leaves absurd timing to the clamp instead of folding it", () => {
+    // beatLength 0.5 = 120000 BPM with plenty of notes: not a multiple of any
+    // song tempo (SV gimmick charts carry 1e24 points, where the divisor walk
+    // would never end).
+    const osuText = buildOsuFile(
+      ["0,0.5,4,2,0,100,1,0"],
+      notesAt(Array.from({ length: 40 }, (_, i) => i * 50)),
+    );
+    expect(computeNoteBpm(osuText)).toBe(1200);
+  });
+
   it("clamps timing-gimmick tempos to the playable band", () => {
     // beatLength 20 = 3000 BPM; clamp caps it at 1200.
     const osuText = buildOsuFile(
@@ -113,13 +124,41 @@ describe("computeNoteBpm", () => {
   });
 
   it("keeps dividing while the folded tempo stays implausible", () => {
-    // Timed ~799.2 (a 3x upload of a 266.4 song): /2 = 399.6 still exceeds
-    // the target band, so the fold lands on /3.
+    // Timed ~799.2 (a 3x upload of a 266.4 song) with the song's 1/4 notes
+    // (56ms, 3/4 of the inflated beat): /2 = 399.6 still exceeds the target
+    // band, so the fold lands on /3, and /4 (3/16 notes) explains the gaps no
+    // better, so it stays there.
     const osuText = buildOsuFile(
       ["0,75.075,4,2,0,100,1,0"],
-      notesAt(Array.from({ length: 40 }, (_, i) => i * 75)),
+      notesAt(Array.from({ length: 40 }, (_, i) => Math.round(i * 56.30625))),
     );
     expect(computeNoteBpm(osuText)).toBe(266.4);
+  });
+
+  it("folds a 999 gimmick past the first plausible tempo when its snaps demand it", () => {
+    // The Schwerkraft shape: timed 999, rows 15/20/30/40/60/120ms apart with
+    // 15ms (a 999 quarter, so the snap test alone would call it honest) the
+    // most common. /3 = 333 reads the 20ms and 40ms rows as 1/9 and 2/9; /4 =
+    // 249.75 puts every row on 1/16, 1/12, 1/8, 1/6, 1/4 or 1/2.
+    const gaps = [
+      ...Array(12).fill(15), ...Array(10).fill(20), ...Array(9).fill(30),
+      ...Array(6).fill(40), ...Array(5).fill(60), ...Array(5).fill(120),
+    ];
+    const times = [0];
+    for (const gap of gaps) times.push(times[times.length - 1] + gap);
+    const osuText = buildOsuFile(["0,60.06006,4,2,0,100,1,0"], notesAt(times));
+    expect(computeNoteBpm(osuText)).toBe(249.75);
+  });
+
+  it("folds a 999 gimmick even when every note sits on its quarter grid", () => {
+    // 15ms vibro rows only: a 999 quarter is not a stream anyone plays, so the
+    // fold is mandatory above 500. /3 reads the rows as 1/12 notes, /4 as
+    // 1/16: the binary grid wins.
+    const osuText = buildOsuFile(
+      ["0,60.06006,4,2,0,100,1,0"],
+      notesAt(Array.from({ length: 40 }, (_, i) => Math.round(i * 15.015))),
+    );
+    expect(computeNoteBpm(osuText)).toBe(249.75);
   });
 
   it("folds rate-edit chordjack timing by two and collapses chords to rows", () => {

@@ -2079,6 +2079,10 @@ export interface LiveMapSearchEntry {
   keyCount: number;
   stars: number;
   bpm: number;
+  // Note-weighted song tempo at 1.0x with gimmick timing folded back to the
+  // song (a 999-timed chart reads 249.75). Null until the chart analysis
+  // lands, absent on older cached payloads.
+  noteBpm?: number | null;
   length: number;
   playCount: number;
   // ISO ranked/loved date; null while pending, absent on older cached payloads.

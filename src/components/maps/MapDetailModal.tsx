@@ -136,13 +136,27 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, aside }: { label: string; value: string; aside?: string | null }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{value}</span>
+      <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">
+        {value}
+        {aside && <span className="ml-1.5 text-[11px] font-medium text-osu-f1">{aside}</span>}
+      </span>
       <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
     </div>
   );
+}
+
+// The osu! bpm is the timing point that holds the most wall-clock time, so
+// gimmick timing (a set timed at 999 as a joke) and long off-tempo intros
+// misreport the tempo the notes run at. When the note-weighted tempo the chart
+// analysis stored disagrees by more than rounding, it takes the stat and the
+// timed figure becomes the footnote.
+function realBpm(bpm: number, noteBpm: number | null | undefined): string | null {
+  if (noteBpm == null || !(noteBpm > 0) || !(bpm > 0)) return null;
+  if (Math.abs(noteBpm - bpm) / bpm < 0.03) return null;
+  return String(Math.round(noteBpm * 100) / 100);
 }
 
 // A Stat whose value the stub does not carry yet: the label is already true, so
@@ -454,6 +468,7 @@ export function MapDetailModal({
   const diffs = useMemo(() => (entry ? entryDiffs(entry) : []), [entry]);
   const mixedKeys = useMemo(() => new Set(diffs.map((diff) => diff.keyCount)).size > 1, [diffs]);
   const active = diffs.find((diff) => diff.beatmapId === selectedDiffId) ?? entry;
+  const realBpmStat = active ? realBpm(active.bpm, active.noteBpm) : null;
 
   // A tracked play can name a chart the catalog never indexed, and a stub built
   // from a play row may not know the set either; both leave the set id at 0.
@@ -641,7 +656,7 @@ export function MapDetailModal({
                   <div className="grid grid-cols-4 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
                     {numbersKnown ? (
                       <>
-                        <Stat label={t`BPM`} value={String(Math.round(active.bpm))} />
+                        <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} aside={realBpmStat ? t`timed at ${Math.round(active.bpm)}` : null} />
                         <Stat label={t`Length`} value={formatDuration(active.length)} />
                         <Stat label={t`Plays`} value={formatNumber(active.playCount)} />
                         <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />

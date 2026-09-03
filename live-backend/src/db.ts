@@ -3225,6 +3225,12 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
     // backfilled by the r5 BUILD_REVISION re-upsert.
     await db.execute("alter table map_search_index add column msd_overall real");
   }
+  if (!mapSearchColumns.has("note_bpm")) {
+    // Note-weighted song tempo from the chart analysis (dan/note-bpm.ts), so
+    // the map modal can show the real tempo next to a gimmick nominal bpm.
+    // Backfilled by the r11 BUILD_REVISION re-upsert.
+    await db.execute("alter table map_search_index add column note_bpm real");
+  }
   if (!mapSearchColumns.has("msd_ln_json")) {
     // Raw tail-aware MSD calc run (same semantics as
     // beatmap_chart_analysis.msd_ln_json; readers blend by keymode weight), so

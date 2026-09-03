@@ -13434,6 +13434,11 @@ msgstr "周四"
 msgid "Time played"
 msgstr "游玩时长"
 
+#. placeholder {0}: Math.round(active.bpm)
+#: src/components/maps/MapDetailModal.tsx
+msgid "timed at {0}"
+msgstr "标注 {0}"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Timed out loading the replay renderer."
 msgstr "加载回放渲染器超时。"

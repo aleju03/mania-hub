@@ -13425,6 +13425,11 @@ msgstr "Jueves"
 msgid "Time played"
 msgstr "Tiempo jugado"
 
+#. placeholder {0}: Math.round(active.bpm)
+#: src/components/maps/MapDetailModal.tsx
+msgid "timed at {0}"
+msgstr "timing a {0}"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Timed out loading the replay renderer."
 msgstr "Se agotó el tiempo de espera al cargar el renderizador de replays."
