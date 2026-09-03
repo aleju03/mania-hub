@@ -7,7 +7,9 @@ import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
-import { MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
+import { INVERSE_MOD_VARIANT, MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
+import type { RateDanVerdictPair } from "./dan-estimates.js";
+import { invertManiaOsuText } from "../dan/invert-mod.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
@@ -749,6 +751,13 @@ export interface StoredPlaySsr {
   // stored. Absent means unchecked (rated before the check existed), and the
   // retention pass checks it on the next compute.
   rateVibroChecked?: number;
+  // True when the play was set under lazer's Invert mod and so was rated (SSR
+  // and dan alike) against the inverted chart (dan/invert-mod.ts) rather than
+  // the stored one. Its slot key carries it, so it never displaces a plain
+  // play of the same chart at the same rate, and the dan clear rules read the
+  // inverted chart's own verdict for it. Only the keymodes in
+  // INVERSE_MOD_KEY_COUNTS ever store one.
+  inverse?: boolean;
 }
 
 interface StoredModesSummary {
@@ -788,9 +797,16 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
  * Mods under which the judgements testify about a chart the stored .osu never
  * was, so both the SSR (computed from the stored notes) and any dan credit
  * would be mis-rated. Hold Off plays every hold as a bare tap, which turns an
- * LN chart into rice; Invert turns the gaps between notes into holds; No
- * Release frees every hold tail, which is where LN accuracy is earned. Such a
- * play is skipped rather than mis-rated, like the no-single-rate mods.
+ * LN chart into rice; No Release frees every hold tail, which is where LN
+ * accuracy is earned. Such a play is skipped rather than mis-rated, like the
+ * no-single-rate mods.
+ *
+ * Invert rewrites the chart too (the gaps between notes become holds), but its
+ * rewrite is deterministic and rebuilt here (dan/invert-mod.ts), so on the
+ * keymodes in INVERSE_MOD_KEY_COUNTS an Invert play is rated against the
+ * inverted chart instead of being skipped: it is how a 7K player plays inverse
+ * LN on a rice chart, and the 7K LN ladder has an Inverse tile for exactly
+ * that. Everywhere else it is still turned away.
  *
  * Difficulty Adjust is deliberately not one of them: mania's DA moves the OD
  * slider (and HP drain), never a note, so the stored .osu is still the chart
@@ -800,7 +816,7 @@ export function getPlayRate(mods: OsuMod[] | string[] | undefined): number | nul
  * the slider DOWN is refused a rating outright though - see
  * daWidensHitWindows.
  */
-const CHART_REWRITING_MODS = new Set(["HO", "IN", "NR"]);
+const CHART_REWRITING_MODS = new Set(["HO", "NR"]);
 
 export function scoreRewritesChart(mods: OsuMod[] | string[] | undefined): boolean {
   for (const mod of mods ?? []) {
@@ -808,6 +824,67 @@ export function scoreRewritesChart(mods: OsuMod[] | string[] | undefined): boole
     if (CHART_REWRITING_MODS.has(acronym)) return true;
   }
   return false;
+}
+
+/** Whether the play was set under lazer's Invert mod. */
+export function scoreInvertsChart(mods: OsuMod[] | string[] | undefined): boolean {
+  for (const mod of mods ?? []) {
+    const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
+    if (acronym === INVERSE_MOD_VARIANT) return true;
+  }
+  return false;
+}
+
+/**
+ * The keymodes an Invert play is rated on. 7K is the one whose scene names
+ * inverse as an LN discipline and whose ladder has a tile for it; the 4K LN
+ * verdicts come from LeoBlack, which has never been checked against inverted
+ * charts, so those plays stay turned away until that is measured.
+ */
+const INVERSE_MOD_KEY_COUNTS = new Set([7]);
+
+/**
+ * The pattern tags an Invert play carries instead of its chart's. The mod
+ * makes the chart inverse LN by construction, so the clear files by that fact
+ * rather than by the analyzer's tags for the rice it never played; the bare
+ * "ln" tag puts it in General too, which holds the side's whole body of LN
+ * work (danSkillsetBuckets).
+ */
+const INVERSE_MOD_PATTERNS = ["ln", "lninverse"];
+
+/**
+ * The slot a rated play occupies: best play per (chart, rate), with an Invert
+ * play in a slot of its own since it played a different chart.
+ */
+function playSlotKey(beatmapId: number, rate: number, inverse: boolean | undefined): string {
+  return inverse ? `${beatmapId}:${rate}:${INVERSE_MOD_VARIANT}` : `${beatmapId}:${rate}`;
+}
+
+/** The .osu an Invert play is rated against, or the chart's own for any other. */
+function ratedOsuTextFor(osuText: string, inverse: boolean | undefined): string | null {
+  return inverse ? invertManiaOsuText(osuText) : osuText;
+}
+
+/**
+ * The chart facts the bucket walk reads for an Invert play: the stored chart's
+ * cluster shares and tags describe notes the player never held, so they are
+ * replaced by what the mod made of it (INVERSE_MOD_PATTERNS). Everything the
+ * clear rules read directly (eligibility, OD, length) stays the chart's own.
+ */
+function inverseModChartInfo(chart: ChartSkillInfo | undefined): ChartSkillInfo | undefined {
+  if (!chart) return undefined;
+  return {
+    ...chart,
+    patterns: INVERSE_MOD_PATTERNS,
+    jackDemand: false,
+    jackShare: null,
+    streamShare: null,
+    techCategory: null,
+    clusterTrill: null,
+    handstreamCluster: null,
+    techScore: 0,
+    chordjackScore: 0,
+  };
 }
 
 /**
@@ -1170,6 +1247,9 @@ export interface ChartSkillInfo {
   /** Stored overall difficulty from the beatmaps row; null when the chart is
    * not yet enriched. Read by the dan-evidence OD floor (DAN_MIN_OD). */
   od: number | null;
+  /** The analysis row's key count, so an Invert play can be turned away for a
+   * keymode the mod is not supported on before its .osu is loaded. */
+  keyCount?: number | null;
 }
 
 interface LeanHalfJson {
@@ -1528,6 +1608,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         htDanLabel: readDanLabel(danHt?.primaryLabel),
         lengthSeconds: readLengthSeconds(row.total_length),
         od: readStoredOd(row.od),
+        keyCount,
       });
     }
     if (offset + chunk.length < ids.length) {
@@ -1660,14 +1741,31 @@ function clearRatePercent(rate: number): number | null {
   return percent;
 }
 
+/**
+ * The (chart, rate[, mod]) verdict a play's clear reads from the rate-verdict
+ * map, or null when it reads the chart-analysis columns instead (a plain 1.0x
+ * play) or is outside the estimator's band. An Invert play always reads a
+ * verdict of its own, at every rate including 1.0x: the stored chart's
+ * columns describe a chart it never played.
+ */
+function rateVerdictPairFor(play: StoredPlaySsr): RateDanVerdictPair | null {
+  if (!Number.isInteger(play.beatmapId) || play.beatmapId <= 0) return null;
+  if (play.inverse) {
+    if (!Number.isFinite(play.rate) || play.rate <= 0) return null;
+    const percent = Math.round(play.rate * 100);
+    if (percent < MIN_RATE_PERCENT || percent > MAX_RATE_PERCENT) return null;
+    return { beatmapId: play.beatmapId, ratePercent: percent, modVariant: INVERSE_MOD_VARIANT };
+  }
+  const ratePercent = clearRatePercent(play.rate);
+  return ratePercent == null ? null : { beatmapId: play.beatmapId, ratePercent };
+}
+
 /** The stored rate verdicts these plays' clears read, in clear-rule terms. */
 async function loadRateVerdictCredits(db: Db, plays: StoredPlaySsr[]): Promise<RateVerdictMap> {
-  const pairs: Array<{ beatmapId: number; ratePercent: number }> = [];
+  const pairs: RateDanVerdictPair[] = [];
   for (const play of plays) {
-    const ratePercent = clearRatePercent(play.rate);
-    if (ratePercent != null && Number.isInteger(play.beatmapId) && play.beatmapId > 0) {
-      pairs.push({ beatmapId: play.beatmapId, ratePercent });
-    }
+    const pair = rateVerdictPairFor(play);
+    if (pair) pairs.push(pair);
   }
   const stored = await loadStoredRateDanVerdicts(db, pairs);
   const credits: RateVerdictMap = new Map();
@@ -1686,18 +1784,19 @@ function missingRateVerdictPairs(
   plays: StoredPlaySsr[],
   infoByBeatmap: Map<number, ChartSkillInfo>,
   rateVerdicts: RateVerdictMap,
-): Array<{ beatmapId: number; ratePercent: number }> {
-  const missing = new Map<string, { beatmapId: number; ratePercent: number }>();
+): RateDanVerdictPair[] {
+  const missing = new Map<string, RateDanVerdictPair>();
   for (const play of plays) {
-    const ratePercent = clearRatePercent(play.rate);
-    if (ratePercent == null) continue;
+    const pair = rateVerdictPairFor(play);
+    if (pair == null) continue;
     const info = infoByBeatmap.get(play.beatmapId);
     if (!info) continue;
-    if (ratePercent === 150 && info.dtFamily != null) continue;
-    if (ratePercent === 75 && info.htFamily != null) continue;
-    const key = rateDanVerdictKey(play.beatmapId, ratePercent);
+    // The sweeps' columns only describe the stored chart, never a mod variant.
+    if (pair.modVariant == null && pair.ratePercent === 150 && info.dtFamily != null) continue;
+    if (pair.modVariant == null && pair.ratePercent === 75 && info.htFamily != null) continue;
+    const key = rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant);
     if (rateVerdicts.has(key)) continue;
-    missing.set(key, { beatmapId: play.beatmapId, ratePercent });
+    missing.set(key, pair);
   }
   return [...missing.values()];
 }
@@ -1727,9 +1826,10 @@ function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
  * Every one of these is a rule the estimate depends on, and each drops a play
  * that the player did in fact set - so the explaining surfaces list the play
  * with its reason rather than leaving a hole the reader has to guess at.
- * `chart_rewritten` is the one class that never reaches here: HO/IN/NR plays
- * are refused a rating at all (scoreRewritesChart), so no stored play carries
- * them and nothing downstream can name them. A DA that widened the hit
+ * `chart_rewritten` is the one class that never reaches here: HO/NR plays
+ * (and Invert plays outside INVERSE_MOD_KEY_COUNTS) are refused a rating at
+ * all (scoreRewritesChart), so no stored play carries them and nothing
+ * downstream can name them. A DA that widened the hit
  * windows is refused on the same terms (daWidensHitWindows), so `low_od` now
  * only names plays judged at an OD the chart itself sets too low, or a DA that
  * raised the slider but not past the floor.
@@ -1783,6 +1883,13 @@ function danClearTargetFor(
 ): DanClearTarget | null {
   const target = (rawDan: number | null, side: "rc" | "ln", label: string | null): DanClearTarget | null =>
     rawDan == null ? null : { rawDan, side, label };
+  if (play.inverse) {
+    // Rated against the inverted chart, whose verdict is its own row at every
+    // rate (the chart-analysis columns describe the chart before the mod).
+    const pair = rateVerdictPairFor(play);
+    const verdict = pair ? rateVerdicts.get(rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant)) : null;
+    return verdict ? target(verdict.rawDan, verdict.side, verdict.displayName ?? null) : null;
+  }
   if (play.rate === 1 && info.lnRatio != null) {
     const side = info.lnRatio >= lnPrimaryMinRatioFor(keyCount) ? "ln" : "rc";
     return target(side === "ln" ? info.lnRawDan : info.rcRawDan, side, side === "ln" ? info.lnDanLabel : info.rcDanLabel);
@@ -1907,30 +2014,13 @@ function collectDanClears(
       }
       clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold });
     };
-    if (play.rate === 1 && info.lnRatio != null) {
-      const side = info.lnRatio >= lnPrimaryMinRatioFor(keyCount) ? "ln" : "rc";
-      push(side === "ln" ? info.lnRawDan : info.rcRawDan, side, side === "ln" ? info.lnDanLabel : info.rcDanLabel);
-    } else if (play.rate === 1.5 && info.dtFamily != null) {
-      push(info.dtRawDan, info.dtFamily, info.dtDanLabel);
-    } else if (play.rate === 0.75 && info.htFamily != null) {
-      // Credited what the chart is worth AT 0.75x, which is well under its 1.0x
-      // dan: slowing a chart down does not clear the chart it used to be.
-      push(info.htRawDan, info.htFamily, info.htDanLabel);
+    // The dan the play is measured against is the target resolved above
+    // (danClearTargetFor owns the branch order); a play with none credits
+    // nothing.
+    if (target) {
+      push(target.rawDan, target.side, target.label);
     } else {
-      // Every other rate in the 0.5x-2.0x band - a lazer speed_change, or a
-      // 1.5x/0.75x chart the sweeps never stored columns for - credits the
-      // dan_estimates verdict at the play's own rate, on the same terms.
-      const ratePercent = clearRatePercent(play.rate);
-      if (ratePercent == null) {
-        reject(play, "no_chart_dan", aimed);
-        continue;
-      }
-      const verdict = rateVerdicts.get(rateDanVerdictKey(play.beatmapId, ratePercent));
-      if (verdict) {
-        push(verdict.rawDan, verdict.side, verdict.displayName ?? null);
-      } else {
-        reject(play, "no_chart_dan", aimed);
-      }
+      reject(play, "no_chart_dan", aimed);
     }
   }
   return clears;
@@ -2395,6 +2485,8 @@ interface PlayCandidate {
    * not on the beatmaps row yet (chartOdPending). */
   odOverride: number | null;
   chartOdPending: boolean;
+  /** Set under Invert: rated against the inverted chart, in its own slot. */
+  inverse: boolean;
 }
 
 /**
@@ -2450,9 +2542,9 @@ export async function computePlayerSkillRatings(
   // the same slot. Tracked plays that fail validation are best-effort extras
   // and skip silently; only top plays count toward unsupportedPlays.
   const candidates = new Map<string, PlayCandidate>();
-  // Score identities seen carrying a chart-rewriting mod (HO/IN/NR):
-  // never candidates, and grounds for evicting a stored play rated before
-  // the exclusion existed.
+  // Score identities seen carrying a chart-rewriting mod (HO/NR, or Invert
+  // on a keymode it is not rated on): never candidates, and grounds for
+  // evicting a stored play rated before the exclusion existed.
   const rewritingModIdentities = new Set<string>();
   // Score identities seen carrying a DA that widened the hit windows below
   // the chart's own OD: same treatment, and the same grounds for eviction.
@@ -2469,6 +2561,16 @@ export async function computePlayerSkillRatings(
       return;
     }
     const info = infoByBeatmap.get(beatmapId);
+    // An Invert play is rated against the inverted chart on the keymodes that
+    // support it; on any other it rewrote the chart like HO/NR do. With no
+    // analysis row yet the keymode check waits for the calc loop, which reads
+    // it off the .osu it loads anyway.
+    const inverse = scoreInvertsChart(score.mods);
+    if (inverse && info?.keyCount != null && !INVERSE_MOD_KEY_COUNTS.has(info.keyCount)) {
+      rewritingModIdentities.add(getScoreIdentity(score));
+      if (source === "top") unsupportedPlays += 1;
+      return;
+    }
     if (info?.vibro && !ppBackedChartIds.has(beatmapId)) return;
     const rate = getPlayRate(score.mods);
     if (rate == null) {
@@ -2489,17 +2591,19 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    const goal = ssrGoalForScore(score, info?.lnRatio ?? null, odOverride ?? chartOd);
+    // Under Invert every object is a hold, so the LN goal fade is the whole
+    // fade regardless of what the stored chart's hold share was.
+    const goal = ssrGoalForScore(score, inverse ? 1 : info?.lnRatio ?? null, odOverride ?? chartOd);
     if (goal == null) {
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    const key = `${beatmapId}:${rate}`;
+    const key = playSlotKey(beatmapId, rate, inverse);
     const existing = candidates.get(key);
     if (!existing || goal > existing.goal || (goal === existing.goal && source === "top" && existing.source === "tracked")) {
       candidates.set(key, {
         score, beatmapId, rate, goal, identity: getScoreIdentity(score), source,
-        odOverride, chartOdPending: odOverride != null && chartOd == null,
+        odOverride, chartOdPending: odOverride != null && chartOd == null, inverse,
       });
     }
   };
@@ -2559,7 +2663,10 @@ export async function computePlayerSkillRatings(
       odOverride: difficultyAdjustOd(score.mods),
     };
     const previous = previousByIdentity.get(identity);
-    if (previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal) {
+    if (
+      previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal
+      && (previous.inverse === true) === candidate.inverse
+    ) {
       analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence });
       continue;
     }
@@ -2584,17 +2691,34 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       continue;
     }
+    // The keymode check the consider pass could not make without an analysis
+    // row: Invert on any other keymode rewrote the chart, like HO/NR.
+    if (candidate.inverse && !INVERSE_MOD_KEY_COUNTS.has(keyCount)) {
+      rewritingModIdentities.add(identity);
+      if (source === "top") unsupportedPlays += 1;
+      continue;
+    }
+    // From here on the play is rated against the chart it played: the stored
+    // file, or under Invert the inverted one.
+    const ratedText = ratedOsuTextFor(osuText, candidate.inverse);
+    if (ratedText == null) {
+      if (source === "top") unsupportedPlays += 1;
+      continue;
+    }
     // Rate vibro, ahead of the calc so a shake never costs a MinaCalc run.
     // Same trust rule as the stored flag: pp-backed charts are ranked and
     // ranked does not admit vibro, so only tracked-history charts check.
     let rateVibroChecked: number | undefined;
     if (rate !== 1 && !ppBackedChartIds.has(beatmapId) && rateVibroChecks < MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
       rateVibroChecks += 1;
-      const vibro = chartVibroAtRate(osuText, rate);
+      const vibro = chartVibroAtRate(ratedText, rate);
       if (vibro) continue;
       if (vibro === false) rateVibroChecked = RATE_VIBRO_CHECK_VERSION;
     }
-    const ssr = await computePlaySsrValues(osuText, { rate, keyCount, goal, lnRatio: infoByBeatmap.get(beatmapId)?.lnRatio ?? null });
+    const ssr = await computePlaySsrValues(ratedText, {
+      rate, keyCount, goal,
+      lnRatio: candidate.inverse ? 1 : infoByBeatmap.get(beatmapId)?.lnRatio ?? null,
+    });
     if (!ssr) {
       if (source === "top") unsupportedPlays += 1;
       continue;
@@ -2602,6 +2726,7 @@ export async function computePlayerSkillRatings(
     analyzedByKey.set(key, {
       identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: ssr.values, patterns: [], ...clearEvidence,
       ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
+      ...(candidate.inverse ? { inverse: true } : {}),
     });
     // Each calc run is a short synchronous wasm burst; breathe between bursts
     // so a long first run does not starve the event loop.
@@ -2628,11 +2753,16 @@ export async function computePlayerSkillRatings(
     // evict instead of retaining.
     if (!(previous.goal > SSR_GOAL_MIN)) continue;
     // A stored play whose still-visible score turns out to carry a
-    // chart-rewriting mod (HO/IN/NR) was rated against a chart it never
+    // chart-rewriting mod (HO/NR) was rated against a chart it never
     // played (rated before the exclusion existed); evict instead of
     // retaining. Applies to any source: top trust is about the rate, and
     // these disqualify regardless of rate.
     if (rewritingModIdentities.has(previous.identity)) continue;
+    // Same for an Invert play stored without the inverse flag: it was rated
+    // against the un-inverted chart, before the mod was rated at all. And an
+    // inverse play on a keymode the mod is no longer rated on goes with it.
+    if (!previous.inverse && previous.mods?.includes(INVERSE_MOD_VARIANT)) continue;
+    if (previous.inverse && !INVERSE_MOD_KEY_COUNTS.has(previous.keyCount)) continue;
     // Same for a DA that widened the hit windows. The stored play carries the
     // OD it was judged at, so this catches the ones rated before the
     // exclusion existed even after their score payload is gone - which is the
@@ -2654,7 +2784,7 @@ export async function computePlayerSkillRatings(
     if (previous.source !== "top" && untrustedIdentities.has(previous.identity)) continue;
     const candidateRate = candidateRateByIdentity.get(previous.identity);
     if (candidateRate != null && candidateRate !== previous.rate) continue;
-    const key = `${previous.beatmapId}:${previous.rate}`;
+    const key = playSlotKey(previous.beatmapId, previous.rate, previous.inverse);
     const current = analyzedByKey.get(key);
     if (!current) {
       analyzedByKey.set(key, previous);
@@ -2672,9 +2802,10 @@ export async function computePlayerSkillRatings(
     if (play.rateVibroChecked === RATE_VIBRO_CHECK_VERSION) continue;
     if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) break;
     const osuText = await loadOsuText(db, osu, play.beatmapId);
-    if (osuText == null) continue;
+    const ratedText = osuText == null ? null : ratedOsuTextFor(osuText, play.inverse);
+    if (ratedText == null) continue;
     rateVibroChecks += 1;
-    const vibro = chartVibroAtRate(osuText, play.rate);
+    const vibro = chartVibroAtRate(ratedText, play.rate);
     if (vibro) analyzedByKey.delete(key);
     else if (vibro === false) analyzedByKey.set(key, { ...play, rateVibroChecked: RATE_VIBRO_CHECK_VERSION });
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -2687,7 +2818,7 @@ export async function computePlayerSkillRatings(
   const untaggedBeatmapIds: number[] = [];
   for (const play of analyzed) {
     const info = infoByBeatmap.get(play.beatmapId);
-    if (info) play.patterns = info.patterns;
+    if (info) play.patterns = play.inverse ? INVERSE_MOD_PATTERNS : info.patterns;
     else untaggedBeatmapIds.push(play.beatmapId);
   }
 
@@ -2704,11 +2835,11 @@ export async function computePlayerSkillRatings(
     if (osuText == null) continue;
     verdictComputes += 1;
     calcRunsTotal += 1;
-    const lean = await computeAndStoreRateDanVerdictFromText(db, pair.beatmapId, pair.ratePercent, osuText);
+    const lean = await computeAndStoreRateDanVerdictFromText(db, pair.beatmapId, pair.ratePercent, osuText, pair.modVariant);
     if (lean) {
       rateVerdicts.set(
-        rateDanVerdictKey(pair.beatmapId, pair.ratePercent),
-        { rawDan: lean.rawDan, side: lean.family === "ln" ? "ln" : "rc" },
+        rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant),
+        { rawDan: lean.rawDan, side: lean.family === "ln" ? "ln" : "rc", displayName: lean.displayName },
       );
     }
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -3921,8 +4052,11 @@ interface GroupedDanClears {
 function danSkillsetBucketsForPlay(
   buckets: DanSkillsetBucket[],
   play: StoredPlaySsr,
-  chart: ChartSkillInfo | undefined,
+  storedChart: ChartSkillInfo | undefined,
 ): DanSkillsetBucket[] {
+  // An Invert play files by what the mod made of the chart, not by the stored
+  // chart's tags (inverseModChartInfo).
+  const chart = play.inverse ? inverseModChartInfo(storedChart) : storedChart;
   const topSkillset = bucketingSkillset(
     play.values,
     chart?.lengthSeconds ?? null,
@@ -4007,7 +4141,7 @@ export async function getPlayerSkillDanEvidence(
   // existed) would otherwise wait forever. The job key dedupes repeat opens.
   if (queue) {
     for (const pair of missingRateVerdictPairs(plays, infoByBeatmap, rateVerdicts).slice(0, DAN_EVIDENCE_VERDICT_ENQUEUES)) {
-      await enqueueRateDanEstimate(queue, pair.beatmapId, pair.ratePercent).catch(() => {});
+      await enqueueRateDanEstimate(queue, pair.beatmapId, pair.ratePercent, pair.modVariant).catch(() => {});
     }
   }
   // Collected in the same pass as the clears so the two lists cannot disagree

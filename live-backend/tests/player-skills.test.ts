@@ -633,7 +633,7 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("skips Hold Off/Invert/No Release plays: the judged chart is not the stored chart", async () => {
+  it("skips Hold Off/No Release plays, and Invert outside 7K: the judged chart is not the stored chart", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
 
@@ -2663,5 +2663,136 @@ describe("danClearAverageWindowFor", () => {
     expect(danClearAverageWindowFor("rc", 4)).toBe(20);
     expect(danClearAverageWindowFor("ln", 6)).toBe(20);
     expect(danClearAverageWindowFor("ln", 7)).toBe(20);
+  });
+});
+
+// 7K rice at 170 BPM: 1/4 single notes walking the columns, ~1100 objects, no
+// holds at all. Under Invert every gap becomes a hold, so the rated chart is
+// pure LN even though the stored one has none.
+function buildSevenKeyRiceBeatmapFile(): string {
+  const pattern = [0, 3, 6, 1, 4, 2, 5, 3, 0, 6, 2, 4, 1, 5];
+  const notes = Array.from({ length: 1100 }, (_, index) => {
+    const column = pattern[index % pattern.length];
+    const x = Math.floor((column + 0.5) * 512 / 7);
+    const time = 1000 + index * 88;
+    return `${x},192,${time},1,0,0:0:0:0:`;
+  }).join("\n");
+  return `osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+Mode: 3
+
+[Metadata]
+Title: Player Skills Test
+Artist: Test
+Creator: Mapper
+Version: 7K Rice
+
+[Difficulty]
+CircleSize:7
+OverallDifficulty:8
+
+[TimingPoints]
+0,352.94,4,2,0,100,1,0
+
+[HitObjects]
+${notes}
+`;
+}
+
+describe("Invert plays on 7K", () => {
+  it("rates a 7K Invert play against the inverted chart, in its own slot, with its own LN verdict", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const { getScoreIdentity } = await import("../src/shared/score.js");
+      await storeCachedBeatmapFile(db, 701, buildSevenKeyRiceBeatmapFile(), { source: "test" });
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+         values (?, ?, 'ready', 7, ?, ?)`,
+        [701, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [{ id: "chordstream", score: 0.9 }], rc: { rawDan: 9 } }), new Date().toISOString()],
+      );
+      const plain = play({ id: 71, beatmap_id: 701, accuracy: 0.98, statistics: { perfect: 900, great: 200 } });
+      const inverted = play({ id: 72, beatmap_id: 701, accuracy: 0.97, statistics: { perfect: 800, great: 290, good: 5 }, mods: [{ acronym: "IN" }] });
+      const result = await computePlayerSkillRatings(db, failingOsu, [plain, inverted], []);
+      // Both survive: the Invert play is a play of a different chart.
+      expect(result.summary.analyzedPlays).toBe(2);
+      expect(result.summary.unsupportedPlays).toBe(0);
+      const stored = result.plays.find((entry) => entry.identity === getScoreIdentity(inverted))!;
+      expect(stored.inverse).toBe(true);
+      expect(stored.mods).toEqual(["IN"]);
+      // The stored chart is rice; the play files as inverse LN.
+      expect(stored.patterns).toEqual(["ln", "lninverse"]);
+      expect(result.plays.find((entry) => entry.identity === getScoreIdentity(plain))!.inverse).toBeUndefined();
+      expect(result.plays.find((entry) => entry.identity === getScoreIdentity(plain))!.patterns).toEqual(["chordstream"]);
+
+      // The inverted chart's verdict was computed in the same pass, into the
+      // mod table, and never reads as the chart's own.
+      const modRows = (await exec(db, "select mod_variant, rate_percent, status, family from dan_mod_estimates where beatmap_id = 701")).rows;
+      expect(modRows).toHaveLength(1);
+      expect(modRows[0].mod_variant).toBe("IN");
+      expect(Number(modRows[0].rate_percent)).toBe(100);
+      expect(modRows[0].status).toBe("ready");
+      expect(modRows[0].family).toBe("ln");
+      expect((await exec(db, "select 1 from dan_estimates where beatmap_id = 701")).rows).toHaveLength(0);
+      const { loadStoredRateDanVerdicts } = await import("../src/features/dan-estimates.js");
+      expect((await loadStoredRateDanVerdicts(db, [{ beatmapId: 701, ratePercent: 100 }])).size).toBe(0);
+      const modVerdict = await loadStoredRateDanVerdicts(db, [{ beatmapId: 701, ratePercent: 100, modVariant: "IN" }]);
+      expect(modVerdict.get("701:100:IN")?.family).toBe("ln");
+
+      // A second compute reuses the SSR (no calc) and keeps the flag.
+      const again = await computePlayerSkillRatings(db, failingOsu, [plain, inverted], result.plays);
+      expect(again.summary.analyzedPlays).toBe(2);
+      expect(again.plays.find((entry) => entry.identity === getScoreIdentity(inverted))!.inverse).toBe(true);
+
+      // A stored Invert play without the flag was rated against the
+      // un-inverted chart, before the mod was supported: it evicts.
+      const legacy = { ...stored, inverse: undefined, identity: "official:73", mods: ["IN"] };
+      const purged = await computePlayerSkillRatings(db, failingOsu, [], [legacy]);
+      expect(purged.summary.analyzedPlays).toBe(0);
+    });
+  });
+
+  it("files an Invert clear under Inverse and General from the inverted chart's own verdict", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const seed = async (beatmapId: number) => exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+         values (?, ?, 'ready', 7, ?, ?)`,
+        [beatmapId, CHART_ANALYSIS_VERSION,
+          JSON.stringify({ lnRatio: 0, patterns: [{ id: "tech", score: 0.9 }], rc: { rawDan: 9 } }), new Date().toISOString()],
+      );
+      const ids = [741, 742, 743, 744];
+      for (const id of ids) await seed(id);
+      const { collectDanClearsForTest, danSideFromClearsForTest } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, ids);
+      const inversePlay = (beatmapId: number) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 7, rate: 1, goal: 0.95, pp: 100,
+        values: { Overall: 25 }, patterns: ["ln", "lninverse"], accuracy: 0.95, stableAccuracy: 0.95, mods: ["IN"], inverse: true,
+      });
+      const verdicts = new Map(ids.map((id) => [`${id}:100:IN`, { rawDan: 11, side: "ln" as const, displayName: "zenith" }]));
+
+      // Without the inverted chart's verdict the play credits nothing: the
+      // stored chart's rice dan is not what it played.
+      const rejects: Parameters<typeof collectDanClearsForTest>[4] = [];
+      expect(collectDanClearsForTest(7, ids.map(inversePlay), info, new Map(), rejects)).toEqual([]);
+      expect(rejects.map((entry) => entry.reason)).toEqual(["no_chart_dan", "no_chart_dan", "no_chart_dan", "no_chart_dan"]);
+
+      const clears = collectDanClearsForTest(7, ids.map(inversePlay), info, verdicts);
+      expect(clears).toHaveLength(4);
+      expect(clears.every((clear) => clear.side === "ln" && clear.chartDan === 11 && clear.chartDanLabel === "zenith")).toBe(true);
+
+      const side = danSideFromClearsForTest(7, "ln", ids.map(inversePlay), info, [], verdicts)!;
+      expect(side.skillsets?.lninverse?.rawDan).toBe(11);
+      expect(side.skillsets?.lngeneral?.rawDan).toBe(11);
+      // The stored chart's tech tag describes rice the player never held.
+      expect(side.skillsets?.lntech).toBeUndefined();
+
+      // The same plays without the flag are plain rice clears of the chart.
+      const plainClears = collectDanClearsForTest(7, ids.map((id) => ({ ...inversePlay(id), inverse: undefined, mods: [] })), info, verdicts);
+      expect(plainClears.every((clear) => clear.side === "rc" && clear.chartDan === 9)).toBe(true);
+    });
   });
 });

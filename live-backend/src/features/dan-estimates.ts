@@ -4,6 +4,7 @@ import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.j
 import { classifyChartWithCompanella } from "../dan/companella.js";
 import { computeMsd } from "../dan/msd.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
+import { invertManiaOsuText } from "../dan/invert-mod.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -48,11 +49,23 @@ export interface DanEstimateRequest {
   rate?: number;
 }
 
+/**
+ * A lazer mod that rewrites the chart before it is played, so the verdict is
+ * for the rewritten chart rather than the stored one. Only Invert today: a
+ * play under it is rated against invertManiaOsuText's chart, and its verdict
+ * lives in dan_mod_estimates, keyed once more by the mod, so it can never be
+ * read as the chart's own.
+ */
+export type DanModVariant = "IN";
+export const INVERSE_MOD_VARIANT: DanModVariant = "IN";
+
 export interface NormalizedDanEstimateRequest {
   beatmapId: number;
   rate: number;
   ratePercent: number;
   key: string;
+  /** Set only by internal callers (the clear rules, their job); never off the wire. */
+  modVariant?: DanModVariant;
 }
 
 export interface DanEstimateBatchResponse {
@@ -73,7 +86,12 @@ type CachedDanEstimate =
   | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null }
   | { found: false };
 
-export function normalizeDanEstimateItems(items: unknown[]): NormalizedDanEstimateRequest[] {
+export function normalizeDanEstimateItems(
+  items: unknown[],
+  // The public batch endpoint never sets this: a mod variant on an item is
+  // honoured only for the job payloads the internal callers write.
+  options: { modVariants?: boolean } = {},
+): NormalizedDanEstimateRequest[] {
   const normalized: NormalizedDanEstimateRequest[] = [];
   const seen = new Set<string>();
 
@@ -86,7 +104,8 @@ export function normalizeDanEstimateItems(items: unknown[]): NormalizedDanEstima
     const rawRate = raw.rate == null ? 1 : Number(raw.rate);
     const safeRate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
     const ratePercent = Math.max(MIN_RATE_PERCENT, Math.min(MAX_RATE_PERCENT, Math.round(safeRate * 100)));
-    const key = responseKey(beatmapId, ratePercent);
+    const modVariant = options.modVariants && raw.mod === INVERSE_MOD_VARIANT ? INVERSE_MOD_VARIANT : undefined;
+    const key = modVariant ? rateDanVerdictKey(beatmapId, ratePercent, modVariant) : responseKey(beatmapId, ratePercent);
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push({
@@ -94,10 +113,25 @@ export function normalizeDanEstimateItems(items: unknown[]): NormalizedDanEstima
       rate: ratePercent / 100,
       ratePercent,
       key,
+      ...(modVariant ? { modVariant } : {}),
     });
   }
 
   return normalized;
+}
+
+/** The request the clear rules make for one (chart, rate, mod) verdict. */
+function normalizeRateDanRequest(
+  beatmapId: number,
+  ratePercent: number,
+  modVariant?: DanModVariant,
+): NormalizedDanEstimateRequest | null {
+  const [request] = normalizeDanEstimateItems(
+    [{ beatmapId, rate: ratePercent / 100, ...(modVariant ? { mod: modVariant } : {}) }],
+    { modVariants: true },
+  );
+  if (!request || request.ratePercent !== ratePercent) return null;
+  return request;
 }
 
 export async function getDanEstimateBatch(
@@ -238,17 +272,18 @@ async function fillCachedRateMsd(
 export async function enqueueDanEstimate(queue: JobQueue, request: NormalizedDanEstimateRequest): Promise<void> {
   await queue.enqueue(
     "compute_dan_estimate",
-    danEstimateJobKey(request.beatmapId, request.ratePercent),
+    danEstimateJobKey(request.beatmapId, request.ratePercent, request.modVariant),
     {
       beatmapId: request.beatmapId,
       rate: request.rate,
+      ...(request.modVariant ? { mod: request.modVariant } : {}),
     },
     { priority: 45 },
   );
 }
 
 export async function computeDanEstimateJob(db: Db, osu: OsuApiClient, payload: unknown): Promise<void> {
-  const [request] = normalizeDanEstimateItems([payload]);
+  const [request] = normalizeDanEstimateItems([payload], { modVariants: true });
   if (!request) return;
   await computeAndStoreDanEstimate(db, osu, request, "job:compute_dan_estimate");
 }
@@ -277,7 +312,31 @@ async function computeAndStoreDanEstimate(
     }
     throw error;
   }
-  return classifyAndStoreDanEstimate(db, request, parsed, starRating, options);
+  const variant = applyModVariant(parsed, request.modVariant);
+  if (!variant) {
+    // The file is fine but the mod cannot rebuild it (no [HitObjects] to
+    // invert): terminal, like a keymode the estimator has no table for.
+    await storeUnsupportedDanEstimate(db, request);
+    return { status: "unsupported", value: null, msd: null };
+  }
+  return classifyAndStoreDanEstimate(db, request, variant, starRating, options);
+}
+
+/**
+ * The chart a mod-variant request is about: the stored .osu rewritten the way
+ * the mod rewrites it, re-parsed so the classifier sees the rewritten notes.
+ * A request without a variant is the stored chart itself. Null when the
+ * rewrite cannot be built or the result does not parse.
+ */
+function applyModVariant(parsed: ParsedDanBeatmap, modVariant: DanModVariant | undefined): ParsedDanBeatmap | null {
+  if (!modVariant) return parsed;
+  const osuText = invertManiaOsuText(parsed.osuText);
+  if (!osuText) return null;
+  try {
+    return { map: parseManiaBeatmap(osuText), osuText };
+  } catch {
+    return null;
+  }
 }
 
 async function classifyAndStoreDanEstimate(
@@ -316,49 +375,36 @@ async function classifyAndStoreDanEstimate(
     estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
   };
 
-  await exec(
-    db,
-    `insert into dan_estimates (
-       estimator_version, beatmap_id, rate_percent, status, label, variant, display_name,
-       raw_dan, family, confidence, star_rating, error, msd_json, computed_at, updated_at
-     )
-     values (?, ?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, null, ?, ?, ?)
-     on conflict(estimator_version, beatmap_id, rate_percent) do update set
-       status = excluded.status,
-       label = excluded.label,
-       variant = excluded.variant,
-       display_name = excluded.display_name,
-       raw_dan = excluded.raw_dan,
-       family = excluded.family,
-       confidence = excluded.confidence,
-       star_rating = excluded.star_rating,
-       error = excluded.error,
-       msd_json = coalesce(excluded.msd_json, dan_estimates.msd_json),
-       computed_at = excluded.computed_at,
-       updated_at = excluded.updated_at`,
-    [
-      DAN_ESTIMATE_CACHE_VERSION,
-      request.beatmapId,
-      request.ratePercent,
-      lean.label,
-      lean.variant,
-      lean.displayName,
-      lean.rawDan,
-      lean.family,
-      lean.confidence,
-      starRating ?? null,
-      msd ? JSON.stringify(msd) : null,
-      nowIso(),
-      nowIso(),
-    ],
-  );
+  await writeDanEstimateRow(db, request, {
+    status: "ready",
+    label: lean.label,
+    variant: lean.variant,
+    displayName: lean.displayName,
+    rawDan: lean.rawDan,
+    family: lean.family,
+    confidence: lean.confidence,
+    starRating: starRating ?? null,
+    error: null,
+    msdJson: msd ? JSON.stringify(msd) : null,
+  });
 
   return { status: "ready", value: lean, msd: msd?.values ?? null };
 }
 
-/** Key a (chart, rate) verdict is filed under in the maps the dan clear rules read. */
-export function rateDanVerdictKey(beatmapId: number, ratePercent: number): string {
-  return `${beatmapId}:${ratePercent}`;
+/**
+ * Key a (chart, rate[, mod]) verdict is filed under in the maps the dan clear
+ * rules read. A mod variant's key carries the mod, so an Invert play on a
+ * chart and a plain play on it at the same rate read different verdicts.
+ */
+export function rateDanVerdictKey(beatmapId: number, ratePercent: number, modVariant?: DanModVariant): string {
+  return `${beatmapId}:${ratePercent}${modVariant ? `:${modVariant}` : ""}`;
+}
+
+/** One (chart, rate[, mod]) the clear rules want a verdict for. */
+export interface RateDanVerdictPair {
+  beatmapId: number;
+  ratePercent: number;
+  modVariant?: DanModVariant;
 }
 
 export interface StoredRateDanVerdict {
@@ -384,25 +430,39 @@ const RATE_VERDICT_QUERY_CHUNK = 400;
  */
 export async function loadStoredRateDanVerdicts(
   db: Db,
-  pairs: Iterable<{ beatmapId: number; ratePercent: number }>,
+  pairs: Iterable<RateDanVerdictPair>,
 ): Promise<Map<string, StoredRateDanVerdict | null>> {
   const wanted = new Set<string>();
   const beatmapIds = new Set<number>();
+  const modBeatmapIds = new Set<number>();
   for (const pair of pairs) {
     if (!Number.isInteger(pair.beatmapId) || pair.beatmapId <= 0) continue;
     if (!Number.isInteger(pair.ratePercent)) continue;
-    wanted.add(rateDanVerdictKey(pair.beatmapId, pair.ratePercent));
-    beatmapIds.add(pair.beatmapId);
+    wanted.add(rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant));
+    (pair.modVariant ? modBeatmapIds : beatmapIds).add(pair.beatmapId);
   }
   const verdicts = new Map<string, StoredRateDanVerdict | null>();
   if (wanted.size === 0) return verdicts;
-  const ids = [...beatmapIds];
+  await collectStoredRateDanVerdicts(db, "dan_estimates", [...beatmapIds], wanted, verdicts);
+  await collectStoredRateDanVerdicts(db, "dan_mod_estimates", [...modBeatmapIds], wanted, verdicts);
+  return verdicts;
+}
+
+/** One table's worth of loadStoredRateDanVerdicts; the mod table keys by mod too. */
+async function collectStoredRateDanVerdicts(
+  db: Db,
+  table: "dan_estimates" | "dan_mod_estimates",
+  ids: number[],
+  wanted: Set<string>,
+  verdicts: Map<string, StoredRateDanVerdict | null>,
+): Promise<void> {
+  const modColumn = table === "dan_mod_estimates" ? ", mod_variant" : "";
   for (let offset = 0; offset < ids.length; offset += RATE_VERDICT_QUERY_CHUNK) {
     const chunk = ids.slice(offset, offset + RATE_VERDICT_QUERY_CHUNK);
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = (await exec(
       db,
-      `select beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name from dan_estimates
+      `select beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name${modColumn} from ${table}
        where estimator_version = ? and beatmap_id in (${placeholders})`,
       [DAN_ESTIMATE_CACHE_VERSION, ...chunk],
     )).rows;
@@ -418,7 +478,8 @@ export async function loadStoredRateDanVerdicts(
       if (Number.isFinite(value) && value > 0) currentStarRatings.set(Number(row.beatmap_id), value);
     }
     for (const row of rows) {
-      const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent));
+      const modVariant = row.mod_variant === INVERSE_MOD_VARIANT ? INVERSE_MOD_VARIANT : undefined;
+      const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent), modVariant);
       if (!wanted.has(key)) continue;
       const status = String(row.status ?? "");
       if (status === "unsupported" || status === "unavailable") {
@@ -439,25 +500,27 @@ export async function loadStoredRateDanVerdicts(
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
   }
-  return verdicts;
 }
 
 /**
- * One (chart, rate) dan verdict computed from an already-loaded .osu (the
- * caller owns the fetch policy) and stored in dan_estimates on the same terms
- * as the batch path, so every reader shares one cache. Returns the ready
- * verdict, or null for anything uncreditable: an already-stored terminal row,
- * an unsupported keymode (stored, so it will not recompute), or a chart the
- * parser rejects (not stored; the caller retries on a later pass).
+ * One (chart, rate[, mod]) dan verdict computed from the chart's already-loaded
+ * .osu (the caller owns the fetch policy) and stored on the same terms as the
+ * batch path, so every reader shares one cache. A mod variant is applied here
+ * to the stored text, so the caller always hands over the chart's own file.
+ * Returns the ready verdict, or null for anything uncreditable: an
+ * already-stored terminal row, an unsupported keymode or an un-rebuildable
+ * mod variant (both stored, so they will not recompute), or a chart the parser
+ * rejects (not stored; the caller retries on a later pass).
  */
 export async function computeAndStoreRateDanVerdictFromText(
   db: Db,
   beatmapId: number,
   ratePercent: number,
   osuText: string,
+  modVariant?: DanModVariant,
 ): Promise<LeanDanEstimate | null> {
-  const [request] = normalizeDanEstimateItems([{ beatmapId, rate: ratePercent / 100 }]);
-  if (!request || request.ratePercent !== ratePercent) return null;
+  const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
+  if (!request) return null;
   const cached = await readCachedDanEstimate(db, request);
   if (cached.found) return cached.status === "ready" ? cached.value : null;
   let map: ManiaBeatmap;
@@ -466,19 +529,25 @@ export async function computeAndStoreRateDanVerdictFromText(
   } catch {
     return null;
   }
+  const variant = applyModVariant({ map, osuText }, request.modVariant);
+  if (!variant) {
+    await storeUnsupportedDanEstimate(db, request);
+    return null;
+  }
   const starRating = await readBeatmapStarRating(db, request.beatmapId);
-  const computed = await classifyAndStoreDanEstimate(db, request, { map, osuText }, starRating);
+  const computed = await classifyAndStoreDanEstimate(db, request, variant, starRating);
   return computed.value;
 }
 
-/** Queue the (chart, rate) verdict compute; the job key dedupes repeat asks. */
+/** Queue the (chart, rate[, mod]) verdict compute; the job key dedupes repeat asks. */
 export async function enqueueRateDanEstimate(
   queue: JobQueue,
   beatmapId: number,
   ratePercent: number,
+  modVariant?: DanModVariant,
 ): Promise<void> {
-  const [request] = normalizeDanEstimateItems([{ beatmapId, rate: ratePercent / 100 }]);
-  if (!request || request.ratePercent !== ratePercent) return;
+  const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
+  if (!request) return;
   await enqueueDanEstimate(queue, request);
 }
 
@@ -516,13 +585,14 @@ async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number,
 }
 
 async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateRequest): Promise<CachedDanEstimate> {
+  const { table, keyColumns, keyValues } = danEstimateTable(request);
   const row = (await exec(
     db,
     `select *
-     from dan_estimates
-     where estimator_version = ? and beatmap_id = ? and rate_percent = ?
+     from ${table}
+     where ${keyColumns.map((column) => `${column} = ?`).join(" and ")}
      limit 1`,
-    [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent],
+    keyValues,
   )).rows[0];
   if (!row) return { found: false };
   const status = String(row.status ?? "");
@@ -605,15 +675,69 @@ async function storeTerminalDanEstimate(
   error: string,
   msd: Record<string, number> | null = null,
 ): Promise<void> {
+  await writeDanEstimateRow(db, request, {
+    status,
+    label: null,
+    variant: null,
+    displayName: null,
+    rawDan: null,
+    family: null,
+    confidence: null,
+    // Terminal rows are resolved regardless of star rating (an unsupported
+    // keymode or a gone .osu does not change with it), so none is recorded
+    // and the freshness check above never re-opens them over it.
+    starRating: null,
+    error,
+    msdJson: msd ? JSON.stringify({ values: msd }) : null,
+  });
+}
+
+/**
+ * Where a request's row lives. The chart's own verdicts are dan_estimates; a
+ * mod variant's are dan_mod_estimates, the same columns keyed once more by the
+ * mod, so the two can never be confused for each other on a read.
+ */
+function danEstimateTable(request: NormalizedDanEstimateRequest): { table: string; keyColumns: string[]; keyValues: Array<number | string> } {
+  return request.modVariant
+    ? {
+      table: "dan_mod_estimates",
+      keyColumns: ["estimator_version", "beatmap_id", "rate_percent", "mod_variant"],
+      keyValues: [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent, request.modVariant],
+    }
+    : {
+      table: "dan_estimates",
+      keyColumns: ["estimator_version", "beatmap_id", "rate_percent"],
+      keyValues: [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent],
+    };
+}
+
+/** The one upsert both the ready and the terminal writers go through. */
+async function writeDanEstimateRow(
+  db: Db,
+  request: NormalizedDanEstimateRequest,
+  row: {
+    status: DanEstimateStatus;
+    label: string | null;
+    variant: string | null;
+    displayName: string | null;
+    rawDan: number | null;
+    family: string | null;
+    confidence: number | null;
+    starRating: number | null;
+    error: string | null;
+    msdJson: string | null;
+  },
+): Promise<void> {
+  const { table, keyColumns, keyValues } = danEstimateTable(request);
   const now = nowIso();
   await exec(
     db,
-    `insert into dan_estimates (
-       estimator_version, beatmap_id, rate_percent, status, label, variant, display_name,
+    `insert into ${table} (
+       ${keyColumns.join(", ")}, status, label, variant, display_name,
        raw_dan, family, confidence, star_rating, error, msd_json, computed_at, updated_at
      )
-     values (?, ?, ?, ?, null, null, null, null, null, null, ?, ?, ?, ?, ?)
-     on conflict(estimator_version, beatmap_id, rate_percent) do update set
+     values (${keyColumns.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(${keyColumns.join(", ")}) do update set
        status = excluded.status,
        label = excluded.label,
        variant = excluded.variant,
@@ -623,20 +747,21 @@ async function storeTerminalDanEstimate(
        confidence = excluded.confidence,
        star_rating = excluded.star_rating,
        error = excluded.error,
-       msd_json = coalesce(excluded.msd_json, dan_estimates.msd_json),
+       msd_json = coalesce(excluded.msd_json, ${table}.msd_json),
        computed_at = excluded.computed_at,
        updated_at = excluded.updated_at`,
     [
-      DAN_ESTIMATE_CACHE_VERSION,
-      request.beatmapId,
-      request.ratePercent,
-      status,
-      // Terminal rows are resolved regardless of star rating (an unsupported
-      // keymode or a gone .osu does not change with it), so none is recorded
-      // and the freshness check above never re-opens them over it.
-      null,
-      error,
-      msd ? JSON.stringify({ values: msd }) : null,
+      ...keyValues,
+      row.status,
+      row.label,
+      row.variant,
+      row.displayName,
+      row.rawDan,
+      row.family,
+      row.confidence,
+      row.starRating,
+      row.error,
+      row.msdJson,
       now,
       now,
     ],
@@ -649,8 +774,8 @@ async function readBeatmapStarRating(db: Db, beatmapId: number): Promise<number 
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-function danEstimateJobKey(beatmapId: number, ratePercent: number): string {
-  return `dan:${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}:r${ratePercent}`;
+function danEstimateJobKey(beatmapId: number, ratePercent: number, modVariant?: DanModVariant): string {
+  return `dan:${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}:r${ratePercent}${modVariant ? `:${modVariant}` : ""}`;
 }
 
 function responseKey(beatmapId: number, ratePercent: number): string {
