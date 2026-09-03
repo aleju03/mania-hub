@@ -15,7 +15,7 @@
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
 // round trip; changing the actual subject (keymode/skill/side) loads a new one.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Ban, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Ban, ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -57,6 +57,9 @@ const PLAYS_COHORT_SIZE = 200;
 const PLAYS_REVEAL_STEP = 50;
 const COHORT_CACHE_TTL_MS = 60_000;
 const COHORT_CACHE_MAX_ENTRIES = 64;
+// The refresh button answers every click, but asks the backend at most this
+// often. Clicks inside the window only replay the spin.
+const REFRESH_MIN_INTERVAL_MS = 3_000;
 
 export type SkillPlaysExplorerView = "msd" | "dan";
 
@@ -118,13 +121,21 @@ function msdCohortKey(userId: number, keyCount: number, axis: string, sort: "rat
   return `${userId}:${keyCount}:${axis}:${sort}`;
 }
 
-function loadMsdCohort(userId: number, keyCount: number, axis: string, sort: "rating" | "recent"): Promise<LivePlayerSkillPlay[]> {
+function loadMsdCohort(
+  userId: number,
+  keyCount: number,
+  axis: string,
+  sort: "rating" | "recent",
+  options: { fresh?: boolean } = {},
+): Promise<LivePlayerSkillPlay[]> {
   const key = msdCohortKey(userId, keyCount, axis, sort);
+  if (options.fresh) msdCohortCache.delete(key);
   return loadCachedCohort(msdCohortCache, key, async () => {
     const page = await fetchLivePlayerSkillPlaysDirect(userId, keyCount, axis, {
       limit: PLAYS_COHORT_SIZE,
       offset: 0,
       sort,
+      ...(options.fresh ? { fresh: true } : {}),
     });
     return page.items.slice(0, PLAYS_COHORT_SIZE);
   });
@@ -147,14 +158,22 @@ function danCohortKey(userId: number, keyCount: number, side: "rc" | "ln", sort:
   return `${userId}:${keyCount}:${side}:${sort}`;
 }
 
-function loadDanCohort(userId: number, keyCount: number, side: "rc" | "ln", sort: "rating" | "recent"): Promise<DanRow[]> {
+function loadDanCohort(
+  userId: number,
+  keyCount: number,
+  side: "rc" | "ln",
+  sort: "rating" | "recent",
+  options: { fresh?: boolean } = {},
+): Promise<DanRow[]> {
   const key = danCohortKey(userId, keyCount, side, sort);
+  if (options.fresh) danCohortCache.delete(key);
   return loadCachedCohort(danCohortCache, key, async () => {
     const payload = await fetchLivePlayerDanEvidenceDirect(userId, keyCount, side, {
       limit: PLAYS_COHORT_SIZE,
       includeRejected: true,
       rejectedLimit: PLAYS_COHORT_SIZE,
       sort,
+      ...(options.fresh ? { fresh: true } : {}),
     });
     const rows: DanRow[] = [
       ...payload.clears.map((clear): DanRow => ({ kind: "clear", play: clear.play, dan: clear.creditedDan, clear })),
@@ -235,6 +254,13 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   // play off the screen. Narrow screens get them behind one button instead;
   // from sm up the disclosure is gone and they are simply on.
   const [showFilters, setShowFilters] = useState(false);
+  // Refresh: the nonce tells the mounted list to fetch its cohort again past
+  // every cache. It only moves when a request is actually made; the spin runs
+  // on every click, so the button never looks like it ignored one.
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [refreshSpinning, setRefreshSpinning] = useState(false);
+  const lastRefreshAtRef = useRef(0);
+  const refreshSpinTimerRef = useRef<number | null>(null);
   // The rating column travels with the play: the detail card prints the same
   // number the row did, under the same name, and the dan list's rows carry the
   // Overall rating their evidence payload rated them at.
@@ -251,7 +277,23 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      if (refreshSpinTimerRef.current != null) window.clearTimeout(refreshSpinTimerRef.current);
+    };
+  }, []);
+
+  const refresh = useCallback(() => {
+    setRefreshSpinning(true);
+    if (refreshSpinTimerRef.current != null) window.clearTimeout(refreshSpinTimerRef.current);
+    refreshSpinTimerRef.current = window.setTimeout(() => {
+      refreshSpinTimerRef.current = null;
+      setRefreshSpinning(false);
+    }, 700);
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < REFRESH_MIN_INTERVAL_MS) return;
+    lastRefreshAtRef.current = now;
+    setRefreshNonce((nonce) => nonce + 1);
   }, []);
 
   // A profile whose keymodes changed under us (a recompute landing while the
@@ -453,6 +495,15 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             activeCount={activeFilterCount}
             onToggle={() => setShowFilters((current) => !current)}
           />
+          <button
+            type="button"
+            onClick={refresh}
+            title={t`Refresh`}
+            aria-label={t`Refresh`}
+            className={`inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center text-osu-f1 transition-colors hover:text-osu-l1 ${CONTROL_TRACK_CLASS}`}
+          >
+            <RefreshCw size={12} className={refreshSpinning ? "animate-spin" : ""} />
+          </button>
         </div>
         <div className={`${showFilters ? "flex" : "hidden"} flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex`}>
           <RateCapControl value={maxPerChart} onChange={setMaxPerChart} />
@@ -501,6 +552,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           hideRanked={hideRanked}
           maxPerChart={maxPerChart}
           modFilter={modFilter}
+          refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
           onSettled={onListSettled}
           onOpen={openDetail}
@@ -515,6 +567,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           maxPerChart={maxPerChart}
           showRejected={showRejected}
           modFilter={modFilter}
+          refreshNonce={refreshNonce}
           onAvailableMods={handleAvailableMods}
           onSettled={onListSettled}
           onOpen={openDetail}
@@ -555,6 +608,7 @@ function MsdPlaysList({
   hideRanked,
   maxPerChart,
   modFilter,
+  refreshNonce,
   onAvailableMods,
   onSettled,
   onOpen,
@@ -568,6 +622,8 @@ function MsdPlaysList({
   hideRanked: boolean;
   maxPerChart: number;
   modFilter: ModFilterState;
+  /** Bumped by the toolbar's refresh; a change fetches past every cache. */
+  refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string }) => void;
@@ -586,18 +642,25 @@ function MsdPlaysList({
      heading would be a lie and that clears. */
   const listIdentity = `${keyCount}:${axis}`;
   const shownIdentity = useRef(listIdentity);
+  // A refresh keeps the rows on screen (busy, not skeleton) and reads past the
+  // cohort cache and the browser's; the other ordering's cache is dropped too,
+  // so flipping Best/Recent after it does not show the older list.
+  const seenRefreshNonce = useRef(refreshNonce);
 
   useEffect(() => {
     let cancelled = false;
+    const fresh = seenRefreshNonce.current !== refreshNonce;
+    seenRefreshNonce.current = refreshNonce;
     if (shownIdentity.current !== listIdentity) {
       shownIdentity.current = listIdentity;
       setCohort([]);
     }
-    const cached = peekCachedCohort(msdCohortCache, cacheKey);
+    if (fresh) msdCohortCache.delete(msdCohortKey(userId, keyCount, axis, oppositeSort(sort)));
+    const cached = fresh ? undefined : peekCachedCohort(msdCohortCache, cacheKey);
     if (cached) setCohort(cached);
-    setLoading(cached == null);
+    setLoading(fresh || cached == null);
     setError(null);
-    loadMsdCohort(userId, keyCount, axis, sort)
+    loadMsdCohort(userId, keyCount, axis, sort, { fresh })
       .then((items) => {
         if (cancelled) return;
         setCohort(items);
@@ -611,10 +674,10 @@ function MsdPlaysList({
         setLoading(false);
         onSettled?.();
         // Best/Recent is then a cache swap rather than a click-time request.
-        void loadMsdCohort(userId, keyCount, axis, oppositeSort(sort)).catch(() => {});
+        void loadMsdCohort(userId, keyCount, axis, oppositeSort(sort), { fresh }).catch(() => {});
       });
     return () => { cancelled = true; };
-  }, [axis, cacheKey, keyCount, listIdentity, onSettled, sort, userId]);
+  }, [axis, cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
   useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, modKey]);
@@ -696,6 +759,7 @@ function DanPlaysList({
   maxPerChart,
   showRejected,
   modFilter,
+  refreshNonce,
   onAvailableMods,
   onSettled,
   onOpen,
@@ -708,6 +772,8 @@ function DanPlaysList({
   maxPerChart: number;
   showRejected: boolean;
   modFilter: ModFilterState;
+  /** Bumped by the toolbar's refresh; a change fetches past every cache. */
+  refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
   onSettled?: (() => void) | undefined;
   onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string }) => void;
@@ -727,19 +793,23 @@ function DanPlaysList({
   const [error, setError] = useState<string | null>(null);
   const listIdentity = `${keyCount}:${side}`;
   const shownIdentity = useRef(listIdentity);
+  const seenRefreshNonce = useRef(refreshNonce);
 
   useEffect(() => {
     let cancelled = false;
+    const fresh = seenRefreshNonce.current !== refreshNonce;
+    seenRefreshNonce.current = refreshNonce;
     if (shownIdentity.current !== listIdentity) {
       shownIdentity.current = listIdentity;
       setCohort([]);
     }
-    const cached = peekCachedCohort(danCohortCache, cacheKey);
+    if (fresh) danCohortCache.delete(danCohortKey(userId, keyCount, side, oppositeSort(sort)));
+    const cached = fresh ? undefined : peekCachedCohort(danCohortCache, cacheKey);
     if (cached) setCohort(cached);
     setOpenReason(null);
-    setLoading(cached == null);
+    setLoading(fresh || cached == null);
     setError(null);
-    loadDanCohort(userId, keyCount, side, sort)
+    loadDanCohort(userId, keyCount, side, sort, { fresh })
       .then((rows) => {
         if (cancelled) return;
         setCohort(rows);
@@ -752,10 +822,10 @@ function DanPlaysList({
         if (cancelled) return;
         setLoading(false);
         onSettled?.();
-        void loadDanCohort(userId, keyCount, side, oppositeSort(sort)).catch(() => {});
+        void loadDanCohort(userId, keyCount, side, oppositeSort(sort), { fresh }).catch(() => {});
       });
     return () => { cancelled = true; };
-  }, [cacheKey, keyCount, listIdentity, onSettled, side, sort, userId]);
+  }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, side, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
   useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, showRejected, modKey]);

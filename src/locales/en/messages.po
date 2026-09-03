@@ -10188,6 +10188,7 @@ msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Redo (Ctrl+Shift+Z)"
 
 #: src/components/layout/StaleBuildNotice.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Refresh"
 msgstr "Refresh"
 

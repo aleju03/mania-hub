@@ -1531,6 +1531,8 @@ export async function fetchLivePlayerSkillPlaysDirect(
     hideRanked?: boolean;
     /** Keeps at most this many plays per chart, for maps with several rates. */
     maxPerChart?: number;
+    /** Skips the browser's cached copy (the endpoint is served with a short max-age). */
+    fresh?: boolean;
   } = {},
 ): Promise<LivePlayerSkillPlaysPage> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
@@ -1548,7 +1550,10 @@ export async function fetchLivePlayerSkillPlaysDirect(
   if (Number.isFinite(options.maxPerChart) && Number(options.maxPerChart) > 0) {
     query.set("maxPerChart", String(Math.floor(Number(options.maxPerChart))));
   }
-  return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
+  return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.fresh ? { cache: "reload" as const } : {}),
+  });
 }
 
 /** One play this site tracked, shaped to list beside an osu! window score. */
@@ -1645,6 +1650,8 @@ export async function fetchLivePlayerDanEvidenceDirect(
     rejectedLimit?: number;
     /** Orders the returned clear/rejection pages; the estimate remains best-first. */
     sort?: "rating" | "recent";
+    /** Skips the browser's cached copy (the endpoint is served with a short max-age). */
+    fresh?: boolean;
   } = {},
 ): Promise<LivePlayerDanEvidence> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
@@ -1660,7 +1667,10 @@ export async function fetchLivePlayerDanEvidenceDirect(
   // Pages the "all clears" list past the default window (server-clamped).
   if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
   if (Number.isInteger(options.offset) && options.offset! > 0) query.set("offset", String(options.offset));
-  return fetchLiveJson(`/api/profiles/${userId}/dan-evidence?${query.toString()}`, options.signal ? { signal: options.signal } : undefined);
+  return fetchLiveJson(`/api/profiles/${userId}/dan-evidence?${query.toString()}`, {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.fresh ? { cache: "reload" as const } : {}),
+  });
 }
 
 export async function fetchLivePlayerActivityDirect(

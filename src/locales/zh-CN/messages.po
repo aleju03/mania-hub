@@ -10189,6 +10189,7 @@ msgid "Redo (Ctrl+Shift+Z)"
 msgstr "重做（Ctrl+Shift+Z）"
 
 #: src/components/layout/StaleBuildNotice.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Refresh"
 msgstr "刷新"
 

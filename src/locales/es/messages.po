@@ -10180,6 +10180,7 @@ msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Rehacer (Ctrl+Shift+Z)"
 
 #: src/components/layout/StaleBuildNotice.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Refresh"
 msgstr "Recargar"
 
