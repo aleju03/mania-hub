@@ -1314,9 +1314,9 @@ export function skinViewUrl(ref: string): string | null {
   return base ? `${base}/api/skins/view?id=${encodeURIComponent(ref)}` : null;
 }
 
-// Fires the counted view: the skin page pings it on open, the browse card on
-// a settled hover or a grid download. Fire-and-forget - a view that failed to
-// register is not worth a message anywhere it is called from.
+// The skin page pings on open; grid impressions use the batch endpoint below.
+// Fire-and-forget - a view that failed to register is not worth a message
+// anywhere it is called from.
 export function pingSkinView(ref: string): void {
   const url = skinViewUrl(ref);
   if (!url) return;

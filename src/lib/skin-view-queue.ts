@@ -1,10 +1,10 @@
 import { pingSkinViews } from "./skins";
 
-// Views earned from a grid. A card is seen when it holds most of itself in
-// the viewport for a moment or a hover settles on it; either way the skin's
-// ref lands here rather than in its own request, because one scroll of a
-// browse page shows a couple dozen cards at once. The queue flushes shortly
-// after the last card joins it, and on the page hiding so a visitor who
+// Views earned from a grid. A card is seen when at least half of it stays in
+// the upper half of the viewport for three continuous seconds. The skin's
+// ref lands here rather than in its own request, because one scroll can
+// qualify several cards. The queue flushes shortly after the first card
+// joins it, and on the page hiding so a visitor who
 // scrolled and left still counts (keepalive carries the request out).
 // The set spares repeat sends for a card re-rendered by filtering or scrolled
 // back into view; what actually counts is the backend's 6h-per-IP dedup.

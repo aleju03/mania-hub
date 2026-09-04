@@ -31,25 +31,42 @@ vi.mock("@tanstack/react-router", () => ({
 vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
 
 // jsdom has no IntersectionObserver. This stand-in records what each card
-// watches and lets a test scroll a card into or out of view by hand.
+// watches and intersects a 200px-tall card with the configured viewport region.
 type SeenCallback = (entries: IntersectionObserverEntry[]) => void;
-const observed = new Map<Element, SeenCallback>();
+const observed = new Map<Element, FakeIntersectionObserver>();
+const cardTops = new WeakMap<Element, number>();
 class FakeIntersectionObserver {
-  constructor(private readonly callback: SeenCallback) {}
+  constructor(private readonly callback: SeenCallback, private readonly options: IntersectionObserverInit = {}) {}
   observe(element: Element) {
-    observed.set(element, this.callback);
+    observed.set(element, this);
+    this.update(element);
   }
   unobserve(element: Element) {
     observed.delete(element);
   }
-  disconnect() {}
+  disconnect() {
+    for (const [element, observer] of observed) {
+      if (observer === this) observed.delete(element);
+    }
+  }
+  update(element: Element) {
+    const top = cardTops.get(element);
+    if (top == null) return;
+    const margins = (this.options.rootMargin ?? "0px 0px 0px 0px").split(" ");
+    const bottomMargin = margins[2];
+    const offset = parseFloat(bottomMargin) * (bottomMargin.endsWith("%") ? window.innerWidth / 100 : 1);
+    const visibleHeight = Math.max(0, Math.min(top + 200, window.innerHeight + offset) - Math.max(top, 0));
+    const ratio = visibleHeight / 200;
+    this.callback([{ target: element, intersectionRatio: ratio, isIntersecting: ratio > 0 } as IntersectionObserverEntry]);
+  }
 }
 vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
-function scrollTo(element: Element, ratio: number) {
-  observed.get(element)?.([{ target: element, intersectionRatio: ratio, isIntersecting: ratio > 0 } as IntersectionObserverEntry]);
+function scrollTo(element: Element, top: number) {
+  cardTops.set(element, top);
+  observed.get(element)?.update(element);
 }
 
-const { SkinCard, SkinPreviewImage, HOVER_VIEW_DWELL_MS, SEEN_VIEW_DWELL_MS } = await import("./SkinCard");
+const { SkinCard, SkinPreviewImage, SEEN_VIEW_DWELL_MS } = await import("./SkinCard");
 const { SKIN_VIEW_FLUSH_MS, resetSkinViewQueue } = await import("../../lib/skin-view-queue");
 
 const SKIN: SkinSummary = {
@@ -202,46 +219,52 @@ describe("SkinCard grid views", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     resetSkinViewQueue();
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(800);
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1200);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
   });
   afterEach(() => {
-    fetchSpy.mockRestore();
+    cleanup();
+    resetSkinViewQueue();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
-  it("counts a hover that settles, once per skin for the page's life", () => {
-    const { container } = render(<SkinCard skin={{ ...SKIN, slug: "hover-settles" }} />);
+  it("counts after three continuous seconds in the upper half, once per skin for the page's life", () => {
+    const { container } = render(<SkinCard skin={{ ...SKIN, slug: "seen-once" }} />);
     const card = container.firstElementChild!;
 
-    fireEvent(card, pointer("pointerover", "mouse"));
+    scrollTo(card, 100);
+    vi.advanceTimersByTime(2999);
+    window.dispatchEvent(new Event("pagehide"));
     expect(fetchSpy).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
+    vi.advanceTimersByTime(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).toHaveBeenCalledWith(viewsUrl, expect.objectContaining({ method: "POST", keepalive: true }));
-    expect(sentIds()).toEqual([["hover-settles"]]);
+    expect(sentIds()).toEqual([["seen-once"]]);
 
-    // Coming back to the same card sends nothing new, nor does it being seen.
-    fireEvent(card, pointer("pointerout", "mouse"));
-    fireEvent(card, pointer("pointerover", "mouse"));
-    scrollTo(card, 1);
+    scrollTo(card, 600);
+    scrollTo(card, 100);
     vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("does not count a mouse just passing through", () => {
-    const { container } = render(<SkinCard skin={{ ...SKIN, slug: "swept-past" }} />);
+  it("does not count a fully visible lower-half card, even while hovered", () => {
+    const { container } = render(<SkinCard skin={{ ...SKIN, slug: "lower-half" }} />);
     const card = container.firstElementChild!;
 
+    scrollTo(card, 500);
     fireEvent(card, pointer("pointerover", "mouse"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS - 100);
-    fireEvent(card, pointer("pointerout", "mouse"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("ignores the enter a touch tap fires on its way to a click", () => {
     const { container } = render(<SkinCard skin={{ ...SKIN, slug: "tapped" }} />);
     fireEvent(container.firstElementChild!, pointer("pointerover", "touch"));
-    vi.advanceTimersByTime(HOVER_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -249,9 +272,9 @@ describe("SkinCard grid views", () => {
     const first = render(<SkinCard skin={{ ...SKIN, slug: "seen-first" }} />).container.firstElementChild!;
     const second = render(<SkinCard skin={{ ...SKIN, slug: "seen-second" }} />).container.firstElementChild!;
 
-    scrollTo(first, 1);
+    scrollTo(first, 100);
     vi.advanceTimersByTime(100);
-    scrollTo(second, 0.6);
+    scrollTo(second, 300);
     vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS);
     // Both dwelled; nothing has left yet because the queue waits for the rest.
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -259,21 +282,76 @@ describe("SkinCard grid views", () => {
     expect(sentIds()).toEqual([["seen-first", "seen-second"]]);
   });
 
-  it("does not count a card flicked past or only half shown", () => {
+  it("does not count a card flicked past or with less than half in the upper region", () => {
     const flicked = render(<SkinCard skin={{ ...SKIN, slug: "flicked" }} />).container.firstElementChild!;
     const clipped = render(<SkinCard skin={{ ...SKIN, slug: "clipped" }} />).container.firstElementChild!;
 
-    scrollTo(flicked, 1);
+    scrollTo(flicked, 100);
     vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS - 100);
-    scrollTo(flicked, 0.2);
-    scrollTo(clipped, 0.3);
+    scrollTo(flicked, -150);
+    scrollTo(clipped, 301);
     vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh wait after a card leaves and re-enters the upper region", () => {
+    const card = render(<SkinCard skin={{ ...SKIN, slug: "returned" }} />).container.firstElementChild!;
+    scrollTo(card, 100);
+    vi.advanceTimersByTime(2500);
+    scrollTo(card, 500);
+    vi.advanceTimersByTime(1000);
+    scrollTo(card, 100);
+    vi.advanceTimersByTime(2999);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1 + SKIN_VIEW_FLUSH_MS);
+    expect(sentIds()).toEqual([["returned"]]);
+  });
+
+  it("discards unfinished dwell time when the tab hides and waits again on return", () => {
+    const card = render(<SkinCard skin={{ ...SKIN, slug: "hidden-tab" }} />).container.firstElementChild!;
+    scrollTo(card, 100);
+    vi.advanceTimersByTime(2500);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(10_000);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(2999);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1 + SKIN_VIEW_FLUSH_MS);
+    expect(sentIds()).toEqual([["hidden-tab"]]);
+  });
+
+  it("uses the resized viewport midpoint and cancels waits outside it", () => {
+    const card = render(<SkinCard skin={{ ...SKIN, slug: "resized" }} />).container.firstElementChild!;
+    scrollTo(card, 250);
+    vi.advanceTimersByTime(2500);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(600);
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    scrollTo(card, 200);
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
+    expect(sentIds()).toEqual([["resized"]]);
+  });
+
+  it("cancels an unfinished view when the card unmounts", () => {
+    const { container, unmount } = render(<SkinCard skin={{ ...SKIN, slug: "unmounted" }} />);
+    scrollTo(container.firstElementChild!, 100);
+    vi.advanceTimersByTime(2500);
+    unmount();
+    vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("sends what is queued when the page hides, before the flush would", () => {
     const card = render(<SkinCard skin={{ ...SKIN, slug: "left-early" }} />).container.firstElementChild!;
-    scrollTo(card, 1);
+    scrollTo(card, 100);
     vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
     window.dispatchEvent(new Event("pagehide"));
@@ -288,7 +366,7 @@ describe("SkinCard grid views", () => {
     const { container } = render(<SkinCard skin={{ ...SKIN, slug: "kept-private", visibility: "private" }} />);
     const card = container.firstElementChild!;
     fireEvent(card, pointer("pointerover", "mouse"));
-    scrollTo(card, 1);
+    scrollTo(card, 100);
     vi.advanceTimersByTime(SEEN_VIEW_DWELL_MS * 2 + SKIN_VIEW_FLUSH_MS);
     expect(fetchSpy).not.toHaveBeenCalled();
   });

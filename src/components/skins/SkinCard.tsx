@@ -13,19 +13,11 @@ import { Avatar } from "../ui/Avatar";
 const MAX_KEYMODE_TAGS = 3;
 export const SKIN_FALLBACK_ACCENT = "#ff66ab";
 
-// A view can be earned from the grid, not just by opening the page. Two ways:
-// a card that holds most of itself in the viewport for a moment (people scroll
-// a page and look at every skin on it without touching one), or a hover that
-// settles on a card sooner than that. Both are somebody looking at the skin
-// in the sense the counter measures, and both go through the grid's queue so
-// a scroll is one request. (A download straight off the grid counts one too,
-// but the backend does that itself - every counted download moves the view
-// count.) The dwells filter a flick past the grid and the sweep of a mouse
-// crossing it on its way somewhere else. Touch has no hover and its tap fires
-// pointerenter on the way to a click, so touch is ignored on the hover path:
-// scrolling covers it.
-export const HOVER_VIEW_DWELL_MS = 400;
-export const SEEN_VIEW_DWELL_MS = 2000;
+// Grid views require half the card to stay in the upper half of the viewport
+// for three continuous seconds while the page is visible. Hovering does not
+// bypass that wait. Opening the skin page and downloading count separately,
+// through the backend's shared per-skin, per-IP dedup.
+export const SEEN_VIEW_DWELL_MS = 3000;
 export const SEEN_VIEW_RATIO = 0.5;
 
 // One observer for every card on the page rather than one per card. The
@@ -35,17 +27,23 @@ type SeenWatch = { timer: ReturnType<typeof setTimeout> | null; onSeen: () => vo
 const seenWatches = new Map<Element, SeenWatch>();
 let seenObserver: IntersectionObserver | null = null;
 
-function watchSeen(element: Element, onSeen: () => void): () => void {
-  if (typeof IntersectionObserver === "undefined") return () => {};
-  seenObserver ??= new IntersectionObserver(
+function resetSeenObserver(): void {
+  seenObserver?.disconnect();
+  seenObserver = null;
+  for (const watch of seenWatches.values()) {
+    if (watch.timer != null) clearTimeout(watch.timer);
+    watch.timer = null;
+  }
+  if (document.visibilityState === "hidden") return;
+  seenObserver = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
         const watch = seenWatches.get(entry.target);
         if (!watch) continue;
-        if (entry.intersectionRatio >= SEEN_VIEW_RATIO) {
+        if (entry.intersectionRatio >= SEEN_VIEW_RATIO && document.visibilityState !== "hidden") {
           watch.timer ??= setTimeout(() => {
             watch.timer = null;
-            watch.onSeen();
+            if (document.visibilityState !== "hidden") watch.onSeen();
           }, SEEN_VIEW_DWELL_MS);
         } else if (watch.timer != null) {
           clearTimeout(watch.timer);
@@ -53,15 +51,34 @@ function watchSeen(element: Element, onSeen: () => void): () => void {
         }
       }
     },
-    { threshold: SEEN_VIEW_RATIO },
+    // Percentage root margins use the viewport width, even for bottom/top.
+    // Use its height in pixels and rebuild when the viewport changes size.
+    { threshold: SEEN_VIEW_RATIO, rootMargin: `0px 0px -${window.innerHeight / 2}px 0px` },
   );
+  for (const element of seenWatches.keys()) seenObserver.observe(element);
+}
+
+function watchSeen(element: Element, onSeen: () => void): () => void {
+  if (typeof IntersectionObserver === "undefined") return () => {};
   seenWatches.set(element, { timer: null, onSeen });
-  seenObserver.observe(element);
+  if (seenWatches.size === 1) {
+    document.addEventListener("visibilitychange", resetSeenObserver);
+    window.addEventListener("resize", resetSeenObserver);
+    resetSeenObserver();
+  } else {
+    seenObserver?.observe(element);
+  }
   return () => {
     const watch = seenWatches.get(element);
     if (watch?.timer != null) clearTimeout(watch.timer);
     seenWatches.delete(element);
     seenObserver?.unobserve(element);
+    if (seenWatches.size === 0) {
+      seenObserver?.disconnect();
+      seenObserver = null;
+      document.removeEventListener("visibilitychange", resetSeenObserver);
+      window.removeEventListener("resize", resetSeenObserver);
+    }
   };
 }
 
@@ -182,17 +199,9 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
   // as the skin page's own ping; the backend refuses anything else anyway.
   const viewRef = skin.slug ?? skin.id;
   const viewCountable = skin.status === "published" && !isPrivate;
-  const hoverViewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingView = useCallback(() => {
     if (viewCountable) queueSkinView(viewRef);
   }, [viewCountable, viewRef]);
-  const cancelHoverView = useCallback(() => {
-    if (hoverViewTimer.current != null) {
-      clearTimeout(hoverViewTimer.current);
-      hoverViewTimer.current = null;
-    }
-  }, []);
-  useEffect(() => cancelHoverView, [cancelHoverView]);
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!viewCountable || !rootRef.current) return;
@@ -202,16 +211,7 @@ export function SkinCard({ skin, previewKeys, showUploader = false, onClick }: {
     // The download sits outside the card link (an anchor cannot nest in
     // another), overlaid on the preview's corner, so a skin can be grabbed
     // straight from the grid without opening its page.
-    <div
-      ref={rootRef}
-      className="group relative"
-      onPointerEnter={(event) => {
-        if (event.pointerType === "touch") return;
-        cancelHoverView();
-        hoverViewTimer.current = setTimeout(pingView, HOVER_VIEW_DWELL_MS);
-      }}
-      onPointerLeave={cancelHoverView}
-    >
+    <div ref={rootRef} className="group relative">
       <Link
         to="/skins/$id"
         params={{ id: skin.slug ?? skin.id }}
