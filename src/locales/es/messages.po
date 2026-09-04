@@ -8009,7 +8009,7 @@ msgstr "No se encontraron países"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
-msgstr "Sin dans"
+msgstr "No Dans"
 
 #: src/routes/farm-helper.tsx
 msgid "no data"
