@@ -1577,7 +1577,10 @@ export const JACK_TAG_RECOMPUTE_JOB = "recompute_jack_tag_sweep";
 // v3 (2026-09-03): the 6K-8K chordjack score gained the chord-repeat gate
 // (chord-tech files like the Terminal 11 pack filed as Chordjack), so every
 // keymode in that branch owes the comparison again.
-export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v3";
+// v4 (2026-09-03): the delay score now reads off-grid rows instead of density
+// and entropy, so most 6K-8K delay tags move; the comparison also watches
+// the scores, since the player tile line (0.25) sits above the tag line (0.2).
+export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v4";
 const JACK_TAG_CHUNK = 50;
 const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7, 8];
 
@@ -1627,7 +1630,11 @@ export async function recomputeJackTagChunk(
       const freshTags = [...new Set(analysis.patterns.map((hit) => hit.id))].sort();
       const storedCategory = stored.category ?? null;
       const freshCategory = analysis.primary?.label ?? null;
-      if (storedTags.join(",") !== freshTags.join(",") || storedCategory !== freshCategory) {
+      const scoreMoved = analysis.patterns.some((hit) => {
+        const storedScore = Number((stored.patterns ?? []).find((candidate) => candidate?.id === hit.id)?.score ?? 0);
+        return Math.abs(storedScore - hit.score) >= 0.05;
+      });
+      if (storedTags.join(",") !== freshTags.join(",") || storedCategory !== freshCategory || scoreMoved) {
         changed.push(beatmapId);
       }
     } catch {

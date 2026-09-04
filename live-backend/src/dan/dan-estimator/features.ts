@@ -97,6 +97,57 @@ function sampledWindowNps(noteTimes: number[], windowMs: number, durationMs: num
   return samples;
 }
 
+// Beat fractions a row can sit at before it counts as off the 16th grid.
+const SNAP_DIVISORS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32];
+
+/** Smallest divisor d with the gap at k/d beats (k >= 1) inside 2ms + 1%, or 0 when nothing fits. */
+function gapSnapDivisor(gapMs: number, beatLengthMs: number): number {
+  const tolerance = 2 + gapMs * 0.01;
+  for (const divisor of SNAP_DIVISORS) {
+    const unit = beatLengthMs / divisor;
+    const steps = Math.round(gapMs / unit);
+    if (steps >= 1 && Math.abs(steps * unit - gapMs) <= tolerance) return divisor;
+  }
+  return 0;
+}
+
+/**
+ * Share of note rows off the 16th grid: the gap back to the previous row is
+ * 1/6, 1/8, 1/12, 1/16, 1/24 or 1/32 of the beat at that point, an off-snap
+ * gap inside half a beat, or 55ms and under whatever the grid says (charts
+ * timed at double tempo put their 1/4 there). This is the shape 7K calls
+ * delay: 1/8 and 1/12 flow at 128-150 BPM in the BMS delay packs, 1/6 at
+ * 158-177 in the 7777's practice packs, all of it single notes and small
+ * chords staggered across the columns. Measured 2026-09-03 over 232
+ * delay-named 7K charts (p10 0.43 / p50 0.74) against jack (p90 0.12),
+ * stream (p90 0.10) and 700 random 7K (p50 0.07 / p75 0.23). Read at the
+ * chart's own tempo, so rate leaves it alone. Rows more than a beat apart
+ * count toward the denominator but never as off-grid.
+ */
+function offGridRowShare(map: ManiaBeatmap): number {
+  const timingPoints = (map.timingPoints ?? [])
+    .filter((point) => Number.isFinite(point.time) && point.beatLength > 0)
+    .sort((a, b) => a.time - b.time);
+  const fallbackBeatLength = map.bpm > 0 ? 60000 / map.bpm : Infinity;
+  const rows = groupNotesByTime(map.notes.filter((note) => note.column >= 0 && note.column < map.keyCount));
+  if (rows.length < 2) return 0;
+  let offGrid = 0;
+  let timingIndex = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const time = rows[i][0];
+    while (timingIndex + 1 < timingPoints.length && timingPoints[timingIndex + 1].time <= time + 1) timingIndex++;
+    const beatLength = timingPoints.length > 0 && timingPoints[timingIndex].time <= time + 1
+      ? timingPoints[timingIndex].beatLength
+      : timingPoints[0]?.beatLength ?? fallbackBeatLength;
+    const gap = time - rows[i - 1][0];
+    if (gap <= 55) { offGrid++; continue; }
+    if (gap > beatLength) continue;
+    const divisor = gapSnapDivisor(gap, beatLength);
+    if (divisor >= 6 || (divisor === 0 && gap <= beatLength / 2)) offGrid++;
+  }
+  return offGrid / rows.length;
+}
+
 export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: number): DanFeatureExtractionResult {
   const notes = getRatedNotes(map, rate);
   const warnings: string[] = [];
@@ -319,6 +370,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
     ? fastRowCount / rowIntervals.length
     : 0;
   const rowIntervalEntropy = bucketEntropy(rowIntervals, 5);
+  const offGridShare = offGridRowShare(map);
   const rowPatternEntropy = bucketEntropy(rowMasks, 1);
   const rowPatternVariety = rowMasks.length
     ? new Set(rowMasks).size / Math.min(rowMasks.length, 2 ** Math.max(1, map.keyCount))
@@ -406,6 +458,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       rowBurstPressure,
       fastRowRatio,
       rowIntervalEntropy,
+      offGridRowShare: offGridShare,
       patternVariety,
       rowPatternEntropy,
       rowPatternVariety,

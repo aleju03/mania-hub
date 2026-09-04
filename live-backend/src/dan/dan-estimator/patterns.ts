@@ -817,28 +817,29 @@ export function analyzeManiaPatterns(
       chordjackBase,
       minGate(pressure(chordRatio, 0.34, 0.72), pressure(repeatedChordRatio, 0.04, 0.22)),
     );
-    // Same veto the tech tag takes in player-skills, for the same reason: the
-    // delay ingredients are density, entropy and low repetition, all of which
-    // dense chordjack saturates, so CJ files scored delay on nothing but being
-    // hard. Measured 2026-08-16 over 250 delay-named and 700 random 7K charts,
-    // the veto costs zero delay-named charts their tag at every cutoff from
-    // 0.7 to 0.9 while dropping ones like "[7K] JACK Another" (delay 0.62,
-    // chordjack 1.00). Narrow ramp rather than a cliff, closed at the same 0.8
-    // TECH_TAG_CHORDJACK_VETO uses.
+    // Delay is the off-grid flow itself (offGridRowShare in features.ts):
+    // 1/8 and 1/12 rows in the BMS delay packs, 1/6 in the 7777's practice
+    // packs. The previous reading was density plus entropy plus low
+    // repetition, which any hard broken stream saturates: a 192 BPM 1/4
+    // minijack-chordstream chart with 0.3% off-grid rows scored 0.60 and was
+    // one player's #1 Delay play. Ramp measured 2026-09-03 over 232
+    // delay-named 7K charts (share p10 0.43 / p25 0.61) against 143 jack
+    // (p90 0.12), 106 stream (p90 0.10), 51 tech (p50 0.18 / p90 0.45) and
+    // 700 random 7K (p50 0.07 / p75 0.23 / p90 0.46). The 0.2-0.5 ramp puts
+    // the 0.25 line player-skills reads at 27.5% of rows: a first pass at
+    // 0.12-0.42 (19.5%) tagged a bracket chordstream chart carrying thirteen
+    // seconds of 1/8 fills, which the user read as stream, not delay. At this
+    // ramp the tag keeps 96% of the delay corpus (94% before) and reaches 1%
+    // of stream (58% before), 0% of jack, 27% of tech and 8% of random (21%
+    // before, 1/6 and 1/8 o2jam-style files). The speed packs split 34% /
+    // 66%: their 1/4 streams at 200+ BPM are speed, not delay, and leave the
+    // tag on purpose.
+    //
+    // Same veto the tech tag takes in player-skills, for the same reason: a
+    // 1/8 chordjack file is jack, not delay. Narrow ramp rather than a cliff,
+    // closed at the same 0.8 TECH_TAG_CHORDJACK_VETO uses.
     const delayChordjackVeto = clamp01((0.8 - chordjackScore) / 0.05);
-    const delayScore = nonLnFlowGate * delayChordjackVeto * Math.max(
-      lowChordGate * streamActivity,
-      minGate(
-        pressure(metrics.sustainedNps10s, 14, 30),
-        pressure(metrics.peakNps5s, 18, 34),
-        Math.max(
-          pressure(metrics.rowIntervalEntropy, 1.4, 2.8),
-          pressure(metrics.fastRowRatio, 0.35, 0.9),
-        ),
-        pressure(metrics.rowPatternEntropy, 2.2, 5),
-        clamp01((0.4 - metrics.repeatedRowPatternRatio) / 0.4),
-      ),
-    );
+    const delayScore = nonLnFlowGate * delayChordjackVeto * pressure(metrics.offGridRowShare, 0.2, 0.5);
     // Ramps measured 2026-08 against mapper-named 7K pack corpora (279 jack /
     // 78 tech / 136 stream / 150 delay charts) plus 700 random 7K charts:
     // jack1Share sits at p25 0.271 / p50 0.404 on the jack corpus against
@@ -850,7 +851,7 @@ export function analyzeManiaPatterns(
       pressure(singleJack.trillRunShare, 0.03, 0.12),
     );
     candidates.push(
-      hit("delay", delayScore, dataConfidence, `${metrics.keyCount}K dense broken-stream flow, entropy ${metrics.rowIntervalEntropy.toFixed(1)}`),
+      hit("delay", delayScore, dataConfidence, `${compactPercent(metrics.offGridRowShare)} rows off the 16th grid (1/6, 1/8, 1/12)`),
       hit("jack", jackScore, dataConfidence, `${compactPercent(singleJack.jack1Share)} consecutive-row column re-hits, ${compactPercent(singleJack.trillRunShare)} notes in two-row trill runs`),
       hit("chordjack", chordjackScore, dataConfidence, `${compactPercent(chordRatio)} chord rows, ${compactPercent(repeatedChordRatio)} repeated chord rows`),
       hit("tech", nonLnPatternGate * Math.max(

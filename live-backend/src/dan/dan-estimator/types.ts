@@ -68,6 +68,8 @@ export interface DanFeatureMetrics {
   rowBurstPressure: number;
   fastRowRatio: number;
   rowIntervalEntropy: number;
+  /** Share of note rows off the 16th grid (1/6, 1/8, 1/12 and finer, or off-snap); see offGridRowShare. */
+  offGridRowShare: number;
   patternVariety: number;
   rowPatternEntropy: number;
   rowPatternVariety: number;

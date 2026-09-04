@@ -33,6 +33,7 @@ const vertexBetaMidChordProfile: DanFeatureMetrics = {
   rowBurstPressure: 12.5,
   fastRowRatio: 0.17,
   rowIntervalEntropy: 1.812,
+  offGridRowShare: 0,
   patternVariety: 2.443,
   rowPatternEntropy: 1.812,
   rowPatternVariety: 2.443,

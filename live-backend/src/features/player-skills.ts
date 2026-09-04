@@ -166,6 +166,11 @@ const CHORDJACK_TAG_MIN_SCORE = 0.8;
 // corpus scores delay between 0 and 0.25, so this is the conservative way of
 // writing "a real detection" rather than a fitted line; lowering it further
 // buys nothing measurable.
+//
+// 2026-09-03: the delay score became the off-grid row share (1/6, 1/8, 1/12
+// flow) on a 0.2-0.5 ramp, so 0.25 now means 27.5% of rows off the 16th
+// grid. Re-measured there it keeps 96% of 232 delay-named charts while the
+// stream corpus drops from 58% to 1%; the line itself did not need to move.
 const DELAY_TAG_MIN_SCORE = 0.25;
 
 /** Whether chart analysis places a chart in a bucket's tag/cluster arm. */
@@ -5659,7 +5664,9 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // v1 when this shipped).
 // v4 (2026-09-03): the chart-side jack tag sweep re-ran (v3) for the 6K-8K
 // chordjack chord-repeat gate, so the stored tags this folds moved again.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v4";
+// v5 (2026-09-03): the delay tag now reads off-grid rows (jack tag sweep v4),
+// which empties the Delay tile of 1/4 chordstream and refills it.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v5";
 // The keymodes whose stored per-play tags may still predate their summary.
 const PATTERN_SWEEP_KEY_COUNTS = [6, 7, 8];
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;

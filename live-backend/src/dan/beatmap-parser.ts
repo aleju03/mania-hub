@@ -17,6 +17,11 @@ export interface ManiaBreakPeriod {
   endTime: number;
 }
 
+export interface ManiaTimingPoint {
+  time: number;
+  beatLength: number;
+}
+
 export interface ManiaBeatmap {
   title: string;
   artist: string;
@@ -33,6 +38,8 @@ export interface ManiaBeatmap {
   backgroundFilename: string;
   breakPeriods: ManiaBreakPeriod[];
   scrollVelocities: ManiaScrollVelocity[];
+  /** Uninherited (red line) timing points in file order; optional so hand-built maps need none. */
+  timingPoints?: ManiaTimingPoint[];
 }
 
 type TimingPoint = { time: number; beatLength: number };
@@ -268,5 +275,6 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     backgroundFilename,
     breakPeriods,
     scrollVelocities: buildManiaScrollVelocities(timingPoints, controlPoints, totalLength),
+    timingPoints,
   };
 }

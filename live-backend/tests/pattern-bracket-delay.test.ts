@@ -84,3 +84,40 @@ describe("7K delay chordjack veto", () => {
     expect(analyzeManiaPatterns(makeMap(7, rows, 55)).primary?.id).toBe("delay");
   });
 });
+
+describe("7K delay reads the snap, not the density", () => {
+  const delayScore = (map: ManiaBeatmap) =>
+    analyzeManiaPatterns(map).allPatterns.find((pattern) => pattern.id === "delay")?.score ?? 0;
+  // Single notes and light chords walking the columns, one row per interval.
+  const flow = (rows: number) => Array.from({ length: rows }, (_, index) =>
+    [...new Set(index % 4 === 0 ? [index % 7, (index + 3) % 7] : [index % 7])].sort((a, b) => a - b));
+
+  it("refuses 1/4 chordstream at 192 BPM however dense it gets", () => {
+    // 78ms rows on a 312.5ms beat: on the 16th grid, so not delay. This is
+    // the shape that scored 0.60 under the density reading.
+    const map = makeMap(7, flow(600), 78);
+    map.bpm = 192;
+    map.timingPoints = [{ time: 0, beatLength: 60000 / 192 }];
+    expect(delayScore(map)).toBe(0);
+  });
+
+  it("tags 1/8 flow at 128 BPM and 1/6 flow at 158 BPM", () => {
+    const eighths = makeMap(7, flow(600), Math.round(60000 / 128 / 8));
+    eighths.bpm = 128;
+    eighths.timingPoints = [{ time: 0, beatLength: 60000 / 128 }];
+    expect(delayScore(eighths)).toBeGreaterThanOrEqual(0.9);
+    const sixths = makeMap(7, flow(600), Math.round(60000 / 158 / 6));
+    sixths.bpm = 158;
+    sixths.timingPoints = [{ time: 0, beatLength: 60000 / 158 }];
+    expect(delayScore(sixths)).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("follows the timing point in force, not the first one", () => {
+    // 135 BPM intro, then the 192 BPM body: the body's 1/4 rows are 78ms,
+    // which on the 135 BPM grid would read as an off-snap gap.
+    const rows = flow(600);
+    const map = makeMap(7, rows, 78);
+    map.timingPoints = [{ time: -20000, beatLength: 60000 / 135 }, { time: 0, beatLength: 60000 / 192 }];
+    expect(delayScore(map)).toBe(0);
+  });
+});

@@ -367,7 +367,9 @@ describe("analyzeManiaPatterns", () => {
   });
 
   it("detects 7K delay, bracket, chordstream, chordjack, and tech", () => {
-    expect(patternIds(7, repeatRows([[0], [2], [4], [6], [3], [1]], 35))).toContain("delay");
+    // 1/8 rows on makeMap's 150 BPM grid; the same roll at 1/4 (100ms) is stream, not delay.
+    expect(analyzeManiaPatterns(makeMap(7, repeatRows([[0], [2], [4], [6], [3], [1]], 35), 50)).patterns.map((pattern) => pattern.id)).toContain("delay");
+    expect(patternIds(7, repeatRows([[0], [2], [4], [6], [3], [1]], 35))).not.toContain("delay");
     expect(analyzeManiaPatterns(makeMap(7, chordedDelayRows(), 55)).primary?.id).toBe("delay");
     expect(patternIds(7, repeatRows([[0, 1, 3], [2, 4, 5]], 60))).toContain("bracket");
     expect(patternIds(7, repeatRows([[0], [1, 3], [2], [4, 6], [5], [1, 4]], 35))).toContain("chordstream");

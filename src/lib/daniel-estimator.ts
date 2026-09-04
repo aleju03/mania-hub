@@ -757,6 +757,7 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     rowBurstPressure: 0,
     fastRowRatio: 0,
     rowIntervalEntropy: 0,
+    offGridRowShare: 0,
     patternVariety: 0,
     rowPatternEntropy: 0,
     rowPatternVariety: 0,
