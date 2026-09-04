@@ -3,7 +3,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { getLiveBackendUrl } from "./live-backend";
 import { REPLAY_SKIN_MAX_COLUMNS, normalizeReplaySkinSettings } from "./replay-skin";
 import type { ReplaySkinImageAsset, ReplaySkinSettings, ReplaySkinStageAssets } from "./replay-skin";
-import { extractSkinSoundsFromArchive, hasAnyImportedAssets, loadOskImageAssetByPath, openOskArchive } from "./replay-skin-import";
 import type { OskArchive } from "./replay-skin-import";
 import { skinOskFileUrl } from "./skins";
 import type { SkinSummary } from "./skins";
@@ -135,6 +134,7 @@ export async function rehydrateOwnerReplaySkinSettings(
   targetKeyCount?: number,
 ): Promise<ReplaySkinSettings | null> {
   if (!isRecord(payload) || payload.v !== 1 || !isRecord(payload.settings)) return null;
+  const { hasAnyImportedAssets, loadOskImageAssetByPath } = await import("./replay-skin-import");
   const settings = structuredClone(payload.settings);
   // A replay draws one keymode. Published skins can carry profiles for every
   // mode from 1K through 10K, including multi-megabyte Percy textures; decoding
@@ -532,7 +532,10 @@ function fetchArchiveFrom(url: string | null, init?: RequestInit): Promise<OskAr
   if (cached) return cached;
 
   const promise = (async () => {
-    const response = await fetch(url, { credentials: "omit", ...init });
+    const [response, { openOskArchive }] = await Promise.all([
+      fetch(url, { credentials: "omit", ...init }),
+      import("./replay-skin-import"),
+    ]);
     if (!response.ok) return null;
     return await openOskArchive(await response.arrayBuffer());
   })().catch(() => null).then((archive) => {
@@ -580,6 +583,7 @@ export async function loadOwnerReplaySkin(
     if (!archive) return null;
     const settings = await rehydrateOwnerReplaySkinSettings(record.settings, archive, targetKeyCount);
     if (!settings) return null;
+    const { extractSkinSoundsFromArchive } = await import("./replay-skin-import");
     const sounds = await extractSkinSoundsFromArchive(archive);
     return { record, settings, sounds, archive };
   } catch {

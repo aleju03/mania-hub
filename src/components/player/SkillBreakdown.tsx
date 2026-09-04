@@ -8,6 +8,7 @@ import { danBareLabel } from "../../lib/dan-images";
 import { formatAccuracy } from "../../lib/format";
 import { useNoDans } from "../../store";
 import { DanLevelBadge } from "./DanLevelBadge";
+import { SkillHistoryButton } from "./SkillHistoryButton";
 import {
   lnPlayShare,
   radarAnchor,
@@ -213,7 +214,7 @@ const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen";
 
 // --- Compact card body (My Data) ---
 
-export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void }) {
+export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, userId }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void; userId?: number }) {
   const { i18n } = useLingui();
   // Surface the scale warning at the moment it matters: right after the
   // viewer flips to another keymode tab and is about to compare numbers.
@@ -253,11 +254,12 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan }: {
           )}
         </div>
       ) : null}
-      <div className="mb-1 flex items-baseline gap-2">
+      <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-[26px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>overall</Trans></span>
         <ProvisionalChip mode={mode!} />
         <RefreshingChip skills={skills!} />
+        {userId ? <span className="ml-auto self-center"><SkillHistoryButton userId={userId} keyCount={mode!.keyCount} /></span> : null}
       </div>
       {overallPercentile ? (
         <div className="mb-2.5 text-[11px] text-osu-l2">
@@ -481,11 +483,13 @@ export function SkillModePanel({
   mode,
   onSelectEntry,
   onSelectDan,
+  userId,
 }: {
   skills: MyDataSkillBreakdown;
   mode: MyDataSkillMode;
   onSelectEntry?: (entry: SkillAxisEntry, mode: MyDataSkillMode) => void;
   onSelectDan?: (side: "rc" | "ln", mode: MyDataSkillMode) => void;
+  userId?: number;
 }) {
   const { t, i18n } = useLingui();
   const [hovered, setHovered] = useState<string | null>(null);
@@ -517,7 +521,10 @@ export function SkillModePanel({
             </div>
           ) : null}
         </div>
-        <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} />
+        <div className="ml-auto flex items-center gap-3">
+          <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} />
+          {userId ? <SkillHistoryButton userId={userId} keyCount={mode.keyCount} /> : null}
+        </div>
       </div>
 
       <div

@@ -208,7 +208,9 @@ describe("ManiaReplayRenderer initialization", () => {
 
     expect(source).toContain("private textFontRevision = 0;");
     expect(source).toContain("this.installTextFontInvalidation();");
-    expect(source).toContain("void document.fonts.ready.then(() => {");
+    expect(source).toContain("void document.fonts.ready.then(invalidate);");
+    expect(source).toContain('document.fonts.addEventListener?.("loadingdone", invalidate);');
+    expect(source).toContain("this.removeTextFontListener?.();");
     expect(source).toContain("this.textFontRevision++;");
     expect(source).toContain("label.__sig = undefined;");
     expect(source).toContain("label.text = \"\";");

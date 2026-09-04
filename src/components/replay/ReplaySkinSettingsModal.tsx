@@ -8,6 +8,7 @@ import { msg } from "@lingui/core/macro";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
+import { ensureReplayFontStylesheet } from "../../lib/replay-fonts";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
   REPLAY_OVERLAY_IDS,
@@ -395,6 +396,7 @@ export function ReplaySkinSettingsModal({
   assetSourceSkin = null,
   saveScope = "viewer",
 }: ReplaySkinSettingsModalProps) {
+  useEffect(() => { void ensureReplayFontStylesheet().catch(() => {}); }, []);
   const { t, i18n } = useLingui();
   const modalRef = useRef<HTMLDivElement | null>(null);
   const matchedInitialPresetRef = useRef(false);

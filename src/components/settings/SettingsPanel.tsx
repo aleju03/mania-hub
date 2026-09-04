@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useLocale } from "../../lib/locale-context";
@@ -15,8 +15,7 @@ import { PageTabs } from "../layout/PageTabs";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { SelectMenu } from "../ui/SelectMenu";
-import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
-import { OwnerReplaySkinCustomizeModal } from "./OwnerReplaySkinCustomizeModal";
+import { ReplaySkinSettingsModal, loadReplaySkinSettingsModal, preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { TranslationReportForm } from "./TranslationReportForm";
 import {
   ReplaySkinColorWheel,
@@ -59,6 +58,7 @@ import {
   clearMyReplaySkin,
   fetchMyReplaySkinCached,
   loadAppliedReplaySkinSettings,
+  loadOwnerReplaySkin,
   peekMyReplaySkinMemory,
   readAppliedCommunityReplaySkin,
   replaySkinSettingsEmbedAssets,
@@ -66,7 +66,7 @@ import {
   writeAppliedCommunityReplaySkin,
   writeMyReplaySkinMemory,
 } from "../../lib/replay-owner-skin";
-import type { AppliedCommunitySkinDraft, OwnerReplaySkinRecord } from "../../lib/replay-owner-skin";
+import type { AppliedCommunitySkinDraft, LoadedOwnerReplaySkin, OwnerReplaySkinRecord } from "../../lib/replay-owner-skin";
 import { useAuth } from "../../lib/auth-context";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
@@ -98,6 +98,13 @@ const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
   mask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
 };
+
+type OwnerEditor = typeof import("./OwnerReplaySkinCustomizeModal")["OwnerReplaySkinCustomizeModal"];
+const loadOwnerEditor = () => import("./OwnerReplaySkinCustomizeModal");
+function preloadOwnerEditor(): void {
+  preloadReplaySkinSettingsModal();
+  void loadOwnerEditor().catch(() => {});
+}
 const MANIA_BAR_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-bar.svg') center / contain no-repeat",
   mask: "url('/images/notes/mania-bar.svg') center / contain no-repeat",
@@ -144,6 +151,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [skinSettingsLoading, setSkinSettingsLoading] = useState(false);
+  const [skinSettingsLoadFailed, setSkinSettingsLoadFailed] = useState(false);
   const skinSettingsLoadRequestRef = useRef(0);
   /* Starts at defaults on both server and first client render (the appearance
      panel renders a different subtree when the cursor is enabled, so reading
@@ -158,6 +166,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
+    preloadReplaySkinSettingsModal();
     setCursorSettings(readCursorSettings());
     setSpectatorNameShown(readReplaySpectatorNameShown());
   }, []);
@@ -220,18 +229,24 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   // Pay that cost only when the full editor actually needs the assets.
   const openAdvancedSkinEditor = () => {
     const applied = readAppliedCommunityReplaySkin();
-    if (!applied || replaySkinSettingsEmbedAssets(skinSettingsRef.current)) {
-      setSkinSettingsOpen(true);
-      return;
-    }
-
-    const appliedKey = appliedCommunityReplaySkinKey(applied);
+    const needsAssets = applied != null && !replaySkinSettingsEmbedAssets(skinSettingsRef.current);
+    const appliedKey = applied ? appliedCommunityReplaySkinKey(applied) : null;
     const requestId = ++skinSettingsLoadRequestRef.current;
     setSkinSettingsLoading(true);
-    void loadAppliedReplaySkinSettings()
-      .then((full) => {
+    setSkinSettingsLoadFailed(false);
+    void Promise.all([
+      loadReplaySkinSettingsModal(),
+      needsAssets ? loadAppliedReplaySkinSettings() : Promise.resolve(null),
+    ])
+      .then(([, full]) => {
         if (skinSettingsLoadRequestRef.current !== requestId) return;
         const currentApplied = readAppliedCommunityReplaySkin();
+        const currentKey = currentApplied ? appliedCommunityReplaySkinKey(currentApplied) : null;
+        if (currentKey !== appliedKey) return;
+        if (needsAssets && !full) {
+          setSkinSettingsLoadFailed(true);
+          return;
+        }
         if (full && currentApplied && appliedCommunityReplaySkinKey(currentApplied) === appliedKey) {
           // Scroll direction remains editable in the lightweight panel. Keep
           // the latest click if it changed while the archive was loading; all
@@ -246,7 +261,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
         setSkinSettingsOpen(true);
       })
       .catch(() => {
-        if (skinSettingsLoadRequestRef.current === requestId) setSkinSettingsOpen(true);
+        if (skinSettingsLoadRequestRef.current === requestId) setSkinSettingsLoadFailed(true);
       })
       .finally(() => {
         if (skinSettingsLoadRequestRef.current === requestId) setSkinSettingsLoading(false);
@@ -256,6 +271,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const resetReplaySettings = () => {
     skinSettingsLoadRequestRef.current += 1;
     setSkinSettingsLoading(false);
+    setSkinSettingsLoadFailed(false);
     setScrollSpeed(DEFAULT_REPLAY_SCROLL_SPEED);
     writeReplayScrollSpeed(DEFAULT_REPLAY_SCROLL_SPEED);
     setBgDim(80);
@@ -320,6 +336,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
           onUpdateSkin={updateSkin}
           onOpenAdvanced={openAdvancedSkinEditor}
           advancedLoading={skinSettingsLoading}
+          advancedLoadFailed={skinSettingsLoadFailed}
         />
       ) : null}
       {activeTab === "viewer" ? (
@@ -354,18 +371,20 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   );
 
   const skinModal = (
-    <AnimatePresence>
-      {skinSettingsOpen ? (
-        <ReplaySkinSettingsModal
-          settings={skinSettings}
-          overlaySettings={overlaySettings}
-          keyCount={4}
-          onSave={saveSkinSettings}
-          onSaveOverlays={saveOverlaySettings}
-          onClose={() => setSkinSettingsOpen(false)}
-        />
-      ) : null}
-    </AnimatePresence>
+    <Suspense fallback={null}>
+      <AnimatePresence>
+        {skinSettingsOpen ? (
+          <ReplaySkinSettingsModal
+            settings={skinSettings}
+            overlaySettings={overlaySettings}
+            keyCount={4}
+            onSave={saveSkinSettings}
+            onSaveOverlays={saveOverlaySettings}
+            onClose={() => setSkinSettingsOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
+    </Suspense>
   );
 
   if (variant === "drawer") {
@@ -643,11 +662,13 @@ function SkinPanel({
   onUpdateSkin,
   onOpenAdvanced,
   advancedLoading,
+  advancedLoadFailed,
 }: {
   skinSettings: ReplaySkinSettings;
   onUpdateSkin: (patch: Partial<ReplaySkinSettings>) => void;
   onOpenAdvanced: () => void;
   advancedLoading: boolean;
+  advancedLoadFailed: boolean;
 }) {
   const { t, i18n } = useLingui();
   const auth = useAuth();
@@ -664,6 +685,10 @@ function SkinPanel({
     () => viewerId != null && rememberedMyReplaySkin !== undefined,
   );
   const [customizing, setCustomizing] = useState(false);
+  const [ownerEditor, setOwnerEditor] = useState<{ Component: OwnerEditor; loaded: LoadedOwnerReplaySkin } | null>(null);
+  const [customizeLoading, setCustomizeLoading] = useState(false);
+  const [customizeLoadFailed, setCustomizeLoadFailed] = useState(false);
+  const customizeRequestRef = useRef(0);
   /* A custom skin brings its own notes and LN caps, and its art only draws
      under the Bars style, so the shape buttons and the tail trim have nothing
      to act on. The editor hides them for the same reason. Read after mount
@@ -673,6 +698,35 @@ function SkinPanel({
   useEffect(() => {
     setOwnerSkinEnabled(readReplayOwnerSkinEnabled());
   }, []);
+
+  useEffect(() => {
+    setCustomizeLoading(false);
+    if (myReplaySkin) preloadOwnerEditor();
+    return () => { customizeRequestRef.current += 1; };
+  }, [viewerId, myReplaySkin?.skin.id, myReplaySkin?.updatedAt]);
+
+  const openOwnerEditor = () => {
+    if (!myReplaySkin) return;
+    const requestId = ++customizeRequestRef.current;
+    setCustomizeLoading(true);
+    setCustomizeLoadFailed(false);
+    void Promise.all([loadOwnerEditor(), loadOwnerReplaySkin(myReplaySkin)])
+      .then(([module, loaded]) => {
+        if (requestId !== customizeRequestRef.current) return;
+        if (!loaded) {
+          setCustomizeLoadFailed(true);
+          return;
+        }
+        setOwnerEditor({ Component: module.OwnerReplaySkinCustomizeModal, loaded });
+        setCustomizing(true);
+      })
+      .catch(() => {
+        if (requestId === customizeRequestRef.current) setCustomizeLoadFailed(true);
+      })
+      .finally(() => {
+        if (requestId === customizeRequestRef.current) setCustomizeLoading(false);
+      });
+  };
 
   useEffect(() => {
     const sync = () => {
@@ -793,6 +847,9 @@ function SkinPanel({
           <button
             type="button"
             onClick={onOpenAdvanced}
+            onPointerEnter={preloadReplaySkinSettingsModal}
+            onFocus={preloadReplaySkinSettingsModal}
+            onPointerDown={preloadReplaySkinSettingsModal}
             disabled={advancedLoading}
             aria-busy={advancedLoading}
             className="group inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-wait disabled:opacity-70"
@@ -805,6 +862,7 @@ function SkinPanel({
         <p className="text-[12px] leading-relaxed text-osu-f1">
           <Trans>Customize how replays look for you. This does not change the replay skin other people see on your plays.</Trans>
         </p>
+        {advancedLoadFailed && <p role="alert" className="text-[11px] text-red-300"><Trans>The skin could not be loaded. Try again in a moment.</Trans></p>}
       </PanelGroup>
 
       <PanelGroup label={t`Replay skin`}>
@@ -841,9 +899,15 @@ function SkinPanel({
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setCustomizing(true)}
-                    className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
+                    onClick={openOwnerEditor}
+                    onPointerEnter={preloadOwnerEditor}
+                    onFocus={preloadOwnerEditor}
+                    onPointerDown={preloadOwnerEditor}
+                    disabled={customizeLoading}
+                    aria-busy={customizeLoading}
+                    className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-wait disabled:opacity-70"
                   >
+                    {customizeLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                     <Trans>Customize</Trans>
                   </button>
                   <Link
@@ -883,10 +947,12 @@ function SkinPanel({
         )}
       </PanelGroup>
 
+      {customizeLoadFailed && <p role="alert" className="text-[11px] text-red-300"><Trans>The skin could not be loaded. Try again in a moment.</Trans></p>}
       <AnimatePresence>
-        {customizing && myReplaySkin ? (
-          <OwnerReplaySkinCustomizeModal
-            record={myReplaySkin}
+        {customizing && myReplaySkin && ownerEditor ? (
+          <ownerEditor.Component
+            record={ownerEditor.loaded.record}
+            initialLoaded={ownerEditor.loaded}
             onSaved={(record) => {
               setMyReplaySkinRecord(record);
               if (viewerId) writeMyReplaySkinMemory(viewerId, record);

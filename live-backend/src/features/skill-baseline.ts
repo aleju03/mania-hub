@@ -971,6 +971,13 @@ export function shrinkMode(mode: PublicPlayerSkillMode, axisCurves: AxisCurveMap
   return { ...mode, ratings, patterns };
 }
 
+/** Freeze display values for history without computing population ranks. */
+export async function shrinkPlayerSkillModes(db: Db, modes: PlayerSkillModeBreakdown[]): Promise<PublicPlayerSkillMode[]> {
+  const exact = await readExactSkillCurves(db);
+  const curves = exactCurvesUsable(exact) ? exact : await readBaselineCurves(db);
+  return modes.map((mode) => shrinkMode(mode, curves?.curves[String(mode.keyCount)]));
+}
+
 /**
  * Decorate an exact skill breakdown with population percentiles. Preferred
  * path: the display-shrunk exact ratings interpolated into the exact-scale

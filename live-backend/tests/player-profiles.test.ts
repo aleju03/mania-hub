@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../src/features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -23,6 +23,37 @@ afterEach(async () => {
 });
 
 describe("player profile snapshots", () => {
+  it("keeps warm profile reads off the writer and cold snapshot/cache writes off the read handle", async () => {
+    const readDb = new Proxy(db, {
+      get(target, key) {
+        if (key === "execute") return (statement: Parameters<Db["execute"]>[0]) => {
+          const sql = typeof statement === "string" ? statement : (statement as { sql: string }).sql;
+          if (/\b(insert|update|delete|replace|create|alter|drop)\b/i.test(sql)) throw new Error(`write on read handle: ${sql}`);
+          return target.execute(statement);
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const getUserByKey = vi.fn(async () => ({ id: USER_ID, username: "MnShiny", country_code: "CR", statistics: { pp: 500 } }));
+    const getUserBestScoresWindow = vi.fn(async () => []);
+    const osu = { getUserByKey, getUserBestScoresWindow };
+    const cold = await getPlayerProfileSnapshot(readDb, osu, String(USER_ID), { lookupMode: "userId", writeDb: db });
+    expect(cold.user.id).toBe(USER_ID);
+    const blockedWriter = { execute: () => { throw new Error("writer is unavailable"); } } as unknown as Db;
+    const warm = await getPlayerProfileSnapshot(readDb, osu, String(USER_ID), { lookupMode: "userId", writeDb: blockedWriter });
+    expect(warm.user.id).toBe(USER_ID);
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    const getUserRecentScores = vi.fn(async () => []);
+    await getPlayerRecentScoresFromOsu(readDb, { getUserRecentScores }, USER_ID, { writeDb: db });
+    await getPlayerRecentScoresFromOsu(readDb, { getUserRecentScores }, USER_ID, { writeDb: blockedWriter });
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    const getUser = vi.fn(async () => ({ page: { raw: "About", html: null } }));
+    await getPlayerAbout(readDb, { getUser }, USER_ID, { writeDb: db });
+    await getPlayerAbout(readDb, { getUser }, USER_ID, { writeDb: blockedWriter });
+    expect(getUser).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the latest tracked play when osu!'s last visit is older", async () => {
     const snapshotFetchedAt = "2026-06-01T03:28:53Z";
     const osuLastVisit = "2026-06-06T10:00:00Z";

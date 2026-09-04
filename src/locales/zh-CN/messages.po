@@ -3471,6 +3471,7 @@ msgstr "客户端"
 msgid "Client"
 msgstr "客户端"
 
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -9096,6 +9097,7 @@ msgstr "导出宽度（像素）"
 msgid "overall"
 msgstr "综合"
 
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Overall"
@@ -13723,6 +13725,7 @@ msgstr "试试放宽筛选条件。"
 msgid "Try a wider range or check back later."
 msgstr "试试更大的范围，或稍后再来。"
 
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/BackendOfflineScreen.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
@@ -14895,3 +14898,60 @@ msgstr "你的用户名和头像"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
+msgstr "每次重新计算评分时都会保存变化，包括评分系统更新带来的变化。更早的变化未被记录。"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Could not load skill history."
+msgstr "无法加载技能历史。"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "LN dan"
+msgstr "长条段位"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Load older changes"
+msgstr "加载更早的变化"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Loading history…"
+msgstr "正在加载历史…"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "No skill ratings have been recorded yet."
+msgstr "尚未记录任何技能评分。"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Regular dan"
+msgstr "常规段位"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Starting rating"
+msgstr "初始评分"
+
+#: src/components/player/SkillHistoryButton.tsx
+msgid "View {keyCount}K skill history"
+msgstr "查看 {keyCount}K 技能历史"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "{keyCount}K skill history"
+msgstr "{keyCount}K 技能历史"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgctxt "skill rating difference"
+msgid "Change"
+msgstr "变化"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Date"
+msgstr "日期"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Earlier changes weren’t recorded."
+msgstr "更早的变化未被记录。"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Rating"
+msgstr "评分"

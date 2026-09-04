@@ -1,6 +1,6 @@
 import { useContext, useMemo, useSyncExternalStore } from "react";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
 import { DEFAULT_INITIAL_SCOPE, normalizeCountryScope } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
@@ -448,21 +448,40 @@ function writeSnipesFiltersByCountry(filters: CountryRecord<SnipesFilters>): voi
   }
 }
 
-// Zustand's persist middleware calls storage.setItem on every state change,
-// and each call synchronously writes the full partialized blob via
-// localStorage.setItem — ~20-50ms for our ~100KB payload. A single navigation
-// triggers several state updates in rapid succession (router match, mount
-// effects, fetch .then callbacks, polling intervals), which stacked up to
-// ~200ms of main-thread blocking during the click -> paint window.
-//
-// This wrapper coalesces setItem calls within a short window into one write
-// and dispatches them via setTimeout(0) so the actual localStorage.setItem
-// runs on a later task, after the current render has painted. If the tab is
-// closing we flush synchronously via pagehide so nothing is lost.
+// Persist receives immutable state snapshots. Keep them as objects until the
+// flush: debouncing underneath createJSONStorage still stringified the entire
+// cache on every update, including changes to separately stored preferences.
 const PERSIST_DEBOUNCE_MS = 250;
-const storage = typeof window !== "undefined"
-  ? createJSONStorage(() => {
-      const pending = new Map<string, string | null>();
+type PersistedCache = Partial<AppState>;
+type PersistedCacheValue = StorageValue<PersistedCache>;
+
+function samePersistedCache(left: PersistedCacheValue, right: PersistedCacheValue): boolean {
+  if (left.version !== right.version) return false;
+  const keys = Object.keys(left.state) as Array<keyof PersistedCache>;
+  return keys.length === Object.keys(right.state).length &&
+    keys.every((key) => Object.is(left.state[key], right.state[key]));
+}
+
+function trimPersistedCache(value: PersistedCacheValue): PersistedCacheValue {
+  if (!value.state.feedScoresByCountry) return value;
+  return {
+    ...value,
+    state: {
+      ...value.state,
+      feedScoresByCountry: Object.fromEntries(
+        Object.entries(value.state.feedScoresByCountry).map(([country, scores]) => [
+          country,
+          scores.length > TRACKER_FEED_PERSIST_LIMIT ? scores.slice(0, TRACKER_FEED_PERSIST_LIMIT) : scores,
+        ]),
+      ),
+    },
+  };
+}
+
+const storage: PersistStorage<PersistedCache> | undefined = typeof window !== "undefined"
+  ? (() => {
+      const pending = new Map<string, PersistedCacheValue | null>();
+      const latest = new Map<string, PersistedCacheValue>();
       let timer: ReturnType<typeof setTimeout> | null = null;
 
       const flush = () => {
@@ -470,29 +489,30 @@ const storage = typeof window !== "undefined"
           clearTimeout(timer);
           timer = null;
         }
-        if (pending.size === 0) return;
         const batch = Array.from(pending.entries());
         pending.clear();
         for (const [name, value] of batch) {
+          let serialized: string | undefined;
           try {
             if (value === null) {
               localStorage.removeItem(name);
             } else {
-              localStorage.setItem(name, value);
+              serialized = JSON.stringify(trimPersistedCache(value));
+              localStorage.setItem(name, serialized);
             }
           } catch (error) {
-            if (isQuotaExceededError(error) && value !== null) {
-              // Over quota. Drop the stale value first so we never keep serving
-              // a frozen cache, then retry — the freed space usually fits the
-              // new (now-smaller) blob. If even that fails, the key stays evicted
-              // and the next load starts fresh instead of stuck on old data.
+            if (isQuotaExceededError(error) && serialized !== undefined) {
+              // Evict a frozen cache before retrying. Critical preferences have
+              // their own keys, so they survive even when the cache cannot fit.
               try {
                 localStorage.removeItem(name);
-                localStorage.setItem(name, value);
+                localStorage.setItem(name, serialized);
               } catch (retryError) {
+                latest.delete(name);
                 warnStorageIssue(`write "${name}" (evicted, still over quota)`, retryError);
               }
             } else {
+              latest.delete(name);
               warnStorageIssue(`write "${name}"`, error);
             }
           }
@@ -503,8 +523,9 @@ const storage = typeof window !== "undefined"
         timer = setTimeout(flush, PERSIST_DEBOUNCE_MS);
       };
 
-      // Best-effort sync flush on tab hide/unload so we don't lose the last
-      // batch if the user closes the page within the debounce window.
+      // Flush synchronously when leaving so serialization deferral cannot lose
+      // the last update. The first change starts a fixed window: a busy live
+      // feed must not keep postponing its write indefinitely.
       window.addEventListener("pagehide", flush);
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") flush();
@@ -512,27 +533,32 @@ const storage = typeof window !== "undefined"
 
       return {
         getItem: (name) => {
-          // Honor pending writes so consecutive read-after-write stays coherent.
           if (pending.has(name)) {
-            return pending.get(name) ?? null;
+            const value = pending.get(name);
+            return value ? trimPersistedCache(value) : null;
           }
           try {
-            return localStorage.getItem(name);
+            const raw = localStorage.getItem(name);
+            return raw === null ? null : JSON.parse(raw) as PersistedCacheValue;
           } catch (error) {
             warnStorageIssue(`read "${name}"`, error);
             return null;
           }
         },
         setItem: (name, value) => {
+          const previous = latest.get(name);
+          if (previous && samePersistedCache(previous, value)) return;
+          latest.set(name, value);
           pending.set(name, value);
           schedule();
         },
         removeItem: (name) => {
+          latest.delete(name);
           pending.set(name, null);
           schedule();
         },
       };
-    })
+    })()
   : undefined;
 
 // On the client, prefer the cookie value as the initial selectedCountry so
@@ -1041,19 +1067,16 @@ export const useAppStore = create<AppState>()(
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         popoffsWindowByCountry: state.popoffsWindowByCountry,
         trackerPpGainsByCountry: state.trackerPpGainsByCountry,
-        feedScoresByCountry: Object.fromEntries(
-          Object.entries(state.feedScoresByCountry).map(([country, scores]) => [
-            country,
-            scores.length > TRACKER_FEED_PERSIST_LIMIT ? scores.slice(0, TRACKER_FEED_PERSIST_LIMIT) : scores,
-          ]),
-        ),
+        // Keep this reference stable between feed updates; trim only when
+        // serializing so a theme change does not rebuild the persisted feed.
+        feedScoresByCountry: state.feedScoresByCountry,
         feedScoresFetchedAtByCountry: state.feedScoresFetchedAtByCountry,
         // snipesByCountry is intentionally NOT persisted. It can balloon
         // past the ~5MB localStorage quota once more than a country or two
         // accumulates (up to 500 entries × ~1KB per country). The server
         // cache serves it in <100ms on hydration so the round-trip is cheap.
         // feedScoresByCountry IS persisted, but trimmed to TRACKER_FEED_PERSIST_LIMIT
-        // (newest-first) above so the blob stays small. The full in-memory feed
+        // (newest-first) by trimPersistedCache so the blob stays small. The full in-memory feed
         // (up to TRACKER_FEED_SCORE_LIMIT) is only for the current session.
       }),
     },

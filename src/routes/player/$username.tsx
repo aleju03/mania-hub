@@ -41,6 +41,7 @@ import {
   formatPP,
 } from "../../lib/format";
 import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
+import { refreshPlayerActivitySnapshot } from "../../lib/player-activity-refresh";
 import { useHasHydrated, useNoDans } from "../../store";
 import {
   getBeatmapUrl,
@@ -69,7 +70,7 @@ import { ModFilterChip } from "../../components/ui/ModFilterChip";
 import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
-import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
+import { ManiaCard3DPanel as ManiaCardPanel, preloadManiaCard3DPanel } from "../../components/player/maniacard3d/LazyManiaCard3DPanel";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
 import { SkillBreakdownBody, SkillModePanel, SkillModeOption } from "../../components/player/SkillBreakdown";
 import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
@@ -2917,6 +2918,9 @@ export function PlayerProfilePage({
                   <button
                     key={playerTab}
                     data-player-tab={playerTab}
+                    onPointerEnter={playerTab === "card" ? preloadManiaCard3DPanel : undefined}
+                    onFocus={playerTab === "card" ? preloadManiaCard3DPanel : undefined}
+                    onPointerDown={playerTab === "card" ? preloadManiaCard3DPanel : undefined}
                     onClick={() => handleTabChange(playerTab)}
                     className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === playerTab ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
                   >
@@ -3811,7 +3815,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           <div className="grid grid-cols-1 items-start">
             {skillModeStrip.filter((mode) => mode.keyCount !== activeSkillMode?.keyCount).map((mode) => (
               <div key={mode.keyCount} className="invisible col-start-1 row-start-1" aria-hidden>
-                <SkillModePanel skills={skills} mode={mode} />
+                <SkillModePanel skills={skills} mode={mode} userId={user.id} />
                 {/* The reserve measures what the open cell measures, button
                     row included, or picking the tallest keymode would still
                     move the page by exactly this row. */}
@@ -3823,6 +3827,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
                 <SkillModePanel
                   skills={skills}
                   mode={activeSkillMode}
+                  userId={user.id}
                   onSelectEntry={(entry) => setSelectedSkill({ entry, keyCount: activeSkillMode.keyCount })}
                   onSelectDan={(side) => setSelectedDan({ side, keyCount: activeSkillMode.keyCount })}
                 />
@@ -3952,28 +3957,17 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
       return;
     }
 
-    let cancelled = false;
     setLoading(true);
     setError(null);
-
-    fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, requestedYear)
-      .then((nextSnapshot) => {
-        if (cancelled) return;
-        setSnapshot(nextSnapshot);
-      })
-      .catch(() => {
-        if (cancelled) return;
+    return refreshPlayerActivitySnapshot({
+      load: () => fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, requestedYear),
+      onSnapshot: setSnapshot,
+      onInitialError: () => {
         setSnapshot(null);
         setError(t`Couldn't load Activity right now.`);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+      },
+      onInitialSettled: () => setLoading(false),
+    });
   }, [activityRefreshKey, requestedYear, user.id]);
 
   useEffect(() => {

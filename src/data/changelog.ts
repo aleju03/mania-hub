@@ -18,6 +18,8 @@ export interface ChangelogUpdate {
   /** Day it went live on the site clock (UTC-6), as YYYY-MM-DD. */
   date: string;
   text: string;
+  /** A word in the text to highlight with a gentle letter wave. */
+  emphasis?: string;
   /** Optional in-app path, which makes the whole row clickable. */
   to?: string;
 }
@@ -27,6 +29,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-04", text: "A MAJOR rework of skill measurement is planned for LN (I know it's overrated sometimes and underrated at other times) across all keymodes, and for 7K as a whole too, not just LN. It'll take some time before it's ready.", emphasis: "MAJOR" },
   { date: "2026-09-03", text: "Performance optimizations" },
   { date: "2026-09-03", text: "New Community Replays page with every replay uploaded to the site, not only the last 9. Click All uploads on the Upload tab of the replay page. Uploading a replay and opening a shared one also load faster now", to: "/replay/community" },
   { date: "2026-09-03", text: "7K plays with the lazer Invert mod now count toward LN dan, under Inverse. The play is rated on the inverted map, not the original", to: "/dan-estimates" },

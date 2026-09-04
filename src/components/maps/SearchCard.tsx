@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ensureMapPlaceholderFont } from "../../lib/replay-fonts";
 import { Plural, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -242,6 +243,9 @@ export function SearchCard({
   const { t, i18n } = useLingui();
   const pill = beatmapStatusPill(entry.status);
   const [coverFailed, setCoverFailed] = useState(false);
+  useEffect(() => {
+    if (coverFailed) ensureMapPlaceholderFont();
+  }, [coverFailed]);
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;
   const starLo = Math.min(...diffs.map((diff) => diff.stars));

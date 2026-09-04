@@ -483,25 +483,86 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
      where ${whereSql}`,
     args,
   )).rows;
-  const rows = (await exec(
-    db,
+  const total = Number(totalRows[0]?.count ?? 0);
+  // Try a bounded prefix of the PP/gain index for broad GLOBAL first pages.
+  // Never force an all-time index walk: a busy 24h window may still have none
+  // of the highest historical scores. If this prefix cannot prove the page,
+  // fall back to the ordinary narrowed-window plan below.
+  const prefixIds = !scopeSql && userIds.length === 0 && options.dir !== "asc"
+    && options.sort !== "recent" && offset + pageSize <= 500 && total > 1_000
+    ? await getGlobalTopPlayPrefixIds(db, whereSql, args, options, offset, pageSize)
+    : null;
+  // The fallback must start at the time cutoff. Selecting IDs alone can make
+  // SQLite prefer an unbounded PP index walk even when the payload query used
+  // the time index. User/country-scoped queries retain their selective plans.
+  const windowIndex = !scopeSql && userIds.length === 0 ? "indexed by idx_top_play_events_score_time" : "";
+  // Rank IDs first. Even when a selective query needs a sort, only the
+  // selected page loads JSON and joins display metadata.
+  const rows = offset >= total ? [] : prefixIds ? (await exec(db,
     `select e.payload_json, u.username, u.avatar_url, u.country_code
-     from top_play_events e
+     from top_play_events e left join users u on u.user_id = e.user_id
+     where e.rowid in (${prefixIds.map(() => "?").join(",")})
+     order by ${topPlaysSnapshotOrderBy(options)}`,
+    prefixIds,
+  )).rows : (await exec(
+    db,
+    `with page as materialized (
+       select e.rowid as id from top_play_events e ${windowIndex}
+       where ${whereSql}
+       order by ${topPlaysSnapshotOrderBy(options)}
+       limit ? offset ?
+     )
+     select e.payload_json, u.username, u.avatar_url, u.country_code
+     from page join top_play_events e on e.rowid = page.id
      left join users u on u.user_id = e.user_id
-     where ${whereSql}
-     order by ${topPlaysSnapshotOrderBy(options)}
-     limit ? offset ?`,
+     order by ${topPlaysSnapshotOrderBy(options)}`,
     [...args, pageSize, offset],
   )).rows;
   return {
     popoffs: await hydrateTopPlayEvents(db, rows),
     scannedAt: Date.now(),
     window,
-    total: Number(totalRows[0]?.count ?? 0),
+    total,
     page,
     pageSize,
     ppGains: options.includePpGains ? await getTopPlaysPpGains(db, country, cutoff, options) : undefined,
   };
+}
+
+async function getGlobalTopPlayPrefixIds(
+  db: Db,
+  whereSql: string,
+  args: Array<string | number>,
+  options: TopPlaysSnapshotOptions,
+  offset: number,
+  pageSize: number,
+): Promise<number[] | null> {
+  const metric = options.sort === "gain" ? "pp_gain" : "pp";
+  const index = options.sort === "gain" ? "idx_top_play_events_gain_window" : "idx_top_play_events_pp_window";
+  const scanLimit = Math.min(2_000, Math.max(256, (offset + pageSize) * 4));
+  const rows = (await exec(db,
+    `with candidates as materialized (
+       select rowid as id, user_id, pp, pp_gain, score_time, detected_at, key_count
+       from top_play_events indexed by ${index}
+       order by ${metric} desc limit ?
+     ), page as materialized (
+       select e.id, e.${metric} as metric from candidates e
+       where ${whereSql}
+       order by ${topPlaysSnapshotOrderBy(options)} limit ? offset ?
+     )
+     select page.id, page.metric,
+       (select min(${metric}) from candidates) as boundary,
+       (select count(*) from candidates) as scanned
+     from page`,
+    [scanLimit, ...args, pageSize, offset],
+  )).rows;
+  if (rows.length === 0) return null;
+  // A boundary tie may hide a better score_time/detected_at outside the
+  // prefix. Only a strict metric gap proves that every omitted row sorts later.
+  const exhausted = Number(rows[0].scanned) < scanLimit;
+  const boundary = Number(rows[0].boundary);
+  if (!exhausted && (rows.length < pageSize || rows.some((row) => Number(row.metric) <= boundary))) return null;
+  return rows.map((row) => Number(row.id));
 }
 
 async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, options: TopPlaysSnapshotOptions): Promise<TopPlaysPpGainSummary[]> {

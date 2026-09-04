@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, execBatch, migrate } from "../src/db.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
-import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
+import { ACTIVITY_BACKFILL_JOB, ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot, runPlayerActivityBackfillJob } from "../src/features/activity.js";
 import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPackCardSnapshots, selectReadyPackCardUserIds, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "../src/features/player-profiles.js";
@@ -303,7 +303,7 @@ describe("live backend", () => {
     });
   });
 
-  it("backfills activity from retained score events once and skips already-scanned events", async () => {
+  it("serves activity immediately and repairs retained gaps in a deduplicated background job", async () => {
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     await ingestor.ingestBatch([scores[0]]);
@@ -314,8 +314,18 @@ describe("live backend", () => {
     }
 
     const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
-    expect(snapshot.totalScores).toBe(1);
-    expect(snapshot.days[0]).toMatchObject({ date: "2026-05-11", scoreCount: 1, sessionCount: 1 });
+    expect(snapshot.totalScores).toBe(0);
+    expect(snapshot.refreshPending).toBe(true);
+    await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
+    await vi.waitFor(async () => {
+      expect(Number((await exec(db, "select count(*) as count from jobs where type = ?", [ACTIVITY_BACKFILL_JOB])).rows[0].count)).toBe(1);
+    });
+    expect(await runPlayerActivityBackfillJob(db, queue, { userId: 101, country: "CR" })).toBe(false);
+    await exec(db, "update jobs set status = 'done' where type = ?", [ACTIVITY_BACKFILL_JOB]);
+    const repaired = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
+    expect(repaired.totalScores).toBe(1);
+    expect(repaired.refreshPending).toBeUndefined();
+    expect(repaired.days[0]).toMatchObject({ date: "2026-05-11", scoreCount: 1, sessionCount: 1 });
 
     const cursor = (await exec(db, "select last_event_id from player_activity_backfill_cursors where country = 'CR' and user_id = 101")).rows[0];
     expect(Number(cursor?.last_event_id)).toBeGreaterThan(0);
@@ -324,6 +334,95 @@ describe("live backend", () => {
     await exec(db, "delete from player_activity_score_refs");
     const rescan = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
     expect(rescan.totalScores).toBe(0);
+    expect(rescan.refreshPending).toBeUndefined();
+  });
+
+  it("advances bounded activity repair across already-projected scores and repairs opted-out history", async () => {
+    const { db, queue, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([score]);
+    await exec(db, `with recursive n(i) as (select 2 union all select i+1 from n where i < 2001)
+      insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+      select 100000+i, 'activity-batch-'||i, user_id, country, beatmap_id, ruleset_id,
+        json_set(score_json, '$.id', 100000+i), passed, processed, is_lazer, has_replay, ended_at, received_at, source
+      from n join score_events on score_events.id = 1`);
+    await exec(db, `insert into player_activity_score_refs (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
+      select country, score_identity, user_id, substr(ended_at,1,10), beatmap_id, passed, ended_at, received_at
+      from score_events where id > 1 and id <= 2000`);
+    await exec(db, "update country_rosters set is_tracked = 0 where user_id = 101");
+    expect((await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026)).refreshPending).toBe(true);
+    const writes = vi.spyOn(db, "execute");
+    expect(await runPlayerActivityBackfillJob(db, queue, { userId: 101, country: "CR" })).toBe(true);
+    expect(writes.mock.calls.some(([statement]) => /insert or ignore into player_activity_score_refs/i.test(typeof statement === "string" ? statement : (statement as unknown as { sql: string }).sql))).toBe(false);
+    expect(Number((await exec(db, "select last_event_id from player_activity_backfill_cursors where user_id = 101")).rows[0].last_event_id)).toBe(2000);
+    expect(await runPlayerActivityBackfillJob(db, queue, { userId: 101, country: "CR" })).toBe(false);
+    expect(Number((await exec(db, "select count(*) as count from player_activity_score_refs")).rows[0].count)).toBe(2001);
+    expect((await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026)).refreshPending).toBe(true);
+    await exec(db, "update jobs set status = 'done' where type = ?", [ACTIVITY_BACKFILL_JOB]);
+    expect((await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026)).refreshPending).toBeUndefined();
+    writes.mockRestore();
+  });
+
+  it("finishes deferred activity sessions when a repair is cancelled after projecting its refs", async () => {
+    const { db, queue, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([score, { ...score, id: 19002, legacy_score_id: 19002, ended_at: "2026-05-12T02:02:00.000Z" }]);
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps", "player_activity_backfill_cursors"]) {
+      await exec(db, `delete from ${table}`);
+    }
+    const controller = new AbortController();
+    let mapWrites = 0;
+    const interruptedDb = new Proxy(db, {
+      get(target, key) {
+        if (key === "execute") return async (statement: { sql: string; args?: never } | string) => {
+          const result = await target.execute(statement);
+          const sql = typeof statement === "string" ? statement : statement.sql;
+          if (/insert into player_activity_maps/i.test(sql) && ++mapWrites === 2) controller.abort();
+          return result;
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await expect(runPlayerActivityBackfillJob(interruptedDb, queue, { userId: 101, country: "CR" }, controller.signal)).rejects.toThrow();
+    expect(Number((await exec(db, "select session_count from player_activity_days")).rows[0].session_count)).toBe(1);
+    expect(await runPlayerActivityBackfillJob(db, queue, { userId: 101, country: "CR" })).toBe(false);
+    expect(Number((await exec(db, "select session_count from player_activity_days")).rows[0].session_count)).toBe(2);
+    expect(Number((await exec(db, "select count(*) as count from player_activity_score_refs")).rows[0].count)).toBe(2);
+  });
+
+  it("cannot recreate buffered activity after a concurrent data wipe", async () => {
+    const { db, queue, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([score, { ...score, id: 19002, legacy_score_id: 19002 }]);
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps", "player_activity_backfill_cursors"]) {
+      await exec(db, `delete from ${table}`);
+    }
+    let wiped = false;
+    const racedDb = new Proxy(db, {
+      get(target, key) {
+        if (key === "execute") return async (statement: { sql: string; args?: never } | string) => {
+          const result = await target.execute(statement);
+          const sql = typeof statement === "string" ? statement : statement.sql;
+          if (!wiped && /insert or ignore into player_activity_score_refs/i.test(sql)) {
+            wiped = true;
+            await execBatch(db, [
+              { sql: "update users set is_active = 0 where user_id = 101", args: [] },
+              ...["score_events", "player_activity_score_refs", "player_activity_days", "player_activity_maps", "player_activity_backfill_cursors"]
+                .map((table) => ({ sql: `delete from ${table} where user_id = 101`, args: [] })),
+            ]);
+          }
+          return result;
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    expect(await runPlayerActivityBackfillJob(racedDb, queue, { userId: 101, country: "CR" })).toBe(false);
+    expect(wiped).toBe(true);
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps", "player_activity_backfill_cursors"]) {
+      expect(Number((await exec(db, `select count(*) as count from ${table} where user_id = 101`)).rows[0].count)).toBe(0);
+    }
   });
 
   it("pages my data tracked plays and top plays with total counts", async () => {
@@ -1353,23 +1452,34 @@ describe("live backend", () => {
     ]);
   });
 
-  it("fails a hung job via the lane watchdog instead of parking the lane", async () => {
+  it("releases a watchdog lane but retains the lease until aborted work settles", async () => {
     const { db, queue, events, ingestor } = await setup();
+    vi.useFakeTimers();
 
     await queue.enqueue("enrich_user", "user:101", { userId: 101 });
 
     const lane = { name: "fast", jobTypes: ["enrich_user"], claimLimit: 1, intervalMs: 750, jobTimeoutMs: 25 };
     const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker", [lane]);
-    // A handler whose promise never settles (a starved API slot in prod).
-    (worker as unknown as { handle: () => Promise<void> }).handle = () => new Promise<void>(() => {});
+    let settle!: () => void;
+    (worker as unknown as { handle: () => Promise<void> }).handle = () => new Promise<void>((resolve) => { settle = resolve; });
 
-    await (worker as unknown as { runLaneOnce: (target: typeof lane) => Promise<void> }).runLaneOnce(lane);
+    const turn = (worker as unknown as { runLaneOnce: (target: typeof lane) => Promise<void> }).runLaneOnce(lane);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(25);
+    await turn;
 
     const job = (await exec(db, "select status, last_error from jobs where type = 'enrich_user'")).rows[0];
-    expect(job.status).toBe("failed");
-    expect(String(job.last_error)).toContain("watchdog");
-    // The lane is free again: no active job left behind.
-    expect(worker.status().lanes[0].activeJobs).toEqual([]);
+    expect(job.status).toBe("running");
+    expect(worker.status().lanes[0].activeJobs[0].aborting).toBe(true);
+    // The original 60s claim expires while cleanup is still outstanding.
+    // Heartbeats must keep it owned even though its lane turn has returned.
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(await queue.claim("other-lane", 1, { types: ["enrich_user"] })).toEqual([]);
+    settle();
+    await vi.waitFor(async () => {
+      expect((await exec(db, "select status from jobs where type = 'enrich_user'")).rows[0].status).toBe("failed");
+      expect(worker.status().lanes[0].activeJobs).toEqual([]);
+    });
   });
 
   it("aborts the job signal when the watchdog fires so a cooperative handler can stop", async () => {
@@ -1392,6 +1502,9 @@ describe("live backend", () => {
     await (worker as unknown as { runLaneOnce: (target: typeof lane) => Promise<void> }).runLaneOnce(lane);
 
     expect(captured?.aborted).toBe(true);
+    await vi.waitFor(async () => {
+      expect((await exec(db, "select status from jobs where type = 'enrich_user'")).rows[0].status).toBe("failed");
+    });
     const job = (await exec(db, "select status, last_error from jobs where type = 'enrich_user'")).rows[0];
     expect(job.status).toBe("failed");
     expect(String(job.last_error)).toContain("watchdog");
@@ -3232,7 +3345,7 @@ describe("live backend", () => {
       get(inner, property, receiver) {
         if (property === "execute") {
           return (statement: { sql: string } | string) => {
-            statements.push(typeof statement === "string" ? statement : statement.sql);
+            statements.push(typeof statement === "string" ? statement : (statement as unknown as { sql: string }).sql);
             return (inner.execute as (value: unknown) => unknown)(statement);
           };
         }

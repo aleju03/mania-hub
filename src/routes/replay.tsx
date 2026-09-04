@@ -1,5 +1,5 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Suspense, useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -9,6 +9,7 @@ import { getI18n } from "../lib/i18n";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, submitCommunityBeatmap } from "../lib/osu";
 import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
+import { loadReplayRenderer, preloadReplayRenderer } from "../lib/replay-renderer-loader";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
@@ -18,11 +19,12 @@ import { exitNativeFullscreen, getNativeFullscreenElement, requestNativeFullscre
 import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/ReplayBrowseView";
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
+import { ReplayBufferingIndicator } from "../components/replay/ReplayBufferingIndicator";
 import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
 import { ReplaySideBySideView } from "../components/replay/ReplaySideBySideView";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
-import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
+import { ReplaySkinSettingsModal, loadReplaySkinSettingsModal, preloadReplaySkinSettingsModal, scheduleReplaySkinSettingsPreload } from "../components/replay/LazyReplaySkinSettingsModal";
 import { track } from "../lib/analytics";
 import { reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
@@ -42,6 +44,7 @@ import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
 import { buildReplayShareUrl } from "../lib/replay-share";
 import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
+import { readReplayAudioClock } from "../lib/replay-audio-clock";
 import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
 import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
@@ -874,6 +877,7 @@ function ReplayPage() {
   }, [replay, scoreUserId, scoreUserName, scoreUserAvatar]);
 
   const loadReplay = useCallback(async (sid: number, initialScore?: OsuScore | null) => {
+    preloadReplayRenderer();
     const loadStartMs = performance.now();
     let scoreMs = 0;
     let replayFetchMs = 0;
@@ -1464,6 +1468,7 @@ function ReplayPage() {
   }, [navigate, pendingBeatmapUpload, uploadId]);
 
   const loadSharedUploadedReplay = useCallback(async (id: string) => {
+    preloadReplayRenderer();
     setError(null);
     setReplayLoadingStep("shared-upload");
     setReplayBeatmapFileStatus("unknown");
@@ -1504,6 +1509,7 @@ function ReplayPage() {
   }, [applyLocalBeatmapAssets, openUploadedReplay]);
 
   const handleUploadReplay = async (file: File) => {
+    preloadReplayRenderer();
     setError(null);
     if (!file.name.toLowerCase().endsWith(".osr")) {
       setError(t`Please choose an .osr replay file.`);
@@ -2262,6 +2268,21 @@ function ReplayViewer({
   const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [missThumbHand, setMissThumbHand] = useState<ReplayThumbHand>(readReplayMissThumbHand);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
+  const [skinSettingsLoading, setSkinSettingsLoading] = useState(false);
+  const [skinSettingsLoadFailed, setSkinSettingsLoadFailed] = useState(false);
+  const skinEditorRequestRef = useRef(0);
+  useEffect(() => () => { skinEditorRequestRef.current += 1; }, []);
+  useEffect(() => {
+    if (!skinSettingsLoading) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      skinEditorRequestRef.current += 1;
+      setSkinSettingsLoading(false);
+    };
+    document.addEventListener("keydown", cancel, true);
+    return () => document.removeEventListener("keydown", cancel, true);
+  }, [skinSettingsLoading]);
   // The replay player's own published skin, pulled from the community
   // catalog, and whether it is the one on the stage right now. It only ever
   // lives in memory: the viewer's saved skin settings are never overwritten.
@@ -2456,6 +2477,30 @@ function ReplayViewer({
     });
     return promise;
   }, []);
+
+  const openSkinEditor = useCallback(() => {
+    const requestId = ++skinEditorRequestRef.current;
+    setSkinSettingsLoading(true);
+    setSkinSettingsLoadFailed(false);
+    const applied = readAppliedCommunityReplaySkin();
+    void Promise.all([
+      loadReplaySkinSettingsModal(),
+      applied ? hydrateAppliedCommunitySkin(applied) : Promise.resolve(null),
+    ]).then(([, full]) => {
+      if (requestId !== skinEditorRequestRef.current) return;
+      const current = readAppliedCommunityReplaySkin();
+      if ((current ? appliedCommunityReplaySkinKey(current) : null) !== (applied ? appliedCommunityReplaySkinKey(applied) : null)) return;
+      if (applied && !full) {
+        setSkinSettingsLoadFailed(true);
+        return;
+      }
+      setSkinSettingsOpen(true);
+    }).catch(() => {
+      if (requestId === skinEditorRequestRef.current) setSkinSettingsLoadFailed(true);
+    }).finally(() => {
+      if (requestId === skinEditorRequestRef.current) setSkinSettingsLoading(false);
+    });
+  }, [hydrateAppliedCommunitySkin]);
 
   useEffect(() => {
     const applied = readAppliedCommunityReplaySkin();
@@ -3661,6 +3706,7 @@ function ReplayViewer({
     let cancelled = false;
     let renderer: ReplayRendererLike | null = null;
     let handleResize: (() => void) | null = null;
+    let cancelEditorPreload: (() => void) | null = null;
     setRendererError(null);
     // A rebuild always starts paused (the fresh renderer is); stop the audio
     // too so it can't run ahead while the new judgement build finishes.
@@ -3673,7 +3719,7 @@ function ReplayViewer({
     void (async () => {
       try {
         const { ManiaReplayRenderer } = await withTimeout(
-          import("../components/replay/ReplayCanvas"),
+          loadReplayRenderer(),
           8000,
           "Timed out loading the replay renderer.",
         );
@@ -3762,6 +3808,7 @@ function ReplayViewer({
         renderer.setSpectatorCount?.(spectatorCountRef.current);
         renderer.setSpectatorNames?.(spectatorNamesRef.current);
         rendererRef.current = renderer;
+        cancelEditorPreload = scheduleReplaySkinSettingsPreload();
         if (ownerSkinReadyToRevealRef.current) releaseOwnerSkinHold();
         if (appliedSkinHydratedRef.current) releaseAppliedSkinHold();
 
@@ -3780,17 +3827,11 @@ function ReplayViewer({
         // making sound, the renderer derives currentTime from audio.currentTime
         // (i.e. audio is the master). When audio is seeking/buffering we
         // freeze the renderer so it can't drift ahead of the song. When audio
-        // is disabled we return null and the renderer falls back to wall clock.
-        renderer.setExternalClock(() => {
-          if (!audioEnabledRef.current || !audioUrlActiveRef.current) return null;
-          const audio = audioRef.current;
-          if (!audio) return null;
-          const stalled =
-            audio.paused ||
-            audio.seeking ||
-            audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
-          return { time: audio.currentTime * 1000, stalled };
-        });
+        // is disabled or fails we return null and the renderer uses its own clock.
+        renderer.setExternalClock(() => readReplayAudioClock(
+          audioRef.current,
+          audioEnabledRef.current && audioUrlActiveRef.current,
+        ));
 
         const resume = resumeAfterRebuildRef.current;
         resumeAfterRebuildRef.current = null;
@@ -3835,6 +3876,7 @@ function ReplayViewer({
     return () => {
       cancelled = true;
       if (handleResize) window.removeEventListener("resize", handleResize);
+      cancelEditorPreload?.();
       // `rendererRef` is populated only after async Pixi initialization. On a
       // fast route change (especially Home -> browser Back), cleanup can run
       // while this effect already owns a renderer but the ref is still null.
@@ -3894,7 +3936,7 @@ function ReplayViewer({
 
   // Sync audio with replay play/pause/seek
   useEffect(() => {
-    if (!audioRef.current || !audioEnabled) return;
+    if (!audioRef.current || !audioEnabled || !audioUrlActiveRef.current || audioRef.current.error) return;
     if (!replayEndAudioFadeActiveRef.current) audioRef.current.volume = volume;
     if (isPlaying) {
       cancelReplayEndAudioFade();
@@ -3958,7 +4000,7 @@ function ReplayViewer({
     if (!audio) return;
 
     const resumeAudioIfNeeded = () => {
-      if (!audioEnabled || !isPlaying) return;
+      if (!audioEnabled || !isPlaying || !audioUrlActiveRef.current || audio.error) return;
       const renderer = rendererRef.current;
       if (audio.ended || !renderer?.isPlaying || renderer.time >= renderer.duration) {
         if (!audio.ended && renderer?.isPlaying && renderer.time >= renderer.duration) {
@@ -3989,11 +4031,7 @@ function ReplayViewer({
         setBuffering(false);
         return;
       }
-      setBuffering(
-        audio.paused ||
-          audio.seeking ||
-          audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
-      );
+      setBuffering(readReplayAudioClock(audio, audioUrlActiveRef.current)?.stalled ?? false);
     };
 
     const clearAudioRecoveryTimer = () => {
@@ -4002,7 +4040,7 @@ function ReplayViewer({
       audioRecoveryTimeoutRef.current = null;
     };
     const scheduleAudioRecovery = () => {
-      if (!isPlaying || !audioEnabled || !canRecoverRemoteAudio || audioBlobUrlRef.current || audioRecoveryTimeoutRef.current != null) return;
+      if (!isPlaying || !audioEnabled || !audioUrlActiveRef.current || audio.error || !canRecoverRemoteAudio || audioBlobUrlRef.current || audioRecoveryTimeoutRef.current != null) return;
       audioRecoveryTimeoutRef.current = window.setTimeout(() => {
         audioRecoveryTimeoutRef.current = null;
         setAudioRecoveryRequested(true);
@@ -4012,7 +4050,14 @@ function ReplayViewer({
     const handleCanPlayThrough = () => { clearAudioRecoveryTimer(); resumeAudioIfNeeded(); updateBuffering(); };
     const handleSeeked = () => { resumeAudioIfNeeded(); updateBuffering(); };
     const handleLoadedData = () => { clearAudioRecoveryTimer(); resumeAudioIfNeeded(); updateBuffering(); };
-    const handleLoadedMetadata = () => { setAudioReady(true); updateBuffering(); };
+    const handleLoadedMetadata = () => {
+      // A recovered streaming/blob source can take over again after its
+      // position has been resynced to the renderer by the source-swap effect.
+      audioUrlActiveRef.current = true;
+      setAudioError(null);
+      setAudioReady(true);
+      updateBuffering();
+    };
     const handlePlaying = () => { clearAudioRecoveryTimer(); updateBuffering(); };
     const handleWaiting = () => { updateBuffering(); scheduleAudioRecovery(); };
     const handleStalled = () => { updateBuffering(); scheduleAudioRecovery(); };
@@ -4083,7 +4128,7 @@ function ReplayViewer({
 
   // Sync audio time on seek — pause first to force re-buffer, then resume
   const syncAudioTime = (timeMs: number) => {
-    if (!audioRef.current || !audioEnabled) return;
+    if (!audioRef.current || !audioEnabled || !audioUrlActiveRef.current || audioRef.current.error) return;
     cancelReplayEndAudioFade();
     const wasPlaying = !audioRef.current.paused;
     shouldResumeAudioRef.current = wasPlaying || isPlaying;
@@ -4107,13 +4152,14 @@ function ReplayViewer({
     r.play();
     setIsPlaying(true);
     // Play audio directly from user gesture so browsers don't block it
-    if (audioRef.current && audioEnabled) {
+    if (audioRef.current && audioEnabled && audioUrlActiveRef.current && !audioRef.current.error) {
       audioRef.current.currentTime = r.time / 1000;
       audioRef.current.playbackRate = effectiveRate;
       setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       audioRef.current.volume = volume;
       const audio = audioRef.current;
       audio.play().catch(() => {
+        if (!audioUrlActiveRef.current || audio.error) return;
         if (isTimestampAutoplay && rendererRef.current === r && r.isPlaying && audio.paused) {
           // Do not let a shared moment run past in silence when the browser
           // rejects audible autoplay. Freeze exactly there and ask for the one
@@ -4148,7 +4194,7 @@ function ReplayViewer({
       return;
     }
     // Audio is expected but hasn't loaded metadata yet — queue the play.
-    if (audioEnabled && audioUrl && !audioReady && !audioError) {
+    if (audioEnabled && audioUrl && !audioReady && !audioError && !audioRef.current?.error) {
       timestampAutoplayPendingRef.current = false;
       setPendingPlay(true);
       return;
@@ -4163,7 +4209,7 @@ function ReplayViewer({
   // disabled), whether queued by a user click or a timestamped share link.
   useEffect(() => {
     if (!pendingPlay || isPlaying) return;
-    if (audioEnabled && audioUrl && !audioReady && !audioError) return;
+    if (audioEnabled && audioUrl && !audioReady && !audioError && !audioRef.current?.error) return;
     const isTimestampAutoplay = timestampAutoplayPendingRef.current;
     timestampAutoplayPendingRef.current = false;
     setPendingPlay(false);
@@ -4213,8 +4259,17 @@ function ReplayViewer({
       return;
     }
     cancelReplayEndAudioFade();
+    // The renderer must stop waiting on a media element that can never advance.
+    // Keep hitsounds enabled: only the failed song loses control of the clock.
+    audioUrlActiveRef.current = false;
     setAudioError(t`Couldn't load the song audio for this replay.`);
+    setBuffering(false);
     shouldResumeAudioRef.current = false;
+    if (audioRecoveryTimeoutRef.current != null) {
+      window.clearTimeout(audioRecoveryTimeoutRef.current);
+      audioRecoveryTimeoutRef.current = null;
+    }
+    audioRef.current?.pause();
   };
 
   const handleProgressPointerDown = () => {
@@ -4434,7 +4489,7 @@ function ReplayViewer({
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       const { ManiaReplayRenderer } = await withTimeout(
-        import("../components/replay/ReplayCanvas"),
+        loadReplayRenderer(),
         8000,
         "Timed out loading the replay renderer.",
       );
@@ -4691,6 +4746,9 @@ function ReplayViewer({
       inputOverlayColor={inputOverlayColor}
       keypressOverlayEnabled={overlaySettings.keypresses.enabled}
       skinSettingsOpen={skinSettingsOpen}
+      skinSettingsLoading={skinSettingsLoading}
+      skinSettingsLoadFailed={skinSettingsLoadFailed}
+      onPreloadSkinSettings={preloadReplaySkinSettingsModal}
       scrollSpeed={scrollSpeed}
       bgDim={bgDim}
       blackPlayfield={blackPlayfield}
@@ -4759,7 +4817,7 @@ function ReplayViewer({
       onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}
       onToggleInputOverlayKeyHistory={() => setInputOverlayKeyHistory((value) => !value)}
       onSetInputOverlayColor={(color) => setInputOverlayColor(normalizeReplayInputColor(color))}
-      onOpenSkinSettings={() => setSkinSettingsOpen(true)}
+      onOpenSkinSettings={openSkinEditor}
       onSetScrollSpeed={(nextSpeed) => {
         const normalized = normalizeReplayScrollSpeed(nextSpeed);
         scrollSpeedUserOverrideRef.current = true;
@@ -4855,6 +4913,7 @@ function ReplayViewer({
                 "h-[calc(100svh-172px)] min-h-[360px] max-h-[540px] sm:h-[calc(100dvh-60px)] sm:min-h-[420px] sm:max-h-none"
           }`}
         />
+        <ReplayBufferingIndicator loading={pendingPlay || (isPlaying && buffering)} />
         {!isCanvasFullscreen && (
           <button
             type="button"
@@ -5240,19 +5299,21 @@ function ReplayViewer({
       {renderReplayControls("card")}
       </div>
 
-      <AnimatePresence>
-        {skinSettingsOpen && (
-          <ReplaySkinSettingsModal
-            settings={skinSettings}
-            overlaySettings={overlaySettings}
-            keyCount={replay.keyCount}
-            onSave={applySkinSettings}
-            onSaveOverlays={applyOverlaySettings}
-            onAudioSettingsChange={setAudioSettings}
-            onClose={() => setSkinSettingsOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {skinSettingsOpen && (
+            <ReplaySkinSettingsModal
+              settings={skinSettings}
+              overlaySettings={overlaySettings}
+              keyCount={replay.keyCount}
+              onSave={applySkinSettings}
+              onSaveOverlays={applyOverlaySettings}
+              onAudioSettingsChange={setAudioSettings}
+              onClose={() => setSkinSettingsOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
     </div>
   );
 }

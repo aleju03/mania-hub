@@ -6,6 +6,7 @@ import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbo
 import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../features/keymode-pp.js";
 import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
 import { DAN_EVIDENCE_MAX_REJECTED, DAN_EVIDENCE_PAGE_MAX_CLEARS, PLAYER_SKILL_PLAYS_MAX, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
+import { getPlayerSkillHistory } from "../../features/player-skill-history.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
@@ -15,7 +16,7 @@ import type { Db } from "../../db.js";
 import type { HttpContext } from "../context.js";
 import { createMapsResponseCache, pruneMapsResponseCache, serveMapsResponseCached, type MapsResponseCache } from "../maps-response-cache.js";
 import { prepareJsonResponse, type PreparedJsonResponse } from "../prepared-json.js";
-import { clampInteger, clampLimit } from "../request.js";
+import { clampInteger, clampLimit, isAdmin } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
 
 export async function handleProfileRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL, country: string): Promise<boolean> {
@@ -24,6 +25,15 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
+    }
+    // History is an admin preview while changes accumulate in the background.
+    // Gate before reading player data, including callers of the old public URL.
+    if (profileRoute.kind === "skill-history") {
+      res.setHeader("cache-control", "private, no-store");
+      if (!isAdmin(req, ctx)) {
+        sendJson(req, res, ctx, 401, { error: "unauthorized" });
+        return true;
+      }
     }
     if (profileRoute.kind === "cached-snapshot") {
       await handleCachedProfileSnapshot(req, res, ctx, url, profileRoute.key);
@@ -42,10 +52,10 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       let snapshot;
       try {
         snapshot = await getPlayerProfileSnapshot(
-          ctx.serveWriteDb ?? ctx.db,
+          ctx.db,
           ctx.osu,
           profileRoute.key,
-          { queue: wantsRefresh ? ctx.serveWriteQueue ?? ctx.queue : null, lookupMode },
+          { queue: wantsRefresh ? ctx.serveWriteQueue ?? ctx.queue : null, lookupMode, writeDb: ctx.serveWriteDb ?? ctx.db },
         );
       } catch (error) {
         // A profile nobody has stored is minted inline from the osu! API, so a
@@ -87,10 +97,11 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
           [userId],
         )).rows.map((row) => String(row.country).toUpperCase());
         sendJson(req, res, ctx, 200, await getPlayerRecentScoresFromOsu(
-          ctx.serveWriteDb ?? ctx.db,
+          ctx.db,
           ctx.osu,
           userId,
           {
+            writeDb: ctx.serveWriteDb ?? ctx.db,
             ...(trackedCountries.length > 0
               ? { onFreshScores: (scores: OscScore[]) => void ingestProfileRecentScores(ctx, userId, scores, trackedCountries) }
               : {}),
@@ -98,7 +109,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         ));
         return true;
       }
-      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.serveWriteDb ?? ctx.db, userId));
+      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.db, userId));
       return true;
     }
     if (profileRoute.kind === "replay-scores") {
@@ -110,8 +121,8 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
     }
     if (profileRoute.kind === "activity") {
       sendJson(req, res, ctx, 200, await getPlayerActivitySnapshot(
-        ctx.serveWriteDb ?? ctx.db,
-        ctx.queue,
+        ctx.db,
+        ctx.serveWriteQueue ?? ctx.queue,
         userId,
         url.searchParams.get("country") ?? country,
         clampInteger(url.searchParams.get("year"), 2007, new Date().getUTCFullYear() + 1, new Date().getUTCFullYear()),
@@ -125,8 +136,8 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         return true;
       }
       const detail = await getPlayerActivityDayDetail(
-        ctx.serveWriteDb ?? ctx.db,
-        ctx.queue,
+        ctx.db,
+        ctx.serveWriteQueue ?? ctx.queue,
         userId,
         url.searchParams.get("country") ?? country,
         day,
@@ -162,6 +173,18 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       const breakdown = await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId, { allowEnqueue: known });
       res.setHeader("cache-control", "public, max-age=60");
       sendJson(req, res, ctx, 200, { ...(await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown)), tracked });
+      return true;
+    }
+    if (profileRoute.kind === "skill-history") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      const keyCount = Number(url.searchParams.get("keys"));
+      const before = url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined;
+      if (!Number.isInteger(keyCount) || keyCount < 4 || keyCount > 18
+        || (before != null && (!Number.isSafeInteger(before) || before <= 0))) {
+        sendJson(req, res, ctx, 400, { error: "invalid_skill_history_params" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, await getPlayerSkillHistory(ctx.db, userId, keyCount, { before }));
       return true;
     }
     if (profileRoute.kind === "skill-plays") {
@@ -260,7 +283,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     let about;
     try {
-      about = await getPlayerAbout(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId);
+      about = await getPlayerAbout(ctx.db, ctx.osu, userId, { writeDb: ctx.serveWriteDb ?? ctx.db });
     } catch (error) {
       if (!isOsuNotFound(error)) throw error;
       sendJson(req, res, ctx, 404, { error: "profile_not_found" });
@@ -277,8 +300,8 @@ function isOsuNotFound(error: unknown): boolean {
   return error instanceof OsuApiError && error.status === 404;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays" | "dan-evidence" | "keymode-pp"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-plays|dan-evidence|keymode-pp)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "dan-evidence" | "keymode-pp"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-history|skill-plays|dan-evidence|keymode-pp)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -288,7 +311,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-plays" | "keymode-pp",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "keymode-pp",
   };
 }
 

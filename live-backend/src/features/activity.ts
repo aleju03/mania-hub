@@ -14,11 +14,16 @@ import { activityMapBestRowOrder } from "./keymode-pp.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreTimestamp, nowIso, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
+import { errorContext, logWarn } from "../logger.js";
 
 // v5: chordjack requires actual chord-column repetition (chordColumnOverlapRatio
 // gate in the family choice + pattern scorer), so dense 7K bracket/jumpstream
 // files stop minting "chordjack" primaries.
 export const ACTIVITY_SKILL_ANALYSIS_VERSION = 5;
+export const ACTIVITY_BACKFILL_JOB = "backfill_player_activity";
+const ACTIVITY_BACKFILL_BATCH_SIZE = 2_000;
+const ACTIVITY_BACKFILL_ENQUEUE_COOLDOWN_MS = 60_000;
+const activityBackfillEnqueues = new WeakMap<Db, Map<string, number>>();
 
 const ACTIVITY_SESSION_GAP_MS = 45 * 60_000;
 const ACTIVITY_DAY_DETAIL_MAP_LIMIT = 500;
@@ -98,6 +103,7 @@ export interface PlayerActivityDay {
 }
 
 export interface PlayerActivitySnapshot {
+  refreshPending?: boolean;
   available: boolean;
   isTracked: boolean;
   userId: number;
@@ -134,16 +140,17 @@ export async function recordPlayerActivity(
   country: string,
   score: OscScore,
   scoreIdentity: string,
-  options: { deferSessionRecompute?: boolean } = {},
+  options: { deferSessionRecompute?: boolean; retainedEventId?: number } = {},
 ): Promise<{ day: string } | null> {
   const activity = readScoreActivityInput(country, score, scoreIdentity);
   if (!activity) return null;
   const now = nowIso();
+  const guard = retainedActivityWriteGuard(options.retainedEventId, activity.userId);
   const inserted = await exec(
     db,
     `insert or ignore into player_activity_score_refs
        (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+     select ?, ?, ?, ?, ?, ?, ?, ? ${guard}`,
     [
       activity.country,
       activity.scoreIdentity,
@@ -157,14 +164,24 @@ export async function recordPlayerActivity(
   );
   if (Number(inserted.rowsAffected ?? 0) === 0) return null;
 
-  await upsertActivityDay(db, activity, now);
+  await upsertActivityDay(db, activity, now, guard);
   if (!options.deferSessionRecompute) {
     await recomputeActivitySessions(db, activity.country, activity.userId, activity.day);
   }
-  await upsertActivityMap(db, activity, score, now);
+  await upsertActivityMap(db, activity, score, now, guard);
   await enqueueBeatmapSkillAnalysisIfNeeded(db, queue, activity.beatmapId);
   await enqueueChartAnalysisIfNeeded(db, queue, activity.beatmapId);
   return { day: activity.day };
+}
+
+// Each repair mutation checks its retained source in the same SQLite statement.
+// A wipe can commit between awaited writes, so a check at job/row entry alone
+// cannot prevent a buffered score from recreating projections after deletion.
+function retainedActivityWriteGuard(eventId: number | undefined, userId: number): string {
+  if (eventId == null) return "";
+  if (!Number.isSafeInteger(eventId) || eventId <= 0 || !Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid retained activity identity");
+  return `where exists (select 1 from score_events where id = ${eventId} and user_id = ${userId})
+    and not exists (select 1 from users where user_id = ${userId} and is_active = 0)`;
 }
 
 export async function removePlayerActivityScore(db: Db, country: string, scoreIdentity: string): Promise<void> {
@@ -236,7 +253,15 @@ export async function getPlayerActivitySnapshot(
     return emptyActivitySnapshot(userId, null, year, false, generatedAt);
   }
 
-  await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country);
+  const missingRetainedActivity = await hasMissingRetainedActivity(db, userId, resolved.country);
+  if (missingRetainedActivity) enqueuePlayerActivityBackfill(db, queue, userId, resolved.country);
+  // The last ref can appear before the worker finishes the day's aggregates.
+  // Keep a mounted calendar refreshing until that repair actually completes;
+  // only real gaps enqueue work, so polling never resurrects a finished job.
+  const refreshPending = missingRetainedActivity || !!(await exec(db,
+    "select 1 from jobs where dedupe_key = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [`activity-backfill:${resolved.country}:${userId}`],
+  )).rows[0];
   const timezone = getCountryTimezone(resolved.country);
   const years = await getActivityYears(db, userId, resolved.country);
   const availableYears = years.length > 0 ? years : [year];
@@ -254,6 +279,7 @@ export async function getPlayerActivitySnapshot(
   const todayKey = getZonedDayKey(timezone, Date.now()) ?? nowIso().slice(0, 10);
 
   return {
+    ...(refreshPending ? { refreshPending: true } : {}),
     available: resolved.isTracked || days.length > 0,
     isTracked: resolved.isTracked,
     userId,
@@ -283,13 +309,16 @@ export async function getPlayerActivityDayDetail(
   const resolved = await resolveActivityCountry(db, userId, requestedCountry);
   if (!resolved.country) return null;
 
-  await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country);
+  if (await hasMissingRetainedActivity(db, userId, resolved.country)) {
+    enqueuePlayerActivityBackfill(db, queue, userId, resolved.country);
+  }
   const timezone = getCountryTimezone(resolved.country);
   const rows = await getActivityDayScoreRows(db, userId, resolved.country, timezone, day);
   if (rows.length === 0) return null;
 
   const maps = await getActivityMapsForLocalDay(db, userId, resolved.country, day, rows);
-  await enqueueMissingActivitySkillAnalyses(db, queue, new Map([[day, maps]]));
+  void enqueueMissingActivitySkillAnalyses(db, queue, new Map([[day, maps]]))
+    .catch((error) => logWarn("activity_analysis_enqueue_failed", { user_id: userId, ...errorContext(error) }));
 
   let sessionCount = 0;
   let passedCount = 0;
@@ -343,53 +372,117 @@ export async function getPlayerActivityAvailability(
   };
 }
 
-async function backfillPlayerActivityFromRetainedScores(
+async function hasMissingRetainedActivity(db: Db, userId: number, country: string): Promise<boolean> {
+  // Opting out stops future ingestion, not access to already-retained history.
+  // An unknown player has no retained rows, so arbitrary profile IDs cannot
+  // enqueue work. A data wipe removes these rows and marks the account inactive.
+  return !!(await exec(db,
+    `select 1 from score_events e
+     where e.country = ? and e.user_id = ?
+       and e.id > coalesce((select last_event_id from player_activity_backfill_cursors where country = ? and user_id = ?), 0)
+       and not exists (select 1 from player_activity_score_refs r where r.country = e.country and r.score_identity = e.score_identity)
+     limit 1`,
+    [country, userId, country, userId],
+  )).rows[0];
+}
+
+function enqueuePlayerActivityBackfill(db: Db, queue: JobQueue, userId: number, country: string): void {
+  let recent = activityBackfillEnqueues.get(db);
+  if (!recent) activityBackfillEnqueues.set(db, (recent = new Map()));
+  const key = `activity-backfill:${country}:${userId}`;
+  const now = Date.now();
+  if ((recent.get(key) ?? 0) > now) return;
+  for (const [entry, expiresAt] of recent) {
+    if (expiresAt <= now) recent.delete(entry);
+  }
+  if (recent.size >= 2_048) recent.delete(recent.keys().next().value!);
+  recent.set(key, now + ACTIVITY_BACKFILL_ENQUEUE_COOLDOWN_MS);
+  // A read never waits for either the repair or its queue insert. Live ingest
+  // already owns new activity; this job only repairs retained legacy gaps.
+  void queue.enqueue(ACTIVITY_BACKFILL_JOB, key, { userId, country }, { priority: 20, replaceDone: true })
+    .catch((error) => {
+      recent.delete(key);
+      logWarn("activity_backfill_enqueue_failed", { user_id: userId, country, ...errorContext(error) });
+    });
+}
+
+/** Returns true when the worker should defer this job for another bounded batch. */
+export async function runPlayerActivityBackfillJob(
   db: Db,
   queue: JobQueue,
-  userId: number,
-  country: string,
-): Promise<void> {
-  // Live ingestion records activity for every new score, so this only has to
-  // catch up on score_events ingested before the cursor (one-time per player).
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  signal?.throwIfAborted();
+  const input = payload as { userId?: unknown; country?: unknown } | null;
+  const userId = Number(input?.userId);
+  const country = typeof input?.country === "string" ? input.country.trim().toUpperCase() : "";
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !/^[A-Z]{2}$/.test(country)) return false;
+  if ((await exec(db, "select 1 from users where user_id = ? and is_active = 0", [userId])).rows[0]) return false;
   const cursor = Number((await exec(
     db,
     "select last_event_id from player_activity_backfill_cursors where country = ? and user_id = ?",
     [country, userId],
   )).rows[0]?.last_event_id ?? 0);
-  const rows = (await exec(
+  // Bound the retained-ID walk independently of how many gaps it contains.
+  // Already-projected scores still advance the cursor, without reading their
+  // JSON or issuing an INSERT OR IGNORE for each of them.
+  const batch = (await exec(
     db,
-    `select id, score_identity, score_json
-     from score_events
-     where country = ? and user_id = ? and id > ?
-     order by id asc
-     limit 2000`,
-    [country, userId, cursor],
+    `select max(id) as last_id, count(*) as count,
+       json_group_array(distinct substr(ended_at, 1, 10)) as days_json from (
+       select id, ended_at from score_events
+       where country = ? and user_id = ? and id > ?
+       order by id asc limit ?
+     )`,
+    [country, userId, cursor, ACTIVITY_BACKFILL_BATCH_SIZE],
+  )).rows[0];
+  const lastEventId = Number(batch?.last_id ?? 0);
+  if (lastEventId <= cursor) return false;
+  const rows = (await exec(db,
+    `select e.id, e.score_identity, e.score_json
+     from score_events e
+     where e.country = ? and e.user_id = ? and e.id > ? and e.id <= ?
+       and not exists (
+         select 1 from player_activity_score_refs r
+         where r.country = e.country and r.score_identity = e.score_identity
+       )
+     order by e.id asc`,
+    [country, userId, cursor, lastEventId],
   )).rows;
-  if (rows.length === 0) return;
 
-  let lastEventId = cursor;
-  const touchedDays = new Set<string>();
+  // A previous attempt may have inserted refs and then been cancelled before
+  // its deferred session recompute. Revisit every day in the cursor range so
+  // the anti-join cannot hide that unfinished bookkeeping on retry.
+  const touchedDays = new Set(parseJson<string[]>(batch?.days_json, []));
   for (const row of rows) {
-    lastEventId = Math.max(lastEventId, Number(row.id) || 0);
+    signal?.throwIfAborted();
     const score = parseJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
     const recorded = await recordPlayerActivity(db, queue, country, score, String(row.score_identity), {
       deferSessionRecompute: true,
+      retainedEventId: Number(row.id),
     });
     if (recorded) touchedDays.add(recorded.day);
   }
   for (const day of touchedDays) {
+    signal?.throwIfAborted();
     await recomputeActivitySessions(db, country, userId, day);
   }
+  signal?.throwIfAborted();
+  if ((await exec(db, "select 1 from users where user_id = ? and is_active = 0", [userId])).rows[0]) return false;
   await exec(
     db,
     `insert into player_activity_backfill_cursors (country, user_id, last_event_id, updated_at)
-     values (?, ?, ?, ?)
+     select ?, ?, ?, ?
+     where not exists (select 1 from users where user_id = ? and is_active = 0)
+       and exists (select 1 from score_events where country = ? and user_id = ? and id = ?)
      on conflict(country, user_id) do update set
-       last_event_id = excluded.last_event_id,
+       last_event_id = max(last_event_id, excluded.last_event_id),
        updated_at = excluded.updated_at`,
-    [country, userId, lastEventId, nowIso()],
+    [country, userId, lastEventId, nowIso(), userId, country, userId, lastEventId],
   );
+  return Number(batch?.count ?? 0) === ACTIVITY_BACKFILL_BATCH_SIZE;
 }
 
 async function enqueueMissingActivitySkillAnalyses(
@@ -504,12 +597,13 @@ async function upsertActivityDay(
   db: Db,
   activity: NonNullable<ReturnType<typeof readScoreActivityInput>>,
   now: string,
+  guard = "",
 ): Promise<void> {
   await exec(
     db,
     `insert into player_activity_days
        (country, user_id, day, score_count, passed_count, session_count, first_score_at, last_score_at, updated_at)
-     values (?, ?, ?, 1, ?, 1, ?, ?, ?)
+     select ?, ?, ?, 1, ?, 1, ?, ?, ? ${guard}
      on conflict(country, user_id, day) do update set
        score_count = player_activity_days.score_count + 1,
        passed_count = player_activity_days.passed_count + excluded.passed_count,
@@ -541,6 +635,7 @@ async function upsertActivityMap(
   activity: NonNullable<ReturnType<typeof readScoreActivityInput>>,
   score: OscScore,
   now: string,
+  guard = "",
 ): Promise<void> {
   const pp = score.pp == null ? null : Number(score.pp);
   const accuracy = getDisplayedAccuracy(score);
@@ -553,7 +648,7 @@ async function upsertActivityMap(
     db,
     `insert into player_activity_maps
        (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, best_mods_json, best_statistics_json, best_max_combo, best_has_replay, best_solo_score_id, best_total_score, best_played_at, first_played_at, last_played_at, updated_at)
-     values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     select ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${guard}
      on conflict(country, user_id, day, beatmap_id) do update set
        play_count = player_activity_maps.play_count + 1,
        best_score_id = case when ${activityMapBetterSql()} then excluded.best_score_id else player_activity_maps.best_score_id end,

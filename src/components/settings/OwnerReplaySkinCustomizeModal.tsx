@@ -28,15 +28,17 @@ type SaveState = "idle" | "saving" | "error";
 // backend; overlays stay viewer-local exactly like everywhere else.
 export function OwnerReplaySkinCustomizeModal({
   record,
+  initialLoaded,
   onSaved,
   onClose,
 }: {
   record: OwnerReplaySkinRecord;
+  initialLoaded?: LoadedOwnerReplaySkin;
   onSaved: (record: OwnerReplaySkinRecord) => void;
   onClose: () => void;
 }) {
   const { t } = useLingui();
-  const [loaded, setLoaded] = useState<LoadedOwnerReplaySkin | null>(null);
+  const [loaded, setLoaded] = useState<LoadedOwnerReplaySkin | null>(initialLoaded ?? null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   // The settings modal closes itself synchronously right after onSave fires,
@@ -49,6 +51,7 @@ export function OwnerReplaySkinCustomizeModal({
   const [overlaySettings] = useState<ReplayOverlaySettings>(readReplayOverlaySettings);
 
   useEffect(() => {
+    if (initialLoaded?.record === record) return;
     let cancelled = false;
     void loadOwnerReplaySkin(record).then((result) => {
       if (cancelled) return;
@@ -58,7 +61,7 @@ export function OwnerReplaySkinCustomizeModal({
     return () => {
       cancelled = true;
     };
-  }, [record]);
+  }, [record, initialLoaded]);
 
   const updateSaveState = (state: SaveState) => {
     saveStateRef.current = state;

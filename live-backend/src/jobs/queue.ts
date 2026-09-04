@@ -13,11 +13,19 @@ export interface Job<T = unknown> {
   runAfter: string;
   attempts: number;
   payload: T;
+  lockedUntil?: string;
 }
 
 export interface ClaimOptions {
   types?: string[];
 }
+
+export interface JobLease {
+  workerId: string;
+  attempt: number;
+}
+
+export const JOB_LEASE_MS = 60_000;
 
 const QUEUE_TARGET_DEPTH = 100;
 const QUEUE_SOFT_PRESSURE_DEPTH = 80;
@@ -55,6 +63,7 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // one at a time, so the reserve only has to keep them out of the shedder.
   import_beatmap_leaderboard: 3,
   analyze_activity_beatmap: 10,
+  backfill_player_activity: 2,
   analyze_beatmap_chart: 10,
   // Self-chaining top-up runner for the chart-analysis backfill: one slot for
   // the runner and one for the queued continuation.
@@ -195,7 +204,7 @@ export class JobQueue {
 
   async claim(workerId: string, limit = 1, options: ClaimOptions = {}): Promise<Job[]> {
     const now = nowIso();
-    const lockedUntil = new Date(Date.now() + 60_000).toISOString();
+    const lockedUntil = new Date(Date.now() + JOB_LEASE_MS).toISOString();
     const typeFilter = buildTypeFilter(options.types);
     const rows = (await exec(
       this.db,
@@ -216,7 +225,7 @@ export class JobQueue {
            and ((status in ('queued', 'failed') and run_after <= ?) or (status = 'running' and locked_until <= ?))`,
         [workerId, lockedUntil, now, Number(row.id), now, now],
       );
-      if (result.rowsAffected > 0) jobs.push(rowToJob(row));
+      if (result.rowsAffected > 0) jobs.push({ ...rowToJob(row), lockedUntil });
     }
     // A reserved-lane type whose lane comes up short refills itself from its
     // deferred pool right away. shedPressure() also refills, but it only runs
@@ -252,8 +261,20 @@ export class JobQueue {
     return !!row;
   }
 
-  async complete(id: number): Promise<void> {
-    await exec(this.db, "update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ? where id = ?", [nowIso(), id]);
+  async renewLease(id: number, lease: JobLease): Promise<boolean> {
+    const result = await exec(this.db,
+      "update jobs set locked_until = ? where id = ? and status = 'running' and locked_by = ? and attempts = ?",
+      [new Date(Date.now() + JOB_LEASE_MS).toISOString(), id, lease.workerId, lease.attempt]);
+    return result.rowsAffected > 0;
+  }
+
+  // Unfenced calls are retained for administrative/test queue manipulation.
+  // Workers always supply both their identity and attempt: the same lane can
+  // reclaim a job after restart, so worker identity alone is insufficient.
+  async complete(id: number, lease?: JobLease): Promise<boolean> {
+    const fence = leaseFence(lease);
+    const result = await exec(this.db, `update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ? where id = ?${fence.sql}`, [nowIso(), id, ...fence.args]);
+    return result.rowsAffected > 0;
   }
 
   /**
@@ -293,21 +314,25 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0) > 0;
   }
 
-  async fail(id: number, error: unknown, retryDelayMs = 30_000): Promise<void> {
+  async fail(id: number, error: unknown, retryDelayMs = 30_000, lease?: JobLease): Promise<boolean> {
     const message = error instanceof Error ? error.message : String(error);
-    await exec(
+    const fence = leaseFence(lease);
+    const result = await exec(
       this.db,
-      "update jobs set status = 'failed', locked_by = null, locked_until = null, run_after = ?, last_error = ?, updated_at = ? where id = ?",
-      [new Date(Date.now() + retryDelayMs).toISOString(), message, nowIso(), id],
+      `update jobs set status = 'failed', locked_by = null, locked_until = null, run_after = ?, last_error = ?, updated_at = ? where id = ?${fence.sql}`,
+      [new Date(Date.now() + retryDelayMs).toISOString(), message, nowIso(), id, ...fence.args],
     );
+    return result.rowsAffected > 0;
   }
 
-  async defer(id: number, retryDelayMs = 30_000): Promise<void> {
-    await exec(
+  async defer(id: number, retryDelayMs = 30_000, lease?: JobLease): Promise<boolean> {
+    const fence = leaseFence(lease);
+    const result = await exec(
       this.db,
-      "update jobs set status = 'queued', locked_by = null, locked_until = null, run_after = ?, last_error = null, updated_at = ? where id = ?",
-      [new Date(Date.now() + retryDelayMs).toISOString(), nowIso(), id],
+      `update jobs set status = 'queued', locked_by = null, locked_until = null, run_after = ?, last_error = null, updated_at = ? where id = ?${fence.sql}`,
+      [new Date(Date.now() + retryDelayMs).toISOString(), nowIso(), id, ...fence.args],
     );
+    return result.rowsAffected > 0;
   }
 
   async depth(): Promise<number> {
@@ -563,6 +588,12 @@ export class JobQueue {
       : reserved.length > 0
         ? { sql: `and type not in (${reserved.map(() => "?").join(", ")})`, args: reserved }
         : { sql: "", args: [] as string[] };
+    // Even a zero-row UPDATE takes SQLite's writer lock. Empty lanes poll
+    // frequently, so only enter the write path when there is work to revive.
+    const waiting = (await exec(this.db,
+      `select 1 from jobs where status = 'deferred_pressure' ${typeFilter.sql} limit 1`,
+      typeFilter.args)).rows[0];
+    if (!waiting) return 0;
     const result = await exec(
       this.db,
       `update jobs
@@ -582,6 +613,12 @@ export class JobQueue {
     );
     return Number(result.rowsAffected ?? 0);
   }
+}
+
+function leaseFence(lease?: JobLease): { sql: string; args: Array<string | number> } {
+  return lease
+    ? { sql: " and status = 'running' and locked_by = ? and attempts = ?", args: [lease.workerId, lease.attempt] }
+    : { sql: "", args: [] };
 }
 
 async function activeDepth(db: Db, type?: string, excludeDedupeKey?: string): Promise<number> {

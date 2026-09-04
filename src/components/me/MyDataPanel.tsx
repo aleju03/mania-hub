@@ -601,6 +601,7 @@ export function MyDataPanel() {
                 <SkillBreakdownBody
                   skills={skills}
                   mode={activeSkillMode}
+                  userId={viewer.id}
                   own
                   onSelectDan={activeSkillMode ? (side) => setSelectedDan({ side, keyCount: activeSkillMode.keyCount }) : undefined}
                 />

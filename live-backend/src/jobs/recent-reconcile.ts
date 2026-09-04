@@ -5,6 +5,21 @@ import type { JobStatus } from "./queue.js";
 
 export const RECENT_RECONCILE_JOB_TYPE = "reconcile_user_recent_scores";
 
+export interface RecentReconcilePayload {
+  userId: number;
+  source?: string;
+  processLeaderboardFeatures?: boolean;
+  unchangedPolls?: number;
+  latestScoreAt?: string;
+}
+
+export function nextRecentReconcileCadence(previous: number | undefined, changed: boolean): { unchangedPolls: number; delayMs: number } {
+  const unchangedPolls = changed ? 0 : Math.min(3, Math.max(0, Math.floor(previous ?? 0)) + 1);
+  // Keep the first unchanged follow-up at two minutes for delayed replay/id
+  // corrections, then check at four/eight minutes until the activity TTL ends.
+  return { unchangedPolls, delayMs: 2 * 60_000 * 2 ** Math.max(0, unchangedPolls - 1) };
+}
+
 // A fresh score means the user's recent-score list is worth refreshing now:
 // osu! can flip fields such as has_replay shortly after oSC emits the score.
 export async function promotePendingRecentReconcileJobs(db: Db, userId: number, priority = 70): Promise<number> {
@@ -20,6 +35,7 @@ export async function promotePendingRecentReconcileJobs(db: Db, userId: number, 
          locked_by = null,
          locked_until = null,
          last_error = null,
+         payload_json = json_set(payload_json, '$.unchangedPolls', 0),
          updated_at = ?
      where type = ?
        and status in ('queued', 'failed', 'deferred_pressure')

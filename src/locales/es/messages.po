@@ -3462,6 +3462,7 @@ msgstr "cliente"
 msgid "Client"
 msgstr "Cliente"
 
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -9087,6 +9088,7 @@ msgstr "Ancho de salida en píxeles"
 msgid "overall"
 msgstr "general"
 
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Overall"
@@ -13714,6 +13716,7 @@ msgstr "Prueba con un filtro más amplio."
 msgid "Try a wider range or check back later."
 msgstr "Prueba con un rango más amplio o vuelve más tarde."
 
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/BackendOfflineScreen.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
@@ -14886,3 +14889,60 @@ msgstr "Tu nombre de usuario y avatar"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "Video de YouTube"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
+msgstr "Los cambios se guardan al recalcular el rating, incluidas las actualizaciones del sistema de rating. Los cambios anteriores no se registraron."
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Could not load skill history."
+msgstr "No se pudo cargar el historial de habilidad."
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "LN dan"
+msgstr "Dan LN"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Load older changes"
+msgstr "Cargar cambios anteriores"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Loading history…"
+msgstr "Cargando historial…"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "No skill ratings have been recorded yet."
+msgstr "Aún no se han registrado ratings de habilidad."
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Regular dan"
+msgstr "Dan regular"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Starting rating"
+msgstr "Rating inicial"
+
+#: src/components/player/SkillHistoryButton.tsx
+msgid "View {keyCount}K skill history"
+msgstr "Ver historial de habilidad {keyCount}K"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "{keyCount}K skill history"
+msgstr "Historial de habilidad {keyCount}K"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgctxt "skill rating difference"
+msgid "Change"
+msgstr "Cambio"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Date"
+msgstr "Fecha"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Earlier changes weren’t recorded."
+msgstr "No se registraron cambios anteriores."
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Rating"
+msgstr "Rating"

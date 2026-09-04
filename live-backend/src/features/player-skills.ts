@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import type { MotionFeatures } from "../dan/motion-features.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
@@ -2948,21 +2949,22 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       return null;
     });
     const computedAt = nowIso();
-    await exec(
-      db,
-      `update player_skill_ratings
-       set status = 'ready', modes_json = ?, plays_json = ?, acc_model_json = ?, source_fetched_at = ?, error = null, computed_at = ?, updated_at = ?
-       where user_id = ? and analysis_version = ?`,
-      [
-        json(result.summary),
-        json({ version: PLAYER_SKILLS_VERSION, plays: result.plays }),
-        accModel ? json(accModel) : null,
-        snapshot.fetchedAt,
-        computedAt,
-        computedAt,
-        userId,
-        PLAYER_SKILLS_VERSION,
-      ],
+    await writePlayerSkillRatingWithHistory(
+      db, userId, PLAYER_SKILLS_VERSION, result.summary.modes, computedAt, {
+        sql: `update player_skill_ratings
+         set status = 'ready', modes_json = ?, plays_json = ?, acc_model_json = ?, source_fetched_at = ?, error = null, computed_at = ?, updated_at = ?
+         where user_id = ? and analysis_version = ?`,
+        args: [
+          json(result.summary),
+          json({ version: PLAYER_SKILLS_VERSION, plays: result.plays }),
+          accModel ? json(accModel) : null,
+          snapshot.fetchedAt,
+          computedAt,
+          computedAt,
+          userId,
+          PLAYER_SKILLS_VERSION,
+        ],
+      },
     );
     // Superseded-version rows are dead weight once the new one is ready.
     await exec(db, "delete from player_skill_ratings where user_id = ? and analysis_version != ?", [userId, PLAYER_SKILLS_VERSION]);
@@ -5525,12 +5527,14 @@ export async function recomputePlayerSkillDanChunk(
     // computed_at stayed new, hiding the mismatch for the full 12h TTL. Zero
     // rows changed means that recompute already wrote the skillset verdicts
     // itself, so there is nothing here to redo.
-    const written = await exec(
-      db,
-      `update player_skill_ratings
-       set modes_json = json(?), updated_at = ?
-       where user_id = ? and analysis_version = ? and updated_at = ?`,
-      [json({ ...summary, modes }), nowIso(), userId, PLAYER_SKILLS_VERSION, readAt],
+    const recordedAt = nowIso();
+    const written = await writePlayerSkillRatingWithHistory(
+      db, userId, PLAYER_SKILLS_VERSION, modes, recordedAt, {
+        sql: `update player_skill_ratings
+         set modes_json = json(?), updated_at = ?
+         where user_id = ? and analysis_version = ? and updated_at = ?`,
+        args: [json({ ...summary, modes }), recordedAt, userId, PLAYER_SKILLS_VERSION, readAt],
+      },
     );
     if (Number(written.rowsAffected ?? 0) > 0) rewritten += 1;
   }
@@ -5748,12 +5752,14 @@ export async function recomputePlayerSkillPatternChunk(
     // updated_at guard, same as the dan sweep: a normal recompute in another
     // lane can rewrite the row between our read and this write, and its fold
     // is fresher than ours.
-    const written = await exec(
-      db,
-      `update player_skill_ratings
-       set modes_json = json(?), plays_json = json(?), updated_at = ?
-       where user_id = ? and analysis_version = ? and updated_at = ?`,
-      [json({ ...summary, modes }), json({ ...stored, plays: refreshedPlays }), nowIso(), userId, PLAYER_SKILLS_VERSION, readAt],
+    const recordedAt = nowIso();
+    const written = await writePlayerSkillRatingWithHistory(
+      db, userId, PLAYER_SKILLS_VERSION, modes, recordedAt, {
+        sql: `update player_skill_ratings
+         set modes_json = json(?), plays_json = json(?), updated_at = ?
+         where user_id = ? and analysis_version = ? and updated_at = ?`,
+        args: [json({ ...summary, modes }), json({ ...stored, plays: refreshedPlays }), recordedAt, userId, PLAYER_SKILLS_VERSION, readAt],
+      },
     );
     if (Number(written.rowsAffected ?? 0) > 0) rewritten += 1;
   }

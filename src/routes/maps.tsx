@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dices } from "lucide-react";
 import { getBeatmapFile } from "../lib/osu";
+import { loadReplayRenderer } from "../lib/replay-renderer-loader";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { displayCountryName, isGlobalScope } from "../lib/country";
 import { useLocale } from "../lib/locale-context";
@@ -3957,7 +3958,7 @@ function RandomReplayPreview({
     let handleResize: (() => void) | null = null;
     setCanvasReady(false);
 
-    void import("../components/replay/ReplayCanvas").then(({ ManiaReplayRenderer }) => {
+    void loadReplayRenderer().then(({ ManiaReplayRenderer }) => {
       if (cancelled || !canvasRef.current) return;
       renderer = new ManiaReplayRenderer(
         canvasRef.current,

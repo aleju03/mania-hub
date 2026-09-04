@@ -8,6 +8,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { RegionIcon } from "../ui/RegionIcon";
 import { CountrySelector } from "./CountrySelector";
 import { SettingsDrawer } from "./SettingsDrawer";
+import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
 import { searchPlayers } from "../../lib/player-search";
@@ -980,6 +981,9 @@ export function Nav() {
             }`}
             title={t`Settings`}
             aria-label={t`Settings`}
+            onPointerEnter={preloadReplaySkinSettingsModal}
+            onFocus={preloadReplaySkinSettingsModal}
+            onPointerDown={preloadReplaySkinSettingsModal}
             aria-expanded={settingsOpen}
           >
             <Settings className="h-5 w-5" strokeWidth={2.1} />
@@ -1221,6 +1225,9 @@ export function Nav() {
                     setMenuOpen(false);
                     setSettingsOpen(true);
                   }}
+                  onPointerEnter={preloadReplaySkinSettingsModal}
+                  onFocus={preloadReplaySkinSettingsModal}
+                  onPointerDown={preloadReplaySkinSettingsModal}
                   className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
                     settingsOpen || settingsActive
                       ? "bg-osu-pink/15 text-white"

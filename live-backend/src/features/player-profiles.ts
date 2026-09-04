@@ -181,7 +181,7 @@ export async function getPlayerProfileSnapshot(
   // profile goes through the queue.
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   rawKey: string,
-  options: { queue?: JobQueue | null; lookupMode?: ProfileLookupMode; includeNoteBpms?: boolean } = {},
+  options: { queue?: JobQueue | null; lookupMode?: ProfileLookupMode; includeNoteBpms?: boolean; writeDb?: Db } = {},
 ): Promise<PlayerProfileSnapshot> {
   const key = normalizeProfileKey(rawKey);
   const lookupMode = options.lookupMode ?? "auto";
@@ -221,7 +221,7 @@ export async function getPlayerProfileSnapshot(
   if (knownUser && Number(knownUser.is_active ?? 1) === 0) {
     throw new ProfileUserSuppressedError(Number(knownUser.user_id));
   }
-  const fetchedRow = await fetchAndStoreProfileSnapshotShared(db, osu, key, lookupMode);
+  const fetchedRow = await fetchAndStoreProfileSnapshotShared(options.writeDb ?? db, osu, key, lookupMode);
   return buildServedSnapshot(
     db,
     fetchedRow,
@@ -788,6 +788,7 @@ export async function getPlayerRecentScoresFromOsu(
      * reuse a payload it has already paid for (see the profile recent handler).
      */
     onFreshScores?: (scores: OscScore[]) => void;
+    writeDb?: Db;
   } = {},
 ): Promise<PlayerProfileSection> {
   let freshScores: OscScore[] | null = null;
@@ -800,6 +801,7 @@ export async function getPlayerRecentScoresFromOsu(
       freshScores = scores;
       return scores;
     },
+    options.writeDb,
   );
   if (freshScores) options.onFreshScores?.(freshScores);
   return {
@@ -812,6 +814,7 @@ export async function getPlayerAbout(
   db: Db,
   osu: Pick<OsuApiClient, "getUser">,
   userId: number,
+  options: { writeDb?: Db } = {},
 ): Promise<PlayerProfileSection> {
   // An archived player's about text is part of their seeded snapshot; the osu!
   // API has nothing to serve for them.
@@ -835,7 +838,7 @@ export async function getPlayerAbout(
     const html = typeof page?.html === "string" ? await sanitizeProfilePageHtml(page.html) : null;
     const raw = typeof page?.raw === "string" ? page.raw : null;
     return { html, raw };
-  });
+  }, options.writeDb);
 }
 
 async function getProfileSection(
@@ -843,6 +846,7 @@ async function getProfileSection(
   section: "about" | "recent",
   userId: number,
   fetchPayload: () => Promise<unknown>,
+  writeDb: Db = db,
 ): Promise<PlayerProfileSection> {
   const cacheKey = `${section}:${userId}`;
   const row = (await exec(db, "select payload_json, fetched_at from profile_section_cache where cache_key = ?", [cacheKey])).rows[0];
@@ -859,7 +863,7 @@ async function getProfileSection(
   const fetchedAt = nowIso();
   const payload = await fetchPayload();
   await exec(
-    db,
+    writeDb,
     `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
      values (?, ?, ?, ?, ?, ?)
      on conflict(cache_key) do update set

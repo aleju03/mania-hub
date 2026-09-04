@@ -97,7 +97,7 @@ describe("replay skin settings UI", () => {
     // cached full-art load starts only when the viewer editor is requested.
     expect(source).not.toContain("loadAppliedCommunityReplaySkinSettings");
     expect(source).toContain("const openAdvancedSkinEditor = () => {");
-    expect(source).toContain("void loadAppliedReplaySkinSettings()");
+    expect(source).toContain("needsAssets ? loadAppliedReplaySkinSettings() : Promise.resolve(null)");
     expect(source).toContain("onOpenAdvanced={openAdvancedSkinEditor}");
   });
 

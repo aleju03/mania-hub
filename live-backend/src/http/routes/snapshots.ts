@@ -10,7 +10,6 @@ import { getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, 
 import { getDanLeaderboard, getSkillLeaderboard, isDanLeaderboardKeyCount, isSkillLeaderboardKeyCount } from "../../features/skill-leaderboards.js";
 import { getRankDeltaSnapshot } from "../../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../../features/snipes.js";
-import { getTopPlaysSnapshot } from "../../features/top-plays.js";
 import { getTrackerSnapshot, TRACKER_MAX_OFFSET } from "../../features/tracker.js";
 import { getBoardLaneKey } from "../../shared/score.js";
 import type { HttpContext, TimedRequest } from "../context.js";
@@ -18,6 +17,7 @@ import { REQUEST_FARM_HELPER_TIMINGS } from "../context.js";
 import { activatePublicCountry, isObserveCountryRequest } from "../country-activation.js";
 import { buildGlobalMapsResponseOnThread, enforceCompressedLargeBody, getMapsResponseCacheState, MAP_SEARCH_RESPONSE_CACHE_TTL_MS, MAPS_GLOBAL_STALE_SERVE_MS, MAPS_PAGE_RESPONSE_CACHE_TTL_MS, MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS, pruneMapsResponseCache, serveMapsResponseCached } from "../maps-response-cache.js";
 import { prepareJsonResponse } from "../prepared-json.js";
+import { sendTopPlaysSnapshot } from "../top-plays-response-cache.js";
 import { clampInteger, clampLimit, isBridge, parseModAcronyms, parseUserIds } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
 import { parseDanLeaderboardQuery, parseFarmHelperKeyMode, parseFarmHelperSpeedBucket, parseFarmHelperView, parseGlobalRankingsQuery, parseSkillLeaderboardQuery, parseMapsPageQuery, parseMapsPlayersKind, parseMapsRandomDrawQuery, parseMapSearchQuery, parseTopPlaysSnapshotQuery, parseTrackerSnapshotFilters, parseTrackerSnapshotSort, parseTrackerSnapshotSortDirection } from "../snapshot-queries.js";
@@ -66,7 +66,7 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
   }
   if (url.pathname === "/api/snapshots/top-plays") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    await sendAccentEnrichedJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d", parseTopPlaysSnapshotQuery(url.searchParams)));
+    await sendTopPlaysSnapshot(req, res, ctx, country, url.searchParams.get("window") ?? "7d", parseTopPlaysSnapshotQuery(url.searchParams));
     return true;
   }
   if (url.pathname === "/api/snapshots/snipes") {

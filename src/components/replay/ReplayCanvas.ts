@@ -7,6 +7,9 @@ import { calculateManiaPp, getManiaPpModMultiplier } from "../../lib/mania-pp";
 import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScoreScaleToReal } from "../../lib/mania-score-simulation";
 import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
+import { buildReplayPeakKps, replayPeakKpsAt } from "../../lib/replay-kps";
+import { ensureReplayFontStyle } from "../../lib/replay-fonts";
+import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
 import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
@@ -588,6 +591,8 @@ export class ManiaReplayRenderer {
   private lifeBarFrames: ReplayLifeBarFrame[];
   private keypressTimesByColumn: number[][];
   private keypressTimes: number[] = [];
+  private peakKps: Uint32Array = new Uint32Array();
+  private removeTextFontListener: (() => void) | null = null;
   private keyCount: number;
   private currentTime = 0;
   private playbackSpeed = 1;
@@ -850,6 +855,7 @@ export class ManiaReplayRenderer {
         : mods.has("HT") || mods.has("DC")
           ? 0.75
           : 1;
+    this.peakKps = buildReplayPeakKps(this.keypressTimes, KEY_KPS_WINDOW_MS, this.modRate);
     this.hasHiddenMod = mods.has("HD");
     this.hasFadeInMod = mods.has("FI");
     const coverInputMod = inputMods.find((m) => getModAcronym(m) === "CO");
@@ -1004,7 +1010,7 @@ export class ManiaReplayRenderer {
 
   private installTextFontInvalidation() {
     if (typeof document === "undefined" || !document.fonts?.ready) return;
-    void document.fonts.ready.then(() => {
+    const invalidate = () => {
       if (this.destroyed) return;
       this.textFontRevision++;
       this.textWidthCache.clear();
@@ -1017,10 +1023,22 @@ export class ManiaReplayRenderer {
         label.text = "";
       }
       if (!this._isPlaying) this.render();
-    });
+    };
+    void document.fonts.ready.then(invalidate);
+    document.fonts.addEventListener?.("loadingdone", invalidate);
+    this.removeTextFontListener = () => document.fonts.removeEventListener?.("loadingdone", invalidate);
   }
 
   private async initPixi() {
+    // Font registration now belongs to the viewer. Explicitly load canvas-only
+    // text before its first paint; a blocked font host falls back after a short
+    // wait, with loadingdone invalidating cached text if it recovers later.
+    await withTimeout(
+      ensureReplayFontStyle(getReplayComboFontStyle(this.skinSettings.comboFontSet)),
+      2500,
+      "Timed out loading replay fonts.",
+    ).catch(() => {});
+    if (this.destroyed) return;
     const app = new Application<WebGLRenderer | CanvasRenderer>();
     const width = Math.max(1, this.cssWidth);
     const height = Math.max(1, this.cssHeight);
@@ -1472,6 +1490,7 @@ export class ManiaReplayRenderer {
   }
 
   private updateHudSnapshotIfNeeded(force = false) {
+    if ((this.hideHud || this.barePlayfield) && !this.liveStats) return;
     const elapsed = performance.now() - this.hudSnapshotTime;
     if (!force && elapsed < 50 && Number.isFinite(this.hudSnapshotTime)) return;
     this.hudSnapshotTime = performance.now();
@@ -1584,17 +1603,7 @@ export class ManiaReplayRenderer {
   }
 
   private getMaxKpsUpTo(time: number): number {
-    if (this.keypressTimes.length === 0) return 0;
-    const windowMs = this.getKpsWindowGameMs();
-    const endLimit = this.upperBound(this.keypressTimes, time);
-    let max = 0;
-    let start = 0;
-    for (let end = 0; end < endLimit; end++) {
-      const windowStart = Math.max(0, this.keypressTimes[end] - windowMs);
-      while (this.keypressTimes[start] < windowStart) start++;
-      max = Math.max(max, end - start + 1);
-    }
-    return max * (1000 / KEY_KPS_WINDOW_MS);
+    return replayPeakKpsAt(this.keypressTimes, this.peakKps, time, KEY_KPS_WINDOW_MS);
   }
 
   private getKpsWindowGameMs(): number {
@@ -1881,6 +1890,7 @@ export class ManiaReplayRenderer {
     this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
     this.keypressTimes = this.keypressTimesByColumn.flat().sort((a, b) => a - b);
     this.updateSkinCache();
+    this.peakKps = buildReplayPeakKps(this.keypressTimes, KEY_KPS_WINDOW_MS, this.modRate);
     this.prepareScrollVelocities();
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
@@ -2276,6 +2286,7 @@ export class ManiaReplayRenderer {
 
   setSkinSettings(settings: ReplaySkinSettings) {
     this.skinSettings = normalizeReplaySkinSettings(settings);
+    void ensureReplayFontStyle(getReplayComboFontStyle(this.skinSettings.comboFontSet)).catch(() => {});
     this.updateSkinCache();
     this.invalidateLayoutCache();
     this.prewarmSkinTextures();
@@ -7250,6 +7261,8 @@ export class ManiaReplayRenderer {
     // cannot destroy Pixi children or shared textures twice.
     if (this.destroyed) return;
     this.destroyed = true;
+    this.removeTextFontListener?.();
+    this.removeTextFontListener = null;
     this.pause();
     this.resumeAfterContextRestore = false;
     this.canvas.style.visibility = "hidden";

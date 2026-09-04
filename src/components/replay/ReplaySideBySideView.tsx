@@ -3,6 +3,7 @@ import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play, SlidersHo
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { getBeatmapAudioUrl, getInlineBackgroundUrl } from "../../lib/audio-url";
+import { loadReplayRenderer, preloadReplayRenderer } from "../../lib/replay-renderer-loader";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
 import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -372,6 +373,7 @@ export function ReplaySideBySideView({
 
   // Load both scores + replays and the (shared) beatmap file.
   useEffect(() => {
+    preloadReplayRenderer();
     let cancelled = false;
     setSides(null);
     setBeatmapFileContent(null);
@@ -420,7 +422,7 @@ export function ReplaySideBySideView({
     void (async () => {
       try {
         const { ManiaReplayRenderer } = await withTimeout(
-          import("./ReplayCanvas"),
+          loadReplayRenderer(),
           8000,
           t`Timed out loading the replay renderer.`,
         );
@@ -586,7 +588,7 @@ export function ReplaySideBySideView({
     let cancelled = false;
     void (async () => {
       try {
-        const { ManiaReplayRenderer } = await import("./ReplayCanvas");
+        const { ManiaReplayRenderer } = await loadReplayRenderer();
         const canvas = storyboardCanvasRef.current;
         if (cancelled || !canvas) return;
         const renderer = new ManiaReplayRenderer(canvas, [], sides[0].replay.keyCount, sides[0].beatmap?.notes ?? [], {

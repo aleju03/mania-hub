@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerE
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Gauge, Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { getBeatmapFile } from "../../lib/osu";
+import { loadReplayRenderer } from "../../lib/replay-renderer-loader";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../../lib/replay-scroll-speed";
@@ -1137,7 +1138,7 @@ function ChartPreviewRenderer({
     let handleResize: (() => void) | null = null;
     setCanvasReady(false);
 
-    void import("../replay/ReplayCanvas").then(({ ManiaReplayRenderer }) => {
+    void loadReplayRenderer().then(({ ManiaReplayRenderer }) => {
       if (cancelled || !canvasRef.current) return;
       renderer = new ManiaReplayRenderer(
         canvasRef.current,

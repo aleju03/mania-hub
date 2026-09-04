@@ -290,6 +290,7 @@ export async function wipeUserProjections(db: Db, userId: number, journalDb: Db 
     { name: "user_top_scores", statement: { sql: "delete from user_top_scores where user_id = ?", args: [safeUserId] } },
     { name: "top_play_events", statement: { sql: "delete from top_play_events where user_id = ?", args: [safeUserId] } },
     { name: "snipe_events", statement: { sql: "delete from snipe_events where sniper_id = ? or victim_id = ?", args: [safeUserId, safeUserId] } },
+    { name: "player_skill_history", statement: { sql: "delete from player_skill_history where user_id = ?", args: [safeUserId] } },
     { name: "player_skill_ratings", statement: { sql: "delete from player_skill_ratings where user_id = ?", args: [safeUserId] } },
     { name: "player_skill_baseline", statement: { sql: "delete from player_skill_baseline where user_id = ?", args: [safeUserId] } },
     { name: "profile_snapshots", statement: { sql: "delete from profile_snapshots where user_id = ?", args: [safeUserId] } },

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, stagger, useAnimate, useReducedMotion } from "framer-motion";
 import { ChevronRight, X } from "lucide-react";
 
-import { UPDATES, WIP } from "#/data/changelog";
+import { UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
 import { formatReleaseAge, groupUpdatesByDay } from "#/lib/changelog";
 import { formatDate } from "#/lib/format";
 import { useLingui } from "@lingui/react/macro";
@@ -13,6 +13,49 @@ const DAYS = groupUpdatesByDay(UPDATES);
 /** Newest day only: it is the one the reader came for, and every other day
     stays a one-line row so the whole history fits without scrolling. */
 const DEFAULT_OPEN_DAYS = DAYS.slice(0, 1).map((day) => day.date);
+
+function UpdateText({ update }: { update: ChangelogUpdate }) {
+  const reduceMotion = useReducedMotion();
+  const [scope, animate] = useAnimate<HTMLSpanElement>();
+  const { text, emphasis } = update;
+  const start = emphasis ? text.indexOf(emphasis) : -1;
+
+  // Start the loop explicitly: the day's AnimatePresence disables initial
+  // animations, which would also suppress a declarative loop on these letters.
+  useEffect(() => {
+    if (!scope.current) return;
+    const animation = animate("span", {
+      x: 0,
+      y: reduceMotion ? 0 : [0, -1.5, 0],
+      rotate: 0,
+    }, reduceMotion ? { duration: 0 } : {
+      duration: 1.8,
+      delay: stagger(0.14),
+      repeat: Infinity,
+      ease: "easeInOut",
+    });
+    return () => animation.stop();
+  }, [animate, emphasis, reduceMotion, scope, start]);
+
+  if (!emphasis || start === -1) return <>{text}</>;
+
+  return (
+    <>
+      {text.slice(0, start)}
+      <strong className="inline-block whitespace-nowrap font-bold tracking-[0.04em] text-osu-c1">
+        <span className="sr-only">{emphasis}</span>
+        <span ref={scope} aria-hidden="true">
+          {Array.from(emphasis).map((letter, index) => (
+            <span key={index} className="inline-block">
+              {letter}
+            </span>
+          ))}
+        </span>
+      </strong>
+      {text.slice(start + emphasis.length)}
+    </>
+  );
+}
 
 export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useLingui();
@@ -135,7 +178,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                                 return (
                                   <div key={update.text} className={row}>
                                     {bullet}
-                                    <span className="min-w-0">{update.text}</span>
+                                    <span className="min-w-0"><UpdateText update={update} /></span>
                                   </div>
                                 );
                               }
@@ -147,7 +190,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                                   className={`${row} transition-colors hover:bg-osu-b3/30 hover:text-white`}
                                 >
                                   {bullet}
-                                  <span className="min-w-0">{update.text}</span>
+                                  <span className="min-w-0"><UpdateText update={update} /></span>
                                 </Link>
                               );
                             })}

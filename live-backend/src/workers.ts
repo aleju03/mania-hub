@@ -4,7 +4,7 @@ import { canSeedSnipesForCountry, isCountryRosterConfirmedEmpty, retireCountry }
 import { exec, json, parseJson } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
-import { computeBeatmapActivitySkillVector } from "./features/activity.js";
+import { ACTIVITY_BACKFILL_JOB, computeBeatmapActivitySkillVector, runPlayerActivityBackfillJob } from "./features/activity.js";
 import { BRACKET_CONTENT_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, COMPANELLA_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, INVERSE_CLUSTER_BPM_JOB, JACK_DEMAND_RECOMPUTE_JOB, NKEY_MSD_JOB, JACK_TAG_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LN_MSD_SWEEP_JOB, LN_LEOBLACK_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runBracketContentRecomputeJob, runBracketTagRecomputeJob, runChartAnalysisBackfillJob, runChordjackTagRecomputeJob, runCompanellaRecomputeJob, runDanEligibilityRecomputeJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runHtRateAnalysisJob, runInverseClusterBpmRecoveryJob, runJackDemandRecomputeJob, runNkeyMsdJob, runJackTagRecomputeJob, runMotionFeaturesRecomputeJob, runLeoblackRepinDtRecomputeJob, runLeoblackRepinRecomputeJob, runLnLeoblackRecomputeJob, runLnMsdSweepJob, runLn7PrimaryRepinJob, runLnPrimaryRepinJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runMsdPoisonRecoveryJob, runNoteBpmRecomputeJob, runOsuFileRepairJob, runSunnyRepinDtRecomputeJob, runSunnyRepinRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileGoalsForUser, reconcileStatGoalsForCountry } from "./features/goals.js";
@@ -27,7 +27,8 @@ import { ACTIVITY_COMBO_BACKFILL_JOB_TYPE, runActivityComboBackfillJob } from ".
 import { ACTIVITY_DETAIL_ON_DEMAND_JOB, runActivityDetailOnDemandJob } from "./features/activity-detail-on-demand.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
-import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
+import { JobLeaseLostError, maintainJobLease } from "./jobs/lease.js";
+import { hasPendingRecentReconcileJob, nextRecentReconcileCadence, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs, type RecentReconcilePayload } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import { readWorkersPaused, writeJobMemoryMetric } from "./live/runtime-status.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
@@ -56,10 +57,10 @@ interface WorkerLane {
 // A job whose promise never settles (a starved osu! API slot, a wedged render
 // subprocess) would otherwise park its lane forever: the lane tick awaits its
 // claimed jobs before scheduling the next claim, and most job types have no
-// other consumer to reclaim them. The watchdog rejects the await so the job
-// takes the normal fail-with-backoff path and the lane keeps ticking. The
-// abandoned promise stays running detached; its eventual settlement is ignored
-// (job handlers are idempotent upserts). Jobs are designed short (long work
+// other consumer to reclaim them. The watchdog releases the lane and aborts
+// the handler. Its lease remains live until that handler settles, then it
+// takes the fail-with-backoff path; an uncooperative handler cannot overlap a
+// retry. Aborting attempts stay visible in worker status. Jobs are short (long work
 // self-chains in batches), so ten minutes only ever fires on a genuine hang.
 const DEFAULT_JOB_WATCHDOG_MS = 10 * 60_000;
 
@@ -70,7 +71,13 @@ const DEFAULT_JOB_WATCHDOG_MS = 10 * 60_000;
 // a single invocation always finishes well under the watchdog ceiling.
 const SNIPE_SEED_ROSTER_BATCH = 15;
 
-export class JobWatchdogTimeoutError extends Error {}
+export class JobWatchdogTimeoutError extends Error {
+  settled?: Promise<void>;
+}
+
+class DeferredJobError extends Error {
+  constructor(readonly delayMs: number) { super("bounded job batch completed; continuation pending"); }
+}
 
 interface WorkerActiveJob {
   id: number;
@@ -79,6 +86,7 @@ interface WorkerActiveJob {
   attempts: number;
   startedAt: string;
   payload: unknown;
+  aborting?: boolean;
 }
 
 class LeaderboardImportRefusedError extends Error {
@@ -192,7 +200,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // per-map compute as analyze_activity_beatmap; its deep negative priority
     // keeps interactive analyses ahead of the sweep chain.
     name: "activity-analysis",
-    jobTypes: ["analyze_activity_beatmap", SKILL_VECTOR_BACKFILL_JOB],
+    jobTypes: ["analyze_activity_beatmap", SKILL_VECTOR_BACKFILL_JOB, ACTIVITY_BACKFILL_JOB],
     claimLimit: 1,
     intervalMs: 1_500,
   },
@@ -452,24 +460,54 @@ export class WorkerRunner {
     };
     this.activeJobs.set(lane, [...(this.activeJobs.get(lane) ?? []), activeJob]);
     const startedAtMs = Date.now();
+    const lease = { workerId, attempt: job.attempts + 1 };
+    const controller = new AbortController();
+    const leaseGuard = maintainJobLease(this.queue, job.id, lease, controller, job.lockedUntil ? Date.parse(job.lockedUntil) : undefined);
+    const clearActive = () => {
+      const remaining = (this.activeJobs.get(lane) ?? []).filter((current) => current !== activeJob);
+      if (remaining.length > 0) this.activeJobs.set(lane, remaining);
+      else this.activeJobs.delete(lane);
+    };
+    let detachedCleanup = false;
     try {
       logInfo("job_start", { job_id: job.id, type: job.type, lane, worker_id: workerId, attempts: job.attempts + 1 });
-      await this.handleWithWatchdog(job, lane);
-      await this.queue.complete(job.id);
+      await this.handleWithWatchdog(job, lane, controller, leaseGuard.lost);
+      if (!await this.queue.complete(job.id, lease)) return;
       logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId, duration_ms: Date.now() - startedAtMs });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
     } catch (error) {
+      if (error instanceof JobLeaseLostError || controller.signal.reason instanceof JobLeaseLostError) {
+        logWarn("job_lease_lost", { job_id: job.id, type: job.type, worker_id: workerId });
+        return;
+      }
+      if (error instanceof JobWatchdogTimeoutError && error.settled) {
+        // Release this lane, but keep the attempt leased while its aborted
+        // handler unwinds. Retrying before it settles starts the same writes
+        // and API calls twice. A truly stuck handler recovers on process restart.
+        detachedCleanup = true;
+        activeJob.aborting = true;
+        void error.settled.then(async () => {
+          const delayMs = getRetryDelayMs(job.type, job.attempts, error);
+          if (await this.queue.fail(job.id, error, delayMs, lease)) {
+            await this.events.append("job_status", null, { id: job.id, type: job.type, status: "failed" }, `job:${job.id}:failed:${job.attempts}`);
+          }
+        }).catch((cleanupError) => {
+          logWarn("job_abort_cleanup_failed", { job_id: job.id, ...errorContext(cleanupError) });
+        }).finally(() => { leaseGuard.stop(); clearActive(); });
+        logWarn("job_watchdog_aborting", { job_id: job.id, type: job.type, lane, ...errorContext(error) });
+        return;
+      }
       if (await this.handleMissingUserJob(workerId, job, lane, error)) return;
       if (await this.retireEmptyMapsCountry(workerId, job, lane, error)) return;
-      if (error instanceof MapsRosterNotReadyError) {
-        const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
-        await this.queue.defer(job.id, retryDelayMs);
+      if (error instanceof MapsRosterNotReadyError || error instanceof DeferredJobError) {
+        const retryDelayMs = error instanceof DeferredJobError ? error.delayMs : getRetryDelayMs(job.type, job.attempts, error);
+        if (!await this.queue.defer(job.id, retryDelayMs, lease)) return;
         logInfo("job_deferred", { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, reason: error.message });
         await this.events.append("job_status", null, { id: job.id, type: job.type, status: "queued", reason: error.message }, `job:${job.id}:deferred:${job.attempts}`);
         return;
       }
       const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
-      await this.queue.fail(job.id, error, retryDelayMs);
+      if (!await this.queue.fail(job.id, error, retryDelayMs, lease)) return;
       // A pending top-play confirmation is the queue's designed wait for a score
       // osu! has not published into the player's best-200 yet, not a fault: it
       // retries on its own backoff and gives up after a few attempts. Logged at
@@ -483,18 +521,12 @@ export class WorkerRunner {
       }
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "failed" }, `job:${job.id}:failed:${job.attempts}`);
     } finally {
-      const remaining = (this.activeJobs.get(lane) ?? []).filter((current) => current.id !== job.id);
-      if (remaining.length > 0) {
-        this.activeJobs.set(lane, remaining);
-      } else {
-        this.activeJobs.delete(lane);
-      }
+      if (!detachedCleanup) { leaseGuard.stop(); clearActive(); }
     }
   }
 
-  private async handleWithWatchdog(job: Job, lane: string): Promise<void> {
+  private async handleWithWatchdog(job: Job, lane: string, controller = new AbortController(), leaseLost?: Promise<never>): Promise<void> {
     const timeoutMs = this.lanes.find((candidate) => candidate.name === lane)?.jobTimeoutMs ?? DEFAULT_JOB_WATCHDOG_MS;
-    const controller = new AbortController();
     // The handler keeps running detached after the watchdog fires (the lane is
     // released so it keeps ticking). Aborting the signal lets handlers that check
     // it stop at their next batch/page boundary instead of running on and burning
@@ -506,9 +538,11 @@ export class WorkerRunner {
     try {
       await Promise.race([
         handlePromise,
+        ...(leaseLost ? [leaseLost] : []),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
             const error = new JobWatchdogTimeoutError(`job watchdog: ${job.type} still running after ${timeoutMs}ms, releasing the lane`);
+            error.settled = handlePromise.then(() => {}, () => {});
             // Reject first so the watchdog error is what the race surfaces (the
             // job's fail path / last_error), then abort — a handler that rejects
             // synchronously on abort must not preempt the watchdog message.
@@ -559,6 +593,11 @@ export class WorkerRunner {
     const payloadUserId = Math.floor(Number((job.payload as { userId?: unknown } | null)?.userId));
     if (Number.isSafeInteger(payloadUserId) && payloadUserId > 0 && await isUserKnownInactive(this.db, payloadUserId)) {
       logInfo("job_skipped_inactive_user", { job_id: job.id, type: job.type, user_id: payloadUserId });
+      return;
+    }
+    if (job.type === ACTIVITY_BACKFILL_JOB) {
+      throwIfAborted(signal);
+      if (await runPlayerActivityBackfillJob(this.db, this.queue, job.payload, signal)) throw new DeferredJobError(1_000);
       return;
     }
     if (!readConfig().enableOsuApiJobs && OSU_API_JOB_TYPES.has(job.type)) {
@@ -666,7 +705,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "reconcile_user_recent_scores") {
-      await this.reconcileUserRecentScores(job.payload as { userId: number; source?: string; processLeaderboardFeatures?: boolean }, job.id);
+      await this.reconcileUserRecentScores(job.payload as RecentReconcilePayload, job.id, signal);
       return;
     }
     if (job.type === "refresh_country_roster") {
@@ -1016,7 +1055,7 @@ export class WorkerRunner {
       return false;
     }
     if (!await retireCountry(this.db, country)) return false;
-    await this.queue.complete(job.id);
+    await this.queue.complete(job.id, { workerId, attempt: job.attempts + 1 });
     logWarn("country_retired_empty", {
       job_id: job.id,
       type: job.type,
@@ -1034,7 +1073,7 @@ export class WorkerRunner {
     const userId = Number((job.payload as { userId?: unknown }).userId);
     if (!Number.isInteger(userId) || userId <= 0) return false;
     const result = await markUserMissing(this.db, userId, `${job.type}: ${error.message}`);
-    await this.queue.complete(job.id);
+    await this.queue.complete(job.id, { workerId, attempt: job.attempts + 1 });
     logInfo("job_user_missing", {
       job_id: job.id,
       type: job.type,
@@ -1153,7 +1192,7 @@ export class WorkerRunner {
     }
   }
 
-  private async reconcileUserRecentScores(payload: { userId: number; source?: string; processLeaderboardFeatures?: boolean }, currentJobId?: number): Promise<void> {
+  private async reconcileUserRecentScores(payload: RecentReconcilePayload, currentJobId?: number, signal?: AbortSignal): Promise<void> {
     const userId = Number(payload.userId);
     if (!Number.isFinite(userId) || userId <= 0) return;
     const source = payload.source === "osu_recent_fallback" ? "osu_recent_fallback" : "osu_recent";
@@ -1171,40 +1210,53 @@ export class WorkerRunner {
     const scores = recentScores
       .filter((score) => score.passed)
       .map((score) => ({ ...score, ruleset_id: score.ruleset_id ?? 3 }));
-    await this.ingestor.ingestBatch(scores, source, {
+    throwIfAborted(signal);
+    const ingested = await this.ingestor.ingestBatch(scores, source, {
       enqueueRecentReconcile: false,
       processLeaderboardFeatures: payload.processLeaderboardFeatures === true,
     });
-    if (await this.isUserActive(userId)) {
+    throwIfAborted(signal);
+    const latestTrackedScoreAt = await this.getLatestActiveScoreAt(userId);
+    if (latestTrackedScoreAt) {
       if (await requeueDeferredRecentReconcileJobs(this.db, userId) > 0) return;
       if (await hasPendingRecentReconcileJob(this.db, userId, {
         excludeJobId: currentJobId,
         statuses: ["queued", "failed"],
       })) return;
-      const runAfter = new Date(Date.now() + 2 * 60_000);
+      const latestScoreAt = scores.reduce<string>((latest, score) => {
+        const timestamp = score.ended_at ?? score.created_at;
+        return timestamp && (!latest || timestamp > latest) ? timestamp : latest;
+      }, latestTrackedScoreAt);
+      // A play may already have arrived through the live feed, so an unchanged
+      // insert count alone cannot tell us the player has stopped. Metadata
+      // corrections also count as changes and reset the short polling window.
+      const changed = ingested.inserted > 0 || latestScoreAt !== payload.latestScoreAt;
+      const cadence = nextRecentReconcileCadence(payload.unchangedPolls, changed);
+      const runAfter = new Date(Date.now() + cadence.delayMs);
       const bucket = Math.floor(runAfter.getTime() / (2 * 60_000));
       await this.queue.enqueue(
         RECENT_RECONCILE_JOB_TYPE,
         `recent:user:${userId}:next:${bucket}`,
-        { userId },
+        { ...payload, userId, latestScoreAt, unchangedPolls: cadence.unchangedPolls },
         { priority: 25, runAfter },
       );
     }
   }
 
-  private async isUserActive(userId: number): Promise<boolean> {
+  private async getLatestActiveScoreAt(userId: number): Promise<string | null> {
     const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
     const row = (await exec(
       this.db,
-      `select 1
+      `select ended_at
        from score_events
        where user_id = ?
          and ended_at >= ?
          and (source like 'osc_%' or source in ('osu_scores_fallback', 'osu_recent', 'osu_recent_fallback'))
+       order by ended_at desc
        limit 1`,
       [userId, cutoff],
     )).rows[0];
-    return !!row;
+    return row ? String(row.ended_at) : null;
   }
 
   private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string; cursor?: number }, signal?: AbortSignal): Promise<void> {

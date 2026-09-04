@@ -559,6 +559,8 @@ export interface LivePlayerActivityDay {
 export interface LivePlayerActivitySnapshot {
   available: boolean;
   isTracked: boolean;
+  /** Retained history is being repaired; the current calendar can already render. */
+  refreshPending?: boolean;
   userId: number;
   country: string | null;
   /** IANA timezone the backend used to bucket days (the player country's local time). */
@@ -1515,6 +1517,24 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
 export async function fetchLivePlayerSkillsDirect(userId: number): Promise<LivePlayerSkills> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/skills`);
+}
+
+export interface LivePlayerSkillHistorySnapshot {
+  ratings: Record<string, number>;
+  dan: Record<"rc" | "ln", { label: string; beyondTable: boolean } | null>;
+}
+
+export interface LivePlayerSkillHistoryEntry {
+  id: number;
+  recordedAt: string;
+  version: number;
+  snapshot: LivePlayerSkillHistorySnapshot;
+  previous: LivePlayerSkillHistorySnapshot | null;
+}
+
+export interface LivePlayerSkillHistoryPage {
+  items: LivePlayerSkillHistoryEntry[];
+  nextBefore: number | null;
 }
 
 export async function fetchLivePlayerSkillPlaysDirect(

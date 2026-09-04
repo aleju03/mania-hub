@@ -132,7 +132,7 @@ async function retag(db: any): Promise<void> {
       const freshCategory = analysis.primary?.label ?? null;
       // The player side files a clear by score >= 0.5, so track that line too.
       const storedStrong = new Set((stored.patterns ?? []).filter((h) => Number(h.score) >= 0.5).map((h) => h.id));
-      const freshStrong = new Set(analysis.patterns.filter((h) => h.score >= 0.5).map((h) => h.id));
+      const freshStrong = new Set<string>(analysis.patterns.filter((h) => h.score >= 0.5).map((h) => h.id));
       for (const id of TILES) {
         const was = storedStrong.has(id), now = freshStrong.has(id);
         if (was !== now) { const k = `${id} ${was ? "lost" : "gained"} (>=0.5)`; tagFlow.set(k, (tagFlow.get(k) ?? 0) + 1); }

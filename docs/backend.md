@@ -32,9 +32,13 @@ Ingest flow:
 
 Rosters are warmed from osu! mania performance rankings on a schedule; roster refreshes also capture `country_rank_snapshots` used for 7-day rank deltas.
 
+Recent-score reconciliation keeps an initial two-minute follow-up for delayed score/replay corrections, then backs off unchanged results to four and eight minutes within the 30-minute active window. New feed activity or corrected score data resets the short cadence. Ingestion skips identical metadata within a batch and only updates stored metadata when its persisted fields change.
+
 ## Queue and jobs
 
 The queue lives in the `jobs` table with priority, dedupe keys, and per-type backoff. Under load it sheds pressure: low-priority job types are auto-deferred (`deferred_pressure`) when queue depth is high and wake when it drains. Workers run in dedicated lanes (fast enrichment, osc-backfill, osc-country-catchup, maps-refresh, dan-estimates, activity-analysis, chart-analysis, snipe-seed, replay-video render and finalize).
+
+Workers renew each 60-second lease while its attempt runs; completion, failure and deferral require the same worker and attempt. An empty reserved-lane refill checks for deferred rows before taking the write lock. On watchdog expiry the lane is released and the handler is aborted, but its attempt remains leased and visible as `aborting` until the handler settles. A handler that never cooperates needs a process restart; it must not be retried concurrently while it can still write.
 
 Job types:
 
@@ -44,6 +48,7 @@ Job types:
 - `refresh_user_top_scores`: confirm a candidate top play and compute PP gain.
 - `refresh_profile_user`, `refresh_profile_snapshot`: catch a viewed profile up off the request path (osu! user payload; full user + best-200 re-mint). Both are queued by the profile endpoints, never awaited by them.
 - `reconcile_user_recent_scores`: sync a user's recent scores from the osu! API to fill ingest gaps.
+- `backfill_player_activity`: repair retained legacy score gaps off the Activity request path, in bounded batches that skip existing activity references and resume from a durable cursor.
 - `refresh_user_maps_farmed_scores`, `refresh_country_maps`, `refresh_global_maps`: maps-farmed aggregation per user, per country, and globally.
 - `refresh_qualified_maps`: hourly qualified-maps watch; pulls osu!'s current qualified mania list in one search call and reconciles `/maps` status (promote pending->qualified, index new sets, resolve ranks/dequalifies).
 - `seed_snipe_board`: build the initial board for a beatmap/lane.
@@ -59,6 +64,8 @@ Job types:
 ## HTTP surface
 
 `/healthz` and `/readyz` are open, and are what a liveness or uptime probe should use. `/api/status` is **not** public: it needs `LIVE_ADMIN_TOKEN` like `/api/admin/status` (it is the same body without the worker-activity extras), because queue pressure, DB headroom, the osu! API budget and the abuse counters together describe exactly when the backend is least able to absorb load. Public endpoints: `/api/countries/features`, `/api/countries/activate`, `/api/snapshots/*` (tracker, top-plays, snipes, snipe-board, maps, maps-page, maps-progress, maps-set, maps-players, rankings, global-rankings, farm-helper, farm-helper-farmers, rank-deltas), `/api/profiles/{user}/{section}` (snapshot, cached-snapshot, about, recent, replay-scores, activity, activity-day, activity-availability, keymode-pp), `/api/dan-estimates`, `/api/score-submissions` (manual score submission: fetches the pasted score id from the osu! API, verifies it belongs to the target player, and runs it through the ordinary ScoreIngestor; layered per-IP/hour + global rate buckets since each accepted one spends osu! API budget; the admin-only `/api/admin/leaderboard-imports` queues a chart's global top 50 for the same ingest and reports job state on GET), `/api/chart-analysis` (stored 1.0x classification) and `/api/chart-analysis/rate?beatmapId&rate` (MSD + dan at a play's own rate), `/api/audio`, `/api/hitsounds`, `/api/storyboard` (zip of the set's root .osb plus referenced images for the replay viewer; empty zip means no storyboard, cached in R2 including negatives), `/api/packs/{warm,cards,card-stats,pulled-stats/{id},recent-pulls}`, `/api/goat-poll`, `/api/events` (country-activating event-log replay since `?since=`), `/api/discord/info`, `/api/replay-video-job`, the SSE stream at `/api/live?country=XX`, the ghost stream at `/api/updates/stream?route=` (public because every page open holds one; identity optional and signed), and the replay-viewer presence stream at `/api/replay/presence?key=score:<id>|upload:<id>`. The paginated `replay-scores` section serves deduplicated replay-ready `score_events` for the side-by-side picker; its history is therefore bounded by score-event retention. `/api/discord/interactions` is public but Ed25519 signature-verified, ahead of the public rate gate.
+
+`/api/profiles/:id/skill-history` is an admin-only preview despite sharing the profile URL prefix. It requires `LIVE_ADMIN_TOKEN`; the frontend checks admin access before proxying a read, and both layers mark the response `private, no-store`. Background skill-history recording continues for all players.
 
 Replay presence emits SSE `count` events for the viewer's "Spectators (N)" counter: in-memory refcounts, anonymous by default, `observe=1` receives counts without being counted (admin viewers). A watcher who enabled "show my name under spectators" adds `uid`/`name`/`exp`/`sig`, an HMAC of `spectator:<id>:<username>:<expiry>` keyed with `LIVE_ADMIN_TOKEN` and minted by `getReplaySpectatorTicket` in `src/lib/replay-spectator.ts`; their username joins a `names` array, deduped per account and capped.
 

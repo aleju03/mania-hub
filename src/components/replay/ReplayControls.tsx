@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Film, Maximize2, Settings, Share2 } from "lucide-react";
+import { Check, ChevronDown, Film, Loader2, Maximize2, Settings, Share2 } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
@@ -37,6 +37,9 @@ interface ReplayControlsProps {
   inputOverlayColor: string;
   keypressOverlayEnabled: boolean;
   skinSettingsOpen: boolean;
+  skinSettingsLoading?: boolean;
+  skinSettingsLoadFailed?: boolean;
+  onPreloadSkinSettings?: () => void;
   scrollSpeed: number;
   bgDim: number;
   blackPlayfield: boolean;
@@ -136,6 +139,9 @@ export function ReplayControls({
   inputOverlayColor,
   keypressOverlayEnabled,
   skinSettingsOpen,
+  skinSettingsLoading = false,
+  skinSettingsLoadFailed = false,
+  onPreloadSkinSettings,
   scrollSpeed,
   bgDim,
   blackPlayfield,
@@ -546,15 +552,20 @@ export function ReplayControls({
   const settingsButton = (
     <button
       onClick={onOpenSkinSettings}
+      onPointerEnter={onPreloadSkinSettings}
+      onFocus={onPreloadSkinSettings}
+      onPointerDown={onPreloadSkinSettings}
+      disabled={skinSettingsLoading}
+      aria-busy={skinSettingsLoading}
       aria-label={t`Replay settings`}
-      title={t`Replay settings`}
-      className={`${isOverlay ? "w-9 h-9" : "order-8 sm:order-none w-7 h-7"} rounded flex items-center justify-center cursor-pointer transition-colors ${
+      title={skinSettingsLoadFailed ? t`The skin could not be loaded. Try again in a moment.` : t`Replay settings`}
+      className={`${isOverlay ? "w-9 h-9" : "order-8 sm:order-none w-7 h-7"} rounded flex items-center justify-center cursor-pointer transition-colors disabled:cursor-wait ${
         skinSettingsOpen
           ? "bg-osu-pink text-white"
           : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
       }`}
     >
-      <Settings className="h-4 w-4" strokeWidth={2.2} />
+      {skinSettingsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" strokeWidth={2.2} />}
     </button>
   );
 

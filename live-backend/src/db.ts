@@ -356,10 +356,24 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateGoatPoll(target);
   await migrateTranslationReports(target);
   await migrateBugReports(target);
+  await migratePlayerSkillHistory(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
   });
+}
+
+async function migratePlayerSkillHistory(db: Db): Promise<void> {
+  await db.execute(`create table if not exists player_skill_history (
+    id integer primary key autoincrement,
+    user_id integer not null,
+    key_count integer not null,
+    analysis_version integer not null,
+    recorded_at text not null,
+    snapshot_json text not null
+  )`);
+  await db.execute(`create index if not exists idx_player_skill_history_user_mode
+    on player_skill_history (user_id, key_count, id desc)`);
 }
 
 // Reopens the connection between passes. This is NOT the stale-snapshot wedge

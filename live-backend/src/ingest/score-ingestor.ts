@@ -50,8 +50,9 @@ export class ScoreIngestor {
   async ingestBatch(scores: OscScore[], source = "osc_socket", options: ScoreIngestOptions = {}): Promise<{ inserted: number; skipped: number }> {
     let inserted = 0;
     let skipped = 0;
+    const metadataSeen = new Map<string, string>();
     for (const score of scores) {
-      const didInsert = await this.ingestScore(score, source, options);
+      const didInsert = await this.ingestScoreWithMetadata(score, source, options, metadataSeen);
       if (didInsert) inserted++;
       else skipped++;
     }
@@ -66,6 +67,10 @@ export class ScoreIngestor {
   }
 
   async ingestScore(score: OscScore, source = "osc_socket", options: ScoreIngestOptions = {}): Promise<boolean> {
+    return this.ingestScoreWithMetadata(score, source, options);
+  }
+
+  private async ingestScoreWithMetadata(score: OscScore, source: string, options: ScoreIngestOptions, metadataSeen?: Map<string, string>): Promise<boolean> {
     const enqueueRecentReconcile = options.enqueueRecentReconcile ?? source !== "osu_recent";
     const processLeaderboardFeatures = options.processLeaderboardFeatures ?? source !== "osu_recent";
     const processTopPlayFeatures = options.processTopPlayFeatures ?? processLeaderboardFeatures;
@@ -100,7 +105,7 @@ export class ScoreIngestor {
     const countries = await this.getTrackedCountries(score, options.countryAllowlist);
     if (countries.length === 0) return false;
     logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, countries, beatmap_id: beatmapId, source });
-    await this.persistMetadata(score, options.countryAllowlist);
+    await this.persistMetadata(score, options.countryAllowlist, metadataSeen);
     const totalScore = getDisplayedTotalScore(score);
     const scoreIdentity = getScoreIdentity(score);
     let inserted = 0;
@@ -349,14 +354,24 @@ export class ScoreIngestor {
     return [...countries];
   }
 
-  private async persistMetadata(score: OscScore, countryAllowlist?: string[]): Promise<void> {
+  private async persistMetadata(score: OscScore, countryAllowlist?: string[], metadataSeen?: Map<string, string>): Promise<void> {
     const now = nowIso();
     const statements: DbStatement[] = [];
+    const seenUpdates: Array<[string, string]> = [];
+    const addMetadata = (key: string, statement: DbStatement) => {
+      // Last argument is our timestamp, which must not defeat deduplication.
+      const fingerprint = json(statement.args?.slice(0, -1));
+      if (metadataSeen?.get(key) === fingerprint) return;
+      statements.push(statement);
+      seenUpdates.push([key, fingerprint]);
+    };
     if (score.user) {
-      statements.push({
+      addMetadata(`user:${score.user.id}`, {
         sql: `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
               values (?, ?, ?, ?, ?, ?)
-              on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, updated_at = excluded.updated_at`,
+              on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, updated_at = excluded.updated_at
+              where users.username is not excluded.username or users.avatar_url is not excluded.avatar_url
+                 or users.country_code is not excluded.country_code`,
         args: [score.user.id, score.user.username, score.user.avatar_url, score.user.country_code, json(score.user), now],
       });
       const activeCountries = await getActiveCountryCodes(this.db, this.config);
@@ -364,7 +379,7 @@ export class ScoreIngestor {
       const countryAllowed = countryAllowlist == null
         || countryAllowlist.some((country) => country.trim().toUpperCase() === userCountry);
       if (userCountry && countryAllowed && activeCountries.includes(userCountry)) {
-        statements.push({
+        addMetadata(`roster:${userCountry}:${score.user.id}`, {
           // Also revives an untracked non-manual row: play evidence carrying user metadata is
           // the only path that can, since the /scores fallback feed has no user objects. Manual
           // rows are excluded so an explicit opt-out stays opted out.
@@ -377,22 +392,29 @@ export class ScoreIngestor {
       }
     }
     if (score.beatmapset) {
-      statements.push({
+      addMetadata(`set:${score.beatmapset.id}`, {
         sql: `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
               values (?, ?, ?, ?, ?, ?, ?, ?)
-              on conflict(beatmapset_id) do update set title = excluded.title, artist = excluded.artist, covers_json = excluded.covers_json, updated_at = excluded.updated_at`,
+              on conflict(beatmapset_id) do update set title = excluded.title, artist = excluded.artist, covers_json = excluded.covers_json, updated_at = excluded.updated_at
+              where beatmapsets.title is not excluded.title or beatmapsets.artist is not excluded.artist
+                 or beatmapsets.covers_json is not excluded.covers_json`,
         args: [score.beatmapset.id, score.beatmapset.title, score.beatmapset.artist, score.beatmapset.creator ?? null, score.beatmapset.status ?? null, json(score.beatmapset.covers), json(score.beatmapset), now],
       });
     }
     if (score.beatmap) {
-      statements.push({
+      addMetadata(`map:${score.beatmap.id}`, {
         sql: `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
               values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              on conflict(beatmap_id) do update set version = excluded.version, status = excluded.status, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`,
+              on conflict(beatmap_id) do update set version = excluded.version, status = excluded.status, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at
+              where beatmaps.version is not excluded.version or beatmaps.status is not excluded.status
+                 or beatmaps.metadata_json is not excluded.metadata_json`,
         args: [score.beatmap.id, score.beatmap.beatmapset_id, score.beatmap.mode, score.beatmap.status ?? null, score.beatmap.cs, score.beatmap.difficulty_rating, score.beatmap.bpm, score.beatmap.max_combo ?? null, score.beatmap.version, score.beatmap.url, json(score.beatmap), now],
       });
     }
+    // Dedupe only within this batch, and compare the entire stored input: a
+    // later score can carry corrected map status or user display metadata.
     await execBatch(this.db, statements);
+    for (const [key, fingerprint] of seenUpdates) metadataSeen?.set(key, fingerprint);
   }
 }
 
