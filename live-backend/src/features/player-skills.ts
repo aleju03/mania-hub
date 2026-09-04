@@ -5657,7 +5657,9 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // on the pre-sweep tags, so the sweep re-walks every pattern keymode to store
 // the per-play tags too (1,498 of 7,586 6K/7K rows had not recomputed since
 // v1 when this shipped).
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v3";
+// v4 (2026-09-03): the chart-side jack tag sweep re-ran (v3) for the 6K-8K
+// chordjack chord-repeat gate, so the stored tags this folds moved again.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v4";
 // The keymodes whose stored per-play tags may still predate their summary.
 const PATTERN_SWEEP_KEY_COUNTS = [6, 7, 8];
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;

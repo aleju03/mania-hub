@@ -1573,11 +1573,13 @@ export const JACK_TAG_RECOMPUTE_JOB = "recompute_jack_tag_sweep";
 // v2 (2026-09-02): 8K charts moved into the analyzer's 6K/7K detector branch
 // (bracket, delay, jack), so every stored 8K verdict needs the comparison.
 // The keymode list is the set this stamp still owes, not everything the
-// analyzer branch covers: v1 already walked 6K and 7K and nothing changed
-// for them since, so re-scanning them would only cost reads.
-export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v2";
+// analyzer branch covers.
+// v3 (2026-09-03): the 6K-8K chordjack score gained the chord-repeat gate
+// (chord-tech files like the Terminal 11 pack filed as Chordjack), so every
+// keymode in that branch owes the comparison again.
+export const JACK_TAG_META_KEY = "jack_tag_recompute_done:v3";
 const JACK_TAG_CHUNK = 50;
-const JACK_TAG_SWEEP_KEY_COUNTS = [8];
+const JACK_TAG_SWEEP_KEY_COUNTS = [6, 7, 8];
 
 export interface JackTagChunkResult {
   nextCursor: number;

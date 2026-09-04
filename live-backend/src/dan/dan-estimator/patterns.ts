@@ -61,6 +61,14 @@ interface RowPatternStats {
   repeatedChordRows: number;
   bracketWindowRows: number;
   averageChordSize: number;
+  // Consecutive chord rows under a second apart, and how many of those pairs
+  // re-hit two or more columns: the chord itself being jacked, as opposed to
+  // one finger held over from the previous chord.
+  chordPairs: number;
+  multiOverlapChordPairs: number;
+  // Runs of consecutive chord rows (broken by any single-note row). Mean run
+  // length is chordRows / chordRuns.
+  chordRuns: number;
 }
 
 interface LnPatternStats {
@@ -124,11 +132,17 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
   let repeatedChordRows = 0;
   let bracketWindowRows = 0;
   let totalChordSize = 0;
+  let chordPairs = 0;
+  let multiOverlapChordPairs = 0;
+  let chordRuns = 0;
   let previousChordMask: number | null = null;
+  let previousRowMask = 0;
+  let previousRowSize = 0;
+  let previousRowTime = Number.NEGATIVE_INFINITY;
   let previousColumns: number[] = [];
   let beforePreviousColumns: number[] = [];
 
-  for (const [, rowNotes] of orderedRows) {
+  for (const [time, rowNotes] of orderedRows) {
     const columns = rowColumns(rowNotes);
     const size = columns.length;
     let mask = 0;
@@ -140,9 +154,17 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
       totalChordSize += size;
       if (mask === previousChordMask) repeatedChordRows++;
       previousChordMask = mask;
+      if (previousRowSize < 2) chordRuns++;
+      if (previousRowSize >= 2 && time - previousRowTime < 1000) {
+        chordPairs++;
+        if (bitCount(mask & previousRowMask) >= 2) multiOverlapChordPairs++;
+      }
     } else {
       previousChordMask = null;
     }
+    previousRowMask = mask;
+    previousRowSize = size;
+    previousRowTime = time;
     if (size === 2) twoNoteRows++;
     if (size === 3) threeNoteRows++;
     if (size >= 4) fourPlusRows++;
@@ -185,7 +207,19 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
     repeatedChordRows,
     bracketWindowRows,
     averageChordSize: chordRows ? totalChordSize / chordRows : 0,
+    chordPairs,
+    multiOverlapChordPairs,
+    chordRuns,
   };
+}
+
+function bitCount(mask: number): number {
+  let count = 0;
+  while (mask) {
+    count += 1;
+    mask &= mask - 1;
+  }
+  return count;
 }
 
 // Single-note jack content for the 6K/7K jack tag, where the chordjack
@@ -753,7 +787,33 @@ export function analyzeManiaPatterns(
       chordstreamGate,
       minGate(pressure(chordRatio, 0.2, 0.62), pressure(metrics.chordSizeChangeRate, 0.18, 0.52)),
     );
-    const chordjackScore = nonLnPatternGate * Math.max(
+    const singleJack = getSingleJackStats(orderedRows);
+    // Chord-tech is not chordjack. The overlap gate above asks whether
+    // consecutive chords share ANY column, and a 7K tech chart re-hits one
+    // finger between chords all the time (a chord of three moving to a chord
+    // of three next to it) without ever jacking the chord: [7K] Miserable
+    // Bastard from the Terminal 11 Technical Pack (3537470) sits at 0.50
+    // overlap, chordjack 0.92, and filed as Chordjack over tech 0.52. What
+    // real chordjack has and chord-tech lacks is the chord itself repeating:
+    // consecutive chords sharing two or more columns, single notes re-hit one
+    // row back (the minijack content), or chords arriving in long unbroken
+    // runs rather than two or three at a time between singles. Measured
+    // 2026-09-03 over 7K rice charts filed Chordjack: 151 from chordjack-tagged
+    // sets and jack packs against the 4 from tech-tagged sets and tech packs
+    // (of 101). Multi-column overlap sits at p10 0.215 / p50 0.559 on the jack
+    // side against 0.17-0.23 on the tech side; jack1Share p10 0.216 against
+    // 0.12-0.18; mean chord run p10 4.8 against 2.4-6.6. Any one arm keeps the
+    // tag. At these ramps 3 of the 4 tech-side charts move to Tech, 8 of the
+    // 207 jack-family charts leave the family (7 of them files LeoBlack calls
+    // chordstream, none it calls chordjack) and 13 of a random 974 change
+    // primary (1.3%, 7 of them to Tech, 4 to Delay once the chordjack veto
+    // on delay lets go).
+    const chordRepeatGate = Math.max(
+      pressure(ratio(stats.multiOverlapChordPairs, Math.max(1, stats.chordPairs)), 0.16, 0.26),
+      pressure(singleJack.jack1Share, 0.16, 0.26),
+      pressure(stats.chordRows / Math.max(1, stats.chordRuns), 4, 8),
+    );
+    const chordjackScore = nonLnPatternGate * chordRepeatGate * Math.max(
       chordjackBase,
       minGate(pressure(chordRatio, 0.34, 0.72), pressure(repeatedChordRatio, 0.04, 0.22)),
     );
@@ -785,7 +845,6 @@ export function analyzeManiaPatterns(
     // p90 0.163 (tech), 0.162 (stream) and 0.129 (delay), so the 0.08-0.28
     // ramp puts the 0.5 tag line at 0.18, between those populations. The
     // trill arm's 0.03-0.12 ramp tags from 0.075, three times any corpus p90.
-    const singleJack = getSingleJackStats(orderedRows);
     const jackScore = nonLnPatternGate * Math.max(
       pressure(singleJack.jack1Share, 0.08, 0.28),
       pressure(singleJack.trillRunShare, 0.03, 0.12),

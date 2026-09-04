@@ -375,6 +375,21 @@ describe("analyzeManiaPatterns", () => {
     expect(patternIds(7, repeatRows([[0], [1, 3, 5], [2], [1, 2], [6], [0, 4, 5]], 35))).toContain("tech");
   });
 
+  it("does not tag chord-tech that carries one finger between chords as chordjack", () => {
+    // Chords of three moving to a neighbouring chord of three share one column
+    // every time, which saturates the any-column overlap gate, but the chord
+    // is never jacked: no pair re-hits two columns, the chords come two at a
+    // time between singles, and the single-note re-hits sit under the jack
+    // line. Terminal 11 Technical Pack's [7K] Miserable Bastard is this shape
+    // and filed as Chordjack 0.92 over Tech 0.52.
+    const rows = repeatRows([[0, 1, 3], [3, 4, 6], [0], [1, 2, 5], [0, 5, 6], [4]], 40);
+    const analysis = analyzeManiaPatterns(makeMap(7, rows, 100));
+    expect(analysis.allPatterns.find((pattern) => pattern.id === "chordjack")?.score ?? 0).toBeLessThan(0.2);
+    expect(analysis.primary?.id).not.toBe("chordjack");
+    // The same chords jacked in place keep the tag.
+    expect(patternIds(7, repeatRows([[0, 1, 3], [0, 1, 3], [0], [1, 2, 5], [1, 2, 5], [4]], 40))).toContain("chordjack");
+  });
+
   it("does not tag dense hand-alternating files as chordjack", () => {
     // Dense 7K chord motion: every row is a hand chord, but consecutive chords
     // never share a column - chord density without chord-jack repetition. The

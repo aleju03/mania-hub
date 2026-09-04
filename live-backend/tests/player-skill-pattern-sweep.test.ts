@@ -197,7 +197,7 @@ describe("ensurePlayerSkillPatternSweepSeeded", () => {
     // The finishing chunk stamps done and reports it, so the dispatcher can
     // force the baseline rebuild.
     expect(await runPlayerSkillPatternSweepJob(db, queue, { cursor: 0 })).toBe(true);
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_pattern_sweep_done:v3'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_pattern_sweep_done:v4'", [])).rows[0];
     expect(done).toBeTruthy();
 
     await ensurePlayerSkillPatternSweepSeeded(db, queue);
