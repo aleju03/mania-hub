@@ -12,7 +12,8 @@ import {
   loadDanCourseClears,
   type DanCourseCreditOptions,
 } from "../src/features/dan-courses.js";
-import { danClearBarFor, danLabelForTest, loadPlayerDanCourseClears } from "../src/features/player-skills.js";
+import { danClearBarFor, danLabelForTest, danSideFromClearsForTest, loadPlayerDanCourseClears } from "../src/features/player-skills.js";
+import { calculateStableAccuracy } from "../src/shared/score.js";
 
 let dir = "";
 
@@ -80,7 +81,7 @@ describe("course accuracy tiers", () => {
   it("never prints a bare level for a run that missed the bar", () => {
     // 94.59% on the 7K LN ladder's 95% bar: 0.41 short, and it used to round
     // into the no-variant band and read as a clean 8th dan clear.
-    const offset = danCourseCreditOffset(0.945913, 0.95, true)!;
+    const offset = danCourseCreditOffset(0.945913, 0.95, true, { keyCount: 7, side: "ln" })!;
     expect(danLabelForTest(8 + offset, "ln", 7)).toBe("8-");
   });
 
@@ -124,6 +125,51 @@ describe("course mods", () => {
 });
 
 describe("crediting a pass", () => {
+  it("credits the 92.47% lazer Gamma LN attempt as 10++ using its stable judgements", () => {
+    const stable = calculateStableAccuracy({ perfect: 9679, great: 6386, good: 1275, ok: 299, meh: 261, miss: 415 });
+    expect(stable).toBeCloseTo(0.9314, 4);
+    const clears = creditDanCoursePassesForTest(
+      [{ beatmapId: 2556940, mods: [], displayed: 0.9247, stable }],
+      OPTIONS,
+    );
+    expect(clears).toHaveLength(1);
+    expect(clears[0]).toMatchObject({ level: "gamma", rawDan: 10.27, currency: "stable", bar: 0.95, displayedAccuracy: 0.9247 });
+    expect(danSideFromClearsForTest(7, "ln", [], new Map(), clears)?.label).toBe("10++");
+  });
+
+  it("keeps 7K LN course credit monotone through the near-miss band and the clear bar", () => {
+    let previous = -Infinity;
+    for (let basisPoints = 9300; basisPoints <= 10000; basisPoints += 1) {
+      const [clear] = creditDanCoursePassesForTest(
+        [{ beatmapId: 2556940, mods: [], displayed: basisPoints / 10000 }], OPTIONS,
+      );
+      expect(clear.rawDan).toBeGreaterThanOrEqual(previous);
+      if (basisPoints < 9500) expect(clear.rawDan).toBeLessThan(11);
+      previous = clear.rawDan;
+    }
+    for (const [accuracy, label] of [[0.94, "10++"], [0.9499, "gamma-"], [0.95, "gamma"], [0.97, "gamma++"]] as const) {
+      const [clear] = creditDanCoursePassesForTest([{ beatmapId: 2556940, mods: [], displayed: accuracy }], OPTIONS);
+      expect(danLabelForTest(clear.rawDan, "ln", 7)).toBe(label);
+    }
+    expect(creditDanCoursePassesForTest([{ beatmapId: 2556940, mods: [], displayed: 0.9299 }], OPTIONS)).toEqual([]);
+  });
+
+  it("applies the deeper decay across 7K LN courses while retaining other ladders' credit", () => {
+    for (const course of listDanCourses()) {
+      const level = danCourseLevelFor(course)!;
+      const bar = danClearBarFor(course.side, course.keyCount, level);
+      const clears = creditDanCoursePassesForTest(
+        [{ beatmapId: course.beatmapId, mods: [], displayed: bar.accuracy - 0.02, scoreV2: bar.accuracy - 0.02 }], OPTIONS,
+      );
+      if (course.keyCount === 4 && course.side === "ln") {
+        expect(clears).toEqual([]);
+      } else {
+        const deduction = course.keyCount === 7 && course.side === "ln" ? 0.75 : 0.5;
+        expect(clears[0].rawDan, course.courseName).toBeCloseTo(level - deduction);
+      }
+    }
+  });
+
   it("credits an epsilon clear at epsilon", () => {
     const [clear] = creditDanCoursePassesForTest(
       [{ beatmapId: EPSILON, mods: [], displayed: 0.964, stable: 0.964 }],

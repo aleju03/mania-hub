@@ -14,6 +14,7 @@ import { useLocale } from "../../lib/locale-context";
 import { useNoDans } from "../../store";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { makeSkillHistoryPreview } from "./skill-history-preview";
+import { groupSkillHistoryByDay, loadSkillHistoryDays } from "./skill-history-days";
 
 const ROW_GRID = "grid grid-cols-[minmax(0,1fr)_54px_80px_12px] items-center gap-2 px-4";
 
@@ -31,6 +32,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
   const [preview, setPreview] = useState<LivePlayerSkillHistoryEntry[] | null>(null);
   const reduceMotion = useReducedMotion();
   const visibleItems = preview ?? items;
+  const visibleDays = groupSkillHistoryByDay(visibleItems);
   const visibleLoading = loading && !preview;
   const visibleError = error && !preview;
   useBodyScrollLock(true);
@@ -42,7 +44,10 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
     setLoading(true);
     setError(false);
     try {
-      const page = await fetchPlayerSkillHistory({ data: { userId, keyCount, before }, signal: controller.signal });
+      const page = await loadSkillHistoryDays(async (cursor) => {
+        controller.signal.throwIfAborted();
+        return fetchPlayerSkillHistory({ data: { userId, keyCount, before: cursor }, signal: controller.signal });
+      }, before);
       if (controller.signal.aborted) return;
       setItems((current) => before ? [...current, ...page.items] : page.items);
       setNextBefore(page.nextBefore);
@@ -114,7 +119,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
           {visibleItems.length > 0 ? (
-            <ol>{visibleItems.map((entry) => <HistoryEntry key={`${preview ? "preview" : "real"}:${entry.id}`} entry={entry} />)}</ol>
+            <ol>{visibleDays.map((entry) => <HistoryEntry key={`${preview ? "preview" : "real"}:${entry.day}`} entry={entry} />)}</ol>
           ) : !visibleLoading && !visibleError ? (
             <p className="px-4 py-8 text-center text-[12px] text-osu-f1"><Trans>No skill ratings have been recorded yet.</Trans></p>
           ) : null}
@@ -163,7 +168,7 @@ function changeColor(value: number): string {
   return value > 0 ? "text-osu-green-light" : value < 0 ? "text-osu-red-light" : "text-osu-f1";
 }
 
-function HistoryEntry({ entry }: { entry: LivePlayerSkillHistoryEntry }) {
+function HistoryEntry({ entry }: { entry: LivePlayerSkillHistoryEntry & { day: string } }) {
   const { i18n, t } = useLingui();
   const locale = useLocale();
   const noDans = useNoDans();
@@ -181,9 +186,8 @@ function HistoryEntry({ entry }: { entry: LivePlayerSkillHistoryEntry }) {
   const date = new Date(entry.recordedAt);
   const row = (
     <>
-      <time dateTime={entry.recordedAt} title={date.toLocaleString(locale, { dateStyle: "long", timeStyle: "medium" })} className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-osu-l2">
+      <time dateTime={entry.day} title={date.toLocaleDateString(locale, { dateStyle: "long" })} className="text-[11px] text-osu-l2">
         <span>{date.toLocaleDateString(locale, { month: "short", day: "numeric", ...(date.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) })}</span>
-        <span className="text-[10px] text-osu-f1">{date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>
       </time>
       <span className="text-right text-[12px] font-semibold text-osu-l1 tabular-nums">{overall.toFixed(2)}</span>
       <span className={`text-right text-[12px] font-semibold tabular-nums ${changeColor(delta)}`}>

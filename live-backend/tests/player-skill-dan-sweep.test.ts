@@ -101,6 +101,29 @@ async function seedRow(db: Db, userId: number, beatmapIds: number[]): Promise<vo
 }
 
 describe("recomputePlayerSkillDanChunk", () => {
+  it("replaces a stale Gamma LN course floor with the discounted 10++ credit", async () => {
+    const db = await makeDb();
+    await seedRow(db, 71, [2556940]);
+    await exec(db, "update player_skill_ratings set modes_json = json(?), plays_json = json(?) where user_id = 71", [
+      json({ modes: [{ keyCount: 7, ratings: { Overall: 22 }, dan: { rc: null, ln: { rawDan: 10.51, label: "gamma--", clears: 1 } } }] }),
+      json({ plays: [{ ...barePass(2556940), keyCount: 7, accuracy: 0.9314, stableAccuracy: 0.9314 }] }),
+    ]);
+    await exec(db,
+      `insert into player_activity_maps (country, user_id, day, beatmap_id, play_count, best_accuracy, best_mods_json, updated_at)
+       values ('CR', 71, '2026-09-04', 2556940, 1, 0.9314, json('[]'), '2026-09-04T00:00:00Z')`, []);
+    await exec(db,
+      `insert into player_activity_score_refs (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
+       values ('CR', 'course:71', 71, '2026-09-04', 2556940, 1, '2026-09-04T00:00:00Z', '2026-09-04T00:00:00Z')`, []);
+
+    expect(await recomputePlayerSkillDanChunk(db, 0)).toMatchObject({ rewritten: 1 });
+    const row = (await exec(db, "select modes_json, computed_at from player_skill_ratings where user_id = 71", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ ratings: { Overall: number }; dan: { ln: { rawDan: number; label: string } } }> }>(String(row.modes_json), { modes: [] });
+    expect(summary.modes[0].dan.ln).toMatchObject({ rawDan: 10.27, label: "10++" });
+    expect(summary.modes[0].ratings.Overall).toBe(22);
+    expect(String(row.computed_at)).toBe("2026-08-20T00:00:00.000Z");
+    db.close();
+  });
+
   it("rewrites the stored dan from the plays without touching the ratings or forcing a recompute", async () => {
     const db = await makeDb();
     for (const beatmapId of [301, 302, 303, 304]) await seedChart(db, beatmapId, 8);
@@ -354,7 +377,7 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v24'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v25'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
@@ -374,7 +397,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
     // A job queued by older code is guarded at execution time too.
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v24'", [])).rows).toHaveLength(0);
+    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v25'", [])).rows).toHaveLength(0);
 
     await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
@@ -394,7 +417,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     await exec(
       db,
       "insert into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v20", json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
+      ["player_skill_dan_sweep_done:v24", json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
     );
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;

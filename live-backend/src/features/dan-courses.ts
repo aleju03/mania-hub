@@ -258,11 +258,11 @@ export function danCourseModsAllowed(mods: OsuMod[] | null | undefined): boolean
 //
 // The cap stays under +0.5 because the label rounds: +0.5 would land on the
 // NEXT level's "--" and read as a course the player never touched. The bottom
-// anchor is exactly -0.5 for the same reason in reverse, which Math.round's
+// anchor for the default curve is exactly -0.5, which Math.round's
 // half-up puts back on this level's "--" (and 0.5 is exact in binary, so it
 // needs no margin).
 // A course pass reaches at most 2 points under its bar (the chart-clear curve
-// in dan-credit.ts reaches 4): the course credit is a single-run FLOOR under
+// in dan-credit.ts reaches 3 on 7K LN and 5 on rice): the course credit is a single-run FLOOR under
 // the headline with no quorum behind it, so it stays tighter on both sides.
 const COURSE_CREDIT_BELOW_BAR_WINDOW = 0.02;
 
@@ -274,6 +274,17 @@ const COURSE_CREDIT_BELOW_BAR: DanCreditAnchors = [
   [0, -0.26],
   [0.5, -0.44],
   [1, -0.5],
+];
+
+// 7K LN needs more than a minus suffix for a run well short of its 95% bar.
+// Let course evidence fall into the preceding level: 94% credits -0.60,
+// 93% credits -0.75, and 93.14% on Gamma (11) credits 10.27 -> 10++.
+// This applies to every course on this ladder, without changing chart ratings
+// or the credit earned by meeting the bar.
+const COURSE_CREDIT_7K_LN_BELOW_BAR: DanCreditAnchors = [
+  [0, -0.26],
+  [0.5, -0.6],
+  [1, -0.75],
 ];
 
 // In absolute accuracy points over the bar (aboveBarScale "delta"), the scale
@@ -298,11 +309,18 @@ const COURSE_CREDIT_ANCHORS: DanCreditAnchors = [
  * tolerance and the near-bar clamp live in dan-credit.ts; only the anchor
  * magnitudes are course-specific.
  */
-export function danCourseCreditOffset(accuracy: number, bar: number, allowBelowBar: boolean): number | null {
+export function danCourseCreditOffset(
+  accuracy: number,
+  bar: number,
+  allowBelowBar: boolean,
+  course?: Pick<DanCourse, "keyCount" | "side">,
+): number | null {
   return danCreditOffset(accuracy, bar, {
     aboveBar: COURSE_CREDIT_ANCHORS,
     aboveBarScale: "delta",
-    belowBar: COURSE_CREDIT_BELOW_BAR,
+    belowBar: course?.keyCount === 7 && course.side === "ln"
+      ? COURSE_CREDIT_7K_LN_BELOW_BAR
+      : COURSE_CREDIT_BELOW_BAR,
     belowBarWindow: COURSE_CREDIT_BELOW_BAR_WINDOW,
     allowBelowBar,
   });
@@ -403,7 +421,7 @@ function creditPass(pass: CoursePass, options: DanCourseCreditOptions, statusByB
   // 97% ScoreV2 pass bar with nothing under it, so a sub-bar run is a fail
   // rather than a discounted clear.
   const allowBelowBar = !(course.keyCount === 4 && course.side === "ln");
-  const offset = danCourseCreditOffset(accuracy, threshold, allowBelowBar);
+  const offset = danCourseCreditOffset(accuracy, threshold, allowBelowBar, course);
   if (offset == null) return null;
   return {
     keyCount: course.keyCount,

@@ -5385,7 +5385,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v24 (current): 7K LN's headline follows the General tile, with the other
+// v25 (current): 7K LN course attempts below 95% can credit the preceding
+// level instead of forcing the course's minus tiers (2026-09-04). Reload
+// course evidence and fold stored plays again to remove the old floor.
+// v24: 7K LN's headline follows the General tile, with the other
 // three tiles pulling it by at most a level between them
 // (anchoredSkillsetDans, 2026-09-01). Only the fold over stored tiles
 // changes, so this is the same plays_json re-derivation as every earlier bump.
@@ -5410,7 +5413,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v24";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v25";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
