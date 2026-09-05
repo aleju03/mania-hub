@@ -67,3 +67,32 @@ it("preserves desktop right-click and ordinary tap/keyboard activation", () => {
   expect(open).toHaveBeenCalledTimes(1);
   expect(tap).toHaveBeenCalledTimes(2);
 });
+
+it("opens only once when Android's native menu event beats the hold timer", () => {
+  const open = vi.fn();
+  render(<Card open={open} tap={() => {}} />);
+  const card = screen.getByRole("button");
+  start(card);
+  act(() => { vi.advanceTimersByTime(400); });
+  fireEvent.contextMenu(card, { clientX: 100, clientY: 100 });
+  hold();
+  expect(open).toHaveBeenCalledExactlyOnceWith(100, 100);
+  expect(fireEvent.contextMenu(document.body)).toBe(false);
+  expect(fireEvent.touchEnd(card, { touches: [] })).toBe(false);
+});
+
+it.each(["pointerdown", "touchstart", "keydown", "unmount"])(
+  "releases the document gesture guard on %s", (reason) => {
+    const { unmount } = render(<Card open={() => {}} tap={() => {}} />);
+    start(screen.getByRole("button"));
+    hold();
+    expect(fireEvent.contextMenu(document.body)).toBe(false);
+    expect(fireEvent.click(document.body, { detail: 1 })).toBe(false);
+    if (reason === "pointerdown") fireEvent.pointerDown(document.body);
+    if (reason === "touchstart") fireEvent.touchStart(document.body);
+    if (reason === "keydown") fireEvent.keyDown(document.body, { key: "Escape" });
+    if (reason === "unmount") unmount();
+    expect(fireEvent.contextMenu(document.body)).toBe(true);
+    expect(fireEvent.click(document.body, { detail: 1 })).toBe(true);
+  },
+);

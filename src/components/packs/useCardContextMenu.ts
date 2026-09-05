@@ -8,6 +8,7 @@ export function useCardContextMenu() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   const held = useRef(false);
+  const releaseGuard = useRef<(() => void) | null>(null);
 
   const cancel = () => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -15,11 +16,42 @@ export function useCardContextMenu() {
     origin.current = null;
   };
 
+  const consumeHold = () => {
+    releaseGuard.current?.();
+    held.current = true;
+    // Opening the overlay changes the element under the finger. Android's
+    // delayed contextmenu (or a release click) can land on the backdrop/menu,
+    // outside the tile's handlers. Catch this gesture before either sees it.
+    const consume = (event: MouseEvent) => {
+      if (event.type === "click" && event.detail === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const release = () => {
+      held.current = false;
+      releaseGuard.current = null;
+      document.removeEventListener("contextmenu", consume, true);
+      document.removeEventListener("click", consume, true);
+      document.removeEventListener("pointerdown", release, true);
+      document.removeEventListener("touchstart", release, true);
+      document.removeEventListener("keydown", release, true);
+    };
+    releaseGuard.current = release;
+    document.addEventListener("contextmenu", consume, true);
+    document.addEventListener("click", consume, true);
+    // A fresh gesture is intentional: allow selecting an action, dismissing
+    // the backdrop, or opening another card immediately, without a cooldown.
+    document.addEventListener("pointerdown", release, true);
+    document.addEventListener("touchstart", release, true);
+    document.addEventListener("keydown", release, true);
+  };
+
   useEffect(() => {
     window.addEventListener("scroll", cancel, true);
     window.addEventListener("blur", cancel);
     return () => {
       cancel();
+      releaseGuard.current?.();
       window.removeEventListener("scroll", cancel, true);
       window.removeEventListener("blur", cancel);
     };
@@ -35,7 +67,7 @@ export function useCardContextMenu() {
       origin.current = { x, y };
       timer.current = setTimeout(() => {
         cancel();
-        held.current = true;
+        consumeHold();
         open(x, y);
       }, 500);
     },
@@ -53,22 +85,13 @@ export function useCardContextMenu() {
       if (held.current) event.preventDefault();
     },
     onTouchCancel: cancel,
-    onClickCapture: (event) => {
-      if (!held.current || event.detail === 0) return;
-      held.current = false;
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    onPointerDownCapture: (event) => {
-      if (event.pointerType === "mouse") held.current = false;
-    },
     onContextMenu: (event) => {
       event.preventDefault();
       const touching = origin.current !== null;
       cancel();
       // Android may also emit its native event for the same touch hold.
       if (held.current) return;
-      held.current = touching;
+      if (touching) consumeHold();
       open(event.clientX, event.clientY);
     },
   } satisfies HTMLAttributes<HTMLElement> : {};

@@ -63,7 +63,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it("opens card actions on an iPhone-style hold without a contextmenu event", () => {
+it.each(["iPhone", "Android"])("keeps card actions open after a %s hold", (platform) => {
   render(
     <I18nProvider i18n={getI18n("en")}>
       <CollectionPanel wallet={wallet} showLoginNudge={false} syncStatus="local"
@@ -75,8 +75,20 @@ it("opens card actions on an iPhone-style hold without a contextmenu event", () 
   fireEvent.touchStart(card, { touches: [{ identifier: 1, clientX: 80, clientY: 120 }] });
   act(() => { vi.advanceTimersByTime(500); });
   expect(screen.getByRole("menuitem", { name: "Select cards..." })).toBeTruthy();
+  if (platform === "Android") {
+    // The overlay now covers the card. Android can target its delayed native
+    // contextmenu at that overlay instead of the original touch target.
+    fireEvent.contextMenu(screen.getByRole("menu").previousElementSibling!, { clientX: 80, clientY: 120 });
+    expect(screen.getByRole("menuitem", { name: "Select cards..." })).toBeTruthy();
+  }
   fireEvent.touchEnd(card, { touches: [] });
-  fireEvent.click(screen.getByRole("menuitem", { name: "Select cards..." }));
+  const select = screen.getByRole("menuitem", { name: "Select cards..." });
+  // A compatibility click from lifting the original hold must not choose an
+  // action under the finger. A fresh tap on that action must still work.
+  fireEvent.click(select, { detail: 1 });
+  expect(screen.getByRole("menu")).toBeTruthy();
+  fireEvent.pointerDown(select, { pointerType: "touch" });
+  fireEvent.click(select, { detail: 1 });
   expect(screen.getByRole("button", { name: "Deselect player7" })).toBeTruthy();
 });
 
