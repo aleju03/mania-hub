@@ -111,6 +111,8 @@ Blitz is the same game dealt by the backend (`live-backend/src/features/pack-str
 
 ## Arcade payouts
 
+Arcade player metrics (top-play mods/key counts and stored profile statistics) run on their own serving read worker, including server-dealt Blitz calls through the coalesced writer. SQL JSON scans and profile decompression stay off the serving thread. The existing six-hour per-player cache now belongs to each database connection; only the finished metrics return.
+
 `pack-games.ts` is the arcade's till, shared by both modes of the streak game. A finished casual run is claimed via `POST /api/packs/games/streak` (`streakShardReward` = `STREAK_SHARDS_PER_CORRECT` (8) per correct guess plus a growing bonus at every fifth in a row, so one long run pays more than two short ones). Every payout goes through `grantPackGameShards`, which trims it to what is left of `GAME_SHARD_DAILY_CAP` for the day (UTC), books it in `pack_game_rewards` and adds it via the same `addWalletShards` recycling uses. The cap is the security model for the client-scored mode: a casual streak is scored in the browser off public data, so no amount of server-side state makes it unfarmable; the cap is set below what idling on `/packs` already earns uncapped (a charge every 30s, 2 shards an open, ~240/hour). Blitz runs are the exception and are paid from the server's own count (see `pack-streak.ts`), though they draw on the same daily cap and ledger. `POST /api/packs/games/allowance` is the read the streak page uses for what is left today.
 
 ## GOAT nomination poll (temporary)

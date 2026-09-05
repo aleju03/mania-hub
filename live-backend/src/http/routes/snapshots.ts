@@ -51,18 +51,13 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     const sortDirection = parseTrackerSnapshotSortDirection(url.searchParams);
     const userIds = parseUserIds(url.searchParams.get("userIds"));
     const produceSnapshot = () => getTrackerSnapshot(ctx.db, country, limit, offset, {
-      since: windowHours > 0 ? new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString() : undefined,
+      since: windowHours > 0 ? new Date(Math.floor(Date.now() / 5_000) * 5_000 - windowHours * 60 * 60 * 1000).toISOString() : undefined,
       filters,
       sort,
       sortDirection,
       userIds,
     });
-    const snapshot = global
-      ? await getCachedGlobalTrackerSnapshot(
-          [windowHours, limit, offset, filters.score ?? "", filters.grade ?? "", filters.key ?? "", filters.miss ?? "", sort, sortDirection, userIds.join(",")].join("|"),
-          produceSnapshot,
-        )
-      : await produceSnapshot();
+    const snapshot = await produceSnapshot();
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
@@ -461,41 +456,6 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
     return true;
   }
   return false;
-}
-
-// A global tracker snapshot is identical for every visitor but its query spans
-// every tracked country's score_events, so cache results briefly per parameter
-// set. Entries hold the promise itself rather than the resolved value: a burst
-// of identical requests (page loads, SSE reconnects after a deploy) runs the
-// query once and every caller awaits the same computation.
-const TRACKER_GLOBAL_SNAPSHOT_CACHE_TTL_MS = 5_000;
-const TRACKER_GLOBAL_SNAPSHOT_CACHE_MAX_ENTRIES = 64;
-
-type TrackerSnapshotResult = Awaited<ReturnType<typeof getTrackerSnapshot>>;
-
-const trackerGlobalSnapshotCache = new Map<string, { storedAt: number; snapshot: Promise<TrackerSnapshotResult> }>();
-
-function getCachedGlobalTrackerSnapshot(key: string, produce: () => Promise<TrackerSnapshotResult>): Promise<TrackerSnapshotResult> {
-  const now = Date.now();
-  for (const [entryKey, entry] of trackerGlobalSnapshotCache) {
-    if (now - entry.storedAt > TRACKER_GLOBAL_SNAPSHOT_CACHE_TTL_MS) trackerGlobalSnapshotCache.delete(entryKey);
-  }
-  // Map iterates in insertion order, so the first key is the oldest entry.
-  while (trackerGlobalSnapshotCache.size > TRACKER_GLOBAL_SNAPSHOT_CACHE_MAX_ENTRIES) {
-    const oldest = trackerGlobalSnapshotCache.keys().next().value;
-    if (oldest === undefined) break;
-    trackerGlobalSnapshotCache.delete(oldest);
-  }
-  const cached = trackerGlobalSnapshotCache.get(key);
-  if (cached) return cached.snapshot;
-  const snapshot = produce();
-  trackerGlobalSnapshotCache.set(key, { storedAt: now, snapshot });
-  // Failures are never cached; the next request retries. The identity check
-  // keeps a late rejection from evicting a newer entry under the same key.
-  snapshot.catch(() => {
-    if (trackerGlobalSnapshotCache.get(key)?.snapshot === snapshot) trackerGlobalSnapshotCache.delete(key);
-  });
-  return snapshot;
 }
 
 async function handleMapsPageSnapshot(

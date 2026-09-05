@@ -1,3 +1,5 @@
+import { getServingReadThread } from "../serving-read-thread.js";
+import { ReadCache } from "../shared/read-cache.js";
 import { countryScopeSql, resolveCountryScope, type CountryScope } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
@@ -22,18 +24,17 @@ export interface TrackerSnapshotOptions {
 // Grade/miss/ranked filters live inside score_json, so the hydrated path has
 // to parse rows in JS before it can filter or re-sort them. Cap how many of
 // the most recent rows it may scan: an uncapped filtered request would parse
-// every score_json in the window on the event loop, stalling all other
-// responses. Past the cap, older scores fall out of filtered results and
-// `total` undercounts.
+// every score_json in the window, monopolizing its read worker. Past the cap,
+// older scores fall out of filtered results and `total` undercounts.
 const HYDRATED_SNAPSHOT_SCAN_LIMIT = 5000;
 
-// Deepest page anyone may ask for. SQLite walks the ordered join row by row up
-// to the offset, synchronously on the serving event loop, and the offset is part
-// of the snapshot cache key, so every distinct one is a guaranteed miss into
-// that walk. Country scopes have always been capped at 500; global was capped at
-// Number.MAX_SAFE_INTEGER, which made a deep-offset request a free 0.2-2s stall
-// of every other response and SSE write in the process.
+// Bound deep OFFSET walks and the number of distinct pages competing for the
+// read worker. Country HTTP scopes have a tighter 500-row offset bound.
 export const TRACKER_MAX_OFFSET = 5000;
+
+type TrackerSnapshot = { country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number };
+const snapshotCaches = new WeakMap<Db, ReadCache<TrackerSnapshot>>();
+const totalCaches = new WeakMap<Db, ReadCache<number>>();
 
 export async function getTrackerSnapshot(
   db: Db,
@@ -41,7 +42,26 @@ export async function getTrackerSnapshot(
   limit: number,
   offset = 0,
   options: TrackerSnapshotOptions = {},
-): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number }> {
+): Promise<TrackerSnapshot> {
+  let cache = snapshotCaches.get(db);
+  if (!cache) {
+    cache = new ReadCache(5_000, 64);
+    snapshotCaches.set(db, cache);
+  }
+  country = country.toUpperCase();
+  options = { ...options, userIds: [...new Set(options.userIds ?? [])].sort((a, b) => a - b) };
+  const key = JSON.stringify([country, limit, offset, options]);
+  return cache.get(key, () => getServingReadThread(db, "tracker")?.run({ kind: "tracker", country, limit, offset, options })
+    ?? readTrackerSnapshot(db, country, limit, offset, options));
+}
+
+export async function readTrackerSnapshot(
+  db: Db,
+  country: string,
+  limit: number,
+  offset = 0,
+  options: TrackerSnapshotOptions = {},
+): Promise<TrackerSnapshot> {
   // Past the bound, answer without the walk (same shape as map search's
   // MAP_SEARCH_COUNT_CAP guard). Callers clamp to this, so a legitimate page
   // never lands here.
@@ -108,13 +128,17 @@ export async function getTrackerSnapshot(
     return { country, scores, gains, fetchedAt: Date.now(), total: allScores.length, offset };
   }
 
-  const totalRows = (await exec(
-    db,
-    `select count(*) as count
-     from score_events se
-     where ${whereSql}`,
-    args,
-  )).rows;
+  let totals = totalCaches.get(db);
+  if (!totals) {
+    totals = new ReadCache(5_000, 128);
+    totalCaches.set(db, totals);
+  }
+  // Page size, offset and ordering cannot change the count. Keep one short
+  // total per predicate so paging does not re-scan a country's retained rows.
+  const total = await totals.get(JSON.stringify([whereSql, args]), async () => {
+    const result = await exec(db, `select count(*) as count from score_events se where ${whereSql}`, args);
+    return Number(result.rows[0]?.count ?? 0);
+  });
   const rows = (await exec(
     db,
     `select
@@ -149,7 +173,7 @@ export async function getTrackerSnapshot(
     .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
     .map(toLeanTrackerScore);
   const gains = await getTrackerScoreGains(db, scope, scores);
-  return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length), offset };
+  return { country, scores, gains, fetchedAt: Date.now(), total: total, offset };
 }
 
 function compareTrackerScores(a: LeanTrackerScore, b: LeanTrackerScore, sort: "recent" | "stars", direction: "asc" | "desc"): number {

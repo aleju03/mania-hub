@@ -1,3 +1,4 @@
+import { registerServingReadThreads } from "./serving-read-thread.js";
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
@@ -329,6 +330,7 @@ export async function createApp() {
       },
     }, { coalesceMs: config.serveWriteCoalesceMs, useThread: config.enableServeWriteThread });
   const serveWriteDb = serveWrite?.main ?? null;
+  if (config.role !== "worker") registerServingReadThreads(db, config, serveWriteDb ? [serveWriteDb] : []);
   // Journal writes: the serving process's coalesced journal handle, or the
   // worker's plain one.
   const journalWriteDb = serveWrite?.journal ?? journalDb;

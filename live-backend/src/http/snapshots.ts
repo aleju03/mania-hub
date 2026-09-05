@@ -1,3 +1,5 @@
+import { ServingReadError } from "../serving-read-thread.js";
+import { ReadCacheBusyError } from "../shared/read-cache.js";
 import { handlePackGiftRoutes } from "./routes/pack-gifts.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
@@ -64,6 +66,12 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
   try {
     return await routeHttpUnsafe(req, res, ctx);
   } catch (error) {
+    if (error instanceof ServingReadError || error instanceof ReadCacheBusyError) {
+      res.setHeader("retry-after", "5");
+      res.setHeader("cache-control", "no-store");
+      sendJson(req, res, ctx, 503, { error: "snapshot_temporarily_unavailable" });
+      return true;
+    }
     if (error instanceof HttpRequestError) {
       sendJson(req, res, ctx, error.status, { error: error.code, message: error.message });
       return true;

@@ -2,6 +2,10 @@
 
 Deep per-feature reference: snipes, top plays, maps, farm helper, activity, dan estimates, chart analysis, profiles/rankings, goals, my data, uploaded replays, skins. Card packs and the GOAT poll live in `docs/packs.md`; the Discord bot and `/communities` in `docs/discord.md`.
 
+## Tracker
+
+Tracker reads, score hydration and filtering run on a dedicated serving read worker. Country, region and GLOBAL snapshots share a five-second cache and in-flight requests per database, scope, filter and page. Unfiltered totals have a separate five-second cache keyed by predicate, shared across offsets and page sizes; the passed-country index covers country/time/user reads for counting and pagination. GLOBAL HTTP windows align to five-second boundaries for cache reuse. Filtered/star-sorted requests retain the 5,000-row scan cap, so their totals still describe only the scanned matches. SSE continues supplying new scores between snapshot refreshes.
+
 ## Snipes
 
 Each beatmap/lane has a stored board in `country_beatmap_scores` (keyed by country + beatmap + lane + user), so raw scores do not have to be kept forever. A new score is compared to that board; when it overtakes someone the backend writes `snipe_events` and emits an SSE `snipe`. If no board exists yet, `seed_snipe_board` fetches roster users' scores for that beatmap and builds it.

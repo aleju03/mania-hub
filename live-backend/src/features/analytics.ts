@@ -1808,30 +1808,30 @@ export async function computeMonitorSnapshot(
    structured-clone-safe, because the worker thread receives it as workerData. */
 export type MonitorComputeOptions = Pick<Required<AnalyticsStoreOptions>, "feedHosts" | "feedExcludedViewer" | "displayTimeZone">;
 
+// A monitor/feed batch formats many events in the same timezone. Construct
+// ICU formatters once per zone, with a bound for unusual caller-supplied zones.
+const labelFormatters = new Map<string, { time: Intl.DateTimeFormat; date: Intl.DateTimeFormat; shortTime: Intl.DateTimeFormat }>();
+function formattersFor(timeZone: string) {
+  let formatters = labelFormatters.get(timeZone);
+  if (!formatters) {
+    formatters = {
+      time: new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+      date: new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }),
+      shortTime: new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", minute: "2-digit", hour12: true }),
+    };
+    if (labelFormatters.size >= 32) labelFormatters.delete(labelFormatters.keys().next().value!);
+    labelFormatters.set(timeZone, formatters);
+  }
+  return formatters;
+}
+
 function timeLabelFor(timeZone: string, ts: number): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  }).format(new Date(ts));
+  return formattersFor(timeZone).time.format(ts);
 }
 
 function dateTimeLabelFor(timeZone: string, ts: number): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(ts));
-  const time = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).format(new Date(ts));
-  return `${parts} ${time}`;
+  const { date, shortTime } = formattersFor(timeZone);
+  return `${date.format(ts)} ${shortTime.format(ts)}`;
 }
 
 /* Runs the monitor scan set in a one-shot worker thread on its own read

@@ -611,6 +611,8 @@ create table if not exists api_rate_limit_reservations (
 );
 
 create index if not exists idx_score_events_country_time on score_events(country, ended_at desc);
+-- Covers country/region passed-score counts, including the active-user probe.
+create index if not exists idx_score_events_country_passed_time_user on score_events(country, ended_at desc, user_id) where passed = 1;
 create index if not exists idx_country_registry_status_request on country_registry(status, last_requested_at desc);
 create index if not exists idx_score_events_user_time on score_events(user_id, ended_at desc);
 create index if not exists idx_score_events_beatmap_time on score_events(beatmap_id, ended_at desc);

@@ -1,3 +1,4 @@
+import { getServingReadThread } from "../serving-read-thread.js";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { unpackJson } from "../shared/compressed-json.js";
@@ -161,10 +162,10 @@ export interface StreakPlayerMetrics {
    the pool to a handful of grouped reads a day per serving process. */
 const STREAK_METRICS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const STREAK_METRICS_CACHE_MAX = 4096;
-const streakMetricsCache = new Map<number, { at: number; row: StreakPlayerMetrics }>();
+let streakMetricsCaches = new WeakMap<Db, Map<number, { at: number; row: StreakPlayerMetrics }>>();
 
 export function clearStreakMetricsCache(): void {
-  streakMetricsCache.clear();
+  streakMetricsCaches = new WeakMap();
 }
 
 function emptyStreakMetrics(userId: number): StreakPlayerMetrics {
@@ -205,6 +206,13 @@ export async function getStreakPlayerMetrics(
     .map((id) => Math.floor(Number(id)))
     .filter((id) => Number.isSafeInteger(id) && id > 0))]
     .slice(0, STREAK_METRICS_MAX_IDS);
+  const thread = getServingReadThread(db, "metrics");
+  if (thread) return thread.run({ kind: "metrics", userIds: ids, now });
+  let streakMetricsCache = streakMetricsCaches.get(db);
+  if (!streakMetricsCache) {
+    streakMetricsCache = new Map();
+    streakMetricsCaches.set(db, streakMetricsCache);
+  }
   const result: Record<number, StreakPlayerMetrics> = {};
   const missing: number[] = [];
   for (const id of ids) {
