@@ -16,11 +16,25 @@ export interface FarmHelperTimingSubject {
   limit: number;
 }
 
+export interface FarmHelperTimingData {
+  durations: Array<[string, number]>;
+  counters: Array<[string, number]>;
+}
+
 export class FarmHelperTimings {
   private readonly durations = new Map<string, number>();
   private readonly counters = new Map<string, number>();
   private cacheState: FarmHelperCacheState = "miss";
   private subject: FarmHelperTimingSubject | null = null;
+
+  exportData(): FarmHelperTimingData {
+    return { durations: [...this.durations], counters: [...this.counters] };
+  }
+
+  merge(data: FarmHelperTimingData): void {
+    for (const [stage, duration] of data.durations) this.add(stage, duration);
+    for (const [key, value] of data.counters) this.count(key, value);
+  }
 
   // Stages that run per keymode (two runs on the "any" view) accumulate, so a
   // stage total is the request's real spend on that kind of work.

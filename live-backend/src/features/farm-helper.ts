@@ -13,6 +13,7 @@ import { getPlayerSkillBreakdown, type PlayerSkillBreakdown, type PlayerSkillMod
 import { ACC_MODEL_PRIOR_TYPICAL_ACC, predictPlayerAccuracy, predictPlayerChoke, readPlayerAccModel, type PlayerAccModel, type PlayerAccPrediction, type PlayerChokePrediction } from "./player-acc-model.js";
 import { getBaselineUserVectors, type BaselineUserVector } from "./skill-baseline.js";
 import { timeStage, timeStageSync, type FarmHelperTimings } from "./farm-helper-timing.js";
+import { getFarmHelperBuildThread, invalidateFarmHelperThreadCaches } from "./farm-helper-thread.js";
 import type { JobQueue } from "../jobs/queue.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
@@ -1022,6 +1023,7 @@ async function resolveProfile(
 // Shared request context threaded through the per-mode runs and the shared
 // scoring helper. Each run reads `subjectVariantPps[mode]` directly.
 interface BuildCtx {
+  effects?: { enrichUserIds: number[]; chartAnalysisIds: number[] };
   userId: number;
   username: string;
   avatarUrl: string;
@@ -1137,9 +1139,7 @@ interface FitBand {
 
 async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Promise<FarmHelperSnapshot> {
   const isPopular = ctx.view === "popular";
-  const generatedAt = nowIso();
   const subject = timeStageSync(ctx.timings, "fh_subject", () => prepareSubject(bestScores, ctx.subjectVariantPps));
-  const keyMode = ctx.requestedKeyMode;
 
   // Player feedback marks ("too hard" / "too easy"), loaded once per request
   // and reconciled against the subject's own scores before they apply: a real
@@ -1168,6 +1168,59 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     : getPlayerSkillBreakdown(db, NOOP_QUEUE, ctx.userId, { allowEnqueue: false })));
   ctx.skillBreakdown = skillBreakdown;
 
+  const { queue, writeDb, timings, ...context } = ctx;
+  const input: FarmHelperBuildInput = { subject, context: { ...context, skillBreakdown }, activeMarks };
+  const thread = ctx.asOf == null ? getFarmHelperBuildThread(db) : null;
+  const result = thread
+    ? await timeStage(timings, "fh_thread", () => thread.build(input, writeDb ?? db, timings))
+    : await computeFarmHelperRecommendations(db, input, writeDb, timings);
+  const snapshot = result.snapshot;
+
+  if (queue && ctx.asOf == null) {
+    for (const userId of result.enrichUserIds) {
+      void queue.enqueue("enrich_user", `user:${userId}`, { userId }, { priority: VARIANT_SELF_HEAL_PRIORITY }).catch(() => {});
+    }
+    if (result.chartAnalysisIds.length > 0) {
+      void enqueueMissingChartAnalyses(db, queue, result.chartAnalysisIds).catch(() => {});
+    }
+  }
+  if (!isPopular && ctx.asOf == null) {
+    // Also sweep achievements on an empty board, as before.
+    snapshot.pushUnlocked = await timeStage(timings, "fh_push_targets", () =>
+      reconcilePushTargets(db, writeDb ?? db, ctx.userId, subject, snapshot.recs.filter((rec) => rec.reason === "push")));
+    if (!snapshot.pushUnlocked) snapshot.totalPotentialPp = result.totalWithoutPush;
+  }
+  return snapshot;
+}
+
+// Only serializable subject state crosses the thread boundary. Profile/auth,
+// feedback reconciliation, queueing and push-target writes stay with the caller.
+export interface FarmHelperBuildInput {
+  subject: PreparedSubject;
+  context: Omit<BuildCtx, "queue" | "writeDb" | "timings" | "effects" | "skillBreakdown"> & { skillBreakdown: PlayerSkillBreakdown };
+  activeMarks?: ActiveFarmHelperFeedbackMark[];
+}
+
+export interface FarmHelperBuildResult {
+  snapshot: FarmHelperSnapshot;
+  totalWithoutPush: number;
+  enrichUserIds: number[];
+  chartAnalysisIds: number[];
+}
+
+export async function computeFarmHelperRecommendations(
+  db: Db,
+  input: FarmHelperBuildInput,
+  writeDb?: Db,
+  timings?: FarmHelperTimings,
+): Promise<FarmHelperBuildResult> {
+  const effects = { enrichUserIds: [] as number[], chartAnalysisIds: [] as number[] };
+  const ctx: BuildCtx = { ...input.context, writeDb, timings, effects };
+  const { subject, activeMarks } = input;
+  const skillBreakdown = input.context.skillBreakdown;
+  const isPopular = ctx.view === "popular";
+  const keyMode = ctx.requestedKeyMode;
+  const generatedAt = nowIso();
   // Feedback generalization (see the FEEDBACK_MARGIN_* block): the active
   // marks vote on the per-keymode feasibility margins. Gain view only, and
   // never when the breakdown is not ready (the gate is off entirely there).
@@ -1274,16 +1327,10 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 
   const merged = runs.flatMap((run) => run.scored);
   if (merged.length === 0) {
-    // The achievement sweep still runs on an empty board: an achieved target
-    // is achieved whether or not anything currently qualifies.
-    if (!isPopular && ctx.asOf == null) {
-      base.pushUnlocked = await timeStage(ctx.timings, "fh_push_targets", () =>
-        reconcilePushTargets(db, ctx.writeDb ?? db, ctx.userId, subject, []));
-    }
     if (practiceRecs.length > 0) {
       await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, practiceRecs));
     }
-    return base;
+    return { snapshot: base, totalWithoutPush: 0, ...effects };
   }
   const rankTimings = ctx.timings;
   const rankStartedAt = rankTimings ? performance.now() : 0;
@@ -1346,14 +1393,6 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 
   await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, [...top, ...practiceRecs]));
 
-  // Skillboost suggestion memory + unlock state (gain view only, never on the
-  // backtest path: suggestions are live player state and the sweep writes).
-  let pushUnlocked: boolean | undefined;
-  if (!isPopular && ctx.asOf == null) {
-    pushUnlocked = await timeStage(ctx.timings, "fh_push_targets", () =>
-      reconcilePushTargets(db, ctx.writeDb ?? db, ctx.userId, subject, top.filter((rec) => rec.reason === "push")));
-  }
-
   // The headline total simulates farming everything shown at once against the
   // same baseline the per-rec gains used, so it can never exceed what the list
   // is collectively worth (a naive sum of per-rec gains explodes on short
@@ -1363,14 +1402,17 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
   const totalBaseline = base.gainBasis === "keymode" && keyMode !== "any"
     ? subject.modeBaselines[keyMode]
     : { entries: subject.baselineEntries, total: subject.baselineTotal };
-  const headlineRecs = pushUnlocked === false ? top.filter((rec) => rec.reason !== "push") : top;
+  const totalWithoutPush = round2(estimateCombinedGain(totalBaseline.entries, totalBaseline.total, top.filter((rec) => rec.reason !== "push")));
 
   return {
-    ...base,
-    totalPotentialPp: round2(estimateCombinedGain(totalBaseline.entries, totalBaseline.total, headlineRecs)),
-    totalQualifying: ranked.length,
-    recs: top,
-    ...(pushUnlocked === undefined ? {} : { pushUnlocked }),
+    snapshot: {
+      ...base,
+      totalPotentialPp: round2(estimateCombinedGain(totalBaseline.entries, totalBaseline.total, top)),
+      totalQualifying: ranked.length,
+      recs: top,
+    },
+    totalWithoutPush,
+    ...effects,
   };
 }
 
@@ -1565,15 +1607,16 @@ async function buildModeRun(
   // Cohort self-heal: proxy-only peers that were never variant-enriched can be
   // badly mis-placed. Enqueue their enrichment strongest-weight first so the
   // players who pollute real cohorts get real variant pp ahead of the global
-  // pp-ordered drip. Fire-and-forget; never on the backtest path.
-  if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
+  // pp-ordered drip. Return the targets for the caller to enqueue; never on
+  // the backtest path.
+  if (ctx.effects && asOf == null) ctx.effects.enrichUserIds.push(...variantSelfHealTargets(peers));
 
   // Chart-shape weighting: down-weight peers whose farm charts look unlike the
   // subject's, folded into wD/wB up front. Also carries the subject's shape for
   // this mode (for per-candidate patternFit; null when too few plays are
   // analyzed) and their per-family demonstrated top-play pp (the family cap).
   const shapeContext = peers.length > 0
-    ? await timeStage(ctx.timings, "fh_shapes", () => computeShapeContext(db, peers, subject.rankedScores, mode, ctx.queue))
+    ? await timeStage(ctx.timings, "fh_shapes", () => computeShapeContext(db, peers, subject.rankedScores, mode, ctx.effects?.chartAnalysisIds))
     : null;
   const subjectShape = shapeContext?.shape ?? null;
 
@@ -1616,7 +1659,7 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
   const { peers } = await timeStage(ctx.timings, "fh_peer_pool", () =>
     selectPeerBand(db, ctx.userId, ctx.subjectPp, "any", 0, { strictKeyMode: false, writeDb: ctx.writeDb }));
   ctx.timings?.count("peers", peers.length);
-  if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
+  if (ctx.effects && asOf == null) ctx.effects.enrichUserIds.push(...variantSelfHealTargets(peers));
 
   const band = buildPeerBand("total_pp_fallback", peers);
   if (peers.length === 0) return { scored: [], band, feedbackHidden: 0, maxedHidden: 0, belowGainFloor: 0, practice: [] };
@@ -2523,16 +2566,12 @@ interface CohortCandidate {
 const VARIANT_SELF_HEAL_MAX = 12;
 const VARIANT_SELF_HEAL_PRIORITY = 10;
 
-function enqueueVariantSelfHeal(queue: JobQueue, peers: WeightedPeer[]): void {
-  const targets = peers
+function variantSelfHealTargets(peers: WeightedPeer[]): number[] {
+  return peers
     .filter((peer) => peer.needsVariantEnrich)
     .sort((a, b) => b.wD - a.wD)
-    .slice(0, VARIANT_SELF_HEAL_MAX);
-  for (const peer of targets) {
-    void queue
-      .enqueue("enrich_user", `user:${peer.userId}`, { userId: peer.userId }, { priority: VARIANT_SELF_HEAL_PRIORITY })
-      .catch(() => {});
-  }
+    .slice(0, VARIANT_SELF_HEAL_MAX)
+    .map((peer) => peer.userId);
 }
 
 // The same-pp comparison cohort as a kernel-weighted kNN: a candidate set (the
@@ -3201,20 +3240,17 @@ interface SubjectShapeContext {
 // farm charts look unlike the subject's, folding that mode's per-peer weights
 // into wD/wB up front. Returns the subject's shape for this mode (used for
 // per-candidate patternFit; null when too few top plays are analyzed) plus
-// their per-family top-play pp. Also self-heals: enqueues chart analysis for
-// the subject's un-analyzed top plays so their shape improves on later
-// requests. Fire-and-forget.
+// their per-family top-play pp. Returns uncovered chart IDs for the caller's
+// detached self-heal enqueue, so later requests have a more complete shape.
 async function computeShapeContext(
   db: Db,
   peers: WeightedPeer[],
   rankedScores: OscScore[],
   mode: ConcreteFarmHelperKeyMode,
-  queue?: JobQueue,
+  chartAnalysisIds?: number[],
 ): Promise<SubjectShapeContext> {
   const { shape, uncovered, familyTopPp } = await computeSubjectShape(db, rankedScores, mode);
-  if (queue && uncovered.length > 0) {
-    void enqueueMissingChartAnalyses(db, queue, uncovered).catch(() => {});
-  }
+  chartAnalysisIds?.push(...uncovered);
   if (!shape) return { shape: null, familyTopPp };
 
   const userIds = peers.map((p) => p.userId);
@@ -4005,6 +4041,7 @@ export function invalidateFarmHelperCacheForUser(db: Db, userId: number): void {
 // purge, where the wiped user may sit inside OTHER subjects' cached snapshots;
 // wipes are rare, so dropping everything beats tracking cross-references.
 export function clearFarmHelperCache(db: Db): void {
+  invalidateFarmHelperThreadCaches(db);
   bumpCacheGeneration(db);
   farmHelperCache.delete(db);
   totalPpPoolCache.delete(db);

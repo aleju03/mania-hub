@@ -4,7 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createDb, migrate } from "../src/db.js";
+import { createDb, exec, migrate } from "../src/db.js";
+import { registerFarmHelperBuildThread } from "../src/features/farm-helper-thread.js";
 import type { HttpContext } from "../src/http/context.js";
 import { handleSnapshotRoutes } from "../src/http/routes/snapshots.js";
 
@@ -44,6 +45,36 @@ function mockRes(): ServerResponse & { body: string } {
 }
 
 describe("farm helper HTTP subject gate", () => {
+  it("returns an uncached retryable 503 when the recommendation worker is unavailable", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-fh-http-unavailable-"));
+    dirs.push(dir);
+    const databaseUrl = `file:${join(dir, "test.db")}`;
+    const db = await createDb({ databaseUrl });
+    await migrate(db);
+    const now = new Date().toISOString();
+    const user = { id: 1, username: "Stored", statistics: { pp: 5000 }, country_code: "CR" };
+    await exec(db, `insert into profile_snapshots
+      (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+      values (1, 'stored', ?, '[]', 200, ?, ?, ?)`, [JSON.stringify(user), now, now, now]);
+    await registerFarmHelperBuildThread(db, { databaseUrl })!.close();
+    const ctx = {
+      db,
+      osu: new Proxy({}, { get: () => () => { throw new Error("unexpected osu! call"); } }),
+      config: { allowedOrigins: [], liveAdminToken: "", liveBridgeToken: "" },
+    } as unknown as HttpContext;
+    const path = "/api/snapshots/farm-helper?user=Stored";
+    const res = mockRes();
+    try {
+      expect(await handleSnapshotRoutes(mockReq(path), res, ctx, new URL(path, "http://localhost"), "CR")).toBe(true);
+      expect(res.statusCode).toBe(503);
+      expect(res.getHeader("retry-after")).toBe("30");
+      expect(res.getHeader("cache-control")).toBe("no-store");
+      expect(JSON.parse(res.body)).toEqual({ error: "farm_helper_temporarily_unavailable", retryable: true });
+    } finally {
+      db.close();
+    }
+  });
+
   it("rejects unknown subjects on every public profile-hydrating route without touching osu!", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mania-fh-http-gate-"));
     dirs.push(dir);

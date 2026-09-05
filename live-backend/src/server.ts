@@ -52,6 +52,7 @@ import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { assertMigrationDiskHeadroom, startRetentionScheduler } from "./retention.js";
 import { startCommunityInviteScheduler } from "./communities/refresh.js";
+import { registerFarmHelperBuildThread } from "./features/farm-helper-thread.js";
 import { registerOffThreadBoardBuilds } from "./http/maps-snapshot-thread.js";
 import { eventLoopStatus, startEventLoopMonitor } from "./shared/event-loop.js";
 import { readProcessMemory } from "./shared/process-memory.js";
@@ -150,7 +151,10 @@ export async function createApp() {
   // The pack pool's unranked-member read and the skill leaderboard build run
   // on the maps snapshot thread in a serving process; the headless worker
   // never builds either, and keeps no thread.
-  if (config.role !== "worker") registerOffThreadBoardBuilds(db, config);
+  if (config.role !== "worker") {
+    registerOffThreadBoardBuilds(db, config);
+    registerFarmHelperBuildThread(db, config);
+  }
   // Records this thread's event loop stalls for /api/admin/status and the
   // journal (event_loop_stall); every role, since each process has its own
   // loop and the worker mirrors its copy below.

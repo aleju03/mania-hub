@@ -1,3 +1,4 @@
+import { registerFarmHelperBuildThread, getFarmHelperBuildThread } from "../src/features/farm-helper-thread.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,9 +36,11 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "mania-farm-build-feedback-"));
   db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
+  registerFarmHelperBuildThread(db, { databaseUrl: `file:${join(dir, "test.db")}` });
 });
 
 afterEach(async () => {
+  await getFarmHelperBuildThread(db)?.close();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 

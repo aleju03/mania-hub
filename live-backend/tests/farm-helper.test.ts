@@ -1,3 +1,5 @@
+import { registerFarmHelperBuildThread, getFarmHelperBuildThread } from "../src/features/farm-helper-thread.js";
+import { FarmHelperTimings } from "../src/features/farm-helper-timing.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +31,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await getFarmHelperBuildThread(db)?.close();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
@@ -2842,5 +2845,65 @@ describe("farm helper relative improve margin", () => {
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_MARGIN);
     expect(rec?.reason).toBe("improve");
     expect(rec?.benchmarkPp).toBe(622);
+  });
+});
+
+
+describe("farm helper worker recommendation parity", () => {
+  it("matches inline across keymodes, views and private feedback, keeping heavy reads off the serving connection", async () => {
+    await insertUser(SUBJECT_ID, SUBJECT_PP, "CR", "Subject");
+    await seedPeers();
+    const sevenMap = 7000;
+    await insertBeatmapMeta(sevenMap, 7);
+    for (let i = 0; i < 8; i++) await insertBeatmapMeta(sevenMap + 1 + i, 7);
+    for (let peer = 100; peer < 115; peer++) {
+      for (let i = 0; i < 9; i++) await insertFarmed("CR", peer, sevenMap + i, 550, nowIso());
+    }
+    const scores = [...buildSubjectBestScores(), subjectScore(7999, 500, "2024-06-01T00:00:00Z", 7)];
+    await exec(db, "update users set pp_4k = 8000, pp_7k = 4500");
+    const osu = makeOsuStub(scores, SUBJECT_PP, { "4k": 8000, "7k": 4500 });
+    const markTime = Date.now();
+    await exec(db, `insert into farm_helper_feedback
+      (user_id, beatmap_id, speed_bucket, verdict, created_at, updated_at)
+      values (?, ?, 'normal', 'too_hard', ?, ?)`, [SUBJECT_ID, BM_MISSING, markTime, markTime]);
+    const variants = (["4k", "7k", "any"] as const).flatMap((keyMode) =>
+      (["gain", "popular"] as const).flatMap((view) => [0, SUBJECT_ID].map((viewerUserId) => ({ keyMode, view, viewerUserId }))));
+    const expected = [];
+    for (const params of variants) expected.push(await getFarmHelperSnapshot(db, osu, "Subject", params));
+    // Seed on the worker too: derived-state writes must go through writeDb.
+    await exec(db, "delete from live_meta where key like 'farm_helper_key_stats_seeded:%'");
+    await exec(db, "delete from farm_helper_user_key_stats");
+    const servingDb = new Proxy(db, {
+      get(target, key) {
+        if (key === "execute") return (statement: { sql: string }) => {
+          if (/country_maps_farmed_scores|from farm_helper_user_key_stats/i.test(statement.sql)) {
+            throw new Error("heavy peer read reached serving connection");
+          }
+          return target.execute(statement);
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const thread = registerFarmHelperBuildThread(servingDb, { databaseUrl: `file:${join(dir, "test.db")}` })!;
+    try {
+      for (let i = 0; i < variants.length; i++) {
+        const timings = new FarmHelperTimings();
+        const actual = await getFarmHelperSnapshot(servingDb, osu, "Subject", variants[i], undefined, { writeDb: db, timings });
+        expect({ ...actual, generatedAt: "clock" }).toEqual({ ...expected[i], generatedAt: "clock" });
+        expect(actual.recs.length, JSON.stringify(variants[i])).toBeGreaterThan(0);
+        expect(timings.toServerTiming()).toContain("fh_farm_rows");
+      }
+      expect(thread.status().completed).toBe(variants.length);
+      const cached = await getFarmHelperSnapshot(servingDb, osu, "Subject", variants[0]);
+      expect(cached.recs.length).toBeGreaterThan(0);
+      expect(thread.status().completed).toBe(variants.length);
+      invalidateFarmHelperCacheForUser(servingDb, SUBJECT_ID);
+      await Promise.all(Array.from({ length: 5 }, () =>
+        getFarmHelperSnapshot(servingDb, osu, "Subject", variants[0], undefined, { writeDb: db })));
+      expect(thread.status().completed).toBe(variants.length + 1);
+    } finally {
+      await thread.close();
+    }
   });
 });

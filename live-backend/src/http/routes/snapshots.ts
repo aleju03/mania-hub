@@ -1,3 +1,4 @@
+import { FarmHelperBuildError } from "../../features/farm-helper-thread.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isGlobalCountry, resolveCountryScope } from "../../countries.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, resolveKnownFarmHelperSubject } from "../../features/farm-helper.js";
@@ -369,6 +370,12 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       await timeStage(timings, "fh_accents", () => enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, snapshot));
       sendJson(req, res, ctx, 200, snapshot);
     } catch (error) {
+      if (error instanceof FarmHelperBuildError) {
+        res.setHeader("retry-after", "30");
+        res.setHeader("cache-control", "no-store");
+        sendJson(req, res, ctx, 503, { error: "farm_helper_temporarily_unavailable", retryable: true });
+        return true;
+      }
       if (error instanceof FarmHelperUserNotFoundError) {
         sendJson(req, res, ctx, 404, { error: "user_not_found" });
         return true;

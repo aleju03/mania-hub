@@ -1,3 +1,4 @@
+import { getFarmHelperBuildThread } from "../features/farm-helper-thread.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, getWriteGateStats, parseJson, type Db } from "../db.js";
 import { getCountryRegistry, getCountryRosterSizes, isGlobalCountry } from "../countries.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../features/activity.js";
@@ -237,6 +238,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
       ? {
         // Asking for the thread's status must never be what constructs it.
         mapsSnapshotThread: mapsSnapshotThreadStatus(ctx.config),
+        farmHelperThread: getFarmHelperBuildThread(ctx.db)?.status() ?? null,
         packCommunityThread: packCommunityThreadStatus(ctx.config),
         packCommunitySnapshots: packCommunitySnapshotStatus(ctx.db),
         responseCaches: mapsResponseCacheMetrics(ctx.db),

@@ -20,7 +20,7 @@ const SEEDED_META_PREFIX = "farm_helper_key_stats_seeded:";
 
 const seedLocks = new WeakMap<Db, Map<FarmHelperKeyCount, Promise<void>>>();
 
-export async function ensureFarmHelperKeyStatsSeeded(db: Db, keyCount: FarmHelperKeyCount): Promise<void> {
+export async function ensureFarmHelperKeyStatsSeeded(db: Db, keyCount: FarmHelperKeyCount, writeDb: Db = db): Promise<void> {
   // Version-driven: an existing DB seeded at an older version (or the legacy
   // boolean marker, which reads as 1) rebuilds so shape_json gets populated.
   const meta = (await exec(db, "select value_json from live_meta where key = ? limit 1", [seededMetaKey(keyCount)])).rows[0];
@@ -34,7 +34,7 @@ export async function ensureFarmHelperKeyStatsSeeded(db: Db, keyCount: FarmHelpe
   const current = locks.get(keyCount);
   if (current) return current;
 
-  const lock = rebuildFarmHelperKeyStats(db, keyCount).finally(() => {
+  const lock = rebuildFarmHelperKeyStats(db, keyCount, writeDb).finally(() => {
     locks?.delete(keyCount);
   });
   locks.set(keyCount, lock);
@@ -134,12 +134,12 @@ export function clearFarmHelperKeyStatsCaches(db: Db): void {
 export async function getKeyModePeerPool(
   db: Db,
   keyCount: FarmHelperKeyCount,
-  // Dedicated write connection for the calibration's observability write (see
-  // getProxyCalibration). Omitted off the serving path, where the write is
-  // simply skipped rather than queued on a read connection.
+  // Dedicated writer for first-use seeding and calibration observability. The
+  // recommendation thread bridges these writes to the caller's writer while
+  // keeping all seed reads/calculation on its own query-only connection.
   writeDb?: Db,
 ): Promise<{ peers: RawKeyModePeer[]; calibration: ProxyCalibration }> {
-  await ensureFarmHelperKeyStatsSeeded(db, keyCount);
+  await ensureFarmHelperKeyStatsSeeded(db, keyCount, writeDb ?? db);
   const cache = mapFor(poolCache, db);
   const now = Date.now();
   const cached = cache.get(keyCount);
@@ -327,7 +327,7 @@ export async function refreshFarmHelperKeyStatsForUser(db: Db, userId: number, u
   await writeStats(db, stats, updatedAt, chartShapes);
 }
 
-async function rebuildFarmHelperKeyStats(db: Db, keyCount: FarmHelperKeyCount): Promise<void> {
+async function rebuildFarmHelperKeyStats(db: Db, keyCount: FarmHelperKeyCount, writeDb: Db): Promise<void> {
   const rows = (await exec(
     db,
     `select s.user_id, s.beatmap_id, s.pp, s.updated_at, round(coalesce(mb.cs, b.cs, 0)) as key_count
@@ -341,11 +341,11 @@ async function rebuildFarmHelperKeyStats(db: Db, keyCount: FarmHelperKeyCount): 
 
   const stats = collectStats(rows);
   const chartShapes = await readChartShapes(db, collectBeatmapIds(stats));
-  await exec(db, "delete from farm_helper_user_key_stats where key_count = ?", [keyCount]);
-  await writeStats(db, stats, nowIso(), chartShapes);
+  await exec(writeDb, "delete from farm_helper_user_key_stats where key_count = ?", [keyCount]);
+  await writeStats(writeDb, stats, nowIso(), chartShapes);
   const updatedAt = nowIso();
   await exec(
-    db,
+    writeDb,
     `insert into live_meta (key, value_json, updated_at)
      values (?, ?, ?)
      on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
