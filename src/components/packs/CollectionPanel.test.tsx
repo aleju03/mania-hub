@@ -63,6 +63,23 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it("opens card actions on an iPhone-style hold without a contextmenu event", () => {
+  render(
+    <I18nProvider i18n={getI18n("en")}>
+      <CollectionPanel wallet={wallet} showLoginNudge={false} syncStatus="local"
+        onRecycleCard={() => 0} onRecycleWhole={() => 0} onRecycleWholeMany={() => 0}
+        onRecycleWholeMatching={() => 0} onRecycleAll={() => 0} onApplyMint={() => true} />
+    </I18nProvider>,
+  );
+  const card = screen.getByRole("button", { name: "View player7's card" });
+  fireEvent.touchStart(card, { touches: [{ identifier: 1, clientX: 80, clientY: 120 }] });
+  act(() => { vi.advanceTimersByTime(500); });
+  expect(screen.getByRole("menuitem", { name: "Select cards..." })).toBeTruthy();
+  fireEvent.touchEnd(card, { touches: [] });
+  fireEvent.click(screen.getByRole("menuitem", { name: "Select cards..." }));
+  expect(screen.getByRole("button", { name: "Deselect player7" })).toBeTruthy();
+});
+
 describe("CollectionPanel recycle-all hold", () => {
   it("omits recycling controls for the exclusive card", () => {
     const protectedWallet = { ...wallet, cards: { "7:v1": {

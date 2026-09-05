@@ -1,4 +1,5 @@
 import { GiftSpareDialog } from "./GiftSpareDialog";
+import { useCardContextMenu } from "./useCardContextMenu";
 import { MissingPlayerTile } from "./MissingPlayerTile";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
@@ -417,6 +418,7 @@ export function CollectionPanel({
   const [confirmCardKey, setConfirmCardKey] = useState<string | null>(null);
   // Right-click menu on a card tile; whole-recycle inside it confirms on a
   // second click too.
+  const cardContextMenu = useCardContextMenu();
   const [menu, setMenu] = useState<{ card: CollectedCard; cardKeys: string[]; cardCount: number; x: number; y: number } | null>(null);
   const [menuConfirm, setMenuConfirm] = useState(false);
   // Clicking a tile lifts the card to center stage instead of navigating;
@@ -1477,8 +1479,7 @@ export function CollectionPanel({
                 key={cardKey}
                 data-card-id={cardKey}
                 data-select-keep=""
-                onContextMenu={(event) => {
-                  event.preventDefault();
+                {...cardContextMenu((x, y) => {
                   setMenuConfirm(false);
                   setMenu({
                     card,
@@ -1486,10 +1487,10 @@ export function CollectionPanel({
                       ? selectionScope === "all" ? pageCards.map(packCardKeyOf) : Array.from(selected)
                       : [cardKey],
                     cardCount: selecting && cardSelected ? selectedCount : 1,
-                    x: Math.min(event.clientX, window.innerWidth - 208),
-                    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 480)),
+                    x: Math.max(8, Math.min(x, window.innerWidth - 208)),
+                    y: Math.max(8, Math.min(y, window.innerHeight - 480)),
                   });
-                }}
+                })}
               >
                 {selecting ? (
                   <button

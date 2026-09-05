@@ -1,3 +1,4 @@
+import { useCardContextMenu } from "./useCardContextMenu";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, Recycle } from "lucide-react";
@@ -157,6 +158,7 @@ export function PackSummary({
   const [recycleDelays, setRecycleDelays] = useState<Map<number, number>>(new Map());
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const cardContextMenu = useCardContextMenu();
   const [menu, setMenu] = useState<{ position: number; x: number; y: number } | null>(null);
   /* Only the menu's single-card recycle asks twice, the way the collection's
      does: it sits one mis-click away from a card worth keeping. Recycling a
@@ -560,16 +562,14 @@ export function PackSummary({
               className={`w-[128px] sm:w-[148px] ${selecting ? "select-none" : ""}`}
               data-select-keep=""
               data-pull-position={position}
-              onContextMenu={(event) => {
-                if (isRecycled || damage) return;
-                event.preventDefault();
+              {...cardContextMenu(isRecycled || damage ? null : (x, y) => {
                 setMenuConfirm(false);
                 setMenu({
                   position,
-                  x: Math.min(event.clientX, window.innerWidth - 216),
-                  y: Math.min(event.clientY, window.innerHeight - 176),
+                  x: Math.max(8, Math.min(x, window.innerWidth - 216)),
+                  y: Math.max(8, Math.min(y, window.innerHeight - 176)),
                 });
-              }}
+              })}
               initial={reducedMotion || instant ? false : { opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: reducedMotion || instant ? 0 : position * 0.07 }}

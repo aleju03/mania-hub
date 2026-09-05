@@ -1,3 +1,4 @@
+import { useCardContextMenu } from "./useCardContextMenu";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -15,9 +16,11 @@ export function MissingPlayerTile({ player, wishlist }: {
   const tileRef = useRef<HTMLAnchorElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const cardContextMenu = useCardContextMenu();
   const wished = wishlist?.userIds.has(player.userId) ?? false;
   const wishFull = Boolean(wishlist && !wished && wishlist.full);
   const openMenu = (x: number, y: number) => setMenu({ x: Math.max(8, Math.min(x, window.innerWidth - 220)), y: Math.max(8, Math.min(y, window.innerHeight - 145)) });
+  const contextMenuProps = cardContextMenu(wishlist ? openMenu : null);
   useEffect(() => {
     if (!menu) return;
     menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
@@ -38,15 +41,12 @@ export function MissingPlayerTile({ player, wishlist }: {
   };
   return <div className="flex flex-col gap-1">
     <Link ref={tileRef} to="/player/$username/maniacard" params={{ username: player.username }}
-      onContextMenu={(event) => {
-        if (!wishlist) return;
-        event.preventDefault(); openMenu(event.clientX, event.clientY);
-      }}
+      {...contextMenuProps}
       onKeyDown={(event) => {
         if (!wishlist || !(event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) return;
         event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); openMenu(rect.left + 12, rect.top + 12);
       }}
-      className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30" style={{ aspectRatio: "5 / 7" }}>
+      className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30" style={{ aspectRatio: "5 / 7", ...contextMenuProps.style }}>
       <span className="absolute left-1.5 top-1.5 text-[10px] text-osu-f1/60 tabular-nums">#{player.poolRank}</span>
       <CountryFlag code={player.countryCode} size="xs" decorative className="absolute right-1.5 top-2" />
       <img src={player.avatarUrl} alt="" className="h-1/2 w-auto rounded-full object-cover opacity-30 grayscale" loading="lazy" draggable={false} />
