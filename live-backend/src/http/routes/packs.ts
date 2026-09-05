@@ -1041,6 +1041,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         cardCopies: hasCopyEntries ? cardCopies : undefined,
         tier: recycleUntracked ? "all" : recycleTier,
         query: typeof body.query === "string" ? body.query.slice(0, 120) : "",
+        duplicatesOnly: body.duplicatesOnly === true,
         restrictToCardUserIds: untrackedIds,
       });
       sendJson(req, res, ctx, 200, { gained: result.gained, payload: result.wallet.payload, rev: result.wallet.rev });
@@ -1061,7 +1062,9 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     );
     const tier = url.searchParams.get("tier");
     const query = url.searchParams.get("q");
-    const sort = url.searchParams.get("sort") === "newest" ? ("newest" as const) : null;
+    const sortParam = url.searchParams.get("sort");
+    const sort = sortParam === "newest" ? ("newest" as const) : sortParam === "copies" ? ("copies" as const) : null;
+    const duplicatesOnly = url.searchParams.get("dupes") === "1";
     // The missing list is the pool minus the collection, so a pool that
     // cannot be read has no honest answer: better to say so than to serve an
     // empty page that reads as "you have them all".
@@ -1099,6 +1102,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       tier: untracked ? "all" : tier,
       query,
       sort,
+      duplicatesOnly,
       restrictToCardUserIds: untracked ? progress?.offPoolUserIds ?? [] : undefined,
     });
     sendJson(req, res, ctx, 200, {

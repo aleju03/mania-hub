@@ -175,3 +175,35 @@ it("does not reuse a manual selection cleared by changing collection pages", asy
   await act(async () => fireEvent.click(destination));
   expect(binders.addCards).toHaveBeenCalledWith(1, ["22"]);
 });
+
+it("filters the grid to the cards held more than once, and carries that into a bulk recycle", () => {
+  vi.useRealTimers();
+  const onRecycleWholeMatching = vi.fn(() => 0);
+  /* One page's worth of duplicates plus one, so "select all" (the scope that
+     recycles by filter rather than by key) is on screen at all. */
+  const cards = Object.fromEntries([
+    ...Array.from({ length: 16 }, (_, index) => {
+      const id = index + 7;
+      return [String(id), { ...wallet.cards["7"], userId: id, username: `player${id}`, pp: 12_000 - index }];
+    }),
+    ["99", { ...wallet.cards["7"], userId: 99, username: "player99", copies: 1, pp: 9_000 }],
+  ]);
+  render(
+    <I18nProvider i18n={getI18n("en")}>
+      <CollectionPanel wallet={{ ...wallet, cards }} showLoginNudge={false} syncStatus="local"
+        onRecycleCard={() => 0} onRecycleWhole={() => 0} onRecycleWholeMany={() => 0}
+        onRecycleWholeMatching={onRecycleWholeMatching} onRecycleAll={() => 0} onApplyMint={() => true} />
+    </I18nProvider>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: /Duplicates/ }));
+  expect(screen.getByRole("button", { name: "View player7's card" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "View player99's card" })).toBeNull();
+
+  fireEvent.contextMenu(screen.getByRole("button", { name: "View player7's card" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Select cards..." }));
+  fireEvent.click(screen.getByRole("button", { name: "select all" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Recycle \+/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Sure\?/ }));
+  expect(onRecycleWholeMatching).toHaveBeenCalledWith({ tier: "all", query: "", duplicatesOnly: true });
+});

@@ -66,6 +66,9 @@ export interface ServerPackCollectionPage {
   cards: ServerPackCollectionCard[];
   total: number;
   tierCounts: Record<string, number>;
+  /* Cards held at two copies or more, counted over the whole collection so
+     the duplicates chip can label itself while it is off. */
+  duplicateCardCount: number;
   duplicateShardTotal: number;
   filteredShardTotal: number;
   poolProgress: ServerPackCollectionPoolProgress | null;
@@ -185,13 +188,22 @@ export const mergeServerPackWallet = createServerFn({ method: "POST" })
   });
 
 export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
-  .validator((input: { page?: unknown; pageSize?: unknown; tier?: unknown; query?: unknown; sort?: unknown }) => {
+  .validator((input: {
+    page?: unknown;
+    pageSize?: unknown;
+    tier?: unknown;
+    query?: unknown;
+    sort?: unknown;
+    duplicatesOnly?: unknown;
+  }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
     const tier = typeof input?.tier === "string" ? input.tier : "all";
     const query = typeof input?.query === "string" ? input.query : "";
-    const sort = input?.sort === "newest" ? ("newest" as const) : ("rarity" as const);
-    return { page, pageSize, tier, query, sort };
+    const sort =
+      input?.sort === "newest" ? ("newest" as const) : input?.sort === "copies" ? ("copies" as const) : ("rarity" as const);
+    const duplicatesOnly = input?.duplicatesOnly === true;
+    return { page, pageSize, tier, query, sort, duplicatesOnly };
   })
   .handler(async ({ data }): Promise<ServerPackCollectionPage | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -203,7 +215,8 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     url.searchParams.set("pageSize", String(data.pageSize));
     url.searchParams.set("tier", data.tier);
     if (data.query) url.searchParams.set("q", data.query);
-    if (data.sort === "newest") url.searchParams.set("sort", "newest");
+    if (data.sort !== "rarity") url.searchParams.set("sort", data.sort);
+    if (data.duplicatesOnly) url.searchParams.set("dupes", "1");
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection fetch failed (${response.status}).`);
     const body = (await response.json()) as ServerPackCollectionPage;
@@ -219,6 +232,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       cards: Array.isArray(body.cards) ? body.cards : [],
       total: Number(body.total) || 0,
       tierCounts: body.tierCounts && typeof body.tierCounts === "object" ? body.tierCounts : {},
+      duplicateCardCount: Math.max(0, Math.floor(Number(body.duplicateCardCount) || 0)),
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
       filteredShardTotal: Number(body.filteredShardTotal) || 0,
       poolProgress,
@@ -502,6 +516,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
     cardCopies?: unknown;
     tier?: unknown;
     query?: unknown;
+    duplicatesOnly?: unknown;
   }) => {
     const mode =
       input?.mode === "duplicates" ||
@@ -553,6 +568,9 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       cardCopies: hasCopyEntries ? cardCopies : undefined,
       tier,
       query,
+      // Carries the duplicates filter, so "recycle everything shown" under it
+      // takes the same rows the grid was showing.
+      duplicatesOnly: input?.duplicatesOnly === true,
     };
   })
   .handler(async ({ data }): Promise<{ gained: number; payload: string; rev: number } | null> => {

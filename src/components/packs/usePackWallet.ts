@@ -64,7 +64,7 @@ export interface PackWalletApi {
      first copy of leaves the collection, a duplicate gives up only the copy
      the pack added. */
   recycleCopies: (entries: Array<{ cardKey: string; copies: number }>) => number | Promise<number>;
-  recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string }) => number | Promise<number>;
+  recycleWholeMatching: (filter: PackCollectionFilter) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed.
@@ -115,12 +115,21 @@ function hasLocalHistory(wallet: PackWallet): boolean {
   );
 }
 
+/* What the collection grid is currently showing, so a bulk action over
+   "everything matching" recycles exactly those rows. */
+export interface PackCollectionFilter {
+  tier: ManiaCardTier | "all" | "unrated" | "untracked";
+  query: string;
+  duplicatesOnly?: boolean;
+}
+
 function collectionCardMatchesFilter(
   card: PackWallet["cards"][string],
-  filter: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string },
+  filter: PackCollectionFilter,
 ): boolean {
   const query = filter.query.trim().toLowerCase();
   if (query && !card.username.toLowerCase().includes(query)) return false;
+  if (filter.duplicatesOnly && card.copies <= 1) return false;
   if (filter.tier === "all") return true;
   if (filter.tier === "unrated") return card.tier === null;
   // Pool membership is server knowledge; a local wallet can't resolve it, and
@@ -217,7 +226,7 @@ export function usePackWallet(): PackWalletApi {
     mode: "duplicates" | "whole" | "all_duplicates" | "whole_matching" | "copies",
     cardKey?: string,
     cardKeys?: string[],
-    filter?: { tier: ManiaCardTier | "all" | "unrated" | "untracked"; query: string },
+    filter?: PackCollectionFilter,
     cardCopies?: Array<{ cardKey: string; copies: number }>,
     /* Walks the wallet through syncing on the way out. The collection panel
        re-reads its page whenever a sync lands, so a recycle that happened
@@ -238,6 +247,7 @@ export function usePackWallet(): PackWalletApi {
           cardCopies,
           tier: filter?.tier,
           query: filter?.query,
+          duplicatesOnly: filter?.duplicatesOnly === true,
         },
       });
       if (!result) {

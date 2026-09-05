@@ -66,6 +66,10 @@ export interface PackCollectionPage {
   cards: StoredPackCard[];
   total: number;
   tierCounts: Record<string, number>;
+  /* How many held cards sit at two copies or more. Filter-independent, like
+     tierCounts, because the chip that switches the duplicates filter on has
+     to say how many there are while the filter is off. */
+  duplicateCardCount: number;
   duplicateShardTotal: number;
   filteredShardTotal: number;
 }
@@ -1363,10 +1367,12 @@ export async function listPackCollectionCards(
     tier?: string | null;
     query?: string | null;
     /* "newest" orders by when the card first joined the collection (a
-       duplicate pull does not resurface an old card); anything else is the
-       default rarity order. Legacy cards without a timestamp sink to the end,
+       duplicate pull does not resurface an old card); "copies" puts the most
+       duplicated cards first; anything else is the default rarity order. Legacy cards without a timestamp sink to the end,
        still in rarity order among themselves. */
-    sort?: "newest" | null;
+    sort?: "newest" | "copies" | null;
+    /* Lists only the cards held at two copies or more. */
+    duplicatesOnly?: boolean;
     /* When set, only cards of these players are listed (the "not tracked"
        filter). Empty means match nothing. */
     restrictToCardUserIds?: readonly number[];
@@ -1383,6 +1389,9 @@ export async function listPackCollectionCards(
   if (query) {
     where.push(`lower(${displayUsernameSql}) like ?`);
     args.push(`%${query}%`);
+  }
+  if (options.duplicatesOnly) {
+    where.push("pack_collection_cards.copies > 1");
   }
   if (options.restrictToCardUserIds) {
     where.push(cardUserIdRestrictionSql(options.restrictToCardUserIds));
@@ -1412,7 +1421,11 @@ export async function listPackCollectionCards(
        and serials.owner_user_id = pack_collection_cards.owner_user_id
      where ${whereSql}
      order by ${
-       options.sort === "newest" ? "pack_collection_cards.first_pulled_at desc, " : ""
+       options.sort === "newest"
+         ? "pack_collection_cards.first_pulled_at desc, "
+         : options.sort === "copies"
+           ? "pack_collection_cards.copies desc, "
+           : ""
      }${tierRankSql("pack_collection_cards.tier")} desc, pack_collection_cards.pp desc,
        pack_collection_cards.global_rank asc, pc.username collate nocase asc
      limit ? offset ?`,
@@ -1433,6 +1446,11 @@ export async function listPackCollectionCards(
      where owner_user_id = ? and copies > 0 and ${RECYCLABLE_CARD_SQL}`,
     [userId],
   )).rows[0];
+  const duplicateCardRow = (await exec(
+    db,
+    "select count(*) as total from pack_collection_cards where owner_user_id = ? and copies > 1",
+    [userId],
+  )).rows[0];
   const filteredShardRow = (await exec(
     db,
     `select coalesce(sum(${wholeCardShardValueSql("tier")}), 0) as total
@@ -1444,6 +1462,7 @@ export async function listPackCollectionCards(
     cards: rows.map((row) => cardFromRow(row as Record<string, unknown>)),
     total: Number(totalRow?.total) || 0,
     tierCounts: Object.fromEntries(tierRows.map((row) => [String(row.tier), Number(row.count) || 0])),
+    duplicateCardCount: Number(duplicateCardRow?.total) || 0,
     duplicateShardTotal: Number(duplicateRow?.total) || 0,
     filteredShardTotal: Number(filteredShardRow?.total) || 0,
   };
@@ -2759,6 +2778,9 @@ export async function recyclePackCollectionCards(
     cardCopies?: Array<{ cardKey: string; copies: number }>;
     tier?: string | null;
     query?: string | null;
+    /* Same duplicates filter listPackCollectionCards takes, so "recycle
+       everything shown" under it leaves the single-copy cards alone. */
+    duplicatesOnly?: boolean;
     /* Same restriction listPackCollectionCards takes, so "recycle everything
        shown" under the "not tracked" filter recycles exactly what it showed. */
     restrictToCardUserIds?: readonly number[];
@@ -2777,6 +2799,9 @@ export async function recyclePackCollectionCards(
       // on, or "recycle everything matching" would miss renamed players.
       where.push(`lower(${displayUsernameSql}) like ?`);
       args.push(`%${query}%`);
+    }
+    if (options.duplicatesOnly) {
+      where.push("copies > 1");
     }
     if (options.restrictToCardUserIds) {
       where.push(cardUserIdRestrictionSql(options.restrictToCardUserIds));

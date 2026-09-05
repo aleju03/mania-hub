@@ -43,8 +43,9 @@ export type { CardMint };
 type CollectionTierFilter = ManiaCardTier | "all" | "unrated" | "untracked";
 
 /* "newest" orders by when the card first joined the collection (dup pulls do
-   not resurface a card); "rarity" is the classic tier-then-pp order. */
-type CollectionSortMode = "rarity" | "newest";
+   not resurface a card); "copies" puts the most duplicated cards first;
+   "rarity" is the classic tier-then-pp order. */
+type CollectionSortMode = "rarity" | "newest" | "copies";
 
 const COLLECTION_SORTS: Array<{
   id: CollectionSortMode;
@@ -53,6 +54,7 @@ const COLLECTION_SORTS: Array<{
 }> = [
   { id: "rarity", label: msg`Rarity`, hint: msg`Highest tier first, then pp` },
   { id: "newest", label: msg`Newest`, hint: msg`When each card first joined your collection` },
+  { id: "copies", label: msg`Copies`, hint: msg`Most copies first` },
 ];
 
 /* How you read your own collection is a standing preference, not a transient
@@ -64,7 +66,8 @@ const COLLECTION_SORT_STORAGE_KEY = "mania-hub-collection-sort-v1";
 function readStoredCollectionSort(): CollectionSortMode {
   if (typeof window === "undefined") return "rarity";
   try {
-    return window.localStorage.getItem(COLLECTION_SORT_STORAGE_KEY) === "newest" ? "newest" : "rarity";
+    const stored = window.localStorage.getItem(COLLECTION_SORT_STORAGE_KEY);
+    return stored === "newest" || stored === "copies" ? stored : "rarity";
   } catch {
     return "rarity";
   }
@@ -90,7 +93,11 @@ interface CollectionPanelProps {
   onRecycleCard: (cardKey: string) => number | Promise<number>;
   onRecycleWhole: (cardKey: string) => number | Promise<number>;
   onRecycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
-  onRecycleWholeMatching: (filter: { tier: CollectionTierFilter; query: string }) => number | Promise<number>;
+  onRecycleWholeMatching: (filter: {
+    tier: CollectionTierFilter;
+    query: string;
+    duplicatesOnly: boolean;
+  }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
   onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
@@ -178,14 +185,16 @@ function serverCollectionCacheKey({
   tier,
   query,
   sort,
+  duplicatesOnly,
 }: {
   page: number;
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
   sort: CollectionSortMode;
+  duplicatesOnly: boolean;
 }) {
-  return `${page}:${pageSize}:${tier}:${sort}:${query}`;
+  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${query}`;
 }
 
 /* Which rows the filter selects, not the order they come back in: totals,
@@ -197,12 +206,14 @@ function serverCollectionFilterKey({
   pageSize,
   tier,
   query,
+  duplicatesOnly,
 }: {
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
+  duplicatesOnly: boolean;
 }) {
-  return `${pageSize}:${tier}:${query}`;
+  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${query}`;
 }
 
 function CollectionPager({
@@ -394,6 +405,10 @@ export function CollectionPanel({
   // it waits for a pause in typing instead of firing a request per keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<CollectionTierFilter>("all");
+  /* Narrows the grid to the cards held at two copies or more. A set filter
+     like the rarity chips, not a lens: every bulk action over "everything
+     matching" carries it too. */
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   // Safe to read storage in the initializer: the panel renders null until the
   // wallet hydrates, so its first real render is already client-side.
   const [sortMode, setSortMode] = useState<CollectionSortMode>(readStoredCollectionSort);
@@ -466,6 +481,7 @@ export function CollectionPanel({
       // The stored sort, so a remembered order still hits the page cache on
       // the way back to /packs instead of always missing it.
       sort: readStoredCollectionSort(),
+      duplicatesOnly: false,
     };
     const cacheKey = serverCollectionCacheKey(initialRequest);
     const page = serverCollectionPageCache.get(cacheKey) ?? null;
@@ -709,6 +725,7 @@ export function CollectionPanel({
     tier: tierFilter,
     query: activeQuery.trim().toLowerCase(),
     sort: sortMode,
+    duplicatesOnly,
   };
   const serverCacheKey = serverCollectionCacheKey(serverRequest);
   const serverFilterKey = serverCollectionFilterKey(serverRequest);
@@ -723,7 +740,9 @@ export function CollectionPanel({
     ? ownedCards(wallet).sort((a, b) =>
         sortMode === "newest"
           ? b.firstPulledAt - a.firstPulledAt || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
-          : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
+          : sortMode === "copies"
+            ? b.copies - a.copies || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
+            : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
       )
     : [];
   const cards = useServerCollection ? (activeServerPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
@@ -766,6 +785,16 @@ export function CollectionPanel({
       setTierFilter("all");
     }
   }, [tierFilter, useServerCollection, serverPoolProgress]);
+  /* Like tierCounts, a whole-collection figure: it labels the chip while the
+     chip is off, so it cannot come from the filtered page. */
+  const duplicateCardCount = useServerCollection
+    ? serverMetaPage?.duplicateCardCount ?? serverPage?.page.duplicateCardCount ?? 0
+    : localCards.reduce((count, card) => count + (card.copies > 1 ? 1 : 0), 0);
+  // Same for the duplicates chip: recycling the last spare takes the chip
+  // away, and with it the only way back out of an empty grid.
+  useEffect(() => {
+    if (duplicatesOnly && duplicateCardCount === 0) setDuplicatesOnly(false);
+  }, [duplicatesOnly, duplicateCardCount]);
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -786,6 +815,7 @@ export function CollectionPanel({
   const trimmedQuery = serverRequest.query;
   const visibleCards = useServerCollection ? cards : cards.filter((card) => {
     if (trimmedQuery && !card.username.toLowerCase().includes(trimmedQuery)) return false;
+    if (duplicatesOnly && card.copies <= 1) return false;
     if (tierFilter === "all") return true;
     if (tierFilter === "unrated") return card.tier === null;
     // Pool membership is server knowledge; the chip never renders locally.
@@ -865,14 +895,16 @@ export function CollectionPanel({
   const expectedFilterTotal =
     filteredTotal > 0
       ? filteredTotal
-      : tierFilter === "all"
+      : duplicatesOnly
+        ? duplicateCardCount
+        : tierFilter === "all"
         ? collectionTotal
         : tierFilter === "untracked"
           ? serverPoolProgress?.retiredOwnedCount ?? 0
           : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
-    ? sortMode === "newest" && tierFilter === "all"
+    ? (sortMode !== "rarity" || duplicatesOnly) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
       // skeletons take a rarity-less face rather than claiming a page of
       // commons that the loaded cards then contradict.
@@ -905,7 +937,7 @@ export function CollectionPanel({
     setSelected(new Set());
     setSelectionScope("manual");
     setConfirmBulk(false);
-  }, [trimmedQuery, tierFilter, sortMode]);
+  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly]);
 
   useEffect(() => {
     if (selectionScope !== "all") setSelected(new Set());
@@ -955,6 +987,7 @@ export function CollectionPanel({
         tier: tierFilter,
         query: trimmedQuery,
         sort: sortMode,
+        duplicatesOnly,
       },
     })
       .then((page) => {
@@ -976,7 +1009,7 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, serverCacheKey, serverFilterKey, serverRefreshKey]);
+  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
   /* The missing list, read only while it is on screen. Not cached across
      opens like the collection pages are: the point of the list is which
@@ -1274,6 +1307,24 @@ export function CollectionPanel({
                 </button>
               )}
             </div>
+          )}
+          {/* Rides beside the rarity chips rather than inside them: it cuts
+              across every tier, so it stays on whichever rarity is picked. */}
+          {duplicateCardCount > 0 && !missingOpen && (
+            <button
+              type="button"
+              onClick={() => setDuplicatesOnly((on) => !on)}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors cursor-pointer ${
+                duplicatesOnly
+                  ? "border-osu-pink/50 bg-osu-b4 text-white"
+                  : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
+              }`}
+              title={t`Cards you hold more than one copy of.`}
+              aria-pressed={duplicatesOnly}
+            >
+              <Trans>Duplicates</Trans>
+              <span className="font-semibold tabular-nums opacity-65">{duplicateCardCount}</span>
+            </button>
           )}
           {import.meta.env.DEV && (
             <button
@@ -1632,7 +1683,7 @@ export function CollectionPanel({
                 void (async () => {
                   try {
                     const gained = selectionScope === "all"
-                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery })
+                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly })
                       : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
