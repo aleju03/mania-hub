@@ -195,7 +195,7 @@ function SetManager({ syncStatus, onClose }: {
 
       {binders === null ? null : binders.length === 0 ? (
         <div className="mt-6 text-[12px] text-osu-f1">
-          {t`Friends, matching avatars, inside jokes. Put a few cards together.`}
+          {t`Create a set to organize your cards.`}
         </div>
       ) : (
         <div className="mt-5 grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)]">

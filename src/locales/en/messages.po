@@ -5877,8 +5877,8 @@ msgid "Fridays"
 msgstr "Fridays"
 
 #: src/components/packs/SetsView.tsx
-msgid "Friends, matching avatars, inside jokes. Put a few cards together."
-msgstr "Friends, matching avatars, inside jokes. Put a few cards together."
+msgid "Create a set to organize your cards."
+msgstr "Create a set to organize your cards."
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)

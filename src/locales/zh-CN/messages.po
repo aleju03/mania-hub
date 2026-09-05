@@ -5882,8 +5882,8 @@ msgid "Fridays"
 msgstr "周五"
 
 #: src/components/packs/SetsView.tsx
-msgid "Friends, matching avatars, inside jokes. Put a few cards together."
-msgstr "好友、同款头像、你们之间的梗。把几张卡片放在一起吧。"
+msgid "Create a set to organize your cards."
+msgstr "创建卡组来整理你的卡片。"
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
