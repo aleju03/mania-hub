@@ -1801,10 +1801,10 @@ export function CollectionPanel({
                 onDone={() => setMenu(null)}
               />
             )}
-            {syncStatus === "synced" && menu.card.copies > 1 && (
+            {syncStatus === "synced" && menu.card.copies > 0 && (
               <button type="button" role="menuitem" onClick={() => { setGiftCard(menu.card); setMenu(null); }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer">
-                <Gift className="h-3 w-3" />{t`Gift a spare…`}
+                <Gift className="h-3 w-3" />{t`Gift a card…`}
               </button>
             )}
             {menu.card.recyclable !== false && menu.card.copies > 1 && (

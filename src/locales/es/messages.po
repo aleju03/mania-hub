@@ -2106,6 +2106,10 @@ msgstr "Acc"
 msgid "Accent colour"
 msgstr "Color de acento"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "Accept"
+msgstr "Aceptar"
+
 #: src/components/layout/Nav.tsx
 msgid "Account"
 msgstr "Cuenta"
@@ -2238,6 +2242,10 @@ msgstr "Añadir {cardCount} cartas al conjunto..."
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
 msgstr "Agrega una carta a tus destacados"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Add a message (optional)"
+msgstr "Añade un mensaje (opcional)"
 
 #: src/components/player/AddScoreModal.tsx
 #: src/routes/player/$username.tsx
@@ -4019,8 +4027,8 @@ msgid "Could not deal a blitz run. Try again in a moment."
 msgstr "No se pudo repartir una ronda de Blitz. Inténtalo de nuevo en un momento."
 
 #: src/components/packs/GiftInbox.tsx
-msgid "Could not dismiss these gifts. Try again."
-msgstr "No se pudieron cerrar estos regalos. Inténtalo de nuevo."
+#~ msgid "Could not dismiss these gifts. Try again."
+#~ msgstr "No se pudieron cerrar estos regalos. Inténtalo de nuevo."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Could not draw this one."
@@ -4640,6 +4648,10 @@ msgstr "Repartiendo un duelo…"
 #: src/components/packs/ShuffleStage.tsx
 msgid "Dealing your pack is taking a moment"
 msgstr "Preparar tu sobre está tardando un poco"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Decline"
+msgstr "Rechazar"
 
 #. placeholder {0}: reading.percent
 #: src/components/skins/SkinUpdateModal.tsx
@@ -5972,12 +5984,20 @@ msgid "Getting the map out of osu!"
 msgstr "Sacando el mapa de osu!"
 
 #: src/components/packs/GiftSpareDialog.tsx
-msgid "Gift a spare"
-msgstr "Regalar una copia"
+msgid "Gift a card"
+msgstr "Regalar una carta"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "Gift a spare…"
-msgstr "Regalar una copia…"
+msgid "Gift a card…"
+msgstr "Regalar una carta…"
+
+#: src/components/packs/GiftSpareDialog.tsx
+#~ msgid "Gift a spare"
+#~ msgstr "Regalar una copia"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Gift a spare…"
+#~ msgstr "Regalar una copia…"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift sent"
@@ -7963,6 +7983,10 @@ msgstr "Mediana por modo de teclas"
 #: src/routes/communities.tsx
 msgid "members"
 msgstr "miembros"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Message"
+msgstr "Mensaje"
 
 #: src/lib/replay-overlays.ts
 msgid "Meters"
@@ -10423,8 +10447,12 @@ msgid "Publishing."
 msgstr "Publicando."
 
 #: src/components/packs/GiftSpareDialog.tsx
-msgid "Pull this card while signed in before gifting a spare."
-msgstr "Saca esta carta con la sesión iniciada antes de regalar una copia."
+#~ msgid "Pull this card while signed in before gifting a spare."
+#~ msgstr "Saca esta carta con la sesión iniciada antes de regalar una copia."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Pull this card while signed in before gifting it."
+msgstr "Saca esta carta con la sesión iniciada antes de regalarla."
 
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/PackPulse.tsx
@@ -13124,6 +13152,10 @@ msgstr "Ese ID de beatmap no es una dificultad de mania."
 msgid "That collector is no longer available."
 msgstr "Ese coleccionista ya no está disponible."
 
+#: src/components/packs/GiftInbox.tsx
+msgid "That did not go through. Try again."
+msgstr "No se pudo completar. Inténtalo de nuevo."
+
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/SetsView.tsx
 msgid "That did not save. Try again."
@@ -13144,6 +13176,11 @@ msgstr "Ese archivo no es una imagen."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That file isn't a supported image."
 msgstr "Ese archivo no es una imagen compatible."
+
+#: src/components/packs/GiftInbox.tsx
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "That gift is no longer there."
+msgstr "Ese regalo ya no está."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That image is too large to draw."
@@ -13343,6 +13380,10 @@ msgstr "El navegador guarda preferencias y cachés en localStorage, incluidos lo
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
 msgstr "No se pudo cambiar la portada de la carta. Inténtalo de nuevo."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "The card stays yours until they accept it."
+msgstr "La carta sigue siendo tuya hasta que la acepte."
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "The card was recycled, never synced, or the link is wrong."
@@ -14051,6 +14092,10 @@ msgstr "Estas runs usaron rates distintos ({leftRate}x vs {rightRate}x). La comp
 #: src/lib/replay-side-by-side.ts
 msgid "These scores are on different maps. Side by side plays two runs of the same beatmap."
 msgstr "Estos scores son de mapas distintos. La comparativa reproduce dos runs del mismo beatmap."
+
+#: src/components/packs/GiftInbox.tsx
+msgid "They no longer have that card to give."
+msgstr "Esa persona ya no tiene esa carta para dar."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "They played this on lazer, which showed {courseShown}. The course is scored on the stable accuracy formula, so that is the number above."
@@ -15503,6 +15548,11 @@ msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Subir tu acc pond
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp sin misses. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
 
+#. placeholder {0}: card.copies
+#: src/components/packs/GiftInbox.tsx
+msgid "You already have {0}."
+msgstr "Ya tienes {0}."
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "You already have {BINDER_MAX_PER_COLLECTOR} binders."
 #~ msgstr "Ya tienes {BINDER_MAX_PER_COLLECTOR} carpetas."
@@ -15596,8 +15646,12 @@ msgstr "Puedes usar el sitio como referencia personal y comunitaria. Por favor, 
 #~ msgstr "Necesitas más copias repetidas para crear esta edición."
 
 #: src/components/packs/GiftSpareDialog.tsx
-msgid "You no longer have a spare copy of this card."
-msgstr "Ya no te quedan copias extra de esta carta."
+msgid "You no longer have a copy of this card."
+msgstr "Ya no tienes ninguna copia de esta carta."
+
+#: src/components/packs/GiftSpareDialog.tsx
+#~ msgid "You no longer have a spare copy of this card."
+#~ msgstr "Ya no te quedan copias extra de esta carta."
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
@@ -15757,6 +15811,10 @@ msgstr "Tu dan de jack es el promedio de tus 20 mejores de estos. El pase de gam
 #: src/routes/farm-helper.tsx
 msgid "your marks"
 msgstr "tus marcas"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Your only copy. It leaves your collection when they accept."
+msgstr "Tu única copia. Sale de tu colección cuando la acepte."
 
 #: src/routes/dan-estimates.tsx
 msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."

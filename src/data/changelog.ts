@@ -34,8 +34,8 @@ export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-09-05", text: "Added a replay overlay adapted from Mania Replay Master: see note judgements, hit offsets and long-note releases as you watch. Enable it in Skin settings > Overlays or from the replay's right-click menu, with adjustable scroll speed and an optional transparent background", reference: { text: "Mania Replay Master", href: "https://github.com/Mania-Visualization-Project/Mania-Replay-Master" } },
-  { date: "2026-09-05", text: "Packs: right-click a duplicate to gift a spare to another collector. You keep your last copy", to: "/packs" },
-  { date: "2026-09-05", text: "Received gifts appear under Gifts with the sender and card. The card is already in your collection; Ok just dismisses the notice", to: "/packs" },
+  { date: "2026-09-05", text: "Packs: right-click a card to gift it to another collector, with a short message if you want. Any card you hold can go, including your only copy", to: "/packs" },
+  { date: "2026-09-05", text: "Gifts sent to you appear under Gifts with the sender, the card and their message. Accept adds it to your collection, Decline turns it down. The card stays with the sender until you accept", to: "/packs" },
   { date: "2026-09-05", text: "Packs: wish for up to five missing players. Eligible packs get a bonus chance to draw one: 3% initially, rising by 1 percentage point per miss to 25% after 22 misses", to: "/packs" },
   { date: "2026-09-05", text: "Organize your cards into named sets: up to 12 sets with 10 cards each. Choose their order and manage them in the new Sets view", to: "/packs", search: { view: "sets" } },
   { date: "2026-09-05", text: "Show your sets alongside individual cards on Showcase. Your sets opens a compact manager right inside Collections", to: "/packs/collections" },

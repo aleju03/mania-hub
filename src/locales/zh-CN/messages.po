@@ -2115,6 +2115,10 @@ msgstr "准度"
 msgid "Accent colour"
 msgstr "强调色"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "Accept"
+msgstr "接受"
+
 #: src/components/layout/Nav.tsx
 msgid "Account"
 msgstr "账号"
@@ -2247,6 +2251,10 @@ msgstr "将 {cardCount} 张卡牌添加到卡组…"
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
 msgstr "把一张卡片加入展示柜"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Add a message (optional)"
+msgstr "添加留言（可选）"
 
 #: src/components/player/AddScoreModal.tsx
 #: src/routes/player/$username.tsx
@@ -4028,8 +4036,8 @@ msgid "Could not deal a blitz run. Try again in a moment."
 msgstr "无法开始闪电战。请稍后再试。"
 
 #: src/components/packs/GiftInbox.tsx
-msgid "Could not dismiss these gifts. Try again."
-msgstr "无法清除这些礼物通知。请重试。"
+#~ msgid "Could not dismiss these gifts. Try again."
+#~ msgstr "无法清除这些礼物通知。请重试。"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Could not draw this one."
@@ -4649,6 +4657,10 @@ msgstr "正在发牌…"
 #: src/components/packs/ShuffleStage.tsx
 msgid "Dealing your pack is taking a moment"
 msgstr "卡包准备中，请稍候"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Decline"
+msgstr "拒绝"
 
 #. placeholder {0}: reading.percent
 #: src/components/skins/SkinUpdateModal.tsx
@@ -5981,12 +5993,20 @@ msgid "Getting the map out of osu!"
 msgstr "从 osu! 里把谱面导出"
 
 #: src/components/packs/GiftSpareDialog.tsx
-msgid "Gift a spare"
-msgstr "赠送多余副本"
+msgid "Gift a card"
+msgstr "赠送卡片"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "Gift a spare…"
-msgstr "赠送多余副本…"
+msgid "Gift a card…"
+msgstr "赠送卡片…"
+
+#: src/components/packs/GiftSpareDialog.tsx
+#~ msgid "Gift a spare"
+#~ msgstr "赠送多余副本"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Gift a spare…"
+#~ msgstr "赠送多余副本…"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift sent"
@@ -7972,6 +7992,10 @@ msgstr "各键数中位数"
 #: src/routes/communities.tsx
 msgid "members"
 msgstr "成员数"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Message"
+msgstr "留言"
 
 #: src/lib/replay-overlays.ts
 msgid "Meters"
@@ -10432,8 +10456,12 @@ msgid "Publishing."
 msgstr "正在发布。"
 
 #: src/components/packs/GiftSpareDialog.tsx
-msgid "Pull this card while signed in before gifting a spare."
-msgstr "登录后抽到这张卡片，才能赠送多余副本。"
+#~ msgid "Pull this card while signed in before gifting a spare."
+#~ msgstr "登录后抽到这张卡片，才能赠送多余副本。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Pull this card while signed in before gifting it."
+msgstr "登录后抽到这张卡片，才能把它送出。"
 
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/PackPulse.tsx
@@ -13133,6 +13161,10 @@ msgstr "这个谱面 ID 不是 mania 难度。"
 msgid "That collector is no longer available."
 msgstr "该收藏者已不可用。"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "That did not go through. Try again."
+msgstr "操作没有成功。请重试。"
+
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/SetsView.tsx
 msgid "That did not save. Try again."
@@ -13153,6 +13185,11 @@ msgstr "该文件不是图片。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "That file isn't a supported image."
 msgstr "这个文件不是支持的图片格式。"
+
+#: src/components/packs/GiftInbox.tsx
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "That gift is no longer there."
+msgstr "这份礼物已经不在了。"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That image is too large to draw."
@@ -13352,6 +13389,10 @@ msgstr "浏览器会在 localStorage 里存储偏好和缓存，包括主题设�
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
 msgstr "无法更换卡片封面。请重试。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "The card stays yours until they accept it."
+msgstr "在对方接受之前，这张卡片仍然属于你。"
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "The card was recycled, never synced, or the link is wrong."
@@ -14060,6 +14101,10 @@ msgstr "这两份成绩的速率不同（{leftRate}x 与 {rightRate}x）。并�
 #: src/lib/replay-side-by-side.ts
 msgid "These scores are on different maps. Side by side plays two runs of the same beatmap."
 msgstr "这两个成绩来自不同谱面。并排观看需要同一张谱面的两份成绩。"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "They no longer have that card to give."
+msgstr "对方已经没有那张卡片可以送出了。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "They played this on lazer, which showed {courseShown}. The course is scored on the stable accuracy formula, so that is the number above."
@@ -15512,6 +15557,11 @@ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 �
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
+#. placeholder {0}: card.copies
+#: src/components/packs/GiftInbox.tsx
+msgid "You already have {0}."
+msgstr "你已经有 {0} 张了。"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "You already have {BINDER_MAX_PER_COLLECTOR} binders."
 #~ msgstr "你已经有 {BINDER_MAX_PER_COLLECTOR} 个卡夹了。"
@@ -15605,8 +15655,12 @@ msgstr "你可以将本站用于个人和社区参考。请不要使公开接口
 #~ msgstr "你需要更多多余副本来制作此版本。"
 
 #: src/components/packs/GiftSpareDialog.tsx
-msgid "You no longer have a spare copy of this card."
-msgstr "你已没有这张卡片的多余副本。"
+msgid "You no longer have a copy of this card."
+msgstr "你已没有这张卡片了。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+#~ msgid "You no longer have a spare copy of this card."
+#~ msgstr "你已没有这张卡片的多余副本。"
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
@@ -15766,6 +15820,10 @@ msgstr "你的叠段位是其中最好 20 次通过的平均。那次 gamma 的�
 #: src/routes/farm-helper.tsx
 msgid "your marks"
 msgstr "你的标记"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Your only copy. It leaves your collection when they accept."
+msgstr "这是你唯一的一张。对方接受后它会离开你的收藏。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it, broken down by skill. The whole population is on the <0>Dan tab of the rankings page</0>, per country and per keymode."

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Gift, Loader2, Search } from "lucide-react";
 import { useLingui } from "@lingui/react/macro";
 import { packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
-import { searchOwnGiftRecipients, sendOwnPackGift, type GiftCollector, type PackGiftError } from "#/lib/pack-gifts";
+import { GIFT_MESSAGE_MAX_CHARS, searchOwnGiftRecipients, sendOwnPackGift, type GiftCollector, type PackGiftError } from "#/lib/pack-gifts";
 import { PackDialog } from "./PackDialog";
 import { CollectionCardTile } from "./CardTile";
 import { useCardThumbnails } from "./useCardThumbnails";
@@ -16,12 +16,13 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
   const [searching, setSearching] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
   const [searchAttempt, setSearchAttempt] = useState(0);
+  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef<string | null>(null);
   const [attempted, setAttempted] = useState(false);
-  const [remaining, setRemaining] = useState(card.copies - 1);
+  const remaining = card.copies - 1;
   const thumbnails = useCardThumbnails([card]);
   useEffect(() => {
     if (recipient || query.trim().length < 2) { setRecipients([]); setSearching(false); return; }
@@ -35,12 +36,13 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
     return () => { cancelled = true; clearTimeout(timer); };
   }, [query, recipient, searchAttempt]);
   const refusal = (reason: PackGiftError) => {
-    if (reason === "no_spare") return t`You no longer have a spare copy of this card.`;
+    if (reason === "no_spare") return t`You no longer have a copy of this card.`;
     if (reason === "special_card") return t`This special-edition Eternal stays with its collector.`;
-    if (reason === "unverified_card") return t`Pull this card while signed in before gifting a spare.`;
+    if (reason === "unverified_card") return t`Pull this card while signed in before gifting it.`;
     if (reason === "card_not_ready") return t`This card is not ready to gift. Open it to finish loading its stats.`;
     if (reason === "recipient_not_found") return t`That collector is no longer available.`;
     if (reason === "self_gift") return t`Choose another collector for your gift.`;
+    if (reason === "gift_not_found") return t`That gift is no longer there.`;
     return t`Your collection changed. Nothing was sent. Refresh and try again.`;
   };
   const send = async () => {
@@ -48,24 +50,25 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
     requestId.current ??= crypto.randomUUID();
     setAttempted(true); setBusy(true); setError(null);
     try {
-      const result = await sendOwnPackGift({ data: { recipientUserId: recipient.userId, cardKey: packCardKeyOf(card), requestId: requestId.current } });
+      const result = await sendOwnPackGift({ data: { recipientUserId: recipient.userId, cardKey: packCardKeyOf(card), requestId: requestId.current, message } });
       if (!result) { setError(t`Sign in again to send a gift.`); return; }
       if (!result.ok) { setError(refusal(result.error)); return; }
-      setRemaining(result.remainingCopies); setSent(true); onSent();
+      setSent(true); onSent();
     } catch { setError(t`Could not confirm delivery. Retry to check this same gift.`); }
     finally { setBusy(false); }
   };
-  return <PackDialog title={sent ? t`Gift sent` : t`Gift a spare`} onClose={onClose} busy={busy} width="md">
+  return <PackDialog title={sent ? t`Gift sent` : t`Gift a card`} onClose={onClose} busy={busy} width="md">
     <div className="flex items-start gap-4">
       <div className="w-[104px] shrink-0">
         <CollectionCardTile card={card} thumbnail={getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))} canBackfill={false} onApplyMint={() => false} onThumbnailError={thumbnails.onThumbnailError} showCopies={false} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold text-white">{card.username}</p>
-        <p className="mt-1 text-[12px] text-osu-f1">{t`One copy for a friend. You keep ${remaining}.`}</p>
-        {sent ? <div role="status" className="mt-5">
-          <Check className="mb-2 text-emerald-300" size={24} />
-          <p className="text-sm text-white">{t`Sent to ${recipient?.username ?? ""}.`}</p>
+        <p className="mt-1 text-[12px] text-osu-f1">{remaining > 0 ? t`One copy for a friend. You keep ${remaining}.` : t`Your only copy. It leaves your collection when they accept.`}</p>
+        {sent ? <div role="status" className="mt-4">
+          <p className="flex items-center gap-2 text-[13px] text-white"><Check className="shrink-0 text-emerald-300" size={16} />{t`Sent to ${recipient?.username ?? ""}.`}</p>
+          <p className="mt-1 text-[12px] text-osu-f1">{t`The card stays yours until they accept it.`}</p>
+          {message.trim() && <p className="mt-2 break-words text-[12px] italic text-osu-f1 [overflow-wrap:anywhere]">{message.trim()}</p>}
           <button type="button" onClick={onClose} className="mt-4 rounded-lg bg-osu-pink/20 px-4 py-2 text-[12px] font-semibold text-white">{t`Done`}</button>
         </div> : <>
           {recipient ? <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-white/5 p-2">
@@ -85,8 +88,12 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
               <img src={person.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 rounded-full" /><span className="truncate">{person.username}</span>
             </button>)}</div>
           </>}
+          <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={2} maxLength={GIFT_MESSAGE_MAX_CHARS}
+            placeholder={t`Add a message (optional)`} aria-label={t`Message`}
+            className="mt-3 w-full resize-none rounded-lg border border-osu-b3/40 bg-osu-b4/50 px-2 py-2 text-[12px] text-white outline-none focus:border-osu-pink/50" />
+          {message.length > GIFT_MESSAGE_MAX_CHARS - 20 && <p className="mt-1 text-right text-[11px] text-osu-f1">{GIFT_MESSAGE_MAX_CHARS - message.length}</p>}
           {error && <p role="alert" className="mt-3 text-[12px] text-rose-300">{error}</p>}
-          <button type="button" onClick={() => void send()} disabled={!recipient || busy || card.copies < 2} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-osu-pink/20 px-3 py-2 text-[12px] font-semibold text-white hover:bg-osu-pink/30 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={() => void send()} disabled={!recipient || busy || card.copies < 1} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-osu-pink/20 px-3 py-2 text-[12px] font-semibold text-white hover:bg-osu-pink/30 disabled:cursor-not-allowed disabled:opacity-40">
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}{busy ? t`Sending…` : recipient ? t`Send to ${recipient.username}` : t`Choose a collector`}
           </button>
         </>}

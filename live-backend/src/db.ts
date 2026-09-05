@@ -420,6 +420,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateTranslationReports(target);
   await migrateBugReports(target);
   await migratePlayerSkillHistory(target);
+  await migratePackGiftMessage(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
@@ -1980,6 +1981,24 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   // every mint, for nothing. The migration no longer creates it; this clears it
   // off the databases that already have it.
   await db.execute("drop index if exists idx_pack_card_serials_owner");
+}
+
+// The short note a sender may attach to a gift, and the offer's state now that
+// a gift waits to be accepted. Both are metadata-only ALTERs (nullable, or a
+// constant default): every gift written before this had already been delivered
+// on send, so 'accepted' is what those rows are, and none of them carried a
+// message - which is exactly what their receipts already showed.
+async function migratePackGiftMessage(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(pack_gifts)")).rows.map((row) => String(row.name));
+  if (!columns.includes("message")) {
+    await db.execute("alter table pack_gifts add column message text");
+  }
+  if (!columns.includes("status")) {
+    await db.execute("alter table pack_gifts add column status text not null default 'accepted'");
+  }
+  if (!columns.includes("resolved_at")) {
+    await db.execute("alter table pack_gifts add column resolved_at integer");
+  }
 }
 
 // The last username a wallet's pulls were recorded under. Durable, unlike the

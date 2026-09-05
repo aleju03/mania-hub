@@ -1291,8 +1291,11 @@ create table if not exists pack_gifts (
   recipient_username text not null,
   card_key text not null,
   card_user_id integer not null,
+  message text,
+  status text not null default 'accepted',
   sent_at integer not null,
   seen_at integer,
+  resolved_at integer,
   unique(sender_user_id, request_id)
 );
 create index if not exists idx_pack_gifts_sender_time on pack_gifts(sender_user_id, sent_at);
