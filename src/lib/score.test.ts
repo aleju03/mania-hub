@@ -354,6 +354,17 @@ describe("scoreUsesLazerScoring", () => {
 });
 
 describe("getManiaAccuracyFromCounts", () => {
+  it("displays stable ScoreV2 on its own scale while retaining the fixed stable-scale helper", () => {
+    const score = createScore({
+      legacy_score_id: 1,
+      mods: [{ acronym: "SV2" }],
+      statistics: { count_geki: 1, count_300: 1 },
+    });
+    expect(getDisplayedAccuracy(score)).toBeCloseTo(605 / 610, 10);
+    expect(getStableScaleManiaAccuracy(score)).toBe(1);
+    expect(isLazerScore(score)).toBe(false);
+  });
+
   // The same play measured both ways: lazer's MAX is worth 305 of 305, stable's
   // is worth 300 of 300, so a play carrying anything below MAX reads lower on
   // lazer. Counts are from uploadId 5UjidMiPv4-vOCoph4o9.

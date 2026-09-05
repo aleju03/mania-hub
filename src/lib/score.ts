@@ -326,12 +326,15 @@ function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   return (countMax * 300 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 300);
 }
 
-/** Mania accuracy on the scale the play was judged on, from raw counts rather
- *  than a score object. For an uploaded .osr, whose header counts are the only
- *  statistics there are: lazer writes its own judgements into the same legacy
- *  fields, so the counts are right either way and only the scale differs. */
-export function getManiaAccuracyFromCounts(stats: OsuScoreStatistics, isLazer: boolean): number {
-  return isLazer ? calculateLazerAccuracy(stats) : calculateStableAccuracy(stats);
+/** SV2 is the replay/API acronym; tosu also reports this mod as V2. */
+export function hasManiaScoreV2Mod(mods: string[]): boolean {
+  return mods.some((mod) => ["SV2", "V2"].includes(mod.toUpperCase()));
+}
+
+/** Header counts use the same fields across clients. Stable ScoreV2 and lazer
+ *  both weight MAX at 305; stable ScoreV1 weights MAX and 300 equally. */
+export function getManiaAccuracyFromCounts(stats: OsuScoreStatistics, isLazer: boolean, mods: string[] = []): number {
+  return isLazer || hasManiaScoreV2Mod(mods) ? calculateLazerAccuracy(stats) : calculateStableAccuracy(stats);
 }
 
 function getPreferredTotalScore(score: ScoreLike, isLazer: boolean): number | null {
@@ -357,7 +360,7 @@ function getPreferredAccuracy(score: ScoreLike, isLazer: boolean): number {
     return calculateLazerAccuracy(score.statistics);
   }
 
-  const stableAccuracy = calculateStableAccuracy(score.statistics);
+  const stableAccuracy = getManiaAccuracyFromCounts(score.statistics, false, getModAcronyms(score.mods));
   if (stableAccuracy > 0) {
     return stableAccuracy;
   }

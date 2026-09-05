@@ -110,8 +110,8 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).not.toContain("buildStableReplayScoringSegments");
     expect(source).not.toContain("expectedFinalJudgmentCounts");
     expect(source).not.toContain("getDisplayJudgmentCounts");
-    expect(source).toContain("legacyReplayFrameRounding: options?.legacyReplayFrameRounding ?? this.ruleset.accuracyMode === \"stable\"");
-    expect(source).toContain("this.ruleset.accuracyMode !== \"stable\" && options?.expectedCounts");
+    expect(source).toContain("legacyReplayFrameRounding: options?.legacyReplayFrameRounding ?? this.ruleset.accuracyMode !== \"lazer\"");
+    expect(source).toContain("this.ruleset.accuracyMode === \"lazer\" && options?.expectedCounts");
     expect(source).not.toContain("lateStableHoldHead");
     expect(source).toContain("const shouldLetPassLine = detached || (awaitingJudgment && note.time < this.currentTime - 10);");
     // Late-hit taps scroll below the receptors until their actual hit time;

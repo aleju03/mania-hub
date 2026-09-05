@@ -37,11 +37,26 @@ function UpdateText({ update }: { update: ChangelogUpdate }) {
     return () => animation.stop();
   }, [animate, emphasis, reduceMotion, scope, start]);
 
-  if (!emphasis || start === -1) return <>{text}</>;
+  const renderText = (value: string) => {
+    const reference = update.reference;
+    const referenceStart = reference ? value.indexOf(reference.text) : -1;
+    if (!reference || referenceStart === -1) return value;
+    return (
+      <>
+        {value.slice(0, referenceStart)}
+        <a href={reference.href} target="_blank" rel="noopener noreferrer" className="text-osu-pink underline underline-offset-2 hover:text-osu-pink-light">
+          {reference.text}
+        </a>
+        {value.slice(referenceStart + reference.text.length)}
+      </>
+    );
+  };
+
+  if (!emphasis || start === -1) return <>{renderText(text)}</>;
 
   return (
     <>
-      {text.slice(0, start)}
+      {renderText(text.slice(0, start))}
       <strong className="inline-block whitespace-nowrap font-bold tracking-[0.04em] text-osu-c1">
         <span className="sr-only">{emphasis}</span>
         <span ref={scope} aria-hidden="true">
@@ -52,7 +67,7 @@ function UpdateText({ update }: { update: ChangelogUpdate }) {
           ))}
         </span>
       </strong>
-      {text.slice(start + emphasis.length)}
+      {renderText(text.slice(start + emphasis.length))}
     </>
   );
 }
@@ -174,7 +189,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                               const bullet = (
                                 <span className="mt-[-2px] size-1 shrink-0 rounded-full bg-osu-f1/60" />
                               );
-                              if (!update.to) {
+                              if (!update.to || update.reference) {
                                 return (
                                   <div key={update.text} className={row}>
                                     {bullet}

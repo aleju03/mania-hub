@@ -3,13 +3,13 @@ import type { Judgment } from "./mania-replay-judgement";
 // Live score counters for the replay HUD, mirroring the two real clients:
 // - stable: ScoreV1 osu!mania (wiki/Gameplay/Score/ScoreV1/osu!mania), 1M cap
 //   split into base + bonus halves with the running 0-100 Bonus counter.
-// - lazer: ManiaScoreProcessor (150k combo / 850k * Acc^(2+2*Acc) accuracy
+// - stable ScoreV2 / lazer: ManiaScoreProcessor (150k combo / 850k * Acc^(2+2*Acc) accuracy
 //   split, log4 combo factor clamped to [0.5, log4(400)], Perfect = 305 base
 //   but 300 combo score).
 // Judgment indices follow mania-replay-judgement: 1=MAX 2=300 3=200 4=100
 // 5=50 6=MISS.
 
-export type ManiaScoreMode = "stable" | "lazer";
+export type ManiaScoreMode = "stable" | "stable-scorev2" | "lazer";
 
 export interface ManiaScoreSimulator {
   readonly value: number;

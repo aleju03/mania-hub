@@ -20,6 +20,8 @@ export interface ChangelogUpdate {
   text: string;
   /** A word in the text to highlight with a gentle letter wave. */
   emphasis?: string;
+  /** Link a named reference inside the text to its original source. */
+  reference?: { text: string; href: string };
   /** Optional in-app path, which makes the whole row clickable. */
   to?: string;
 }
@@ -29,6 +31,13 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-05", text: "Added a replay overlay adapted from Mania Replay Master: see note judgements, hit offsets and long-note releases as you watch. Enable it in Skin settings > Overlays or from the replay's right-click menu, with adjustable scroll speed and an optional transparent background", reference: { text: "Mania Replay Master", href: "https://github.com/Mania-Visualization-Project/Mania-Replay-Master" } },
+  { date: "2026-09-05", text: "Packs: right-click a duplicate to gift a spare to another collector. You keep your last copy", to: "/packs" },
+  { date: "2026-09-05", text: "Received gifts appear under Gifts with the sender and card. The card is already in your collection; Ok just dismisses the notice", to: "/packs" },
+  { date: "2026-09-05", text: "Packs: wish for up to five missing players. Eligible packs get a bonus chance to draw one: 3% initially, rising by 1 percentage point per miss to 25% after 22 misses", to: "/packs" },
+  { date: "2026-09-05", text: "Organize your cards into named sets: up to 12 sets with 10 cards each. Choose their order and manage them in the new Sets view", to: "/packs?view=sets" },
+  { date: "2026-09-05", text: "Show your sets alongside individual cards on Showcase. Your sets opens a compact manager right inside Collections, and saving no longer makes the gallery flash", to: "/packs/collections" },
+  { date: "2026-09-05", text: "Whoever opens the 1Mth pack gets an exclusive card", to: "/packs" },
   { date: "2026-09-04", text: "A MAJOR rework of skill measurement is planned for LN (I know it's overrated sometimes and underrated at other times) across all keymodes, and for 7K as a whole too, not just LN. It'll take some time before it's ready.", emphasis: "MAJOR" },
   { date: "2026-09-03", text: "Performance optimizations" },
   { date: "2026-09-03", text: "New Community Replays page with every replay uploaded to the site, not only the last 9. Click All uploads on the Upload tab of the replay page. Uploading a replay and opening a shared one also load faster now", to: "/replay/community" },

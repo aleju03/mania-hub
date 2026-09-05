@@ -32,7 +32,8 @@ const UNRESOLVED_BEATMAP_RETRY_MS = 24 * 60 * 60 * 1000;
 // drop CL, where before they were whatever the legacy bitfield could express;
 // accuracy and grade follow the client that recorded the play instead of always
 // being measured on stable's scale.
-export const DESCRIPTION_VERSION = 2;
+// v3: stable ScoreV2 also uses MAX=305 accuracy. Refresh existing artifacts.
+export const DESCRIPTION_VERSION = 3;
 
 // Uploaded replays are stored anonymously and content-addressed by a random id,
 // so there is no stored record of who uploaded them or which score they are.
@@ -95,7 +96,7 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
 // The .osr header counts are all the statistics an upload has, and lazer writes
 // its own judgements into those same legacy fields - so the counts are right for
 // either client and only the accuracy scale differs.
-function maniaAccuracy(j: UploadedReplayJudgements, isLazer: boolean): number {
+function maniaAccuracy(j: UploadedReplayJudgements, isLazer: boolean, mods: string[]): number {
   return getManiaAccuracyFromCounts({
     count_geki: j.max,
     count_300: j.count300,
@@ -103,7 +104,7 @@ function maniaAccuracy(j: UploadedReplayJudgements, isLazer: boolean): number {
     count_100: j.count100,
     count_50: j.count50,
     count_miss: j.miss,
-  }, isLazer);
+  }, isLazer, mods);
 }
 
 // Grade off that accuracy; both clients use the same brackets, and silver ranks
@@ -275,7 +276,7 @@ async function buildUploadedReplayDescription(
   const mods = modDisplay.map((mod) => mod.acronym);
   const modRate = modDisplay.find((mod) => mod.rate != null)?.rate;
   const isLazer = scoreUsesLazerScoring(null, header.gameVersion);
-  const accuracy = maniaAccuracy(judgements, isLazer);
+  const accuracy = maniaAccuracy(judgements, isLazer, mods);
 
   return {
     id: normalized,

@@ -59,7 +59,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
       count_100: h.count100,
       count_50: h.count50,
       count_miss: h.countMiss,
-    }, sourceIsLazer) * 100;
+    }, sourceIsLazer, (mods ?? []).map((mod) => mod.acronym)) * 100;
   const beatmapsetId = score?.beatmapset?.id ?? fallbackBeatmapsetId;
   const beatmapId = score?.beatmap?.id;
   const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;

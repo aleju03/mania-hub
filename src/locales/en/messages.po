@@ -1703,6 +1703,10 @@ msgstr "1 rate per chart"
 msgid "1 screenshot"
 msgstr "1 screenshot"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "1× = original default"
+msgstr "1× = original default"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "100"
@@ -2214,6 +2218,10 @@ msgstr "Activity is recorded for the top 100 of each tracked country. If this is
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Actual size"
 msgstr "Actual size"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Adapted from <0>Mania Replay Master</0>."
+msgstr "Adapted from <0>Mania Replay Master</0>."
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Add"
@@ -7692,6 +7700,10 @@ msgstr "manager"
 msgid "Mania maps"
 msgstr "Mania maps"
 
+#: src/lib/replay-overlays.ts
+msgid "Mania Replay Master"
+msgstr "Mania Replay Master"
+
 #: src/routes/skins_.$id.tsx
 #: src/routes/skins.tsx
 msgid "mania stage"
@@ -9665,6 +9677,10 @@ msgstr "overall"
 msgid "Overall"
 msgstr "Overall"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Overlay scroll speed"
+msgstr "Overlay scroll speed"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Overlays"
 msgstr "Overlays"
@@ -11127,6 +11143,7 @@ msgid "Reroll settings"
 msgstr "Reroll settings"
 
 #: src/components/layout/ThemePicker.tsx
+#: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Reset"
 msgstr "Reset"
@@ -11496,6 +11513,10 @@ msgstr "Scroll speed"
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll speed:"
 msgstr "Scroll speed:"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Scrolling judgement-colored notes with actual hit offsets and long-note releases."
+msgstr "Scrolling judgement-colored notes with actual hit offsets and long-note releases."
 
 #: src/routes/maps.tsx
 msgid "search"
@@ -14509,6 +14530,10 @@ msgstr "Trail color"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Trail thickness"
 msgstr "Trail thickness"
+
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Transparent background"
+msgstr "Transparent background"
 
 #: src/lib/signature-style.ts
 msgid "Triangles"

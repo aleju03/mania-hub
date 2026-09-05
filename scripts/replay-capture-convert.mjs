@@ -16,12 +16,27 @@ if (!inPath || !outPath) {
 const lines = readFileSync(inPath, "utf8").split("\n").filter(Boolean);
 const out = [];
 let sequence = 0;
+let hitErrors = [];
+let previousTotal = 0;
 
 for (const line of lines) {
   const row = JSON.parse(line);
-  if (row.type === "frame") {
+  if (row.type === "meta") {
+    hitErrors = [];
+    previousTotal = 0;
+  } else if (row.type === "frame") {
     if (row.state !== "play") continue;
     const hits = row.hits ?? {};
+    const total = ["geki", "c300", "katu", "c100", "c50", "miss"]
+      .reduce((sum, key) => sum + (hits[key] ?? 0), 0);
+    if (total < previousTotal) hitErrors = [];
+    previousTotal = total;
+    // tosu-log stores only new errors; the comparison harness expects the
+    // cumulative array from tosu's API. Keep the original order, including
+    // multiple hits that arrived between two counter snapshots.
+    if (Array.isArray(row.newHitErrors)) {
+      hitErrors.push(...row.newHitErrors.filter((value) => typeof value === "number" && Number.isFinite(value)));
+    }
     out.push(JSON.stringify({
       type: "sample",
       sequence,
@@ -42,7 +57,7 @@ for (const line of lines) {
           accuracy: row.acc,
           combo: { current: row.combo, max: row.maxCombo },
           score: row.score,
-          hitErrorArray: [],
+          hitErrorArray: hitErrors,
         },
       },
     }));

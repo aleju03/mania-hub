@@ -1,9 +1,10 @@
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
+import { hasManiaScoreV2Mod } from "./score.ts";
 
 export type Judgment = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-export type ReplayAccuracyMode = "stable" | "lazer";
+export type ReplayAccuracyMode = "stable" | "stable-scorev2" | "lazer";
 
 export interface ReplaySegment {
   start: number;
@@ -165,9 +166,10 @@ export function getManiaReplayRuleset(
 ): ManiaReplayRuleset {
   const modSet = new Set(mods.map((mod) => mod.toUpperCase()));
   const speedMultiplier = Number(speedMultiplierOverride);
+  const scoreV2 = hasManiaScoreV2Mod(mods);
 
   return {
-    accuracyMode: isLazer ? "lazer" : "stable",
+    accuracyMode: isLazer ? "lazer" : scoreV2 ? "stable-scorev2" : "stable",
     difficultyMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 1 / 1.4 : 1,
     isConvert,
     speedMultiplier: Number.isFinite(speedMultiplier) && speedMultiplier > 0
@@ -177,7 +179,7 @@ export function getManiaReplayRuleset(
         : modSet.has("HT") || modSet.has("DC")
           ? 0.75
           : 1,
-    useClassicWindows: !isLazer || (modSet.has("CL") && !modSet.has("SV2")),
+    useClassicWindows: (!isLazer || modSet.has("CL")) && !scoreV2,
   };
 }
 
@@ -513,6 +515,20 @@ function getRoundedLegacyTailPossibleJudgments(
   }
 
   return [...possible].sort((a, b) => a - b);
+}
+
+function getStableScoreV2TailJudgment(offsetMs: number, windows: ManiaReplayHitWindows): Judgment {
+  // Truncate the window before release lenience. Rounding the divided error
+  // instead incorrectly upgrades boundary releases (e.g. 92ms at DT OD7.6).
+  const delta = Math.abs(Math.round(offsetMs));
+  if (delta <= Math.floor(windows.perfect) * RELEASE_WINDOW_LENIENCE) return 1;
+  if (delta <= Math.floor(windows.great) * RELEASE_WINDOW_LENIENCE) return 2;
+  if (delta <= Math.floor(windows.good) * RELEASE_WINDOW_LENIENCE) return 3;
+  if (offsetMs >= Math.floor(windows.ok) * RELEASE_WINDOW_LENIENCE) return 6;
+  if (delta <= Math.floor(windows.ok) * RELEASE_WINDOW_LENIENCE) return 4;
+  if (delta <= Math.floor(windows.meh) * RELEASE_WINDOW_LENIENCE) return 5;
+  if (delta <= Math.floor(windows.miss) * RELEASE_WINDOW_LENIENCE) return 6;
+  return 0;
 }
 
 function getStableHeadJudgmentForOffset(
@@ -1007,17 +1023,15 @@ function createMissState(
   stableJudgmentOverride?: Judgment,
 ): ReplayNoteState {
   const isLN = note.isHold && note.endTime > note.time;
-  const passiveHeadWindow = accuracyMode === "lazer"
+  const passiveHeadWindow = accuracyMode === "lazer" || isLN
     ? windows.meh
-    : accuracyMode === "stable" && isLN
-      ? windows.meh
-      : windows.miss;
+    : accuracyMode === "stable-scorev2" ? windows.ok : windows.miss;
   const headTime = actualHead?.time ?? note.time + passiveHeadWindow;
   const headOffsetMs = actualHead?.offsetMs ?? passiveHeadWindow;
   const releaseTime = actualHead?.releaseTime ?? 0;
 
   if (!isLN) {
-    const stableTimeout = accuracyMode === "stable" && !actualHead;
+    const stableTimeout = accuracyMode !== "lazer" && !actualHead;
     const lazerTimeout = accuracyMode === "lazer" && !actualHead;
     const eventTime = stableTimeout ? note.time + windows.ok : lazerTimeout ? note.time + windows.meh : headTime;
     events.push({
@@ -1043,8 +1057,9 @@ function createMissState(
     };
   }
 
-  if (accuracyMode === "lazer") {
-    const tailTime = note.endTime + windows.meh * RELEASE_WINDOW_LENIENCE;
+  if (accuracyMode !== "stable") {
+    const tailWindow = accuracyMode === "stable-scorev2" ? windows.ok : windows.meh;
+    const tailTime = note.endTime + tailWindow * RELEASE_WINDOW_LENIENCE;
     events.push({
       column,
       judgment: 6,
@@ -1057,7 +1072,7 @@ function createMissState(
       column,
       judgment: 6,
       noteIndex,
-      offsetMs: windows.meh * RELEASE_WINDOW_LENIENCE,
+      offsetMs: tailWindow * RELEASE_WINDOW_LENIENCE,
       part: "hold-tail",
       time: tailTime,
     });
@@ -1070,7 +1085,7 @@ function createMissState(
       headTime,
       releaseTime,
       tailJudgment: 6,
-      tailOffsetMs: windows.meh * RELEASE_WINDOW_LENIENCE,
+      tailOffsetMs: tailWindow * RELEASE_WINDOW_LENIENCE,
       tailTime,
     };
   }
@@ -1114,16 +1129,23 @@ export function simulateManiaReplayJudgements(
   const noteStates: ReplayNoteState[] = new Array(notes.length);
   const events: ReplayJudgementEvent[] = [];
   const notesByColumn: number[][] = Array.from({ length: keyCount }, () => []);
-  const isLazer = accuracyMode === "lazer";
-  const noReleaseTails = isLazer && Boolean(options.lazerNoReleaseTails);
-  const stableTransitionMedian = !isLazer && options.legacyReplayFrameRounding
+  const separateHoldJudgements = accuracyMode !== "stable";
+  const stableScoreV2 = accuracyMode === "stable-scorev2";
+  const separateHeadWindow = stableScoreV2 ? windows.ok : windows.meh;
+  const separateTailWindow = stableScoreV2 ? windows.ok : windows.meh;
+  // Stable gates input on its unscaled miss window even though the judgement
+  // bands are expressed in rate-adjusted replay time.
+  const stableScoreV2InputWindow = Math.floor(windows.miss / (options.speedMultiplier ?? 1));
+  const stableScoreV2TailInputWindow = stableScoreV2InputWindow * RELEASE_WINDOW_LENIENCE;
+  const noReleaseTails = accuracyMode === "lazer" && Boolean(options.lazerNoReleaseTails);
+  const stableTransitionMedian = !separateHoldJudgements && options.legacyReplayFrameRounding
     ? getStableTransitionMedian(segments)
     : 0;
-  const useDenseForcedCoarsePlayback = !isLazer
+  const useDenseForcedCoarsePlayback = !separateHoldJudgements
     && Boolean(options.legacyReplayFrameRounding)
     && options.stableDenseForceCoarsePlaybackMaxMedian != null
     && stableTransitionMedian <= options.stableDenseForceCoarsePlaybackMaxMedian;
-  const useCoarseStablePlayback = !isLazer
+  const useCoarseStablePlayback = !separateHoldJudgements
     && Boolean(options.legacyReplayFrameRounding)
     && (
       options.stableForceCoarsePlayback
@@ -1135,7 +1157,7 @@ export function simulateManiaReplayJudgements(
     : options.stableCoarseEdgePlaybackDelay ?? STABLE_COARSE_EDGE_PLAYBACK_DELAY;
   const useStableCoarsePressPlayback = options.stableCoarsePressPlayback ?? useCoarseStablePlayback;
   const useStableCoarseReleasePlayback = options.stableCoarseReleasePlayback
-    ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
+    ?? (!separateHoldJudgements && Boolean(options.legacyReplayFrameRounding));
   const useStableLongNoteHeadRefinement = Boolean(options.stableEnableLongNoteHeadRefinement)
     && !options.stableDisableLongNoteHeadRefinement
     && (!useCoarseStablePlayback || Boolean(options.stableAllowCoarseLongNoteHeadRefinement));
@@ -1150,9 +1172,9 @@ export function simulateManiaReplayJudgements(
   const stableMissedInsideConsumedSegmentJudgment = options.stableMissedInsideConsumedSegmentJudgment;
   const stableMissedInsideConsumedNoAdvanceJudgment = options.stableMissedInsideConsumedNoAdvanceJudgment;
   const stablePreHeadReleaseMissConsumesRecovery = (options.stablePreHeadReleaseMissConsumesRecovery
-    ?? (!isLazer && Boolean(options.legacyReplayFrameRounding)))
+    ?? (!separateHoldJudgements && Boolean(options.legacyReplayFrameRounding)))
     || (
-      !isLazer
+      !separateHoldJudgements
       && Boolean(options.legacyReplayFrameRounding)
       && options.stableDensePreHeadReleaseMissConsumesRecoveryMaxMedian != null
       && stableTransitionMedian <= options.stableDensePreHeadReleaseMissConsumesRecoveryMaxMedian
@@ -1181,21 +1203,21 @@ export function simulateManiaReplayJudgements(
     ? 3
     : options.stableBodyBreakCapJudgment;
   const stableBrokenTailPressAfterTailMisses = options.stableBrokenTailPressAfterTailMisses
-    ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
+    ?? (!separateHoldJudgements && Boolean(options.legacyReplayFrameRounding));
   const stableHeldKeyActivatesLongNoteHead = options.stableHeldKeyActivatesLongNoteHead ?? false;
   const stableRateDownLateHeadWindow = options.stableRateDownLateHeadWindow
-    ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
+    ?? (!separateHoldJudgements && Boolean(options.legacyReplayFrameRounding));
   const stableBrokenTailReleaseGrace = options.stableBrokenTailReleaseGrace ?? null;
   const stableLateRegrabMehFloor = options.stableLateRegrabMehFloor ?? false;
   const stableLongNoteBodyGrab = options.stableLongNoteBodyGrab ?? false;
   const stableRegrabWithinOkKeepsHeadDelta = options.stableRegrabWithinOkKeepsHeadDelta ?? false;
   const stableTailSegmentReuseGrace = options.stableTailSegmentReuseGrace ?? 0;
   const stableTailEdgeGrace = options.stableTailEdgeGrace ?? STABLE_TAIL_EDGE_GRACE;
-  const stableNextNoteEdgeGrace = !isLazer && options.legacyReplayFrameRounding
+  const stableNextNoteEdgeGrace = !separateHoldJudgements && options.legacyReplayFrameRounding
     ? options.stableNextNoteEdgeGrace ?? getStableNextNoteEdgeGrace(stableTransitionMedian)
     : 0;
   const stablePreciseEdgePosition = options.stablePreciseEdgePosition ?? STABLE_PRECISE_EDGE_POSITION;
-  const stableHiddenBodyBreakGapThreshold = !isLazer && options.legacyReplayFrameRounding
+  const stableHiddenBodyBreakGapThreshold = !separateHoldJudgements && options.legacyReplayFrameRounding
     ? getStableHiddenBodyBreakGapThreshold(stableTransitionMedian, options.speedMultiplier)
     : Number.POSITIVE_INFINITY;
 
@@ -1225,8 +1247,8 @@ export function simulateManiaReplayJudgements(
       // start time. Keep those ambiguous taps eligible for the earlier note;
       // LN heads have separate hold/body behaviour and should keep scrolling
       // when they are held late.
-      const canUseStableCrossedHeadEdge = !isLN;
-      const stableNextEdgeGrace = !isLazer
+      const canUseStableCrossedHeadEdge = !isLN || stableScoreV2;
+      const stableNextEdgeGrace = !separateHoldJudgements
         && options.legacyReplayFrameRounding
         && canUseStableCrossedHeadEdge
         && nextNote != null
@@ -1242,29 +1264,34 @@ export function simulateManiaReplayJudgements(
       let headJudgment: Judgment = 0;
       let headTime = 0;
       const stableHeadDeadline = note.time + Math.floor(isLN ? windows.meh : windows.ok) - Number.EPSILON;
-      const stableHeadEdgeGrace = !isLazer
+      const stableHeadEdgeGrace = !separateHoldJudgements
         && options.legacyReplayFrameRounding
         && canUseStableCrossedHeadEdge
         && nextNote != null
         ? Math.max(stableNextEdgeGrace, stableHeadDeadline - nextNote.time)
         : stableNextEdgeGrace;
-      const stableColumnInputOwnershipEnd = !isLazer
+      const stableColumnInputOwnershipEnd = !separateHoldJudgements
         && options.legacyReplayFrameRounding
         && options.stableColumnInputOwnership
         ? getStableColumnInputOwnershipEnd(note, nextNote, windows)
         : Number.POSITIVE_INFINITY;
-      const latestHeadHitTime = isLazer
-        ? Math.min(note.time + windows.meh, nextNote ? nextNote.time - Number.EPSILON : note.time + windows.meh)
+      const headWindow = stableScoreV2 ? Math.floor(isLN ? windows.meh : windows.ok) : separateHeadWindow;
+      const latestHeadHitTime = separateHoldJudgements
+        ? Math.min(note.time + headWindow, nextNote ? nextNote.time - Number.EPSILON : note.time + headWindow)
         : isLN
           ? stableHeadDeadline
           : Math.min(stableHeadDeadline, nextNote ? nextNote.time - Number.EPSILON : stableHeadDeadline);
 
       for (let s = segmentCursor; matchedSegmentIndex === -1 && s < columnSegments.length; s++) {
         const segment = columnSegments[s];
-        const pressRange = !isLazer && options.legacyReplayFrameRounding
+        const pressRange = (!separateHoldJudgements || stableScoreV2) && options.legacyReplayFrameRounding
           ? isLN ? getStableSegmentPressRange(segment) : getStableTapPressRange(segment)
           : null;
         if (stableRangeIsPastHeadDeadline(pressRange?.min ?? segment.start, latestHeadHitTime, stableHeadEdgeGrace)) break;
+        // Stable expires the object on its frame update before processing
+        // input. A sampled edge can straddle the deadline only if the prior
+        // frame was strictly before it.
+        if (stableScoreV2 && (pressRange?.min ?? segment.start) >= note.time + headWindow) break;
 
         let currentHeadTime = pressRange
           ? isLN
@@ -1276,12 +1303,15 @@ export function simulateManiaReplayJudgements(
           if (!pressRange || stableRangeIsPastHeadDeadline(pressRange.min, latestHeadHitTime, stableHeadEdgeGrace)) break;
         }
         if (currentHeadTime > stableColumnInputOwnershipEnd) break;
+        // Subtracting Number.EPSILON from large map timestamps does not make
+        // the next-note cutoff exclusive; compare the timestamp directly.
+        if (stableScoreV2 && nextNote && currentHeadTime >= nextNote.time) break;
         const currentHeadOffsetMs = currentHeadTime - note.time;
         const previousNoteIsLongNote = previousNote != null
           && previousNote.isHold
           && previousNote.endTime > previousNote.time;
         if (
-          !isLazer &&
+          !separateHoldJudgements &&
           options.legacyReplayFrameRounding &&
           previousNote != null &&
           !previousNoteIsLongNote &&
@@ -1290,18 +1320,24 @@ export function simulateManiaReplayJudgements(
           continue;
         }
 
-        const currentHeadJudgment = isLazer
-          ? getJudgmentForOffset(currentHeadOffsetMs, windows)
-          : isLN
-            ? getStableLongNoteHeadPreviewJudgment(currentHeadOffsetMs, windows)
-            : getStableHeadJudgmentForOffset(currentHeadOffsetMs, windows);
+        const currentHeadJudgment = stableScoreV2
+          ? getStableHeadJudgmentForOffset(currentHeadOffsetMs, windows)
+          : separateHoldJudgements
+            ? getJudgmentForOffset(currentHeadOffsetMs, windows)
+            : isLN
+              ? getStableLongNoteHeadPreviewJudgment(currentHeadOffsetMs, windows)
+              : getStableHeadJudgmentForOffset(currentHeadOffsetMs, windows);
+        // An early press can be in a judgement band while the object is not
+        // hittable yet. This gate applies to taps and hold heads alike.
+        if (stableScoreV2 && currentHeadOffsetMs < 0
+          && (currentHeadJudgment === 6 || currentHeadOffsetMs < -stableScoreV2InputWindow)) continue;
         if (currentHeadJudgment !== 0) {
-          const stableTimedOutCrossedLongNoteHead = !isLazer
+          const stableTimedOutCrossedLongNoteHead = !separateHoldJudgements
             && isLN
             && stableTransitionMedian === STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION
             && currentHeadOffsetMs > windows.meh;
           if (
-            !isLazer
+            !separateHoldJudgements
             && isLN
             && nextNote
             && currentHeadTime >= nextNote.time
@@ -1316,14 +1352,14 @@ export function simulateManiaReplayJudgements(
           matchedSegmentIndex = s;
           headJudgment = currentHeadJudgment;
           headTime = currentHeadTime;
-          const keepShortLongNoteEarlyMeh = !isLazer
+          const keepShortLongNoteEarlyMeh = !separateHoldJudgements
             && isLN
             && headJudgment === 5
             && note.endTime - note.time <= Math.max(20, stableTransitionMedian * 4);
 
           if (
             !keepShortLongNoteEarlyMeh
-            && !isLazer
+            && !separateHoldJudgements
               && isLN
               && options.legacyReplayFrameRounding
               && useStableLongNoteHeadRefinement
@@ -1368,7 +1404,7 @@ export function simulateManiaReplayJudgements(
       // the next note has no claim on the press.
       if (
         matchedSegmentIndex === -1
-        && !isLazer
+        && !separateHoldJudgements
         && isLN
         && stableRateDownLateHeadWindow
         && options.legacyReplayFrameRounding
@@ -1402,7 +1438,7 @@ export function simulateManiaReplayJudgements(
       // broken-tail rules if the grab does not survive to the tail.
       if (
         matchedSegmentIndex === -1
-        && !isLazer
+        && !separateHoldJudgements
         && isLN
         && stableLongNoteBodyGrab
         && options.legacyReplayFrameRounding
@@ -1441,11 +1477,13 @@ export function simulateManiaReplayJudgements(
         // the segment cursor) and no later than the tail's raw Meh window;
         // the release judges via the 1.5x lenience windows and is capped to
         // Meh because the head was not hit.
-        if (isLazer && isLN) {
-          const tailDeadline = note.endTime + windows.meh * RELEASE_WINDOW_LENIENCE;
+        if (separateHoldJudgements && isLN) {
+          const tailDeadline = note.endTime + separateTailWindow * RELEASE_WINDOW_LENIENCE;
           let regrabTail: { judgment: Judgment; offsetMs: number; time: number } | null = null;
           for (let s = segmentCursor; s < columnSegments.length; s++) {
             const segment = columnSegments[s];
+            if (stableScoreV2 && segment.start < note.time - windows.meh) continue;
+            if (stableScoreV2 && segment.start > note.endTime) break;
             if (segment.start > note.endTime + windows.meh) break;
             if (!noReleaseTails && segment.end > tailDeadline) break;
 
@@ -1468,7 +1506,7 @@ export function simulateManiaReplayJudgements(
               // unjudged nested object ending before it - including this
               // tail. Only presses that miss (or fall short of) the next
               // object's hit window leave the tail judgeable.
-              if (nextAliveStart - segment.start <= windows.meh && note.endTime < nextAliveStart) break;
+              if (!stableScoreV2 && nextAliveStart - segment.start <= windows.meh && note.endTime < nextAliveStart) break;
             }
 
             // No Release: once the re-grab is holding at the tail, Perfect is
@@ -1483,11 +1521,14 @@ export function simulateManiaReplayJudgements(
             }
             if (segment.end > tailDeadline) break;
 
-            const rawTailJudgment = getJudgmentForOffset(
-              (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE,
-              windows,
-            );
-            if (rawTailJudgment === 0) continue;
+            const releaseOffset = (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE;
+            const rawTailJudgment = stableScoreV2
+              ? getStableScoreV2TailJudgment(segment.end - note.endTime, windows)
+              : getJudgmentForOffset(releaseOffset, windows);
+            if (rawTailJudgment === 0 || (stableScoreV2 && rawTailJudgment === 6 && releaseOffset < 0)) continue;
+            // Stable gives this press to the recovering hold. Lazer can
+            // deliver the same press to a later head through its hit policy.
+            if (stableScoreV2) segmentCursor = s + 1;
             regrabTail = {
               judgment: capLazerTailJudgment(rawTailJudgment, true),
               offsetMs: segment.end - note.endTime,
@@ -1496,12 +1537,13 @@ export function simulateManiaReplayJudgements(
             break;
           }
           if (regrabTail) {
-            const headTimeoutTime = note.time + windows.meh;
+            const headMissWindow = stableScoreV2 ? windows.meh : separateHeadWindow;
+            const headTimeoutTime = note.time + headMissWindow;
             events.push({
               column,
               judgment: 6,
               noteIndex,
-              offsetMs: windows.meh,
+              offsetMs: headMissWindow,
               part: "hold-head",
               time: headTimeoutTime,
             });
@@ -1518,7 +1560,7 @@ export function simulateManiaReplayJudgements(
               displayJudgment: regrabTail.judgment,
               displayTime: regrabTail.time,
               headJudgment: 6,
-              headOffsetMs: windows.meh,
+              headOffsetMs: headMissWindow,
               headTime: headTimeoutTime,
               releaseTime: regrabTail.time,
               tailJudgment: regrabTail.judgment,
@@ -1531,7 +1573,7 @@ export function simulateManiaReplayJudgements(
 
         let timedOutHeldSegmentIndex = -1;
         if (
-          !isLazer
+          !separateHoldJudgements
           && isLN
           && nextNote != null
           && options.legacyReplayFrameRounding
@@ -1561,7 +1603,7 @@ export function simulateManiaReplayJudgements(
         }
 
         const previousConsumedSegment = columnSegments[Math.max(0, segmentCursor) - 1];
-        const stableMissedInsideConsumedSegment = !isLazer
+        const stableMissedInsideConsumedSegment = !separateHoldJudgements
           && isLN
           && options.legacyReplayFrameRounding
           && previousConsumedSegment != null
@@ -1595,7 +1637,7 @@ export function simulateManiaReplayJudgements(
           events,
           accuracyMode,
           undefined,
-          !isLazer && options.legacyReplayFrameRounding ? [1, 2, 3, 4, 5, 6] : undefined,
+          !separateHoldJudgements && options.legacyReplayFrameRounding ? [1, 2, 3, 4, 5, 6] : undefined,
           stableMissedInsideConsumedSegment ? stableMissedInsideConsumedJudgment : undefined,
         );
         if (stableMissedInsideConsumedSegment) {
@@ -1616,7 +1658,7 @@ export function simulateManiaReplayJudgements(
 
       const headSegment = columnSegments[matchedSegmentIndex];
       const headOffsetMs = headTime - note.time;
-      const stableMatchedPreviousTailSegment = !isLazer
+      const stableMatchedPreviousTailSegment = !separateHoldJudgements
         && isLN
         && options.legacyReplayFrameRounding
         && previousNote != null
@@ -1630,7 +1672,7 @@ export function simulateManiaReplayJudgements(
       // the head is counted as a miss but the tail still gets its own judgement
       // (capped to Meh by the head-miss combo-break rule), so we let lazer fall
       // through to the regular flow.
-      if (headJudgment === 6 && !isLazer && !isLN) {
+      if (headJudgment === 6 && !separateHoldJudgements && !isLN) {
         noteStates[noteIndex] = createMissState(
           note,
           noteIndex,
@@ -1655,7 +1697,7 @@ export function simulateManiaReplayJudgements(
           noteIndex,
           offsetMs: headOffsetMs,
           part: "note",
-          ...(!isLazer && options.legacyReplayFrameRounding
+          ...(!separateHoldJudgements && options.legacyReplayFrameRounding
             ? { possibleJudgments: getStableTapPossibleJudgments(headSegment, note, windows) }
             : {}),
           time: headTime,
@@ -1679,7 +1721,7 @@ export function simulateManiaReplayJudgements(
       }
 
       // --- Long note ---
-      if (isLazer) {
+      if (separateHoldJudgements) {
         events.push({
           column,
           judgment: headJudgment,
@@ -1692,9 +1734,11 @@ export function simulateManiaReplayJudgements(
         let bodyBreakTime: number | null = null;
         let releaseTime = headSegment.end;
         let scanIndex = matchedSegmentIndex;
-        const tailDeadline = note.endTime + windows.meh * RELEASE_WINDOW_LENIENCE;
+        let unconsumedRecovery = false;
+        let releasedTailTimeoutTime: number | null = null;
+        const tailDeadline = note.endTime + separateTailWindow * RELEASE_WINDOW_LENIENCE;
         let tailJudgment: Judgment = 6;
-        let tailOffsetMs = windows.meh * RELEASE_WINDOW_LENIENCE;
+        let tailOffsetMs = separateTailWindow * RELEASE_WINDOW_LENIENCE;
         let tailTime = tailDeadline;
         let possibleTailJudgments: Judgment[] | undefined;
 
@@ -1704,6 +1748,11 @@ export function simulateManiaReplayJudgements(
 
         while (scanIndex < columnSegments.length) {
           const segment = columnSegments[scanIndex];
+          if (stableScoreV2 && bodyBreakTime != null && segment.start > note.endTime) {
+            unconsumedRecovery = true;
+            tailJudgment = 6;
+            break;
+          }
           releaseTime = Math.max(releaseTime, segment.end);
 
           // No Release: NoReleaseDrawableHoldNoteTail applies Perfect as soon
@@ -1726,14 +1775,26 @@ export function simulateManiaReplayJudgements(
           }
 
           const releaseOffsetMs = (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE;
-          const rawTailJudgment = getJudgmentForOffset(releaseOffsetMs, windows);
+          const rawTailJudgment = stableScoreV2
+            ? getStableScoreV2TailJudgment(segment.end - note.endTime, windows)
+            : getJudgmentForOffset(releaseOffsetMs, windows);
 
-          if (rawTailJudgment !== 0) {
-            const hasComboBreak = bodyBreakTime != null || headMissed;
+          // The input gate uses the unscaled miss window with tail lenience.
+          // A release inside it can end the hold; an earlier one breaks it.
+          if (rawTailJudgment !== 0 && !(stableScoreV2 && segment.end < note.endTime - stableScoreV2TailInputWindow)) {
+            // Stable's hold-state update and its recorded release edge can
+            // fall on adjacent frames. Estimate the state-update time from
+            // that edge interval; the hit-error value remains the raw edge.
+            const releaseUpdateTime = segment.end + (segment.end - (segment.endPrevious ?? segment.end));
+            const hasComboBreak = bodyBreakTime != null || headMissed
+              || (stableScoreV2 && releaseUpdateTime < note.endTime - windows.meh);
             tailJudgment = capLazerTailJudgment(rawTailJudgment, hasComboBreak);
             tailOffsetMs = segment.end - note.endTime;
             tailTime = segment.end;
-            possibleTailJudgments = options.legacyReplayFrameRounding
+            if (stableScoreV2 && hasComboBreak && bodyBreakTime == null && !headMissed) {
+              tailTime = Math.max(segment.end, note.endTime - windows.meh);
+            }
+            possibleTailJudgments = accuracyMode === "lazer" && options.legacyReplayFrameRounding
               ? getRoundedLegacyTailPossibleJudgments(tailOffsetMs, windows, hasComboBreak)
               : undefined;
             break;
@@ -1758,6 +1819,15 @@ export function simulateManiaReplayJudgements(
             });
           }
 
+          if (stableScoreV2 && releasedTailTimeoutTime == null) {
+            // A released hold can receive Meh as its tail enters the early
+            // window. Waiting for a later release delays (or loses) this grade.
+            const earlyTailTime = Math.max(segment.end, note.endTime - windows.meh);
+            const next = columnSegments[scanIndex + 1];
+            if (earlyTailTime <= note.endTime && (!next || next.start > earlyTailTime)) {
+              releasedTailTimeoutTime = earlyTailTime;
+            }
+          }
           scanIndex++;
           if (scanIndex >= columnSegments.length || columnSegments[scanIndex].start > tailDeadline) {
             tailJudgment = 6;
@@ -1767,6 +1837,10 @@ export function simulateManiaReplayJudgements(
           }
         }
 
+        if (releasedTailTimeoutTime != null) {
+          tailJudgment = 5;
+          tailTime = releasedTailTimeoutTime;
+        }
         events.push({
           column,
           judgment: tailJudgment,
@@ -1787,13 +1861,19 @@ export function simulateManiaReplayJudgements(
           headOffsetMs,
           headTime,
           releaseTime,
+          ...(stableScoreV2 ? { stableMatchedSegmentIndex: matchedSegmentIndex } : {}),
           tailJudgment,
           tailOffsetMs,
           tailTime,
         };
 
         if (matchedSegmentIndex >= segmentCursor) {
-          segmentCursor = matchedSegmentIndex + 1;
+          // Consume re-grabs as well as the head press, but leave an unvisited
+          // segment beyond the tail deadline available for the next note.
+          const holdEndCursor = !unconsumedRecovery && scanIndex < columnSegments.length && columnSegments[scanIndex].start <= tailDeadline
+            ? scanIndex + 1
+            : scanIndex;
+          segmentCursor = stableScoreV2 ? holdEndCursor : matchedSegmentIndex + 1;
         }
         continue;
       }
@@ -2356,7 +2436,7 @@ export function calculateReplayAccuracy(
   const totalNotes = counts[1] + counts[2] + counts[3] + counts[4] + counts[5] + counts[6];
   if (totalNotes <= 0) return 100;
 
-  const perfectValue = accuracyMode === "lazer" ? 305 : 300;
+  const perfectValue = accuracyMode !== "stable" ? 305 : 300;
   const totalValue =
     counts[1] * perfectValue +
     counts[2] * 300 +

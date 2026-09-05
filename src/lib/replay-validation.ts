@@ -714,7 +714,7 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
           .map((event) => event.time)
       : undefined);
   const resolvedEvents =
-    input.legacyReplayFrameRounding && (input.resolveLegacyFrameAmbiguity ?? true)
+    ruleset.accuracyMode !== "stable-scorev2" && input.legacyReplayFrameRounding && (input.resolveLegacyFrameAmbiguity ?? true)
       ? resolveReplayJudgementEvents(simulated.events, input.expectedCounts, {
           allowLegacyScoreReconciliation: Boolean(input.allowStableScoreHeaderReconciliation) && ruleset.accuracyMode === "stable",
           comboBreakTimes,

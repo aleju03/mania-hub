@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
+  it("adds Replay Master to old settings without enabling it and preserves its saved placement", () => {
+    expect(normalizeReplayOverlaySettings({}).replayMaster.enabled).toBe(false);
+    const placement = { enabled: true, x: 0.64, y: 0.12, scale: 1.3 };
+    expect(normalizeReplayOverlaySettings(JSON.parse(JSON.stringify({ replayMaster: placement }))).replayMaster).toEqual({ ...placement, scrollSpeed: 1, transparentBackground: false });
+  });
+
+  it("preserves Replay Master speed and transparency through saved settings", () => {
+    const placement = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.replayMaster, scrollSpeed: 0.5, transparentBackground: true };
+    expect(normalizeReplayOverlaySettings(JSON.parse(JSON.stringify({ replayMaster: placement }))).replayMaster).toEqual(placement);
+    expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: NaN, transparentBackground: "true" } }).replayMaster).toMatchObject({ scrollSpeed: 1, transparentBackground: false });
+    expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: 0 } }).replayMaster.scrollSpeed).toBe(0.25);
+    expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: 100 } }).replayMaster.scrollSpeed).toBe(3);
+  });
   it("uses the larger miss counter in the default layout", () => {
     expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.misses.scale).toBe(1);
   });

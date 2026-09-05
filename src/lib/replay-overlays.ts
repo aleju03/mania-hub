@@ -14,7 +14,16 @@ export type ReplayThumbHand = "left" | "right";
 
 export const DEFAULT_REPLAY_MISS_THUMB_HAND: ReplayThumbHand = "right";
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "pp", "judgements", "progress", "leaderboard"] as const;
+export const REPLAY_MASTER_MIN_SCROLL_SPEED = 0.25;
+export const REPLAY_MASTER_MAX_SCROLL_SPEED = 3;
+export const DEFAULT_REPLAY_MASTER_SCROLL_SPEED = 1;
+
+export function normalizeReplayMasterScrollSpeed(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_REPLAY_MASTER_SCROLL_SPEED;
+  return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
+}
+
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "pp", "judgements", "progress", "leaderboard", "replayMaster"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -29,6 +38,7 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   judgements: msg`Judgements`,
   progress: msg`Progress pie`,
   leaderboard: msg`Leaderboard`,
+  replayMaster: msg`Mania Replay Master`,
 };
 
 // Per-hand accuracy is the one overlay with more than one worthwhile shape,
@@ -59,6 +69,10 @@ export interface ReplayOverlayPlacement {
   scale: number;
   /** Only meaningful on the per-hand accuracy overlay. */
   style?: ReplayHandAccuracyStyle;
+  /** Mania Replay Master scroll multiplier; independent of replay playback. */
+  scrollSpeed?: number;
+  /** Show Replay Master's marks directly over the stage. */
+  transparentBackground?: boolean;
 }
 
 export type ReplayOverlaySettings = Record<ReplayOverlayId, ReplayOverlayPlacement>;
@@ -70,6 +84,7 @@ export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 // corner, so accuracy defaults to a big draggable readout on the left and
 // the judgement counts sit below the score block.
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
+  replayMaster: { enabled: false, x: 0.72, y: 0.25, scale: 0.75, scrollSpeed: DEFAULT_REPLAY_MASTER_SCROLL_SPEED, transparentBackground: false },
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
@@ -96,7 +111,7 @@ const PREVIOUS_ACCURACY_OVERLAY_DEFAULTS: ReplayOverlayPlacement[] = [
 // What the defaults were when the ingame-clone HUD first landed (accuracy
 // folded into the fixed score block, smaller judgement counts); users still
 // on these exact placements follow the defaults forward.
-const SCORE_BLOCK_HUD_DEFAULTS: ReplayOverlaySettings = {
+const SCORE_BLOCK_HUD_DEFAULTS: Partial<ReplayOverlaySettings> = {
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
@@ -110,7 +125,7 @@ const SCORE_BLOCK_HUD_DEFAULTS: ReplayOverlaySettings = {
 
 // What the defaults were before the ingame-clone HUD; users still on these
 // exact placements follow the defaults forward.
-const PRE_INGAME_HUD_DEFAULTS: ReplayOverlaySettings = {
+const PRE_INGAME_HUD_DEFAULTS: Partial<ReplayOverlaySettings> = {
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
@@ -126,7 +141,7 @@ const PRE_INGAME_HUD_DEFAULTS: ReplayOverlaySettings = {
 
 const COMPACT_MISS_OVERLAY_DEFAULT: ReplayOverlayPlacement = { enabled: true, x: 0.085, y: 0.77, scale: 0.75 };
 
-const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
+const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: Partial<ReplayOverlaySettings> = {
   keypresses: { enabled: true, x: 0.05, y: 0.68, scale: 0.82 },
   kps: { enabled: true, x: 0.03, y: 0.68, scale: 0.82 },
   misses: { enabled: true, x: 0.05, y: 0.77, scale: 0.82 },
@@ -140,7 +155,7 @@ const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
   leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
 };
 
-const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
+const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: Partial<ReplayOverlaySettings> = {
   keypresses: { enabled: true, x: 0.22, y: 0.74, scale: 1 },
   kps: { enabled: true, x: 0.14, y: 0.74, scale: 1 },
   misses: { enabled: true, x: 0.22, y: 0.84, scale: 1 },
@@ -170,8 +185,8 @@ function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement): R
   };
 }
 
-function placementMatches(a: ReplayOverlayPlacement, b: ReplayOverlayPlacement): boolean {
-  return a.enabled === b.enabled
+function placementMatches(a: ReplayOverlayPlacement, b: ReplayOverlayPlacement | undefined): boolean {
+  return b !== undefined && a.enabled === b.enabled
     && Math.abs(a.x - b.x) < 0.0001
     && Math.abs(a.y - b.y) < 0.0001
     && Math.abs(a.scale - b.scale) < 0.0001;
@@ -186,6 +201,11 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     if (id === "handAccuracy") {
       const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
       placement.style = normalizeReplayHandAccuracyStyle(rawStyle);
+    }
+    if (id === "replayMaster") {
+      const rawSpeed = raw[id] && typeof raw[id] === "object" ? (raw[id] as { scrollSpeed?: unknown }).scrollSpeed : undefined;
+      placement.scrollSpeed = normalizeReplayMasterScrollSpeed(rawSpeed);
+      placement.transparentBackground = (raw[id] as { transparentBackground?: unknown } | undefined)?.transparentBackground === true;
     }
     settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
       || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])

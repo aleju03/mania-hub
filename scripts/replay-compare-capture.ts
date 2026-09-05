@@ -1114,7 +1114,7 @@ function visibleCountsEqual(a: ReplayHitCounts, b: ReplayHitCounts): boolean {
     && a.countMiss === b.countMiss;
 }
 
-function accuracyFor(counts: ReplayHitCounts, mode: "stable" | "lazer"): number {
+function accuracyFor(counts: ReplayHitCounts, mode: "stable" | "stable-scorev2" | "lazer"): number {
   return calculateReplayAccuracy(replayHitCountsToArray(counts), mode);
 }
 
@@ -5491,6 +5491,23 @@ function buildSimHitErrorEvents(simulation: SimulationResult): SimHitErrorEvent[
     }
 
     if (event.judgment == null) continue;
+
+    if (simulation.accuracyMode === "stable-scorev2") {
+      // A passive miss has no timing input. Broken tails have already emitted
+      // their release error through the hold-break event. The tail's grade
+      // can arrive later than the release that supplied its hit error.
+      if (event.judgment === 6 && (event.part !== "hold-head" || state.stableMatchedSegmentIndex == null)) continue;
+      if (event.part === "hold-tail" && state.bodyBreakTime != null) continue;
+      const isTail = event.part === "hold-tail";
+      components.push({
+        noteIndex: event.noteIndex,
+        offset: Math.round(event.offsetMs),
+        part: isTail ? "tail" : event.part === "hold-head" ? "head" : "note",
+        result: event.judgment,
+        time: (isTail ? note.endTime : note.time) + event.offsetMs,
+      });
+      continue;
+    }
 
     if (!isStableLongNote) {
       components.push({

@@ -280,4 +280,14 @@ describe("persistUploadedReplayDescription", () => {
     expect(written.mods).toEqual(["DT"]);
     expect(written.modRate).toBeUndefined();
   });
+
+  it("uses ScoreV2 accuracy for uploads recorded by stable", async () => {
+    await persistUploadedReplayDescription(
+      VALID_ID, fakeParsed("d".repeat(32), [{ acronym: "SV2" }], 20260820), null, null,
+    );
+    const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+    const expected = (100 * 305 + 50 * 300 + 10 * 200 + 5 * 100 + 50) / (168 * 305);
+    expect(written.accuracy).toBeCloseTo(expected, 10);
+    expect(written.version).toBe(DESCRIPTION_VERSION);
+  });
 });

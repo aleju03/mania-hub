@@ -1703,6 +1703,10 @@ msgstr "1 velocidad por mapa"
 msgid "1 screenshot"
 msgstr "1 captura"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "1× = original default"
+msgstr "1× = velocidad original"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "100"
@@ -2214,6 +2218,10 @@ msgstr "La actividad se registra para el top 100 de cada país trackeado. Si est
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Actual size"
 msgstr "Tamaño real"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Adapted from <0>Mania Replay Master</0>."
+msgstr "Adaptado de <0>Mania Replay Master</0>."
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Add"
@@ -7684,6 +7692,10 @@ msgstr "gestor"
 msgid "Mania maps"
 msgstr "Mapas de mania"
 
+#: src/lib/replay-overlays.ts
+msgid "Mania Replay Master"
+msgstr "Mania Replay Master"
+
 #: src/routes/skins_.$id.tsx
 #: src/routes/skins.tsx
 msgid "mania stage"
@@ -9657,6 +9669,10 @@ msgstr "general"
 msgid "Overall"
 msgstr "General"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Overlay scroll speed"
+msgstr "Velocidad de scroll"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Overlays"
 msgstr "Overlays"
@@ -11119,6 +11135,7 @@ msgid "Reroll settings"
 msgstr "Ajustes del sorteo"
 
 #: src/components/layout/ThemePicker.tsx
+#: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Reset"
 msgstr "Restablecer"
@@ -11488,6 +11505,10 @@ msgstr "Velocidad de scroll"
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll speed:"
 msgstr "Velocidad de scroll:"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Scrolling judgement-colored notes with actual hit offsets and long-note releases."
+msgstr "Notas en movimiento coloreadas según el juicio, con los desfases reales de pulsación y las sueltas de notas largas."
 
 #: src/routes/maps.tsx
 msgid "search"
@@ -14501,6 +14522,10 @@ msgstr "Color de la estela"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Trail thickness"
 msgstr "Grosor de la estela"
+
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Transparent background"
+msgstr "Fondo transparente"
 
 #: src/lib/signature-style.ts
 msgid "Triangles"

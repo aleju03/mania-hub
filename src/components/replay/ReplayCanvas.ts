@@ -14,6 +14,8 @@ import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
 import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
+import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
+import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
 import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
@@ -734,6 +736,7 @@ export class ManiaReplayRenderer {
   private judgmentEvents: ReplayJudgementEvent[];
   private missTimesCache: number[] | null = null;
   private noteStates: ReplayNoteState[];
+  private replayMasterTimeline: ReplayMasterTimeline | null = null;
   private comboEvents: ReplayComboEvent[];
 
   private combo = 0;
@@ -947,7 +950,7 @@ export class ManiaReplayRenderer {
       this.ruleset.accuracyMode,
       {
         lazerNoReleaseTails: mods.has("NR"),
-        legacyReplayFrameRounding: options?.legacyReplayFrameRounding ?? this.ruleset.accuracyMode === "stable",
+        legacyReplayFrameRounding: options?.legacyReplayFrameRounding ?? this.ruleset.accuracyMode !== "lazer",
         speedMultiplier: this.ruleset.speedMultiplier,
       },
     );
@@ -966,7 +969,7 @@ export class ManiaReplayRenderer {
     const rawStableComboEvents = this.ruleset.accuracyMode === "stable"
       ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
       : null;
-    this.judgmentEvents = this.ruleset.accuracyMode !== "stable" && options?.expectedCounts
+    this.judgmentEvents = this.ruleset.accuracyMode === "lazer" && options?.expectedCounts
       ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts, {
           allowLegacyScoreReconciliation: false,
           comboBreakTimes: rawStableComboEvents
@@ -982,6 +985,7 @@ export class ManiaReplayRenderer {
       this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
     }
     this.noteStates = simulated.noteStates;
+    this.replayMasterTimeline = null;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
       ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
       : this.judgmentEvents.map((event) => ({
@@ -1499,7 +1503,7 @@ export class ManiaReplayRenderer {
     this.hudSnapshotTime = performance.now();
 
     const scoreValue = this.scoreSimulator?.value ?? 0;
-    this.hudCachedScore = this.ruleset.accuracyMode === "stable"
+    this.hudCachedScore = this.ruleset.accuracyMode !== "lazer"
       ? formatStableScore(scoreValue)
       : formatLazerScore(scoreValue);
     this.hudCachedAccuracy = this.formatAccuracy(this.getAccuracy());
@@ -1913,7 +1917,7 @@ export class ManiaReplayRenderer {
       this.hitWindows,
       this.ruleset.accuracyMode,
       {
-        legacyReplayFrameRounding: this.ruleset.accuracyMode === "stable",
+        legacyReplayFrameRounding: this.ruleset.accuracyMode !== "lazer",
         speedMultiplier: this.ruleset.speedMultiplier,
       },
     );
@@ -1926,6 +1930,7 @@ export class ManiaReplayRenderer {
     // Previews carry no real life bar, so they can never be fails.
     this.failTime = null;
     this.noteStates = simulated.noteStates;
+    this.replayMasterTimeline = null;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
       ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
       : this.judgmentEvents.map((event) => ({
@@ -4190,6 +4195,22 @@ export class ManiaReplayRenderer {
     }
   }
 
+  private renderReplayMasterOverlay(layout: Layout) {
+    if (!this.overlaySettings.replayMaster.enabled) return;
+    const scale = Math.min(this.getOverlayScale(layout, "replayMaster"), layout.h / 384);
+    const width = 216 * scale;
+    const height = 384 * scale;
+    const frame = this.getOverlayFrame(layout, "replayMaster", width, height);
+    if (!frame) return;
+    this.replayMasterTimeline ??= buildReplayMasterTimeline(this.notes, this.noteStates, this.segments, this.modRate);
+    if (!this.overlaySettings.replayMaster.transparentBackground) {
+      this.fillRect(frame.x, frame.y, width, height, "#000000", 1);
+    }
+    drawReplayMasterTimeline(this.replayMasterTimeline, this.currentTime, this.modRate, this.keyCount, width, height,
+      (x, y, w, h, color) => this.fillRect(frame.x + x, frame.y + y, w, h, color, 1),
+      this.overlaySettings.replayMaster.scrollSpeed);
+  }
+
   private renderMissOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "misses");
     const labelFontSize = 9 * scale;
@@ -4656,6 +4677,7 @@ export class ManiaReplayRenderer {
     this.renderScoreBlock(layout);
     this.renderLeaderboard(layout);
     if (this.shouldRenderCustomOverlays(layout)) {
+      this.renderReplayMasterOverlay(layout);
       this.renderKeypressOverlay(layout);
       this.renderKpsOverlay(layout);
       this.renderMissOverlay(layout);

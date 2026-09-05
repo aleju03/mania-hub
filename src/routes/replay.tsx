@@ -63,6 +63,7 @@ import {
   writeReplayOverlaySettings,
 } from "../lib/replay-overlays";
 import type { ReplayHandAccuracyStyle, ReplayThumbHand } from "../lib/replay-overlays";
+import { ReplayMasterOverlayControls } from "../components/replay/ReplayMasterOverlayControls";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { getUploadedReplayBeatmapResolution, getUploadedReplayOpenData } from "../lib/uploaded-replay-open";
@@ -4954,6 +4955,17 @@ function ReplayViewer({
           >
             {overlayMenu.targetId ? (
               <>
+                {overlayMenu.targetId === "replayMaster" && (
+                  <div className="border-b border-white/10 px-3 py-2 text-white/85" onKeyDown={(event) => event.stopPropagation()}>
+                    <ReplayMasterOverlayControls
+                      placement={overlaySettings.replayMaster}
+                      onChange={(patch) => {
+                        const current = overlaySettingsRef.current;
+                        applyOverlaySettings({ ...current, replayMaster: { ...current.replayMaster, ...patch } });
+                      }}
+                    />
+                  </div>
+                )}
                 {overlayMenu.targetId === "handAccuracy" && (
                   <>
                     <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>

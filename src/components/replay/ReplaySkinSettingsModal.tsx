@@ -8,6 +8,7 @@ import { msg } from "@lingui/core/macro";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
+import { ReplayMasterOverlayControls } from "./ReplayMasterOverlayControls";
 import { ensureReplayFontStylesheet } from "../../lib/replay-fonts";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
@@ -4085,6 +4086,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = 
   judgements: msg`Hit counts and unstable rate.`,
   progress: msg`Map completion percentage.`,
   leaderboard: msg`Ingame scoreboard with live rank climbing. Tab toggles it.`,
+  replayMaster: msg`Scrolling judgement-colored notes with actual hit offsets and long-note releases.`,
 };
 
 const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
@@ -4095,6 +4097,7 @@ const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
   pp: "/images/replay-overlays/pp.webp",
   judgements: "/images/replay-overlays/judgements.webp",
   progress: "/images/replay-overlays/progress.webp",
+  replayMaster: "/images/replay-overlays/replay-master.svg",
 };
 
 // The same four shapes the canvas draws, so the card matches what enabling
@@ -4209,71 +4212,80 @@ function ReplayOverlaySettingsRow({
   const toggle = () => onChange({ enabled: !enabled });
   return (
     <div
-      role="button"
-      aria-pressed={enabled}
-      tabIndex={0}
-      onClick={toggle}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          toggle();
-        }
-      }}
       className={`group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-lg border text-left transition-all ${
         enabled
           ? "border-osu-pink/70 bg-osu-b5/55 shadow-[0_0_0_1px_rgba(232,60,144,0.18)]"
           : "border-osu-b3/50 bg-osu-b5/25 hover:border-osu-b2 hover:bg-osu-b5/45"
       }`}
     >
-      <div className="relative aspect-[16/9] w-full overflow-hidden bg-black" style={{ backgroundColor: "#000" }}>
-        <div className="absolute inset-0 bg-black" aria-hidden="true" />
-        {REPLAY_OVERLAY_PREVIEWS[id] ? (
-          <img
-            src={REPLAY_OVERLAY_PREVIEWS[id]}
-            alt=""
-            loading="lazy"
-            draggable={false}
-            className="relative h-full w-full object-contain"
-            style={{ backgroundColor: "#000" }}
-          />
-        ) : id === "handAccuracy" ? (
-          <HandAccuracyOverlayPreview style={normalizeReplayHandAccuracyStyle(placement.style)} />
-        ) : id === "leaderboard" ? (
-          <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
-            <div className="w-3/5 space-y-1">
-              {[["#101018", "1"], ["#1f4a6e", "2"], ["#101018", "3"]].map(([color, rankNumber]) => (
-                <div
-                  key={rankNumber}
-                  className="relative h-7 rounded-r px-1.5 py-0.5"
-                  style={{ background: `linear-gradient(90deg, ${color}ee, ${color}22)` }}
-                >
-                  <div className="h-1.5 w-12 rounded-sm bg-white/80" />
-                  <div className="mt-1 h-1 w-8 rounded-sm bg-white/50" />
-                  <span className="absolute right-1 top-0 text-[18px] font-bold leading-7 text-white/20">{rankNumber}</span>
-                </div>
-              ))}
+      <button type="button" aria-pressed={enabled} onClick={toggle} className="flex w-full cursor-pointer flex-col text-left">
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-black" style={{ backgroundColor: "#000" }}>
+          <div className="absolute inset-0 bg-black" aria-hidden="true" />
+          {REPLAY_OVERLAY_PREVIEWS[id] ? (
+            <img
+              src={REPLAY_OVERLAY_PREVIEWS[id]}
+              alt=""
+              loading="lazy"
+              draggable={false}
+              className="relative h-full w-full object-contain"
+              style={{ backgroundColor: "#000" }}
+            />
+          ) : id === "handAccuracy" ? (
+            <HandAccuracyOverlayPreview style={normalizeReplayHandAccuracyStyle(placement.style)} />
+          ) : id === "leaderboard" ? (
+            <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
+              <div className="w-3/5 space-y-1">
+                {[["#101018", "1"], ["#1f4a6e", "2"], ["#101018", "3"]].map(([color, rankNumber]) => (
+                  <div
+                    key={rankNumber}
+                    className="relative h-7 rounded-r px-1.5 py-0.5"
+                    style={{ background: `linear-gradient(90deg, ${color}ee, ${color}22)` }}
+                  >
+                    <div className="h-1.5 w-12 rounded-sm bg-white/80" />
+                    <div className="mt-1 h-1 w-8 rounded-sm bg-white/50" />
+                    <span className="absolute right-1 top-0 text-[18px] font-bold leading-7 text-white/20">{rankNumber}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+          ) : null}
+          <div
+            className={`absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full transition-colors ${
+              enabled
+                ? "bg-osu-pink text-white"
+                : "border border-osu-b3/70 bg-osu-b5/70 text-transparent group-hover:border-osu-b2"
+            }`}
+            aria-hidden="true"
+          >
+            <Check className="h-3 w-3" strokeWidth={3} />
           </div>
-        ) : null}
-        <div
-          className={`absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full transition-colors ${
-            enabled
-              ? "bg-osu-pink text-white"
-              : "border border-osu-b3/70 bg-osu-b5/70 text-transparent group-hover:border-osu-b2"
-          }`}
-          aria-hidden="true"
-        >
-          <Check className="h-3 w-3" strokeWidth={3} />
         </div>
-      </div>
-      <div className="border-t border-osu-b3/40 px-3 py-2">
-        <div className={`text-sm font-semibold ${enabled ? "text-white" : "text-osu-l1"}`}>
-          {i18n._(REPLAY_OVERLAY_LABELS[id])}
+        <div className="border-t border-osu-b3/40 px-3 py-2">
+          <div className={`text-sm font-semibold ${enabled ? "text-white" : "text-osu-l1"}`}>
+            {i18n._(REPLAY_OVERLAY_LABELS[id])}
+          </div>
+          <div className="mt-0.5 text-[11px] leading-snug text-osu-f1">
+            {i18n._(REPLAY_OVERLAY_DESCRIPTIONS[id])}
+          </div>
         </div>
-        <div className="mt-0.5 text-[11px] leading-snug text-osu-f1">
-          {i18n._(REPLAY_OVERLAY_DESCRIPTIONS[id])}
+      </button>
+      {id === "replayMaster" && (
+        <div className="px-3 pb-3 text-osu-l1">
+          <ReplayMasterOverlayControls placement={placement} onChange={onChange} />
         </div>
-      </div>
+      )}
+      {id === "replayMaster" && (
+        <p className="px-3 pb-2 text-[11px] leading-snug text-osu-f1">
+          <Trans>
+            Adapted from <a
+              href="https://github.com/Mania-Visualization-Project/Mania-Replay-Master"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-osu-pink underline underline-offset-2 hover:text-osu-pink-light"
+            >Mania Replay Master</a>.
+          </Trans>
+        </p>
+      )}
     </div>
   );
 }

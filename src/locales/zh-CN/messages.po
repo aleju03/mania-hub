@@ -1712,6 +1712,10 @@ msgstr "每张谱面 1 个倍速"
 msgid "1 screenshot"
 msgstr "1 张截图"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "1× = original default"
+msgstr "1× = 原版默认速度"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "100"
@@ -2223,6 +2227,10 @@ msgstr "活跃度只记录每个已追踪国家/地区的前 100 名。如果这
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Actual size"
 msgstr "实际大小"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Adapted from <0>Mania Replay Master</0>."
+msgstr "改编自 <0>Mania Replay Master</0>。"
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Add"
@@ -7693,6 +7701,10 @@ msgstr "管理员"
 msgid "Mania maps"
 msgstr "Mania 谱面"
 
+#: src/lib/replay-overlays.ts
+msgid "Mania Replay Master"
+msgstr "Mania Replay Master"
+
 #: src/routes/skins_.$id.tsx
 #: src/routes/skins.tsx
 msgid "mania stage"
@@ -9666,6 +9678,10 @@ msgstr "综合"
 msgid "Overall"
 msgstr "总体"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Overlay scroll speed"
+msgstr "叠加层滚动速度"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Overlays"
 msgstr "覆盖层"
@@ -11128,6 +11144,7 @@ msgid "Reroll settings"
 msgstr "重抽设置"
 
 #: src/components/layout/ThemePicker.tsx
+#: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Reset"
 msgstr "重置"
@@ -11497,6 +11514,10 @@ msgstr "下落速度"
 #: src/components/replay/ReplayControls.tsx
 msgid "Scroll speed:"
 msgstr "流速："
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Scrolling judgement-colored notes with actual hit offsets and long-note releases."
+msgstr "按判定着色的滚动音符，显示实际击打偏差及长按松键时机。"
 
 #: src/routes/maps.tsx
 msgid "search"
@@ -14510,6 +14531,10 @@ msgstr "拖尾颜色"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Trail thickness"
 msgstr "拖尾粗细"
+
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Transparent background"
+msgstr "透明背景"
 
 #: src/lib/signature-style.ts
 msgid "Triangles"
