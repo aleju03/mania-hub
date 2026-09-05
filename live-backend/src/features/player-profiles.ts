@@ -302,6 +302,56 @@ export async function getCachedPlayerProfileSnapshot(
   }, true, await getTrackedProfileRecentScores(db, Number(userRow.user_id), PROFILE_TRACKED_OVERLAY_LIMIT));
 }
 
+export interface SignatureProfileSnapshot {
+  user: Record<string, unknown>;
+  bestScores: OscScore[];
+}
+
+/** The projected best-200 and the identity/art a signature actually draws.
+ * No presence, keymode history, projected total pp, avatar accents or osu! work.
+ * Reuse the profile overlay rules so a new top play appears before a refresh.
+ */
+export async function getCachedSignatureProfileSnapshot(db: Db, userId: number): Promise<SignatureProfileSnapshot | null> {
+  const key = String(userId);
+  const row = await getStoredProfileSnapshot(db, key, "userId");
+  const userRow = row ? null : await getStoredProfileUser(db, key, "userId");
+  if (!row && !userRow) return null;
+  const user = row ? unpackJson<Record<string, unknown>>(row.user_json, {}) : buildCachedProfileUser(userRow!);
+  const fetchedAt = row?.fetched_at ?? String(userRow?.updated_at ?? "");
+  const scores = row
+    ? await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []))
+    : await getStoredUserTopScores(db, userId);
+  const recent = await getTrackedProfileRecentScores(db, userId, PROFILE_TRACKED_OVERLAY_LIMIT);
+  const projection = await projectTopPlays(db, userId, scores, fetchedAt, fetchedAt, recent);
+  await attachNoteBpms(db, projection.scores);
+  const noStoredMaps = new Map<number, PackCardScore["beatmap"]>();
+  return {
+    user: {
+      id: user.id, username: user.username, avatar_url: user.avatar_url,
+      cover_url: user.cover_url,
+      statistics: { pp: readNumber(readRecord(user.statistics)?.pp) },
+    },
+    bestScores: projection.scores.map((score): OscScore => {
+      const card = toPackCardScore(score, noStoredMaps);
+      const map = score.beatmap;
+      const set = score.beatmapset;
+      return {
+        ...card,
+        created_at: score.created_at, ended_at: score.ended_at,
+        beatmap: map && card.beatmap ? {
+          ...card.beatmap,
+          beatmapset_id: map.beatmapset_id, mode: map.mode, convert: map.convert,
+          note_bpm: map.note_bpm, version: map.version, url: map.url,
+        } : undefined,
+        beatmapset: set ? {
+          id: set.id, title: set.title, artist: set.artist,
+          covers: { cover: set.covers?.cover, "cover@2x": set.covers?.["cover@2x"] },
+        } : undefined,
+      };
+    }),
+  };
+}
+
 /* Pack card view of a profile snapshot. The maniacard pipeline consumes up to
    200 best scores, but per score it reads only pp/mods/statistics, the score's
    own combo/accuracy/lazer-detection fields, and a handful of beatmap

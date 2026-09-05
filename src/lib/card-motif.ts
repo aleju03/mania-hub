@@ -1,3 +1,5 @@
+import { packFinishSvg } from "./card-finish-art";
+
 /* The floating shape a maniacard's background drifts with.
 
    Every card front already has one: ordinary tiers scatter osu! triangle
@@ -10,7 +12,7 @@
    does: giving one collector a card that rains hearts must not repaint it on
    everyone else's shelf.
 
-   Only /admin/collections writes one. The wallet sync path drops the field
+   The admin grant desk writes motifs. Legacy crafted finishes remain readable. The wallet sync path drops the field
    outright (see normalizeCard in the backend's pack-wallets.ts), which is why
    nothing here needs to defend against a forged motif reaching a render - by
    the time a URL is in a row, an admin typed it. What this module does defend
@@ -18,11 +20,11 @@
    returns null rather than handing a half-formed motif to a canvas. */
 
 /* A palette a holding's look may swap in for its tier's own: the whole card
-   wash, starfield, rim and badge colours, not just the floating image. Today
-   only the milestone's golden card uses one. Kept on the motif rather than as
+   wash, starfield, rim and badge colours, not just the floating image. The
+   milestone's gold and legacy crafted finishes use these. Kept on the motif rather than as
    a column of its own because the motif is already "how this holding looks",
    and every surface that carries a motif carries this with it for free. */
-export const CARD_MOTIF_PALETTES = ["gold"] as const;
+export const CARD_MOTIF_PALETTES = ["gold", "prismatic", "aurora", "ember"] as const;
 export type CardMotifPalette = (typeof CARD_MOTIF_PALETTES)[number];
 
 export interface CardMotif {
@@ -99,7 +101,8 @@ export function serializeCardMotif(motif: CardMotif | null): string | null {
    error. The proxy adds the headers and is also the only thing that bounds the
    bytes a card can pull in. */
 export function cardMotifImageSrc(motif: CardMotif): string {
-  return `/api/card-motif?src=${encodeURIComponent(motif.url)}`;
+  const svg = packFinishSvg(motif.url);
+  return svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : `/api/card-motif?src=${encodeURIComponent(motif.url)}`;
 }
 
 /* Identity of a motif for cache keys and render signatures. A card whose motif

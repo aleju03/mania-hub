@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { ogRenderGate, pngResponse } from "../../lib/og-render";
+import { pngResponse } from "../../lib/og-render";
 import type { ResolvedSignature } from "../../lib/signature-resolve";
 import { parseSignatureVariant, signatureVariantSlug, type SignatureType } from "../../lib/signature-shared";
 import { normalizeSignatureStyle } from "../../lib/signature-style";
@@ -123,13 +123,13 @@ export const Route = createFileRoute("/api/signature-preview")({
         };
 
         try {
-          const buffer = await ogRenderGate.run(() => renderSignature({
+          const buffer = await renderSignature({
             request,
             resolved,
             type: variant.type,
             design: variant.design,
             style: normalizeSignatureStyle(body.style, variant.type),
-          }));
+          });
           return pngResponse(buffer, "private, no-store");
         } catch {
           // No placeholder image: the page keeps the last good frame on screen

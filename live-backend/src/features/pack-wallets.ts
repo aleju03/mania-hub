@@ -5,6 +5,7 @@ import { exec, execBatch, parseJson } from "../db.js";
 import { parseCardMotif, type CardMotif } from "./card-motif.js";
 import { logInfo } from "../logger.js";
 import { mintPackCardSerialStatement } from "./pack-serials.js";
+import { BINDER_MAX_CARDS } from "./pack-binder-limits.js";
 
 // Synced maniacard pack wallets now keep economy metadata in pack_wallets and
 // collection cards in pack_collection_cards. The legacy blob shape is still
@@ -21,6 +22,8 @@ export type SavePackWalletResult =
   | { ok: false; current: StoredPackWallet };
 
 export interface StoredPackCard {
+  /* Derived from the milestone registry; never accepted from client claims. */
+  recyclable?: boolean;
   userId: number;
   /* Wallet key of this card ("<id>" or "<id>:goat"); see packCardKey. */
   cardKey?: string;
@@ -452,7 +455,7 @@ function toFiniteNumber(value: unknown, fallback: number): number {
    changes, and thumbnail caches key off that string). Reads overlay the
    current identity from users so a new pfp or rename shows up without a
    repull. */
-function liveUserFieldSql(field: "username" | "avatar_url" | "country_code"): string {
+export function liveUserFieldSql(field: "username" | "avatar_url" | "country_code"): string {
   return `(select u.${field} from users u where u.user_id = pack_collection_cards.card_user_id)`;
 }
 
@@ -472,14 +475,18 @@ function catalogFieldSql(field: "username" | "avatar_url" | "country_code" | "ti
    out of the way rather than shadowing `pack_collection_cards.*`: a collector
    whose copy was given its own name reads that, everyone else reads the
    variant's. */
-const CARD_SELECT_SQL = `select pack_collection_cards.*,
+/* The exclusive milestone holding must survive every recycling mode. */
+const RECYCLABLE_CARD_SQL = "pack_collection_cards.card_key not in (select card_key from pack_milestone_cards)";
+
+export const CARD_SELECT_SQL = `select pack_collection_cards.*,
+       (${RECYCLABLE_CARD_SQL}) as recyclable,
        pc.username as username,
        pc.avatar_url as avatar_url,
        pc.country_code as country_code,
        pc.tier_label as catalog_tier_label,
        sk.skills_json as skills_json`;
 
-const CARD_CATALOG_JOIN_SQL = `left join pack_cards pc
+export const CARD_CATALOG_JOIN_SQL = `left join pack_cards pc
        on pc.card_key = pack_collection_cards.card_key
        and pc.tier = coalesce(pack_collection_cards.tier, '')
      left join pack_card_skills sk on sk.id = pack_collection_cards.skills_id`;
@@ -1251,8 +1258,9 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function cardFromRow(row: Record<string, unknown>): StoredPackCard {
+export function cardFromRow(row: Record<string, unknown>): StoredPackCard {
   return {
+    ...(Number(row.recyclable) === 0 ? { recyclable: false } : {}),
     userId: Number(row.card_user_id),
     cardKey: typeof row.card_key === "string" ? row.card_key : packCardKey(Number(row.card_user_id), typeof row.tier === "string" ? row.tier : null),
     username: nonEmptyString(row.live_username) ?? String(row.username ?? ""),
@@ -1422,14 +1430,14 @@ export async function listPackCollectionCards(
     db,
     `select coalesce(sum(max(copies - 1, 0) * ${duplicateShardValueSql("tier")}), 0) as total
      from pack_collection_cards
-     where owner_user_id = ? and copies > 0`,
+     where owner_user_id = ? and copies > 0 and ${RECYCLABLE_CARD_SQL}`,
     [userId],
   )).rows[0];
   const filteredShardRow = (await exec(
     db,
     `select coalesce(sum(${wholeCardShardValueSql("tier")}), 0) as total
      from pack_collection_cards
-     where ${whereSql}`,
+     where ${whereSql} and ${RECYCLABLE_CARD_SQL}`,
     args,
   )).rows[0];
   return {
@@ -1472,6 +1480,64 @@ export async function getPackCollectionCard(
     [ownerUserId, cardKey],
   )).rows[0];
   return row ? cardFromRow(row as Record<string, unknown>) : null;
+}
+
+/* The held cards behind a list of keys, in the order the keys were given.
+   Same joined shape as the paged read, and like the showcase it requires
+   copies > 0, so a key naming a card that was fully recycled simply comes
+   back missing. Shared with the binders feature (features/pack-binders.ts),
+   which stores card keys of its own and needs to read them back as cards. */
+export async function listOwnedPackCardsForKeys(
+  db: Db,
+  ownerUserId: number,
+  cardKeys: string[],
+): Promise<StoredPackCard[]> {
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0 || cardKeys.length === 0) return [];
+  const cards = (await readOwnedPackCardGroups(db, new Map([[ownerUserId, cardKeys]]))).get(ownerUserId);
+  return cardKeys.flatMap((key) => cards?.has(key) ? [cards.get(key)!] : []);
+}
+
+/* One indexed lookup for all owners/cards on a showcase page. Keep the owner
+   in the key: two copies of one player may have different frozen snapshots. */
+async function readOwnedPackCardGroups(
+  db: Db,
+  groups: Map<number, string[]>,
+): Promise<Map<number, Map<string, StoredPackCard>>> {
+  const predicates: string[] = [];
+  const args: InValue[] = [];
+  for (const [ownerUserId, cardKeys] of groups) {
+    const keys = [...new Set(cardKeys)];
+    if (keys.length === 0) continue;
+    predicates.push(`(pack_collection_cards.owner_user_id = ? and pack_collection_cards.card_key in (${keys.map(() => "?").join(", ")}))`);
+    args.push(ownerUserId, ...keys);
+  }
+  const groupsByOwner = new Map<number, Map<string, StoredPackCard>>();
+  if (predicates.length === 0) return groupsByOwner;
+  const rows = (await exec(
+    db,
+    `${CARD_SELECT_SQL},
+       pack_collection_cards.owner_user_id as holding_owner_id,
+       ${liveUserFieldSql("username")} as live_username,
+       ${liveUserFieldSql("avatar_url")} as live_avatar_url,
+       ${liveUserFieldSql("country_code")} as live_country_code,
+       serials.serial as serial,
+       (select max(other.serial) from pack_card_serials other
+         where other.card_key = pack_collection_cards.card_key) as minted_total
+     from pack_collection_cards
+     ${CARD_CATALOG_JOIN_SQL}
+     left join pack_card_serials serials
+       on serials.card_key = pack_collection_cards.card_key
+       and serials.owner_user_id = pack_collection_cards.owner_user_id
+     where pack_collection_cards.copies > 0 and (${predicates.join(" or ")})`,
+    args,
+  )).rows;
+  for (const row of rows) {
+    const ownerUserId = Number(row.holding_owner_id);
+    const cards = groupsByOwner.get(ownerUserId) ?? new Map<string, StoredPackCard>();
+    cards.set(String(row.card_key), cardFromRow(row as Record<string, unknown>));
+    groupsByOwner.set(ownerUserId, cards);
+  }
+  return groupsByOwner;
 }
 
 /* The showcase shelf: up to five cards a collector pins to their public
@@ -1554,63 +1620,89 @@ export async function setPackShowcase(db: Db, ownerUserId: number, cardKeys: unk
   return kept;
 }
 
-/* The showcase wall, one row per chosen card rather than one per collector.
-   Most recently chosen first, which with the stamp above means the card that
-   most recently went up, not the shelf most recently touched.
-
-   Paged over the cards because that is what the page shows: a gallery you
-   browse, where whose card it is comes out of inspecting it. The table holds
-   at most five rows per collector, so the sort is over thousands of rows even
-   with every collector on the site taking part. */
+/* A single gallery stream. Pins and enabled sets share pagination; a set's
+   ordered members stay together and its first card supports older clients. */
 export interface ShowcasedCard {
   ownerUserId: number;
   showcasedAt: number;
   card: StoredPackCard;
+  set?: { id: number; name: string; cards: StoredPackCard[] };
 }
 
 export async function listShowcasedCards(
   db: Db,
   options: { page: number; pageSize: number },
-): Promise<{ cards: ShowcasedCard[]; total: number }> {
+): Promise<{ cards: ShowcasedCard[]; total: number; cardTotal: number }> {
   const pageSize = Math.min(60, Math.max(1, Math.floor(options.pageSize) || 1));
   const page = Math.max(0, Math.floor(options.page) || 0);
-  // Pins whose card has since been fully recycled draw nothing, so they are
-  // not counted either; otherwise the last page could come back empty.
-  const joinSql = `from pack_showcase_cards
-     join pack_collection_cards
-       on pack_collection_cards.owner_user_id = pack_showcase_cards.owner_user_id
-       and pack_collection_cards.card_key = pack_showcase_cards.card_key
-       and pack_collection_cards.copies > 0`;
-  const total = Number((await exec(db, `select count(*) as total ${joinSql}`)).rows[0]?.total) || 0;
-  if (total === 0) return { cards: [], total: 0 };
-  const rows = (await exec(
-    db,
-    `${CARD_SELECT_SQL},
-       ${liveUserFieldSql("username")} as live_username,
-       ${liveUserFieldSql("avatar_url")} as live_avatar_url,
-       ${liveUserFieldSql("country_code")} as live_country_code,
-       serials.serial as serial,
-       (select max(other.serial) from pack_card_serials other
-         where other.card_key = pack_collection_cards.card_key) as minted_total,
-       pack_showcase_cards.updated_at as showcased_at
-     ${joinSql}
-     ${CARD_CATALOG_JOIN_SQL}
-     left join pack_card_serials serials
-       on serials.card_key = pack_collection_cards.card_key
-       and serials.owner_user_id = pack_collection_cards.owner_user_id
-     order by pack_showcase_cards.updated_at desc,
-       pack_showcase_cards.owner_user_id asc, pack_showcase_cards.position asc
-     limit ? offset ?`,
-    [pageSize, page * pageSize],
-  )).rows;
-  return {
-    cards: rows.map((row) => ({
-      ownerUserId: Number(row.owner_user_id),
-      showcasedAt: Number(row.showcased_at) || 0,
-      card: cardFromRow(row as Record<string, unknown>),
-    })),
-    total,
-  };
+  // A group is one entry, so its cards never get split across pages. A pin
+  // already shown in one of this owner's sets is represented by the set.
+  const feedSql = `with visible_sets as (
+    select b.id, b.name, b.owner_user_id, b.created_at, count(*) as card_count
+    from pack_binders b join pack_binder_cards bc on bc.binder_id = b.id
+    join pack_collection_cards c on c.owner_user_id = b.owner_user_id
+      and c.card_key = bc.card_key and c.copies > 0
+    where b.showcased = 1
+      and (select count(*) from pack_binder_cards where binder_id = b.id) <= ${BINDER_MAX_CARDS}
+    group by b.id
+  ), feed as (
+    select s.owner_user_id, s.card_key, s.updated_at as chosen_at,
+      s.position, 0 as set_id, '' as set_name, 1 as card_count
+    from pack_showcase_cards s join pack_collection_cards c
+      on c.owner_user_id = s.owner_user_id and c.card_key = s.card_key and c.copies > 0
+    where not exists (
+      select 1 from pack_binders b join pack_binder_cards bc on bc.binder_id = b.id
+      where b.owner_user_id = s.owner_user_id and b.showcased = 1 and bc.card_key = s.card_key
+        and (select count(*) from pack_binder_cards where binder_id = b.id) <= ${BINDER_MAX_CARDS}
+    )
+    union all
+    select owner_user_id, '', created_at, 0, id, name, card_count from visible_sets
+  )`;
+  const count = (await exec(db, `${feedSql} select count(*) as total, coalesce(sum(card_count), 0) as card_total from feed`)).rows[0];
+  const total = Number(count?.total) || 0;
+  const cardTotal = Number(count?.card_total) || 0;
+  if (total === 0) return { cards: [], total, cardTotal };
+  const rows = (await exec(db, `${feedSql} select * from feed
+    order by chosen_at desc, owner_user_id asc, set_id desc, position asc
+    limit ? offset ?`, [pageSize, page * pageSize])).rows;
+  const setIds = rows.map((row) => Number(row.set_id)).filter((id) => id > 0);
+  const keysBySet = new Map<number, string[]>();
+  if (setIds.length > 0) {
+    const members = (await exec(db,
+      `select binder_id, card_key from pack_binder_cards
+       where binder_id in (${setIds.map(() => "?").join(", ")}) order by binder_id, position`, setIds,
+    )).rows;
+    for (const member of members) {
+      const id = Number(member.binder_id);
+      const keys = keysBySet.get(id) ?? [];
+      keys.push(String(member.card_key));
+      keysBySet.set(id, keys);
+    }
+  }
+  const keysByOwner = new Map<number, string[]>();
+  for (const row of rows) {
+    const ownerUserId = Number(row.owner_user_id);
+    const keys = Number(row.set_id) > 0 ? keysBySet.get(Number(row.set_id)) ?? [] : [String(row.card_key)];
+    keysByOwner.set(ownerUserId, [...(keysByOwner.get(ownerUserId) ?? []), ...keys]);
+  }
+  const held = await readOwnedPackCardGroups(db, keysByOwner);
+  const cards: ShowcasedCard[] = [];
+  for (const row of rows) {
+    const ownerUserId = Number(row.owner_user_id);
+    const setId = Number(row.set_id);
+    const ownerCards = held.get(ownerUserId);
+    if (setId > 0) {
+      const grouped = (keysBySet.get(setId) ?? []).flatMap((key) => {
+        const card = ownerCards?.get(key);
+        return card ? [{ ...card, recycledCopies: 0 }] : [];
+      });
+      if (grouped.length > 0) cards.push({ ownerUserId, showcasedAt: Number(row.chosen_at), card: grouped[0], set: { id: setId, name: String(row.set_name), cards: grouped } });
+    } else {
+      const card = ownerCards?.get(String(row.card_key));
+      if (card) cards.push({ ownerUserId, showcasedAt: Number(row.chosen_at), card });
+    }
+  }
+  return { cards, total, cardTotal };
 }
 
 /**
@@ -2244,9 +2336,9 @@ export async function mintDealtPackCards(
    comfortably (per-card copies rarely reach double digits, duplicates in the
    hundreds mean hundreds of packs opened logged-out); what the caps bound is
    a hand-written localStorage wallet, whose one shot at the server is this
-   call. Everything here inflates only the importer's own account - shards and
-   cards are not transferable - so the caps are about keeping that inflation
-   small, not about protecting anyone else's collection. */
+   call. Shards stay on the importer, and imported cards cannot be gifted until
+   a server deal establishes that holding's eligibility. The duplicate budget
+   bounds imported copies even after that later deal makes gifting possible. */
 const WALLET_IMPORT_MAX_DISTINCT_CARDS = 8_000;
 const WALLET_IMPORT_MAX_COPIES_PER_CARD = 100;
 const WALLET_IMPORT_DUPLICATE_BUDGET = 1_000;
@@ -2676,7 +2768,7 @@ export async function recyclePackCollectionCards(
   let gained = 0;
 
   if (options.mode === "whole_matching") {
-    const where = ["owner_user_id = ?", "copies > 0"];
+    const where = ["owner_user_id = ?", "copies > 0", RECYCLABLE_CARD_SQL];
     const args: InValue[] = [userId];
     const tier = options.tier ?? "all";
     const query = options.query?.trim().toLowerCase() ?? "";
@@ -2727,7 +2819,7 @@ export async function recyclePackCollectionCards(
       db,
       `select coalesce(sum(${wholeCardShardValueSql("tier")}), 0) as gained
        from pack_collection_cards
-       where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
+       where owner_user_id = ? and card_key in (${placeholders}) and copies > 0 and ${RECYCLABLE_CARD_SQL}`,
       [userId, ...keys],
     )).rows[0];
     gained = Number(row?.gained) || 0;
@@ -2738,7 +2830,7 @@ export async function recyclePackCollectionCards(
          set recycled_copies = recycled_copies + copies,
              copies = 0,
              updated_at = ?
-         where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
+         where owner_user_id = ? and card_key in (${placeholders}) and copies > 0 and ${RECYCLABLE_CARD_SQL}`,
         [now, userId, ...keys],
       );
     }
@@ -2761,7 +2853,7 @@ export async function recyclePackCollectionCards(
     const rows = (await exec(
       db,
       `select card_key, copies, tier from pack_collection_cards
-       where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
+       where owner_user_id = ? and card_key in (${placeholders}) and copies > 0 and ${RECYCLABLE_CARD_SQL}`,
       [userId, ...keys],
     )).rows;
     const updates: DbStatement[] = [];
@@ -2796,7 +2888,7 @@ export async function recyclePackCollectionCards(
       db,
       `select coalesce(sum(max(copies - 1, 0) * ${duplicateShardValueSql("tier")}), 0) as gained
        from pack_collection_cards
-       where owner_user_id = ? and copies > 1`,
+       where owner_user_id = ? and copies > 1 and ${RECYCLABLE_CARD_SQL}`,
       [userId],
     )).rows[0];
     gained = Number(row?.gained) || 0;
@@ -2807,7 +2899,7 @@ export async function recyclePackCollectionCards(
          set recycled_copies = recycled_copies + copies - 1,
              copies = 1,
              updated_at = ?
-         where owner_user_id = ? and copies > 1`,
+         where owner_user_id = ? and copies > 1 and ${RECYCLABLE_CARD_SQL}`,
         [now, userId],
       );
     }
@@ -2818,7 +2910,7 @@ export async function recyclePackCollectionCards(
   if (!cardKey) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
   const card = (await exec(
     db,
-    "select copies, tier from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
+    `select copies, tier from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0 and ${RECYCLABLE_CARD_SQL}`,
     [userId, cardKey],
   )).rows[0];
   if (!card) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };

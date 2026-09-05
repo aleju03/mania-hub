@@ -40,6 +40,10 @@ The queue lives in the `jobs` table with priority, dedupe keys, and per-type bac
 
 Workers renew each 60-second lease while its attempt runs; completion, failure and deferral require the same worker and attempt. An empty reserved-lane refill checks for deferred rows before taking the write lock. On watchdog expiry the lane is released and the handler is aborted, but its attempt remains leased and visible as `aborting` until the handler settles. A handler that never cooperates needs a process restart; it must not be retried concurrently while it can still write.
 
+MinaCalc runs in a dedicated worker thread (`dan/msd-thread.ts` / `msd-thread-worker.ts`), including chart parsing and WASM initialization. Calls from every job lane and the rate-analysis endpoints share one serialized calculator per process. An active calculation has a two-minute watchdog; a crash or timeout rejects the work and allows a fresh thread after a one-minute cooldown. These infrastructure failures remain retryable through the chart/skill callers instead of being stored as missing ratings. Source-mode development uses the same thread through the scoped tsx loader in `module-worker.ts`.
+
+The main, journal and analytics connections opened by `server.ts` use `createRuntimeDb`: SQLite's synchronous busy timeout is zero, and `exec` / `execBatch` retain their asynchronous retry budgets. Each connection serializes native operations and repairs a handle that returned `SQLITE_BUSY` before another caller can use it; even a failed single statement can otherwise leave later writes visible only to that connection. Contention recovery appears in the `statementBusyReconnects` / `batchBusyReconnects` counters. Dedicated DB threads and the throwaway boot migration connection still use their configured native busy timeouts.
+
 Job types:
 
 - `enrich_user`, `enrich_beatmap`: fetch full metadata from the osu! API.

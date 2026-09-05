@@ -1,3 +1,4 @@
+import { createPackBinder, setPackBinderCards, setPackBinderShowcased } from "../src/features/pack-binders.js";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -531,7 +532,7 @@ describe("showcase wall", () => {
   it("has nothing to show before anyone picks a card", async () => {
     await seedCollector(BIG, "bigcollector");
     await seedCollectionCard(db, BIG, 11);
-    expect(await listPackShowcaseWall(db, { page: 0, pageSize: 10 })).toEqual({ cards: [], total: 0 });
+    expect(await listPackShowcaseWall(db, { page: 0, pageSize: 10 })).toEqual({ cards: [], total: 0, cardTotal: 0 });
   });
 });
 
@@ -608,5 +609,64 @@ describe("snapshot disk cache", () => {
       collector: { source: "inline" },
     });
     expect((await readdir(dir)).filter((name) => name.startsWith("pack-community-"))).toEqual([]);
+  });
+});
+
+
+describe("sets in the showcase wall", () => {
+  it("mixes groups with individual cards in one order and keeps a set together across pages", async () => {
+    await seedCollector(BIG, "curator");
+    for (const id of [11, 12, 13, 14]) await seedCollectionCard(db, BIG, id, { tier: "rare" });
+    const setId = await createPackBinder(db, BIG, "Matching avatars");
+    await setPackBinderCards(db, BIG, setId, ["12", "11"]);
+    await setPackBinderShowcased(db, BIG, setId, true);
+    await exec(db, "update pack_binders set created_at = 2000 where id = ?", [setId]);
+    await exec(db, "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, '13', 3000), (?, 1, '14', 1000)", [BIG, BIG]);
+    const first = await listPackShowcaseWall(db, { page: 0, pageSize: 2 });
+    const second = await listPackShowcaseWall(db, { page: 1, pageSize: 2 });
+    expect(first.total).toBe(3);
+    expect(first.cardTotal).toBe(4);
+    expect(first.cards[0].card.userId).toBe(13);
+    expect(first.cards[1].set).toMatchObject({ id: setId, name: "Matching avatars" });
+    expect(first.cards[1].set?.cards.map((card) => card.userId)).toEqual([12, 11]);
+    expect(first.cards[1].collector.username).toBe("curator");
+    expect(second.cards.map((entry) => entry.card.userId)).toEqual([14]);
+  });
+
+  it("represents an owner's individually pinned card once when it is also in their set", async () => {
+    await seedCollector(BIG, "curator");
+    await seedCollector(SMALL, "othercurator");
+    await seedCollectionCard(db, BIG, 11, { tier: "rare" });
+    await seedCollectionCard(db, BIG, 12, { tier: "rare" });
+    await seedCollectionCard(db, SMALL, 11, { tier: "rare" });
+    const setId = await createPackBinder(db, BIG, "Friends");
+    await setPackBinderCards(db, BIG, setId, ["11", "12"]);
+    await setPackBinderShowcased(db, BIG, setId, true);
+    await exec(db, "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, '11', 1000), (?, 0, '11', 1000)", [BIG, SMALL]);
+    const wall = await listPackShowcaseWall(db, { page: 0, pageSize: 40 });
+    expect(wall.total).toBe(2);
+    expect(wall.cardTotal).toBe(3);
+    expect(wall.cards.filter((entry) => !entry.set).map((entry) => entry.collector.userId)).toEqual([SMALL]);
+    await setPackBinderShowcased(db, BIG, setId, false);
+    const hidden = await listPackShowcaseWall(db, { page: 0, pageSize: 40 });
+    expect(hidden.cards.every((entry) => !entry.set)).toBe(true);
+    expect(hidden.cardTotal).toBe(2);
+    expect(hidden.total).toBe(2);
+  });
+
+  it("omits unchecked sets and fully recycled groups, and preserves the order of remaining cards", async () => {
+    await seedCollector(BIG, "curator");
+    await seedCollectionCard(db, BIG, 11, { tier: "rare" });
+    await seedCollectionCard(db, BIG, 12, { tier: "rare" });
+    const setId = await createPackBinder(db, BIG, "Friends");
+    await setPackBinderCards(db, BIG, setId, ["12", "11"]);
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 40 })).total).toBe(0);
+    await setPackBinderShowcased(db, BIG, setId, true);
+    await exec(db, "update pack_collection_cards set copies = 0 where owner_user_id = ? and card_key = '12'", [BIG]);
+    const wall = await listPackShowcaseWall(db, { page: 0, pageSize: 40 });
+    expect(wall.cardTotal).toBe(1);
+    expect(wall.cards[0].set?.cards.map((card) => card.userId)).toEqual([11]);
+    await exec(db, "update pack_collection_cards set copies = 0 where owner_user_id = ?", [BIG]);
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 40 })).total).toBe(0);
   });
 });

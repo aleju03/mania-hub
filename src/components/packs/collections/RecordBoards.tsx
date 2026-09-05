@@ -100,9 +100,9 @@ function CardRow({ card, index, value, note }: { card: LivePackCommunityCard; in
   );
 }
 
-function Board({ title, children }: { title: string; children: React.ReactNode }) {
+function Board({ title, children, centered = false }: { title: string; children: React.ReactNode; centered?: boolean }) {
   return (
-    <Section>
+    <Section className={centered ? "md:col-span-2 md:mx-auto md:w-[calc((100%-2.5rem)/2)]" : undefined}>
       <SectionHeading>{title}</SectionHeading>
       {/* No dividers and no box: the heading opens the board and the hover
           fill is what separates one row from the next. */}
@@ -111,17 +111,17 @@ function Board({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-/* What the boards below come back as: eight of them, ten rows each
-   (PACK_COMMUNITY_BOARD_SIZE on the backend). The skeleton draws that shape
-   exactly, so the page under it is already the height it will be. */
-const BOARD_COUNT = 8;
+/* Seven boards, ten rows each. Completion and packs opened lead the grid. */
+const BOARD_COUNT = 7;
 const BOARD_ROWS = 10;
 
 export function RecordBoardsSkeleton() {
   return (
     <div className="grid gap-x-10 gap-y-10 md:grid-cols-2">
       {Array.from({ length: BOARD_COUNT }, (_, index) => (
-        <BoardSkeleton key={index} rows={BOARD_ROWS} />
+        <div key={index} className={index === BOARD_COUNT - 1 ? "md:col-span-2 md:mx-auto md:w-[calc((100%-2.5rem)/2)]" : undefined}>
+          <BoardSkeleton rows={BOARD_ROWS} />
+        </div>
       ))}
     </div>
   );
@@ -214,22 +214,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
         ))}
       </Board>
 
-      {/* Counted in how many collectors have ever pulled the card rather than
-          in how many hold it now: a serial is never given back, so recycling
-          cannot make a common card look rare. */}
-      <Board title={t`hardest cards to find`}>
-        {boards.rarestCards.map((card, index) => (
-          <CardRow
-            key={card.userId}
-            card={card}
-            index={index}
-            note={card.mintedTotal > 0 && card.mintedTotal !== card.owners ? t`${formatNumber(card.owners)} still held` : null}
-            value={card.mintedTotal > 0 ? t`found ${formatNumber(card.mintedTotal)}x` : t`${formatNumber(card.owners)} held`}
-          />
-        ))}
-      </Board>
-
-      <Board title={t`most collected cards`}>
+      <Board title={t`most collected cards`} centered>
         {boards.mostOwnedCards.map((card, index) => (
           <CardRow
             key={card.userId}

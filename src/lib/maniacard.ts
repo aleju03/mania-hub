@@ -878,7 +878,34 @@ export interface ManiaCardTierStyle {
 
 /* The card-surface style for a holding whose motif names a palette
    (CardMotif.palette), everything but the label, which stays the tier's. */
-export const MANIA_PALETTE_STYLES: Record<"gold", Omit<ManiaCardTierStyle, "label">> = {
+export const MANIA_PALETTE_STYLES: Record<"gold" | "prismatic" | "aurora" | "ember", Omit<ManiaCardTierStyle, "label">> = {
+  prismatic: {
+    background: "from-black via-violet-950 to-zinc-950",
+    border: "border-cyan-200/90",
+    glow: "shadow-[0_18px_90px_rgba(167,139,250,0.45)]",
+    edgeFill: "rgba(167, 139, 250, 0.8)", glowColor: "rgba(167, 139, 250, 0.45)",
+    starColor: "text-fuchsia-100", badgeColor: "text-white",
+    badgeGradient: "linear-gradient(142deg, #f0abfc 0%, #a78bfa 34%, #67e8f9 70%, #090910 100%)",
+    badgeHalo: "rgba(167, 139, 250, 0.65)", badgeGlyphShadow: "rgba(167, 139, 250, 0.4)",
+  },
+  aurora: {
+    background: "from-black via-teal-950 to-zinc-950",
+    border: "border-indigo-200/90",
+    glow: "shadow-[0_18px_90px_rgba(45,212,191,0.45)]",
+    edgeFill: "rgba(45, 212, 191, 0.8)", glowColor: "rgba(45, 212, 191, 0.45)",
+    starColor: "text-cyan-100", badgeColor: "text-white",
+    badgeGradient: "linear-gradient(142deg, #99f6e4 0%, #2dd4bf 34%, #818cf8 70%, #090910 100%)",
+    badgeHalo: "rgba(45, 212, 191, 0.65)", badgeGlyphShadow: "rgba(45, 212, 191, 0.4)",
+  },
+  ember: {
+    background: "from-black via-orange-950 to-zinc-950",
+    border: "border-rose-200/90",
+    glow: "shadow-[0_18px_90px_rgba(251,146,60,0.45)]",
+    edgeFill: "rgba(251, 146, 60, 0.8)", glowColor: "rgba(251, 146, 60, 0.45)",
+    starColor: "text-amber-100", badgeColor: "text-white",
+    badgeGradient: "linear-gradient(142deg, #fed7aa 0%, #fb923c 34%, #fb7185 70%, #090910 100%)",
+    badgeHalo: "rgba(251, 146, 60, 0.65)", badgeGlyphShadow: "rgba(251, 146, 60, 0.4)",
+  },
   gold: {
     background: "from-black via-yellow-950 to-zinc-950",
     border: "border-yellow-100/95",

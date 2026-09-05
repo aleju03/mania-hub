@@ -10,10 +10,13 @@
 // process needs (the pack pool's unranked members, the skill leaderboard), see
 // computeOnMapsSnapshotThread: each of those is seconds of synchronous libsql
 // and JSON work that used to freeze every request while it ran.
-import { Worker } from "node:worker_threads";
+// Catalog search also runs here, returning prepared JSON under "maps-search".
+import type { Worker } from "node:worker_threads";
 import type { Db } from "../db.js";
 import { logWarn, errorContext } from "../logger.js";
 import type { MapsPageQuery } from "../features/maps.js";
+import type { MapSearchQuery } from "../features/map-search.js";
+import { createModuleWorker } from "../module-worker.js";
 import type { PreparedJsonResponse } from "./prepared-json.js";
 
 export type MapsSnapshotThreadBuildRequest = {
@@ -22,6 +25,10 @@ export type MapsSnapshotThreadBuildRequest = {
   query: MapsPageQuery;
   encoding: "br" | "gzip" | null;
   maxAgeMs: number;
+} | {
+  kind: "maps-search";
+  query: MapSearchQuery;
+  encoding: "br" | "gzip" | null;
 };
 
 /* Board builds that come back as a value (structured clone, typed-array
@@ -34,7 +41,7 @@ export type MapsSnapshotThreadComputeRequest =
 export type MapsSnapshotThreadRequest = (MapsSnapshotThreadBuildRequest | MapsSnapshotThreadComputeRequest) & { id: number };
 
 export type MapsSnapshotThreadOkResponse =
-  | { id: number; ok: true; kind: "maps-page"; status: number; encoding: "br" | "gzip" | null; vary: boolean; body: Uint8Array }
+  | { id: number; ok: true; kind: "maps-page" | "maps-search"; status: number; encoding: "br" | "gzip" | null; vary: boolean; body: Uint8Array }
   | { id: number; ok: true; kind: "compute"; value: unknown };
 
 export type MapsSnapshotThreadResponse =
@@ -81,7 +88,7 @@ export interface MapsSnapshotThreadStatus {
   lastBuildAt: string | null;
   /** Which request the last build answered: a maps page or one of the board computes. */
   lastBuildKind: string | null;
-  /** Body size of the last maps-page build; null after a compute, which has no body. */
+  /** Body size of the last page/search build; null after a compute, which has no body. */
   lastBuildBytes: number | null;
   lastErrorAt: string | null;
   lastError: string | null;
@@ -164,7 +171,7 @@ export class MapsSnapshotThread {
 
   async build(request: MapsSnapshotThreadBuildRequest): Promise<PreparedJsonResponse> {
     const response = await this.dispatch(request);
-    if (response.kind !== "maps-page") {
+    if (response.kind === "compute" || response.kind !== request.kind) {
       throw new MapsSnapshotBuildError(`maps snapshot thread answered ${request.kind} with a ${response.kind} response`);
     }
     return {
@@ -185,6 +192,11 @@ export class MapsSnapshotThread {
   }
 
   private dispatch(request: MapsSnapshotThreadBuildRequest | MapsSnapshotThreadComputeRequest): Promise<MapsSnapshotThreadOkResponse> {
+    // Distinct search misses share the read thread. Bound the backlog so a
+    // burst cannot retain unbounded requests behind one expensive query.
+    if (request.kind === "maps-search" && this.pending.size >= 16) {
+      return Promise.reject(new MapsSnapshotBuildError("maps search thread busy"));
+    }
     const worker = this.ensureWorker();
     if (!worker) return Promise.reject(new Error("maps snapshot thread unavailable"));
     const id = this.nextId++;
@@ -207,7 +219,7 @@ export class MapsSnapshotThread {
     if (!this.available()) return null;
     let worker: Worker;
     try {
-      worker = new Worker(new URL("./maps-snapshot-thread-worker.js", import.meta.url), {
+      worker = createModuleWorker(new URL("./maps-snapshot-thread-worker.js", import.meta.url), {
         workerData: this.config,
       });
     } catch (error) {
@@ -248,7 +260,7 @@ export class MapsSnapshotThread {
       return;
     }
     this.okBuilds += 1;
-    this.lastBuildBytes = response.kind === "maps-page" ? response.body.byteLength : null;
+    this.lastBuildBytes = response.kind === "compute" ? null : response.body.byteLength;
     pending.resolve(response);
   }
 
@@ -309,11 +321,10 @@ export type MapsSnapshotThreadDisabledReason = "not_file_db" | "env_disabled" | 
 function mapsSnapshotThreadDisabledReason(databaseUrl?: string): MapsSnapshotThreadDisabledReason | null {
   if (!databaseUrl || !databaseUrl.startsWith("file:")) return "not_file_db";
   if (process.env.MAPS_SNAPSHOT_THREAD === "0") return "env_disabled";
-  // `node --import tsx` can run this source module, but its worker threads do
-  // not remap the worker's internal `.js` imports back to `.ts`. Source-mode
-  // development therefore uses the existing inline fallback without first
-  // spawning a worker that is guaranteed to fail and log warnings. Compiled
-  // production reaches this code from a `.js` module and keeps the worker.
+  // Keep the existing inline source-mode development path. The explicit
+  // loader in createModuleWorker lets worker integration tests run from TS,
+  // while ordinary dev does not load another large maps/board isolate.
+  // Compiled production reaches this code from JS and uses the worker.
   if (import.meta.url.endsWith(".ts")) return "source_mode";
   return null;
 }

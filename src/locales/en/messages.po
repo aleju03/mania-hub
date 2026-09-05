@@ -297,6 +297,11 @@ msgstr "{0} ({1} stars)"
 msgid "{0} {1} maniacard"
 msgstr "{0} {1} maniacard"
 
+#. placeholder {0}: binders?.length ?? 0
+#: src/components/packs/SetsView.tsx
+msgid "{0} / {BINDER_MAX_PER_COLLECTOR} sets · Up to {BINDER_MAX_CARDS} cards per set"
+msgstr "{0} / {BINDER_MAX_PER_COLLECTOR} sets · Up to {BINDER_MAX_CARDS} cards per set"
+
 #. placeholder {0}: beatmapset.artist
 #. placeholder {0}: farmContext?.artist ?? t`unknown artist`
 #. placeholder {1}: beatmapset.creator
@@ -320,15 +325,20 @@ msgstr "{0} albums"
 msgid "{0} biggest"
 msgstr "{0} biggest"
 
-#. placeholder {0}: shown.total.toLocaleString("en-US")
+#. placeholder {0}: cardCount.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} card"
 msgstr "{0} card"
 
-#. placeholder {0}: shown.total.toLocaleString("en-US")
+#. placeholder {0}: cardCount.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} cards"
 msgstr "{0} cards"
+
+#. placeholder {0}: formatNumber(history.records.firstFindCount, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{0} cards found first"
+#~ msgstr "{0} cards found first"
 
 #. placeholder {0}: 0
 #. placeholder {0}: charCount.toLocaleString("en-US")
@@ -351,6 +361,11 @@ msgstr "{0} collections"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} columns selected"
 msgstr "{0} columns selected"
+
+#. placeholder {0}: formatNumber(history.records.mostCopies.copies, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{0} copies"
+#~ msgstr "{0} copies"
 
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -389,6 +404,11 @@ msgstr "{0} duplicate"
 msgid "{0} Eternal maniacard"
 msgstr "{0} Eternal maniacard"
 
+#. placeholder {0}: formatNumber(history.records.rarest.mintedTotal, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{0} ever minted"
+#~ msgstr "{0} ever minted"
+
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
 msgid "{0} favourites"
@@ -398,6 +418,11 @@ msgstr "{0} favourites"
 #: src/components/packs/GoatPoll.tsx
 msgid "{0} for"
 msgstr "{0} for"
+
+#. placeholder {0}: status.cap - status.used
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "{0} forges left"
+#~ msgstr "{0} forges left"
 
 #. placeholder {0}: entry.frameCount
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -416,8 +441,8 @@ msgstr "{0} goats"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "{0} held"
-msgstr "{0} held"
+#~ msgid "{0} held"
+#~ msgstr "{0} held"
 
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
@@ -517,6 +542,12 @@ msgstr "{0} of {1} plays analyzed"
 msgid "{0} of {1} to pull this"
 msgstr "{0} of {1} to pull this"
 
+#. placeholder {0}: forge.status.used
+#. placeholder {1}: forge.status.cap
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "{0} of {1} today"
+#~ msgstr "{0} of {1} today"
+
 #. placeholder {0}: maps.length
 #: src/routes/player/$username.tsx
 msgid "{0} of {mapCount}"
@@ -524,8 +555,13 @@ msgstr "{0} of {mapCount}"
 
 #. placeholder {0}: picked.length
 #: src/components/packs/collections/ShowcasePicker.tsx
-msgid "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
-msgstr "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
+msgid "{0} of {maxCards} chosen"
+msgstr "{0} of {maxCards} chosen"
+
+#. placeholder {0}: picked.length
+#: src/components/packs/collections/ShowcasePicker.tsx
+#~ msgid "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
+#~ msgstr "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
 
 #. placeholder {0}: focused.count
 #: src/routes/player/$username.tsx
@@ -541,6 +577,11 @@ msgstr "{0} on their own"
 #: src/routes/tracker.tsx
 msgid "{0} only"
 msgstr "{0} only"
+
+#. placeholder {0}: open.owner.username
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "{0} opened a {packName} pack"
+#~ msgstr "{0} opened a {packName} pack"
 
 #. placeholder {0}: i18n._(PACK_TYPE_NAME_LABELS[odds.packId])
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -637,6 +678,11 @@ msgstr "{0} sound from {1}"
 msgid "{0} sounds from {1}"
 msgstr "{0} sounds from {1}"
 
+#. placeholder {0}: status.cost
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "{0} spare copies"
+#~ msgstr "{0} spare copies"
+
 #. placeholder {0}: farmContext.stars.toFixed(2)
 #. placeholder {0}: selectedBeatmap.difficultyRating.toFixed(2)
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -645,8 +691,8 @@ msgstr "{0} stars"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "{0} still held"
-msgstr "{0} still held"
+#~ msgid "{0} still held"
+#~ msgstr "{0} still held"
 
 #. placeholder {0}: patternName(pattern)
 #: src/components/maps/PatternPicker.tsx
@@ -987,6 +1033,10 @@ msgstr "{hours}h ago"
 msgid "{keyCount}K {sideLabel} dan"
 msgstr "{keyCount}K {sideLabel} dan"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "{keyCount}K skill history"
+msgstr "{keyCount}K skill history"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{keyCount}K skillset"
 msgstr "{keyCount}K skillset"
@@ -1015,6 +1065,10 @@ msgstr "{label} rating"
 #: src/components/player/SkillBreakdown.tsx
 msgid "{label}: {share} of {population} tracked {keyCount}K mains"
 msgstr "{label}: {share} of {population} tracked {keyCount}K mains"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{label}'s history"
+#~ msgstr "{label}'s history"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{left} to go at {at}pp+"
@@ -1107,6 +1161,14 @@ msgstr "{name} isn't one of them."
 #: src/lib/streak-game.ts
 msgid "{name} joined in {month}."
 msgstr "{name} joined in {month}."
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "{name}'s {packName} pack"
+#~ msgstr "{name}'s {packName} pack"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{name}'s collector history"
+#~ msgstr "{name}'s collector history"
 
 #: src/lib/streak-game.ts
 msgid "{name}'s oldest top play is from {month}."
@@ -1511,6 +1573,10 @@ msgstr "<0>{0}K has its own rating scale.</0> A lower number than another keymod
 msgid "<0>{collectorLabel}</0> has not opened a pack."
 msgstr "<0>{collectorLabel}</0> has not opened a pack."
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "<0>{label}</0> has not opened a pack."
+#~ msgstr "<0>{label}</0> has not opened a pack."
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
 msgstr "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
@@ -1899,10 +1965,18 @@ msgstr "A fresh rating is being computed from the latest plays; these numbers ma
 #~ msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
 #~ msgstr "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
 
+#: src/components/packs/GiftInbox.tsx
+msgid "A gift from"
+msgstr "A gift from"
+
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A line about the skin"
 msgstr "A line about the skin"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "A little something for you"
+msgstr "A little something for you"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "A live feed of your tracked plays, your playstyle fingerprint, when you play, and records the osu! profile never shows you."
@@ -1988,6 +2062,10 @@ msgstr "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "A screenshot could not be removed. Try again."
 msgstr "A screenshot could not be removed. Try again."
+
+#: src/components/packs/SetsView.tsx
+msgid "A set can hold up to {BINDER_MAX_CARDS} cards."
+msgstr "A set can hold up to {BINDER_MAX_CARDS} cards."
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
@@ -2141,6 +2219,14 @@ msgstr "Actual size"
 #~ msgid "Add"
 #~ msgstr "Add"
 
+#: src/components/packs/SetsView.tsx
+msgid "Add {cardCount} cards"
+msgstr "Add {cardCount} cards"
+
+#: src/components/packs/SetsView.tsx
+msgid "Add {cardCount} cards to set..."
+msgstr "Add {cardCount} cards to set..."
+
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
 msgstr "Add a card to your showcase"
@@ -2179,6 +2265,10 @@ msgstr "Add area"
 msgid "Add at least {USER_COLLECTION_MIN_ITEMS} maps before posting."
 msgstr "Add at least {USER_COLLECTION_MIN_ITEMS} maps before posting."
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Add cards"
+#~ msgstr "Add cards"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add color"
 msgstr "Add color"
@@ -2207,6 +2297,10 @@ msgstr "Add more details"
 msgid "Add overlay"
 msgstr "Add overlay"
 
+#: src/components/packs/WishlistLine.tsx
+msgid "Add players from the missing cards in your collection. Eligible packs have a growing chance to include one of your wishes."
+msgstr "Add players from the missing cards in your collection. Eligible packs have a growing chance to include one of your wishes."
+
 #: src/components/player/AddScoreModal.tsx
 msgid "Add score"
 msgstr "Add score"
@@ -2219,9 +2313,25 @@ msgstr "Add the {label} run"
 msgid "Add the text that reads wrong."
 msgstr "Add the text that reads wrong."
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Add to binder..."
+#~ msgstr "Add to binder..."
+
 #: src/routes/discord.tsx
 msgid "Add to Discord"
 msgstr "Add to Discord"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Add to folder..."
+#~ msgstr "Add to folder..."
+
+#: src/components/packs/SetsView.tsx
+msgid "Add to set"
+msgstr "Add to set"
+
+#: src/components/packs/SetsView.tsx
+msgid "Add to set..."
+msgstr "Add to set..."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "added"
@@ -2299,6 +2409,10 @@ msgstr "All collections"
 msgid "All Discord servers"
 msgstr "All Discord servers"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "All five cards have to be the same rarity."
+#~ msgstr "All five cards have to be the same rarity."
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "all keymodes"
 msgstr "all keymodes"
@@ -2332,6 +2446,10 @@ msgstr "All players"
 msgid "All rows"
 msgstr "All rows"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "All three forges are used. They return after 24 hours."
+#~ msgstr "All three forges are used. They return after 24 hours."
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
 msgstr "All uploads"
@@ -2347,6 +2465,10 @@ msgstr "Almost there{elapsedLabel}"
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
 msgstr "already a GOAT"
+
+#: src/components/packs/SetsView.tsx
+msgid "Already in set"
+msgstr "Already in set"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Already in the collection"
@@ -2533,6 +2655,10 @@ msgstr "Archived"
 msgid "archived summary"
 msgstr "archived summary"
 
+#: src/components/packs/collections/ShowcasePicker.tsx
+msgid "Arrange your cards"
+msgstr "Arrange your cards"
+
 #: src/routes/skins.tsx
 msgid "arrows"
 msgstr "arrows"
@@ -2597,6 +2723,10 @@ msgstr "Audio URL (mp3)"
 msgid "August 23, 2026"
 msgstr "August 23, 2026"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Aurora"
+#~ msgstr "Aurora"
+
 #: src/routes/discord.tsx
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "Authorize. The bot needs to send messages and embed links."
@@ -2652,6 +2782,10 @@ msgstr "Back"
 msgid "back to collection"
 msgstr "back to collection"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Back to collection"
+#~ msgstr "Back to collection"
+
 #: src/routes/replay.tsx
 msgid "Back to menu"
 msgstr "Back to menu"
@@ -2676,6 +2810,10 @@ msgstr "back to servers"
 #: src/routes/skins_.$id.tsx
 msgid "back to skins"
 msgstr "back to skins"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Back to the collection"
+#~ msgstr "Back to the collection"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back to the picker"
@@ -2902,6 +3040,18 @@ msgstr "Biggest day"
 msgid "biggest jump first"
 msgstr "biggest jump first"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Binder name"
+#~ msgstr "Binder name"
+
+#: src/routes/packs.tsx
+#~ msgid "Binders"
+#~ msgstr "Binders"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Binders are kept with your account, so sign in to make one."
+#~ msgstr "Binders are kept with your account, so sign in to make one."
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
 msgstr "Black playfield"
@@ -2931,6 +3081,10 @@ msgstr "Board spot <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "Bold"
+
+#: src/components/packs/WishlistLine.tsx
+msgid "Bonus chance per eligible pack: {chance}"
+msgstr "Bonus chance per eligible pack: {chance}"
 
 #: src/routes/player/$username.tsx
 msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
@@ -3043,11 +3197,21 @@ msgstr "Bulgarian"
 msgid "Bullet list"
 msgstr "Bullet list"
 
+#. placeholder {0}: tierLabel(entry.tier)
+#. placeholder {1}: tierLabel(entry.targetTier)
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Burn 5 duplicate {0} copies for one {1} card"
+#~ msgstr "Burn 5 duplicate {0} copies for one {1} card"
+
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "by <0>{0}</0>"
 msgstr "by <0>{0}</0>"
+
+#: src/components/packs/collections/RecordBoards.tsx
+#~ msgid "by country"
+#~ msgstr "by country"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "By Player"
@@ -3069,6 +3233,10 @@ msgstr "Calculating skills..."
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "Cancel"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Cancel forge"
+#~ msgstr "Cancel forge"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Canvas unavailable."
@@ -3128,6 +3296,11 @@ msgstr "cards collected"
 msgid "Cards found"
 msgstr "Cards found"
 
+#. placeholder {0}: picking.name
+#: src/components/packs/SetsView.tsx
+msgid "Cards in {0}"
+msgstr "Cards in {0}"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
 msgstr "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
@@ -3145,8 +3318,14 @@ msgstr "Ch"
 msgid "change"
 msgstr "change"
 
+#: src/components/packs/GiftSpareDialog.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+msgid "Change"
+msgstr "Change"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgctxt "skill rating difference"
 msgid "Change"
 msgstr "Change"
 
@@ -3170,6 +3349,10 @@ msgstr "changelog"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changelog"
 msgstr "Changelog"
+
+#: src/components/player/SkillHistoryModal.tsx
+#~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
+#~ msgstr "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing the keymode label failed. Try again."
@@ -3252,9 +3435,17 @@ msgstr "Chinese"
 msgid "Choke"
 msgstr "Choke"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Choose a collector"
+msgstr "Choose a collector"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Choose a different replay"
 msgstr "Choose a different replay"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Choose a finish"
+#~ msgstr "Choose a finish"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
@@ -3263,6 +3454,14 @@ msgstr "Choose a mania difficulty"
 #: src/components/packs/GoatPoll.tsx
 msgid "Choose a new GOAT"
 msgstr "Choose a new GOAT"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Choose another collector for your gift."
+msgstr "Choose another collector for your gift."
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Choose the card you want to craft a special edition of."
+#~ msgstr "Choose the card you want to craft a special edition of."
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
@@ -3462,7 +3661,6 @@ msgstr "client"
 msgid "Client"
 msgstr "Client"
 
-#: src/components/player/SkillHistoryModal.tsx
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -3474,10 +3672,12 @@ msgstr "Client"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
+#: src/components/packs/PackDialog.tsx
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -3588,6 +3788,16 @@ msgstr "Collections are being rebuilt. Check back in a few minutes."
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Collections are unavailable right now. Try again in a bit."
 msgstr "Collections are unavailable right now. Try again in a bit."
+
+#. placeholder {0}: formatNumber(history.collectorNumber, locale)
+#. placeholder {1}: formatDate(new Date(history.collector.joinedAt).toISOString(), timeZone, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Collector <0>#{0}</0>, joined {1}"
+#~ msgstr "Collector <0>#{0}</0>, joined {1}"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Collector history"
+#~ msgstr "Collector history"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "collectors"
@@ -3783,6 +3993,10 @@ msgstr "Copying BBCode..."
 msgid "Could not check that invite. Try again."
 msgstr "Could not check that invite. Try again."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Could not confirm delivery. Retry to check this same gift."
+msgstr "Could not confirm delivery. Retry to check this same gift."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Could not copy to clipboard"
 msgstr "Could not copy to clipboard"
@@ -3790,6 +4004,10 @@ msgstr "Could not copy to clipboard"
 #: src/components/packs/StreakGame.tsx
 msgid "Could not deal a blitz run. Try again in a moment."
 msgstr "Could not deal a blitz run. Try again in a moment."
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Could not dismiss these gifts. Try again."
+msgstr "Could not dismiss these gifts. Try again."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Could not draw this one."
@@ -3799,6 +4017,18 @@ msgstr "Could not draw this one."
 msgid "Could not load more plays."
 msgstr "Could not load more plays."
 
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Could not load sets."
+#~ msgstr "Could not load sets."
+
+#: src/components/packs/SetsView.tsx
+msgid "Could not load sets. Try again."
+msgstr "Could not load sets. Try again."
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Could not load skill history."
+msgstr "Could not load skill history."
+
 #: src/routes/player/$username.tsx
 msgid "Could not load skill ratings. Try again in a bit."
 msgstr "Could not load skill ratings. Try again in a bit."
@@ -3806,6 +4036,10 @@ msgstr "Could not load skill ratings. Try again in a bit."
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Could not load that collection."
 msgstr "Could not load that collection."
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Could not load that history."
+#~ msgstr "Could not load that history."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Could not load the clears"
@@ -3846,6 +4080,10 @@ msgstr "Could not load these plays."
 msgid "Could not load this leaderboard."
 msgstr "Could not load this leaderboard."
 
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Could not load your journal."
+#~ msgstr "Could not load your journal."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not match the image sizes."
 msgstr "Could not match the image sizes."
@@ -3873,6 +4111,10 @@ msgstr "Could not resize the image."
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "Could not save that. Try again."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Could not search collectors. Try again."
+msgstr "Could not search collectors. Try again."
 
 #: src/routes/report.tsx
 msgid "Could not send that update. Try again."
@@ -4130,6 +4372,10 @@ msgstr "Country (or global) leaderboard, top players by pp."
 msgid "Country mania rankings"
 msgstr "Country mania rankings"
 
+#: src/components/packs/collections/RecordBoards.tsx
+#~ msgid "country pride"
+#~ msgstr "country pride"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so Mania Hub cannot look yours up. It can only work from your plays."
 #~ msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so Mania Hub cannot look yours up. It can only work from your plays."
@@ -4142,6 +4388,26 @@ msgstr "Country mania rankings"
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 #~ msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 
+#. placeholder {0}: names[finish]
+#. placeholder {1}: status?.cost ?? 20
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Craft {0} · {1} copies"
+#~ msgstr "Craft {0} · {1} copies"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Craft a finish for your copies of this card. Its rarity, stats and serial stay the same."
+#~ msgstr "Craft a finish for your copies of this card. Its rarity, stats and serial stay the same."
+
+#. placeholder {0}: card.username
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Craft an edition of {0}'s card"
+#~ msgstr "Craft an edition of {0}'s card"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Crafting your edition…"
+#~ msgstr "Crafting your edition…"
+
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
 msgstr "Create"
@@ -4165,6 +4431,10 @@ msgstr "Croatian"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "crop {0}×{1}"
 msgstr "crop {0}×{1}"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Crystal facets and a rainbow foil rim."
+#~ msgstr "Crystal facets and a rainbow foil rim."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
@@ -4334,6 +4604,10 @@ msgstr "Data Sources"
 msgid "Data The Site Uses"
 msgstr "Data The Site Uses"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Date"
+msgstr "Date"
+
 #: src/routes/dan-estimates.tsx
 msgid "DDMythical's Reform dan courses, stable accuracy"
 msgstr "DDMythical's Reform dan courses, stable accuracy"
@@ -4371,6 +4645,7 @@ msgid "Delay"
 msgstr "Delay"
 
 #: src/components/maps/UserCollectionDetail.tsx
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete"
@@ -4606,6 +4881,7 @@ msgstr "done"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/GiftSpareDialog.tsx
 msgid "Done"
 msgstr "Done"
 
@@ -4790,6 +5066,10 @@ msgstr "Each skillset is the average of your {averageWindow} best clears in it. 
 msgid "Earlier"
 msgstr "Earlier"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Earlier changes weren’t recorded."
+msgstr "Earlier changes weren’t recorded."
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Early"
 msgstr "Early"
@@ -4820,6 +5100,10 @@ msgstr "Edit"
 #: src/components/communities/CommunityCard.tsx
 msgid "Edit {0}"
 msgstr "Edit {0}"
+
+#: src/components/packs/SetsView.tsx
+msgid "Edit cards"
+msgstr "Edit cards"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "edit collection"
@@ -4861,6 +5145,10 @@ msgstr "Edit skin previews"
 msgid "Edit your listing"
 msgstr "Edit your listing"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Edition crafted"
+#~ msgstr "Edition crafted"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
 msgstr "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
@@ -4873,6 +5161,10 @@ msgstr "Edits stay in this browser. Copy the result and paste it into the me! ed
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "Elite"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Ember"
+#~ msgstr "Ember"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "End"
@@ -5301,6 +5593,7 @@ msgid "find a card..."
 msgstr "find a card..."
 
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/packs/GiftSpareDialog.tsx
 msgid "Find a collector"
 msgstr "Find a collector"
 
@@ -5323,6 +5616,10 @@ msgstr "Find a player"
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Find a player in your collection"
 msgstr "Find a player in your collection"
+
+#: src/components/packs/SetsView.tsx
+msgid "Find a set"
+msgstr "Find a set"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "find an album"
@@ -5359,6 +5656,14 @@ msgstr "Finishing this looks risky for you; treat it as a clear attempt, not a f
 msgid "Finnish"
 msgstr "Finnish"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First {rarity}"
+#~ msgstr "First {rarity}"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First card"
+#~ msgstr "First card"
+
 #. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "First card {0}"
@@ -5372,9 +5677,29 @@ msgstr "First collected by"
 msgid "First collection page"
 msgstr "First collection page"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First Eternal"
+#~ msgstr "First Eternal"
+
 #: src/components/packs/PackSummary.tsx
 msgid "first ever to pull this"
 msgstr "first ever to pull this"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "first finds"
+#~ msgstr "first finds"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "First finds"
+#~ msgstr "First finds"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First forged card"
+#~ msgstr "First forged card"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First GOAT"
+#~ msgstr "First GOAT"
 
 #: src/components/ui/Pagination.tsx
 msgid "First page"
@@ -5400,9 +5725,17 @@ msgstr "First time anyone pulled this card"
 msgid "first to find a card"
 msgstr "first to find a card"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "firsts"
+#~ msgstr "firsts"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "Fit"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Five duplicate copies of one tier forge one card of the tier above. Your last copy of a card is never used."
+#~ msgstr "Five duplicate copies of one tier forge one card of the tier above. Your last copy of a card is never used."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -5433,6 +5766,22 @@ msgstr "Flip horizontal"
 msgid "Flip vertical"
 msgstr "Flip vertical"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Flowing ribbons of teal and violet."
+#~ msgstr "Flowing ribbons of teal and violet."
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Folder name"
+#~ msgstr "Folder name"
+
+#: src/routes/packs.tsx
+#~ msgid "Folders"
+#~ msgstr "Folders"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Folders are kept with your account, so sign in to make one."
+#~ msgstr "Folders are kept with your account, so sign in to make one."
+
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "for"
@@ -5461,14 +5810,35 @@ msgstr "for you"
 msgid "Force a fresh collection rotation now (admin only)"
 msgstr "Force a fresh collection rotation now (admin only)"
 
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forge"
+#~ msgstr "Forge"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forge {FORGE_COST_CARDS} of one rarity"
+#~ msgstr "Forge {FORGE_COST_CARDS} of one rarity"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Forge a special edition"
+#~ msgstr "Forge a special edition"
+
+#. placeholder {0}: forgeTierLabel(forgeSelection.targetTier)
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forge into {0}"
+#~ msgstr "Forge into {0}"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forging..."
+#~ msgstr "Forging..."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "formatting copied - right-click text to paste"
 msgstr "formatting copied - right-click text to paste"
 
 #. placeholder {0}: formatNumber(card.mintedTotal)
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "found {0}x"
-msgstr "found {0}x"
+#~ msgid "found {0}x"
+#~ msgstr "found {0}x"
 
 #: src/routes/report.tsx
 msgid "Found something broken? Describe what happened."
@@ -5498,6 +5868,10 @@ msgstr "Fri"
 msgid "Fridays"
 msgstr "Fridays"
 
+#: src/components/packs/SetsView.tsx
+msgid "Friends, matching avatars, inside jokes. Put a few cards together."
+msgstr "Friends, matching avatars, inside jokes. Put a few cards together."
+
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
 #: src/components/me/GoalsPanel.tsx
@@ -5512,6 +5886,7 @@ msgstr "From the real play (not simulated)"
 msgid "Fronts the browse card"
 msgstr "Fronts the browse card"
 
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Full"
@@ -5579,9 +5954,38 @@ msgstr "Get my link"
 msgid "Getting the map out of osu!"
 msgstr "Getting the map out of osu!"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Gift a spare"
+msgstr "Gift a spare"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Gift a spare…"
+msgstr "Gift a spare…"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Gift sent"
+msgstr "Gift sent"
+
+#. placeholder {0}: inbox.total
+#: src/components/packs/GiftInbox.tsx
+msgid "Gifts ({0})"
+msgstr "Gifts ({0})"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Give the binder a name."
+#~ msgstr "Give the binder a name."
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Give the collection a title."
 msgstr "Give the collection a title."
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Give the folder a name."
+#~ msgstr "Give the folder a name."
+
+#: src/components/packs/SetsView.tsx
+msgid "Give the set a name."
+msgstr "Give the set a name."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "global"
@@ -5682,6 +6086,10 @@ msgstr "Goes by the country on someone's osu! account, and anyone already in can
 msgid "Gold"
 msgstr "Gold"
 
+#: src/components/packs/GiftInbox.tsx
+#~ msgid "Got it"
+#~ msgstr "Got it"
+
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
 msgid "Grade"
@@ -5743,8 +6151,8 @@ msgid "hard"
 msgstr "hard"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "hardest cards to find"
-msgstr "hardest cards to find"
+#~ msgid "hardest cards to find"
+#~ msgstr "hardest cards to find"
 
 #: src/components/communities/field-options.tsx
 msgid "Harmful, hateful or a scam"
@@ -5883,6 +6291,10 @@ msgstr "Hindi"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hint"
 msgstr "Hint"
+
+#: src/components/packs/collections/CollectorShelf.tsx
+#~ msgid "History"
+#~ msgstr "History"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Hit <0/> <1/>"
@@ -6312,6 +6724,10 @@ msgstr "It only ever raises the number. If your skills already average higher, t
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 #~ msgstr "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 
+#: src/components/packs/GiftInbox.tsx
+msgid "It's already in your collection."
+msgstr "It's already in your collection."
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "Italian"
@@ -6367,6 +6783,11 @@ msgstr "Join server"
 msgid "joined ?"
 msgstr "joined ?"
 
+#. placeholder {0}: formatDate(new Date(history.collector.joinedAt).toISOString(), timeZone, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Joined {0}"
+#~ msgstr "Joined {0}"
+
 #: src/lib/streak-game.ts
 msgid "joined {month}"
 msgstr "joined {month}"
@@ -6374,6 +6795,10 @@ msgstr "joined {month}"
 #: src/routes/player/$username.tsx
 msgid "Joined <0>{joinedValue}</0>"
 msgstr "Joined <0>{joinedValue}</0>"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Journal"
+#~ msgstr "Journal"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "JS"
@@ -6798,6 +7223,10 @@ msgstr "Live feeds"
 msgid "Live performance points."
 msgstr "Live performance points."
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Live preview"
+#~ msgstr "Live preview"
+
 #: src/routes/tracker.tsx
 msgid "Live score tracker"
 msgstr "Live score tracker"
@@ -6840,6 +7269,10 @@ msgstr "LN body color"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "LN Body color"
 msgstr "LN Body color"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "LN dan"
+msgstr "LN dan"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -6917,6 +7350,10 @@ msgstr "Load more plays"
 msgid "Load my me! page"
 msgstr "Load my me! page"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Load older changes"
+msgstr "Load older changes"
+
 #: src/routes/player/$username.tsx
 msgid "Load osu! recents"
 msgstr "Load osu! recents"
@@ -6976,6 +7413,10 @@ msgstr "Loading collections..."
 msgid "Loading goals..."
 msgstr "Loading goals..."
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Loading history…"
+msgstr "Loading history…"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Loading maps..."
@@ -7000,6 +7441,10 @@ msgstr "Loading rankings..."
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Loading scores..."
 msgstr "Loading scores..."
+
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Loading sets…"
+#~ msgstr "Loading sets…"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Loading skin…"
@@ -7035,6 +7480,8 @@ msgstr "loading..."
 
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
+#: src/components/packs/SetsView.tsx
+#: src/components/replay/ReplayBufferingIndicator.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
@@ -7164,6 +7611,10 @@ msgstr "Low PP"
 #: src/routes/player/$username.tsx
 msgid "Lowest PP first"
 msgstr "Lowest PP first"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Lowest rarities first. You keep at least one of every card."
+#~ msgstr "Lowest rarities first. You keep at least one of every card."
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -7658,6 +8109,10 @@ msgstr "most collected cards"
 msgid "most complete collections"
 msgstr "most complete collections"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "most copies"
+#~ msgstr "most copies"
+
 #: src/routes/dan-estimates.tsx
 msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III."
 msgstr "Most dan courses are unranked, except JinJin's, loved up to Phase III."
@@ -7701,6 +8156,14 @@ msgstr "most unique cards"
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"
 msgstr "Most Used Mod"
+
+#: src/components/packs/collections/ShowcasePicker.tsx
+msgid "Move {name} left"
+msgstr "Move {name} left"
+
+#: src/components/packs/collections/ShowcasePicker.tsx
+msgid "Move {name} right"
+msgstr "Move {name} right"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move down"
@@ -7771,6 +8234,18 @@ msgstr "name"
 msgid "Name"
 msgstr "Name"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Name a new binder"
+#~ msgstr "Name a new binder"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Name a new folder"
+#~ msgstr "Name a new folder"
+
+#: src/components/packs/SetsView.tsx
+msgid "Name a new set"
+msgstr "Name a new set"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Name and description"
 msgstr "Name and description"
@@ -7807,12 +8282,17 @@ msgstr "never loaded here"
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
+#: src/components/player/SkillHistoryModal.tsx
 msgid "new"
 msgstr "new"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New"
 msgstr "New"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "New binder"
+#~ msgstr "New binder"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "new collection"
@@ -7826,6 +8306,10 @@ msgstr "New collection"
 #: src/components/discord/CommandShowcase.tsx
 msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
 msgstr "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "New folder"
+#~ msgstr "New folder"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "New in this build"
@@ -7846,6 +8330,10 @@ msgstr "New preset"
 #: src/routes/tracker.tsx
 msgid "New scores stream in live over this connection."
 msgstr "New scores stream in live over this connection."
+
+#: src/components/packs/SetsView.tsx
+msgid "New set"
+msgstr "New set"
 
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -7876,6 +8364,7 @@ msgstr "Newest Top Play"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 msgid "Next"
 msgstr "Next"
@@ -7905,6 +8394,11 @@ msgstr "next bonus at {0} in a row"
 msgid "Next card"
 msgstr "Next card"
 
+#. placeholder {0}: set.name
+#: src/components/packs/collections/ShowcaseWall.tsx
+msgid "Next cards in {0}"
+msgstr "Next cards in {0}"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Next collection page"
 msgstr "Next collection page"
@@ -7912,6 +8406,10 @@ msgstr "Next collection page"
 #: src/routes/packs.tsx
 msgid "next free pack"
 msgstr "next free pack"
+
+#: src/components/packs/WishlistLine.tsx
+#~ msgid "Next pack: {chance}% chance one of these is in it"
+#~ msgstr "Next pack: {chance}% chance one of these is in it"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/ui/Pagination.tsx
@@ -7977,6 +8475,10 @@ msgstr "No album matches \"{0}\"."
 msgid "No beatmaps found for \"{query}\""
 msgstr "No beatmaps found for \"{query}\""
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "No binders yet. Name one above, then add cards to it."
+#~ msgstr "No binders yet. Name one above, then add cards to it."
+
 #: src/routes/snipes.tsx
 msgid "No board stored for this lane yet."
 msgstr "No board stored for this lane yet."
@@ -8011,6 +8513,10 @@ msgstr "No change in the last 7 days"
 msgid "No collections here yet. Post the first one."
 msgstr "No collections here yet. Post the first one."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "No collector found. They need to open a pack first."
+msgstr "No collector found. They need to open a pack first."
+
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
 msgstr "No countries found"
@@ -8034,6 +8540,10 @@ msgstr "No favourites found for any player in the top 50."
 #: src/routes/maps.tsx
 msgid "No favourites match your filters. Try loosening them."
 msgstr "No favourites match your filters. Try loosening them."
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
+#~ msgstr "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
 
 #: src/routes/farm-helper.tsx
 msgid "no gains here"
@@ -8274,6 +8784,14 @@ msgstr "No servers match"
 msgid "No servers yet"
 msgstr "No servers yet"
 
+#: src/components/packs/SetsView.tsx
+msgid "No sets found."
+msgstr "No sets found."
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "No skill ratings have been recorded yet."
+msgstr "No skill ratings have been recorded yet."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "No skin loaded in the editor"
 msgstr "No skin loaded in the editor"
@@ -8329,6 +8847,10 @@ msgstr "No tracked plays. Play some ranked maps and they show up here live, or c
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live."
 msgstr "No tracked plays. Play some ranked maps and they show up here live."
+
+#: src/components/packs/WishlistLine.tsx
+msgid "No wishes yet. Choose a missing player to get started."
+msgstr "No wishes yet. Choose a missing player to get started."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
@@ -8473,6 +8995,10 @@ msgstr "Not enough data near your pp yet"
 msgid "Not enough qualifying clears for an estimate yet ({0} of {quorum})."
 msgstr "Not enough qualifying clears for an estimate yet ({0} of {quorum})."
 
+#: src/components/packs/SetsView.tsx
+msgid "Not enough room"
+msgstr "Not enough room"
+
 #: src/routes/farm-helper.tsx
 msgid "not found"
 msgstr "not found"
@@ -8558,6 +9084,10 @@ msgstr "Nothing active right now."
 msgid "Nothing by that name."
 msgstr "Nothing by that name."
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Nothing dated yet."
+#~ msgstr "Nothing dated yet."
+
 #: src/routes/farm-helper.tsx
 msgid "Nothing here would move your total"
 msgstr "Nothing here would move your total"
@@ -8565,6 +9095,10 @@ msgstr "Nothing here would move your total"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Nothing in here yet"
 msgstr "Nothing in here yet"
+
+#: src/components/packs/SetsView.tsx
+msgid "Nothing in here yet."
+msgstr "Nothing in here yet."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nothing in the loaded plays matches \"{trimmedQuery}\"."
@@ -8637,6 +9171,7 @@ msgstr "Obtained"
 msgid "Obtained on {dateText}"
 msgstr "Obtained on {dateText}"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "OD"
@@ -8680,6 +9215,10 @@ msgstr "Off means you are only part of the count. Needs you signed in."
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Off the list, no download. Your replays still play in it."
 msgstr "Off the list, no download. Your replays still play in it."
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Ok"
+msgstr "Ok"
 
 #: src/components/me/MeScoreRow.tsx
 msgid "old"
@@ -8748,9 +9287,21 @@ msgstr "on a map"
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 #~ msgstr "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 
+#: src/components/packs/SetsView.tsx
+msgid "On Showcase"
+msgstr "On Showcase"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "One copy for a friend. You keep {remaining}."
+msgstr "One copy for a friend. You keep {remaining}."
+
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 msgstr "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "One of those cards is no longer in your collection."
+#~ msgstr "One of those cards is no longer in your collection."
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -8771,6 +9322,10 @@ msgstr "Only people from here can join"
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
 msgstr "Only skillboost maps right now"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
+#~ msgstr "Only the last few opens of each collector are kept, or the link is wrong."
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -8871,6 +9426,7 @@ msgid "open packs"
 msgstr "open packs"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/MissingPlayerTile.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Open profile"
 msgstr "Open profile"
@@ -8896,9 +9452,17 @@ msgstr "Open the in-browser replay viewer for a score."
 msgid "open their profile"
 msgstr "open their profile"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Open this card once to load its stats, then return to the forge."
+#~ msgstr "Open this card once to load its stats, then return to the forge."
+
 #: src/routes/communities_.$id.tsx
 msgid "open to"
 msgstr "open to"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Open your first pack to start your journal."
+#~ msgstr "Open your first pack to start your journal."
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Open your own packs"
@@ -9096,7 +9660,6 @@ msgstr "Output width in pixels"
 msgid "overall"
 msgstr "overall"
 
-#: src/components/player/SkillHistoryModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Overall"
@@ -9114,6 +9677,10 @@ msgstr "Overview"
 msgid "owner"
 msgstr "owner"
 
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Pack open"
+#~ msgstr "Pack open"
+
 #: src/components/layout/Nav.tsx
 #: src/routes/packs.tsx
 msgid "packs"
@@ -9127,6 +9694,10 @@ msgstr "Packs"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "packs opened"
 msgstr "packs opened"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Packs opened"
+#~ msgstr "Packs opened"
 
 #. placeholder {0}: page + 1
 #. placeholder {1}: lastPage + 1
@@ -9318,6 +9889,14 @@ msgstr "Pick another file"
 #: src/routes/farm-helper.tsx
 msgid "Pick any map on the left to preview it here."
 msgstr "Pick any map on the left to preview it here."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Pick five cards of the same rarity."
+#~ msgstr "Pick five cards of the same rarity."
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
+#~ msgstr "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
@@ -9686,6 +10265,7 @@ msgstr "Previews uploaded."
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 msgid "Previous"
 msgstr "Previous"
@@ -9701,6 +10281,11 @@ msgstr "Previous area"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Previous asset"
 msgstr "Previous asset"
+
+#. placeholder {0}: set.name
+#: src/components/packs/collections/ShowcaseWall.tsx
+msgid "Previous cards in {0}"
+msgstr "Previous cards in {0}"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Previous collection page"
@@ -9722,6 +10307,10 @@ msgstr "Previous preview"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "Previously"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Prismatic"
+#~ msgstr "Prismatic"
 
 #: src/routes/__root.tsx
 msgid "privacy"
@@ -9803,6 +10392,10 @@ msgstr "published"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Publishing."
 msgstr "Publishing."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Pull this card while signed in before gifting a spare."
+msgstr "Pull this card while signed in before gifting a spare."
 
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/PackPulse.tsx
@@ -9937,6 +10530,10 @@ msgstr "rankings"
 msgid "Rankings"
 msgstr "Rankings"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "rarest"
+#~ msgstr "rarest"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Rarity"
 msgstr "Rarity"
@@ -9981,6 +10578,10 @@ msgstr "Rated from only {plays} plays - treat as a rough estimate until more {ke
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rates per chart"
 msgstr "Rates per chart"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Rating"
+msgstr "Rating"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
@@ -10097,6 +10698,10 @@ msgstr "Recent"
 msgid "Recent notable top plays across a country."
 msgstr "Recent notable top plays across a country."
 
+#: src/components/packs/RecentOpens.tsx
+#~ msgid "Recent opens"
+#~ msgstr "Recent opens"
+
 #: src/routes/maps.tsx
 msgid "Recent plays"
 msgstr "Recent plays"
@@ -10207,6 +10812,10 @@ msgstr "Red"
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "Redo (Ctrl+Shift+Z)"
 
+#: src/components/packs/SetsView.tsx
+msgid "Reduce this set to {BINDER_MAX_CARDS} cards to show it on Showcase."
+msgstr "Reduce this set to {BINDER_MAX_CARDS} cards to show it on Showcase."
+
 #: src/components/layout/StaleBuildNotice.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Refresh"
@@ -10250,6 +10859,10 @@ msgstr "Regular 4K/6K/7K"
 #: src/lib/signature-shared.ts
 msgid "Regular and LN"
 msgstr "Regular and LN"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Regular dan"
+msgstr "Regular dan"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Regular ladders"
@@ -10297,6 +10910,11 @@ msgstr "Remove {0} from recently watched"
 #: src/components/packs/GoatPoll.tsx
 msgid "Remove {0} from the poll"
 msgstr "Remove {0} from the poll"
+
+#. placeholder {0}: player.username
+#: src/components/packs/WishlistLine.tsx
+msgid "Remove {0} from your wishlist"
+msgstr "Remove {0} from your wishlist"
 
 #. placeholder {0}: entry.username
 #: src/components/packs/StreakLeaderboard.tsx
@@ -10346,6 +10964,10 @@ msgstr "Remove tag"
 msgid "Remove this screenshot"
 msgstr "Remove this screenshot"
 
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Remove wish"
+msgstr "Remove wish"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "Removed imported skin hitsounds"
@@ -10354,6 +10976,7 @@ msgstr "Removed imported skin hitsounds"
 msgid "Removing the screenshot failed. Try again."
 msgstr "Removing the screenshot failed. Try again."
 
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Rename"
 msgstr "Rename"
@@ -10413,6 +11036,10 @@ msgstr "Replaces the mouse cursor with an osu!-style cursor across the site. Des
 #: src/routes/player/$username.tsx
 msgid "Replay"
 msgstr "Replay"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Replay again"
+#~ msgstr "Replay again"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Replay link"
@@ -10562,6 +11189,7 @@ msgid "Retention And Controls"
 msgstr "Retention And Controls"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/packs/SetsView.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
 #: src/routes/skins.tsx
@@ -10575,6 +11203,11 @@ msgstr "reveal all"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "Revealing the rest..."
+
+#. placeholder {0}: status.cost
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Review ingredients ({available}/{0})"
+#~ msgstr "Review ingredients ({available}/{0})"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Rice"
@@ -10667,6 +11300,10 @@ msgstr "Saturdays"
 msgid "Save"
 msgstr "Save"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Save binder"
+#~ msgstr "Save binder"
+
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Save changes"
@@ -10676,9 +11313,17 @@ msgstr "Save changes"
 msgid "Save changes for everyone"
 msgstr "Save changes for everyone"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Save folder"
+#~ msgstr "Save folder"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save for everyone"
 msgstr "Save for everyone"
+
+#: src/components/packs/SetsView.tsx
+msgid "Save set"
+msgstr "Save set"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Save showcase"
@@ -11073,6 +11718,10 @@ msgstr "Select all"
 msgid "Select all and copy, or use the button below."
 msgstr "Select all and copy, or use the button below."
 
+#: src/components/packs/SetsView.tsx
+msgid "Select at most {BINDER_MAX_CARDS} cards to add to a set."
+msgstr "Select at most {BINDER_MAX_CARDS} cards to add to a set."
+
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Select cards..."
@@ -11104,6 +11753,11 @@ msgstr "Send"
 msgid "Send report"
 msgstr "Send report"
 
+#. placeholder {0}: recipient.username
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Send to {0}"
+msgstr "Send to {0}"
+
 #: src/routes/report.tsx
 #~ msgid "Send update"
 #~ msgstr "Send update"
@@ -11112,9 +11766,27 @@ msgstr "Send report"
 msgid "Sending..."
 msgstr "Sending..."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sending…"
+msgstr "Sending…"
+
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "Sent along with it:"
+
+#. placeholder {0}: recipient?.username ?? ""
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sent to {0}."
+msgstr "Sent to {0}."
+
+#. placeholder {0}: gift.card.username
+#: src/components/packs/GiftInbox.tsx
+#~ msgid "Sent you {0}'s card."
+#~ msgstr "Sent you {0}'s card."
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Sent you a card."
+msgstr "Sent you a card."
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
@@ -11193,6 +11865,14 @@ msgstr "Set goal"
 msgid "set just now"
 msgstr "set just now"
 
+#: src/components/packs/SetsView.tsx
+msgid "Set limit reached"
+msgstr "Set limit reached"
+
+#: src/components/packs/SetsView.tsx
+msgid "Set name"
+msgstr "Set name"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Set on {at}"
 msgstr "Set on {at}"
@@ -11208,6 +11888,18 @@ msgstr "Set the next milestone"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set this goal again"
 msgstr "Set this goal again"
+
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "sets"
+#~ msgstr "sets"
+
+#: src/routes/packs.tsx
+msgid "Sets"
+msgstr "Sets"
+
+#: src/components/packs/SetsView.tsx
+msgid "Sets are kept with your account, so sign in to make one."
+msgstr "Sets are kept with your account, so sign in to make one."
 
 #: src/routes/skins_.$id.tsx
 msgid "Setting the replay skin failed. Try again."
@@ -11351,6 +12043,11 @@ msgstr "Show {totalLabel} maps"
 msgid "Show all {0}"
 msgstr "Show all {0}"
 
+#. placeholder {0}: set.cards.length
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Show all {0} cards"
+#~ msgstr "Show all {0} cards"
+
 #. placeholder {0}: openedSection.clears
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Show all {0} clears"
@@ -11374,6 +12071,10 @@ msgstr "show fewer"
 #: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "Show fewer"
+
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Show less"
+#~ msgstr "Show less"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "show more"
@@ -11402,6 +12103,14 @@ msgstr "Show non-4K plays"
 #: src/routes/tracker.tsx
 msgid "Show non-4K scores"
 msgstr "Show non-4K scores"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Show on shelf"
+#~ msgstr "Show on shelf"
+
+#: src/components/packs/SetsView.tsx
+msgid "Show on Showcase"
+msgstr "Show on Showcase"
 
 #: src/routes/farm-helper.tsx
 msgid "show skillboost"
@@ -11486,6 +12195,14 @@ msgstr "Side"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
 msgstr "Side by Side"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sign in again to send a gift."
+msgstr "Sign in again to send a gift."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Sign in again to use the forge."
+#~ msgstr "Sign in again to use the forge."
 
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in and runs like that pay shards."
@@ -11963,6 +12680,10 @@ msgstr "Start here"
 msgid "Start tracking your plays"
 msgstr "Start tracking your plays"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Starting rating"
+msgstr "Starting rating"
+
 #: src/lib/signature-shared.ts
 #: src/routes/packs_.collections.tsx
 msgid "Stats"
@@ -12136,6 +12857,11 @@ msgstr "Sundays"
 msgid "Supporter"
 msgstr "Supporter"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "sure?"
+#~ msgstr "sure?"
+
+#: src/components/packs/SetsView.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sure?"
 msgstr "Sure?"
@@ -12152,6 +12878,10 @@ msgstr "sure? +{lastCopyValue}"
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "Sure? The card leaves the collection"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Sure? The five cards are used up"
+#~ msgstr "Sure? The five cards are used up"
 
 #: src/routes/maps.tsx
 msgid "SV"
@@ -12356,6 +13086,15 @@ msgstr "That address cannot be loaded."
 msgid "That beatmap ID is not a mania difficulty."
 msgstr "That beatmap ID is not a mania difficulty."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "That collector is no longer available."
+msgstr "That collector is no longer available."
+
+#: src/components/packs/collections/ShowcasePicker.tsx
+#: src/components/packs/SetsView.tsx
+msgid "That did not save. Try again."
+msgstr "That did not save. Try again."
+
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
 msgstr "That does not look like a Discord invite link."
@@ -12416,6 +13155,10 @@ msgstr "That listing is not yours."
 #: src/components/communities/field-options.tsx
 msgid "That listing no longer exists."
 msgstr "That listing no longer exists."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "That rarity cannot be forged any higher."
+#~ msgstr "That rarity cannot be forged any higher."
 
 #: src/routes/replay.tsx
 msgid "That replay file is too large to open in the browser."
@@ -12893,6 +13636,22 @@ msgstr "The exact .osu file works too."
 msgid "The first uploaded skin lands here."
 msgstr "The first uploaded skin lands here."
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge could not finish. Refresh the ingredients before trying again."
+#~ msgstr "The forge could not finish. Refresh the ingredients before trying again."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge could not finish. Try again."
+#~ msgstr "The forge could not finish. Try again."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge could not load. Try again."
+#~ msgstr "The forge could not load. Try again."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge is not available right now."
+#~ msgstr "The forge is not available right now."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 msgstr "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
@@ -13108,7 +13867,9 @@ msgstr "The site recalculates accuracy from the score's judgements instead of us
 #~ msgid "The skill breakdown"
 #~ msgstr "The skill breakdown"
 
+#: src/components/replay/ReplayControls.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "The skin could not be loaded. Try again in a moment."
 msgstr "The skin could not be loaded. Try again in a moment."
 
@@ -13164,6 +13925,10 @@ msgstr "The tracked player pool is too small to play right now."
 msgid "The vote just closed."
 msgstr "The vote just closed."
 
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Their collection"
+#~ msgstr "Their collection"
+
 #: src/components/packs/CardCollectors.tsx
 msgid "Their copy"
 msgstr "Their copy"
@@ -13192,6 +13957,14 @@ msgstr "Theme hue"
 msgid "Theme saturation"
 msgstr "Theme saturation"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "There is no card left to forge into at that rarity."
+#~ msgstr "There is no card left to forge into at that rarity."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "There is no card left to forge into at that tier."
+#~ msgstr "There is no card left to forge into at that tier."
+
 #: src/routes/dan-estimates.tsx
 msgid "These are the packs checked, matched by beatmap. A pass has to be on one of these exact difficulties. Clearing the same courses from a different upload is still a clear, but that upload is not currently checked. More packs can be added."
 msgstr "These are the packs checked, matched by beatmap. A pass has to be on one of these exact difficulties. Clearing the same courses from a different upload is still a clear, but that upload is not currently checked. More packs can be added."
@@ -13215,6 +13988,11 @@ msgstr "These are the packs checked, matched by beatmap. A pass has to be on one
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
+
+#. placeholder {0}: forgeTierLabel(forgeSelection.targetTier)
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "These five become one {0} card."
+#~ msgstr "These five become one {0} card."
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -13244,6 +14022,22 @@ msgstr "They're already a GOAT."
 #: src/components/skins/SkinUploadModal.tsx
 msgid "This .osk could not be read."
 msgstr "This .osk could not be read."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "This card already has a custom edition. Its appearance is protected."
+#~ msgstr "This card already has a custom edition. Its appearance is protected."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "This card already wears that finish."
+#~ msgstr "This card already wears that finish."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "This card is no longer available. Refresh your collection."
+#~ msgstr "This card is no longer available. Refresh your collection."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "This card is not ready to gift. Open it to finish loading its stats."
+msgstr "This card is not ready to gift. Open it to finish loading its stats."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."
@@ -13342,6 +14136,10 @@ msgstr "this map is beyond your level: hides it from your recs until you set a s
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "This open is gone"
+#~ msgstr "This open is gone"
+
 #: src/routes/__root.tsx
 msgid "This page doesn't exist."
 msgstr "This page doesn't exist."
@@ -13439,6 +14237,10 @@ msgstr "This skin's file is not available, so its previews cannot be re-rendered
 #: src/routes/skins_.$id.tsx
 msgid "This skin's settings are too large to store."
 msgstr "This skin's settings are too large to store."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "This special-edition Eternal stays with its collector."
+msgstr "This special-edition Eternal stays with its collector."
 
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
@@ -13724,9 +14526,10 @@ msgstr "Try a wider filter."
 msgid "Try a wider range or check back later."
 msgstr "Try a wider range or check back later."
 
-#: src/components/player/SkillHistoryModal.tsx
 #: src/components/BackendOfflineScreen.tsx
+#: src/components/packs/GiftSpareDialog.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Try again"
@@ -13849,6 +14652,10 @@ msgstr "Undo re-renders"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Unhide"
 msgstr "Unhide"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Unique cards"
+#~ msgstr "Unique cards"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -14189,6 +14996,10 @@ msgstr "View {0}'s card"
 msgid "View {0}'s icon"
 msgstr "View {0}'s icon"
 
+#: src/components/player/SkillHistoryButton.tsx
+msgid "View {keyCount}K skill history"
+msgstr "View {keyCount}K skill history"
+
 #: src/routes/index.tsx
 msgid "view all"
 msgstr "view all"
@@ -14339,6 +15150,10 @@ msgstr "Waiting for audio to load..."
 msgid "Waiting for new scores"
 msgstr "Waiting for new scores"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Warm copper foil and drifting sparks."
+#~ msgstr "Warm copper foil and drifting sparks."
+
 #: src/components/packs/RevealStage.tsx
 msgid "Warming this player up... first draws can take a moment"
 msgstr "Warming this player up... first draws can take a moment"
@@ -14346,6 +15161,10 @@ msgstr "Warming this player up... first draws can take a moment"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Watch"
 msgstr "Watch"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Watch a pack of maniacards being opened, card by card."
+#~ msgstr "Watch a pack of maniacards being opened, card by card."
 
 #: src/routes/replay.tsx
 msgid "Watch osu!mania replays in your browser."
@@ -14449,6 +15268,10 @@ msgstr "what you're browsing"
 msgid "What's new"
 msgstr "What's new"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "When {name} found their first card, and every rarity after it."
+#~ msgstr "When {name} found their first card, and every rarity after it."
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "When each card first joined your collection"
 msgstr "When each card first joined your collection"
@@ -14522,6 +15345,27 @@ msgstr "Width of the exported image, in pixels"
 #: src/lib/packs.ts
 msgid "Wild"
 msgstr "Wild"
+
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Wish"
+msgstr "Wish"
+
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Wished"
+msgstr "Wished"
+
+#: src/components/packs/PackSummary.tsx
+#: src/components/packs/RevealStage.tsx
+msgid "wishlist"
+msgstr "wishlist"
+
+#: src/components/packs/WishlistLine.tsx
+msgid "Wishlist"
+msgstr "Wishlist"
+
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Wishlist is full (5)"
+msgstr "Wishlist is full (5)"
 
 #: src/routes/farm-helper.tsx
 msgid "with {mods}"
@@ -14613,6 +15457,18 @@ msgstr "You already beat the typical score here with {yourPp}pp. Raising your 32
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "You already have {BINDER_MAX_PER_COLLECTOR} binders."
+#~ msgstr "You already have {BINDER_MAX_PER_COLLECTOR} binders."
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "You already have {BINDER_MAX_PER_COLLECTOR} folders."
+#~ msgstr "You already have {BINDER_MAX_PER_COLLECTOR} folders."
+
+#: src/components/packs/SetsView.tsx
+msgid "You already have {BINDER_MAX_PER_COLLECTOR} sets."
+msgstr "You already have {BINDER_MAX_PER_COLLECTOR} sets."
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "You already have the maximum number of collections."
 msgstr "You already have the maximum number of collections."
@@ -14625,9 +15481,17 @@ msgstr "You are cutting through the cards"
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "You can send 10 gifts per 24 hours. Try again later."
+msgstr "You can send 10 gifts per 24 hours. Try again later."
+
 #: src/routes/farm-helper.tsx
 msgid "you could gain"
 msgstr "you could gain"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "You do not have five duplicate copies of that tier."
+#~ msgstr "You do not have five duplicate copies of that tier."
 
 #: src/components/packs/StreakGame.tsx
 msgid "You got {streak} right, a new best."
@@ -14657,6 +15521,10 @@ msgstr "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remov
 msgid "you have too many active marks, clear some first"
 msgstr "you have too many active marks, clear some first"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "You have used every forge for today."
+#~ msgstr "You have used every forge for today."
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "You haven't liked a collection yet."
 msgstr "You haven't liked a collection yet."
@@ -14680,6 +15548,14 @@ msgstr "You marked this too hard"
 #: src/routes/terms.tsx
 msgid "You may use the site for personal and community reference. Please do not overload public endpoints, attempt to bypass access controls, scrape aggressively, interfere with other users, or use the service in a way that disrupts osu!, ppy, community APIs, or Mania Tracker infrastructure."
 msgstr "You may use the site for personal and community reference. Please do not overload public endpoints, attempt to bypass access controls, scrape aggressively, interfere with other users, or use the service in a way that disrupts osu!, ppy, community APIs, or Mania Tracker infrastructure."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "You need more spare copies to craft this edition."
+#~ msgstr "You need more spare copies to craft this edition."
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "You no longer have a spare copy of this card."
+msgstr "You no longer have a spare copy of this card."
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
@@ -14733,6 +15609,11 @@ msgstr "You're strongest in <0>{0}</0>"
 msgid "your"
 msgstr "your"
 
+#. placeholder {0}: names[finish]
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Your {0} edition"
+#~ msgstr "Your {0} edition"
+
 #: src/routes/farm-helper.tsx
 msgid "your {yourPp}pp"
 msgstr "your {yourPp}pp"
@@ -14761,6 +15642,22 @@ msgstr "your best"
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Your collection changed. Nothing was sent. Refresh and try again."
+msgstr "Your collection changed. Nothing was sent. Refresh and try again."
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Your collection changed. Refresh the ingredients and try again."
+#~ msgstr "Your collection changed. Refresh the ingredients and try again."
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your collection's milestones, just for you."
+#~ msgstr "Your collection's milestones, just for you."
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your collector journal"
+#~ msgstr "Your collector journal"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
@@ -14775,6 +15672,10 @@ msgstr "Your description shows up here."
 msgid "Your dynamic renders were turned off."
 msgstr "Your dynamic renders were turned off."
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Your edition is ready for your collection and showcase."
+#~ msgstr "Your edition is ready for your collection and showcase."
+
 #: src/routes/dan-estimates.tsx
 msgid "Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
 msgstr "Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
@@ -14782,6 +15683,18 @@ msgstr "Your estimate for a side is the plain arithmetic average of the skill da
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 #~ msgstr "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your first {rarity}"
+#~ msgstr "Your first {rarity}"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your first card"
+#~ msgstr "Your first card"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your first forge"
+#~ msgstr "Your first forge"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
@@ -14873,6 +15786,11 @@ msgid "Your server shows up here once it is approved. Until then you can see it,
 msgstr "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/SetsView.tsx
+msgid "Your sets"
+msgstr "Your sets"
+
+#: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "your showcase"
 
@@ -14893,64 +15811,11 @@ msgstr "Your uploads"
 msgid "Your username and avatar"
 msgstr "Your username and avatar"
 
+#: src/components/packs/WishlistLine.tsx
+msgid "Your wishlist"
+msgstr "Your wishlist"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube video"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
-msgstr "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Could not load skill history."
-msgstr "Could not load skill history."
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "LN dan"
-msgstr "LN dan"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Load older changes"
-msgstr "Load older changes"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Loading history…"
-msgstr "Loading history…"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "No skill ratings have been recorded yet."
-msgstr "No skill ratings have been recorded yet."
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Regular dan"
-msgstr "Regular dan"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Starting rating"
-msgstr "Starting rating"
-
-#: src/components/player/SkillHistoryButton.tsx
-msgid "View {keyCount}K skill history"
-msgstr "View {keyCount}K skill history"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "{keyCount}K skill history"
-msgstr "{keyCount}K skill history"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgctxt "skill rating difference"
-msgid "Change"
-msgstr "Change"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Date"
-msgstr "Date"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Earlier changes weren’t recorded."
-msgstr "Earlier changes weren’t recorded."
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Rating"
-msgstr "Rating"

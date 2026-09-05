@@ -4,7 +4,7 @@
 import type { ManiaBeatmap } from "./beatmap-parser.js";
 import { classifyChart, type ChartClassification, type ClassifyChartInput } from "./chart-classifier.js";
 import { getInputRate } from "./dan-estimator/labels.js";
-import { computeMsd } from "./msd.js";
+import { computeMsd, msdChartErrorFallback } from "./msd.js";
 import type { CompanellaEstimate } from "../../vendor/leoblack/estimator/companellaEstimator.js";
 
 // Companella is LeoBlack's ONNX dan model: a 10-feature MLP over the eight
@@ -67,8 +67,8 @@ export async function computeCompanellaEstimate(
       interludeStar,
       sunnyStar,
     });
-  } catch {
-    return null;
+  } catch (error) {
+    return msdChartErrorFallback(error);
   }
 }
 

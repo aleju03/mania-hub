@@ -37,6 +37,10 @@ export interface ServerPackDrawSlot {
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
+  /* Dealt by the wishlist's pity roll rather than by the ordinary draw
+     (live-backend pack-wishlist.ts), so the reveal can name it. Display-only
+     on this side: the slot is an ordinary card either way. */
+  wished?: boolean;
   isNew?: boolean;
   username?: string;
   avatarUrl?: string;

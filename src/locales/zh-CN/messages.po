@@ -306,6 +306,11 @@ msgstr "{0} ({1} 星)"
 msgid "{0} {1} maniacard"
 msgstr "{0} {1} maniacard"
 
+#. placeholder {0}: binders?.length ?? 0
+#: src/components/packs/SetsView.tsx
+msgid "{0} / {BINDER_MAX_PER_COLLECTOR} sets · Up to {BINDER_MAX_CARDS} cards per set"
+msgstr "{0} / {BINDER_MAX_PER_COLLECTOR} 个卡组 · 每组最多 {BINDER_MAX_CARDS} 张卡牌"
+
 #. placeholder {0}: beatmapset.artist
 #. placeholder {0}: farmContext?.artist ?? t`unknown artist`
 #. placeholder {1}: beatmapset.creator
@@ -329,15 +334,20 @@ msgstr "{0} 个卡册"
 msgid "{0} biggest"
 msgstr "{0} 大"
 
-#. placeholder {0}: shown.total.toLocaleString("en-US")
+#. placeholder {0}: cardCount.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} card"
 msgstr "{0} 张卡片"
 
-#. placeholder {0}: shown.total.toLocaleString("en-US")
+#. placeholder {0}: cardCount.toLocaleString("en-US")
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "{0} cards"
 msgstr "{0} 张卡片"
+
+#. placeholder {0}: formatNumber(history.records.firstFindCount, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{0} cards found first"
+#~ msgstr "率先找到 {0} 张卡"
 
 #. placeholder {0}: 0
 #. placeholder {0}: charCount.toLocaleString("en-US")
@@ -360,6 +370,11 @@ msgstr "{0} 个收藏册"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "{0} columns selected"
 msgstr "已选 {0} 列"
+
+#. placeholder {0}: formatNumber(history.records.mostCopies.copies, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{0} copies"
+#~ msgstr "{0} 张"
 
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -398,6 +413,11 @@ msgstr "{0} 张重复"
 msgid "{0} Eternal maniacard"
 msgstr "{0} 的 Eternal maniacard"
 
+#. placeholder {0}: formatNumber(history.records.rarest.mintedTotal, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{0} ever minted"
+#~ msgstr "共铸造 {0} 张"
+
 #. placeholder {0}: randomPick.player.favouriteCount
 #: src/routes/maps.tsx
 msgid "{0} favourites"
@@ -407,6 +427,11 @@ msgstr "{0} 个收藏"
 #: src/components/packs/GoatPoll.tsx
 msgid "{0} for"
 msgstr "{0} 票赞成"
+
+#. placeholder {0}: status.cap - status.used
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "{0} forges left"
+#~ msgstr "剩余 {0} 次锻造"
 
 #. placeholder {0}: entry.frameCount
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -425,8 +450,8 @@ msgstr "{0} 张 GOAT"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "{0} held"
-msgstr "持有 {0}"
+#~ msgid "{0} held"
+#~ msgstr "持有 {0}"
 
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
@@ -526,6 +551,12 @@ msgstr "已分析 {1} 次游玩中的 {0} 次"
 msgid "{0} of {1} to pull this"
 msgstr "是 {1} 人中{0} 个抽到这张的"
 
+#. placeholder {0}: forge.status.used
+#. placeholder {1}: forge.status.cap
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "{0} of {1} today"
+#~ msgstr "今日 {0}/{1}"
+
 #. placeholder {0}: maps.length
 #: src/routes/player/$username.tsx
 msgid "{0} of {mapCount}"
@@ -533,8 +564,13 @@ msgstr "{mapCount} 张中的 {0} 张"
 
 #. placeholder {0}: picked.length
 #: src/components/packs/collections/ShowcasePicker.tsx
-msgid "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
-msgstr "已选 {0} / {PACK_SHOWCASE_MAX_CARDS}"
+msgid "{0} of {maxCards} chosen"
+msgstr "已选 {0}/{maxCards}"
+
+#. placeholder {0}: picked.length
+#: src/components/packs/collections/ShowcasePicker.tsx
+#~ msgid "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
+#~ msgstr "已选 {0} / {PACK_SHOWCASE_MAX_CARDS}"
 
 #. placeholder {0}: focused.count
 #: src/routes/player/$username.tsx
@@ -550,6 +586,11 @@ msgstr "只有 {0}"
 #: src/routes/tracker.tsx
 msgid "{0} only"
 msgstr "仅 {0}"
+
+#. placeholder {0}: open.owner.username
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "{0} opened a {packName} pack"
+#~ msgstr "{0} 开了一个{packName}卡包"
 
 #. placeholder {0}: i18n._(PACK_TYPE_NAME_LABELS[odds.packId])
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -646,6 +687,11 @@ msgstr "来自 {1} 的 {0} 个音效"
 msgid "{0} sounds from {1}"
 msgstr "来自 {1} 的 {0} 个音效"
 
+#. placeholder {0}: status.cost
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "{0} spare copies"
+#~ msgstr "{0} 张多余副本"
+
 #. placeholder {0}: farmContext.stars.toFixed(2)
 #. placeholder {0}: selectedBeatmap.difficultyRating.toFixed(2)
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -654,8 +700,8 @@ msgstr "{0} 星"
 
 #. placeholder {0}: formatNumber(card.owners)
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "{0} still held"
-msgstr "仍持有 {0}"
+#~ msgid "{0} still held"
+#~ msgstr "仍持有 {0}"
 
 #. placeholder {0}: patternName(pattern)
 #: src/components/maps/PatternPicker.tsx
@@ -996,6 +1042,10 @@ msgstr "{hours} 小时前"
 msgid "{keyCount}K {sideLabel} dan"
 msgstr "{keyCount}K {sideLabel}段位"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "{keyCount}K skill history"
+msgstr "{keyCount}K 技能历史"
+
 #: src/components/player/SkillPlaysModal.tsx
 msgid "{keyCount}K skillset"
 msgstr "{keyCount}K 技能组"
@@ -1024,6 +1074,10 @@ msgstr "{label} 评分"
 #: src/components/player/SkillBreakdown.tsx
 msgid "{label}: {share} of {population} tracked {keyCount}K mains"
 msgstr "{label}：已追踪的 {population} 名 {keyCount}K 主玩家中占 {share}"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{label}'s history"
+#~ msgstr "{label} 的历程"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{left} to go at {at}pp+"
@@ -1116,6 +1170,14 @@ msgstr "{name} 不在其中。"
 #: src/lib/streak-game.ts
 msgid "{name} joined in {month}."
 msgstr "{name} 于 {month} 加入。"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "{name}'s {packName} pack"
+#~ msgstr "{name} 的{packName}卡包"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "{name}'s collector history"
+#~ msgstr "{name} 的收藏历程"
 
 #: src/lib/streak-game.ts
 msgid "{name}'s oldest top play is from {month}."
@@ -1245,7 +1307,7 @@ msgstr "{secs} 秒前"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "{selectedImageCount, plural, one {# image selected} other {# images selected}}"
-msgstr ""
+msgstr "{selectedImageCount, plural, other {已选择 # 张图片}}"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -1519,6 +1581,10 @@ msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "<0>{collectorLabel}</0> has not opened a pack."
 msgstr "<0>{collectorLabel}</0> 还没有开过卡包。"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "<0>{label}</0> has not opened a pack."
+#~ msgstr "<0>{label}</0> 还没有开过卡包。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>{percent}%</0> of the rated plays are LN charts ({lnPlays} of {total})"
@@ -1908,10 +1974,18 @@ msgstr "正在根据最新成绩重新计算评分，这些数字稍后可能会
 #~ msgid "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
 #~ msgstr "刚部署的资源加载失败。应用会尝试一次干净的刷新；如果又回到这里，说明预览部署缺少构建资源。"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "A gift from"
+msgstr "礼物来自"
+
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A line about the skin"
 msgstr "一句关于皮肤的介绍"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "A little something for you"
+msgstr "送你一点小礼物"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "A live feed of your tracked plays, your playstyle fingerprint, when you play, and records the osu! profile never shows you."
@@ -1972,7 +2046,7 @@ msgstr "刚刚有新更新。正在刷新..."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "A pasted image is no longer available. Paste it again before copying."
-msgstr ""
+msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
 
 #: src/routes/dan-estimates.tsx
 msgid "A quick reminder of what a dan is"
@@ -1997,6 +2071,10 @@ msgstr "有一张截图无法读取为 4 MB 以内的 PNG、JPEG 或 WebP。"
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "A screenshot could not be removed. Try again."
 msgstr "有一张截图删除失败。请重试。"
+
+#: src/components/packs/SetsView.tsx
+msgid "A set can hold up to {BINDER_MAX_CARDS} cards."
+msgstr "每个卡组最多可容纳 {BINDER_MAX_CARDS} 张卡牌。"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
@@ -2150,6 +2228,14 @@ msgstr "实际大小"
 #~ msgid "Add"
 #~ msgstr "添加"
 
+#: src/components/packs/SetsView.tsx
+msgid "Add {cardCount} cards"
+msgstr "添加 {cardCount} 张卡牌"
+
+#: src/components/packs/SetsView.tsx
+msgid "Add {cardCount} cards to set..."
+msgstr "将 {cardCount} 张卡牌添加到卡组…"
+
 #: src/components/packs/collections/ShowcaseCards.tsx
 msgid "Add a card to your showcase"
 msgstr "把一张卡片加入展示柜"
@@ -2188,6 +2274,10 @@ msgstr "添加区域"
 msgid "Add at least {USER_COLLECTION_MIN_ITEMS} maps before posting."
 msgstr "发布前请至少添加 {USER_COLLECTION_MIN_ITEMS} 张谱面。"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Add cards"
+#~ msgstr "添加卡片"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add color"
 msgstr "添加颜色"
@@ -2216,6 +2306,10 @@ msgstr "添加更多详情"
 msgid "Add overlay"
 msgstr "添加覆盖层"
 
+#: src/components/packs/WishlistLine.tsx
+msgid "Add players from the missing cards in your collection. Eligible packs have a growing chance to include one of your wishes."
+msgstr "从收藏中缺少的卡片添加玩家。符合条件的卡包有逐渐增加的概率包含一张心愿卡。"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "Add score"
 msgstr "添加成绩"
@@ -2228,9 +2322,25 @@ msgstr "添加{label}的成绩"
 msgid "Add the text that reads wrong."
 msgstr "请填写有问题的文本。"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Add to binder..."
+#~ msgstr "加入卡夹…"
+
 #: src/routes/discord.tsx
 msgid "Add to Discord"
 msgstr "添加到 Discord"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Add to folder..."
+#~ msgstr "加入文件夹…"
+
+#: src/components/packs/SetsView.tsx
+msgid "Add to set"
+msgstr "添加到卡组"
+
+#: src/components/packs/SetsView.tsx
+msgid "Add to set..."
+msgstr "添加到卡组…"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "added"
@@ -2308,6 +2418,10 @@ msgstr "全部收藏册"
 msgid "All Discord servers"
 msgstr "全部 Discord 服务器"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "All five cards have to be the same rarity."
+#~ msgstr "五张卡必须是同一个稀有度。"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "all keymodes"
 msgstr "全部键数"
@@ -2341,6 +2455,10 @@ msgstr "所有玩家"
 msgid "All rows"
 msgstr "全部记录"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "All three forges are used. They return after 24 hours."
+#~ msgstr "三次锻造均已用完。每次使用后 24 小时恢复。"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
 msgstr "全部上传"
@@ -2356,6 +2474,10 @@ msgstr "快好了{elapsedLabel}"
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
 msgstr "已经是 GOAT"
+
+#: src/components/packs/SetsView.tsx
+msgid "Already in set"
+msgstr "已在卡组中"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Already in the collection"
@@ -2542,6 +2664,10 @@ msgstr "已归档"
 msgid "archived summary"
 msgstr "归档摘要"
 
+#: src/components/packs/collections/ShowcasePicker.tsx
+msgid "Arrange your cards"
+msgstr "排列卡片"
+
 #: src/routes/skins.tsx
 msgid "arrows"
 msgstr "箭头"
@@ -2606,6 +2732,10 @@ msgstr "音频链接 (mp3)"
 msgid "August 23, 2026"
 msgstr "2026年8月23日"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Aurora"
+#~ msgstr "极光"
+
 #: src/routes/discord.tsx
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
@@ -2661,6 +2791,10 @@ msgstr "返回"
 msgid "back to collection"
 msgstr "返回收藏册"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Back to collection"
+#~ msgstr "返回收藏"
+
 #: src/routes/replay.tsx
 msgid "Back to menu"
 msgstr "返回菜单"
@@ -2685,6 +2819,10 @@ msgstr "返回服务器列表"
 #: src/routes/skins_.$id.tsx
 msgid "back to skins"
 msgstr "返回皮肤"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Back to the collection"
+#~ msgstr "返回收藏册"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back to the picker"
@@ -2911,6 +3049,18 @@ msgstr "最多的一天"
 msgid "biggest jump first"
 msgstr "涨幅最大优先"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Binder name"
+#~ msgstr "卡夹名称"
+
+#: src/routes/packs.tsx
+#~ msgid "Binders"
+#~ msgstr "卡夹"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Binders are kept with your account, so sign in to make one."
+#~ msgstr "卡夹保存在你的账号里，登录后即可创建。"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Black playfield"
 msgstr "纯黑游玩区域"
@@ -2940,6 +3090,10 @@ msgstr "榜单位置 <0>#{0}</0>"
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "加粗"
+
+#: src/components/packs/WishlistLine.tsx
+msgid "Bonus chance per eligible pack: {chance}"
+msgstr "每个符合条件的卡包的额外概率：{chance}"
 
 #: src/routes/player/$username.tsx
 msgid "Bonus pp for playcount is not counted here, so these read a little under the 4K and 7K totals on an osu! profile."
@@ -3052,11 +3206,21 @@ msgstr "保加利亚语"
 msgid "Bullet list"
 msgstr "无序列表"
 
+#. placeholder {0}: tierLabel(entry.tier)
+#. placeholder {1}: tierLabel(entry.targetTier)
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Burn 5 duplicate {0} copies for one {1} card"
+#~ msgstr "熔掉 5 张重复的{0}卡，换 1 张{1}卡"
+
 #. placeholder {0}: skin.author
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "by <0>{0}</0>"
 msgstr "由 <0>{0}</0> 上传"
+
+#: src/components/packs/collections/RecordBoards.tsx
+#~ msgid "by country"
+#~ msgstr "按国家/地区"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "By Player"
@@ -3078,6 +3242,10 @@ msgstr "正在计算技能…"
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "取消"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Cancel forge"
+#~ msgstr "取消锻造"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Canvas unavailable."
@@ -3137,6 +3305,11 @@ msgstr "已收集卡片"
 msgid "Cards found"
 msgstr "找到的卡片"
 
+#. placeholder {0}: picking.name
+#: src/components/packs/SetsView.tsx
+msgid "Cards in {0}"
+msgstr "{0} 中的卡片"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back."
 msgstr "你持有的、已经抽不到的玩家卡片：他们在每个已追踪国家/地区都掉出了前 100 名，也没有主动加入。如果他们回来，就会重新进入卡池和完成度统计。"
@@ -3154,10 +3327,16 @@ msgstr "断"
 msgid "change"
 msgstr "更换"
 
+#: src/components/packs/GiftSpareDialog.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Change"
 msgstr "更换"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgctxt "skill rating difference"
+msgid "Change"
+msgstr "变化"
 
 #. placeholder {0}: target.label
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -3179,6 +3358,10 @@ msgstr "更新日志"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changelog"
 msgstr "更新日志"
+
+#: src/components/player/SkillHistoryModal.tsx
+#~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
+#~ msgstr "每次重新计算评分时都会保存变化，包括评分系统更新带来的变化。更早的变化未被记录。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing the keymode label failed. Try again."
@@ -3261,9 +3444,17 @@ msgstr "中文"
 msgid "Choke"
 msgstr "断连"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Choose a collector"
+msgstr "选择收藏者"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Choose a different replay"
 msgstr "换一个回放"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Choose a finish"
+#~ msgstr "选择外观"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
@@ -3272,6 +3463,14 @@ msgstr "选择一个 mania 难度"
 #: src/components/packs/GoatPoll.tsx
 msgid "Choose a new GOAT"
 msgstr "选出新的 GOAT"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Choose another collector for your gift."
+msgstr "请选择另一位收藏者收礼。"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Choose the card you want to craft a special edition of."
+#~ msgstr "选择要制作特别版的卡片。"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/SearchCard.tsx
@@ -3471,7 +3670,6 @@ msgstr "客户端"
 msgid "Client"
 msgstr "客户端"
 
-#: src/components/player/SkillHistoryModal.tsx
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -3483,10 +3681,12 @@ msgstr "客户端"
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/GoatPollVoters.tsx
+#: src/components/packs/PackDialog.tsx
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -3597,6 +3797,16 @@ msgstr "收藏册正在重建，过几分钟再来看看。"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Collections are unavailable right now. Try again in a bit."
 msgstr "收藏册暂时不可用，请稍后再试。"
+
+#. placeholder {0}: formatNumber(history.collectorNumber, locale)
+#. placeholder {1}: formatDate(new Date(history.collector.joinedAt).toISOString(), timeZone, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Collector <0>#{0}</0>, joined {1}"
+#~ msgstr "第 <0>{0}</0> 位收藏者，{1} 加入"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Collector history"
+#~ msgstr "收藏历程"
 
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "collectors"
@@ -3786,11 +3996,15 @@ msgstr "复制分享码"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
-msgstr ""
+msgstr "正在复制 BBCode…"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
 msgstr "无法核对这个邀请链接，请再试一次。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Could not confirm delivery. Retry to check this same gift."
+msgstr "无法确认是否送达。重试会检查同一份礼物。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Could not copy to clipboard"
@@ -3800,6 +4014,10 @@ msgstr "无法复制到剪贴板"
 msgid "Could not deal a blitz run. Try again in a moment."
 msgstr "无法开始闪电战。请稍后再试。"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "Could not dismiss these gifts. Try again."
+msgstr "无法清除这些礼物通知。请重试。"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Could not draw this one."
 msgstr "这张画不出来。"
@@ -3808,6 +4026,18 @@ msgstr "这张画不出来。"
 msgid "Could not load more plays."
 msgstr "无法加载更多成绩。"
 
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Could not load sets."
+#~ msgstr "无法加载卡组。"
+
+#: src/components/packs/SetsView.tsx
+msgid "Could not load sets. Try again."
+msgstr "无法加载卡组，请重试。"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Could not load skill history."
+msgstr "无法加载技能历史。"
+
 #: src/routes/player/$username.tsx
 msgid "Could not load skill ratings. Try again in a bit."
 msgstr "无法加载技能评分，请稍后再试。"
@@ -3815,6 +4045,10 @@ msgstr "无法加载技能评分，请稍后再试。"
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Could not load that collection."
 msgstr "无法加载这个收藏册。"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Could not load that history."
+#~ msgstr "无法加载该历程。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Could not load the clears"
@@ -3855,9 +4089,13 @@ msgstr "无法加载这些成绩。"
 msgid "Could not load this leaderboard."
 msgstr "无法加载该排行榜。"
 
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Could not load your journal."
+#~ msgstr "无法加载你的日志。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not match the image sizes."
-msgstr ""
+msgstr "无法统一图片尺寸。"
 
 #: src/components/communities/field-options.tsx
 msgid "Could not reach Discord to check that invite. Try again in a moment."
@@ -3882,6 +4120,10 @@ msgstr "无法调整图片尺寸。"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
 msgstr "保存失败，请再试一次。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Could not search collectors. Try again."
+msgstr "无法搜索收藏者。请重试。"
 
 #: src/routes/report.tsx
 msgid "Could not send that update. Try again."
@@ -4139,6 +4381,10 @@ msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
 msgid "Country mania rankings"
 msgstr "国家/地区 mania 排行榜"
 
+#: src/components/packs/collections/RecordBoards.tsx
+#~ msgid "country pride"
+#~ msgstr "国家荣耀"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so Mania Hub cannot look yours up. It can only work from your plays."
 #~ msgstr "段位课题谱面都是未上架的，通过与否由运营该段位表的人来审核。这些信息都不会以段位的形式通过 osu! API 返回，所以 Mania Hub 查不到你的段位，只能从你的成绩来推算。"
@@ -4151,6 +4397,26 @@ msgstr "国家/地区 mania 排行榜"
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 #~ msgstr "段位课题谱面都未上架，通过与否由维护对应段位表的人认定。这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
 
+#. placeholder {0}: names[finish]
+#. placeholder {1}: status?.cost ?? 20
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Craft {0} · {1} copies"
+#~ msgstr "制作{0} · {1} 张副本"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Craft a finish for your copies of this card. Its rarity, stats and serial stay the same."
+#~ msgstr "为你持有的这张卡片制作外观。稀有度、属性和序列号保持不变。"
+
+#. placeholder {0}: card.username
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Craft an edition of {0}'s card"
+#~ msgstr "制作 {0} 卡片的特别版"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Crafting your edition…"
+#~ msgstr "正在制作你的特别版…"
+
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Create"
 msgstr "创建"
@@ -4175,9 +4441,13 @@ msgstr "克罗地亚语"
 msgid "crop {0}×{1}"
 msgstr "裁剪 {0}×{1}"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Crystal facets and a rainbow foil rim."
+#~ msgstr "水晶切面与彩虹镭射边框。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Ctrl/Cmd-click images to add or remove them."
-msgstr ""
+msgstr "按住 Ctrl/Cmd 点击图片以添加或移除。"
 
 #: src/routes/player/$username.tsx
 msgid "Cumulative"
@@ -4343,6 +4613,10 @@ msgstr "数据来源"
 msgid "Data The Site Uses"
 msgstr "本站使用的数据"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Date"
+msgstr "日期"
+
 #: src/routes/dan-estimates.tsx
 msgid "DDMythical's Reform dan courses, stable accuracy"
 msgstr "DDMythical 的 Reform 段位课题，stable 准确率"
@@ -4380,6 +4654,7 @@ msgid "Delay"
 msgstr "延迟"
 
 #: src/components/maps/UserCollectionDetail.tsx
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete"
@@ -4615,6 +4890,7 @@ msgstr "刷够"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/GiftSpareDialog.tsx
 msgid "Done"
 msgstr "完成"
 
@@ -4799,6 +5075,10 @@ msgstr "每个技能是你在它上面最好 {averageWindow} 次通过的平均�
 msgid "Earlier"
 msgstr "更早"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Earlier changes weren’t recorded."
+msgstr "更早的变化未被记录。"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Early"
 msgstr "偏早"
@@ -4829,6 +5109,10 @@ msgstr "编辑"
 #: src/components/communities/CommunityCard.tsx
 msgid "Edit {0}"
 msgstr "编辑 {0}"
+
+#: src/components/packs/SetsView.tsx
+msgid "Edit cards"
+msgstr "编辑卡片"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "edit collection"
@@ -4870,6 +5154,10 @@ msgstr "编辑皮肤预览"
 msgid "Edit your listing"
 msgstr "编辑你的条目"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Edition crafted"
+#~ msgstr "特别版制作完成"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edits stay in this browser. Copy the result and paste it into the me! editor on <0>your osu! page</0>."
 msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到<0>你的 osu! 页面</0>的 me! 编辑器中。"
@@ -4882,6 +5170,10 @@ msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到你
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "精英"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Ember"
+#~ msgstr "余烬"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "End"
@@ -5306,6 +5598,7 @@ msgid "find a card..."
 msgstr "查找卡片…"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/packs/GiftSpareDialog.tsx
 msgid "Find a collector"
 msgstr "查找收藏者"
 
@@ -5328,6 +5621,10 @@ msgstr "查找玩家"
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Find a player in your collection"
 msgstr "在你的收藏里查找玩家"
+
+#: src/components/packs/SetsView.tsx
+msgid "Find a set"
+msgstr "查找卡组"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "find an album"
@@ -5364,6 +5661,14 @@ msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是
 msgid "Finnish"
 msgstr "芬兰语"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First {rarity}"
+#~ msgstr "首张{rarity}"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First card"
+#~ msgstr "首张卡片"
+
 #. placeholder {0}: formatTimeAgo(new Date(collector.joinedAt).toISOString(), locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "First card {0}"
@@ -5377,9 +5682,29 @@ msgstr "首位收集者"
 msgid "First collection page"
 msgstr "收藏册首页"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First Eternal"
+#~ msgstr "首张 Eternal"
+
 #: src/components/packs/PackSummary.tsx
 msgid "first ever to pull this"
 msgstr "史上第一个抽到这张"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "first finds"
+#~ msgstr "率先找到"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "First finds"
+#~ msgstr "首次发现"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First forged card"
+#~ msgstr "首张熔铸卡"
+
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "First GOAT"
+#~ msgstr "首张 GOAT"
 
 #: src/components/ui/Pagination.tsx
 msgid "First page"
@@ -5405,9 +5730,17 @@ msgstr "这张卡片首次被抽出"
 msgid "first to find a card"
 msgstr "最先找到卡片"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "firsts"
+#~ msgstr "首次"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "适应宽度"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Five duplicate copies of one tier forge one card of the tier above. Your last copy of a card is never used."
+#~ msgstr "用某一等级的五张重复卡，熔铸出一张高一级的卡。每张卡的最后一张永远不会被用掉。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Five is roughly the length of a real course. With exactly four qualifying passes the average is over those four; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -5438,6 +5771,22 @@ msgstr "水平翻转"
 msgid "Flip vertical"
 msgstr "垂直翻转"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Flowing ribbons of teal and violet."
+#~ msgstr "流动的青绿与紫色光带。"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Folder name"
+#~ msgstr "文件夹名称"
+
+#: src/routes/packs.tsx
+#~ msgid "Folders"
+#~ msgstr "文件夹"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Folders are kept with your account, so sign in to make one."
+#~ msgstr "文件夹保存在你的账号里，登录后即可创建。"
+
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "为"
@@ -5466,14 +5815,35 @@ msgstr "为你推荐"
 msgid "Force a fresh collection rotation now (admin only)"
 msgstr "立即强制轮换收藏册（仅管理员）"
 
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forge"
+#~ msgstr "熔铸"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forge {FORGE_COST_CARDS} of one rarity"
+#~ msgstr "熔铸同稀有度的 {FORGE_COST_CARDS} 张"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Forge a special edition"
+#~ msgstr "锻造特别版"
+
+#. placeholder {0}: forgeTierLabel(forgeSelection.targetTier)
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forge into {0}"
+#~ msgstr "熔铸成 {0}"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Forging..."
+#~ msgstr "熔铸中…"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "formatting copied - right-click text to paste"
 msgstr "已复制格式，右键文本即可粘贴"
 
 #. placeholder {0}: formatNumber(card.mintedTotal)
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "found {0}x"
-msgstr "被找到 {0} 次"
+#~ msgid "found {0}x"
+#~ msgstr "被找到 {0} 次"
 
 #: src/routes/report.tsx
 msgid "Found something broken? Describe what happened."
@@ -5503,6 +5873,10 @@ msgstr "五"
 msgid "Fridays"
 msgstr "周五"
 
+#: src/components/packs/SetsView.tsx
+msgid "Friends, matching avatars, inside jokes. Put a few cards together."
+msgstr "好友、同款头像、你们之间的梗。把几张卡片放在一起吧。"
+
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
 #: src/components/me/GoalsPanel.tsx
@@ -5517,6 +5891,7 @@ msgstr "来自真实成绩（非模拟）"
 msgid "Fronts the browse card"
 msgstr "作为浏览卡片的封面"
 
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Full"
@@ -5584,9 +5959,38 @@ msgstr "获取我的链接"
 msgid "Getting the map out of osu!"
 msgstr "从 osu! 里把谱面导出"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Gift a spare"
+msgstr "赠送多余副本"
+
+#: src/components/packs/CollectionPanel.tsx
+msgid "Gift a spare…"
+msgstr "赠送多余副本…"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Gift sent"
+msgstr "礼物已送出"
+
+#. placeholder {0}: inbox.total
+#: src/components/packs/GiftInbox.tsx
+msgid "Gifts ({0})"
+msgstr "礼物（{0}）"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Give the binder a name."
+#~ msgstr "给卡夹起个名字。"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Give the collection a title."
 msgstr "给收藏册起个标题。"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Give the folder a name."
+#~ msgstr "给文件夹起个名字。"
+
+#: src/components/packs/SetsView.tsx
+msgid "Give the set a name."
+msgstr "给卡组起个名字。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "global"
@@ -5687,6 +6091,10 @@ msgstr "以对方 osu! 账号上的国家/地区为准，已经加入的人仍�
 msgid "Gold"
 msgstr "金色"
 
+#: src/components/packs/GiftInbox.tsx
+#~ msgid "Got it"
+#~ msgstr "知道了"
+
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
 msgid "Grade"
@@ -5748,8 +6156,8 @@ msgid "hard"
 msgstr "难"
 
 #: src/components/packs/collections/RecordBoards.tsx
-msgid "hardest cards to find"
-msgstr "最难找到的卡片"
+#~ msgid "hardest cards to find"
+#~ msgstr "最难找到的卡片"
 
 #: src/components/communities/field-options.tsx
 msgid "Harmful, hateful or a scam"
@@ -5888,6 +6296,10 @@ msgstr "印地语"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hint"
 msgstr "提示条"
+
+#: src/components/packs/collections/CollectorShelf.tsx
+#~ msgid "History"
+#~ msgstr "历程"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Hit <0/> <1/>"
@@ -6313,6 +6725,10 @@ msgstr "它只会把数字往上抬。如果你的技能平均值本来就更高
 #~ msgid "It used to be the 4th best pass across all your skills at once, and in practice that was just whatever you specialise in. Measured across the site's 12,974 4K regular estimates, the old number sat a median of 0.14 levels above the player's single strongest skill, and 84% of players were within half a level of theirs. It was measuring your best pattern and calling that your dan. A real course does not work that way: it makes you clear a mix in one sitting. Averaging asks the same question."
 #~ msgstr "以前的做法是把你所有技能的通过混在一起，取第四好的那次，而实际上那测出来的就是你最擅长的那一项。拿本站 12,974 个 4K 单点估算来量，旧的数字中位数只比玩家最强的那一个技能高 0.14 级，84% 的玩家与自己最强技能的差距在半级以内。它量的是你最拿手的谱型，然后把这个数字当作你的段位。真实的课题不是这样的：它要你在一场之内把混在一起的谱面全部通过。取平均问的正是同一个问题。"
 
+#: src/components/packs/GiftInbox.tsx
+msgid "It's already in your collection."
+msgstr "已经在你的收藏里了。"
+
 #: src/components/communities/field-options.tsx
 msgid "Italian"
 msgstr "意大利语"
@@ -6368,6 +6784,11 @@ msgstr "加入服务器"
 msgid "joined ?"
 msgstr "加入于 ?"
 
+#. placeholder {0}: formatDate(new Date(history.collector.joinedAt).toISOString(), timeZone, locale)
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Joined {0}"
+#~ msgstr "{0} 加入"
+
 #: src/lib/streak-game.ts
 msgid "joined {month}"
 msgstr "加入于 {month}"
@@ -6375,6 +6796,10 @@ msgstr "加入于 {month}"
 #: src/routes/player/$username.tsx
 msgid "Joined <0>{joinedValue}</0>"
 msgstr "注册于 <0>{joinedValue}</0>"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Journal"
+#~ msgstr "日志"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "JS"
@@ -6799,6 +7224,10 @@ msgstr "实时 feed"
 msgid "Live performance points."
 msgstr "实时 pp。"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Live preview"
+#~ msgstr "实时预览"
+
 #: src/routes/tracker.tsx
 msgid "Live score tracker"
 msgstr "实时成绩追踪器"
@@ -6841,6 +7270,10 @@ msgstr "长条主体颜色"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "LN Body color"
 msgstr "长条主体颜色"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "LN dan"
+msgstr "长条段位"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -6918,6 +7351,10 @@ msgstr "加载更多成绩"
 msgid "Load my me! page"
 msgstr "加载我的 me! 页面"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Load older changes"
+msgstr "加载更早的变化"
+
 #: src/routes/player/$username.tsx
 msgid "Load osu! recents"
 msgstr "加载 osu! 最近成绩"
@@ -6977,6 +7414,10 @@ msgstr "正在加载收藏册…"
 msgid "Loading goals..."
 msgstr "目标加载中…"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Loading history…"
+msgstr "正在加载历史…"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Loading maps..."
@@ -7001,6 +7442,10 @@ msgstr "正在加载排行榜..."
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Loading scores..."
 msgstr "正在加载成绩…"
+
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Loading sets…"
+#~ msgstr "正在加载卡组…"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Loading skin…"
@@ -7036,6 +7481,8 @@ msgstr "加载中…"
 
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
+#: src/components/packs/SetsView.tsx
+#: src/components/replay/ReplayBufferingIndicator.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
@@ -7165,6 +7612,10 @@ msgstr "低 pp"
 #: src/routes/player/$username.tsx
 msgid "Lowest PP first"
 msgstr "pp 从低到高"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Lowest rarities first. You keep at least one of every card."
+#~ msgstr "优先使用低稀有度卡片。每张卡片至少保留一份。"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -7442,7 +7893,7 @@ msgstr "已标记太难"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Match sizes to first selected image"
-msgstr ""
+msgstr "统一为第一张所选图片的尺寸"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Matching against the replay's checksum."
@@ -7659,6 +8110,10 @@ msgstr "被收集最多的卡片"
 msgid "most complete collections"
 msgstr "最完整的收藏册"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "most copies"
+#~ msgstr "最多张数"
+
 #: src/routes/dan-estimates.tsx
 msgid "Most dan courses are unranked, except JinJin's, loved up to Phase III."
 msgstr "大多数段位课题都未上架，只有 JinJin 的例外，到 Phase III 为止都是 loved。"
@@ -7702,6 +8157,14 @@ msgstr "最多不重复卡牌"
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"
 msgstr "最常用 Mod"
+
+#: src/components/packs/collections/ShowcasePicker.tsx
+msgid "Move {name} left"
+msgstr "将 {name} 向左移动"
+
+#: src/components/packs/collections/ShowcasePicker.tsx
+msgid "Move {name} right"
+msgstr "将 {name} 向右移动"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move down"
@@ -7772,6 +8235,18 @@ msgstr "名称"
 msgid "Name"
 msgstr "名称"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Name a new binder"
+#~ msgstr "新卡夹名称"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Name a new folder"
+#~ msgstr "新文件夹名称"
+
+#: src/components/packs/SetsView.tsx
+msgid "Name a new set"
+msgstr "为新卡组命名"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Name and description"
 msgstr "名称与简介"
@@ -7808,12 +8283,17 @@ msgstr "从未在此加载过"
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
+#: src/components/player/SkillHistoryModal.tsx
 msgid "new"
 msgstr "新"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New"
 msgstr "新建"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "New binder"
+#~ msgstr "新建卡夹"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "new collection"
@@ -7827,6 +8307,10 @@ msgstr "新建收藏册"
 #: src/components/discord/CommandShowcase.tsx
 msgid "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps."
 msgstr "新的刷分谱面，会自动发到运行过 /subscribe feed:new maps 的频道。"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "New folder"
+#~ msgstr "新建文件夹"
 
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "New in this build"
@@ -7847,6 +8331,10 @@ msgstr "新建预设"
 #: src/routes/tracker.tsx
 msgid "New scores stream in live over this connection."
 msgstr "新成绩会通过此连接实时推送。"
+
+#: src/components/packs/SetsView.tsx
+msgid "New set"
+msgstr "新建卡组"
 
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -7877,6 +8365,7 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 msgid "Next"
 msgstr "下一页"
@@ -7906,6 +8395,11 @@ msgstr "连对 {0} 次得下一个奖励"
 msgid "Next card"
 msgstr "下一张卡片"
 
+#. placeholder {0}: set.name
+#: src/components/packs/collections/ShowcaseWall.tsx
+msgid "Next cards in {0}"
+msgstr "{0} 中的下一组卡片"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Next collection page"
 msgstr "收藏册下一页"
@@ -7913,6 +8407,10 @@ msgstr "收藏册下一页"
 #: src/routes/packs.tsx
 msgid "next free pack"
 msgstr "下一个免费卡包"
+
+#: src/components/packs/WishlistLine.tsx
+#~ msgid "Next pack: {chance}% chance one of these is in it"
+#~ msgstr "下一包：有 {chance}% 的几率开出其中一张"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/ui/Pagination.tsx
@@ -7978,6 +8476,10 @@ msgstr "没有匹配「{0}」的卡册。"
 msgid "No beatmaps found for \"{query}\""
 msgstr "没有找到匹配「{query}」的谱面"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "No binders yet. Name one above, then add cards to it."
+#~ msgstr "还没有卡夹。在上方起个名字，然后往里加卡片。"
+
 #: src/routes/snipes.tsx
 msgid "No board stored for this lane yet."
 msgstr "此栏目还没有榜单数据。"
@@ -8012,6 +8514,10 @@ msgstr "最近 7 天无变化"
 msgid "No collections here yet. Post the first one."
 msgstr "这里还没有收藏册，来发布第一个吧。"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "No collector found. They need to open a pack first."
+msgstr "未找到收藏者。对方需要先打开一个卡包。"
+
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
 msgstr "未找到国家/地区"
@@ -8035,6 +8541,10 @@ msgstr "前 50 名玩家中没有找到任何收藏。"
 #: src/routes/maps.tsx
 msgid "No favourites match your filters. Try loosening them."
 msgstr "没有符合筛选条件的收藏。试着放宽一些。"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
+#~ msgstr "还没有文件夹。建一个来随意归类你的卡片，想展示的话还能放到展示柜上。"
 
 #: src/routes/farm-helper.tsx
 msgid "no gains here"
@@ -8275,6 +8785,14 @@ msgstr "没有匹配的服务器"
 msgid "No servers yet"
 msgstr "还没有服务器"
 
+#: src/components/packs/SetsView.tsx
+msgid "No sets found."
+msgstr "未找到卡组。"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "No skill ratings have been recorded yet."
+msgstr "尚未记录任何技能评分。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "No skin loaded in the editor"
 msgstr "编辑器里没有加载皮肤"
@@ -8330,6 +8848,10 @@ msgstr "还没有追踪到的成绩。去打几张 ranked 谱面，成绩会实�
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays. Play some ranked maps and they show up here live."
 msgstr "还没有追踪到的成绩。去打几张 ranked 谱面，成绩会实时出现在这里。"
+
+#: src/components/packs/WishlistLine.tsx
+msgid "No wishes yet. Choose a missing player to get started."
+msgstr "还没有心愿。选择一位尚未拥有的玩家开始吧。"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
@@ -8474,6 +8996,10 @@ msgstr "你 pp 附近的数据还不够"
 msgid "Not enough qualifying clears for an estimate yet ({0} of {quorum})."
 msgstr "达标通过还不足以估算（{0}/{quorum}）。"
 
+#: src/components/packs/SetsView.tsx
+msgid "Not enough room"
+msgstr "空间不足"
+
 #: src/routes/farm-helper.tsx
 msgid "not found"
 msgstr "未找到"
@@ -8559,6 +9085,10 @@ msgstr "目前没有进行中的目标。"
 msgid "Nothing by that name."
 msgstr "没有叫这个名字的。"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "Nothing dated yet."
+#~ msgstr "暂无带日期的记录。"
+
 #: src/routes/farm-helper.tsx
 msgid "Nothing here would move your total"
 msgstr "这里没有能提升你总 pp 的谱面"
@@ -8566,6 +9096,10 @@ msgstr "这里没有能提升你总 pp 的谱面"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Nothing in here yet"
 msgstr "这里还什么都没有"
+
+#: src/components/packs/SetsView.tsx
+msgid "Nothing in here yet."
+msgstr "这里还是空的。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nothing in the loaded plays matches \"{trimmedQuery}\"."
@@ -8638,6 +9172,7 @@ msgstr "已获得"
 msgid "Obtained on {dateText}"
 msgstr "获得于 {dateText}"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "OD"
@@ -8681,6 +9216,10 @@ msgstr "关闭后你只计入人数统计。需要登录。"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Off the list, no download. Your replays still play in it."
 msgstr "不在列表中，也无法下载。你的回放仍然用它播放。"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Ok"
+msgstr "好的"
 
 #: src/components/me/MeScoreRow.tsx
 msgid "old"
@@ -8749,9 +9288,21 @@ msgstr "单图"
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 #~ msgstr "在密集谱面上，Stream 和 Technical 的评分经常只差一丝，哪个略微领先几乎等于抛硬币。这种几乎持平的情况通常判给速度，但当 Technical 咬得这么紧、而谱面分析本身也确信这张谱是技时，这次通过就会改归到技。"
 
+#: src/components/packs/SetsView.tsx
+msgid "On Showcase"
+msgstr "已展示"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "One copy for a friend. You keep {remaining}."
+msgstr "送一份给朋友，你还保留 {remaining} 份。"
+
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 msgstr "一个段位的跨度很大，所以每个段位又分成五档。一张谱面可以是 7--、7-、7、7+ 或 7++，从 7 段最简单的一端排到最难的一端。这些后缀只是段位内部的排序，没有别的意思。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "One of those cards is no longer in your collection."
+#~ msgstr "其中一张卡已不在你的收藏册里。"
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -8772,6 +9323,10 @@ msgstr "只有来自该地区的玩家才能加入"
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
 msgstr "当前只有提升技能的谱面"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
+#~ msgstr "每位收藏者只保留最近几次开包，或者链接有误。"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -8872,6 +9427,7 @@ msgid "open packs"
 msgstr "开卡包"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/MissingPlayerTile.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Open profile"
 msgstr "打开主页"
@@ -8897,9 +9453,17 @@ msgstr "在浏览器里打开某个成绩的回放播放器。"
 msgid "open their profile"
 msgstr "打开其个人主页"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Open this card once to load its stats, then return to the forge."
+#~ msgstr "先打开这张卡片加载属性，再返回锻造。"
+
 #: src/routes/communities_.$id.tsx
 msgid "open to"
 msgstr "开放给"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Open your first pack to start your journal."
+#~ msgstr "打开第一个卡包，开启你的日志。"
 
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "Open your own packs"
@@ -9097,7 +9661,6 @@ msgstr "导出宽度（像素）"
 msgid "overall"
 msgstr "综合"
 
-#: src/components/player/SkillHistoryModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
 msgid "Overall"
@@ -9115,6 +9678,10 @@ msgstr "概述"
 msgid "owner"
 msgstr "所有者"
 
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Pack open"
+#~ msgstr "开包"
+
 #: src/components/layout/Nav.tsx
 #: src/routes/packs.tsx
 msgid "packs"
@@ -9128,6 +9695,10 @@ msgstr "卡包"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "packs opened"
 msgstr "已开卡包"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Packs opened"
+#~ msgstr "已开卡包"
 
 #. placeholder {0}: page + 1
 #. placeholder {1}: lastPage + 1
@@ -9319,6 +9890,14 @@ msgstr "换一个文件"
 #: src/routes/farm-helper.tsx
 msgid "Pick any map on the left to preview it here."
 msgstr "点击左侧任意谱面即可在此预览。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Pick five cards of the same rarity."
+#~ msgstr "请选择五张同一稀有度的卡。"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
+#~ msgstr "选择五张同一稀有度的卡。它们会离开你的收藏册，换来一张高一级稀有度的卡。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Pick one to load it into the editor."
@@ -9687,6 +10266,7 @@ msgstr "预览图已上传。"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 msgid "Previous"
 msgstr "上一页"
@@ -9702,6 +10282,11 @@ msgstr "上一个区域"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Previous asset"
 msgstr "上一个素材"
+
+#. placeholder {0}: set.name
+#: src/components/packs/collections/ShowcaseWall.tsx
+msgid "Previous cards in {0}"
+msgstr "{0} 中的上一组卡片"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Previous collection page"
@@ -9723,6 +10308,10 @@ msgstr "上一段试听"
 #: src/routes/snipes.tsx
 msgid "Previously"
 msgstr "此前"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Prismatic"
+#~ msgstr "棱彩"
 
 #: src/routes/__root.tsx
 msgid "privacy"
@@ -9804,6 +10393,10 @@ msgstr "已发布"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Publishing."
 msgstr "正在发布。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Pull this card while signed in before gifting a spare."
+msgstr "登录后抽到这张卡片，才能赠送多余副本。"
 
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/PackPulse.tsx
@@ -9938,6 +10531,10 @@ msgstr "排行榜"
 msgid "Rankings"
 msgstr "排行榜"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "rarest"
+#~ msgstr "最稀有"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Rarity"
 msgstr "稀有度"
@@ -9982,6 +10579,10 @@ msgstr "仅依据 {plays} 个成绩评分，在更多 {keyCount}K 成绩被评�
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rates per chart"
 msgstr "每张谱面的倍速数"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Rating"
+msgstr "评分"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
@@ -10098,6 +10699,10 @@ msgstr "最新"
 msgid "Recent notable top plays across a country."
 msgstr "某个国家/地区最近值得关注的最佳成绩。"
 
+#: src/components/packs/RecentOpens.tsx
+#~ msgid "Recent opens"
+#~ msgstr "最近开包"
+
 #: src/routes/maps.tsx
 msgid "Recent plays"
 msgstr "最近游玩"
@@ -10208,6 +10813,10 @@ msgstr "红色"
 msgid "Redo (Ctrl+Shift+Z)"
 msgstr "重做（Ctrl+Shift+Z）"
 
+#: src/components/packs/SetsView.tsx
+msgid "Reduce this set to {BINDER_MAX_CARDS} cards to show it on Showcase."
+msgstr "请将此卡组减少至 {BINDER_MAX_CARDS} 张卡牌后再展示。"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Refresh"
@@ -10251,6 +10860,10 @@ msgstr "普通 4K/6K/7K"
 #: src/lib/signature-shared.ts
 msgid "Regular and LN"
 msgstr "单点与长条"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Regular dan"
+msgstr "常规段位"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Regular ladders"
@@ -10298,6 +10911,11 @@ msgstr "把 {0} 从最近观看中移除"
 #: src/components/packs/GoatPoll.tsx
 msgid "Remove {0} from the poll"
 msgstr "把 {0} 从投票中移除"
+
+#. placeholder {0}: player.username
+#: src/components/packs/WishlistLine.tsx
+msgid "Remove {0} from your wishlist"
+msgstr "将 {0} 从愿望单移除"
 
 #. placeholder {0}: entry.username
 #: src/components/packs/StreakLeaderboard.tsx
@@ -10347,6 +10965,10 @@ msgstr "移除标签"
 msgid "Remove this screenshot"
 msgstr "移除这张截图"
 
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Remove wish"
+msgstr "移出心愿单"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Removed imported skin hitsounds"
 msgstr "已移除导入的皮肤打击音"
@@ -10355,6 +10977,7 @@ msgstr "已移除导入的皮肤打击音"
 msgid "Removing the screenshot failed. Try again."
 msgstr "移除截图失败。请重试。"
 
+#: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Rename"
 msgstr "重命名"
@@ -10414,6 +11037,10 @@ msgstr "在全站将鼠标光标替换为 osu! 风格光标。仅桌面端。"
 #: src/routes/player/$username.tsx
 msgid "Replay"
 msgstr "回放"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Replay again"
+#~ msgstr "再看一次"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Replay link"
@@ -10563,6 +11190,7 @@ msgid "Retention And Controls"
 msgstr "数据保留与控制"
 
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/packs/SetsView.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
 #: src/routes/skins.tsx
@@ -10576,6 +11204,11 @@ msgstr "全部揭晓"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "正在揭晓剩下的…"
+
+#. placeholder {0}: status.cost
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Review ingredients ({available}/{0})"
+#~ msgstr "查看材料（{available}/{0}）"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Rice"
@@ -10668,6 +11301,10 @@ msgstr "周六"
 msgid "Save"
 msgstr "保存"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Save binder"
+#~ msgstr "保存卡夹"
+
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Save changes"
@@ -10677,9 +11314,17 @@ msgstr "保存更改"
 msgid "Save changes for everyone"
 msgstr "保存改动，对所有人生效"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "Save folder"
+#~ msgstr "保存文件夹"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save for everyone"
 msgstr "对所有人保存"
+
+#: src/components/packs/SetsView.tsx
+msgid "Save set"
+msgstr "保存卡组"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Save showcase"
@@ -11074,6 +11719,10 @@ msgstr "全选"
 msgid "Select all and copy, or use the button below."
 msgstr "全选并复制，或使用下面的按钮。"
 
+#: src/components/packs/SetsView.tsx
+msgid "Select at most {BINDER_MAX_CARDS} cards to add to a set."
+msgstr "最多选择 {BINDER_MAX_CARDS} 张卡牌添加到卡组。"
+
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 msgid "Select cards..."
@@ -11105,6 +11754,11 @@ msgstr "发送"
 msgid "Send report"
 msgstr "提交反馈"
 
+#. placeholder {0}: recipient.username
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Send to {0}"
+msgstr "送给 {0}"
+
 #: src/routes/report.tsx
 #~ msgid "Send update"
 #~ msgstr "发送更新"
@@ -11113,9 +11767,27 @@ msgstr "提交反馈"
 msgid "Sending..."
 msgstr "正在发送..."
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sending…"
+msgstr "正在发送…"
+
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "将一并发送："
+
+#. placeholder {0}: recipient?.username ?? ""
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sent to {0}."
+msgstr "已送给 {0}。"
+
+#. placeholder {0}: gift.card.username
+#: src/components/packs/GiftInbox.tsx
+#~ msgid "Sent you {0}'s card."
+#~ msgstr "送给你一张 {0} 的卡片。"
+
+#: src/components/packs/GiftInbox.tsx
+msgid "Sent you a card."
+msgstr "送给你一张卡片。"
 
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
@@ -11194,6 +11866,14 @@ msgstr "设定目标"
 msgid "set just now"
 msgstr "刚刚打出"
 
+#: src/components/packs/SetsView.tsx
+msgid "Set limit reached"
+msgstr "已达到卡组数量上限"
+
+#: src/components/packs/SetsView.tsx
+msgid "Set name"
+msgstr "卡组名称"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Set on {at}"
 msgstr "设定于 {at}"
@@ -11209,6 +11889,18 @@ msgstr "设定下一个里程碑"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set this goal again"
 msgstr "再次设定这个目标"
+
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "sets"
+#~ msgstr "卡组"
+
+#: src/routes/packs.tsx
+msgid "Sets"
+msgstr "卡组"
+
+#: src/components/packs/SetsView.tsx
+msgid "Sets are kept with your account, so sign in to make one."
+msgstr "登录后就可以创建卡组。"
 
 #: src/routes/skins_.$id.tsx
 msgid "Setting the replay skin failed. Try again."
@@ -11352,6 +12044,11 @@ msgstr "显示 {totalLabel} 个谱面"
 msgid "Show all {0}"
 msgstr "显示全部 {0} 个"
 
+#. placeholder {0}: set.cards.length
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Show all {0} cards"
+#~ msgstr "查看全部 {0} 张卡片"
+
 #. placeholder {0}: openedSection.clears
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Show all {0} clears"
@@ -11375,6 +12072,10 @@ msgstr "收起"
 #: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "收起"
+
+#: src/components/packs/collections/CommunitySets.tsx
+#~ msgid "Show less"
+#~ msgstr "收起"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "show more"
@@ -11403,6 +12104,14 @@ msgstr "显示非 4K 游玩"
 #: src/routes/tracker.tsx
 msgid "Show non-4K scores"
 msgstr "显示非 4K 成绩"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "Show on shelf"
+#~ msgstr "展示在展示柜"
+
+#: src/components/packs/SetsView.tsx
+msgid "Show on Showcase"
+msgstr "在展示区显示"
 
 #: src/routes/farm-helper.tsx
 msgid "show skillboost"
@@ -11487,6 +12196,14 @@ msgstr "方向"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Side by Side"
 msgstr "并排对比"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Sign in again to send a gift."
+msgstr "请重新登录以发送礼物。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Sign in again to use the forge."
+#~ msgstr "请重新登录以使用锻造。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in and runs like that pay shards."
@@ -11964,6 +12681,10 @@ msgstr "在此开始"
 msgid "Start tracking your plays"
 msgstr "开始追踪你的成绩"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Starting rating"
+msgstr "初始评分"
+
 #: src/lib/signature-shared.ts
 #: src/routes/packs_.collections.tsx
 msgid "Stats"
@@ -12137,6 +12858,11 @@ msgstr "周日"
 msgid "Supporter"
 msgstr "Supporter"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "sure?"
+#~ msgstr "确定？"
+
+#: src/components/packs/SetsView.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sure?"
 msgstr "确定？"
@@ -12153,6 +12879,10 @@ msgstr "确定？+{lastCopyValue}"
 #: src/components/packs/PackSummary.tsx
 msgid "Sure? The card leaves the collection"
 msgstr "确定？这张卡片将离开收藏册"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Sure? The five cards are used up"
+#~ msgstr "确定？这五张卡会被用掉"
 
 #: src/routes/maps.tsx
 msgid "SV"
@@ -12357,6 +13087,15 @@ msgstr "这个地址无法加载。"
 msgid "That beatmap ID is not a mania difficulty."
 msgstr "这个谱面 ID 不是 mania 难度。"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "That collector is no longer available."
+msgstr "该收藏者已不可用。"
+
+#: src/components/packs/collections/ShowcasePicker.tsx
+#: src/components/packs/SetsView.tsx
+msgid "That did not save. Try again."
+msgstr "保存失败，请重试。"
+
 #: src/components/communities/field-options.tsx
 msgid "That does not look like a Discord invite link."
 msgstr "这看起来不像是 Discord 邀请链接。"
@@ -12417,6 +13156,10 @@ msgstr "这个条目不是你的。"
 #: src/components/communities/field-options.tsx
 msgid "That listing no longer exists."
 msgstr "这个条目已经不存在了。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "That rarity cannot be forged any higher."
+#~ msgstr "该稀有度无法再往上熔铸。"
 
 #: src/routes/replay.tsx
 msgid "That replay file is too large to open in the browser."
@@ -12558,7 +13301,7 @@ msgstr "排行榜暂时没有响应。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The browser blocked the clipboard. Try Copy BBCode again."
-msgstr ""
+msgstr "浏览器拦截了剪贴板。请再次点击复制 BBCode。"
 
 #: src/routes/privacy.tsx
 msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
@@ -12894,9 +13637,25 @@ msgstr "直接用对应的 .osu 文件也可以。"
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge could not finish. Refresh the ingredients before trying again."
+#~ msgstr "锻造未能完成。请刷新材料后重试。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge could not finish. Try again."
+#~ msgstr "熔铸未能完成，请重试。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge could not load. Try again."
+#~ msgstr "无法加载锻造。请重试。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "The forge is not available right now."
+#~ msgstr "熔铸暂时不可用。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
-msgstr ""
+msgstr "图片已上传，但浏览器拦截了剪贴板。请再点一次复制 BBCode。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
@@ -13109,7 +13868,9 @@ msgstr "本站不使用游戏内显示的准确率，而是根据成绩的判定
 #~ msgid "The skill breakdown"
 #~ msgstr "按技能拆开看"
 
+#: src/components/replay/ReplayControls.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "The skin could not be loaded. Try again in a moment."
 msgstr "皮肤加载失败。请稍后再试。"
 
@@ -13165,6 +13926,10 @@ msgstr "已追踪的玩家池太小，现在还玩不了。"
 msgid "The vote just closed."
 msgstr "投票刚刚结束。"
 
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Their collection"
+#~ msgstr "TA 的收藏册"
+
 #: src/components/packs/CardCollectors.tsx
 msgid "Their copy"
 msgstr "他们的那张"
@@ -13193,6 +13958,14 @@ msgstr "主题色相"
 msgid "Theme saturation"
 msgstr "主题饱和度"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "There is no card left to forge into at that rarity."
+#~ msgstr "该稀有度已没有可熔铸出的卡片。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "There is no card left to forge into at that tier."
+#~ msgstr "该等级已没有可熔铸出的卡片。"
+
 #: src/routes/dan-estimates.tsx
 msgid "These are the packs checked, matched by beatmap. A pass has to be on one of these exact difficulties. Clearing the same courses from a different upload is still a clear, but that upload is not currently checked. More packs can be added."
 msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生在这些具体难度之一。即使你通过的是其它上传里的同一套课题，也仍然算通过，只是目前不会核对那份上传。以后可以加入更多图包。"
@@ -13216,6 +13989,11 @@ msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "这些估算不是真正的段位通过。这里没有人真的被段位课题检验过。Mania Hub 的做法是给每张谱面各自评一个段位，看你已经通过了哪些谱面，再从中读出一个等级。这就是为什么每个估算段位前面都写着「~」，排行榜也自称只是粗略排序。"
+
+#. placeholder {0}: forgeTierLabel(forgeSelection.targetTier)
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "These five become one {0} card."
+#~ msgstr "这五张会变成一张 {0} 卡。"
 
 #: src/routes/dan-estimates.tsx
 msgid "These numbers are subject to change."
@@ -13245,6 +14023,22 @@ msgstr "他们已经是 GOAT 了。"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "This .osk could not be read."
 msgstr "无法读取这个 .osk。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "This card already has a custom edition. Its appearance is protected."
+#~ msgstr "这张卡片已有定制版本，其外观受到保护。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "This card already wears that finish."
+#~ msgstr "这张卡片已经使用该外观。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "This card is no longer available. Refresh your collection."
+#~ msgstr "这张卡片已不可用。请刷新收藏。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "This card is not ready to gift. Open it to finish loading its stats."
+msgstr "这张卡片还不能赠送。请打开它以完成属性加载。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart has no dan level at the rate it was played at."
@@ -13343,6 +14137,10 @@ msgstr "这张图超出你的水平：会从你的推荐中隐藏，直到你在
 msgid "This older {selectedKeymode}K preview predates saved render choices. Its first re-render needs a new backdrop and pattern; later edits will preserve both."
 msgstr "这个较早的 {selectedKeymode}K 预览是在保存渲染选项之前生成的。第一次重新渲染需要重新选择背景和谱型，之后的编辑会保留这两项。"
 
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "This open is gone"
+#~ msgstr "这次开包已不存在"
+
 #: src/routes/__root.tsx
 msgid "This page doesn't exist."
 msgstr "此页面不存在。"
@@ -13440,6 +14238,10 @@ msgstr "这个皮肤的文件不可用，因此无法重新渲染预览。"
 #: src/routes/skins_.$id.tsx
 msgid "This skin's settings are too large to store."
 msgstr "这个皮肤的设置太大，无法保存。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "This special-edition Eternal stays with its collector."
+msgstr "这张特别版 Eternal 由原收藏者保留。"
 
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
@@ -13725,9 +14527,10 @@ msgstr "试试放宽筛选条件。"
 msgid "Try a wider range or check back later."
 msgstr "试试更大的范围，或稍后再来。"
 
-#: src/components/player/SkillHistoryModal.tsx
 #: src/components/BackendOfflineScreen.tsx
+#: src/components/packs/GiftSpareDialog.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Try again"
@@ -13850,6 +14653,10 @@ msgstr "撤销重新渲染"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Unhide"
 msgstr "取消隐藏"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Unique cards"
+#~ msgstr "不同卡片"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -14190,6 +14997,10 @@ msgstr "查看 {0} 的卡片"
 msgid "View {0}'s icon"
 msgstr "查看 {0} 的图标"
 
+#: src/components/player/SkillHistoryButton.tsx
+msgid "View {keyCount}K skill history"
+msgstr "查看 {keyCount}K 技能历史"
+
 #: src/routes/index.tsx
 msgid "view all"
 msgstr "查看全部"
@@ -14322,7 +15133,7 @@ msgstr "vs"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Wait for the image resize to finish, then copy again."
-msgstr ""
+msgstr "请等图片缩放完成后再复制。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
@@ -14340,6 +15151,10 @@ msgstr "等待音频加载…"
 msgid "Waiting for new scores"
 msgstr "等待新成绩"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Warm copper foil and drifting sparks."
+#~ msgstr "温暖的铜色镭射与飘动的火花。"
+
 #: src/components/packs/RevealStage.tsx
 msgid "Warming this player up... first draws can take a moment"
 msgstr "正在准备这名玩家…第一次抽卡可能要等一会儿"
@@ -14347,6 +15162,10 @@ msgstr "正在准备这名玩家…第一次抽卡可能要等一会儿"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Watch"
 msgstr "观看"
+
+#: src/routes/packs_.open.$token.tsx
+#~ msgid "Watch a pack of maniacards being opened, card by card."
+#~ msgstr "逐张观看一个 maniacard 卡包的开包过程。"
 
 #: src/routes/replay.tsx
 msgid "Watch osu!mania replays in your browser."
@@ -14450,6 +15269,10 @@ msgstr "你在浏览的内容"
 msgid "What's new"
 msgstr "更新内容"
 
+#: src/routes/packs_.collections_.history.$collector.tsx
+#~ msgid "When {name} found their first card, and every rarity after it."
+#~ msgstr "{name} 找到首张卡片的时间，以及之后每个稀有度的首张。"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "When each card first joined your collection"
 msgstr "每张卡片最初加入你收藏册的时间"
@@ -14523,6 +15346,27 @@ msgstr "导出图片的宽度，单位像素"
 #: src/lib/packs.ts
 msgid "Wild"
 msgstr "狂野"
+
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Wish"
+msgstr "许愿"
+
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Wished"
+msgstr "已许愿"
+
+#: src/components/packs/PackSummary.tsx
+#: src/components/packs/RevealStage.tsx
+msgid "wishlist"
+msgstr "愿望单"
+
+#: src/components/packs/WishlistLine.tsx
+msgid "Wishlist"
+msgstr "愿望单"
+
+#: src/components/packs/MissingPlayerTile.tsx
+msgid "Wishlist is full (5)"
+msgstr "愿望单已满（5）"
 
 #: src/routes/farm-helper.tsx
 msgid "with {mods}"
@@ -14614,6 +15458,18 @@ msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 �
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
+#: src/components/packs/BindersView.tsx
+#~ msgid "You already have {BINDER_MAX_PER_COLLECTOR} binders."
+#~ msgstr "你已经有 {BINDER_MAX_PER_COLLECTOR} 个卡夹了。"
+
+#: src/components/packs/BindersView.tsx
+#~ msgid "You already have {BINDER_MAX_PER_COLLECTOR} folders."
+#~ msgstr "你已经有 {BINDER_MAX_PER_COLLECTOR} 个文件夹了。"
+
+#: src/components/packs/SetsView.tsx
+msgid "You already have {BINDER_MAX_PER_COLLECTOR} sets."
+msgstr "你已经有 {BINDER_MAX_PER_COLLECTOR} 个卡组了。"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "You already have the maximum number of collections."
 msgstr "你的收藏册数量已达上限。"
@@ -14626,9 +15482,17 @@ msgstr "你正在划开卡片"
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "你最多可以发布 {COMMUNITY_MAX_PER_USER} 个服务器。"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "You can send 10 gifts per 24 hours. Try again later."
+msgstr "每 24 小时可送出 10 份礼物。请稍后再试。"
+
 #: src/routes/farm-helper.tsx
 msgid "you could gain"
 msgstr "潜在收益"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "You do not have five duplicate copies of that tier."
+#~ msgstr "你没有该等级的五张重复卡。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "You got {streak} right, a new best."
@@ -14658,6 +15522,10 @@ msgstr "已达到 {HIDDEN_USERS_LIMIT} 名隐藏玩家的上限。移除一些�
 msgid "you have too many active marks, clear some first"
 msgstr "你标记的谱面太多了，先清掉一些"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "You have used every forge for today."
+#~ msgstr "今天的熔铸次数已用完。"
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "You haven't liked a collection yet."
 msgstr "你还没有喜欢过任何收藏册。"
@@ -14681,6 +15549,14 @@ msgstr "你已把这张标记为太难"
 #: src/routes/terms.tsx
 msgid "You may use the site for personal and community reference. Please do not overload public endpoints, attempt to bypass access controls, scrape aggressively, interfere with other users, or use the service in a way that disrupts osu!, ppy, community APIs, or Mania Tracker infrastructure."
 msgstr "你可以将本站用于个人和社区参考。请不要使公开接口过载、试图绕过访问控制、激进地抓取数据、干扰其他用户，或以扰乱 osu!、ppy、社区 API 或 Mania Tracker 基础设施的方式使用本服务。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "You need more spare copies to craft this edition."
+#~ msgstr "你需要更多多余副本来制作此版本。"
+
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "You no longer have a spare copy of this card."
+msgstr "你已没有这张卡片的多余副本。"
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
@@ -14734,6 +15610,11 @@ msgstr "你最强的是 <0>{0}</0>"
 msgid "your"
 msgstr "你的"
 
+#. placeholder {0}: names[finish]
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Your {0} edition"
+#~ msgstr "你的{0}特别版"
+
 #: src/routes/farm-helper.tsx
 msgid "your {yourPp}pp"
 msgstr "你的 {yourPp}pp"
@@ -14762,6 +15643,22 @@ msgstr "你的最佳"
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
 
+#: src/components/packs/GiftSpareDialog.tsx
+msgid "Your collection changed. Nothing was sent. Refresh and try again."
+msgstr "你的收藏已发生变化，没有送出任何卡片。请刷新后重试。"
+
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Your collection changed. Refresh the ingredients and try again."
+#~ msgstr "你的收藏已发生变化。请刷新材料后重试。"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your collection's milestones, just for you."
+#~ msgstr "收藏历程中的里程碑，仅你可见。"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your collector journal"
+#~ msgstr "你的收藏日志"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
@@ -14776,6 +15673,10 @@ msgstr "你的描述会显示在这里。"
 msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
 
+#: src/components/packs/ForgePanel.tsx
+#~ msgid "Your edition is ready for your collection and showcase."
+#~ msgstr "你的特别版已准备好加入收藏和展示。"
+
 #: src/routes/dan-estimates.tsx
 msgid "Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
 msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术平均。10、9、7、6 这四个技能，算出来的估算是 8。如果它正好落在段位表的最顶端，标记会从「~」变成「>」，读作<0>高于</0>那个段位，而不是把你钉在上面，因为段位表已经没有更高的级别来衡量你了。"
@@ -14783,6 +15684,18 @@ msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your estimate is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
 #~ msgstr "你的估算是 alpha++，也就是第四个。那次 gamma 的通过不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。要求凑够四次，就是为了不让某一天的手感决定你的段位。"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your first {rarity}"
+#~ msgstr "你的第一张{rarity}"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your first card"
+#~ msgstr "你的第一张卡片"
+
+#: src/components/packs/CollectorJournal.tsx
+#~ msgid "Your first forge"
+#~ msgstr "你的第一次锻造"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is alpha++, the 4th one. The gamma pass does not make you gamma: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Asking for four of them is what keeps a single good day from setting your level."
@@ -14874,6 +15787,11 @@ msgid "Your server shows up here once it is approved. Until then you can see it,
 msgstr "审核通过后你的服务器就会出现在这里。在那之前，你可以在上面自己的收录里看到并修改它。"
 
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/SetsView.tsx
+msgid "Your sets"
+msgstr "你的卡组"
+
+#: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "你的展示柜"
 
@@ -14894,64 +15812,11 @@ msgstr "你的上传"
 msgid "Your username and avatar"
 msgstr "你的用户名和头像"
 
+#: src/components/packs/WishlistLine.tsx
+msgid "Your wishlist"
+msgstr "你的心愿单"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
-msgstr "每次重新计算评分时都会保存变化，包括评分系统更新带来的变化。更早的变化未被记录。"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Could not load skill history."
-msgstr "无法加载技能历史。"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "LN dan"
-msgstr "长条段位"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Load older changes"
-msgstr "加载更早的变化"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Loading history…"
-msgstr "正在加载历史…"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "No skill ratings have been recorded yet."
-msgstr "尚未记录任何技能评分。"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Regular dan"
-msgstr "常规段位"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Starting rating"
-msgstr "初始评分"
-
-#: src/components/player/SkillHistoryButton.tsx
-msgid "View {keyCount}K skill history"
-msgstr "查看 {keyCount}K 技能历史"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "{keyCount}K skill history"
-msgstr "{keyCount}K 技能历史"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgctxt "skill rating difference"
-msgid "Change"
-msgstr "变化"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Date"
-msgstr "日期"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Earlier changes weren’t recorded."
-msgstr "更早的变化未被记录。"
-
-#: src/components/player/SkillHistoryModal.tsx
-msgid "Rating"
-msgstr "评分"

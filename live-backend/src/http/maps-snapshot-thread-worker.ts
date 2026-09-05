@@ -9,12 +9,15 @@
 // The pack pool's unranked-member read and the skill leaderboard build run
 // here too, for the same reason: each is a whole-roster scan plus JSON parsing
 // that measured seconds of main-thread CPU per rebuild in production.
+// Catalog search uses the same connection for its counts, filtered pages and
+// prepared response, so a slow search miss cannot pause HTTP/SSE either.
 import { parentPort, workerData } from "node:worker_threads";
 import { createDb } from "../db.js";
 import { JobQueue } from "../jobs/queue.js";
 import { readUnrankedPoolEntries } from "../features/global-rankings.js";
 import { enqueueGlobalFarmedBoardRepack, getMapsPageSnapshot, registerGlobalFarmedBoardDiskCache, registerGlobalFarmedBoardRepackDelegation } from "../features/maps.js";
 import { buildSkillBoard } from "../features/skill-leaderboards.js";
+import { getMapSearchPage } from "../features/map-search.js";
 import { prepareJsonResponse } from "./prepared-json.js";
 import type { MapsSnapshotThreadRequest, MapsSnapshotThreadResponse } from "./maps-snapshot-thread.js";
 
@@ -69,8 +72,10 @@ async function handle(request: MapsSnapshotThreadRequest): Promise<void> {
       respond({ id: request.id, ok: true, kind: "compute", value: board }, transferableBuffers(board));
       return;
     }
-    const snapshot = await getMapsPageSnapshot(db, queue, request.country, request.maxAgeMs, request.query);
-    const status = snapshot.value ? 200 : 202;
+    const snapshot = request.kind === "maps-search"
+      ? await getMapSearchPage(db, request.query)
+      : await getMapsPageSnapshot(db, queue, request.country, request.maxAgeMs, request.query);
+    const status = "value" in snapshot && !snapshot.value ? 202 : 200;
     const prepared = await prepareJsonResponse(status, snapshot, request.encoding);
     // Transfer the body's ArrayBuffer when the Buffer owns it outright (large
     // bodies do); small pooled Buffers fall back to a structured-clone copy.
@@ -79,7 +84,7 @@ async function handle(request: MapsSnapshotThreadRequest): Promise<void> {
       {
         id: request.id,
         ok: true,
-        kind: "maps-page",
+        kind: request.kind,
         status: prepared.status,
         encoding: prepared.encoding,
         vary: prepared.vary,

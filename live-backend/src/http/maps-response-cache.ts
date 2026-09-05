@@ -178,6 +178,24 @@ export async function buildGlobalMapsResponseOnThread(
   }
 }
 
+// Search misses must never retry on the serving connection after a worker
+// failure, including a failed first spawn. Source-mode/remote/explicitly
+// disabled threads retain the existing inline path.
+export async function buildMapSearchResponseOnThread(
+  ctx: HttpContext,
+  request: Extract<MapsSnapshotThreadBuildRequest, { kind: "maps-search" }>,
+): Promise<PreparedJsonResponse | null> {
+  const thread = getMapsSnapshotThread(ctx.config);
+  if (!thread) return null;
+  if (!thread.available()) throw new MapsSnapshotBuildError("maps search thread cooling down");
+  try {
+    return await thread.build(request);
+  } catch (error) {
+    logWarn("maps_search_thread_build_failed", errorContext(error));
+    throw new MapsSnapshotBuildError(error instanceof Error ? error.message : String(error));
+  }
+}
+
 export interface MapsResponseCachedServeOptions {
   cache: MapsResponseCache;
   inflight: Map<string, Promise<PreparedJsonResponse>>;
@@ -279,4 +297,3 @@ export function warmGlobalMapsFarmedBoard(ctx: HttpContext): void {
     });
   })().catch((error) => logWarn("maps_global_farmed_board_warmup_failed", errorContext(error)));
 }
-

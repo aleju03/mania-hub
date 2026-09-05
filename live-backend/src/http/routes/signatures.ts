@@ -218,6 +218,7 @@ export async function handleSignatureRoutes(
       sendJson(req, res, ctx, 400, { error: "invalid_types" });
       return true;
     }
+    const previous = await getUserSignature(writeDb, userId);
     const signature = await enableUserSignature(
       writeDb,
       userId,
@@ -228,7 +229,9 @@ export async function handleSignatureRoutes(
       // a name Intl accepts, or to null.
       body.timeZone === undefined ? undefined : normalizeTimeZone(body.timeZone),
     );
-    sendJson(req, res, ctx, 200, { ok: true, signature });
+    const purgeToken = previous && (!previous.enabled || previous.enabledTypes.some((type) => !types.includes(type)))
+      ? previous.token : undefined;
+    sendJson(req, res, ctx, 200, { ok: true, signature, purgeToken });
     return true;
   }
 
@@ -244,17 +247,19 @@ export async function handleSignatureRoutes(
   }
 
   if (url.pathname === "/api/signature/disable") {
+    const previous = await getUserSignature(writeDb, userId);
     const ok = await disableUserSignature(writeDb, userId);
-    sendJson(req, res, ctx, ok ? 200 : 404, { ok });
+    sendJson(req, res, ctx, ok ? 200 : 404, { ok, purgeToken: ok ? previous?.token : undefined });
     return true;
   }
 
   // /api/signature/rotate
+  const previous = await getUserSignature(writeDb, userId);
   const rotated = await rotateUserSignatureToken(writeDb, userId);
   if (!rotated) {
     sendJson(req, res, ctx, 404, { ok: false, error: "not_found" });
     return true;
   }
-  sendJson(req, res, ctx, 200, { ok: true, signature: rotated });
+  sendJson(req, res, ctx, 200, { ok: true, signature: rotated, purgeToken: previous?.token });
   return true;
 }

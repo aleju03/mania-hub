@@ -51,6 +51,7 @@ function makeDeps(entries: GlobalRankingEntry[], overrides: Partial<PackDrawDeps
     listOwnedCardKeys: async () => [],
     selectReadyUserIds: async (_db, ids) => [...ids],
     listEternalCards: async () => [],
+    rollWishlist: async () => ({ userId: 0, counted: false }),
     rng: rngQueue([]),
     ...overrides,
   };
@@ -237,6 +238,101 @@ describe("drawPackHand", () => {
     );
     const goat = (hand?.players ?? []).find((slot) => slot.honorary);
     expect(goat?.userId).toBe(roster[1]);
+  });
+});
+
+describe("the wishlist's pity slot", () => {
+  it("takes the hand's weakest slot and marks itself", async () => {
+    const entries = pool(200);
+    const wishedId = entries[199].user.id;
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(entries, { rollWishlist: async () => ({ userId: wishedId, counted: true }) }),
+    );
+    const players = hand?.players ?? [];
+    expect(players).toHaveLength(5);
+    // Reveal order is weakest first, and the wished player is the weakest
+    // entry in the pool, so they open the hand.
+    expect(players[0]?.userId).toBe(wishedId);
+    expect(players[0]?.wished).toBe(true);
+    expect(players.filter((slot) => slot.wished)).toHaveLength(1);
+    expect(new Set(players.map((slot) => slot.userId)).size).toBe(5);
+  });
+
+  it("is asked only about players the pack could actually deal", async () => {
+    const entries = pool(200);
+    let seen: ReadonlySet<number> | null = null;
+    const hand = await drawPackHand(
+      db,
+      { packType: "legend", ownerUserId: 1 },
+      makeDeps(entries, {
+        rollWishlist: async (_db, _owner, sliceUserIds) => {
+          seen = sliceUserIds;
+          return { userId: 0, counted: false };
+        },
+      }),
+    );
+    /* Legend draws the top 2%, floored at 50 players, and the five the hand
+       already holds are taken out: a wished player the ordinary roll dealt is
+       not a pity case, and the settle pass takes them off the list without
+       spending the counter. */
+    expect(seen).not.toBeNull();
+    expect((seen as unknown as Set<number>).size).toBe(45);
+    expect((seen as unknown as Set<number>).has(entries[199].user.id)).toBe(false);
+    const dealt = new Set(rankedIds(hand?.players ?? []));
+    for (const id of dealt) expect((seen as unknown as Set<number>).has(id)).toBe(false);
+    // Everything else in the slice is still on the table.
+    expect([...(seen as unknown as Set<number>)].every((id) => !dealt.has(id))).toBe(true);
+  });
+
+  it("is never taken back by a GOAT cascade", async () => {
+    const entries = pool(200);
+    const wishedId = entries[150].user.id;
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      // rng 0: the honorary roll hits and every cascade wins, which without
+      // the guard would overwrite the wished slot too.
+      makeDeps(entries, { rng: () => 0, rollWishlist: async () => ({ userId: wishedId, counted: true }) }),
+    );
+    const players = hand?.players ?? [];
+    expect(players[0]?.userId).toBe(wishedId);
+    expect(players[0]?.wished).toBe(true);
+    expect(players[0]?.honorary).toBeUndefined();
+    expect(players.filter((slot) => slot.honorary)).toHaveLength(4);
+  });
+
+  it("keeps a cold wished player instead of swapping them for a warm one", async () => {
+    const entries = pool(200);
+    const wishedId = entries[199].user.id;
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(entries, {
+        rollWishlist: async () => ({ userId: wishedId, counted: true }),
+        selectReadyUserIds: async (_db, ids) => ids.filter((id) => id !== wishedId),
+      }),
+    );
+    const ids = rankedIds(hand?.players ?? []);
+    expect(ids).toContain(wishedId);
+    // Still warmed, so the reveal's cold path joins an in-flight fetch.
+    expect(hand?.notReadyUserIds).toContain(wishedId);
+  });
+
+  it("deals the ordinary hand when the wishlist read fails", async () => {
+    const entries = pool(200);
+    const hand = await drawPackHand(
+      db,
+      { packType: "standard", ownerUserId: 1 },
+      makeDeps(entries, {
+        rollWishlist: async () => {
+          throw new Error("wishlist unavailable");
+        },
+      }),
+    );
+    expect(hand?.players).toHaveLength(5);
+    expect((hand?.players ?? []).some((slot) => slot.wished)).toBe(false);
   });
 });
 

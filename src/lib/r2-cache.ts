@@ -1269,7 +1269,7 @@ export async function getCachedSignatureImage(cacheKey: string): Promise<Buffer 
     const object = await r2.send(new GetObjectCommand({
       Bucket: REPLAY_CACHE_BUCKET,
       Key: storageKey,
-    }));
+    }), { abortSignal: AbortSignal.timeout(3_000) });
     const buffer = await readObjectBody(object.Body);
     return buffer.length > 0 ? buffer : null;
   } catch {

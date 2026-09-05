@@ -80,7 +80,7 @@ describe("SIGNATURE_CACHE_HEADER", () => {
      they do is invisible: every expiry silently becomes a blocking origin
      fetch for whoever arrives first. */
   it("does not pair s-maxage with stale-while-revalidate", () => {
-    expect(SIGNATURE_CACHE_HEADER).toContain("stale-while-revalidate=60");
+    expect(SIGNATURE_CACHE_HEADER).toContain("stale-while-revalidate=86400");
     expect(SIGNATURE_CACHE_HEADER).not.toContain("s-maxage");
   });
 

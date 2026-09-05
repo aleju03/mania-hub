@@ -27,6 +27,7 @@ export function ShowcaseCards({
   emptySlots = 0,
   onEmptySlotClick,
   onCardOpen,
+  onCardClose,
   thumbnails,
 }: {
   cards: ServerPackCollectionCard[];
@@ -40,6 +41,7 @@ export function ShowcaseCards({
   /* Told which card was lifted, for the surfaces that report browsing (a
      collector's shelf). The spotlight itself stays this row's business. */
   onCardOpen?: (card: CollectedCard) => void;
+  onCardClose?: () => void;
   /* Passed by a surface that draws many rows at once (the wall) so all of
      their faces are resolved in one request instead of one per row. A row on
      its own loads its own. */
@@ -107,7 +109,10 @@ export function ShowcaseCards({
       <CardSpotlight
         target={spotlight}
         onClose={() => setSpotlight(null)}
-        onExitComplete={() => setLiftedCardKey(null)}
+        onExitComplete={() => {
+          setLiftedCardKey(null);
+          onCardClose?.();
+        }}
       />
     </>
   );

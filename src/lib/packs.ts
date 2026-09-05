@@ -69,27 +69,37 @@ export interface PackPlayer {
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
+  /* Dealt by the wishlist's pity roll (live-backend pack-wishlist.ts): a
+     player this collector named and the pack reached for. Display-only, like
+     the flags above - it only decides whether the reveal prints the tag. */
+  wished?: boolean;
 }
 
 /* The variant fields a server slot may carry, bounded: a key that is not a
    variant of this player is dropped, and a motif that does not parse is no
-   motif. */
+   motif. The wishlist flag rides along here rather than beside it because it
+   is the same kind of field: something the slot says about itself that the
+   card face does not carry, and it belongs to an ordinary card with no
+   variant key at all, so it survives the early return. */
 export function packPlayerVariantFields(slot: {
   userId: number;
   milestone?: boolean;
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
-}): Pick<PackPlayer, "milestone" | "cardKey" | "customLabel" | "motif"> {
+  wished?: boolean;
+}): Pick<PackPlayer, "milestone" | "cardKey" | "customLabel" | "motif" | "wished"> {
+  const wished = slot.wished === true ? { wished: true as const } : {};
   const parsed = typeof slot.cardKey === "string" ? parsePackCardKey(slot.cardKey) : null;
   const cardKey = parsed && parsed.userId === slot.userId && parsed.variant > 0 ? slot.cardKey : undefined;
-  if (!cardKey) return {};
+  if (!cardKey) return wished;
   const customLabel = typeof slot.customLabel === "string" && slot.customLabel.trim() ? slot.customLabel.slice(0, 60) : null;
   return {
     cardKey,
     customLabel,
     motif: parseCardMotif(slot.motif ?? null),
     ...(slot.milestone === true ? { milestone: true as const } : {}),
+    ...wished,
   };
 }
 

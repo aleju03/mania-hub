@@ -146,6 +146,7 @@ export interface PackCommunityBoards {
   completion: PackCollectorSummary[];
   rarestCards: PackCommunityCard[];
   mostOwnedCards: PackCommunityCard[];
+
 }
 
 export interface PackCommunityStats {
@@ -601,9 +602,16 @@ const gzipAsync = promisify(gzipCallback);
 const gunzipAsync = promisify(gunzipCallback);
 
 /* In the filename, so a shape change simply misses its cache instead of
-   parsing an old file into the new type. Bump on any change to what
-   PackCollectorSnapshotWire or PackCardSnapshot carry. */
-const SNAPSHOT_CACHE_VERSION = 1;
+   parsing an old file into the new type. Bump the half whose shape changed, on
+   any change to what PackCollectorSnapshotWire or PackCardSnapshot carry: the
+   two halves are written and read separately, so bumping both would throw away
+   a warm start the change did not touch. The card half is at v3 after removing
+   the country board from its payload. */
+const SNAPSHOT_CACHE_VERSIONS: Record<PackCommunitySnapshotKind, number> = {
+  collector: 1,
+  card: 3,
+  totals: 1,
+};
 
 /* Where the snapshot in hand came from, for the admin status readout. "disk"
    is a restart that started warm; "inline" means the thread is not running
@@ -704,7 +712,7 @@ export function registerPackCommunitySnapshots(
 }
 
 function cachePath(cacheDir: string, kind: PackCommunitySnapshotKind): string {
-  return join(cacheDir, `pack-community-${kind}-v${SNAPSHOT_CACHE_VERSION}.json.gz`);
+  return join(cacheDir, `pack-community-${kind}-v${SNAPSHOT_CACHE_VERSIONS[kind]}.json.gz`);
 }
 
 /* A parsed cache file or thread payload is only adopted if it still looks like
@@ -1192,21 +1200,11 @@ export async function getPackShowcaseCards(db: Db, userId: number): Promise<Stor
   return getPackShowcase(db, userId);
 }
 
-/* The showcase wall: the cards people chose to show, one tile each, most
-   recently chosen first.
-
-   Paged over cards rather than over collectors. Grouping them by owner made
-   the name the headline and the card the footnote, and gave whoever last
-   edited their shelf the whole top of the page; the wall is meant to be a
-   gallery you browse, where whose card it is is something you find out by
-   inspecting it. The owner still comes down with every tile, because the
-   spotlight names them.
-
-   Deliberately not part of the cached snapshot: a showcase is the one thing on
-   this page a collector edits and then immediately wants to look at, so it is
-   read live. It is cheap, `pack_showcase_cards` holds at most five rows per
-   collector. */
+/* One showcase feed for cards and ordered sets. Each group is one entry,
+   while its member cards keep the same owner metadata for the spotlight.
+   Read live from the small showcase/set tables, without a roll-up build. */
 export interface PackShowcaseWallCard {
+  set?: { id: number; name: string; cards: StoredPackCard[] };
   card: StoredPackCard;
   collector: PackShowcaseCollector;
   showcasedAt: number;
@@ -1215,15 +1213,15 @@ export interface PackShowcaseWallCard {
 export async function listPackShowcaseWall(
   db: Db,
   options: { page: number; pageSize: number },
-): Promise<{ cards: PackShowcaseWallCard[]; total: number }> {
-  const { cards, total } = await listShowcasedCards(db, options);
-  if (cards.length === 0) return { cards: [], total };
+): Promise<{ cards: PackShowcaseWallCard[]; total: number; cardTotal: number }> {
+  const { cards, total, cardTotal } = await listShowcasedCards(db, options);
+  if (cards.length === 0) return { cards: [], total, cardTotal };
   const collectors = await readShowcaseCollectors(db, [...new Set(cards.map((entry) => entry.ownerUserId))]);
   const wall = cards.flatMap((entry) => {
     const collector = collectors.get(entry.ownerUserId);
-    return collector ? [{ card: entry.card, collector, showcasedAt: entry.showcasedAt }] : [];
+    return collector ? [{ card: entry.card, collector, showcasedAt: entry.showcasedAt, ...(entry.set ? { set: entry.set } : {}) }] : [];
   });
-  return { cards: wall, total };
+  return { cards: wall, total, cardTotal };
 }
 
 /* A collector's page: their holdings, how far they are through both

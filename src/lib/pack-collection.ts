@@ -14,6 +14,8 @@ export const PACK_CHARGE_REGEN_MS = 20_000;
 export const PACK_OPEN_SHARD_REWARD = 2;
 
 export interface CollectedCard {
+  /* False for the exclusive milestone card, as reported by the server. */
+  recyclable?: boolean;
   userId: number;
   /* The key this holding lives under, when it cannot be derived from the tier:
      a card /admin/collections handed out is its own collectible ("<id>:v<n>")
@@ -54,7 +56,7 @@ export interface CollectedCard {
      into localStorage. */
   serial?: number | null;
   mintedTotal?: number;
-  /* When /admin/collections handed this card to its holder, null or absent for
+  /* When this card was granted or gifted to its holder, null or absent for
      one that was pulled. A granted card is minted a serial like any other, so
      this is the only thing stopping a surface calling its holder the Nth
      person to pull it. Server-only, like the two above. */
@@ -386,6 +388,7 @@ export function applyCardMint(
 }
 
 export function duplicateShardValue(card: CollectedCard): number {
+  if (card.recyclable === false) return 0;
   return Math.max(0, card.copies - 1) * duplicateShardValueForTier(card.tier);
 }
 
@@ -395,7 +398,7 @@ export function duplicateShardValue(card: CollectedCard): number {
    or "recycle all" would be a strictly better way to cash in duplicates than
    the button that exists for it. */
 export function wholeCardShardValue(card: CollectedCard): number {
-  if (card.copies <= 0) return 0;
+  if (card.recyclable === false || card.copies <= 0) return 0;
   return shardValueForTier(card.tier) + duplicateShardValue(card);
 }
 
@@ -408,7 +411,7 @@ export function recycleDuplicates(
   key: string,
 ): { wallet: PackWallet; gained: number } {
   const card = wallet.cards[key];
-  if (!card || card.copies <= 1) return { wallet, gained: 0 };
+  if (!card || card.recyclable === false || card.copies <= 1) return { wallet, gained: 0 };
   const gained = duplicateShardValue(card);
   return {
     wallet: {
@@ -431,7 +434,7 @@ export function recycleAllCopies(
   key: string,
 ): { wallet: PackWallet; gained: number } {
   const card = wallet.cards[key];
-  if (!card || card.copies <= 0) return { wallet, gained: 0 };
+  if (!card || card.recyclable === false || card.copies <= 0) return { wallet, gained: 0 };
   const gained = wholeCardShardValue(card);
   return {
     wallet: {
@@ -475,7 +478,7 @@ export function recycleCopies(
   copies: number,
 ): { wallet: PackWallet; gained: number } {
   const card = wallet.cards[key];
-  if (!card || card.copies <= 0) return { wallet, gained: 0 };
+  if (!card || card.recyclable === false || card.copies <= 0) return { wallet, gained: 0 };
   const taken = Math.min(Math.max(0, Math.floor(copies)), card.copies);
   if (taken <= 0) return { wallet, gained: 0 };
   const gained = copiesShardValue(card.tier, taken, card.copies);
@@ -498,7 +501,7 @@ export function recycleAllDuplicates(wallet: PackWallet): { wallet: PackWallet; 
   for (const [key, card] of Object.entries(wallet.cards)) {
     gained += duplicateShardValue(card);
     cards[key] =
-      card.copies > 1
+      card.recyclable !== false && card.copies > 1
         ? { ...card, copies: 1, recycledCopies: card.recycledCopies + card.copies - 1 }
         : card;
   }
@@ -631,6 +634,7 @@ function sanitizeCard(value: unknown): CollectedCard | null {
   const cardKey = typeof card.cardKey === "string" ? parsePackCardKey(card.cardKey) : null;
   return {
     userId: card.userId,
+    ...(card.recyclable === false ? { recyclable: false } : {}),
     /* Kept through localStorage, unlike the other server-only fields: it is
        this card's identity rather than a fact about it, and dropping it would
        collapse a granted card onto the player's ordinary one the next time the

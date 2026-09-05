@@ -20,6 +20,7 @@ import { formatOgInt } from "./og-render";
 import { getAssetOrigin } from "./origin";
 import { MANIA_TIER_STYLES, resolveManiaTierStyle } from "./maniacard";
 import type { ManiaCardTier } from "./maniacard";
+import { packFinishSvg } from "./card-finish-art";
 import type { CardMotif } from "./card-motif";
 import { readImageSize, sniffImageMime } from "./image-sniff";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
@@ -105,6 +106,8 @@ interface InlinedMotif {
 const motifDataUrlCache = new Map<string, Promise<InlinedMotif | null>>();
 
 export function cardMotifDataUrl(motif: CardMotif): Promise<InlinedMotif | null> {
+  const svg = packFinishSvg(motif.url);
+  if (svg) return Promise.resolve({ dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`, aspect: 1 });
   const cached = motifDataUrlCache.get(motif.url);
   if (cached) return cached;
   const pending = (async () => {
@@ -588,4 +591,3 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
       ],
     );
 }
-

@@ -231,15 +231,20 @@ async function renderAlbumThumbnail(card: CollectedCard): Promise<string | null>
    collection once and merges it with any local pulls. Cached per session:
    the album only reads it. */
 const SERVER_COLLECTION_TTL_MS = 120_000;
-let serverCollectionCache: { at: number; cards: CollectedCard[] } | null = null;
-let serverCollectionPromise: Promise<CollectedCard[] | null> | null = null;
+let serverCollectionCache: { ownerUserId: number; at: number; cards: CollectedCard[] } | null = null;
+let serverCollectionPromise: { ownerUserId: number; token: object; promise: Promise<CollectedCard[] | null> } | null = null;
 
-async function loadFullServerCollection(): Promise<CollectedCard[] | null> {
-  if (serverCollectionCache && Date.now() - serverCollectionCache.at < SERVER_COLLECTION_TTL_MS) {
+async function loadFullServerCollection(ownerUserId: number, fresh = false): Promise<CollectedCard[] | null> {
+  if (fresh) {
+    if (serverCollectionPromise?.ownerUserId === ownerUserId) await serverCollectionPromise.promise.catch(() => null);
+    serverCollectionCache = null;
+  }
+  if (serverCollectionCache?.ownerUserId === ownerUserId && Date.now() - serverCollectionCache.at < SERVER_COLLECTION_TTL_MS) {
     return serverCollectionCache.cards;
   }
-  if (serverCollectionPromise) return serverCollectionPromise;
-  serverCollectionPromise = (async () => {
+  if (serverCollectionPromise?.ownerUserId === ownerUserId) return serverCollectionPromise.promise;
+  const token = {};
+  const request: Promise<CollectedCard[] | null> = (async () => {
     try {
       const pageSize = PACK_COLLECTION_MAX_PAGE_SIZE;
       const first = await fetchServerPackCollectionPage({ data: { page: 0, pageSize, tier: "all", query: "" } });
@@ -255,13 +260,14 @@ async function loadFullServerCollection(): Promise<CollectedCard[] | null> {
         if (!next) break;
         cards.push(...next.cards);
       }
-      serverCollectionCache = { at: Date.now(), cards };
+      serverCollectionCache = { ownerUserId, at: Date.now(), cards };
       return cards;
     } finally {
-      serverCollectionPromise = null;
+      if (serverCollectionPromise?.token === token) serverCollectionPromise = null;
     }
   })();
-  return serverCollectionPromise;
+  serverCollectionPromise = { ownerUserId, token, promise: request };
+  return request;
 }
 
 /* The cover backdrop follows lazer's Triangles drawable (the same field the
@@ -1096,8 +1102,10 @@ export function AlbumView({
   viewerId,
   openAlbumCode = null,
   scrollLinkedAlbumIntoView,
+  collectionRevision = 0,
 }: {
   wallet: PackWallet;
+  collectionRevision?: number;
   syncStatus: "local" | "syncing" | "synced";
   trackedCountries: string[] | null;
   viewerId: number | null;
@@ -1145,7 +1153,7 @@ export function AlbumView({
      zero-count alphabetical shelf. Client-only: the cache can only be
      populated after hydration, so SSR and first client render agree. */
   const [serverCards, setServerCards] = useState<CollectedCard[] | null>(() =>
-    serverCollectionCache && Date.now() - serverCollectionCache.at < SERVER_COLLECTION_TTL_MS
+    serverCollectionCache?.ownerUserId === viewerId && Date.now() - serverCollectionCache.at < SERVER_COLLECTION_TTL_MS
       ? serverCollectionCache.cards
       : null,
   );
@@ -1234,7 +1242,7 @@ export function AlbumView({
      for real per-country counts and card art, with the owned-ids set as a
      fast first signal while pages stream in. */
   useEffect(() => {
-    if (syncStatus === "local") return;
+    if (syncStatus === "local" || !viewerId) return;
     let cancelled = false;
     void fetchServerPackCollectionOwnedKeys()
       .then((keys) => {
@@ -1247,7 +1255,7 @@ export function AlbumView({
         setServerOwnedGoats(new Set(parsed.filter((entry) => entry.goat).map((entry) => entry.userId)));
       })
       .catch(() => {});
-    void loadFullServerCollection()
+    void loadFullServerCollection(viewerId, collectionRevision > 0)
       .then((cards) => {
         if (!cancelled && cards) setServerCards(cards);
       })
@@ -1255,7 +1263,7 @@ export function AlbumView({
     return () => {
       cancelled = true;
     };
-  }, [syncStatus]);
+  }, [syncStatus, viewerId, collectionRevision]);
 
   /* Only full-collection counts are worth persisting; the seeded/local-only
      interim would just overwrite good data with zeros. */

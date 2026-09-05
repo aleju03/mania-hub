@@ -11,9 +11,11 @@ import { packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import {
   fetchLivePackCollector,
   fetchLivePackCollectorCards,
+  fetchLivePackShowcasedBinders,
   LiveBackendRequestError,
   packCollectorLabel,
   packCollectorLookupSpecs,
+  type LivePackBinder,
   type LivePackCollectorProfile,
   type LivePackCommunityCollectionPage,
 } from "#/lib/live-backend";
@@ -567,6 +569,8 @@ export function CollectorShelf({ collector, tab }: {
         </Section>
       )}
 
+      <ShowcasedBinders userId={profile.collector.userId} />
+
       <Section className="mt-10">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <SectionHeading>
@@ -658,6 +662,43 @@ export function CollectorShelf({ collector, tab }: {
         onExitComplete={() => setLiftedCardKey(null)}
       />
     </div>
+  );
+}
+
+/* The binders this collector put on their shelf, under the showcase row. A
+   binder is a name over a group of their own cards; the read is public and
+   returns only the ones they marked, so a shelf with none of them shows
+   nothing here. */
+function ShowcasedBinders({ userId }: { userId: number }) {
+  const [binders, setBinders] = useState<LivePackBinder[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLivePackShowcasedBinders(userId)
+      .then((next) => {
+        if (!cancelled) setBinders(next);
+      })
+      .catch(() => {
+        if (!cancelled) setBinders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (binders.length === 0) return null;
+
+  return (
+    <>
+      {binders.map((binder) => (
+        <Section key={binder.id} className="mt-10">
+          <SectionHeading>{binder.name}</SectionHeading>
+          <div className="mt-3">
+            <ShowcaseCards cards={binder.cards} ownerUserId={userId} />
+          </div>
+        </Section>
+      ))}
+    </>
   );
 }
 

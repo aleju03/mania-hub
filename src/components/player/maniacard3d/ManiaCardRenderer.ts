@@ -287,6 +287,7 @@ export class ManiaCardRenderer {
      Far cheaper than rebuilding the textures from scratch; the pack reveal
      uses it for tray thumbnails after the flip lands. */
   snapshotFrontCanvas(width = 280): string | null {
+    if (!this.textures?.avatarLoaded) return null;
     const image = this.textures?.frontTexture.image;
     if (!(image instanceof HTMLCanvasElement)) return null;
     const canvas = document.createElement("canvas");

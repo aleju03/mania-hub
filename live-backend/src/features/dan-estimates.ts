@@ -2,7 +2,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
-import { computeMsd } from "../dan/msd.js";
+import { computeMsd, msdChartErrorFallback } from "../dan/msd.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -258,7 +258,7 @@ async function fillCachedRateMsd(
   } catch {
     return null;
   }
-  const msd = await computeMsd(parsed.osuText, { keyCount: parsed.map.keyCount, rate: request.rate }).catch(() => null);
+  const msd = await computeMsd(parsed.osuText, { keyCount: parsed.map.keyCount, rate: request.rate }).catch(msdChartErrorFallback);
   if (!msd) return null;
   await exec(
     db,
@@ -352,7 +352,7 @@ async function classifyAndStoreDanEstimate(
   // is asked for it leads, so the Companella pass reuses it instead of running
   // the calc a second time.
   const msd = options.withMsd
-    ? await computeMsd(osuText, { keyCount: map.keyCount, rate: request.rate }).catch(() => null)
+    ? await computeMsd(osuText, { keyCount: map.keyCount, rate: request.rate }).catch(msdChartErrorFallback)
     : null;
   const classification = await classifyChartWithCompanella(map, osuText, {
     starRating,

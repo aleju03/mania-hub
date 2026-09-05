@@ -64,6 +64,8 @@ export interface SqliteBusyRetryStats {
   // reopenPoisonedBatchConnection). Counted apart from `reconnects` so plain
   // write contention hitting batches does not spike the write-freeze signal.
   batchBusyReconnects: number;
+  // The corresponding repair for a single statement on a runtime connection.
+  statementBusyReconnects: number;
 }
 
 const sqliteBusyRetryStats: SqliteBusyRetryStats = {
@@ -80,6 +82,7 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
   migrationReconnects: 0,
   bestEffortWriteSkips: 0,
   batchBusyReconnects: 0,
+  statementBusyReconnects: 0,
 };
 
 // A local libsql connection can wedge permanently: once it is left inside (or
@@ -94,9 +97,66 @@ const RECONNECT_MIN_INTERVAL_MS = 5_000;
 // Why a connection is being reopened. "wedge" is the stale-snapshot recovery
 // above; "migration" is migrate() discarding a connection that lost the write
 // lock; "batch" is a .batch() that surfaced SQLITE_BUSY and left the
-// connection poisoned. They are counted and rate-limited differently.
-export type ReconnectReason = "wedge" | "migration" | "batch";
+// connection poisoned; "statement" is the same repair after .execute() on a
+// runtime connection. They are counted and rate-limited differently.
+export type ReconnectReason = "wedge" | "migration" | "batch" | "statement";
 export type ReconnectHook = (reason: ReconnectReason) => Promise<boolean>;
+
+const RECOVERS_BUSY = Symbol("mania.sqliteRecoversBusy");
+
+// Long-lived event-loop connections must do their lock waiting in exec /
+// execBatch's async retry layer. A configured 2s busy_timeout otherwise stalls
+// all job lanes, lease renewals and HTTP/SSE on every contended attempt. Keep
+// this in the create config so connection recovery preserves the zero timeout.
+// Boot-only migration connections and dedicated DB threads still use createDb.
+export async function createRuntimeDb(config: Parameters<typeof createDb>[0]): Promise<Db> {
+  const db = await createDb({ ...config, sqliteBusyTimeoutMs: 0 });
+  if (!config.databaseUrl.startsWith("file:")) return db;
+  const reconnect = (db as unknown as Record<symbol, ReconnectHook>)[RECONNECT];
+  let chain: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
+    const run = chain.then(operation);
+    chain = run.catch(() => {});
+    return run;
+  };
+  // Even a single .execute() returning SQLITE_BUSY can leave libSQL's native
+  // statement alive: a later write then succeeds only inside that abandoned
+  // transaction and disappears on close. Repair before releasing this turn,
+  // so no concurrent job can use the poisoned handle during the async reopen.
+  // The real lock wait stays outside the turn in exec/execBatch's retry sleep;
+  // unrelated reads and lease renewals can run between attempts.
+  const attempt = async <T>(operation: () => Promise<T>, reason: "statement" | "batch"): Promise<T> => {
+    try {
+      return await operation();
+    } catch (error) {
+      if (isSqliteBusyError(error)) {
+        try {
+          if (!await reconnect(reason)) throw new Error("SQLite busy recovery refused");
+        } catch (recoveryError) {
+          // Fail closed instead of accepting writes on an unrepaired handle.
+          db.close();
+          logWarn("sqlite_runtime_reconnect_failed", errorContext(recoveryError));
+          throw recoveryError;
+        }
+      }
+      throw error;
+    }
+  };
+  return new Proxy(db, {
+    get(_target, prop) {
+      if (prop === RECOVERS_BUSY) return true;
+      if (prop === RECONNECT) return (reason: ReconnectReason) => serialize(() => reconnect(reason));
+      if (prop === "execute") {
+        return (...args: Parameters<Db["execute"]>) => serialize(() => attempt(() => db.execute(...args), "statement"));
+      }
+      if (prop === "batch") {
+        return (...args: Parameters<Db["batch"]>) => serialize(() => attempt(() => db.batch(...args), "batch"));
+      }
+      const value = (db as unknown as Record<string | symbol, unknown>)[prop];
+      return typeof value === "function" ? value.bind(db) : value;
+    },
+  }) as Db;
+}
 
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
   const isFile = config.databaseUrl.startsWith("file:");
@@ -147,6 +207,9 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
     } else if (reason === "batch") {
       sqliteBusyRetryStats.batchBusyReconnects += 1;
       sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
+    } else if (reason === "statement") {
+      sqliteBusyRetryStats.statementBusyReconnects += 1;
+      sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
     } else {
       sqliteBusyRetryStats.reconnects += 1;
       sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
@@ -163,9 +226,9 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
 }
 
 async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<void> {
-  // busy_timeout makes a connection wait for a lock instead of failing with
-  // SQLITE_BUSY immediately. This is mandatory once a second process/connection
-  // (a split worker) writes to the same WAL file concurrently.
+  // A nonzero timeout parks the calling thread in SQLite. Runtime event-loop
+  // connections use zero and retry asynchronously; DB threads and boot-only
+  // migrations may absorb their lock waits here.
   const busyTimeoutMs = config.sqliteBusyTimeoutMs ?? 5_000;
   // NORMAL fsyncs only at checkpoints (not every commit) and is durable/safe
   // under WAL: a crash can lose the last few committed transactions but never
@@ -813,6 +876,7 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>, options: Busy
   // apply (no shared local handle to leak a transaction on).
   const reopenBeforeRetry = options.reopenBeforeRetry === true
     && recoverDb != null
+    && !(recoverDb as unknown as Record<symbol, unknown>)[RECOVERS_BUSY]
     && (recoverDb as unknown as Record<symbol, unknown>)[RECONNECT] != null;
   if (budgetMs <= 0) {
     try {

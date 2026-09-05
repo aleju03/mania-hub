@@ -7,7 +7,7 @@
 // The version is the whole design. A signature sits behind a URL the player
 // pasted once and never edits, so freshness cannot ride in the URL the way
 // OG_IMAGE_VERSION does. Instead every render is keyed by a version derived
-// from stamps the ingest pipeline already writes, which means a re-render
+// from projected content or stamps the ingest pipeline already writes, so a render
 // happens exactly once per real data change instead of on a timer. Nothing
 // here adds bookkeeping to a write path; every column read below is one that
 // already exists and is already maintained.
@@ -22,6 +22,8 @@ import {
   PROFILE_SNAPSHOT_REFRESH_PRIORITY,
   PROFILE_USER_REFRESH_JOB,
   PROFILE_USER_REFRESH_PRIORITY,
+  getCachedSignatureProfileSnapshot,
+  type SignatureProfileSnapshot,
 } from "./player-profiles.js";
 
 export const SIGNATURE_TYPES = ["insights", "goals", "skills", "dan", "maniacard"] as const;
@@ -70,6 +72,7 @@ export interface ResolvedSignature {
   styles: Record<string, unknown> | null;
   timeZone: string | null;
   versions: Record<SignatureType, string>;
+  profile?: SignatureProfileSnapshot | null;
 }
 
 export type SignatureProfileRefreshKind = "snapshot" | "user";
@@ -328,7 +331,7 @@ export interface SignaturePurgeTarget {
 export async function getSignaturePurgeTarget(db: Db, userId: number): Promise<SignaturePurgeTarget | null> {
   const record = await getUserSignature(db, userId);
   if (!record) return null;
-  return { token: record.token, versions: await buildVersions(db, userId, record.styles, record.timeZone) };
+  return { token: record.token, versions: (await buildVersions(db, userId, record.styles, record.timeZone)).versions };
 }
 
 /** The kill switch. Blocking does not touch `enabled`, so unblocking restores
@@ -373,7 +376,9 @@ export async function clearSignatureImages(db: Db, userId: number): Promise<bool
 }
 
 function hashVersion(parts: unknown[]): string {
-  return createHash("sha1").update(parts.map((part) => String(part ?? "")).join("|")).digest("hex").slice(0, 12);
+  return createHash("sha1").update(parts.map((part) =>
+    part != null && typeof part === "object" ? canonicalJson(part) : String(part ?? ""),
+  ).join("|")).digest("hex").slice(0, 12);
 }
 
 /* Key-sorted so two identical styles cannot hash differently and re-render for
@@ -394,10 +399,10 @@ function styleStamp(styles: Record<string, unknown> | null, type: SignatureType)
   return canonicalJson(styles?.[type] ?? null);
 }
 
-/* Version derivation. Each type reads only the stamps its own image draws
-   from, so a goal edit does not invalidate a maniacard render.
+/* Version derivation. Each type hashes its own projected inputs or stamps,
+   so a goal edit does not invalidate a maniacard render.
 
-   The stamps are hashed rather than passed through: the frontend only ever
+   The inputs are hashed rather than passed through: the frontend only ever
    compares versions for equality, and an opaque fixed-length token keeps
    internal timestamps off a public wire. */
 async function buildVersions(
@@ -405,22 +410,18 @@ async function buildVersions(
   userId: number,
   styles: Record<string, unknown> | null,
   timeZone: string | null,
-): Promise<Record<SignatureType, string>> {
+): Promise<{ versions: Record<SignatureType, string>; profile: SignatureProfileSnapshot | null; username: string }> {
   // No global_rank: nothing on a signature draws a rank any more, and rank
   // moves for an active player constantly, so keeping it here would re-render
   // images whose pixels cannot change. pp stays because card power is computed
   // from it.
   const userRow = (await exec(
     db,
-    "select updated_at, top_scores_refreshed_at, pp from users where user_id = ?",
+    "select username, updated_at, top_scores_refreshed_at, pp from users where user_id = ?",
     [userId],
   )).rows[0] as Record<string, unknown> | undefined;
 
-  const snapshotRow = (await exec(
-    db,
-    "select updated_at from profile_snapshots where user_id = ?",
-    [userId],
-  )).rows[0] as Record<string, unknown> | undefined;
+  const profile = await getCachedSignatureProfileSnapshot(db, userId);
 
   // computed_at, not updated_at: computePlayerSkillsJob stamps updated_at when
   // it flips status to 'running', which would bump the version with no new
@@ -450,11 +451,10 @@ async function buildVersions(
 
   const userStamp = String(userRow?.updated_at ?? "");
   const topScoresStamp = String(userRow?.top_scores_refreshed_at ?? "");
-  // getCachedPlayerProfileSnapshot falls back to stored top scores when there
-  // is no snapshot row, which is the normal state for an opted-in player who
-  // is not on a tracked roster, so both sources belong in the maniacard key.
+  // The projected profile also covers users with stored top scores but no
+  // baked snapshot, and folds in live top plays before hashing their content.
   const maniacard = hashVersion([
-    "m", snapshotRow?.updated_at, userStamp, topScoresStamp, userRow?.pp,
+    "m", userRow?.username, profile,
     styleStamp(styles, "maniacard"),
   ]);
   const skillsStamp = skillsRow?.computed_at ?? skillsRow?.updated_at;
@@ -466,22 +466,22 @@ async function buildVersions(
     "g", goalRow?.goal_count, goalRow?.newest, userStamp, topScoresStamp, lastScoreRow?.ended_at,
     styleStamp(styles, "goals"), timeZone,
   ]);
-  /* Same top-play window the maniacard reads, plus the last score event. The
-     card power a maniacard prints is a slow aggregate, but an insights render
-     names the player's NEWEST top play - and projectTopPlays overlays live
-     score events onto the stored window, so that line can be right before the
-     snapshot itself is rewritten. Without the event stamp the one reading the
-     image exists to show would be the last to move. No pp: nothing here is
-     computed from it. */
+  /* Hash the projected content, not refresh/last-score timestamps. A routine
+     refresh or a play below the best-200 must not throw away a finished image.
+     Return these same inputs with the resolve, so rendering cannot race a
+     second snapshot read and store new pixels under an older version. */
   /* The zone is in here because the insights card prints a play date, and the
      goals card now prints completion dates. The same instant is a different
      day either side of midnight, so each dated render owns the zone stamp. */
   const insights = hashVersion([
-    "i", snapshotRow?.updated_at, userStamp, topScoresStamp, lastScoreRow?.ended_at,
+    "i", userRow?.username, profile && {
+      user: { avatar_url: profile.user.avatar_url, cover_url: profile.user.cover_url },
+      bestScores: profile.bestScores,
+    },
     styleStamp(styles, "insights"), timeZone,
   ]);
 
-  return { maniacard, goals, skills, dan, insights };
+  return { versions: { maniacard, goals, skills, dan, insights }, profile, username: String(userRow?.username ?? "") };
 }
 
 export async function resolveSignatureToken(db: Db, token: string): Promise<ResolvedSignature | null> {
@@ -495,19 +495,16 @@ export async function resolveSignatureToken(db: Db, token: string): Promise<Reso
   if (!row || Number(row.enabled ?? 0) !== 1 || row.blocked_at != null) return null;
 
   const userId = Number(row.user_id);
-  const userRow = (await exec(db, "select username from users where user_id = ?", [userId])).rows[0] as
-    Record<string, unknown> | undefined;
   const styles = parseStyles(row.style_json);
   const timeZone = normalizeTimeZone(row.time_zone);
 
   return {
     userId,
-    username: String(userRow?.username ?? ""),
     enabledTypes: parseTypes(row.enabled_types_json),
     skillsKeyCount: row.skills_key_count == null ? null : Number(row.skills_key_count),
     styles,
     timeZone,
-    versions: await buildVersions(db, userId, styles, timeZone),
+    ...await buildVersions(db, userId, styles, timeZone),
   };
 }
 

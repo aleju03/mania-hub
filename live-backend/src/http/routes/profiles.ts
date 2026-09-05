@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { exec } from "../../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../../features/activity.js";
 import { enrichPayloadAvatarAccents } from "../../features/avatar-accents.js";
-import { getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores, ProfileUserSuppressedError } from "../../features/player-profiles.js";
+import { getCachedSignatureProfileSnapshot, getCachedPackCardSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, getPlayerReplayScores, ProfileUserSuppressedError } from "../../features/player-profiles.js";
 import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../features/keymode-pp.js";
 import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
 import { DAN_EVIDENCE_MAX_REJECTED, DAN_EVIDENCE_PAGE_MAX_CLEARS, PLAYER_SKILL_PLAYS_MAX, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
@@ -408,7 +408,8 @@ async function handleCachedProfileSnapshot(
 ): Promise<void> {
   // view=card serves the slim pack-card projection; the default stays the
   // full snapshot the profile page consumes.
-  const view = url.searchParams.get("view") === "card" ? "card" : "full";
+  const requestedView = url.searchParams.get("view");
+  const view = requestedView === "card" || requestedView === "signature" ? requestedView : "full";
   const lookupMode = url.searchParams.get("lookup") === "id" ? "userId" : "auto";
   // A pure read belongs on the read connection. serveWriteDb is the tiny
   // write-only side connection (2 MiB cache, no mmap) for the serving path's
@@ -433,7 +434,9 @@ async function handleCachedProfileSnapshot(
       // that mint from another lane and pay for the whole profile twice.
       // The card view never builds a profile: it reads the stored rows and
       // projects them (see getCachedPackCardSnapshot).
-      const body = view === "card"
+      const body = view === "signature" && /^\d+$/.test(key)
+        ? await getCachedSignatureProfileSnapshot(db, Number(key))
+        : view === "card"
         ? await getCachedPackCardSnapshot(db, key, { lookupMode })
         : await getCachedPlayerProfileSnapshot(db, key, { lookupMode });
       if (!body) {
@@ -442,7 +445,7 @@ async function handleCachedProfileSnapshot(
           cacheTtlMs: PROFILE_SNAPSHOT_RESPONSE_CACHE_TTL_MS,
         };
       }
-      await enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, body);
+      if (view !== "signature") await enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, body);
       return {
         prepared: await prepareJsonResponse(200, body, encoding),
         cacheTtlMs: PROFILE_SNAPSHOT_RESPONSE_CACHE_TTL_MS,

@@ -1592,6 +1592,13 @@ export function RevealStage({
                     <Trans>new</Trans>
                   </span>
                 )}
+                {/* A card the pity roll reached for, so the collector can see
+                    their wishlist did something. */}
+                {current.player.wished && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-osu-pink-light">
+                    <Trans>wishlist</Trans>
+                  </span>
+                )}
                 {current.tierLabel && (
                   <span className="text-[13px] font-black uppercase tracking-wide" style={{ color: tierColor }}>
                     {current.tierLabel}

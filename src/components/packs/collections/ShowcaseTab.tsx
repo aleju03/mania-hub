@@ -1,3 +1,4 @@
+import { SetsDialog, subscribePackSetsChanged } from "../SetsView";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Pencil } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -59,13 +60,13 @@ function loadWallPage(page: number, fresh: boolean): Promise<LivePackShowcaseWal
   if (held) return Promise.resolve(held);
   const inFlight = wallPageRequests.get(page);
   if (inFlight) return inFlight;
-  const request = fetchLivePackShowcaseWall({ page, pageSize: WALL_PAGE_SIZE, fresh })
+  const request: Promise<LivePackShowcaseWallPage> = fetchLivePackShowcaseWall({ page, pageSize: WALL_PAGE_SIZE, fresh })
     .then((next) => {
-      rememberWallPage(page, next);
+      if (wallPageRequests.get(page) === request) rememberWallPage(page, next);
       return next;
     })
     .finally(() => {
-      wallPageRequests.delete(page);
+      if (wallPageRequests.get(page) === request) wallPageRequests.delete(page);
     });
   wallPageRequests.set(page, request);
   return request;
@@ -74,6 +75,7 @@ function loadWallPage(page: number, fresh: boolean): Promise<LivePackShowcaseWal
 interface LivePackShowcaseWallPage {
   cards: LivePackShowcaseWallCard[];
   total: number;
+  cardTotal?: number;
 }
 
 export function ShowcaseTab({ shelfSlots }: { shelfSlots: number }) {
@@ -81,11 +83,19 @@ export function ShowcaseTab({ shelfSlots }: { shelfSlots: number }) {
      on page change alone, so the card you had just put up was not there until
      you reloaded the page. */
   const [savedAt, setSavedAt] = useState(0);
-  const onSaved = useCallback(() => setSavedAt(Date.now()), []);
+  const [showcaseRevision, setShowcaseRevision] = useState(0);
+  const onSaved = useCallback(() => setSavedAt((current) => Math.max(Date.now(), current + 1)), []);
+  const onOwnShowcaseSaved = useCallback(() => {
+    onSaved();
+    setShowcaseRevision((current) => current + 1);
+  }, [onSaved]);
+  useEffect(() => subscribePackSetsChanged(({ showcaseChanged }) => {
+    if (showcaseChanged) onSaved();
+  }), [onSaved]);
   return (
     <div className="space-y-10">
-      <YourShowcase slots={shelfSlots} onSaved={onSaved} />
-      <ShowcaseWall reloadKey={savedAt} />
+      <YourShowcase slots={shelfSlots} onSaved={onOwnShowcaseSaved} />
+      <ShowcaseWall reloadKey={savedAt} resetPageKey={showcaseRevision} />
     </div>
   );
 }
@@ -96,6 +106,7 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
   const viewer = auth.viewer;
   const [cards, setCards] = useState<ServerPackCollectionCard[] | null>(null);
   const [picking, setPicking] = useState(false);
+  const [setsOpen, setSetsOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   /* One browser-direct read for the whole row, and one that touches nothing
      expensive. It used to be two requests in series: the owner-scoped server
@@ -168,6 +179,8 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
           <Pencil size={12} />
           {t`Edit`}
         </button>
+        <button type="button" onClick={() => setSetsOpen(true)} aria-haspopup="dialog"
+          className="cursor-pointer rounded-lg px-2.5 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white">{t`Your sets`}</button>
       </div>
       {/* An empty shelf draws nothing at all: no card-shaped holes, and no
           second button telling you to fill them. It cost the height of a row
@@ -213,26 +226,29 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
         onCancel={() => setPicking(false)}
         onSave={save}
       />
+      {setsOpen && <SetsDialog onClose={() => setSetsOpen(false)} />}
     </Section>
   );
 }
 
-function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
+function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPageKey: number }) {
   const { t } = useLingui();
   const [page, setPage] = useState(0);
-  /* A card you just picked sorts to the front, which is page one, so a save
-     takes you back there. Adjusted during render rather than in an effect so
-     the fetch below runs once, for the page it settles on. */
-  const [seenReload, setSeenReload] = useState(reloadKey);
-  if (seenReload !== reloadKey) {
-    setSeenReload(reloadKey);
+  /* New individual pins sort to the front. Editing a set preserves its place
+     in the feed, so those refreshes leave the reader on their current page. */
+  const [seenReset, setSeenReset] = useState(resetPageKey);
+  if (seenReset !== resetPageKey) {
+    setSeenReset(resetPageKey);
     setPage(0);
   }
   /* Paging leaves the scroll alone. Every page is the same forty tiles tall,
      so the buttons stay under the cursor for the next click and the grid
      changes in place; scrolling back up to the heading on each press meant
      re-finding the pager every time you wanted the page after this one. */
-  const [result, setResult] = useState<LivePackShowcaseWallPage | null>(null);
+  const [result, setResult] = useState<{
+    page: number;
+    data: LivePackShowcaseWallPage;
+  } | null>(null);
   const [failed, setFailed] = useState(false);
   /* The page after the one on screen, held only so its faces are minted into
      the shared thumbnail cache before anyone asks to see them. */
@@ -255,6 +271,8 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
   if (cachedReload !== reloadKey) {
     setCachedReload(reloadKey);
     wallPageCache.clear();
+    // An older read must not satisfy the refresh or repopulate its cache.
+    wallPageRequests.clear();
   }
 
   /* Read during the render that the click causes, so a page already in hand
@@ -283,6 +301,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
 
     const held = wallPageCache.get(page);
     if (held) {
+      setResult({ page, data: held });
       setFailed(false);
       warmNextPage(held);
       return () => {
@@ -296,7 +315,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
     loadWallPage(page, reloadKey > 0)
       .then((next) => {
         if (cancelled) return;
-        setResult(next);
+        setResult({ page, data: next });
         warmNextPage(next);
       })
       .catch(() => {
@@ -312,7 +331,7 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
      The wall's faces are forty R2 objects a page, which is what the turn used
      to be spent on. */
   const prefetchedCards = useMemo(
-    () => prefetched.map((entry) => entry.card as CollectedCard),
+    () => prefetched.flatMap((entry) => (entry.set?.cards.slice(0, 3) ?? [entry.card]) as CollectedCard[]),
     [prefetched],
   );
   useCardThumbnails(prefetchedCards);
@@ -321,42 +340,27 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
      the wall lands, so until then its slot holds a blank line of the same 11px
      type: an empty span has no line box at all, and the heading row growing
      1.5px when the number arrives steps the whole grid under it. */
-  const shown = cached ?? result;
+  // Refresh the same page in place, keeping its card nodes and thumbnails
+  // mounted. A page turn still needs its own cards, never a different page's.
+  const shown = cached ?? (result?.page === page ? result.data : null);
+  // Keep the count and pager in place while the requested cards are loading.
+  const totals = shown ?? result?.data ?? null;
 
+  const cardCount = totals?.cardTotal ?? totals?.total ?? 0;
   const header = (
     <div className="flex items-baseline gap-3">
       <SectionHeading>{t`showcases`}</SectionHeading>
       <span className="ml-auto shrink-0 text-[11px] text-osu-f1 tabular-nums">
-        {shown && shown.total > 0
-          ? (shown.total === 1
-            ? t`${shown.total.toLocaleString("en-US")} card`
-            : t`${shown.total.toLocaleString("en-US")} cards`)
+        {totals && cardCount > 0
+          ? (cardCount === 1
+            ? t`${cardCount.toLocaleString("en-US")} card`
+            : t`${cardCount.toLocaleString("en-US")} cards`)
           : "\u00a0"}
       </span>
     </div>
   );
 
-  if (failed && !shown) {
-    return (
-      <Section>
-        {header}
-        <p className="mt-2 text-[12px] text-osu-f1">{t`Could not load the showcases.`}</p>
-      </Section>
-    );
-  }
-
-  if (!shown) {
-    return (
-      <Section>
-        {header}
-        <div className="mt-3">
-          <ShowcaseWallSkeleton cards={WALL_PAGE_SIZE} />
-        </div>
-      </Section>
-    );
-  }
-
-  if (shown.cards.length === 0) {
+  if (shown?.cards.length === 0) {
     return (
       <Section>
         {header}
@@ -367,13 +371,22 @@ function ShowcaseWall({ reloadKey }: { reloadKey: number }) {
     );
   }
 
-  const totalPages = Math.max(1, Math.ceil(shown.total / WALL_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil((totals?.total ?? 0) / WALL_PAGE_SIZE));
+  const placeholderCount = totals
+    ? Math.min(WALL_PAGE_SIZE, Math.max(1, totals.total - page * WALL_PAGE_SIZE))
+    : WALL_PAGE_SIZE;
 
   return (
     <Section>
       {header}
       <div className="mt-3">
-        <ShowcaseWallGrid entries={shown.cards} />
+        {shown ? (
+          <ShowcaseWallGrid entries={shown.cards} />
+        ) : failed ? (
+          <p className="text-[12px] text-osu-f1">{t`Could not load the showcases.`}</p>
+        ) : (
+          <ShowcaseWallSkeleton cards={placeholderCount} />
+        )}
       </div>
 
       {totalPages > 1 && (

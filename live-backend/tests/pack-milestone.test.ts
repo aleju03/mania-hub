@@ -14,6 +14,9 @@ import {
   getPackCollectionCard,
   isPackWalletEternalPending,
   listPullableEternalCards,
+  listPackCollectionCards,
+  recyclePackCollectionCards,
+  type PackRecycleMode,
   mintEternalSelfCardOnce,
   spendPackOpen,
 } from "../src/features/pack-wallets.js";
@@ -120,6 +123,40 @@ describe("the golden card", () => {
     const pullable = await listPullableEternalCards(db, OTHER);
     expect(pullable).toEqual([{ userId: OWNER, owned: false }]);
   });
+
+  it.each<PackRecycleMode>(["whole", "duplicates", "copies", "all_duplicates", "whole_matching"])(
+    "preserves the exclusive card during %s recycling and excludes it from shard totals",
+    async (mode) => {
+      await seedOpened(1);
+      await spendPackOpen(db, OWNER, { kind: "charge" }, NOW);
+      const deal = await claimPackMilestoneOnce(db, OWNER, async () => IDENTITY, NOW);
+      const cardKey = deal.cardKey!;
+      // Even accidental extra copies must not make the exclusive recyclable.
+      await exec(db, "update pack_collection_cards set copies = 3 where card_key = ?", [cardKey]);
+      const before = await getPackCollectionCard(db, OWNER, cardKey);
+      expect(before?.recyclable).toBe(false);
+      const page = await listPackCollectionCards(db, OWNER, { page: 0, pageSize: 10 });
+      expect(page.cards[0].recyclable).toBe(false);
+      expect(page.filteredShardTotal).toBe(0);
+      expect(page.duplicateShardTotal).toBe(0);
+
+      const result = await recyclePackCollectionCards(db, OWNER, {
+        mode, cardKey, cardCopies: [{ cardKey, copies: 3 }],
+      }, NOW + 1);
+      expect(result.gained).toBe(0);
+      expect(JSON.parse(result.wallet.payload).shards).toBe(2);
+      expect(await getPackCollectionCard(db, OWNER, cardKey)).toEqual(before);
+
+      // Bulk recycling still pays for ordinary Eternals in the same request.
+      await mintEternalSelfCardOnce(db, OWNER, IDENTITY, NOW + 2);
+      const bulk = await recyclePackCollectionCards(db, OWNER, {
+        mode: "whole", cardKeys: [cardKey, `${OWNER}:eternal`],
+      }, NOW + 3);
+      expect(bulk.gained).toBe(250);
+      expect(await getPackCollectionCard(db, OWNER, cardKey)).toEqual(before);
+      expect((await getPackCollectionCard(db, OWNER, `${OWNER}:eternal`))?.copies).toBe(0);
+    },
+  );
 
   it("reads back on the public status with the winner's name", async () => {
     await seedOpened(1);

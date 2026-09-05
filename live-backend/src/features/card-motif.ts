@@ -3,7 +3,7 @@
    src/lib/card-motif.ts on the frontend, which is where the shape is
    documented; this copy exists because the backend never imports from src/.
 
-   Only /admin/collections writes one (grantAdminPackCard). The wallet sync
+   The admin grant desk writes motifs. Legacy crafted finishes remain readable. The wallet sync
    path does not read the field at all, so a client cannot put a URL on a card:
    normalizeCard never builds one and the ownership upsert never names the
    column, which leaves whatever the grant wrote in place.
@@ -11,7 +11,7 @@
    Bounded here rather than trusted, because these URLs are handed to browsers
    and to the OG renderer, and a stored row can be older than the rules. */
 
-export const CARD_MOTIF_PALETTES = ["gold"] as const;
+export const CARD_MOTIF_PALETTES = ["gold", "prismatic", "aurora", "ember"] as const;
 export type CardMotifPalette = (typeof CARD_MOTIF_PALETTES)[number];
 
 export interface CardMotif {

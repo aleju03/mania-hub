@@ -101,7 +101,8 @@ async function postSignatureAction(
       body: JSON.stringify({ ...payload, userId: viewer.userId }),
     });
     if (!response.ok) return { allowed: true, signature: null };
-    const signature = readSignature(await response.json().catch(() => null));
+    const body = await response.json().catch(() => null) as { purgeToken?: unknown } | null;
+    const signature = readSignature(body);
     const memo = await import("./signature-resolve");
     const renders = await import("./signature-render-cache");
     if (action === "enable" || action === "time-zone") {
@@ -125,6 +126,11 @@ async function postSignatureAction(
          goes - it is small and this is rare. */
       memo.clearSignatureResolveMemo();
       renders.clearSignatureRenderCache();
+    }
+    // Revokes and unpublishing must purge the old URL as well as local memory,
+    // especially now that quiet profiles can use background revalidation.
+    if (typeof body?.purgeToken === "string") {
+      await eraseSignatureCopies(viewer.userId, { token: body.purgeToken, versions: {} });
     }
     return { allowed: true, signature };
   } catch {
@@ -264,7 +270,7 @@ async function adminSignatureRequest(
     browser or the admin list. */
 interface SignaturePurgeTarget {
   token: string;
-  versions: Record<SignatureType, string>;
+  versions: Partial<Record<SignatureType, string>>;
 }
 
 /* Removing a picture has to reach four places, because a render lives in four:

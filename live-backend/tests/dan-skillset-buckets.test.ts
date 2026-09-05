@@ -901,13 +901,13 @@ describe("charts that carry two tiles", () => {
     expect(new Set(tiles)).toEqual(new Set(["tech", "speed"]));
   });
 
-  it("files a long jack marathon under jack and stamina", () => {
+  it("keeps a long jack marathon on jack alone", () => {
     const tiles = danSkillsetBucketsForValues(4, "rc", STRONG_280.values, 253, 1, STRONG_280.chart);
-    expect(tiles).toEqual(["jack", "stamina"]);
+    expect(tiles).toEqual(["jack"]);
   });
 
   it("leaves a short jack chart on jack alone", () => {
-    // The endurance is half of what makes it both, so a 2:00 cut is just jack.
+    // Short cuts and marathons demonstrate the same jack skill.
     expect(danSkillsetBucketsForValues(4, "rc", STRONG_280.values, 120, 1, { ...STRONG_280.chart, lengthSeconds: 120 }))
       .toEqual(["jack"]);
   });
@@ -924,6 +924,27 @@ describe("charts that carry two tiles", () => {
         expect(tiles.length).toBeGreaterThanOrEqual(1);
         expect(tiles.length).toBeLessThanOrEqual(2);
         expect(new Set(tiles).size).toBe(tiles.length);
+      }
+    }
+  });
+});
+
+describe("4K jack endurance never supplies stamina dan evidence", () => {
+  const jackCharts = [
+    { ...STRONG_280.chart },
+    { ...SPEEDJACK_CHART, patterns: ["chordjack"] },
+    { ...SPEEDJACK_CHART },
+    { ...SPEEDJACK_CHART, patterns: [], jackDemand: true },
+  ];
+
+  it.each(["Stamina", "Handstream"])("keeps every jack override exclusive when %s leads MinaCalc", (top) => {
+    const values = { ...STRONG_280.values, [top]: 36 };
+    for (const chart of jackCharts) {
+      for (const length of [120, 240, 420, 900]) {
+        for (const rate of [0.75, 1, 1.5]) {
+          expect(danSkillsetBucketsForValues(4, "rc", values, length, rate, { ...chart, lengthSeconds: length }))
+            .toEqual(["jack"]);
+        }
       }
     }
   });

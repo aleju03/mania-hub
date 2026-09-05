@@ -43,6 +43,10 @@ async function renderCardThumbnailCanvas(data: ManiaCardReadyData, width: number
     textureScale: Math.max(0.5, Math.min(1, width / 560)),
     frontOnly: true,
   });
+  if (!textures.avatarLoaded) {
+    textures.dispose();
+    throw new Error("Card avatar did not load; thumbnail was not saved");
+  }
   const source = textures.frontTexture.image;
   const canvas = document.createElement("canvas");
   canvas.width = width;

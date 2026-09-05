@@ -21,6 +21,10 @@ export const COLLECTION_CARD_THUMB_WIDTH = 240;
    to produce the same bytes. A change that can only alter one kind of card
    belongs in that card's signature below instead. */
 const CACHE_VERSION = "v2";
+// These portraits were saved as question marks after a failed avatar request.
+// Re-address only the affected player's faces in browser caches and the shared
+// pool; rebuilding every other player's thumbnails would waste their renders.
+const AVATAR_REPAIR_REVISIONS: Readonly<Record<number, number>> = { 8474029: 1 };
 const CACHE_NAME_PREFIX = "mania-hub-maniacard-thumbs-";
 const CACHE_NAME = `${CACHE_NAME_PREFIX}${CACHE_VERSION}`;
 const CACHE_ROUTE = "/__mania-card-thumbnails/";
@@ -387,6 +391,8 @@ function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
      but a handful of cards. The leading token is the scatter's own version:
      bump it when drawMotifPattern changes, and only cards with art re-render. */
   if (data.motif) parts.push(`motif2:${cardMotifSignature(data.motif)}`);
+  const avatarRepair = AVATAR_REPAIR_REVISIONS[data.user.id];
+  if (avatarRepair) parts.push(`avatar-repair:${avatarRepair}`);
   return parts.join("|");
 }
 

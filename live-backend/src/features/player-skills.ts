@@ -3,7 +3,7 @@ import { exec, json, parseJson } from "../db.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import type { MotionFeatures } from "../dan/motion-features.js";
-import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
+import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, msdChartErrorFallback, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -1125,10 +1125,10 @@ async function runMsdAtGoal(
   options: { rate: number; keyCount: number; goal: number; lnTailTaps?: boolean },
 ): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
   const { rate, keyCount, goal, lnTailTaps = false } = options;
-  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps }).catch(() => null);
+  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps }).catch(msdChartErrorFallback);
   if (!capped) return null;
   if (goal <= SSR_CALC_GOAL_CAP) return { values: capped.values, calcRuns: 1 };
-  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps }).catch(() => null);
+  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps }).catch(msdChartErrorFallback);
   if (!base) return { values: capped.values, calcRuns: 1 };
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
   const values: Record<string, number> = {};
@@ -2734,8 +2734,8 @@ export async function computePlayerSkillRatings(
       ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
       ...(candidate.inverse ? { inverse: true } : {}),
     });
-    // Each calc run is a short synchronous wasm burst; breathe between bursts
-    // so a long first run does not starve the event loop.
+    // MinaCalc runs on its own thread. Retain the cooperative yield for the
+    // surrounding score bookkeeping as well.
     calcRuns += ssr.calcRuns;
     calcRunsTotal += ssr.calcRuns;
     if (calcRuns >= 5) {
@@ -3909,12 +3909,12 @@ function bucketsForClear(
   // argmax just like the older speedjack/chordjack tag override.
   if (chart?.jackDemand === true || trillIsJack(chart)) {
     const jack = buckets.find((bucket) => bucket.id === "jack" && bucket.skillsets != null);
-    if (jack) return resolveTilesForClear([jack], buckets, chart, values, rate);
+    if (jack) return resolveTilesForClear([jack], buckets, chart, values);
   }
   const override = buckets.find(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
   );
-  if (override != null) return resolveTilesForClear([override], buckets, chart, values, rate);
+  if (override != null) return resolveTilesForClear([override], buckets, chart, values);
   // The Jumpstream arbitration (TRILL_CLUSTER_CATEGORY). A trill label keeps
   // the tech pairing the bucket lists already give it; a plain label files
   // stamina; a tech-suffixed label hands the tile to the runner-up skillset,
@@ -3940,7 +3940,7 @@ function bucketsForClear(
   const filed = buckets.filter((bucket) => bucket.skillsets
     ? effectiveTop != null && bucket.skillsets.includes(effectiveTop)
     : chartBelongsToTagBucket(bucket, chart));
-  return resolveTilesForClear(filed, buckets, chart, values, rate);
+  return resolveTilesForClear(filed, buckets, chart, values);
 }
 
 /**
@@ -3951,15 +3951,14 @@ function bucketsForClear(
  * arms in bucketingSkillset rather than adding to them. And a chart files TWO
  * tiles where the evidence for one is not evidence against the other: the
  * model landing between its bars (SPEED_TECH_DUAL_LOW / SPEED_TECH_DUAL_HIGH),
- * or a jack chart long enough that the endurance is the other half of what it
- * asks for (JACK_STAMINA_ENDURANCE_SKILLSETS), or a stamina marathon whose
- * base identity the model reads as tech.
+ * or a stamina marathon whose base identity the model reads as tech.
+ * Primarily jack charts stay jack-only: sustained jack demand does not
+ * demonstrate the stream endurance the 4K stamina dan measures.
  *
  * Never more than two, and the tile the clear filed under first stays first:
  * that is its PRIMARY, and only a primary filing counts toward a tile's quorum
  * (see groupDanClearsBySkillset). A shared clear raises both tiles' dans but
- * cannot conjure a tile out of nothing, so four long chordjack marathons still
- * light one skill rather than two.
+ * cannot open a second skill without primary evidence for that skill.
  *
  * 6K/7K file by analyzer tags and already overlap by design, so this only runs
  * where the buckets carry skillset lists.
@@ -3969,7 +3968,6 @@ function resolveTilesForClear(
   buckets: DanSkillsetBucket[],
   chart: ChartSkillInfo | undefined,
   values: Record<string, number> | undefined,
-  rate: number,
 ): DanSkillsetBucket[] {
   if (filed.length !== 1 || filed[0].skillsets == null) return filed;
   const primary = filed[0];
@@ -3990,14 +3988,6 @@ function resolveTilesForClear(
     if (!modelled.shared) return [decided];
     const other = buckets.find((bucket) => bucket.id === (modelled.primary === "tech" ? "speed" : "tech") && bucket.skillsets != null);
     return other ? [decided, other] : [decided];
-  }
-
-  if (primary.id === "jack") {
-    const argmax = dominantSkillset(values);
-    if (argmax == null || !JACK_STAMINA_ENDURANCE_SKILLSETS.includes(argmax)) return filed;
-    const endurance = enduranceSeconds(chart?.lengthSeconds ?? null, rate);
-    if (endurance == null || endurance < STAMINA_TILE_MIN_LENGTH_SECONDS) return filed;
-    return add("stamina");
   }
 
   if (primary.id === "stamina") {
@@ -4574,20 +4564,6 @@ function speedTechTiles(
     shared: probability > SPEED_TECH_DUAL_LOW && probability < SPEED_TECH_DUAL_HIGH,
   };
 }
-
-// A jack chart is also a stamina chart when it is long enough that the
-// endurance is the other half of what it asks for, which the MSD vector says
-// outright: the jack override took the tile from an argmax that was Stamina or
-// Handstream. STRONG 280 [4K] Conflagration (3798537) is the case that named
-// the rule - 4:13 of Stamina 25.50 over Jumpstream 25.39, filed jack on a
-// chordjack score of 0.79 and 45% jack cluster importance - and 4K players
-// read it as both.
-//
-// It is deliberately narrow: 1.5% of a random 6,000-chart sample of the 4K
-// library, and the overlap only runs one way, since the jack veto
-// (STAMINA_TILE_JACK_VETO_SHARE) already keeps a jack-contaminated chart off
-// the stamina tile by every other route.
-const JACK_STAMINA_ENDURANCE_SKILLSETS = ["Stamina", "Handstream"];
 
 // MinaCalc's Stamina is a rider rather than a detector: it tracks the strongest
 // base skillset sustained and the calc clamps it a hair above that base. Over
@@ -5385,7 +5361,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v25 (current): 7K LN course attempts below 95% can credit the preceding
+// v26 (current): primarily jack charts no longer also credit 4K stamina,
+// regardless of length or MinaCalc endurance argmax (2026-09-04). Re-fold
+// stored plays so stamina tiles and their headlines lose the shared credit.
+// v25: 7K LN course attempts below 95% can credit the preceding
 // level instead of forcing the course's minus tiers (2026-09-04). Reload
 // course evidence and fold stored plays again to remove the old floor.
 // v24: 7K LN's headline follows the General tile, with the other
@@ -5413,7 +5392,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v25";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v26";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

@@ -377,7 +377,7 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v25'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v26'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
@@ -397,7 +397,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
     // A job queued by older code is guarded at execution time too.
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v25'", [])).rows).toHaveLength(0);
+    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v26'", [])).rows).toHaveLength(0);
 
     await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
@@ -417,7 +417,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     await exec(
       db,
       "insert into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v24", json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
+      ["player_skill_dan_sweep_done:v25", json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
     );
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;

@@ -313,6 +313,21 @@ export async function wipeUserProjections(db: Db, userId: number, journalDb: Db 
         args: [safeUserId],
       },
     },
+    { name: "pack_wishlist", statement: { sql: "delete from pack_wishlist where owner_user_id = ? or card_user_id = ?", args: [safeUserId, safeUserId] } },
+    { name: "pack_wishlist_state", statement: { sql: "delete from pack_wishlist_state where owner_user_id = ?", args: [safeUserId] } },
+    {
+      name: "pack_binder_cards",
+      statement: {
+        sql: `delete from pack_binder_cards
+              where binder_id in (select id from pack_binders where owner_user_id = ?)
+                 or card_key = cast(? as text) or card_key like cast(? as text) || ':%'`,
+        args: [safeUserId, safeUserId, safeUserId],
+      },
+    },
+    { name: "pack_binders", statement: { sql: "delete from pack_binders where owner_user_id = ?", args: [safeUserId] } },
+    { name: "pack_forge_events", statement: { sql: "delete from pack_forge_events where owner_user_id = ?", args: [safeUserId] } },
+    { name: "pack_finish_events", statement: { sql: "delete from pack_finish_events where owner_user_id = ?", args: [safeUserId] } },
+    { name: "pack_gifts", statement: { sql: "delete from pack_gifts where sender_user_id = ? or recipient_user_id = ? or card_user_id = ?", args: [safeUserId, safeUserId, safeUserId] } },
     { name: "pack_collection_cards", statement: { sql: "delete from pack_collection_cards where card_user_id = ?", args: [safeUserId] } },
     { name: "pack_card_serials", statement: { sql: "delete from pack_card_serials where card_user_id = ?", args: [safeUserId] } },
     { name: "pack_pull_events", statement: { sql: "delete from pack_pull_events where card_user_id = ?", args: [safeUserId] } },

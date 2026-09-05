@@ -9,7 +9,7 @@ import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
-import { LN_TAIL_MIN_RATIO, computeMsd } from "../dan/msd.js";
+import { LN_TAIL_MIN_RATIO, computeMsd, msdChartErrorFallback } from "../dan/msd.js";
 import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
@@ -311,7 +311,7 @@ export async function computeBeatmapChartAnalysis(
     // MSD first: it is stored either way, and Companella needs the same raw
     // values, so computing it up front saves the 4K LN-hybrid slice a second
     // MinaCalc pass.
-    const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(() => null);
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(msdChartErrorFallback);
 
     // Let the event loop breathe between the two CPU bursts.
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -327,7 +327,7 @@ export async function computeBeatmapChartAnalysis(
     let msdLn: Awaited<ReturnType<typeof computeMsd>> = null;
     if (msd && classification.lnRatio > LN_TAIL_MIN_RATIO) {
       await new Promise<void>((resolve) => setImmediate(resolve));
-      msdLn = await computeMsd(osuText, { keyCount: map.keyCount, lnTailTaps: true }).catch(() => null);
+      msdLn = await computeMsd(osuText, { keyCount: map.keyCount, lnTailTaps: true }).catch(msdChartErrorFallback);
     }
 
     const lean = leanClassification(classification, computeNoteBpm(osuText), motionFeatures(map.notes, map.keyCount));
@@ -1077,11 +1077,14 @@ export async function readNoteBpms(db: Db, beatmapIds: number[]): Promise<Map<nu
     const chunk = ids.slice(i, i + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
+    // Disqualify the broad status index: without statistics SQLite can choose
+    // it over the (beatmap_id, analysis_version) PK and scan every ready chart
+    // for a 200-map profile (~200ms). Status still filters the selected rows.
     const rows = (await exec(
       db,
       `select beatmap_id, json_extract(classification_json, '$.noteBpm') as note_bpm
        from beatmap_chart_analysis
-       where analysis_version = ? and status = 'ready' and beatmap_id in (${placeholders})`,
+       where analysis_version = ? and +status = 'ready' and beatmap_id in (${placeholders})`,
       [CHART_ANALYSIS_VERSION, ...chunk],
     )).rows;
     for (const row of rows) {
@@ -2230,7 +2233,7 @@ export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boo
     // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
     // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
     // MSD leads so Companella can reuse it instead of running MinaCalc twice.
-    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(msdChartErrorFallback);
     if (!msd) return false;
     await new Promise<void>((resolve) => setImmediate(resolve));
     const classification = await classifyChartWithCompanella(map, osuText, {
@@ -2254,7 +2257,8 @@ export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boo
       [json(msd), json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
     );
     return true;
-  } catch {
+  } catch (error) {
+    msdChartErrorFallback(error);
     // A chart the parser/estimator rejects keeps its DT columns; the full
     // analysis job (at 1.0x) would fail the same way.
     return false;
@@ -2385,7 +2389,7 @@ export async function storeHtRateVerdict(db: Db, beatmapId: number): Promise<boo
       "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
       [beatmapId],
     )).rows[0]?.difficulty_rating ?? 0);
-    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: HT_RATE }).catch(() => null);
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: HT_RATE }).catch(msdChartErrorFallback);
     if (!msd) return false;
     await new Promise<void>((resolve) => setImmediate(resolve));
     const classification = await classifyChartWithCompanella(map, osuText, {
@@ -2409,7 +2413,8 @@ export async function storeHtRateVerdict(db: Db, beatmapId: number): Promise<boo
       [json(msd), json(danHt), beatmapId, CHART_ANALYSIS_VERSION],
     );
     return true;
-  } catch {
+  } catch (error) {
+    msdChartErrorFallback(error);
     return false;
   }
 }
@@ -2732,7 +2737,7 @@ export async function recomputeLnMsdChunk(
     const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
     if (!osuText) continue;
     try {
-      const msdLn = await computeMsd(osuText, { keyCount: Number(row.key_count), lnTailTaps: true }).catch(() => null);
+      const msdLn = await computeMsd(osuText, { keyCount: Number(row.key_count), lnTailTaps: true }).catch(msdChartErrorFallback);
       if (!msdLn) continue;
       await exec(
         db,
@@ -2741,7 +2746,8 @@ export async function recomputeLnMsdChunk(
         [json(msdLn), beatmapId, CHART_ANALYSIS_VERSION],
       );
       computed.push(beatmapId);
-    } catch {
+    } catch (error) {
+      msdChartErrorFallback(error);
       // A chart the calc rejects keeps its null column; the map page falls
       // back to the base MSD.
     }
@@ -3290,7 +3296,8 @@ export async function recomputeSunnyRepinDtChunk(
         [json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
       );
       computed.push(beatmapId);
-    } catch {
+    } catch (error) {
+      msdChartErrorFallback(error);
       // A chart the parser/estimator rejects keeps its stored verdict; the
       // DT-rate sweep would have failed the same way.
     }
@@ -3546,7 +3553,7 @@ export async function recomputeLeoblackRepinDtChunk(
       const map = parseManiaBeatmap(osuText);
       if (map.keyCount !== 4 && map.keyCount !== 7) continue;
       if (hasCapPinnedSkillset(msdValues)) {
-        const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+        const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(msdChartErrorFallback);
         // A pin the calc can no longer reproduce keeps the stored vector; the
         // verdict re-mint below still runs on it.
         if (msd) {
@@ -3827,7 +3834,7 @@ async function recomputePoisonedDtColumns(db: Db, beatmapId: number): Promise<vo
       "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
       [beatmapId],
     )).rows[0]?.difficulty_rating ?? 0);
-    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(msdChartErrorFallback);
     if (!msd) {
       await clearDtColumns();
       return;
@@ -3853,7 +3860,8 @@ async function recomputePoisonedDtColumns(db: Db, beatmapId: number): Promise<vo
        where beatmap_id = ? and analysis_version = ?`,
       [json(msd), json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
     );
-  } catch {
+  } catch (error) {
+    msdChartErrorFallback(error);
     await clearDtColumns();
   }
 }

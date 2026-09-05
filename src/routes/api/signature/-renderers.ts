@@ -7,16 +7,18 @@
 // already uses for its card art.
 
 import { ImageResponse } from "@vercel/og";
+import { maniaStripElement } from "./-maniacard-strip";
 import { createElement as h } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { getServerLiveBackendUrl } from "../../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../../lib/live-backend-tokens";
-import { clamp, loadOgFonts, ogAvatarUrl, ogFontList } from "../../../lib/og-render";
+import { clamp, loadOgFonts, ogAvatarUrl, ogFontList, ogRenderGate } from "../../../lib/og-render";
 import { getAssetOrigin } from "../../../lib/origin";
 import {
   cosmicLaurelDataUrl,
   maniaTierCardElement,
+  triangleOverlayDataUrl,
   MANIACARD_H,
   MANIACARD_W,
 } from "../../../lib/maniacard-art";
@@ -50,7 +52,8 @@ import {
 import { avatarSquareDataUrl, backgroundImageDataUrl, beatmapCoverBandDataUrl, type SignatureBackgroundSources } from "./-backgrounds";
 import { cosmicStarsDataUrl, signatureArtLayers, tierFlecksDataUrl } from "./-art";
 import { getCosmicTierPalette } from "../../../lib/maniacard-cosmic";
-import type { ResolvedSignature } from "../../../lib/signature-resolve";
+import type { SignatureTiming } from "../../../lib/signature-timing";
+import type { SignatureProfileSnapshot as ProfileSnapshot, ResolvedSignature } from "../../../lib/signature-resolve";
 import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "../../../lib/types";
 import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../../../components/ui/ModBadge";
@@ -67,6 +70,7 @@ const RADAR_LABEL_COLOR = "rgba(255,255,255,0.72)";
 
 export interface SignatureRenderContext {
   request: Request;
+  timing?: SignatureTiming;
   resolved: ResolvedSignature;
   type: SignatureType;
   design: number;
@@ -79,12 +83,14 @@ export interface SignatureRenderContext {
 async function renderPng(ctx: SignatureRenderContext, node: ReactElement): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
   const [regularFont, heavyFont] = await loadOgFonts(ctx.request);
-  const response = new ImageResponse(node, {
-    width: spec.width,
-    height: spec.height,
-    fonts: ogFontList(regularFont, heavyFont),
+  return rasterize(ctx, async () => {
+    const response = new ImageResponse(node, {
+      width: spec.width,
+      height: spec.height,
+      fonts: ogFontList(regularFont, heavyFont),
   });
   return Buffer.from(await response.arrayBuffer());
+  });
 }
 
 /* satori does not implement the `inset` shorthand: a div given `inset: 0`
@@ -267,22 +273,6 @@ export async function renderPlate(ctx: SignatureRenderContext, message: string):
   ]));
 }
 
-function statBlock(label: string, value: string, dim: string, color = "#ffffff"): ReactNode {
-  return h("div", {
-    key: label,
-    style: { display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" },
-  }, [
-    h("div", {
-      key: "v",
-      style: { fontSize: "26px", fontWeight: 900, color, lineHeight: 1 },
-    }, value),
-    h("div", {
-      key: "l",
-      style: { fontSize: "10px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: dim },
-    }, label),
-  ]);
-}
-
 function bar(width: number, pct: number, color: string, height = 8): ReactNode {
   const filled = Math.max(0, Math.min(100, pct));
   return h("div", {
@@ -299,18 +289,6 @@ function bar(width: number, pct: number, color: string, height = 8): ReactNode {
 }
 
 // --- maniacard ---------------------------------------------------------
-
-interface ProfileSnapshot {
-  user?: {
-    id?: number;
-    username?: string;
-    avatar_url?: string;
-    country_code?: string;
-    cover_url?: string | null;
-    statistics?: { global_rank?: number | null; pp?: number | null } | null;
-  };
-  bestScores?: OsuScore[];
-}
 
 /* Both background images come off the profile payload: the osu! banner the
    player set, and the cover of the map behind their best play. */
@@ -332,19 +310,22 @@ async function fetchBackgroundSources(ctx: SignatureRenderContext): Promise<Sign
   // A custom url needs no profile read at all - the address is already in the
   // style.
   if (!styleNeedsProfileImage(ctx.style)) return {};
-  return backgroundSourcesFrom(await fetchProfileSnapshot(ctx.resolved.userId).catch(() => null));
+  return backgroundSourcesFrom(await fetchProfileSnapshot(ctx).catch(() => null));
 }
 
 /* cached-snapshot, not /snapshot: /snapshot queues a background osu! refresh,
    and an anonymous image fetch from a stranger's browser must not drive osu!
    API spend. It also keeps the pixels consistent with the version they are
    keyed under. */
-async function fetchProfileSnapshot(userId: number): Promise<ProfileSnapshot | null> {
-  const base = getServerLiveBackendUrl();
-  if (!base) return null;
-  const response = await fetch(`${base}/api/profiles/${userId}/cached-snapshot`);
-  if (!response.ok) return null;
-  return (await response.json()) as ProfileSnapshot;
+async function fetchProfileSnapshot(ctx: SignatureRenderContext): Promise<ProfileSnapshot | null> {
+  if (ctx.resolved.profile !== undefined) return ctx.resolved.profile;
+  return measure(ctx, "profile", async () => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/profiles/${ctx.resolved.userId}/cached-snapshot?view=signature&lookup=id`, { signal: AbortSignal.timeout(5_000) });
+    if (!response.ok) return null;
+    return (await response.json()) as ProfileSnapshot;
+  });
 }
 
 /* The card itself, rather than a signature-shaped reading of it: the same
@@ -373,26 +354,28 @@ async function renderManiacardFront(
     loadOgFonts(ctx.request),
     cosmicLaurelDataUrl(ctx.request, tier).catch(() => null),
   ]);
-  const response = new ImageResponse(
-    maniaTierCardElement({
-      username: clamp(user.username || ctx.resolved.username, 20),
-      avatarUrl,
-      tier,
-      skills,
-      laurelUrl,
-    }),
-    { width: MANIACARD_W, height: MANIACARD_H, fonts: ogFontList(regularFont, heavyFont) },
-  );
-  const { default: sharp } = await import("sharp");
-  return sharp(Buffer.from(await response.arrayBuffer()))
-    .resize(spec.width, spec.height, { fit: "fill" })
-    .png()
-    .toBuffer();
+  return rasterize(ctx, async () => {
+    const response = new ImageResponse(
+      maniaTierCardElement({
+        username: clamp(user.username || ctx.resolved.username, 20),
+        avatarUrl,
+        tier,
+        skills,
+        laurelUrl,
+      }),
+      { width: MANIACARD_W, height: MANIACARD_H, fonts: ogFontList(regularFont, heavyFont) },
+    );
+    const { default: sharp } = await import("sharp");
+    return sharp(Buffer.from(await response.arrayBuffer()))
+      .resize(spec.width, spec.height, { fit: "fill" })
+      .png()
+      .toBuffer();
+  });
 }
 
 async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
-  const snapshot = await fetchProfileSnapshot(ctx.resolved.userId);
+  const snapshot = await fetchProfileSnapshot(ctx);
   const user = snapshot?.user;
   const scores = snapshot?.bestScores ?? [];
   const skills = user
@@ -404,7 +387,7 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   if (!user || !skills) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
   const tier = getManiaCardTier(skills.cardPower);
-  const avatarSize = ctx.design === 4 ? 454 : ctx.design === 3 ? 150 : ctx.design === 2 ? 96 : 140;
+  const avatarSize = ctx.design === 4 ? 454 : ctx.design === 2 ? 108 : 140;
   const sourceAvatarUrl = ogAvatarUrl(ctx.request, user.avatar_url, user.id);
   /* resvg does not decode GIFs, so handing an animated osu! avatar straight
      to ImageResponse leaves the card's avatar frame blank. Dynamic renders
@@ -419,10 +402,35 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
   const background = await styleLayers(ctx, spec, backgroundSourcesFrom(snapshot));
   const tierBacked = !background.custom && styleUsesTier(ctx.style);
   const statColor = accentHex(ctx.style, "rgba(255,255,255,0.88)");
-  // The muted violet only works on the flat surface. On a tier front it is a
-  // grey smear over gold, same as it would be over a photograph.
-  const dim = background.custom || tierBacked ? TEXT_DIM_ON_ART : TEXT_DIM;
   const username = clamp(user.username || ctx.resolved.username, 20);
+  if (ctx.design === 2) {
+    const cosmic = getCosmicTierPalette(tier);
+    const summaryBackground: ReactNode[] = [...background.layers];
+    if (tierBacked) {
+      summaryBackground.push(
+        ...(cosmic ? tierLayers(tier, style, spec) : [
+          h("div", { key: "base", style: { position: "absolute", ...FILL, background: style.badgeGradient } }),
+          h("img", {
+            key: "facets", src: triangleOverlayDataUrl(spec.width, spec.height),
+            width: spec.width, height: spec.height,
+            style: { position: "absolute", top: 0, left: 0, width: spec.width, height: spec.height, opacity: 0.5 },
+          }),
+        ]),
+      );
+    }
+    return renderPng(ctx, maniaStripElement({
+      ...spec,
+      username,
+      avatarUrl,
+      tierLabel: style.label,
+      accent: accentHex(ctx.style, "#ffffff"),
+      skills,
+      background: summaryBackground,
+      tierBacked,
+      watermark: ctx.style.watermark,
+    }));
+  }
+
   /* No rank and no pp on the image. Both move on osu! faster than a cached
      snapshot can follow, so an embed showing them is wrong more often than it
      is right, and it is wrong right next to the profile that states the real
@@ -465,86 +473,6 @@ async function renderManiacard(ctx: SignatureRenderContext): Promise<Buffer> {
     ...background.layers,
     ...(tierBacked ? tierLayers(tier, style, spec) : []),
   ];
-
-  if (ctx.design === 2) {
-    return renderPng(ctx, frame(spec.width, spec.height, [
-      ...backdrop,
-      h("div", {
-        key: "row",
-        style: { display: "flex", alignItems: "center", gap: "18px", padding: "0 22px", width: "100%" },
-      }, [
-        avatar(96),
-        h("div", { key: "text", style: { display: "flex", flexDirection: "column", gap: "7px", flex: 1, minWidth: "0" } }, [
-          h("div", { key: "n", style: { fontSize: "26px", fontWeight: 900, lineHeight: 1 } }, username),
-          tierText(),
-        ]),
-        tierBacked
-          ? tierPanel([statBlock("Card power", String(Math.round(skills.cardPower)), dim)], "power", "8px 14px", 12)
-          : statBlock("Card power", String(Math.round(skills.cardPower)), dim),
-      ]),
-      wordmark(ctx.style, 12, 8, tierBacked),
-    ]));
-  }
-
-  if (ctx.design === 3) {
-    return renderPng(ctx, frame(spec.width, spec.height, [
-      ...backdrop,
-      h("div", {
-        key: "col",
-        style: {
-          display: "flex", flexDirection: "column", alignItems: "center",
-          width: "100%", padding: "38px 30px", gap: "18px",
-        },
-      }, [
-        avatar(150),
-        // The closest layout to the real card, so on the tier front it takes
-        // the card's structure: a name plate, and the numbers on their own
-        // plate. Bare white type on a Legendary gradient is the thing that
-        // made this look unfinished.
-        ...(tierBacked ? [
-          tierPanel([
-            h("div", { key: "n", style: { fontSize: "32px", fontWeight: 900, textAlign: "center", lineHeight: 1.1 } }, username),
-            tierText("center"),
-          ], "name", "10px 22px"),
-          h("div", { key: "stats", style: { display: "flex", width: "100%", marginTop: "6px" } }, [
-            tierPanel([
-              h("div", {
-                key: "power",
-                style: { display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", width: "100%" },
-              }, [
-                h("div", { key: "v", style: { fontSize: "58px", fontWeight: 900, lineHeight: 1 } }, String(Math.round(skills.cardPower))),
-                h("div", {
-                  key: "l",
-                  style: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: dim },
-                }, "Card power"),
-              ]),
-              h("div", {
-                key: "rows",
-                style: { display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px" },
-              }, cardStatRows(skills, 292, statColor)),
-            ], "plate", "16px 18px", 18),
-          ]),
-        ] : [
-          h("div", { key: "n", style: { fontSize: "34px", fontWeight: 900, textAlign: "center", lineHeight: 1.1 } }, username),
-          tierText("center"),
-          h("div", {
-            key: "power",
-            style: { display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", marginTop: "6px" },
-          }, [
-            h("div", { key: "v", style: { fontSize: "60px", fontWeight: 900, lineHeight: 1 } }, String(Math.round(skills.cardPower))),
-            h("div", {
-              key: "l",
-              style: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: dim },
-            }, "Card power"),
-          ]),
-          h("div", {
-            key: "stats",
-            style: { display: "flex", flexDirection: "column", gap: "12px", width: "100%", marginTop: "14px" },
-          }, cardStatRows(skills, 300, statColor)),
-        ]),
-      ]),
-    ]));
-  }
 
   // Design 1: banner.
   const nameBlock = [
@@ -719,7 +647,7 @@ function cardStatRows(skills: ManiaSkills, width: number, color: string): ReactN
 async function fetchGoals(userId: number): Promise<UserGoal[] | null> {
   const base = getServerLiveBackendUrl();
   if (!base) return null;
-  const response = await fetch(`${base}/api/goals?userId=${userId}`, { headers: bridgeAuthHeaders() });
+  const response = await fetch(`${base}/api/goals?userId=${userId}`, { headers: bridgeAuthHeaders(), signal: AbortSignal.timeout(5_000) });
   if (!response.ok) return null;
   const body = (await response.json()) as { goals?: UserGoal[] };
   return body.goals ?? [];
@@ -1045,7 +973,7 @@ async function renderGoals(ctx: SignatureRenderContext): Promise<Buffer> {
 async function fetchSkills(userId: number): Promise<MyDataSkillBreakdown | null> {
   const base = getServerLiveBackendUrl();
   if (!base) return null;
-  const response = await fetch(`${base}/api/profiles/${userId}/skills`);
+  const response = await fetch(`${base}/api/profiles/${userId}/skills`, { signal: AbortSignal.timeout(5_000) });
   if (!response.ok) return null;
   return (await response.json()) as MyDataSkillBreakdown;
 }
@@ -1306,7 +1234,7 @@ async function danEmblemDataUrl(
   if (!src) return null;
   try {
     const { getAssetOrigin } = await import("../../../lib/origin");
-    const response = await fetch(new URL(src, getAssetOrigin(request)).toString());
+    const response = await fetch(new URL(src, getAssetOrigin(request)).toString(), { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) return null;
     const body = Buffer.from(await response.arrayBuffer());
     if (src.endsWith(".svg")) return `data:image/svg+xml;base64,${body.toString("base64")}`;
@@ -1347,7 +1275,7 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
     ? sides
     : [sides.reduce((best, entry) => (entry.side.clears > best.side.clears ? entry : best), sides[0]!)];
 
-  const emblemSize = ctx.design === 3 ? 150 : ctx.design === 2 ? 96 : 118;
+  const emblemSize = ctx.design === 3 ? 420 : ctx.design === 2 ? 100 : 118;
   const emblems = await Promise.all(chosen.map(async (entry) => ({
     ...entry,
     url: await danEmblemDataUrl(ctx.request, entry.side.label, entry.id === "ln" ? "ln" : "rc", entry.keyCount),
@@ -1686,7 +1614,7 @@ async function recoloredModAsset(request: Request, path: string, color: string):
 
   const promise = (async () => {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (!response.ok) return null;
       const svg = (await response.text())
         .replaceAll('fill="white"', `fill="${color}"`)
@@ -2045,7 +1973,7 @@ async function renderInsightsPpLadder(
 
 async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
-  const snapshot = await fetchProfileSnapshot(ctx.resolved.userId);
+  const snapshot = await fetchProfileSnapshot(ctx);
   const insights = calculateUserProfileInsights(snapshot?.bestScores ?? []);
   if (insights.sampleSize === 0) return renderPlate(ctx, "No ranked mania plays tracked yet.");
 
@@ -2054,36 +1982,28 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
      amount of height to give it. The strip carries no name, so it fetches
      nothing. */
   const avatarSize = ctx.design === 1 ? 28 : ctx.design === 3 ? 26 : ctx.design === 4 ? 24 : 0;
-  const [background, avatarSrc] = await Promise.all([
-    styleLayers(ctx, spec, backgroundSourcesFrom(snapshot)),
-    avatarSize
+  const play = insights.newestTopPlay;
+  const inner = spec.width - (ctx.design === 3 ? 48 : 56);
+  const hasTopPlay = ctx.design !== 2 && ctx.design !== 4;
+  const [background, avatarSrc, cover, modBadges, [mostUsedModBadge = null]] = await Promise.all([
+    measure(ctx, "background", () => styleLayers(ctx, spec, backgroundSourcesFrom(snapshot))),
+    measure(ctx, "avatar", () => avatarSize
       ? avatarSquareDataUrl(snapshot?.user?.avatar_url ?? `https://a.ppy.sh/${ctx.resolved.userId}`, avatarSize)
-      : null,
+      : Promise.resolve(null)),
+    measure(ctx, "cover", () => play && hasTopPlay
+      ? beatmapCoverBandDataUrl(play.coverUrl, inner, TOP_PLAY_CARD_HEIGHT)
+      : Promise.resolve(null)),
+    measure(ctx, "badges", () => play && hasTopPlay ? loadRenderModBadges(ctx.request, play.mods) : Promise.resolve([])),
+    ctx.design !== 4 && insights.mostUsedMod
+      ? loadRenderModBadges(ctx.request, [insights.mostUsedMod.label]) : Promise.resolve([]),
   ]);
   const avatar = avatarSrc ? avatarBox(avatarSrc, avatarSize) : null;
   const accent = accentHex(ctx.style, ACCENT);
   const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
   if (ctx.design === 4) {
-    // Mania only, the same filter calculateUserProfileInsights opens with - a
-    // stored top-play window can carry other rulesets, and a std play in the
-    // ladder would put a rung under plays this render never counted.
     const mania = (snapshot?.bestScores ?? []).filter((score) => score.beatmap?.mode === "mania");
     return renderInsightsPpLadder(ctx, mania, insights, background, accent, dim, avatar);
   }
-
-  const play = insights.newestTopPlay;
-  const inner = spec.width - (ctx.design === 3 ? 48 : 56);
-  /* Design 2 carries no top play, so it pays for no cover: this is a fetch and
-     a sharp pass, cheap once per version and pointless every time. */
-  const [cover, modBadges, [mostUsedModBadge = null]] = await Promise.all([
-    play && ctx.design !== 2
-      ? beatmapCoverBandDataUrl(play.coverUrl, inner, TOP_PLAY_CARD_HEIGHT)
-      : Promise.resolve(null),
-    play && ctx.design !== 2 ? loadRenderModBadges(ctx.request, play.mods) : Promise.resolve([]),
-    // The most used mod is drawn as the same badge the site shows on plays,
-    // not as its letters.
-    insights.mostUsedMod ? loadRenderModBadges(ctx.request, [insights.mostUsedMod.label]) : Promise.resolve([]),
-  ]);
 
   if (ctx.design === 2) {
     // Stats only, at a strip height. No name on this one: it is the layout for
@@ -2189,7 +2109,28 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
 
 // --- dispatch ----------------------------------------------------------
 
+function measure<T>(ctx: SignatureRenderContext, name: string, task: () => Promise<T>): Promise<T> {
+  return ctx.timing ? ctx.timing.measure(name, task) : task();
+}
+
+async function rasterize(ctx: SignatureRenderContext, task: () => Promise<Buffer>): Promise<Buffer> {
+  const queuedAt = performance.now();
+  return ogRenderGate.run(() => {
+    ctx.timing?.add("queue", performance.now() - queuedAt);
+    return measure(ctx, "raster", task);
+  });
+}
+
 export async function renderSignature(ctx: SignatureRenderContext): Promise<Buffer> {
+  // Fonts start beside profile/art reads, and network waits hold no CPU slot.
+  const [, buffer] = await Promise.all([
+    measure(ctx, "fonts", () => loadOgFonts(ctx.request)),
+    renderLayout(ctx),
+  ]);
+  return buffer;
+}
+
+async function renderLayout(ctx: SignatureRenderContext): Promise<Buffer> {
   switch (ctx.type) {
     case "maniacard": return renderManiacard(ctx);
     case "goals": return renderGoals(ctx);

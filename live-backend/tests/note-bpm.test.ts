@@ -1,3 +1,4 @@
+import type { InStatement } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -230,6 +231,27 @@ async function readStoredNoteBpm(db: Db, beatmapId: number): Promise<unknown> {
 }
 
 describe("note-BPM recompute sweep", () => {
+  it("uses beatmap lookups rather than scanning the ready-chart status index", async () => {
+    const db = await makeDb();
+    await seedAnalyzedChart(db, 1, { classification: { noteBpm: 180 } });
+    let statement: Exclude<InStatement, string> | undefined;
+    const observed = new Proxy(db, {
+      get(target, key) {
+        if (key === "execute") return async (query: InStatement) => {
+          if (typeof query !== "string" && query.sql.includes("$.noteBpm")) statement = query;
+          return typeof query === "string" ? target.execute(query) : target.execute(query);
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    expect((await readNoteBpms(observed, Array.from({ length: 200 }, (_, i) => i + 1))).get(1)).toBe(180);
+    const plan = await db.execute({ sql: `explain query plan ${statement!.sql}`, args: statement!.args });
+    const detail = plan.rows.map((row) => String(row.detail)).join(" ");
+    expect(detail).toContain("beatmap_id=? AND analysis_version=?");
+    expect(detail).not.toContain("idx_beatmap_chart_analysis_status_updated");
+  });
+
   it("patches stored classifications from the cached .osu corpus", async () => {
     const db = await makeDb();
     const constantChart = buildOsuFile(["0,300,4,2,0,100,1,0"], notesAt([0, 150, 300, 450, 600]));

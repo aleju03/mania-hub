@@ -1,3 +1,4 @@
+import { handlePackGiftRoutes } from "./routes/pack-gifts.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
 import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest, handleBeatmapStoryboardRequest, handlePreviewAudioRequest } from "../audio/http.js";
@@ -13,6 +14,8 @@ import { handleBugReportRoutes } from "./routes/bug-reports.js";
 import { handleGoatPollRoutes } from "./routes/goat-poll.js";
 import { handleOsuProxyRoutes } from "./routes/osu-proxy.js";
 import { handlePacksRoutes } from "./routes/packs.js";
+import { handlePackBindersRoutes } from "./routes/pack-binders.js";
+import { handlePackWishlistRoutes } from "./routes/pack-wishlist.js";
 import { handleProfileRoutes } from "./routes/profiles.js";
 import { handleReplayVideoRoutes } from "./routes/replay-video.js";
 import { handleScoreSubmissionRoutes } from "./routes/score-submissions.js";
@@ -174,6 +177,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (await handleScoreSubmissionRoutes(req, res, ctx, url)) return true;
   if (await handleOsuProxyRoutes(req, res, ctx, url)) return true;
   if (await handlePacksRoutes(req, res, ctx, url)) return true;
+  if (await handlePackBindersRoutes(req, res, ctx, url)) return true;
+  if (await handlePackGiftRoutes(req, res, ctx, url)) return true;
+  if (await handlePackWishlistRoutes(req, res, ctx, url)) return true;
   if (await handleGoatPollRoutes(req, res, ctx, url)) return true;
   if (await handleReplayVideoRoutes(req, res, ctx, url)) return true;
   if (await handleSkinsRoutes(req, res, ctx, url)) return true;

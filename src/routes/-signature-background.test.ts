@@ -75,6 +75,15 @@ async function renderedLuminance(input: ReturnType<typeof style>): Promise<numbe
 }
 
 describe("background sources", () => {
+  it("shares one download across concurrent layouts using the same avatar", async () => {
+    const results = await Promise.all([
+      avatarSquareDataUrl("https://a.ppy.sh/101", 28),
+      avatarSquareDataUrl("https://a.ppy.sh/101", 48),
+    ]);
+    expect(results.every((result) => result?.startsWith("data:image/"))).toBe(true);
+    expect(pinnedFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("draws an osu! cover into a flat jpeg data url", async () => {
     const url = await backgroundImageDataUrl(style({}), 880, 200, { coverUrl: OSU_COVER }, SURFACE);
     expect(url).toMatch(/^data:image\/jpeg;base64,/);

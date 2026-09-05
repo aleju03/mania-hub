@@ -7,6 +7,7 @@ import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCard
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
 import { claimPackMilestoneOnce, PACK_MILESTONE } from "../../features/pack-milestone.js";
+import { commitPackWishlistRoll, hasPackWishlistRows, settlePackWishlistOwned } from "../../features/pack-wishlist.js";
 import { logInfo, logWarn } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, selectReadyPackCardUserIds, warmProfileSnapshots } from "../../features/player-profiles.js";
@@ -251,6 +252,15 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       });
       return true;
     }
+    /* The wishlist roll was decided before the spend so a refused wallet
+       could not move it; now the pack is paid for, it is written down. */
+    if (hand.wishlistRoll?.counted) {
+      try {
+        await commitPackWishlistRoll(writeDb, ownerUserId, hand.wishlistRoll, Date.now());
+      } catch (error) {
+        logWarn("pack_wishlist_commit_failed", { userId: ownerUserId, error: String(error) });
+      }
+    }
     /* The dealt hand becomes collection rows here, not via a client push:
        copies are the economy's other half. The client's mint pass labels the
        rows (tier, skills) once the reveal computes them. */
@@ -268,6 +278,18 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
           },
     );
     const isNewByCardKey = await mintDealtPackCards(writeDb, ownerUserId, dealtSlots, Date.now());
+    /* A wish is a list of players you are missing, so anything this hand just
+       dealt comes off it. One cheap exists() first: most opens belong to a
+       collector with no wishlist at all and pay nothing for the feature. */
+    try {
+      if (hand.players.some((slot) => slot.wished) || (await hasPackWishlistRows(ctx.db, ownerUserId))) {
+        await settlePackWishlistOwned(writeDb, ownerUserId);
+      }
+    } catch (error) {
+      // The pack is paid and minted by now; a wishlist that cannot be read
+      // or settled is a stale line on the page, never a lost hand.
+      logWarn("pack_wishlist_settle_failed", { userId: ownerUserId, error: String(error) });
+    }
     /* Somebody else's Eternal card, on the 0.0025% slot. Nothing one-time about
        it, so unlike the completion reward it is an ordinary repeatable mint;
        a failure here still returns the paid hand rather than losing the pack.

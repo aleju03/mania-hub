@@ -1205,3 +1205,93 @@ create table if not exists pack_milestone_cards (
   primary key(milestone_id, card_user_id, kind)
 );
 create index if not exists idx_pack_milestone_cards_key on pack_milestone_cards(card_key);
+
+-- ---------------------------------------------------------------------------
+-- The 1M-packs celebration features (docs/packs.md, "1M celebration").
+-- ---------------------------------------------------------------------------
+
+-- Archival rarity-forge records from the retired feature.
+-- Forging is retired; there are no new writes to this table.
+create table if not exists pack_forge_events (
+  id integer primary key autoincrement,
+  owner_user_id integer not null,
+  from_tier text not null,
+  to_tier text not null,
+  burned_copies integer not null,
+  burned_json text not null,
+  card_key text not null,
+  forged_at integer not null
+);
+create index if not exists idx_pack_forge_events_owner_time
+  on pack_forge_events(owner_user_id, forged_at desc);
+
+-- Archival cosmetic crafting records from the retired feature.
+-- Crafting is retired; existing card motifs remain unchanged.
+create table if not exists pack_finish_events (
+  id text primary key,
+  owner_user_id integer not null,
+  card_key text not null,
+  finish_id text not null,
+  burned_json text not null,
+  forged_at integer not null
+);
+create index if not exists idx_pack_finish_events_owner_time
+  on pack_finish_events(owner_user_id, forged_at desc);
+
+-- Player-made binders (features/pack-binders.ts): named groups of a
+-- collector's own cards. `showcased` puts the binder on the collector's public
+-- shelf; a binder is never shown to anyone else otherwise.
+create table if not exists pack_binders (
+  id integer primary key autoincrement,
+  owner_user_id integer not null,
+  name text not null,
+  position integer not null default 0,
+  showcased integer not null default 0,
+  created_at integer not null,
+  updated_at integer not null
+);
+create index if not exists idx_pack_binders_owner
+  on pack_binders(owner_user_id, position);
+create table if not exists pack_binder_cards (
+  binder_id integer not null,
+  card_key text not null,
+  position integer not null default 0,
+  added_at integer not null,
+  primary key(binder_id, card_key)
+);
+
+-- Wishlist and pity (features/pack-wishlist.ts): up to five missing players a
+-- collector marked, and the per-collector pity counter the draw reads.
+create table if not exists pack_wishlist (
+  owner_user_id integer not null,
+  card_user_id integer not null,
+  added_at integer not null,
+  primary key(owner_user_id, card_user_id)
+);
+create table if not exists pack_wishlist_state (
+  owner_user_id integer primary key,
+  misses integer not null default 0,
+  hits integer not null default 0,
+  last_hit_at integer,
+  updated_at integer not null
+);
+
+
+-- One-copy gifts: the claim token gates the transfer transaction; the request
+-- id makes retries idempotent. Only unread receipts appear in the owner's UI.
+create table if not exists pack_gifts (
+  id integer primary key autoincrement,
+  sender_user_id integer not null,
+  recipient_user_id integer not null,
+  request_id text not null,
+  claim_token text not null,
+  sender_username text not null,
+  recipient_username text not null,
+  card_key text not null,
+  card_user_id integer not null,
+  sent_at integer not null,
+  seen_at integer,
+  unique(sender_user_id, request_id)
+);
+create index if not exists idx_pack_gifts_sender_time on pack_gifts(sender_user_id, sent_at);
+create index if not exists idx_pack_gifts_inbox on pack_gifts(recipient_user_id, sent_at desc) where seen_at is null;

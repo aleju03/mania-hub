@@ -89,6 +89,28 @@ describe("charges", () => {
 });
 
 describe("pulls and recycling", () => {
+  it("preserves the exclusive card in every local recycling path, including mixed batches", () => {
+    const wallet = recordPull(createEmptyWallet(T0), pull(7, "eternal"), T0).wallet;
+    const key = "7:eternal";
+    wallet.cards[key] = { ...wallet.cards[key], copies: 3, recyclable: false };
+    expect(wholeCardShardValue(wallet.cards[key])).toBe(0);
+    expect(duplicateShardTotal(wallet)).toBe(0);
+    for (const result of [
+      recycleAllCopies(wallet, key), recycleCopies(wallet, key, 3),
+      recycleDuplicates(wallet, key), recycleAllDuplicates(wallet),
+    ]) {
+      expect(result.gained).toBe(0);
+      expect(result.wallet).toBe(wallet);
+    }
+    const restored = sanitizeWallet(JSON.parse(JSON.stringify(wallet)), T0)!;
+    expect(restored.cards[key].recyclable).toBe(false);
+    const mixed = recordPull(recordPull(wallet, pull(8), T0).wallet, pull(8), T0).wallet;
+    const recycled = recycleAllDuplicates(mixed);
+    expect(recycled.gained).toBe(1);
+    expect(recycled.wallet.cards[key]).toEqual(wallet.cards[key]);
+    expect(recycled.wallet.cards["8"].copies).toBe(1);
+  });
+
   it("records a first pull as new and a repull as a duplicate copy", () => {
     let wallet = createEmptyWallet(T0);
     const first = recordPull(wallet, pull(7), T0);

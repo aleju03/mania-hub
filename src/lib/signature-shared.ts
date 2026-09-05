@@ -48,7 +48,6 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
     { design: 4, slug: "card-front", label: msg`Card front`, width: 480, height: 672, ownArt: true },
     { design: 1, slug: "banner", label: msg`Banner`, width: 880, height: 200 },
     { design: 2, slug: "strip", label: msg`Strip`, width: 600, height: 140 },
-    { design: 3, slug: "card", label: msg`Card`, width: 420, height: 588 },
   ],
   goals: [
     { design: 1, slug: "progress-list", label: msg`Progress list`, width: 880, height: 230 },
@@ -90,7 +89,7 @@ export const SIGNATURE_TYPE_LABELS: Record<SignatureType, MessageDescriptor> = {
    propagates within one edge TTL. Bump it when a layout changes, and when
    the encoding does - a stored object is immutable for its key, so an old one
    would otherwise be served under the new content type. */
-export const SIGNATURE_RENDER_VERSION = "26";
+export const SIGNATURE_RENDER_VERSION = "28";
 
 export function isSignatureType(value: string): value is SignatureType {
   return (SIGNATURE_TYPES as readonly string[]).includes(value);

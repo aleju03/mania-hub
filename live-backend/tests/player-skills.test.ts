@@ -1189,15 +1189,14 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("lets a shared clear raise a second tile's dan but never open one on its own", async () => {
+  it("keeps jack marathons from raising an established stamina dan", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
       const now = new Date().toISOString();
-      // Four 4:13 jack marathons whose MSD argmax is Stamina: exactly the
-      // shape that files jack AND stamina (resolveTilesForClear). Plus four short
-      // stamina charts that file stamina outright.
+      // Four seven-minute jack marathons whose MSD argmax is Stamina,
+      // plus four stream endurance charts that file stamina outright.
       const charts: Array<[number, number, number, boolean]> = [
-        [401, 12, 253, true], [402, 12, 253, true], [403, 12, 253, true], [404, 12, 253, true],
+        [401, 12, 420, true], [402, 12, 420, true], [403, 12, 420, true], [404, 12, 420, true],
         [405, 6, 300, false], [406, 6, 300, false], [407, 6, 300, false], [408, 6, 300, false],
       ];
       for (const [beatmapId, rawDan, length, jackDemand] of charts) {
@@ -1227,9 +1226,9 @@ describe("computePlayerSkillRatings", () => {
       const marathons = [401, 402, 403, 404].map((id) => clearPlay(id, "Stamina"));
       const stamina = [405, 406, 407, 408].map((id) => clearPlay(id, "Stamina"));
 
-      // The marathons really do carry both tiles.
-      expect(danSkillsetBucketsForValues(4, "rc", values("Stamina", 25), 253, 1, info.get(401)))
-        .toEqual(["jack", "stamina"]);
+      // Even seven minutes of jack endurance only credits jack.
+      expect(danSkillsetBucketsForValues(4, "rc", values("Stamina", 25), 420, 1, info.get(401)))
+        .toEqual(["jack"]);
 
       // Four of them alone rate jack, their primary tile, and nothing else:
       // one body of work cannot light up two skills.
@@ -1238,13 +1237,36 @@ describe("computePlayerSkillRatings", () => {
       // And the window counts each clear once rather than twice.
       expect(jackOnly.clearWindow?.have).toBe(4);
 
-      // Add four real stamina clears and the stamina tile opens on its own
-      // primaries - then the marathons DO pull its dan up, from 6 to 9.
+      // The jack marathons must not inflate the four real stamina clears.
+      // Previously they raised stamina from 6 to 9 and the headline to 10.5.
       const both = danSideFromClearsForTest(4, "rc", [...marathons, ...stamina], info)!;
       expect(Object.keys(both.skillsets ?? {}).sort()).toEqual(["jack", "stamina"]);
       expect(both.skillsets?.jack?.rawDan).toBe(12);
-      expect(both.skillsets?.stamina?.rawDan).toBe(9);
+      expect(both.skillsets?.stamina?.rawDan).toBe(6);
+      expect(both.rawDan).toBe(9);
       expect(both.clearWindow?.have).toBe(8);
+
+      // Existing profiles must be corrected by the deploy sweep, and the
+      // evidence window must agree with the persisted verdict.
+      await exec(db,
+        `insert into player_skill_ratings
+         (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (99, ?, 'ready', ?, ?, ?, ?)`,
+        [PLAYER_SKILLS_VERSION,
+          JSON.stringify({ modes: [{ keyCount: 4, dan: { rc: { ...both, rawDan: 10.5 }, ln: null } }] }),
+          JSON.stringify({ plays: [...marathons, ...stamina] }), now, now],
+      );
+      const { recomputePlayerSkillDanChunk } = await import("../src/features/player-skills.js");
+      expect(await recomputePlayerSkillDanChunk(db, 0)).toMatchObject({ rewritten: 1 });
+      const row = (await exec(db, "select modes_json from player_skill_ratings where user_id = 99", [])).rows[0];
+      const stored = JSON.parse(String(row.modes_json));
+      expect(stored.modes[0].dan.rc).toMatchObject({
+        rawDan: 9, skillsets: { jack: { rawDan: 12 }, stamina: { rawDan: 6 } },
+      });
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc");
+      const staminaEvidence = evidence?.skillsets.find((skillset) => skillset.id === "stamina");
+      expect(staminaEvidence?.plays.map((clear) => clear.play.beatmapId).sort())
+        .toEqual([405, 406, 407, 408]);
     });
   });
 
@@ -1252,13 +1274,13 @@ describe("computePlayerSkillRatings", () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
       const now = new Date().toISOString();
-      const charts: Array<{ id: number; rawDan: number; length: number; jackDemand: boolean; top: "JackSpeed" | "Stamina" }> = [
-        // Five strong jack-only clears establish the jack tile's reference.
-        ...[501, 502, 503, 504, 505].map((id) => ({ id, rawDan: 12, length: 120, jackDemand: true, top: "JackSpeed" as const })),
-        // This low marathon is shared. It is a stray beside the jack clears,
+      const charts: Array<{ id: number; rawDan: number; length: number; techMotion: boolean; top: "Technical" | "Stamina" }> = [
+        // Five strong tech-only clears establish the tech tile's reference.
+        ...[501, 502, 503, 504, 505].map((id) => ({ id, rawDan: 12, length: 120, techMotion: true, top: "Technical" as const })),
+        // This low marathon is shared. It is a stray beside the tech clears,
         // but ordinary evidence beside the stamina clears below.
-        { id: 506, rawDan: 5, length: 253, jackDemand: true, top: "Stamina" },
-        ...[507, 508, 509, 510].map((id) => ({ id, rawDan: 5, length: 300, jackDemand: false, top: "Stamina" as const })),
+        { id: 506, rawDan: 5, length: 253, techMotion: true, top: "Stamina" },
+        ...[507, 508, 509, 510].map((id) => ({ id, rawDan: 5, length: 300, techMotion: false, top: "Stamina" as const })),
       ];
       for (const chart of charts) {
         await exec(
@@ -1275,7 +1297,10 @@ describe("computePlayerSkillRatings", () => {
             patterns: [],
             clusters: [],
             rc: { rawDan: chart.rawDan },
-            ...(chart.jackDemand ? { jackDemand: { detected: true } } : {}),
+            ...(chart.techMotion ? { motion: {
+              sameHand: 0.2274, miniJack: 0.0128, oneHandTrill: 0.0148, crossHandTrill: 0.0768,
+              roll4: 0.0772, rhythmBreak: 0.0365, chordSwing: 0.2692, densitySwing: 0.3895,
+            } } : {}),
           }), now],
         );
       }
@@ -1286,7 +1311,7 @@ describe("computePlayerSkillRatings", () => {
         rate: 1,
         goal: 0.95,
         pp: 100,
-        values: { Overall: 25, Stream: 1, [chart.top]: 25 },
+        values: { Overall: 25, Stream: 1, Technical: 24.9, [chart.top]: 25 },
         patterns: [],
         accuracy: 0.96,
         stableAccuracy: 0.96,
@@ -1301,11 +1326,12 @@ describe("computePlayerSkillRatings", () => {
 
       const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc");
       const allClear = evidence?.clears.find((clear) => clear.play.beatmapId === 506);
-      const jackClear = evidence?.skillsets.find((skillset) => skillset.id === "jack")
+      const techClear = evidence?.skillsets.find((skillset) => skillset.id === "tech")
         ?.plays.find((clear) => clear.play.beatmapId === 506);
       const staminaClear = evidence?.skillsets.find((skillset) => skillset.id === "stamina")
         ?.plays.find((clear) => clear.play.beatmapId === 506);
-      expect(jackClear?.ignoredAsStray).toBe(true);
+      expect(techClear?.ignoredAsStray).toBe(true);
+      expect(staminaClear).toBeDefined();
       expect(staminaClear?.ignoredAsStray).not.toBe(true);
       expect(allClear?.ignoredAsStray).not.toBe(true);
     });

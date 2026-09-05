@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Loader2, Search, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatNumber } from "#/lib/format";
 import type { CollectedCard } from "#/lib/pack-collection";
@@ -27,11 +27,23 @@ const PAGE_SIZE = 18;
 export function ShowcasePicker({
   userId,
   initialKeys,
+  maxCards = PACK_SHOWCASE_MAX_CARDS,
+  allowReorder = false,
+  initialCards = [],
+  title,
+  saveLabel,
   onCancel,
   onSave,
 }: {
   userId: number;
   initialKeys: string[];
+  /* How many cards this picker is choosing. The showcase's five by default;
+     binders pick from the same grid with their own ceiling. */
+  maxCards?: number;
+  allowReorder?: boolean;
+  initialCards?: LivePackCommunityCollectionPage["cards"];
+  title?: string;
+  saveLabel?: string;
   onCancel: () => void;
   onSave: (cardKeys: string[]) => Promise<void>;
 }) {
@@ -42,12 +54,49 @@ export function ShowcasePicker({
   const [result, setResult] = useState<LivePackCommunityCollectionPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [showArrangement, setShowArrangement] = useState(initialKeys.length > 0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [saveError, setSaveError] = useState(false);
+  const seenCards = useRef(new Map(initialCards.map((card) => [card.cardKey ?? String(card.userId), card])));
+  for (const card of result?.cards ?? []) seenCards.current.set(card.cardKey ?? String(card.userId), card);
+  const movePicked = (index: number, direction: number) => {
+    setPicked((current) => {
+      const next = [...current];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return current;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
   const debounced = useDebounced(query, 250);
+
+  // Adding the first card or removing the last must not move the grid under
+  // a held pointer. Show/hide the arrangement strip after the sweep finishes.
+  useEffect(() => {
+    if (!dragging) setShowArrangement(picked.length > 0);
+  }, [dragging, picked.length]);
 
   // The picker is only mounted while open. Keep the page behind the sheet
   // still so a touch at either end of the grid cannot scroll the document and
   // make the mobile browser chrome resize two viewports at once.
   useBodyScrollLock(true);
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel, saving]);
 
   useEffect(() => {
     setPage(0);
@@ -71,17 +120,27 @@ export function ShowcasePicker({
   }, [userId, page, debounced]);
 
   const toggle = (cardKey: string) => {
+    if (saving) return;
     setPicked((current) => {
       if (current.includes(cardKey)) return current.filter((key) => key !== cardKey);
-      if (current.length >= PACK_SHOWCASE_MAX_CARDS) return current;
+      if (current.length >= maxCards) return current;
       return [...current, cardKey];
     });
   };
 
+  const select = useCallback((cardKey: string, on: boolean) => {
+    if (saving) return;
+    setPicked((current) => {
+      if (on === current.includes(cardKey)) return current;
+      if (!on) return current.filter((key) => key !== cardKey);
+      return current.length < maxCards ? [...current, cardKey] : current;
+    });
+  }, [maxCards, saving]);
+
   const total = result?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
-  const full = picked.length >= PACK_SHOWCASE_MAX_CARDS;
+  const full = picked.length >= maxCards;
 
   if (typeof document === "undefined") return null;
 
@@ -95,10 +154,12 @@ export function ShowcasePicker({
       onClick={onCancel}
     >
       <motion.div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t`Pick your showcase`}
-        className="modal-card-mobile-safe flex max-h-[88dvh] w-full max-w-[860px] flex-col overflow-hidden rounded-t-2xl border border-osu-b3/30 bg-osu-b5 sm:rounded-2xl"
+        aria-label={title ?? t`Pick your showcase`}
+        tabIndex={-1}
+        className="modal-card-mobile-safe flex max-h-[88dvh] w-full max-w-[860px] flex-col overflow-hidden rounded-t-2xl border border-osu-b3/30 bg-osu-b5 outline-none sm:rounded-2xl"
         initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 8, opacity: 0 }}
@@ -107,9 +168,9 @@ export function ShowcasePicker({
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-osu-b3/30 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-bold text-white">{t`Pick your showcase`}</div>
+            <div className="text-[13px] font-bold text-white">{title ?? t`Pick your showcase`}</div>
             <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
-              <Trans>{picked.length} of {PACK_SHOWCASE_MAX_CARDS} chosen</Trans>
+              <Trans>{picked.length} of {maxCards} chosen</Trans>
             </div>
           </div>
           <button
@@ -135,15 +196,40 @@ export function ShowcasePicker({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-gutter:stable]">
+          {allowReorder && showArrangement && (
+            <div className="mb-5">
+              <p className="mb-2 text-[11px] text-osu-f1">{t`Arrange your cards`}</p>
+              <ol className="flex min-h-[102px] gap-2 overflow-x-auto pb-2">
+                {picked.map((key, index) => {
+                  const card = seenCards.current.get(key);
+                  const name = card?.username ?? key;
+                  return <li key={key} className="w-[94px] shrink-0 rounded-lg bg-white/5 p-2">
+                    <div className="flex items-center gap-1.5"><span className="text-[10px] text-osu-f1">{index + 1}</span>
+                      {card && <img src={card.avatarUrl} alt="" className="h-8 w-8 rounded-lg object-cover" />}
+                    </div>
+                    <div className="mt-1 truncate text-[10px] text-osu-l2">{name}</div>
+                    <div className="mt-1 flex justify-between">
+                      <button type="button" aria-label={t`Move ${name} left`} disabled={index === 0 || saving} onClick={() => movePicked(index, -1)} className="rounded p-1 text-osu-f1 hover:bg-white/10 hover:text-white disabled:opacity-25"><ChevronLeft size={14} /></button>
+                      <button type="button" aria-label={t`Move ${name} right`} disabled={index === picked.length - 1 || saving} onClick={() => movePicked(index, 1)} className="rounded p-1 text-osu-f1 hover:bg-white/10 hover:text-white disabled:opacity-25"><ChevronRight size={14} /></button>
+                    </div>
+                  </li>;
+                })}
+              </ol>
+            </div>
+          )}
           <PickerGrid
             page={result}
             loading={loading}
             picked={picked}
             full={full}
+            saving={saving}
             onToggle={toggle}
+            onSelect={select}
+            onDragChange={setDragging}
           />
         </div>
 
+        {saveError && <p role="alert" className="px-4 pb-2 text-[12px] text-rose-300">{t`That did not save. Try again.`}</p>}
         <div className="flex shrink-0 items-center gap-3 border-t border-osu-b3/30 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {totalPages > 1 && (
             <div className="flex items-center gap-2 text-[11px]">
@@ -178,15 +264,16 @@ export function ShowcasePicker({
             </button>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || picked.length > maxCards}
               onClick={() => {
                 setSaving(true);
-                void onSave(picked).finally(() => setSaving(false));
+                setSaveError(false);
+                void onSave(picked).catch(() => setSaveError(true)).finally(() => setSaving(false));
               }}
               className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink/20 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink/30 disabled:cursor-default disabled:opacity-50"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-              {t`Save showcase`}
+              {saveLabel ?? t`Save showcase`}
             </button>
           </div>
         </div>
@@ -201,17 +288,59 @@ function PickerGrid({
   loading,
   picked,
   full,
+  saving,
   onToggle,
+  onSelect,
+  onDragChange,
 }: {
   page: LivePackCommunityCollectionPage | null;
   loading: boolean;
   picked: string[];
   full: boolean;
+  saving: boolean;
   onToggle: (cardKey: string) => void;
+  onSelect: (cardKey: string, on: boolean) => void;
+  onDragChange: (dragging: boolean) => void;
 }) {
   const { t } = useLingui();
   const cards = (page?.cards ?? []) as CollectedCard[];
   const { onThumbnailError } = useCardThumbnails(cards);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ pointerId: number; on: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  useEffect(() => {
+    const stop = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      onDragChange(false);
+    };
+    const move = (event: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      if (!(event.buttons & 1)) {
+        stop();
+        return;
+      }
+      if (!(event.target instanceof Element)) return;
+      const tile = event.target.closest<HTMLElement>("[data-picker-card]");
+      if (tile && gridRef.current?.contains(tile)) onSelect(tile.dataset.pickerCard!, drag.on);
+    };
+    const release = (event: PointerEvent) => {
+      if (event.pointerId === dragRef.current?.pointerId) stop();
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", release);
+    document.addEventListener("pointercancel", release);
+    window.addEventListener("blur", stop);
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", release);
+      document.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", stop);
+      dragRef.current = null;
+    };
+  }, [onSelect, onDragChange]);
 
   if (!page && loading) {
     return (
@@ -228,17 +357,42 @@ function PickerGrid({
   }
 
   return (
-    <div className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-5 md:grid-cols-6">
+    <div ref={gridRef} className="grid select-none grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-5 md:grid-cols-6"
+      onDragStart={(event) => event.preventDefault()}>
       {cards.map((card) => {
         const cardKey = packCardKeyOf(card);
         const chosen = picked.includes(cardKey);
-        const blocked = full && !chosen;
+        const blocked = saving || (full && !chosen);
         return (
           <button
             key={cardKey}
             type="button"
+            data-picker-card={cardKey}
+            aria-pressed={chosen}
             disabled={blocked}
-            onClick={() => onToggle(cardKey)}
+            onPointerDown={(event) => {
+              if (event.pointerType !== "mouse") {
+                suppressClickRef.current = false;
+                return;
+              }
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.currentTarget.focus({ preventScroll: true });
+              suppressClickRef.current = true;
+              dragRef.current = { pointerId: event.pointerId, on: !chosen };
+              onDragChange(true);
+              onSelect(cardKey, !chosen);
+            }}
+            onClick={(event) => {
+              // Mouse presses already changed this card. Touch taps and
+              // keyboard clicks (detail 0) still toggle once in the usual way.
+              if (suppressClickRef.current && event.detail !== 0) {
+                suppressClickRef.current = false;
+                return;
+              }
+              suppressClickRef.current = false;
+              onToggle(cardKey);
+            }}
             className={`relative block text-left transition-opacity ${
               blocked ? "cursor-default opacity-40" : "cursor-pointer"
             }`}

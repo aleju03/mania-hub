@@ -44,6 +44,8 @@ export interface PreparedCardMotif {
 export interface CardTextureSet {
   frontTexture: CanvasTexture;
   backTexture: CanvasTexture;
+  /** A missing portrait may be displayed temporarily, but must never be cached. */
+  avatarLoaded: boolean;
   /** Set only when this card floats a motif and its image actually loaded. */
   motif: PreparedCardMotif | null;
   layout: FaceLayout;
@@ -138,7 +140,7 @@ export async function createCardTextures(
   };
   const layout = buildFaceLayout(data, measure);
   const [avatar, laurel, motif] = await Promise.all([
-    loadImage(data.avatarUrl).catch(() => null),
+    loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null),
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
     // A motif that will not load is simply not drawn: the card falls back to
     // the flecks or starfield its tier already had, which is a card that looks
@@ -159,6 +161,7 @@ export async function createCardTextures(
   return {
     frontTexture,
     backTexture,
+    avatarLoaded: avatar !== null,
     motif: preparedMotif,
     layout,
     dispose: () => {

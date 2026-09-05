@@ -28,6 +28,7 @@ import {
   type PackOpenCost,
   type PullableEternalCard,
 } from "./pack-wallets.js";
+import { rollPackWishlistPity, type PackWishlistRoll } from "./pack-wishlist.js";
 import { selectReadyPackCardUserIds } from "./player-profiles.js";
 
 /* Draw parameters and price per pack type, mirrored from PACK_TYPES in
@@ -111,6 +112,9 @@ export interface PackDrawSlotVariant {
   motif?: CardMotif | null;
   /* The milestone's golden card: an Eternal slot that is also this. */
   milestone?: boolean;
+  /* This slot was dealt by the wishlist's pity roll (pack-wishlist.ts) rather
+     than by the ordinary draw, so the reveal can say so. */
+  wished?: boolean;
 }
 
 export type PackDrawSlot =
@@ -144,6 +148,9 @@ export interface PackDrawHand {
      replacement left); the route warms them so the client's cold path is a
      coalesced wait, not a fresh mint. */
   notReadyUserIds: number[];
+  /* The wishlist roll this hand was dealt under, for the route to commit
+     once the spend has gone through. Null when nothing was rolled. */
+  wishlistRoll: PackWishlistRoll | null;
 }
 
 export interface PackDrawOptions {
@@ -165,6 +172,15 @@ export interface PackDrawDeps {
   listOwnedCardKeys: (db: Db, userId: number) => Promise<string[]>;
   selectReadyUserIds: (db: Db, userIds: readonly number[]) => Promise<number[]>;
   listEternalCards: (db: Db, ownerUserId: number) => Promise<PullableEternalCard[]>;
+  /* The wishlist's pity roll: the id to force into this hand (or 0), and
+     whether the roll counted. A decision only; the route commits it after
+     the pack is paid for. */
+  rollWishlist: (
+    db: Db,
+    ownerUserId: number,
+    sliceUserIds: ReadonlySet<number>,
+    rng: () => number,
+  ) => Promise<PackWishlistRoll>;
   rng: () => number;
 }
 
@@ -173,6 +189,7 @@ const defaultDeps: PackDrawDeps = {
   listOwnedCardKeys: listPackCollectionOwnedCardKeys,
   selectReadyUserIds: selectReadyPackCardUserIds,
   listEternalCards: listPullableEternalCards,
+  rollWishlist: (db, ownerUserId, sliceUserIds, rng) => rollPackWishlistPity(db, ownerUserId, sliceUserIds, rng),
   rng: Math.random,
 };
 
@@ -296,6 +313,47 @@ export async function drawPackHand(
     }
   }
 
+  /* The wishlist's pity slot (pack-wishlist.ts): a collector who named up to
+     five missing players gets a small, growing chance that one of them is in
+     the pack. Rolled after duplicate protection so the roll sees the hand it
+     is joining, and against the slice this pack actually draws from, so a
+     Legend pack is never asked to pay out on a rank-4000 wish. The winner
+     takes the hand's weakest slot: a wish is a card you wanted, and paying
+     for it with the pack's best hit would be a worse deal than not wishing.
+     A failed roll deals the ordinary hand. */
+  let wishedUserId = 0;
+  let wishlistRoll: PackWishlistRoll | null = null;
+  if (options.ownerUserId > 0) {
+    try {
+      /* The slice minus the hand: a wished player the ordinary roll already
+         dealt is not a pity case, and the settle pass after the mint takes
+         them off the list without spending the counter. */
+      const sliceUserIds = new Set<number>();
+      for (let index = 0; index < drawTotal; index += 1) {
+        const id = entries[index]?.user.id;
+        if (id && !HONORARY_USER_IDS.has(id) && !used.has(id)) sliceUserIds.add(id);
+      }
+      wishlistRoll = await deps.rollWishlist(db, options.ownerUserId, sliceUserIds, rng);
+      const rolled = wishlistRoll.userId;
+      if (rolled > 0 && !used.has(rolled)) {
+        const entry = entries.find((candidate) => candidate.user.id === rolled);
+        if (entry) {
+          let weakest = 0;
+          for (let index = 1; index < hand.length; index += 1) {
+            if (revealSortRank(hand[index]) > revealSortRank(hand[weakest])) weakest = index;
+          }
+          used.delete(hand[weakest].user.id);
+          used.add(rolled);
+          hand[weakest] = entry;
+          wishedUserId = rolled;
+        }
+      }
+    } catch {
+      // A wishlist read that fails costs the nudge, never the pack.
+      wishlistRoll = null;
+    }
+  }
+
   /* Readiness: a player with no stored score window would mint over the live
      osu! lane at reveal time, so trade them for pre-verified ready players
      and warm the originals instead (the route fires the warm). Candidates are
@@ -316,7 +374,11 @@ export async function drawPackHand(
       .slice(0, Math.max(notReadySlots.length * 8, 24));
     const readyCandidateIds = new Set(await deps.selectReadyUserIds(db, sampled.map((entry) => entry.user.id)));
     const readyCandidates = sampled.filter((entry) => readyCandidateIds.has(entry.user.id));
-    for (const { index } of notReadySlots) {
+    for (const { entry, index } of notReadySlots) {
+      /* A wished slot is never swapped out for a warmer one: the collector
+         asked for that exact player, so a cold card here is a slower reveal,
+         not a different one. It is still warmed above. */
+      if (entry.user.id === wishedUserId) continue;
       const replacement = readyCandidates.shift();
       if (!replacement) break;
       used.add(replacement.user.id);
@@ -335,6 +397,7 @@ export async function drawPackHand(
     globalRank: entry.global_rank,
     poolRank: entry.rank,
     pp: entry.pp,
+    ...(wishedUserId > 0 && entry.user.id === wishedUserId ? { wished: true as const } : {}),
   }));
 
   /* The honorary slot, mirrored from applyHonoraryHit: one roll decides
@@ -345,6 +408,9 @@ export async function drawPackHand(
   if (type.honoraryChance > 0 && players.length > 0 && rng() < type.honoraryChance) {
     const dealt = new Set<number>();
     for (let slot = players.length - 1; slot >= 0; slot -= 1) {
+      // A cascade never eats the wished slot: the pity roll already paid out
+      // there, and a GOAT over it would take the card back.
+      if (wishedUserId > 0 && players[slot].userId === wishedUserId) continue;
       const candidates = HONORARY_DRAW_POOL.filter((id) => !dealt.has(id));
       const unowned = candidates.filter((id) => !ownedGoatUserIds.has(id));
       const pool = unowned.length > 0 ? unowned : candidates;
@@ -377,7 +443,7 @@ export async function drawPackHand(
     }
   }
 
-  return { poolTotal, players, notReadyUserIds, eternalPullUserId };
+  return { poolTotal, players, notReadyUserIds, eternalPullUserId, wishlistRoll };
 }
 
 /* Injectable reads for the completion check, so tests can drive it without a

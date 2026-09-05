@@ -64,6 +64,22 @@ afterEach(() => {
 });
 
 describe("CollectionPanel recycle-all hold", () => {
+  it("omits recycling controls for the exclusive card", () => {
+    const protectedWallet = { ...wallet, cards: { "7:v1": {
+      ...wallet.cards["7"], cardKey: "7:v1", recyclable: false,
+    } } };
+    render(
+      <I18nProvider i18n={getI18n("en")}>
+        <CollectionPanel wallet={protectedWallet} showLoginNudge={false} syncStatus="local"
+          onRecycleCard={() => 0} onRecycleWhole={() => 0} onRecycleWholeMany={() => 0}
+          onRecycleWholeMatching={() => 0} onRecycleAll={() => 0} onApplyMint={() => true} />
+      </I18nProvider>,
+    );
+    expect(screen.queryByRole("button", { name: /recycle/i })).toBeNull();
+    fireEvent.contextMenu(screen.getByRole("button", { name: "View player7's card" }));
+    expect(screen.queryByRole("menuitem", { name: /recycle/i })).toBeNull();
+  });
+
   it("claims the native context gesture and lets the hold finish", () => {
     const onRecycleAll = vi.fn(() => 0);
     render(
@@ -94,4 +110,68 @@ describe("CollectionPanel recycle-all hold", () => {
     });
     expect(onRecycleAll).toHaveBeenCalledTimes(1);
   });
+});
+
+const renderSelection = (count = 3) => {
+  vi.useRealTimers();
+  const cards = Object.fromEntries(Array.from({ length: count }, (_, index) => {
+    const id = index + 7;
+    return [String(id), { ...wallet.cards["7"], userId: id, username: `player${id}`, pp: 10000 - index, avatarUrl: "https://a.ppy.sh/7" }];
+  }));
+  const binders = {
+    list: vi.fn().mockResolvedValue([{ id: 1, name: "Friends", position: 0, showcased: false, createdAt: 1, updatedAt: 1, cards: [] }]),
+    addCards: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn().mockResolvedValue(undefined),
+  };
+  render(<I18nProvider i18n={getI18n("en")}>
+    <CollectionPanel wallet={{ ...wallet, cards }} showLoginNudge={false} syncStatus="local" binders={binders}
+      onRecycleCard={() => 0} onRecycleWhole={() => 0} onRecycleWholeMany={() => 0}
+      onRecycleWholeMatching={() => 0} onRecycleAll={() => 0} onApplyMint={() => true} />
+  </I18nProvider>);
+  fireEvent.contextMenu(screen.getByRole("button", { name: "View player7's card" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Select cards..." }));
+  return binders;
+};
+
+it("adds every selected card when right-clicking within the selection", async () => {
+  const binders = renderSelection();
+  fireEvent.click(screen.getByRole("button", { name: "Select player8" }));
+  fireEvent.contextMenu(screen.getByRole("button", { name: "Deselect player7" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Add 2 cards to set..." }));
+  const destination = await screen.findByRole("menuitem", { name: /^Friends/ });
+  await act(async () => fireEvent.click(destination));
+  expect(binders.addCards).toHaveBeenCalledWith(1, ["7", "8"]);
+});
+
+it("targets only the right-clicked card when it is outside the selection", async () => {
+  const binders = renderSelection();
+  fireEvent.click(screen.getByRole("button", { name: "Select player8" }));
+  fireEvent.contextMenu(screen.getByRole("button", { name: "Select player9" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Add to set..." }));
+  const destination = await screen.findByRole("menuitem", { name: /^Friends/ });
+  await act(async () => fireEvent.click(destination));
+  expect(binders.addCards).toHaveBeenCalledWith(1, ["9"]);
+});
+
+it("blocks an oversized select-all instead of quietly adding only the visible page", async () => {
+  const binders = renderSelection(20);
+  fireEvent.click(screen.getByRole("button", { name: "select all" }));
+  fireEvent.contextMenu(screen.getByRole("button", { name: "Deselect player7" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Add 20 cards to set..." }));
+  const destination = await screen.findByRole("menuitem", { name: /^Friends/ });
+  expect((destination as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole("alert").textContent).toBe("Select at most 10 cards to add to a set.");
+  fireEvent.click(destination);
+  expect(binders.addCards).not.toHaveBeenCalled();
+});
+
+it("does not reuse a manual selection cleared by changing collection pages", async () => {
+  const binders = renderSelection(20);
+  fireEvent.click(screen.getAllByRole("button", { name: "Next collection page" })[0]);
+  fireEvent.click(screen.getByRole("button", { name: "Select player22" }));
+  fireEvent.contextMenu(screen.getByRole("button", { name: "Deselect player22" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Add to set..." }));
+  const destination = await screen.findByRole("menuitem", { name: /^Friends/ });
+  await act(async () => fireEvent.click(destination));
+  expect(binders.addCards).toHaveBeenCalledWith(1, ["22"]);
 });

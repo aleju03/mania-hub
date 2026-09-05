@@ -18,7 +18,7 @@ import {
   setSignatureBlocked,
   setUserSignatureTimeZone,
 } from "../src/features/signatures.js";
-import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "../src/features/player-profiles.js";
+import { getCachedSignatureProfileSnapshot, getCachedPlayerProfileSnapshot, PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "../src/features/player-profiles.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 /* Dynamic renders live behind a URL a player pasted into an osu! profile and
@@ -264,9 +264,81 @@ describe("signature profile freshness", () => {
   });
 });
 
+function signatureScore(id: number, pp: number) {
+  return {
+    id, user_id: USER, accuracy: 0.99, mods: [{ acronym: "DT", settings: { speed_change: 1.2 } }],
+    score: 990000, max_combo: 1000, passed: true, rank: "S", statistics: { perfect: 990, miss: 10 }, pp,
+    ended_at: "2026-02-01T00:00:00Z",
+    beatmap: { id, beatmapset_id: id, mode: "mania", status: "ranked", cs: 4, bpm: 180,
+      difficulty_rating: 5, version: "Hard", url: `https://osu.ppy.sh/b/${id}` },
+    beatmapset: { id, title: `Map ${id}`, artist: "Artist", covers: { cover: `https://assets.ppy.sh/${id}.jpg` } },
+  };
+}
+
+async function seedSignatureWindow() {
+  await addProfileSnapshot("2026-01-01T00:00:00Z");
+  await exec(db, "update profile_snapshots set best_scores_json = ?, user_json = ? where user_id = ?", [
+    JSON.stringify(Array.from({ length: 200 }, (_, i) => signatureScore(i + 1, 1000 - i))),
+    JSON.stringify({ id: USER, username: "tester", avatar_url: "https://a.ppy.sh/101", statistics: { pp: 10000, global_rank: 100 } }), USER,
+  ]);
+}
+
+async function recordSignatureScore(id: number, pp: number) {
+  await exec(db, `insert into score_events
+    (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json,
+     passed, is_lazer, has_replay, ended_at, received_at, source)
+    values (?, ?, ?, 'CR', ?, 3, ?, 1, 1, 0, ?, ?, 'test')`, [
+    id, `score:${id}`, USER, id, JSON.stringify(signatureScore(id, pp)),
+    "2026-02-01T00:00:00Z", "2026-02-01T00:00:00Z",
+  ]);
+}
+
 describe("signature versions", () => {
   beforeEach(async () => {
     await enableUserSignature(db, USER, ["maniacard", "goals", "skills", "dan", "insights"], null);
+  });
+
+  it("keeps both profile renders through metadata refreshes and below-window plays", async () => {
+    await seedSignatureWindow();
+    const before = await versions();
+    await recordSignatureScore(999, 10);
+    await exec(db, "update users set updated_at = ?, top_scores_refreshed_at = ?, global_rank = 42 where user_id = ?",
+      ["2026-03-01", "2026-03-01", USER]);
+    await exec(db, "update profile_snapshots set updated_at = ? where user_id = ?", ["2026-03-01", USER]);
+    const after = await versions();
+    expect(after.insights).toBe(before.insights);
+    expect(after.maniacard).toBe(before.maniacard);
+  });
+
+  it("moves both renders for an actual new top play and returns the same projected window", async () => {
+    await seedSignatureWindow();
+    const before = await versions();
+    await recordSignatureScore(999, 1500);
+    const record = await getUserSignature(db, USER);
+    const resolved = await resolveSignatureToken(db, record!.token);
+    expect(resolved!.versions.insights).not.toBe(before.insights);
+    expect(resolved!.versions.maniacard).not.toBe(before.maniacard);
+    expect(resolved!.profile!.bestScores).toHaveLength(200);
+    expect(resolved!.profile!.bestScores[0]).toMatchObject({ id: 999, pp: 1500 });
+    const full = await getCachedPlayerProfileSnapshot(db, String(USER), { lookupMode: "userId" });
+    expect(resolved!.profile!.bestScores.map((score) => score.id)).toEqual(full!.bestScores.map((score) => score.id));
+    expect(resolved!.profile!.bestScores[0].beatmap?.note_bpm).toBe(full!.bestScores[0].beatmap?.note_bpm);
+    expect(resolved!.profile!.bestScores[0].mods).toEqual(full!.bestScores[0].mods);
+    expect(resolved!.profile!.user).not.toHaveProperty("statistics.global_rank");
+    expect(resolved!.profile).not.toHaveProperty("keymodePlayCounts");
+  });
+
+  it("notices corrected pp, avatar changes and score data without a timestamp bump", async () => {
+    await seedSignatureWindow();
+    const before = await versions();
+    await exec(db, "update profile_snapshots set best_scores_json = ? where user_id = ?", [JSON.stringify([signatureScore(1, 1200)]), USER]);
+    const corrected = await versions();
+    expect(corrected.insights).not.toBe(before.insights);
+    await exec(db, "update profile_snapshots set user_json = ? where user_id = ?", [
+      JSON.stringify({ id: USER, username: "tester", avatar_url: "https://a.ppy.sh/101?new" }), USER,
+    ]);
+    expect((await versions()).insights).not.toBe(corrected.insights);
+    expect((await getCachedSignatureProfileSnapshot(db, USER))!.user.avatar_url).toContain("?new");
   });
 
   it("is stable while nothing changes", async () => {
@@ -354,11 +426,8 @@ describe("signature versions", () => {
     expect((await versions()).goals).not.toBe(before.goals);
   });
 
-  /* An insights render names the player's NEWEST top play, and projectTopPlays
-     overlays live score events onto the stored window - so that line can be
-     right before the snapshot row is rewritten. Without the event stamp the
-     one reading the image exists for would be the last to move. */
-  it("moves the insights version when a score event lands", async () => {
+  /* A recorded event that changes no rendered input must not evict the image. */
+  it("ignores score events that do not enter the displayed window", async () => {
     const before = await versions();
     await exec(
       db,
@@ -369,20 +438,20 @@ describe("signature versions", () => {
       [USER, "2026-02-01T00:00:00Z", "2026-02-01T00:00:00Z"],
     );
     const after = await versions();
-    expect(after.insights).not.toBe(before.insights);
+    expect(after.insights).toBe(before.insights);
     // The same play does not move a maniacard: card power comes off the
     // stored top-play window, not off the event stream.
     expect(after.maniacard).toBe(before.maniacard);
   });
 
-  it("moves the insights version when the top-play window is refreshed", async () => {
+  it("ignores a refresh timestamp when the top-play window is unchanged", async () => {
     const before = await versions();
     await exec(
       db,
       "update users set top_scores_refreshed_at = ? where user_id = ?",
       ["2026-02-01T00:00:00Z", USER],
     );
-    expect((await versions()).insights).not.toBe(before.insights);
+    expect((await versions()).insights).toBe(before.insights);
   });
 
   it("does not move the insights version when only a goal changes", async () => {
@@ -743,5 +812,41 @@ describe("time zone", () => {
     await enableUserSignature(db, USER, ["insights"], null, undefined, "America/Costa_Rica");
     await enableUserSignature(db, USER, ["insights", "maniacard"], null);
     expect((await getUserSignature(db, USER))?.timeZone).toBe("America/Costa_Rica");
+  });
+});
+
+describe("signature revocation cache targets", () => {
+  async function action(name: string, body: Record<string, unknown> = {}) {
+    const { Readable } = await import("node:stream");
+    const { handleSignatureRoutes } = await import("../src/http/routes/signatures.js");
+    const req = Object.assign(Readable.from([Buffer.from(JSON.stringify({ userId: USER, ...body }))]), {
+      method: "POST", headers: { authorization: "Bearer test-bridge" },
+    }) as import("node:http").IncomingMessage;
+    let data: { purgeToken?: string; signature?: { token: string } } = {};
+    const res = {
+      setHeader() {}, getHeader() { return undefined; },
+      end(chunk: Buffer) { data = JSON.parse(chunk.toString()); },
+    } as unknown as import("node:http").ServerResponse;
+    await handleSignatureRoutes(req, res, {
+      db, config: { liveBridgeToken: "test-bridge", allowedOrigins: [] },
+    } as unknown as import("../src/http/context.js").HttpContext, new URL(`http://localhost/api/signature/${name}`));
+    return data;
+  }
+
+  it("returns the old token for both disable and rotation", async () => {
+    const signature = await enableUserSignature(db, USER, ["insights"], null);
+    expect((await action("disable")).purgeToken).toBe(signature.token);
+    await enableUserSignature(db, USER, ["insights"], null);
+    const rotated = await action("rotate");
+    expect(rotated.purgeToken).toBe(signature.token);
+    expect(rotated.signature!.token).not.toBe(signature.token);
+  });
+
+  it("purges unpublished types and re-enables without purging every style adjustment", async () => {
+    const signature = await enableUserSignature(db, USER, ["insights", "skills"], null);
+    expect((await action("enable", { types: ["insights"] })).purgeToken).toBe(signature.token);
+    expect((await action("enable", { types: ["insights"], styles: { insights: { opacity: 55 } } })).purgeToken).toBeUndefined();
+    await disableUserSignature(db, USER);
+    expect((await action("enable", { types: ["insights"] })).purgeToken).toBe(signature.token);
   });
 });

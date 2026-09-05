@@ -3,8 +3,8 @@ import { computeOnMapsSnapshotThread, getMapsSnapshotThread, mapsSnapshotThreadS
 import type { Db } from "../src/db.js";
 
 // Under vitest (and under `npm run dev`) this module is loaded from source, so
-// the thread is permanently disabled with reason "source_mode": its worker
-// entry resolves a `.js` specifier that tsx does not remap inside a worker.
+// the registry keeps the thread disabled with reason "source_mode" to retain
+// the inline dev path. Worker integration tests use the explicit source loader.
 // These tests therefore assert the disabled/idle contract — the shape the admin
 // dashboard has to render when no thread exists — not live build counters.
 

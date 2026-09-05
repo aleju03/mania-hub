@@ -36,17 +36,18 @@ const SOURCE_FETCH_TIMEOUT_MS = 5_000;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 
 const SOURCE_MEMO_MS = 5 * 60_000;
-const SOURCE_MEMO_MAX = 32;
+const SOURCE_MEMO_MAX = 128;
+const SOURCE_MEMO_MAX_BYTES = 16 * 1024 * 1024;
 
 interface SourceMemoEntry {
   bytes: Buffer;
   expiresAt: number;
 }
 
-/* Tuning a slider re-renders on every change, and each of those would
-   otherwise re-download the same ~800KB cover. Small and short-lived: this is
-   a drag-gesture buffer, not a cache tier. */
+/* Shared across layouts and renders. Versioned osu! assets survive quiet
+   periods; custom URLs stay short-lived. Both entries and bytes are bounded. */
 const sourceMemo = new Map<string, SourceMemoEntry>();
+const sourceInFlight = new Map<string, Promise<Buffer | null>>();
 
 function readMemo(url: string, now: number): Buffer | null {
   const entry = sourceMemo.get(url);
@@ -59,18 +60,23 @@ function readMemo(url: string, now: number): Buffer | null {
 }
 
 function writeMemo(url: string, bytes: Buffer, now: number): void {
-  if (sourceMemo.size >= SOURCE_MEMO_MAX) {
-    for (const [key, entry] of sourceMemo) {
-      if (entry.expiresAt <= now) sourceMemo.delete(key);
-    }
-    // Still full of live entries: drop the oldest insertion, which Map
-    // iteration order gives for free.
-    if (sourceMemo.size >= SOURCE_MEMO_MAX) {
-      const oldest = sourceMemo.keys().next();
-      if (!oldest.done) sourceMemo.delete(oldest.value);
-    }
+  // Versioned osu! avatars/banners and map covers survive a quiet profile.
+  // User-supplied URLs retain their short freshness window.
+  const parsed = new URL(url);
+  const stableOsuAsset = parsed.hostname === "assets.ppy.sh"
+    || (parsed.hostname === "a.ppy.sh" && parsed.search.length > 1);
+  sourceMemo.delete(url);
+  sourceMemo.set(url, { bytes, expiresAt: now + (stableOsuAsset ? 24 * 60 * 60_000 : SOURCE_MEMO_MS) });
+  let heldBytes = 0;
+  for (const [key, entry] of sourceMemo) {
+    if (entry.expiresAt <= now) sourceMemo.delete(key);
+    else heldBytes += entry.bytes.length;
   }
-  sourceMemo.set(url, { bytes, expiresAt: now + SOURCE_MEMO_MS });
+  for (const [key, entry] of sourceMemo) {
+    if (sourceMemo.size <= SOURCE_MEMO_MAX && heldBytes <= SOURCE_MEMO_MAX_BYTES) break;
+    heldBytes -= entry.bytes.length;
+    sourceMemo.delete(key);
+  }
 }
 
 export interface SignatureBackgroundSources {
@@ -197,6 +203,18 @@ async function fetchSource(url: string): Promise<Buffer | null> {
   const memoized = readMemo(url, now);
   if (memoized) return memoized;
 
+  const pending = sourceInFlight.get(url);
+  if (pending) return pending;
+  const attempt = downloadSource(url);
+  sourceInFlight.set(url, attempt);
+  try {
+    return await attempt;
+  } finally {
+    if (sourceInFlight.get(url) === attempt) sourceInFlight.delete(url);
+  }
+}
+
+async function downloadSource(url: string): Promise<Buffer | null> {
   try {
     const response = await fetchValidatedImage(url, { signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS) });
     if (response.status !== 200) {
@@ -211,7 +229,7 @@ async function fetchSource(url: string): Promise<Buffer | null> {
     }
     const bytes = await readCappedStream(response.stream, MAX_SOURCE_BYTES, response.contentLength);
     if (!bytes || bytes.length === 0) return null;
-    writeMemo(url, bytes, now);
+    writeMemo(url, bytes, Date.now());
     return bytes;
   } catch {
     return null;
@@ -400,11 +418,12 @@ export async function probeSignatureImageUrl(raw: string): Promise<SignatureImag
   }
   // The render that follows a successful check is moments away, so hand it the
   // bytes rather than making the player wait for a second download.
-  writeMemo(url, bytes, now);
+  writeMemo(url, bytes, Date.now());
   return "ok";
 }
 
 /** Test seam: the memo is process-wide and would otherwise leak across cases. */
 export function clearSignatureBackgroundMemo(): void {
   sourceMemo.clear();
+  sourceInFlight.clear();
 }

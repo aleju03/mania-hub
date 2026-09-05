@@ -25,6 +25,9 @@ vi.mock("#/lib/live-backend", () => ({
 vi.mock("#/lib/pack-wallet-sync", () => ({ saveOwnPackShowcase: () => Promise.resolve() }));
 vi.mock("./ShowcasePicker", () => ({ ShowcasePickerHost: () => null }));
 
+vi.mock("../SetsView", () => ({ subscribePackSetsChanged: () => () => {} }));
+vi.mock("@tanstack/react-router", () => ({ Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
+
 const { ShowcaseTab } = await import("./ShowcaseTab");
 
 // The tab reads its copy through Lingui; en resolves to the source strings.

@@ -77,6 +77,7 @@ interface HandGroup {
 function groupHand(cards: RevealedCard[]): HandGroup[] {
   const groups = new Map<string, HandGroup>();
   cards.forEach((card, position) => {
+    if (card.player.milestone) return;
     const cardKey = card.player.cardKey ?? packCardKey(card.player.user.id, card.tier);
     const group = groups.get(cardKey);
     if (group) group.positions.push(position);
@@ -90,6 +91,7 @@ function groupHand(cards: RevealedCard[]): HandGroup[] {
 function toSpotlightCard(card: RevealedCard): CollectedCard {
   return {
     userId: card.player.user.id,
+    ...(card.player.milestone ? { recyclable: false } : {}),
     ...(card.player.cardKey ? { cardKey: card.player.cardKey } : {}),
     username: card.player.user.username,
     avatarUrl: card.player.user.avatar_url,
@@ -166,7 +168,7 @@ export function PackSummary({
   const burstIdRef = useRef(0);
 
   const groups = useMemo(() => groupHand(cards), [cards]);
-  const livePositions = cards.map((_, position) => position).filter((position) => !recycled.has(position));
+  const livePositions = cards.map((_, position) => position).filter((position) => !recycled.has(position) && !cards[position].player.milestone);
   const recycledShards = [...recycled.values()].reduce((sum, value) => sum + value, 0);
 
   /* What handing these tiles back pays. A card this pack was the first copy
@@ -305,6 +307,7 @@ export function PackSummary({
   };
 
   const toggleSelected = (position: number) => {
+    if (cards[position].player.milestone) return;
     setSelected((previous) => {
       const next = new Set(previous);
       if (next.has(position)) next.delete(position);
@@ -314,6 +317,7 @@ export function PackSummary({
   };
 
   const applySelect = (position: number, on: boolean) => {
+    if (cards[position].player.milestone) return;
     setSelected((previous) => {
       if (on === previous.has(position)) return previous;
       const next = new Set(previous);
@@ -663,6 +667,19 @@ export function PackSummary({
                       <Trans>new</Trans>
                     </span>
                   )}
+                  {/* Dealt by the wishlist's pity roll. Text only, under the
+                      NEW badge it usually sits with. */}
+                  {card.player.wished && (
+                    <span
+                      aria-hidden={isRecycled || undefined}
+                      className={`absolute left-1.5 z-10 text-[9px] font-bold uppercase tracking-wide text-osu-pink-light transition-opacity duration-300 ${
+                        card.isNew ? "top-[22px]" : "top-1.5"
+                      } ${isRecycled ? "opacity-0" : ""}`}
+                      style={turnDelayStyle}
+                    >
+                      <Trans>wishlist</Trans>
+                    </span>
+                  )}
                   {(() => {
                     const face = card.thumbnail ? (
                       <img
@@ -686,7 +703,7 @@ export function PackSummary({
                     );
                     return damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
                   })()}
-                  {selecting && !isRecycled && (
+                  {selecting && !isRecycled && !card.player.milestone && (
                     <>
                       <span
                         className={`pointer-events-none absolute inset-0 z-10 rounded-[10px] ${
@@ -865,11 +882,11 @@ export function PackSummary({
       {menu && (() => {
         const card = cards[menu.position];
         const group = groups.find((entry) => entry.positions.includes(menu.position));
-        if (!card || !group) return null;
-        const live = group.positions.filter((position) => !recycled.has(position));
+        if (!card) return null;
+        const live = group?.positions.filter((position) => !recycled.has(position)) ?? [];
         // The last copy of a card this pack was the first of takes the card
         // out of the collection, so that one asks twice; a spare copy does not.
-        const leavesCollection = group.isFirstCopy && live.length === 1;
+        const leavesCollection = Boolean(group?.isFirstCopy && live.length === 1);
         const value = recycleValueOf(new Set([menu.position]));
         return (
           <>
@@ -915,29 +932,31 @@ export function PackSummary({
                 <Check className="h-3 w-3" />
                 <Trans>Select cards...</Trans>
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={recycleBusy}
-                onClick={(event) => {
-                  if (leavesCollection && !menuConfirm) {
-                    setMenuConfirm(true);
-                    return;
-                  }
-                  runRecycle(new Set([menu.position]), event.currentTarget);
-                  setMenu(null);
-                }}
-                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer disabled:cursor-default disabled:opacity-40 ${
-                  menuConfirm ? "font-bold text-osu-pink-light" : "text-osu-f1 hover:text-white"
-                }`}
-              >
-                <Recycle className="h-3 w-3" />
-                {menuConfirm
-                  ? t`Sure? The card leaves the collection`
-                  : leavesCollection
-                    ? t`Recycle card +${value}`
-                    : t`Recycle this copy +${value}`}
-              </button>
+              {!card.player.milestone && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={recycleBusy}
+                  onClick={(event) => {
+                    if (leavesCollection && !menuConfirm) {
+                      setMenuConfirm(true);
+                      return;
+                    }
+                    runRecycle(new Set([menu.position]), event.currentTarget);
+                    setMenu(null);
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer disabled:cursor-default disabled:opacity-40 ${
+                    menuConfirm ? "font-bold text-osu-pink-light" : "text-osu-f1 hover:text-white"
+                  }`}
+                >
+                  <Recycle className="h-3 w-3" />
+                  {menuConfirm
+                    ? t`Sure? The card leaves the collection`
+                    : leavesCollection
+                      ? t`Recycle card +${value}`
+                      : t`Recycle this copy +${value}`}
+                </button>
+              )}
             </div>
           </>
         );

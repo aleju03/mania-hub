@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
-import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "./db.js";
+import { createDb, createRuntimeDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "./db.js";
 import { adoptJournalFromMain, drainJournalTablesFromMain, ensureJournalSchema, isJournalAdopted } from "./journal.js";
 import { createServeWriteConnections } from "./write-thread.js";
 import { AnalyticsStore } from "./features/analytics.js";
@@ -136,7 +136,7 @@ export async function createApp() {
       origin: config.livePublicOrigin,
     });
   }
-  const db = await createDb(config);
+  const db = await createRuntimeDb(config);
   // The GLOBAL farmed board normally lives on the maps snapshot thread (which
   // registers its own connection); this covers the inline fallback path, e.g.
   // source-mode dev where the thread is disabled.
@@ -159,7 +159,7 @@ export async function createApp() {
   // and the shared limiter's reservations, in their own file so none of them
   // ever queues on the main file's write lock. Every role opens it; the
   // schema is idempotent, so every role applies it.
-  const journalDb = await createDb({
+  const journalDb = await createRuntimeDb({
     databaseUrl: config.journalDatabaseUrl,
     sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs,
     sqliteSynchronous: config.sqliteSynchronous,
@@ -179,9 +179,9 @@ export async function createApp() {
     // rows it covers, and a half-applied migration on a full disk is worse
     // than a refused boot. Warns above the hard floor, throws below it.
     await assertMigrationDiskHeadroom(config);
-    // Migrate on a throwaway connection with a much larger busy_timeout than the
-    // serving/ingest default (10s vs 2s). A deploy restarts this process while
-    // the previous one is still writing, so every DDL statement races a live
+    // Migrate on a throwaway connection with a native busy_timeout (10s); the
+    // runtime connections use zero and wait asynchronously. A deploy restarts
+    // this process while the previous one is still writing, so every DDL statement races a live
     // writer; absorbing that wait inside SQLite is by far the cheapest outcome,
     // because a statement that gives up and returns SQLITE_BUSY costs the whole
     // migration pass plus a connection reopen (db.ts explains why). Blocking
@@ -341,7 +341,7 @@ export async function createApp() {
   // owned by the HTTP-serving process (capture posts, admin queries, live
   // SSE); a pure worker process never opens it.
   const analytics = config.role === "worker" ? null : new AnalyticsStore(
-    await createDb({
+    await createRuntimeDb({
       databaseUrl: config.analyticsDatabaseUrl,
       sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs,
       sqliteSynchronous: config.sqliteSynchronous,

@@ -10,13 +10,15 @@ import { isSignatureTokenShape, resolveSignatureToken } from "../../../../lib/si
 import {
   readSignatureRender,
   signatureRenderKey,
+  signatureRenderRevision,
   storeSignatureRender,
 } from "../../../../lib/signature-render-cache";
 import { parseSignatureVariant, SIGNATURE_RENDER_VERSION } from "../../../../lib/signature-shared";
 import { normalizeSignatureStyleMap } from "../../../../lib/signature-style";
-import { encodeSignatureWebp, imageResponse, ogRenderGate, pngResponse, scheduleDetached } from "../../../../lib/og-render";
+import { encodeSignatureWebp, imageResponse, ogRenderGate, scheduleDetached } from "../../../../lib/og-render";
 import { createFixedWindowLimiter } from "../../../../lib/upload-guards";
-import { placeholderPng, renderSignature } from "../-renderers";
+import { SignatureTiming } from "../../../../lib/signature-timing";
+import { renderSignature } from "../-renderers";
 
 /* Dynamic renders: a signature image behind a URL the player pasted into an
    osu! profile once and will never edit.
@@ -27,7 +29,7 @@ import { placeholderPng, renderSignature } from "../-renderers";
  * somewhere else:
  *
  *  - The R2 cache key carries the player's data VERSION, derived backend-side
- *    from stamps the ingest pipeline already writes. A stored object is
+ *    from the projected inputs (or stamps for skills/goals). A stored object is
  *    therefore immutable for its key, and a render happens exactly once per
  *    real data change instead of on a timer.
  *  - The CDN cannot key on that version, so the ETag does. An expired-but-
@@ -39,21 +41,11 @@ import { placeholderPng, renderSignature } from "../-renderers";
  * then this process's own copy of the finished bytes, then an R2 read, and only
  * then satori. */
 
-/* Short enough that an update lands quickly, long enough that the edge absorbs
-   a popular profile: at most one origin request per edge per 5 minutes per URL,
-   no matter how many people load the page.
-
-   `max-age` rather than `s-maxage`, and that is not a style choice. RFC 9111
-   gives `s-maxage` the semantics of `proxy-revalidate`, so a shared cache may
-   not serve a stale copy at all - Cloudflare documents the pairing explicitly
-   ("do not use s-maxage with stale-while-revalidate") and simply ignored the
-   stale-while-revalidate that used to sit beside it here. The result was that
-   every expiry became a blocking origin fetch for whoever arrived first, which
-   is the 1-2s first paint this header is supposed to prevent. Under plain
-   `max-age` the edge takes the same 5 minutes. For the next minute an expired
-   copy goes out immediately while revalidation happens behind it; after a
-   longer quiet gap, the request waits for the current render. */
-export const SIGNATURE_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=60, stale-if-error=604800";
+/* Five-minute freshness, then a day of background revalidation. A profile
+   opened after a quiet gap can show the previous image immediately while the
+   edge refreshes it. No s-maxage: its proxy-revalidate semantics disable SWR.
+   Revokes/moderation still purge these stable URLs through signature.ts. */
+export const SIGNATURE_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=86400, stale-if-error=604800";
 // A refusal is cached too, so a dead or guessed token cannot be used to poke
 // the origin in a loop.
 const SIGNATURE_REFUSAL_HEADER = "public, max-age=300";
@@ -61,7 +53,7 @@ const SIGNATURE_REFUSAL_HEADER = "public, max-age=300";
    `no-store` rather than a short TTL: under a stable URL, a cached failure is
    an invisible image that stays invisible until it expires, which is worse
    than the extra request a retry costs. */
-const SIGNATURE_PLACEHOLDER_HEADER = "no-store";
+const SIGNATURE_ERROR_HEADER = "no-store";
 
 /* Backstop against version thrash for a player mid-session. The edge TTL is
    the primary control (one origin miss per 5 min per URL); this only bounds
@@ -106,27 +98,25 @@ function refuse(): Response {
   });
 }
 
-function placeholderResponse(): Response {
-  // Stays PNG: it is a 1x1 no-store pixel that no cache keeps and no encoder
-  // needs to touch.
-  return pngResponse(placeholderPng(), SIGNATURE_PLACEHOLDER_HEADER);
+function unavailable(timing: SignatureTiming): Response {
+  // A real 5xx lets the CDN use stale-if-error; a transparent 200 cannot.
+  return new Response(null, { status: 503, headers: {
+    "Cache-Control": SIGNATURE_ERROR_HEADER,
+    "Server-Timing": timing.header("error"),
+  } });
 }
 
-function signatureResponse(buffer: Buffer, etag: string): Response {
-  return imageResponse(buffer, SIGNATURE_IMAGE_CONTENT_TYPE, SIGNATURE_CACHE_HEADER, { ETag: etag });
+function signatureResponse(buffer: Buffer, etag: string, timing: SignatureTiming, cache: string): Response {
+  return imageResponse(buffer, SIGNATURE_IMAGE_CONTENT_TYPE, SIGNATURE_CACHE_HEADER, {
+    ETag: etag, "Server-Timing": timing.header(cache),
+  });
 }
 
 async function renderAndStore(cacheKey: string, render: () => Promise<Buffer>): Promise<Buffer | null> {
   const inFlight = inFlightSignatureRenders.get(cacheKey);
   if (inFlight) return inFlight;
 
-  const attempt = ogRenderGate.run(render)
-    .then((buffer) => {
-      // Only successes are stored. An error image written under a version key
-      // that will never change again would be served until the data moves.
-      scheduleDetached(putSignatureImage(cacheKey, buffer));
-      return buffer;
-    })
+  const attempt = render()
     .catch(() => null)
     .finally(() => {
       inFlightSignatureRenders.delete(cacheKey);
@@ -139,6 +129,8 @@ export const Route = createFileRoute("/api/signature/$token/$variant")({
   server: {
     handlers: {
       GET: async ({ request, params }) => {
+        const timing = new SignatureTiming();
+        const revision = signatureRenderRevision();
         const token = params.token;
         if (!isSignatureTokenShape(token)) return refuse();
 
@@ -155,13 +147,19 @@ export const Route = createFileRoute("/api/signature/$token/$variant")({
           if (etagMatches(request.headers.get("if-none-match"), memoized.etag)) {
             return new Response(null, {
               status: 304,
-              headers: { ETag: memoized.etag, "Cache-Control": SIGNATURE_CACHE_HEADER },
+              headers: { ETag: memoized.etag, "Cache-Control": SIGNATURE_CACHE_HEADER, "Server-Timing": timing.header("memory-304") },
             });
           }
-          return signatureResponse(memoized.buffer, memoized.etag);
+          return signatureResponse(memoized.buffer, memoized.etag, timing, "memory");
         }
 
-        const resolved = await resolveSignatureToken(token);
+        let resolved;
+        try {
+          resolved = await timing.measure("resolve", () => resolveSignatureToken(token));
+        } catch {
+          return unavailable(timing);
+        }
+        if (revision !== signatureRenderRevision()) return unavailable(timing);
         if (!resolved) return refuse();
         if (!resolved.enabledTypes.includes(variant.type)) return refuse();
 
@@ -174,45 +172,41 @@ export const Route = createFileRoute("/api/signature/$token/$variant")({
 
         // Before R2, before any render: an unchanged version is a bodyless 304.
         if (etagMatches(request.headers.get("if-none-match"), etag)) {
-          return new Response(null, { status: 304, headers });
+          return new Response(null, { status: 304, headers: { ...headers, "Server-Timing": timing.header("version-304") } });
         }
 
-        const cached = await getCachedSignatureImage(cacheKey);
-        if (cached) {
-          storeSignatureRender(renderKey, cached, etag);
-          return signatureResponse(cached, etag);
+        const retained = readSignatureRender(renderKey, etag);
+        if (retained && retained.etag === etag) {
+          storeSignatureRender(renderKey, retained.buffer, etag);
+          return signatureResponse(retained.buffer, etag, timing, "validated-memory");
         }
-
-        /* Cold render. Unlike /api/og this WAITS on the gate instead of
-           degrading to a fallback image when it is busy. An OG card is a
-           1200x630 composition rasterized for a crawler nobody is watching; a
-           signature is a small card (order 100-300ms) with either a person
-           looking at the preview or a profile page waiting on it. Handing
-           those an empty image to save a few hundred milliseconds of queueing
-           is a bad trade - and a cached empty image is a blank embed. */
-        const limiterKey = `${resolved.userId}:${variant.type}:${variant.design}`;
-        if (coldRenderLimiter.isRateLimited(limiterKey, COLD_RENDERS_PER_MINUTE)) {
-          return placeholderResponse();
-        }
-
-        /* The style is already baked into `version` backend-side, so this only
-           has to turn the stored blob into something a layout can draw from.
-           Normalizing here rather than in each renderer means an id that fell
-           out of the allowlist degrades to the default look instead of
-           reaching satori. */
-        const style = normalizeSignatureStyleMap(resolved.styles)[variant.type];
-
-        const buffer = await renderAndStore(cacheKey, async () => encodeSignatureWebp(await renderSignature({
-          request,
-          resolved,
-          type: variant.type,
-          design: variant.design,
-          style,
-        })));
-        if (!buffer) return placeholderResponse();
+        let cache = inFlightSignatureRenders.has(cacheKey) ? "coalesced" : "render";
+        const buffer = await timing.measure("load", () => renderAndStore(cacheKey, async () => {
+          const cached = await timing.measure("storage", () => getCachedSignatureImage(cacheKey));
+          if (cached) {
+            cache = "storage";
+            return cached;
+          }
+          const limiterKey = `${resolved.userId}:${variant.type}:${variant.design}`;
+          if (coldRenderLimiter.isRateLimited(limiterKey, COLD_RENDERS_PER_MINUTE)) {
+            throw new Error("signature render rate limited");
+          }
+          const style = normalizeSignatureStyleMap(resolved.styles)[variant.type];
+          const png = await timing.measure("render", () => renderSignature({
+            request, resolved, type: variant.type, design: variant.design, style, timing,
+          }));
+          const queuedAt = performance.now();
+          const encoded = await ogRenderGate.run(() => {
+            timing.add("queue", performance.now() - queuedAt);
+            return timing.measure("encode", () => encodeSignatureWebp(png));
+          });
+          scheduleDetached(putSignatureImage(cacheKey, encoded));
+          return encoded;
+        }));
+        if (!buffer || revision !== signatureRenderRevision()) return unavailable(timing);
 
         storeSignatureRender(renderKey, buffer, etag);
-        return signatureResponse(buffer, etag);
+        return signatureResponse(buffer, etag, timing, cache);
       },
     },
   },

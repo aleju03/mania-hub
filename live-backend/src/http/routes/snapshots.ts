@@ -15,8 +15,9 @@ import { getBoardLaneKey } from "../../shared/score.js";
 import type { HttpContext, TimedRequest } from "../context.js";
 import { REQUEST_FARM_HELPER_TIMINGS } from "../context.js";
 import { activatePublicCountry, isObserveCountryRequest } from "../country-activation.js";
-import { buildGlobalMapsResponseOnThread, enforceCompressedLargeBody, getMapsResponseCacheState, MAP_SEARCH_RESPONSE_CACHE_TTL_MS, MAPS_GLOBAL_STALE_SERVE_MS, MAPS_PAGE_RESPONSE_CACHE_TTL_MS, MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS, pruneMapsResponseCache, serveMapsResponseCached } from "../maps-response-cache.js";
+import { buildGlobalMapsResponseOnThread, buildMapSearchResponseOnThread, enforceCompressedLargeBody, getMapsResponseCacheState, MAP_SEARCH_RESPONSE_CACHE_TTL_MS, MAPS_GLOBAL_STALE_SERVE_MS, MAPS_PAGE_RESPONSE_CACHE_TTL_MS, MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS, pruneMapsResponseCache, serveMapsResponseCached } from "../maps-response-cache.js";
 import { prepareJsonResponse } from "../prepared-json.js";
+import { MapsSnapshotBuildError } from "../maps-snapshot-thread.js";
 import { sendTopPlaysSnapshot } from "../top-plays-response-cache.js";
 import { clampInteger, clampLimit, isBridge, parseModAcronyms, parseUserIds } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
@@ -162,10 +163,15 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       freshnessKey: "",
       staleServeMs: 0,
       build: async () => {
-        const snapshot = await getMapSearchPage(ctx.db, query);
-        const prepared = await prepareJsonResponse(200, snapshot, encoding);
+        const prepared = await buildMapSearchResponseOnThread(ctx, { kind: "maps-search", query, encoding })
+          ?? await prepareJsonResponse(200, await getMapSearchPage(ctx.db, query), encoding);
         return { prepared, cacheTtlMs: MAP_SEARCH_RESPONSE_CACHE_TTL_MS };
       },
+    }).catch((error: unknown) => {
+      if (!(error instanceof MapsSnapshotBuildError)) throw error;
+      res.setHeader("cache-control", "no-store");
+      res.setHeader("retry-after", "5");
+      sendJson(req, res, ctx, 503, { error: "maps_search_unavailable" });
     });
     return true;
   }

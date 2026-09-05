@@ -1,13 +1,28 @@
-import { logWarn } from "../logger.js";
+import { computeMsdOnThread, MsdThreadUnavailableError } from "./msd-thread.js";
 
 // Thin backend facade over the vendored MinaCalc wasm harness
 // (vendor/leoblack/ett). calc.js handles the Node specifics itself (wasmBinary
 // injection plus the CommonJS globals the emscripten glue expects), so this
-// module only lazy-loads it, serializes calls, and trims the result.
+// module dispatches to a dedicated thread, which owns the serialized harness.
 
 export interface MsdResult {
   etternaVersion: string;
   values: Record<string, number>;
+}
+
+export interface MsdOptions {
+  rate?: number;
+  keyCount?: number;
+  scoreGoal?: number;
+  lnTailTaps?: boolean;
+}
+
+// A chart the calculator rejects can keep the existing no-MSD fallback.
+// A broken worker is transient infrastructure failure: let the job retry
+// instead of saving empty/lower ratings or advancing a repair sweep past it.
+export function msdChartErrorFallback(error: unknown): null {
+  if (error instanceof MsdThreadUnavailableError) throw error;
+  return null;
 }
 
 // MinaCalc rates 4..18K: 4/6/7 through their official per-keycount classes,
@@ -60,23 +75,6 @@ export function lnAdjustedMsd(
   return Number(blended.Overall ?? 0) - Number(base.Overall ?? 0) >= 0.005 ? blended : null;
 }
 
-type EttModule = typeof import("../../vendor/leoblack/ett/index.js");
-
-let ettModulePromise: Promise<EttModule> | null = null;
-const loggedFallbackReasons = new Set<string>();
-
-// One MinaCalc run at a time: each call is a synchronous CPU burst inside the
-// wasm instance, and serializing keeps concurrent job lanes from stacking
-// bursts on the event loop.
-let msdChain: Promise<unknown> = Promise.resolve();
-
-function loadEtt(): Promise<EttModule> {
-  if (!ettModulePromise) {
-    ettModulePromise = import("../../vendor/leoblack/ett/index.js");
-  }
-  return ettModulePromise;
-}
-
 export function isMsdSupportedKeyCount(keyCount: number): boolean {
   return MSD_SUPPORTED_KEYS.has(keyCount);
 }
@@ -90,30 +88,10 @@ export function isMsdSupportedKeyCount(keyCount: number): boolean {
  */
 export async function computeMsd(
   osuText: string,
-  options: { rate?: number; keyCount?: number; scoreGoal?: number; lnTailTaps?: boolean } = {},
+  options: MsdOptions = {},
 ): Promise<MsdResult | null> {
   const keyCount = options.keyCount;
   if (keyCount != null && !isMsdSupportedKeyCount(keyCount)) return null;
 
-  const run = msdChain.then(async () => {
-    const ett = await loadEtt();
-    const result = await ett.analyzeEtternaFromText(osuText, {
-      musicRate: options.rate ?? 1,
-      scoreGoal: options.scoreGoal,
-      keyOverride: keyCount ?? null,
-      lnTailTaps: options.lnTailTaps === true,
-    });
-    if (result.etternaVersionFallbackReason && !loggedFallbackReasons.has(result.etternaVersionFallbackReason)) {
-      // The 6K/7K preference for 0.74.0 is expected and fires on every non-4K
-      // chart; log each distinct reason once instead of spamming the job logs.
-      loggedFallbackReasons.add(result.etternaVersionFallbackReason);
-      logWarn("msd_version_fallback", { reason: result.etternaVersionFallbackReason });
-    }
-    return {
-      etternaVersion: result.etternaVersion ?? "unknown",
-      values: result.values,
-    };
-  });
-  msdChain = run.catch(() => {});
-  return run;
+  return computeMsdOnThread(osuText, options);
 }

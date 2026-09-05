@@ -1,6 +1,8 @@
+import { GiftSpareDialog } from "./GiftSpareDialog";
+import { MissingPlayerTile } from "./MissingPlayerTile";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
+import { Gift, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
@@ -17,11 +19,11 @@ import {
   type PackWallet,
 } from "#/lib/pack-collection";
 import { honoraryAvatarUrl, HONORARY_PLAYERS, type HonoraryPlayer } from "#/lib/honorary-players";
+import { BinderMenuItems, type PackBinderActions } from "./SetsView";
 import {
   fetchServerPackCollectionMissing,
   fetchServerPackCollectionPage,
   type ServerPackCollectionMissingPage,
-  type ServerPackCollectionMissingPlayer,
   type ServerPackCollectionPage,
 } from "#/lib/pack-wallet-sync";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -81,6 +83,8 @@ interface CollectionPanelProps {
   wallet: PackWallet | null;
   showLoginNudge: boolean;
   syncStatus: "local" | "syncing" | "synced";
+  collectionRevision?: number;
+  onGiftSent?: () => void;
   /* Recycle callbacks return the shards gained so the panel can play the
      clink and spawn the "+N" burst at the click point. */
   onRecycleCard: (cardKey: string) => number | Promise<number>;
@@ -90,6 +94,17 @@ interface CollectionPanelProps {
   onRecycleAll: () => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
   onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
+  /* Present for a synced collection only: what the card menu's "Add to
+     binder..." item reads and writes (src/components/packs/SetsView.tsx). */
+  binders?: PackBinderActions;
+  /* The signed-in collector's wishlist, so a missing player can be put on it
+     from the row that says they are missing. Absent for a local wallet, which
+     has no server-side list. */
+  wishlist?: {
+    userIds: Set<number>;
+    toggle: (userId: number) => Promise<void>;
+    full: boolean;
+  };
 }
 
 interface LoadedServerCollectionPage {
@@ -325,32 +340,6 @@ function tierChipRgb(tier: ManiaCardTier): string {
   return match ? `${match[1]}, ${match[2]}, ${match[3]}` : "148, 163, 184";
 }
 
-/* A pool player the collection has no card of. Deliberately not a card face:
-   nothing has been minted for this collector yet, so there is no rarity to
-   draw. Same empty-slot look the album gives an uncollected roster spot, and
-   it carries the flag so the album that holds them is obvious. */
-function MissingPlayerTile({ player }: { player: ServerPackCollectionMissingPlayer }) {
-  return (
-    <Link
-      to="/player/$username/maniacard"
-      params={{ username: player.username }}
-      className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30"
-      style={{ aspectRatio: "5 / 7" }}
-    >
-      <span className="absolute left-1.5 top-1.5 text-[10px] text-osu-f1/60 tabular-nums">#{player.poolRank}</span>
-      <CountryFlag code={player.countryCode} size="xs" decorative className="absolute right-1.5 top-2" />
-      <img
-        src={player.avatarUrl}
-        alt=""
-        className="h-1/2 w-auto rounded-full object-cover opacity-30 grayscale"
-        loading="lazy"
-        draggable={false}
-      />
-      <span className="mt-2 w-full truncate text-center text-[11px] text-osu-f1">{player.username}</span>
-    </Link>
-  );
-}
-
 function MissingGoatTile({ player }: { player: HonoraryPlayer }) {
   return (
     <Link
@@ -388,12 +377,16 @@ export function CollectionPanel({
   wallet,
   showLoginNudge,
   syncStatus,
+  collectionRevision = 0,
+  onGiftSent,
   onRecycleCard,
   onRecycleWhole,
   onRecycleWholeMany,
   onRecycleWholeMatching,
   onRecycleAll,
   onApplyMint,
+  binders,
+  wishlist,
 }: CollectionPanelProps) {
   const { t, i18n } = useLingui();
   const [query, setQuery] = useState("");
@@ -409,7 +402,7 @@ export function CollectionPanel({
   const [confirmCardKey, setConfirmCardKey] = useState<string | null>(null);
   // Right-click menu on a card tile; whole-recycle inside it confirms on a
   // second click too.
-  const [menu, setMenu] = useState<{ card: CollectedCard; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ card: CollectedCard; cardKeys: string[]; cardCount: number; x: number; y: number } | null>(null);
   const [menuConfirm, setMenuConfirm] = useState(false);
   // Clicking a tile lifts the card to center stage instead of navigating;
   // the spotlight offers the profile link.
@@ -487,6 +480,14 @@ export function CollectionPanel({
   const [serverLoading, setServerLoading] = useState(false);
   const [serverMissingKey, setServerMissingKey] = useState<string | null>(null);
   const [serverRefreshKey, setServerRefreshKey] = useState(0);
+  const [giftCard, setGiftCard] = useState<CollectedCard | null>(null);
+  const lastCollectionRevision = useRef(collectionRevision);
+  useEffect(() => {
+    if (lastCollectionRevision.current === collectionRevision) return;
+    lastCollectionRevision.current = collectionRevision;
+    serverCollectionPageCache.clear();
+    setServerRefreshKey((value) => value + 1);
+  }, [collectionRevision]);
   /* A wallet push landing (syncing -> synced) is the moment freshly pulled
      cards exist server-side, so it's the earliest a re-read can show them.
      Without this, an open pack never reaches the cached page and a "newest"
@@ -1077,7 +1078,7 @@ export function CollectionPanel({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3" data-select-keep="">
+        <div className="flex flex-wrap items-center justify-end gap-3" data-select-keep="">
           <span className="flex items-center gap-1.5 text-[12px] text-osu-f1">
             <Recycle className="h-3.5 w-3.5" />
             {/* Keyed on the value so each shard change replays a small pop */}
@@ -1374,7 +1375,7 @@ export function CollectionPanel({
               {activeMissingPage ? (
                 <>
                   {activeMissingPage.players.map((player) => (
-                    <MissingPlayerTile key={player.userId} player={player} />
+                    <MissingPlayerTile key={player.userId} player={player} wishlist={wishlist} />
                   ))}
                   {missingGoats.map((player) => <MissingGoatTile key={`goat:${player.id}`} player={player} />)}
                 </>
@@ -1430,8 +1431,12 @@ export function CollectionPanel({
                   setMenuConfirm(false);
                   setMenu({
                     card,
+                    cardKeys: selecting && cardSelected
+                      ? selectionScope === "all" ? pageCards.map(packCardKeyOf) : Array.from(selected)
+                      : [cardKey],
+                    cardCount: selecting && cardSelected ? selectedCount : 1,
                     x: Math.min(event.clientX, window.innerWidth - 208),
-                    y: Math.min(event.clientY, window.innerHeight - 176),
+                    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 480)),
                   });
                 }}
               >
@@ -1494,7 +1499,7 @@ export function CollectionPanel({
                     <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
                   </button>
                 )}
-                {selecting ? null : card.copies > 1 ? (
+                {selecting || card.recyclable === false ? null : card.copies > 1 ? (
                   <button
                     type="button"
                     onClick={(event) => runRecycle(() => onRecycleCard(cardKey), event.currentTarget)}
@@ -1616,7 +1621,7 @@ export function CollectionPanel({
             )}
             <button
               type="button"
-              disabled={selectedCount === 0 || bulkBusy}
+              disabled={selectedCount === 0 || bulkShardTotal === 0 || bulkBusy}
               onClick={(event) => {
                 if (!confirmBulk) {
                   setConfirmBulk(true);
@@ -1684,6 +1689,14 @@ export function CollectionPanel({
         </div>
       ))}
 
+      {giftCard && <GiftSpareDialog card={giftCard} onClose={() => setGiftCard(null)} onSent={() => {
+        if (onGiftSent) onGiftSent();
+        else {
+          serverCollectionPageCache.clear();
+          setServerRefreshKey((value) => value + 1);
+        }
+      }} />}
+
       {menu && (
         <>
           <div
@@ -1696,8 +1709,8 @@ export function CollectionPanel({
             }}
           />
           <div
-            className="fixed z-50 w-[200px] rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.55)]"
-            style={{ left: menu.x, top: menu.y }}
+            className="fixed z-50 w-[200px] overflow-y-auto overscroll-contain rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.55)]"
+            style={{ left: menu.x, top: menu.y, maxHeight: `calc(100dvh - ${menu.y + 8}px)` }}
             role="menu"
             data-select-keep=""
           >
@@ -1729,7 +1742,21 @@ export function CollectionPanel({
               <Check className="h-3 w-3" />
               <Trans>Select cards...</Trans>
             </button>
-            {menu.card.copies > 1 && (
+            {binders && (
+              <BinderMenuItems
+                cardKeys={menu.cardKeys}
+                cardCount={menu.cardCount}
+                actions={binders}
+                onDone={() => setMenu(null)}
+              />
+            )}
+            {syncStatus === "synced" && menu.card.copies > 1 && (
+              <button type="button" role="menuitem" onClick={() => { setGiftCard(menu.card); setMenu(null); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer">
+                <Gift className="h-3 w-3" />{t`Gift a spare…`}
+              </button>
+            )}
+            {menu.card.recyclable !== false && menu.card.copies > 1 && (
               <button
                 type="button"
                 role="menuitem"
@@ -1743,28 +1770,30 @@ export function CollectionPanel({
                 <Trans>Recycle duplicates +{duplicateShardValue(menu.card)}</Trans>
               </button>
             )}
-            <button
-              type="button"
-              role="menuitem"
-              onClick={(event) => {
-                if (!menuConfirm) {
-                  setMenuConfirm(true);
-                  return;
-                }
-                runRecycle(() => onRecycleWhole(packCardKeyOf(menu.card)), event.currentTarget);
-                setMenu(null);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer ${
-                menuConfirm ? "font-bold text-osu-pink-light" : "text-osu-f1 hover:text-white"
-              }`}
-            >
-              <Recycle className="h-3 w-3" />
-              {menuConfirm
-                ? t`Sure? The card leaves the collection`
-                : menu.card.copies > 1
-                  ? t`Recycle all copies +${wholeCardShardValue(menu.card)}`
-                  : t`Recycle card +${wholeCardShardValue(menu.card)}`}
-            </button>
+            {menu.card.recyclable !== false && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => {
+                  if (!menuConfirm) {
+                    setMenuConfirm(true);
+                    return;
+                  }
+                  runRecycle(() => onRecycleWhole(packCardKeyOf(menu.card)), event.currentTarget);
+                  setMenu(null);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer ${
+                  menuConfirm ? "font-bold text-osu-pink-light" : "text-osu-f1 hover:text-white"
+                }`}
+              >
+                <Recycle className="h-3 w-3" />
+                {menuConfirm
+                  ? t`Sure? The card leaves the collection`
+                  : menu.card.copies > 1
+                    ? t`Recycle all copies +${wholeCardShardValue(menu.card)}`
+                    : t`Recycle card +${wholeCardShardValue(menu.card)}`}
+              </button>
+            )}
           </div>
         </>
       )}

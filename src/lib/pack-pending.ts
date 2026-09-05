@@ -55,7 +55,8 @@ function sanitizePlayer(value: unknown): PackPlayer | null {
        server minted (or didn't mint) the ":eternal" row at draw time and
        refuses the tier from every client claim. */
     ...(raw.eternal === true ? { eternal: true as const } : {}),
-    /* A milestone card's key, badge and motif, on the same terms: the server
+    /* A milestone card's key, badge and motif, plus the wishlist flag, on the
+       same terms: the server
        already minted the holding, so this only decides what the resumed
        reveal draws and which key its mint pass names. */
     ...packPlayerVariantFields({ userId: user.id, ...raw }),

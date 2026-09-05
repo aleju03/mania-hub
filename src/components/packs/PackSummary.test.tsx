@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@lingui/react";
@@ -43,6 +43,29 @@ const card: RevealedCard = {
 afterEach(cleanup);
 
 describe("PackSummary", () => {
+  it("keeps the milestone card when recycling the rest of a pack", async () => {
+    const milestone = {
+      ...card,
+      tier: "eternal" as const,
+      player: { ...card.player, milestone: true, cardKey: "7:v1" },
+    };
+    const onRecycleCopies = vi.fn(() => 4);
+    const { container } = render(
+      <I18nProvider i18n={getI18n("en")}>
+        <PackSummary cards={[card, milestone]} onOpenAnother={() => {}} onOpenNext={() => {}}
+          canOpenNext={false} nextPackShardCost={null} serials={null}
+          onRecycleCopies={onRecycleCopies} reducedMotion={true} />
+      </I18nProvider>,
+    );
+    fireEvent.contextMenu(container.querySelector('[data-pull-index="1"]')!);
+    expect(screen.getByText("Open profile")).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /Recycle/ })).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "Recycle all +4" }));
+    await waitFor(() => expect(onRecycleCopies).toHaveBeenCalledWith([{ cardKey: "7", copies: 1 }]));
+    expect(container.querySelector('[data-pull-index="1"]')?.textContent).not.toContain("+250");
+  });
+
   it("reserves pull-serial space before asynchronous mint details arrive", () => {
     // The summary uses <Trans>, which throws without a provider; en resolves
     // to the source strings, matching what this test asserts on.

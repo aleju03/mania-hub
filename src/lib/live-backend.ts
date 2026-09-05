@@ -3045,8 +3045,9 @@ export interface LivePackShowcaseCollector {
   goats: number;
 }
 
-/* One tile on the wall: a card, and who put it there. */
+/* One wall entry: an individual card or ordered set, with its spotlight owner. */
 export interface LivePackShowcaseWallCard {
+  set?: { id: number; name: string; cards: ServerPackCollectionCard[] };
   card: ServerPackCollectionCard;
   collector: LivePackShowcaseCollector;
   showcasedAt: number;
@@ -3065,9 +3066,8 @@ export async function fetchLivePackShowcaseCards(userId: number, options: { fres
   return Array.isArray(body.cards) ? body.cards : [];
 }
 
-/* The wall: the cards people chose to show, most recently chosen first. Paged
-   over cards rather than over people, because the page is a gallery and the
-   owner is what inspecting a tile tells you. */
+/* The shared wall pages over cards and whole sets. Owners are shown only
+   when inspecting a card. cardTotal counts cards; total drives pagination. */
 export async function fetchLivePackShowcaseWall(options: {
   page?: number;
   pageSize?: number;
@@ -3075,6 +3075,7 @@ export async function fetchLivePackShowcaseWall(options: {
 } = {}): Promise<{
   cards: LivePackShowcaseWallCard[];
   total: number;
+  cardTotal?: number;
 }> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
@@ -3302,6 +3303,39 @@ export async function fetchLivePackRecentPulls(
   const body = await fetchLiveJson<{ pulls?: LivePackPullFeedEntry[] }>(`/api/packs/recent-pulls?${query}`);
   return Array.isArray(body.pulls) ? body.pulls : [];
 }
+
+// ---------------------------------------------------------------------------
+// 1M celebration pack features. One block per feature; each is owned by that
+// feature's module on the backend (docs/packs.md, "1M celebration").
+// ---------------------------------------------------------------------------
+
+// [1m-anchor: binders]
+
+/* A binder: a name a collector gave a group of their own cards. The cards are
+   joined back to the collection on every read, so one that was fully recycled
+   is simply not here any more. */
+export interface LivePackBinder {
+  id: number;
+  name: string;
+  position: number;
+  showcased: boolean;
+  createdAt: number;
+  updatedAt: number;
+  cards: ServerPackCollectionCard[];
+}
+
+/* The public half of binders: only the ones their owner put on their shelf.
+   Owner reads and every write go through src/lib/pack-binders.ts instead,
+   since those are bridge-gated. */
+export async function fetchLivePackShowcasedBinders(userId: number): Promise<LivePackBinder[]> {
+  if (!Number.isFinite(userId) || userId <= 0) return [];
+  const body = await fetchLiveJson<{ binders?: LivePackBinder[] }>(
+    `/api/packs/community/binders?userId=${Math.floor(userId)}`,
+  );
+  return Array.isArray(body.binders) ? body.binders : [];
+}
+
+// [1m-anchor: wishlist and pity]
 
 /** Per-replay presence stream for the viewer's ingame-style "Spectators (N)"
  *  counter. `key` is `score:<id>` or `upload:<id>`; the stream emits `count`

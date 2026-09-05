@@ -21,6 +21,7 @@ export interface ServerPackWallet {
 }
 
 export interface ServerPackCollectionCard {
+  recyclable?: boolean;
   userId: number;
   /* Wallet key ("<id>", "<id>:goat", or "<id>:v<n>" for a card the grant desk
      handed out), so every card of one player a collector holds stays distinct.
@@ -46,7 +47,7 @@ export interface ServerPackCollectionCard {
      total. Server-side only: a browser-local wallet has no serials. */
   serial?: number | null;
   mintedTotal?: number;
-  /* When the grant desk handed this holding out, null for a pulled one. */
+  /* When this holding was granted or gifted, null for a pulled one. */
   grantedAt?: number | null;
 }
 

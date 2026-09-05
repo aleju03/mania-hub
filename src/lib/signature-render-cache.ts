@@ -21,7 +21,8 @@
 // it. That is why the TTL is 30 seconds rather than the several minutes the
 // hit rate would prefer - a moderator blocking a picture should not have to
 // wait out a cache they cannot see. Within one instance the invalidation below
-// is exact.
+// is exact. Bytes can remain for a day, but using them after 30 seconds
+// requires a newly validated matching ETag; retention extends no authorization.
 
 import type { Buffer } from "node:buffer";
 
@@ -29,6 +30,7 @@ interface CachedRender {
   buffer: Buffer;
   etag: string;
   expiresAt: number;
+  retainUntil: number;
 }
 
 const TTL_MS = 30_000;
@@ -40,6 +42,12 @@ const MAX_BYTES = 16 * 1024 * 1024;
 
 const renders = new Map<string, CachedRender>();
 let heldBytes = 0;
+let revision = 0;
+
+/** An in-flight read must not repopulate bytes invalidated during its await. */
+export function signatureRenderRevision(): number {
+  return revision;
+}
 
 /** Token first, so invalidating one player is a prefix scan. */
 export function signatureRenderKey(token: string, type: string, design: number): string {
@@ -58,7 +66,7 @@ function drop(key: string): void {
     so oldest-inserted is also nearest-expiry. */
 function trim(now: number): void {
   for (const [key, entry] of renders) {
-    if (entry.expiresAt <= now) drop(key);
+    if (entry.retainUntil <= now) drop(key);
   }
   for (const key of renders.keys()) {
     if (renders.size <= MAX_ENTRIES && heldBytes <= MAX_BYTES) break;
@@ -66,13 +74,15 @@ function trim(now: number): void {
   }
 }
 
-export function readSignatureRender(key: string): CachedRender | null {
+export function readSignatureRender(key: string, validatedEtag?: string): CachedRender | null {
   const entry = renders.get(key);
   if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
+  if (entry.retainUntil <= Date.now()) {
     drop(key);
     return null;
   }
+  // Old bytes are reusable only AFTER a fresh token/type/version check.
+  if (entry.expiresAt <= Date.now() && entry.etag !== validatedEtag) return null;
   return entry;
 }
 
@@ -80,7 +90,7 @@ export function storeSignatureRender(key: string, buffer: Buffer, etag: string):
   if (buffer.length === 0 || buffer.length > MAX_BYTES) return;
   const now = Date.now();
   drop(key);
-  renders.set(key, { buffer, etag, expiresAt: now + TTL_MS });
+  renders.set(key, { buffer, etag, expiresAt: now + TTL_MS, retainUntil: now + 24 * 60 * 60_000 });
   heldBytes += buffer.length;
   trim(now);
 }
@@ -89,6 +99,7 @@ export function storeSignatureRender(key: string, buffer: Buffer, etag: string):
     their data: publishing types, saving a style, reporting a time zone. */
 export function forgetSignatureRenders(token: string): void {
   if (!token) return;
+  revision += 1;
   const prefix = `${token}:`;
   for (const key of [...renders.keys()]) {
     if (key.startsWith(prefix)) drop(key);
@@ -100,6 +111,7 @@ export function forgetSignatureRenders(token: string): void {
    exactly the case this must not produce. The map is small and these are rare,
    so they take all of it. */
 export function clearSignatureRenderCache(): void {
+  revision += 1;
   renders.clear();
   heldBytes = 0;
 }

@@ -10,6 +10,18 @@
 import { getServerLiveBackendUrl } from "./live-backend";
 import { bridgeAuthHeaders } from "./live-backend-tokens";
 import type { SignatureType } from "./signature-shared";
+import type { OsuScore } from "./types";
+
+export interface SignatureProfileSnapshot {
+  user?: {
+    id?: number;
+    username?: string;
+    avatar_url?: string;
+    cover_url?: string | null;
+    statistics?: { pp?: number | null } | null;
+  };
+  bestScores?: OsuScore[];
+}
 
 export interface ResolvedSignature {
   userId: number;
@@ -24,6 +36,8 @@ export interface ResolvedSignature {
      browser has never told us, and falls back to UTC. */
   timeZone: string | null;
   versions: Record<SignatureType, string>;
+  /** The exact projected inputs hashed by the backend, avoiding a second read. */
+  profile?: SignatureProfileSnapshot | null;
 }
 
 /* base64url, as minted by the backend. Checked before any network call so a
@@ -53,15 +67,24 @@ interface MemoEntry {
 }
 
 const resolveMemo = new Map<string, MemoEntry>();
-let memoChecks = 0;
+const inFlightResolves = new Map<string, Promise<ResolvedSignature | null>>();
+let memoRevision = 0;
 
 function pruneMemo(now: number): void {
-  memoChecks += 1;
-  if (memoChecks < 128 && resolveMemo.size <= 10_000) return;
-  memoChecks = 0;
   for (const [key, entry] of resolveMemo) {
     if (entry.staleUntil <= now) resolveMemo.delete(key);
   }
+  for (const key of resolveMemo.keys()) {
+    if (resolveMemo.size <= 128) break;
+    resolveMemo.delete(key);
+  }
+}
+
+function remember(token: string, entry: MemoEntry): void {
+  resolveMemo.delete(token);
+  resolveMemo.set(token, entry);
+  // Also bound concurrent cold responses, which all started before insertion.
+  pruneMemo(Date.now());
 }
 
 export async function resolveSignatureToken(token: string): Promise<ResolvedSignature | null> {
@@ -72,28 +95,40 @@ export async function resolveSignatureToken(token: string): Promise<ResolvedSign
   const cached = resolveMemo.get(token);
   if (cached && cached.freshUntil > now) return cached.value;
 
+  const pending = inFlightResolves.get(token);
+  if (pending) return pending;
+  const attempt = fetchResolvedSignature(token, now, cached, memoRevision);
+  inFlightResolves.set(token, attempt);
+  try {
+    return await attempt;
+  } finally {
+    if (inFlightResolves.get(token) === attempt) inFlightResolves.delete(token);
+  }
+}
+
+async function fetchResolvedSignature(token: string, now: number, cached: MemoEntry | undefined, revision: number): Promise<ResolvedSignature | null> {
   const base = getServerLiveBackendUrl();
-  if (!base) return cached?.value ?? null;
+  if (!base) throw new Error("signature backend unavailable");
 
   try {
     const response = await fetch(
       `${base}/api/signature/resolve?token=${encodeURIComponent(token)}`,
-      { headers: bridgeAuthHeaders() },
+      { headers: bridgeAuthHeaders(), signal: AbortSignal.timeout(5_000) },
     );
     // A 404 is a real answer (unknown or disabled token), so it is memoized
     // like any other - otherwise a scraper hammering dead tokens would reach
     // the backend on every single request.
     if (response.status === 404) {
-      resolveMemo.set(token, { value: null, freshUntil: now + RESOLVE_MEMO_MS, staleUntil: now + RESOLVE_STALE_MS });
+      if (revision === memoRevision) remember(token, { value: null, freshUntil: now + RESOLVE_MEMO_MS, staleUntil: now + RESOLVE_STALE_MS });
       return null;
     }
     if (!response.ok) throw new Error(`signature resolve ${response.status}`);
     const value = (await response.json()) as ResolvedSignature;
-    resolveMemo.set(token, { value, freshUntil: now + RESOLVE_MEMO_MS, staleUntil: now + RESOLVE_STALE_MS });
+    if (revision === memoRevision) remember(token, { value, freshUntil: now + RESOLVE_MEMO_MS, staleUntil: now + RESOLVE_STALE_MS });
     return value;
-  } catch {
-    if (cached && cached.staleUntil > now) return cached.value;
-    return null;
+  } catch (error) {
+    if (revision === memoRevision && cached && cached.staleUntil > Date.now()) return cached.value;
+    throw error;
   }
 }
 
@@ -106,11 +141,14 @@ export async function resolveSignatureToken(token: string): Promise<ResolvedSign
     waits out RESOLVE_MEMO_MS, which is why that value has to stay small rather
     than this being the whole fix. */
 export function forgetSignatureToken(token: string): void {
+  memoRevision += 1;
   resolveMemo.delete(token);
+  inFlightResolves.delete(token);
 }
 
 /** Test seam: the memo is process-wide and would otherwise leak across cases. */
 export function clearSignatureResolveMemo(): void {
+  memoRevision += 1;
   resolveMemo.clear();
-  memoChecks = 0;
+  inFlightResolves.clear();
 }

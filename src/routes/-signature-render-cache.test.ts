@@ -74,6 +74,25 @@ describe("storeSignatureRender", () => {
     expect(signatureRenderCacheStats()).toEqual({ entries: 1, bytes: 10 });
   });
 
+  it("reuses retained bytes only with a revalidated matching version", () => {
+    vi.useFakeTimers();
+    storeSignatureRender(key(), Buffer.from("render"), '"tag"');
+    vi.advanceTimersByTime(6 * 60_000);
+    expect(readSignatureRender(key())).toBeNull();
+    expect(readSignatureRender(key(), '"new-tag"')).toBeNull();
+    expect(readSignatureRender(key(), '"tag"')?.buffer.toString()).toBe("render");
+    forgetSignatureRenders(TOKEN);
+    expect(readSignatureRender(key(), '"tag"')).toBeNull();
+  });
+
+  it("eventually discards retained bytes even if their version still matches", () => {
+    vi.useFakeTimers();
+    storeSignatureRender(key(), Buffer.from("render"), '"tag"');
+    vi.advanceTimersByTime(24 * 60 * 60_000);
+    expect(readSignatureRender(key(), '"tag"')).toBeNull();
+    expect(signatureRenderCacheStats()).toEqual({ entries: 0, bytes: 0 });
+  });
+
   it("evicts rather than growing without bound", () => {
     for (let index = 0; index < 600; index += 1) {
       storeSignatureRender(key(TOKEN, "skills", index), Buffer.alloc(64), `"${index}"`);

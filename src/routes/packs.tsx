@@ -1,3 +1,4 @@
+import { GiftInbox } from "../components/packs/GiftInbox";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -8,6 +9,9 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AlbumView } from "../components/packs/album/AlbumView";
 import { CollectionPanel } from "../components/packs/CollectionPanel";
+import { SetsView, packBinderActions, notifyPackBindersChanged } from "../components/packs/SetsView";
+import { WishlistLine } from "../components/packs/WishlistLine";
+import { useWishlist } from "../components/packs/useWishlist";
 import { GoatHoldersButton } from "../components/packs/GoatHoldersButton";
 import { GoatPoll } from "../components/packs/GoatPoll";
 import {
@@ -65,8 +69,9 @@ import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
 export const Route = createFileRoute("/packs")({
-  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak"; album?: string } => {
-    const view = search.view === "album" || search.view === "streak" ? search.view : undefined;
+  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets"; album?: string } => {
+    const view =
+      search.view === "folders" ? "sets" : search.view === "album" || search.view === "streak" || search.view === "sets" ? search.view : undefined;
     /* Which album is open on the shelf, so one can be linked to. Album codes
        are country codes plus the two pinned ones (GLOBAL, GOAT); anything
        that is not shaped like one is dropped and the shelf opens instead.
@@ -520,6 +525,11 @@ function PacksPage() {
   /* Whether opens run through the server (drawn, paid and minted in one
      request). Dev's ?forceGoat pin needs the local roll, so it opts out. */
   const serverDeals = () => Boolean(viewerRef.current) && isLiveBackendConfigured() && !devForceGoatPull();
+  /* The wishlist and its pity counter (src/lib/pack-wishlist.ts). Synced
+     collections only: the list lives server-side beside the collection it is
+     the missing half of. */
+  const wishlistEnabled = Boolean(auth.viewer) && walletApi.syncStatus !== "local";
+  const wishlistApi = useWishlist(wishlistEnabled);
   const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(!streakOpen);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -539,11 +549,27 @@ function PacksPage() {
   /* Once visited, the album stays mounted (hidden) so switching back keeps
      its shelf, open book, and loaded rosters. */
   const [albumMounted, setAlbumMounted] = useState(albumRequested);
+  /* Binders read the same collection a third way, and like the album they
+     stay mounted once visited so switching back keeps what was loaded. */
+  const bindersRequested = view === "sets";
+  const [bindersOpen, setBindersOpen] = useState(bindersRequested);
+  const [bindersMounted, setBindersMounted] = useState(bindersRequested);
+  const collectionViewsRef = useRef<HTMLDivElement>(null);
+  const [collectionViewMinHeight, setCollectionViewMinHeight] = useState<number>();
+  const [collectionRevision, setCollectionRevision] = useState(0);
+  const refreshAfterGift = () => {
+    setCollectionRevision((value) => value + 1);
+    walletApi.refreshServerWallet();
+    wishlistApi.refresh();
+    notifyPackBindersChanged();
+  };
   useEffect(() => {
     setStreakOpen(view === "streak");
     setAlbumOpen(albumRequested);
     if (albumRequested) setAlbumMounted(true);
-  }, [view, albumRequested]);
+    setBindersOpen(bindersRequested);
+    if (bindersRequested) setBindersMounted(true);
+  }, [view, albumRequested, bindersRequested]);
 
   const showStreakView = (open: boolean) => {
     setStreakOpen(open);
@@ -1171,6 +1197,10 @@ function PacksPage() {
                           }
                           setRevealed(pulls);
                           setSummaryFlyFrom(handoff?.sourceRects ?? null);
+                          // The open may have spent a wish or pulled one of
+                          // them anyway, and it moved the pity counter either
+                          // way, so the line re-reads itself.
+                          wishlistApi.refresh();
                           setPhase("summary");
                         }}
                       />
@@ -1184,17 +1214,29 @@ function PacksPage() {
 
             {!streakOpen && !dealError && collectionPanelMounted && collectionWallet && (
               <div className={showCollectionPanel ? "mt-14" : "hidden"}>
-                <div className="mx-auto mb-3 flex w-full max-w-[820px] items-center justify-end gap-1">
-                  {(["grid", "album"] as const).map((mode) => {
-                    const active = albumOpen === (mode === "album");
+                <div className="mx-auto mb-3 flex w-full max-w-[820px] flex-wrap items-center justify-end gap-1">
+                  <div className="mr-auto flex items-center gap-1">
+                    {wishlistEnabled && <GiftInbox key={auth.viewer?.id} onReceived={refreshAfterGift} />}
+                    {wishlistApi.wishlist && <WishlistLine wishlist={wishlistApi.wishlist} onRemove={(userId) => void wishlistApi.toggle(userId)} />}
+                  </div>
+                  {(["grid", "album", "binders"] as const).map((mode) => {
+                    const active =
+                      mode === "album" ? albumOpen : mode === "binders" ? bindersOpen : !albumOpen && !bindersOpen;
                     return (
                       <button
                         key={mode}
                         type="button"
                         onClick={() => {
+                          // A short/loading set view must not clamp the document's
+                          // scroll position when the tall card grid disappears.
+                          const top = collectionViewsRef.current?.getBoundingClientRect().top ?? 0;
+                          setCollectionViewMinHeight(Math.max(0, window.innerHeight - top));
                           const toAlbum = mode === "album";
+                          const toBinders = mode === "binders";
                           setAlbumOpen(toAlbum);
                           if (toAlbum) setAlbumMounted(true);
+                          setBindersOpen(toBinders);
+                          if (toBinders) setBindersMounted(true);
                           /* The URL update waits until after the next paint:
                              navigate() does its route re-match and full route
                              re-render synchronously, and inside the click
@@ -1206,7 +1248,7 @@ function PacksPage() {
                             window.setTimeout(() => {
                               void navigate({
                                 to: "/packs",
-                                search: toAlbum ? { view: "album" } : {},
+                                search: toAlbum ? { view: "album" } : toBinders ? { view: "sets" } : {},
                                 replace: true,
                                 resetScroll: false,
                               });
@@ -1218,39 +1260,51 @@ function PacksPage() {
                         }`}
                         aria-pressed={active}
                       >
-                        {mode === "album" ? t`Album` : t`Grid`}
+                        {mode === "album" ? t`Album` : mode === "binders" ? t`Sets` : t`Grid`}
                       </button>
                     );
                   })}
                 </div>
-                {albumMounted && (
-                  <div className={albumOpen ? undefined : "hidden"}>
-                    <MemoAlbumView
+                <div ref={collectionViewsRef} className="min-h-[70dvh]" style={{ minHeight: collectionViewMinHeight, overflowAnchor: "none" }}>
+                  {albumMounted && (
+                    <div className={albumOpen ? undefined : "hidden"}>
+                      <MemoAlbumView
+                        wallet={collectionWallet}
+                        syncStatus={walletApi.syncStatus}
+                        trackedCountries={trackedCountries}
+                        viewerId={auth.viewer?.id ?? null}
+                        openAlbumCode={openAlbumCode ?? null}
+                        collectionRevision={collectionRevision}
+                        /* A direct album link should land at the book. A summary
+                           remount is only restoring the collection below the
+                           cards just dealt, so scrolling there would yank the
+                           Android viewport away before they can be read. */
+                        scrollLinkedAlbumIntoView={phase === "pack"}
+                      />
+                    </div>
+                  )}
+                  {bindersMounted && (
+                    <div className={bindersOpen ? undefined : "hidden"}>
+                      <SetsView syncStatus={walletApi.syncStatus} />
+                    </div>
+                  )}
+                  <div className={albumOpen || bindersOpen ? "hidden" : undefined}>
+                    <MemoCollectionPanel
+                      binders={auth.viewer && walletApi.syncStatus !== "local" ? packBinderActions : undefined}
                       wallet={collectionWallet}
+                      showLoginNudge={!auth.viewer && auth.loginAvailable}
                       syncStatus={walletApi.syncStatus}
-                      trackedCountries={trackedCountries}
-                      viewerId={auth.viewer?.id ?? null}
-                      openAlbumCode={openAlbumCode ?? null}
-                      /* A direct album link should land at the book. A summary
-                         remount is only restoring the collection below the
-                         cards just dealt, so scrolling there would yank the
-                         Android viewport away before they can be read. */
-                      scrollLinkedAlbumIntoView={phase === "pack"}
+                      onRecycleCard={walletApi.recycleCard}
+                      onRecycleWhole={walletApi.recycleWhole}
+                      onRecycleWholeMany={walletApi.recycleWholeMany}
+                      onRecycleWholeMatching={walletApi.recycleWholeMatching}
+                      onRecycleAll={walletApi.recycleAll}
+                      onApplyMint={walletApi.applyMint}
+                      collectionRevision={collectionRevision}
+                      onGiftSent={refreshAfterGift}
+                      wishlist={wishlistEnabled ? wishlistApi : undefined}
                     />
                   </div>
-                )}
-                <div className={albumOpen ? "hidden" : undefined}>
-                  <MemoCollectionPanel
-                    wallet={collectionWallet}
-                    showLoginNudge={!auth.viewer && auth.loginAvailable}
-                    syncStatus={walletApi.syncStatus}
-                    onRecycleCard={walletApi.recycleCard}
-                    onRecycleWhole={walletApi.recycleWhole}
-                    onRecycleWholeMany={walletApi.recycleWholeMany}
-                    onRecycleWholeMatching={walletApi.recycleWholeMatching}
-                    onRecycleAll={walletApi.recycleAll}
-                    onApplyMint={walletApi.applyMint}
-                  />
                 </div>
               </div>
             )}
