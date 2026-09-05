@@ -40,7 +40,6 @@ export function GiftSpareDialog({ card, onClose, onSent }: { card: CollectedCard
     if (reason === "unverified_card") return t`Pull this card while signed in before gifting a spare.`;
     if (reason === "card_not_ready") return t`This card is not ready to gift. Open it to finish loading its stats.`;
     if (reason === "recipient_not_found") return t`That collector is no longer available.`;
-    if (reason === "daily_limit") return t`You can send 10 gifts per 24 hours. Try again later.`;
     if (reason === "self_gift") return t`Choose another collector for your gift.`;
     return t`Your collection changed. Nothing was sent. Refresh and try again.`;
   };

@@ -5,7 +5,7 @@ import type { ServerPackCollectionCard } from "./pack-wallet-sync";
 export interface GiftCollector { userId: number; username: string; avatarUrl: string; countryCode: string | null }
 export interface PackGiftReceipt { id: number; sender: GiftCollector; card: ServerPackCollectionCard | null }
 export interface PackGiftInbox { gifts: PackGiftReceipt[]; total: number }
-export type PackGiftError = "invalid_request" | "self_gift" | "recipient_not_found" | "no_spare" | "card_not_ready" | "unverified_card" | "special_card" | "daily_limit" | "collection_changed";
+export type PackGiftError = "invalid_request" | "self_gift" | "recipient_not_found" | "no_spare" | "card_not_ready" | "unverified_card" | "special_card" | "collection_changed";
 export type PackGiftResult = { ok: true; giftId: number; recipient: GiftCollector; remainingCopies: number; replayed: boolean } | { ok: false; error: PackGiftError };
 
 async function giftTarget() {

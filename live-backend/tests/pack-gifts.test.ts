@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { acknowledgePackGifts, listPackGiftInbox, PACK_GIFT_DAILY_CAP, searchGiftCollectors, sendPackGift } from "../src/features/pack-gifts.js";
+import { acknowledgePackGifts, listPackGiftInbox, searchGiftCollectors, sendPackGift } from "../src/features/pack-gifts.js";
 import { getPackCollectionCard, isPackWalletEternalPending } from "../src/features/pack-wallets.js";
 let dir: string;
 let db: Db;
@@ -109,11 +109,18 @@ it("fulfills wishes and scopes receipt reads and dismissal to the recipient", as
   await acknowledgePackGifts(db,RECIPIENT,[inbox.gifts[0].id],NOW);
   expect((await listPackGiftInbox(db,RECIPIENT)).total).toBe(0); expect(await copies(RECIPIENT)).toBe(1);
 });
-it("enforces a rolling send limit", async () => {
-  await exec(db,"update pack_collection_cards set copies=30 where owner_user_id=?",[SENDER]);
-  for(let i=0;i<PACK_GIFT_DAILY_CAP;i++) expect((await sendPackGift(db,SENDER,gift(`gift-request-${String(i).padStart(8,'0')}`),NOW)).ok).toBe(true);
-  expect(await sendPackGift(db,SENDER,gift("gift-request-99999999"),NOW)).toEqual({ok:false,error:"daily_limit"});
-  expect((await sendPackGift(db,SENDER,gift("gift-request-99999999"),NOW+86400000)).ok).toBe(true);
+it("allows more than ten gifts in one day while preserving the sender's last copy", async () => {
+  await exec(db, "update pack_collection_cards set copies=30 where owner_user_id=?", [SENDER]);
+  for (let index = 0; index < 29; index++) {
+    const request = gift(`gift-request-${String(index).padStart(8, '0')}`);
+    expect(await sendPackGift(db, SENDER, request, NOW)).toMatchObject({ ok: true, remainingCopies: 29 - index });
+  }
+  expect(await copies(SENDER)).toBe(1);
+  expect(await copies(RECIPIENT)).toBe(29);
+  expect(await sendPackGift(db, SENDER, gift("gift-request-99999999"), NOW)).toEqual({ ok: false, error: "no_spare" });
+  const inbox = await listPackGiftInbox(db, RECIPIENT);
+  expect(inbox.total).toBe(29);
+  expect(inbox.gifts).toHaveLength(20);
 });
 it("searches existing collectors by name or id and treats wildcards literally", async () => {
   expect((await searchGiftCollectors(db,SENDER,"Reci")).map(c=>c.userId)).toEqual([RECIPIENT]);

@@ -5,11 +5,9 @@ import { logInfo } from "../logger.js";
 import { getPackCollectionCard, normalizePackCardKey, type StoredPackCard } from "./pack-wallets.js";
 import { mintPackCardSerialStatement } from "./pack-serials.js";
 
-export const PACK_GIFT_DAILY_CAP = 10;
-const GIFT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REQUEST_ID = /^[a-zA-Z0-9_-]{16,80}$/;
 export interface GiftCollector { userId: number; username: string; avatarUrl: string; countryCode: string | null }
-export type PackGiftError = "invalid_request" | "self_gift" | "recipient_not_found" | "no_spare" | "card_not_ready" | "unverified_card" | "special_card" | "daily_limit" | "collection_changed";
+export type PackGiftError = "invalid_request" | "self_gift" | "recipient_not_found" | "no_spare" | "card_not_ready" | "unverified_card" | "special_card" | "collection_changed";
 export type PackGiftResult = { ok: true; giftId: number; recipient: GiftCollector; remainingCopies: number; replayed: boolean } | { ok: false; error: PackGiftError };
 export interface PackGiftReceipt { id: number; sender: GiftCollector; card: StoredPackCard | null }
 
@@ -71,8 +69,6 @@ export async function sendPackGift(db: Db, senderUserId: number, input: { recipi
   // Passing one on would retire the recipient's completion reward by mistake.
   // Circulating <player>:eternal cards remain giftable as ordinary spare pulls.
   if (source.tier === "eternal" && key !== `${source.card_user_id}:eternal`) return refuse("special_card");
-  const used = Number((await exec(db, "select count(*) as n from pack_gifts where sender_user_id = ? and sent_at > ?", [senderUserId, now - GIFT_WINDOW_MS])).rows[0]?.n ?? 0);
-  if (used >= PACK_GIFT_DAILY_CAP) return refuse("daily_limit");
   const token = randomUUID();
   const gate = "exists (select 1 from pack_gifts where sender_user_id = ? and request_id = ? and claim_token = ?)";
   const gateArgs = [senderUserId, input.requestId, token];
@@ -82,10 +78,9 @@ export async function sendPackGift(db: Db, senderUserId: number, input: { recipi
       exists (select 1 from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 1
         and completion_eligible = 1 and tier is not null and skills_id is not null
         and (tier != 'eternal' or card_key = cast(card_user_id as text) || ':eternal'))
-      and exists (select 1 from pack_wallets where user_id = ?)
-      and (select count(*) from pack_gifts where sender_user_id = ? and sent_at > ?) < ?`,
+      and exists (select 1 from pack_wallets where user_id = ?)`,
     args: [senderUserId, recipientId, input.requestId, token, sender.username, recipient.username, key, Number(source.card_user_id), now,
-      senderUserId, key, recipientId, senderUserId, now - GIFT_WINDOW_MS, PACK_GIFT_DAILY_CAP],
+      senderUserId, key, recipientId],
   }, {
     // New holdings inherit the sender's frozen appearance. Someone who already
     // holds this key keeps their own snapshot; a gift cannot repaint their card.

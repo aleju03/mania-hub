@@ -15481,10 +15481,6 @@ msgstr "You are cutting through the cards"
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 
-#: src/components/packs/GiftSpareDialog.tsx
-msgid "You can send 10 gifts per 24 hours. Try again later."
-msgstr "You can send 10 gifts per 24 hours. Try again later."
-
 #: src/routes/farm-helper.tsx
 msgid "you could gain"
 msgstr "you could gain"

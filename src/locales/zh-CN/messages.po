@@ -15482,10 +15482,6 @@ msgstr "你正在划开卡片"
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "你最多可以发布 {COMMUNITY_MAX_PER_USER} 个服务器。"
 
-#: src/components/packs/GiftSpareDialog.tsx
-msgid "You can send 10 gifts per 24 hours. Try again later."
-msgstr "每 24 小时可送出 10 份礼物。请稍后再试。"
-
 #: src/routes/farm-helper.tsx
 msgid "you could gain"
 msgstr "潜在收益"
