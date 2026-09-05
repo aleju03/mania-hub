@@ -1,5 +1,5 @@
 // Type-only: sanitize-html (and its htmlparser2/postcss graph) loads on demand
-// inside sanitizeProfilePageHtml — only About-page fetches need it, not boot.
+// inside sanitizeProfilePageHtml — profile fetches need it, not boot.
 import type sanitizeHtml from "sanitize-html";
 import type { Db } from "../db.js";
 import { exec, json, parseJson, writeVariantPps } from "../db.js";
@@ -834,11 +834,22 @@ export async function getPlayerAbout(
 
   return getProfileSection(db, "about", userId, async () => {
     const user = await osu.getUser(userId, "api:profile_about");
-    const page = readRecord(user.page);
-    const html = typeof page?.html === "string" ? await sanitizeProfilePageHtml(page.html) : null;
-    const raw = typeof page?.raw === "string" ? page.raw : null;
-    return { html, raw };
+    return readProfileAbout(user);
   }, options.writeDb);
+}
+
+async function readProfileAbout(user: Record<string, unknown>): Promise<{ html: string | null; raw: string | null }> {
+  const page = readRecord(user.page);
+  const html = typeof page?.html === "string" ? await sanitizeProfilePageHtml(page.html) : null;
+  const raw = typeof page?.raw === "string" ? page.raw : null;
+  return { html, raw };
+}
+
+async function cacheProfileAbout(db: Db, userId: number, user: Record<string, unknown>, fetchedAt: string): Promise<void> {
+  // Full profiles already include About. Keep it in the section cache before
+  // dropping it from the smaller snapshot; an omitted page still needs a fetch.
+  if (!readRecord(user.page)) return;
+  await storeProfileSection(db, "about", userId, await readProfileAbout(user), fetchedAt);
 }
 
 async function getProfileSection(
@@ -862,17 +873,27 @@ async function getProfileSection(
 
   const fetchedAt = nowIso();
   const payload = await fetchPayload();
+  await storeProfileSection(writeDb, section, userId, payload, fetchedAt);
+  return { userId, section, payload, fetchedAt, isStale: false };
+}
+
+async function storeProfileSection(
+  db: Db,
+  section: "about" | "recent",
+  userId: number,
+  payload: unknown,
+  fetchedAt: string,
+): Promise<void> {
   await exec(
-    writeDb,
+    db,
     `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
      values (?, ?, ?, ?, ?, ?)
      on conflict(cache_key) do update set
        payload_json = excluded.payload_json,
        fetched_at = excluded.fetched_at,
        updated_at = excluded.updated_at`,
-    [cacheKey, userId, section, json(payload), fetchedAt, fetchedAt],
+    [`${section}:${userId}`, userId, section, json(payload), fetchedAt, fetchedAt],
   );
-  return { userId, section, payload, fetchedAt, isStale: false };
 }
 
 function readProfileRecentScores(payload: unknown): OscScore[] {
@@ -1114,6 +1135,7 @@ async function fetchAndStoreProfileSnapshot(
     [userId, usernameKey, packJson(storedUser), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
   );
   await upsertDisplayUser(db, userId, username, storedUser, fetchedAt);
+  await cacheProfileAbout(db, userId, user, fetchedAt);
   const row = await getStoredProfileSnapshot(db, usernameKey);
   if (!row) throw new Error("Failed to store profile snapshot");
   return row;
@@ -1174,6 +1196,7 @@ export async function runProfileUserRefreshJob(
       [normalizeProfileKey(username), packJson(storedUser), fetchedAt, fetchedAt, row.user_id],
     );
     await upsertDisplayUser(db, row.user_id, username, storedUser, fetchedAt);
+    await cacheProfileAbout(db, row.user_id, user, fetchedAt);
   } catch (error) {
     await recordProfileRefreshError(db, row.user_id, error);
     // Rethrown so the queue applies its own backoff, and so a 404 reaches the

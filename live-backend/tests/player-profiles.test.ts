@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScoresFromOsu, getPlayerReplayScores } from "../src/features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScoresFromOsu, getPlayerReplayScores, runProfileUserRefreshJob } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -23,6 +23,52 @@ afterEach(async () => {
 });
 
 describe("player profile snapshots", () => {
+  it.each([
+    { html: '<b>Hello</b><script>alert(1)</script>', raw: '[b]Hello[/b]', expectedHtml: '<b>Hello</b>' },
+    { html: '', raw: '', expectedHtml: null },
+  ])("reuses the initial profile's About without another osu! call: $raw", async ({ html, raw, expectedHtml }) => {
+    const getUserByKey = vi.fn(async () => ({
+      id: USER_ID, username: "MnShiny", country_code: "CR", page: { html, raw },
+    }));
+    const getUser = vi.fn(async () => { throw new Error("About should already be cached"); });
+    const snapshot = await getPlayerProfileSnapshot(db, {
+      getUserByKey,
+      getUserBestScoresWindow: vi.fn(async () => []),
+    }, "MnShiny");
+
+    const about = await getPlayerAbout(db, { getUser }, USER_ID);
+
+    expect(about.payload).toEqual({ html: expectedHtml, raw });
+    expect(about.fetchedAt).toBe(snapshot.userFetchedAt);
+    expect(snapshot.user.page).toBeNull();
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it("replaces cached About during a user refresh and refetches once it expires", async () => {
+    await insertProfileSnapshot({ snapshotFetchedAt: "2026-06-01T03:28:53Z", lastVisit: null });
+    const getUser = vi.fn(async () => ({
+      id: USER_ID, username: "MnShiny", page: { html: "Old About", raw: "Old About" },
+    }));
+    await getPlayerAbout(db, { getUser }, USER_ID);
+    getUser.mockResolvedValue({
+      id: USER_ID, username: "MnShiny", page: { html: "Updated About", raw: "Updated About" },
+    });
+
+    await runProfileUserRefreshJob(db, { getUser }, USER_ID);
+    expect((await getPlayerAbout(db, { getUser }, USER_ID)).payload).toEqual({
+      html: "Updated About", raw: "Updated About",
+    });
+    expect(getUser).toHaveBeenCalledTimes(2);
+
+    await exec(db, "update profile_section_cache set fetched_at = ? where cache_key = ?", [
+      new Date(Date.now() - 3 * 60_000).toISOString(), `about:${USER_ID}`,
+    ]);
+    await getPlayerAbout(db, { getUser }, USER_ID);
+    expect(getUser).toHaveBeenCalledTimes(3);
+    expect(getUser).toHaveBeenLastCalledWith(USER_ID, "api:profile_about");
+  });
+
   it("keeps warm profile reads off the writer and cold snapshot/cache writes off the read handle", async () => {
     const readDb = new Proxy(db, {
       get(target, key) {

@@ -522,6 +522,7 @@ export class ManiaReplayRenderer {
   // (which reaches into the WebGL context) still type-checks against it.
   private app: Application<WebGLRenderer | CanvasRenderer> | null = null;
   private gameplayGraphics = new Graphics();
+  private inputOverlayGraphics = new Graphics();
   private hudGraphics = new Graphics();
   private graphics = this.gameplayGraphics;
   private textLayer = new Container();
@@ -1141,6 +1142,8 @@ export class ManiaReplayRenderer {
     app.stage.addChild(this.staticGraphics);
     app.stage.addChild(this.gameplayGraphics);
     app.stage.addChild(this.gameplaySkinSprites.layer);
+    // Input holds must remain visible over opaque imported LN bodies.
+    app.stage.addChild(this.inputOverlayGraphics);
     app.stage.addChild(this.storyboardOverlayRoot);
     app.stage.addChild(this.hudGraphics);
     app.stage.addChild(this.hudSkinSprites.layer);
@@ -2963,6 +2966,7 @@ export class ManiaReplayRenderer {
     }
 
     this.gameplayGraphics.clear();
+    this.inputOverlayGraphics.clear();
     this.hudGraphics.clear();
     this.graphics = this.gameplayGraphics;
     this.beginSkinSpriteFrame();
@@ -2980,7 +2984,9 @@ export class ManiaReplayRenderer {
       return;
     }
     if (!this.storyboardOccludesPlayfield) {
+      this.graphics = this.inputOverlayGraphics;
       this.renderSegmentOverlays(layout);
+      this.graphics = this.gameplayGraphics;
       this.renderStageFurnitureUnder(layout);
       // skin.ini KeysUnderNotes: the key area belongs below the notes, which
       // is how arrow and deck skins keep their receptors from covering the
@@ -3611,49 +3617,12 @@ export class ManiaReplayRenderer {
     const visibleMinTime = this.currentTime - velocityWindow * 0.2;
     const visibleMaxTime = this.currentTime + velocityWindow * 1.1;
     const hasNotes = this.notes.length > 0 && !this.inputOverlayOnly;
-    const holdOcclusionRanges: Array<Array<{ top: number; bottom: number }>> = Array.from(
-      { length: this.keyCount },
-      () => [],
-    );
-
-    if (hasNotes) {
-      const startIdx = this.binarySearchNoteIndex(visibleMinTime - this.maxHoldDuration);
-      for (let i = startIdx; i < this.notes.length; i++) {
-        const note = this.notes[i];
-        if (note.time > visibleMaxTime) break;
-        if (!note.isHold || note.column >= this.keyCount) continue;
-
-        const noteState = this.noteStates[i];
-        if (!noteState) continue;
-        const headResolved = noteState.headTime <= this.currentTime;
-        const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
-        const consumedCut = headResolved ? this.getHoldConsumedCutTime(note, noteState, note.column) : null;
-        if (headResolved && tailResolved && (consumedCut == null || consumedCut >= note.endTime - 1)) continue;
-
-        let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
-        const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
-        if (consumedCut != null && consumedCut > note.time) {
-          headY = judgmentY + getVisualDelta(consumedCut) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
-        } else if (headResolved && consumedCut == null) {
-          headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
-        }
-
-        const top = Math.min(headY, tailY);
-        const bottom = this.skinSettings.upscroll
-          ? Math.max(Math.max(headY, tailY), judgmentY)
-          : Math.min(Math.max(headY, tailY), judgmentY);
-        if (top > h + 20 || bottom < -20 || bottom - top <= 0) continue;
-        holdOcclusionRanges[note.column].push({ top, bottom });
-      }
-      holdOcclusionRanges.forEach((ranges) => ranges.sort((a, b) => a.top - b.top));
-    }
 
     for (let col = 0; col < this.keyCount; col++) {
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 2;
       const barWidth = colWidth - 4;
       const color = this.colors[col];
-      const occlusions = holdOcclusionRanges[col];
       const segments = this.segments[col];
       const startSegmentIndex = this.binarySearchSegmentEndIndex(segments, visibleMinTime);
 
@@ -3670,30 +3639,14 @@ export class ManiaReplayRenderer {
         const bottom = this.skinSettings.upscroll
           ? Math.max(Math.max(startY, endY), judgmentY)
           : Math.min(Math.max(startY, endY), judgmentY);
-        let cursor = top;
-
-        const drawOverlayPiece = (pieceTop: number, pieceBottom: number) => {
-          const barH = Math.max(pieceBottom - pieceTop, 2);
-          if (barH <= 0) return;
-          this.roundRect(x, pieceTop, barWidth, barH, 3, hasNotes ? this.inputOverlayColor : color, hasNotes ? 0.18 : 0.7);
-          if (pieceTop < judgmentY && pieceBottom > judgmentY - 20) {
-            this.fillRect(x, pieceTop, barWidth, barH, this.inputOverlayColor, 0.08);
-          }
-        };
-
-        if (!occlusions.length) {
-          drawOverlayPiece(top, bottom);
-          continue;
+        if (bottom < top) continue;
+        // A recorded key hold is one continuous segment, including where it
+        // overlaps the chart's LN body.
+        const barH = Math.max(bottom - top, 2);
+        this.roundRect(x, top, barWidth, barH, 3, hasNotes ? this.inputOverlayColor : color, hasNotes ? 0.18 : 0.7);
+        if (top < judgmentY && bottom > judgmentY - 20) {
+          this.fillRect(x, top, barWidth, barH, this.inputOverlayColor, 0.08);
         }
-
-        for (const range of occlusions) {
-          if (range.bottom <= cursor) continue;
-          if (range.top >= bottom) break;
-          if (range.top > cursor) drawOverlayPiece(cursor, Math.min(range.top, bottom));
-          cursor = Math.max(cursor, range.bottom);
-          if (cursor >= bottom) break;
-        }
-        if (cursor < bottom) drawOverlayPiece(cursor, bottom);
       }
     }
   }
