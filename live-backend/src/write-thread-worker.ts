@@ -53,7 +53,13 @@ async function handle(request: WriteThreadRequest): Promise<WriteThreadResponse>
   }
   const db = await connection(request.target);
   const result = await runWriteGroups(db, request.groups);
-  if (result.poisoned) await reopen(request.target).catch(() => false);
+  if (result.poisoned && !await reopen(request.target).catch(() => false)) {
+    // Never send the next flush to a handle recovery failed to replace.
+    // Preserve already committed groups' outcomes; the next request opens
+    // a fresh connection lazily instead of retrying those groups as a unit.
+    db.close();
+    connections.delete(request.target);
+  }
   return { id: request.id, ok: true, outcomes: result.outcomes };
 }
 

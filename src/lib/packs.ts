@@ -870,6 +870,7 @@ export type ServerPackDealOutcome =
   | { kind: "dealt"; deal: ServerPackDeal }
   /* The server wallet could not pay; `wallet` is the true balance to adopt. */
   | { kind: "insufficient"; reason: "charges" | "shards"; wallet: ServerWalletState | null }
+  | { kind: "busy"; reason: "write_pressure" | "rate_limited" }
   /* Logged out server-side or no backend configured: the caller falls back
      to the browser-local draw and economy. */
   | { kind: "unavailable" };
@@ -881,6 +882,7 @@ export type ServerPackDealOutcome =
 export async function drawPackPlayersFromServer(packTypeId: PackTypeId): Promise<ServerPackDealOutcome> {
   const outcome = await drawServerPack({ data: { packType: packTypeId } });
   if (!outcome) return { kind: "unavailable" };
+  if (outcome.status === "busy") return { kind: "busy", reason: outcome.reason };
   if (outcome.status === "insufficient") {
     return { kind: "insufficient", reason: outcome.reason, wallet: outcome.wallet };
   }

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { checkWriteGateOverloaded, parseJson } from "../../db.js";
+import { checkWriteGateOverloaded, getWriteGateStats, parseJson } from "../../db.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
@@ -199,17 +199,21 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 400, { error: "invalid_pack_type" });
       return true;
     }
-    if (packDrawRateLimited(ownerUserId)) {
-      res.setHeader("retry-after", "60");
-      sendJson(req, res, ctx, 429, { error: "rate_limited" });
-      return true;
-    }
-    // A draw is entertainment: under write pressure it waits a few seconds
-    // (the client's existing 429 retry) instead of feeding the saturation
-    // that froze the site on 2026-08-07 and 2026-08-29.
+    // Refusals happen before payment and before consuming the account's
+    // draw allowance, so the frontend can safely wait and retry them.
     const shed = checkWriteGateOverloaded(ctx.serveWriteDb);
     if (shed) {
-      sendWritePressureShed(req, res, ctx, "packs-draw", shed.retryAfterMs);
+      sendWritePressureShed(req, res, ctx, "packs-draw", shed.retryAfterMs, {
+        user_id: ownerUserId,
+        pack_type: packType,
+        write_gate: getWriteGateStats(ctx.serveWriteDb),
+      });
+      return true;
+    }
+    if (packDrawRateLimited(ownerUserId)) {
+      res.setHeader("retry-after", "60");
+      logWarn("pack_draw_rate_limited", { user_id: ownerUserId, pack_type: packType });
+      sendJson(req, res, ctx, 429, { error: "rate_limited" });
       return true;
     }
     /* Compat hint from clients built before the draw wrote the collection

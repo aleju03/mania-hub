@@ -78,7 +78,7 @@ describe("write coalescer over sqlite", () => {
     ]);
     await holder.execute("rollback");
     expect(result.outcomes.every((o) => !o.ok && /busy|locked/i.test(o.error.message))).toBe(true);
-    expect(result.poisoned).toBe(false);
+    expect(result.poisoned).toBe(true);
     expect(Number((await exec(raw, "select count(*) as n from t")).rows[0].n)).toBe(0);
   });
 });

@@ -4646,6 +4646,10 @@ msgstr "服务器已废弃，或邀请链接失效"
 msgid "Dealing a matchup…"
 msgstr "正在发牌…"
 
+#: src/components/packs/ShuffleStage.tsx
+msgid "Dealing your pack is taking a moment"
+msgstr "卡包准备中，请稍候"
+
 #. placeholder {0}: reading.percent
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -10127,6 +10131,10 @@ msgstr "请选择一个 .osr 回放文件。"
 msgid "Please do not abuse the site, overload public endpoints, attempt to bypass access controls, send harmful payloads, or use the service in a way that disrupts osu!, ppy, community APIs, or other users."
 msgstr "请不要滥用本站、使公开接口过载、试图绕过访问控制、发送有害负载，或以扰乱 osu!、ppy、社区 API 或其他用户的方式使用本服务。"
 
+#: src/routes/packs.tsx
+msgid "Please wait a minute before opening another pack. This pack wasn't charged."
+msgstr "请稍等一分钟再开下一个卡包。本次开包未扣费。"
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "波兰语"
@@ -13724,6 +13732,10 @@ msgstr "新文件没有 {0} 部分，所以皮肤页面上的这些预览图会�
 msgid "The new GOAT"
 msgstr "新的 GOAT"
 
+#: src/routes/packs.tsx
+msgid "The pack could not be opened. Please try again in a moment."
+msgstr "无法打开卡包，请稍后重试。"
+
 #: src/routes/__root.tsx
 msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
 msgstr "页面遇到意外错误，未能完成渲染。重新加载通常可以解决；如果反复出现，请尝试禁用浏览器扩展。"
@@ -13783,12 +13795,12 @@ msgid "The rankings lookup failed."
 msgstr "排行榜查询失败。"
 
 #: src/routes/packs.tsx
-msgid "The rankings lookup failed. Try again in a moment."
-msgstr "排行榜查询失败。请稍后再试。"
+#~ msgid "The rankings lookup failed. Try again in a moment."
+#~ msgstr "排行榜查询失败。请稍后再试。"
 
 #: src/components/packs/ShuffleStage.tsx
-msgid "The rankings lookup is taking a moment"
-msgstr "排行榜查询需要一点时间"
+#~ msgid "The rankings lookup is taking a moment"
+#~ msgstr "排行榜查询需要一点时间"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "The rating may be waiting for a fresh chart-analysis pass."
@@ -13845,6 +13857,10 @@ msgstr "截图名称保存失败。请重试。"
 #: src/routes/legal.tsx
 msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
 msgstr "服务器默认使用一个全局 osu! API 限流器，目标为每分钟 45 次请求，并强制执行每分钟 60 次请求的硬上限。"
+
+#: src/routes/packs.tsx
+msgid "The server is busy. Please try again in a moment. This pack wasn't charged."
+msgstr "服务器繁忙，请稍后重试。本次开包未扣费。"
 
 #: src/routes/privacy.tsx
 msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, and country rank snapshots for about 14 days. Player activity summaries, including scores you submit by hand, are kept indefinitely, so your profile history stays complete."

@@ -77,12 +77,12 @@ function logRateLimited(req: IncomingMessage, result: Exclude<RateLimitResult, {
 /**
  * The write-pressure shed: a 429 for discretionary write endpoints when the
  * serve-write gate is backed up (checkWriteGateOverloaded). Same shape the
- * rate limiter sends, so both clients' existing "wait and retry" handling
- * covers it without knowing why they were asked to wait.
+ * rate limiter sends, with a separate bucket so the signed-in pack flow can
+ * retry brief pre-payment refusals without retrying account rate limits.
  */
-export function sendWritePressureShed(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, route: string, retryAfterMs: number): void {
+export function sendWritePressureShed(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, route: string, retryAfterMs: number, details: Record<string, unknown> = {}): void {
   res.setHeader("retry-after", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
-  logWarn("write_pressure_shed", { route, retry_after_ms: retryAfterMs });
+  logWarn("write_pressure_shed", { ...details, route, retry_after_ms: retryAfterMs });
   sendJson(req, res, ctx, 429, { error: "rate_limited", bucket: "write_pressure", retryAfterMs });
 }
 

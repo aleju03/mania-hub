@@ -479,7 +479,7 @@ function PacksPage() {
      finished. Non-null means the viewer already saw the whole grid, so the
      summary skips its enter ceremony and flies the cards into place. */
   const [summaryFlyFrom, setSummaryFlyFrom] = useState<Map<number, FlightRect> | null>(null);
-  const [dealError, setDealError] = useState(false);
+  const [dealError, setDealError] = useState<"failed" | "write_pressure" | "rate_limited" | null>(null);
   /* Set by "Open another" on the summary: the next deal skips the pack stage
      and charges itself as soon as it has cards. */
   const autoOpenRef = useRef(false);
@@ -661,7 +661,7 @@ function PacksPage() {
     setCards(null);
     setDamage(null);
     setCutCommitted(false);
-    setDealError(false);
+    setDealError(null);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
     dealtPlayersRef.current = null;
@@ -714,6 +714,12 @@ function PacksPage() {
         if (serverDeals()) {
           const outcome = await drawPackPlayersFromServer(type.id);
           if (cancelled) return;
+          if (outcome.kind === "busy") {
+            autoOpenRef.current = false;
+            setCutCommitted(false);
+            setDealError(outcome.reason);
+            return;
+          }
           if (outcome.kind === "insufficient") {
             /* The wallet on the server could not pay (a charge burned in
                another tab, clock drift on the regen countdown). Adopt the
@@ -756,7 +762,7 @@ function PacksPage() {
         autoOpenRef.current = false;
         if (!cancelled) {
           setCutCommitted(false);
-          setDealError(true);
+          setDealError("failed");
         }
       }
     };
@@ -1009,7 +1015,13 @@ function PacksPage() {
               <div className="mx-auto max-w-[420px] text-center">
                 <div className="text-sm font-bold text-white"><Trans>Couldn't deal a pack</Trans></div>
                 <div className="mt-2 text-[12px] text-osu-f1">
-                  <Trans>The rankings lookup failed. Try again in a moment.</Trans>
+                  {dealError === "write_pressure" ? (
+                    <Trans>The server is busy. Please try again in a moment. This pack wasn't charged.</Trans>
+                  ) : dealError === "rate_limited" ? (
+                    <Trans>Please wait a minute before opening another pack. This pack wasn't charged.</Trans>
+                  ) : (
+                    <Trans>The pack could not be opened. Please try again in a moment.</Trans>
+                  )}
                 </div>
                 <button
                   type="button"

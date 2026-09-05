@@ -133,7 +133,7 @@ export function ShuffleStage({ reducedMotion, count }: ShuffleStageProps) {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            <Trans>The rankings lookup is taking a moment</Trans>
+            <Trans>Dealing your pack is taking a moment</Trans>
           </motion.div>
         )}
       </div>

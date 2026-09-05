@@ -83,11 +83,12 @@ export interface ServerPackDrawResult {
 /* Null when the draw cannot run as this viewer (logged out server-side or no
    backend configured); the caller falls back to the browser-local draw. A
    wallet that cannot pay comes back as a refusal carrying the true balance;
-   any other failure (pool unavailable, rate limited) throws, surfacing as
-   the page's "couldn't deal" retry. */
+   backpressure is retried briefly before returning a busy refusal. Other
+   failures throw, surfacing as the page's "couldn't deal" retry. */
 export type ServerPackDrawOutcome =
   | { status: "dealt"; result: ServerPackDrawResult }
   | { status: "insufficient"; reason: "charges" | "shards"; wallet: ServerWalletState | null }
+  | { status: "busy"; reason: "write_pressure" | "rate_limited" }
   | null;
 
 function walletFrom(value: unknown): ServerWalletState | null {
@@ -116,7 +117,8 @@ export const drawServerPack = createServerFn({ method: "POST" })
     if (bridgeToken) {
       headers.authorization = `Bearer ${bridgeToken}`;
     }
-    const response = await fetch(`${base}/api/packs/draw`, {
+    const { fetchPackDrawWithRetry } = await import("./pack-draw-request");
+    const response = await fetchPackDrawWithRetry(`${base}/api/packs/draw`, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -131,6 +133,10 @@ export const drawServerPack = createServerFn({ method: "POST" })
         viewerCountryCode: auth.viewer.countryCode,
       }),
     });
+    if (response.status === 429) {
+      const body = await response.json().catch(() => null) as { bucket?: unknown } | null;
+      return { status: "busy", reason: body?.bucket === "write_pressure" ? "write_pressure" : "rate_limited" };
+    }
     if (response.status === 409) {
       const body = (await response.json().catch(() => null)) as
         | { error?: unknown; reason?: unknown; wallet?: unknown }

@@ -4637,6 +4637,10 @@ msgstr "Servidor caído, o la invitación no funciona"
 msgid "Dealing a matchup…"
 msgstr "Repartiendo un duelo…"
 
+#: src/components/packs/ShuffleStage.tsx
+msgid "Dealing your pack is taking a moment"
+msgstr "Preparar tu sobre está tardando un poco"
+
 #. placeholder {0}: reading.percent
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -10118,6 +10122,10 @@ msgstr "Elige un archivo de replay .osr."
 msgid "Please do not abuse the site, overload public endpoints, attempt to bypass access controls, send harmful payloads, or use the service in a way that disrupts osu!, ppy, community APIs, or other users."
 msgstr "Por favor, no abuses del sitio, no sobrecargues los endpoints públicos, no intentes eludir los controles de acceso, no envíes cargas dañinas ni uses el servicio de una forma que perturbe a osu!, ppy, las API de la comunidad u otros usuarios."
 
+#: src/routes/packs.tsx
+msgid "Please wait a minute before opening another pack. This pack wasn't charged."
+msgstr "Espera un minuto antes de abrir otro sobre. No se te cobró este sobre."
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "Polaco"
@@ -13715,6 +13723,10 @@ msgstr "El nuevo archivo no tiene bloque {0}, así que esas vistas previas se qu
 msgid "The new GOAT"
 msgstr "El nuevo GOAT"
 
+#: src/routes/packs.tsx
+msgid "The pack could not be opened. Please try again in a moment."
+msgstr "No se pudo abrir el sobre. Inténtalo de nuevo en un momento."
+
 #: src/routes/__root.tsx
 msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
 msgstr "La página tuvo un error inesperado y no pudo terminar de renderizarse. Recargar normalmente lo soluciona. Si sigue pasando, prueba desactivando las extensiones del navegador."
@@ -13774,12 +13786,12 @@ msgid "The rankings lookup failed."
 msgstr "No se pudo consultar la clasificación."
 
 #: src/routes/packs.tsx
-msgid "The rankings lookup failed. Try again in a moment."
-msgstr "No se pudo consultar la clasificación. Inténtalo en un momento."
+#~ msgid "The rankings lookup failed. Try again in a moment."
+#~ msgstr "No se pudo consultar la clasificación. Inténtalo en un momento."
 
 #: src/components/packs/ShuffleStage.tsx
-msgid "The rankings lookup is taking a moment"
-msgstr "La consulta de la clasificación está tardando un poco"
+#~ msgid "The rankings lookup is taking a moment"
+#~ msgstr "La consulta de la clasificación está tardando un poco"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "The rating may be waiting for a fresh chart-analysis pass."
@@ -13836,6 +13848,10 @@ msgstr "No se pudieron guardar los nombres de las capturas. Inténtalo de nuevo.
 #: src/routes/legal.tsx
 msgid "The server defaults to a global osu! API limiter that targets 45 requests per minute and enforces a hard cap of 60 requests per minute."
 msgstr "El servidor usa de forma predeterminada un limitador global de la API de osu! que apunta a 45 peticiones por minuto e impone un tope estricto de 60 peticiones por minuto."
+
+#: src/routes/packs.tsx
+msgid "The server is busy. Please try again in a moment. This pack wasn't charged."
+msgstr "El servidor está ocupado. Inténtalo de nuevo en un momento. No se te cobró este sobre."
 
 #: src/routes/privacy.tsx
 msgid "The server keeps raw score events for about 14 days, live event replay logs for about 7 days, API call logs for about 7 days, and country rank snapshots for about 14 days. Player activity summaries, including scores you submit by hand, are kept indefinitely, so your profile history stays complete."

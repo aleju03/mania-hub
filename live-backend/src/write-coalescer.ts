@@ -1,5 +1,5 @@
 import type { InArgs, InStatement, ResultSet, Row, TransactionMode } from "@libsql/client";
-import { RECONNECT, WRITE_GATE, writeTurnContext, type Db, type ReconnectHook, type ReconnectReason, type WriteGateState } from "./db.js";
+import { isSqliteBusyError, RECONNECT, WRITE_GATE, writeTurnContext, type Db, type ReconnectHook, type ReconnectReason, type WriteGateState } from "./db.js";
 
 /*
  * One writer queue with batching for the serving process's write connections.
@@ -54,8 +54,8 @@ export type GroupOutcome =
 
 export interface RunWriteGroupsResult {
   outcomes: GroupOutcome[];
-  /** A ROLLBACK failed after an error inside an open transaction; the
-   * connection cannot be trusted and must be reopened before its next use. */
+  /** A busy statement or failed rollback left the native connection unsafe;
+   * it must be reopened before any further statement uses it. */
   poisoned: boolean;
 }
 
@@ -266,7 +266,7 @@ export async function runWriteGroups(db: Db, groups: WriteGroup[]): Promise<RunW
     // own budget, and re-running each group alone here would only line them
     // up for the same busy wait N times over.
     const failure = serializeError(error);
-    return { outcomes: groups.map(() => ({ ok: false, error: failure })), poisoned: false };
+    return { outcomes: groups.map(() => ({ ok: false, error: failure })), poisoned: isSqliteBusyError(error) };
   }
   const outcomes: GroupOutcome[] = [];
   try {
@@ -279,22 +279,31 @@ export async function runWriteGroups(db: Db, groups: WriteGroup[]): Promise<RunW
     }
     await db.execute("commit");
     return { outcomes, poisoned: false };
-  } catch {
+  } catch (error) {
     // One group failed; the whole merged transaction goes, then each group
-    // gets its own so the failure stays with its caller.
-    const poisoned = !(await rollbackQuietly(db));
+    // gets its own so a constraint failure stays with its caller. SQLITE_BUSY
+    // is different: libSQL can retain an unfinished native statement even
+    // when ROLLBACK succeeds. Reusing that handle can acknowledge uncommitted
+    // writes and hold the database-wide lock until the connection is closed.
+    const rolledBack = await rollbackQuietly(db);
+    const poisoned = isSqliteBusyError(error) || !rolledBack;
     if (poisoned) {
       const failure: SerializedError = { message: "SQLITE_BUSY: write connection lost its transaction and was reopened", code: "SQLITE_BUSY" };
       return { outcomes: groups.map(() => ({ ok: false, error: failure })), poisoned: true };
     }
     const isolated: GroupOutcome[] = [];
-    let anyPoisoned = false;
     for (const group of groups) {
       const result = await runGroupAlone(db, group);
       isolated.push(result.outcomes[0]);
-      anyPoisoned ||= result.poisoned;
+      if (result.poisoned) {
+        // Earlier isolated groups already committed. Preserve their results,
+        // but do not run another group on the damaged connection.
+        const failure: SerializedError = { message: "SQLITE_BUSY: write connection requires recovery", code: "SQLITE_BUSY" };
+        while (isolated.length < groups.length) isolated.push({ ok: false, error: failure });
+        return { outcomes: isolated, poisoned: true };
+      }
     }
-    return { outcomes: isolated, poisoned: anyPoisoned };
+    return { outcomes: isolated, poisoned: false };
   }
 }
 
@@ -305,13 +314,13 @@ async function runGroupAlone(db: Db, group: WriteGroup): Promise<RunWriteGroupsR
       results.push(serializeResultSet(await db.execute(toInStatement(group.statements[0]))));
       return { outcomes: [{ ok: true, results }], poisoned: false };
     } catch (error) {
-      return { outcomes: [{ ok: false, error: serializeError(error) }], poisoned: false };
+      return { outcomes: [{ ok: false, error: serializeError(error) }], poisoned: isSqliteBusyError(error) };
     }
   }
   try {
     await db.execute(group.mode === "read" ? "begin" : "begin immediate");
   } catch (error) {
-    return { outcomes: [{ ok: false, error: serializeError(error) }], poisoned: false };
+    return { outcomes: [{ ok: false, error: serializeError(error) }], poisoned: isSqliteBusyError(error) };
   }
   try {
     for (const statement of group.statements) {
@@ -320,7 +329,8 @@ async function runGroupAlone(db: Db, group: WriteGroup): Promise<RunWriteGroupsR
     await db.execute("commit");
     return { outcomes: [{ ok: true, results }], poisoned: false };
   } catch (error) {
-    const poisoned = !(await rollbackQuietly(db));
+    const rolledBack = await rollbackQuietly(db);
+    const poisoned = isSqliteBusyError(error) || !rolledBack;
     return { outcomes: [{ ok: false, error: serializeError(error) }], poisoned };
   }
 }
@@ -346,7 +356,7 @@ export function createInlineWriteExecutor(db: Db): WriteExecutor {
   return (groups) => {
     const run = tail.then(async () => {
       const result = await runWriteGroups(db, groups);
-      if (result.poisoned) await reopenConnection(db, "batch");
+      if (result.poisoned && !await reopenConnection(db, "batch")) db.close();
       return result.outcomes;
     });
     tail = run.catch(() => undefined);

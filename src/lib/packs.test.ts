@@ -3,6 +3,7 @@ import type { LiveGlobalRankingEntry } from "./live-backend";
 import type { LeanRankingEntry, OsuScore } from "./types";
 import {
   drawPackPlayers,
+  drawPackPlayersFromServer,
   drawPackPlayersFromPool,
   fetchPackPlayerScores,
   liveEntryToPackPlayer,
@@ -37,6 +38,14 @@ import {
 } from "./live-backend";
 import { getRankings, getUserScoresBestWindow } from "./osu";
 import { HONORARY_PACK_POOL, HONORARY_PLAYERS } from "./honorary-players";
+import { drawServerPack } from "./pack-draw";
+
+vi.mock("./pack-draw", () => ({ drawServerPack: vi.fn() }));
+
+it.each(["write_pressure", "rate_limited"] as const)("preserves a signed-in %s refusal instead of falling back to a local draw", async (reason) => {
+  vi.mocked(drawServerPack).mockResolvedValueOnce({ status: "busy", reason });
+  expect(await drawPackPlayersFromServer("legend")).toEqual({ kind: "busy", reason });
+});
 
 vi.mock("./live-backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./live-backend")>()),
