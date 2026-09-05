@@ -500,8 +500,8 @@ export function SkillModePanel({
   const max = entries[0]?.value ?? 1;
   return (
     <div className="flex h-full flex-col rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="relative flex flex-wrap items-start justify-between gap-3">
+        <div className="pr-10 sm:pr-0">
           <div className="mb-1 flex items-center gap-2">
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
@@ -523,7 +523,11 @@ export function SkillModePanel({
         </div>
         <div className="ml-auto flex items-center gap-3">
           <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} />
-          {userId ? <SkillHistoryButton userId={userId} keyCount={mode.keyCount} /> : null}
+          {userId ? (
+            <span className="absolute right-0 top-2 sm:static">
+              <SkillHistoryButton userId={userId} keyCount={mode.keyCount} />
+            </span>
+          ) : null}
         </div>
       </div>
 
