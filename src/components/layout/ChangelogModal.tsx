@@ -201,6 +201,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                                 <Link
                                   key={update.text}
                                   to={update.to}
+                                  search={update.search}
                                   onClick={onClose}
                                   className={`${row} transition-colors hover:bg-osu-b3/30 hover:text-white`}
                                 >

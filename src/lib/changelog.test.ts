@@ -94,7 +94,12 @@ describe("changelog content", () => {
 
   it("links rows at in-app paths only, so the router can handle them", () => {
     for (const update of UPDATES) {
-      if (update.to) expect(update.to.startsWith("/")).toBe(true);
+      if (update.to) {
+        expect(update.to).toMatch(/^\/(?!\/)/);
+        // An embedded query can make intent preloading redirect forever.
+        expect(update.to).not.toMatch(/[?#]/);
+      }
+      if (update.search) expect(update.to).toBeDefined();
     }
   });
 
