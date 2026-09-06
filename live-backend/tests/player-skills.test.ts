@@ -78,16 +78,18 @@ ${notes}
 // 163BPM 1/16 four-column rolls in 3-9-note-per-finger chunks with a 1/8 break
 // between them: 92ms per finger at 1.0x (a fast roll, not vibro at any tier),
 // 61ms per finger at 1.5x (chart-classifier's roll-vibro tier fires).
-function buildRollBeatmapFile(): string {
-  const lengths = [12, 16, 20, 24, 28, 28, 32, 32, 36];
+// The three-column variant uses 33-34ms rows and 100ms repeats at 1.0x,
+// becoming 22-23ms rows and 66-67ms repeats at DT.
+function buildRollBeatmapFile(rowGapMs = 23, columns = 4): string {
+  const lengths = [3, 4, 5, 6, 7, 7, 8, 8, 9].map((length) => length * columns);
   const lines: string[] = [];
   let time = 1000;
   for (let chunk = 0; chunk < 90; chunk++) {
     const length = lengths[chunk % lengths.length];
     for (let index = 0; index < length; index++) {
-      lines.push(`${64 + (index % 4) * 128},192,${Math.round(time + index * 23)},1,0,0:0:0:0:`);
+      lines.push(`${64 + (index % columns) * 128},192,${Math.round(time + index * rowGapMs)},1,0,0:0:0:0:`);
     }
-    time += length * 23 + 184;
+    time += length * rowGapMs + rowGapMs * 8;
   }
   return buildStreamBeatmapFile().replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${lines.join("\n")}\n`);
 }
@@ -1754,10 +1756,10 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("turns away rate plays on charts that are only vibro at the played rate", async () => {
+  it.each([[23, 4], [100 / 3, 3]])("turns away rate-only roll vibro with %sms rows across %s columns", async (rowGapMs, columns) => {
     await withDb(async (db) => {
-      await storeCachedBeatmapFile(db, 106, buildRollBeatmapFile(), { source: "test" });
-      await storeCachedBeatmapFile(db, 107, buildRollBeatmapFile(), { source: "test" });
+      await storeCachedBeatmapFile(db, 106, buildRollBeatmapFile(rowGapMs, columns), { source: "test" });
+      await storeCachedBeatmapFile(db, 107, buildRollBeatmapFile(rowGapMs, columns), { source: "test" });
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
       for (const beatmapId of [106, 107]) {
         await exec(
@@ -1785,9 +1787,15 @@ describe("computePlayerSkillRatings", () => {
       // trusted DT play never needed it.
       expect(result.plays.every((entry) => entry.rateVibroChecked == null)).toBe(true);
 
-      // Retention: a tracked DT play stored before the check existed drops on
-      // its next compute; a top-sourced one keeps its pp-backed trust.
-      const stale = { ...result.plays.find((entry) => entry.beatmapId === 107)!, beatmapId: 106, identity: "official:9", source: "tracked" as const };
+      // Retention: a tracked DT play accepted by the previous detector drops
+      // on its next compute; a top-sourced one keeps its pp-backed trust.
+      const stale = {
+        ...result.plays.find((entry) => entry.beatmapId === 107)!,
+        beatmapId: 106,
+        identity: "official:9",
+        source: "tracked" as const,
+        rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      };
       const dropped = await computePlayerSkillRatings(db, failingOsu, [], [stale], {});
       expect(dropped.plays.map((entry) => entry.beatmapId)).toEqual([]);
       const trusted = await computePlayerSkillRatings(db, failingOsu, [], [{ ...stale, source: "top" as const }], {});

@@ -60,7 +60,11 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v24 (current): re-walks stored rate plays through the expanded rate-vibro
+// v25 (current): rechecks stored rate plays for three-column roll vibro that
+// slipped the original four-column timing envelope. Existing SSRs remain
+// reusable; the new detector stamp evicts affected plays before aggregation.
+//
+// v24: re-walks stored rate plays through the expanded rate-vibro
 // check, which now catches chart-soaked chord walls as well as roll shakes.
 // The per-play detector stamp changes eligibility without changing any SSR,
 // so v23 and every earlier post-v15 row remain sound compute seeds.
@@ -77,7 +81,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 24;
+export const PLAYER_SKILLS_VERSION = 25;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -99,7 +103,7 @@ export const PLAYER_SKILLS_VERSION = 24;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -2466,7 +2470,7 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // from the cached .osu: parse only, no MinaCalc, and the verdict is stamped on
 // the stored play so a chart is checked once per detector version. Bump when
 // the tier changes so stored plays re-check on their next compute.
-export const RATE_VIBRO_CHECK_VERSION = 2;
+export const RATE_VIBRO_CHECK_VERSION = 3;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;

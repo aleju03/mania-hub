@@ -136,6 +136,32 @@ describe("detectRiceVibro", () => {
     expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
   });
 
+  it("catches three-column rolls at DT without requiring four-column roll timing", () => {
+    // 33-34ms rows repeat each finger at 100ms in chart time: 22-23ms
+    // rows and 66-67ms repeats at DT. Both missed the old 20/65ms gates.
+    const notes: Note[] = [];
+    const lengths = [9, 12, 15, 18, 21, 21, 24, 24, 27];
+    let time = 1000;
+    for (let chunk = 0; chunk < 90; chunk++) {
+      const length = lengths[chunk % lengths.length];
+      for (let index = 0; index < length; index++) {
+        notes.push({ column: index % 3, time: Math.round(time + index * (100 / 3)) });
+      }
+      time += length * (100 / 3) + 200;
+    }
+    const map = parseManiaBeatmap(buildOsuFile(notes));
+    expect(detectRiceVibro(map)).toBe(false);
+    expect(detectRateVibro(map)).toBe(false);
+    expect(detectRateVibro(map, 1.25)).toBe(false);
+    expect(detectRollVibro(map, 1.5)).toBe(true);
+    expect(detectRateVibro(map, 1.5)).toBe(true);
+    expect(detectRiceVibro(map, 1.5)).toBe(true);
+    const mirrored = parseManiaBeatmap(buildOsuFile(notes.map((note) => ({ ...note, column: 3 - note.column }))));
+    expect(detectRateVibro(mirrored, 1.5)).toBe(true);
+    const wide = parseManiaBeatmap(buildOsuFile(notes, 7));
+    expect(detectRateVibro(wide, 1.5)).toBe(false);
+  });
+
   it("leaves dense alternating jumpstream alone at the same row speed", () => {
     // [01][23][01]... at 96ms rows: per-column gaps are 192ms, rows are pairs.
     const notes: Note[] = [];

@@ -383,7 +383,7 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     id: "vibro-recompute",
     label: "Vibro recompute sweep",
     description: "Re-derives the vibro flag for stored chart analyses from the cached .osu corpus.",
-    doneKey: "vibro_recompute_done:v4",
+    doneKey: "vibro_recompute_done:v7",
     jobType: "recompute_vibro_sweep",
   }),
   chartAnalysisSweep({

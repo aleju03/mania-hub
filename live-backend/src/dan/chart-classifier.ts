@@ -445,7 +445,8 @@ const RICE_VIBRO_CHORD_WALL_MIN_RATIO = 0.02;
 // and breaks every 8-9 notes, which every tier above lets through (runs too
 // short for tiers 1 and 3, no chords for 2 and 5, the breaks hold tier 4 under
 // its row cap) - and at 1.5x it is a 61ms per-finger shake nobody rolls. Two
-// measures, both at the played rate, and both have to hold:
+// measures, both at the played rate, and both have to hold. The original
+// four-column calibration used these cutoffs (expanded below):
 //  - per-finger: the share of all column gaps at or under 65ms (~15/s per
 //    finger). Ranked and loved 4K at 1.0x (n=23,545) top out at 0.114; the
 //    motivating chart measures 0.47 at 1.5x and 0.00 at 1.0x.
@@ -462,9 +463,16 @@ const RICE_VIBRO_CHORD_WALL_MIN_RATIO = 0.02;
 // No ranked or loved 4K chart meets both at 1.0x. 4K only: ranked 7K carries
 // 55ms column repeats routinely (0.48 on VIVID), so the per-finger measure
 // says nothing there.
-const RICE_VIBRO_ROLL_GAP_MS = 65;
+// Three-column rolls need a slightly wider timing envelope than the original
+// four-column calibration: 100ms repeats / 33-34ms rows become 66-67ms /
+// 22-23ms at DT. Requiring both chart-wide shares still separates these from
+// fast jacks and isolated flams; neither signal alone proves roll vibro.
+// Across 111,502 cached 4K charts and 23,593 stored uprates, the expansion
+// adds no ranked/loved charts at 1.0x and reaches 16 additional uprate pairs.
+// The reported pattern measures 0.283 column share and 0.506 row share at DT.
+const RICE_VIBRO_ROLL_GAP_MS = 70;
 const RICE_VIBRO_ROLL_MIN_RATIO = 0.25;
-const RICE_VIBRO_ROLL_ROW_GAP_MS = 20;
+const RICE_VIBRO_ROLL_ROW_GAP_MS = 25;
 const RICE_VIBRO_ROLL_MIN_ROW_RATIO = 0.3;
 
 function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; ratio: number } {
