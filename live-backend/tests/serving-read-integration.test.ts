@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { InStatement } from "@libsql/client";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { getTrackerSnapshot, readTrackerSnapshot } from "../src/features/tracker.js";
 import { getStreakPlayerMetrics } from "../src/features/pack-games.js";
@@ -81,7 +82,12 @@ it("uses the passed-country index and shares one total across page sizes and off
   const [first, duplicate] = await Promise.all([getTrackerSnapshot(db, "CR", 1), getTrackerSnapshot(db, "CR", 1)]);
   expect(first).toBe(duplicate);
   await getTrackerSnapshot(db, "CR", 2, 1);
-  const counts = () => query.mock.calls.filter(([statement]) => typeof statement !== "string" && statement.sql.includes("select count(*) as count from score_events"));
+  // Vitest infers only execute's last (string) overload; calls can also use
+  // libsql's statement-object overload, as the DB helper does here.
+  const counts = () => query.mock.calls.filter(([statement]: [InStatement, ...unknown[]]) => {
+    const sql = typeof statement === "string" ? statement : statement.sql;
+    return sql.includes("select count(*) as count from score_events");
+  });
   expect(counts()).toHaveLength(1);
   await getTrackerSnapshot(db, "BR", 1);
   expect(counts()).toHaveLength(2);
