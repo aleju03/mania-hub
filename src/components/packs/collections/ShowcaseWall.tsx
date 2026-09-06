@@ -15,8 +15,8 @@ import { useCardThumbnails } from "../useCardThumbnails";
 type ThumbnailError = ReturnType<typeof useCardThumbnails>["onThumbnailError"];
 const NO_CARDS: CollectedCard[] = [];
 
-/** A set occupies adjacent grid columns, filling the row on phones for larger
- * groups. Its ordered cards scroll within that footprint.
+/** A set occupies adjacent grid columns. Larger groups scroll within that
+ * footprint, preserving both their order and the scale of surrounding cards.
  */
 function SetTiles({ entry, renderCard, onThumbnailError }: {
   entry: LivePackShowcaseWallCard;
@@ -50,7 +50,7 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
   }, [cards.length, updateScroll]);
   const visible = useMemo(() => start > 0 ? cards.slice(Math.max(0, start - 1), start + 4) : NO_CARDS, [cards, start]);
   const extra = useCardThumbnails(visible);
-  const span = cards.length === 1 ? "[--set-cols:1]" : cards.length === 2 ? "col-span-2 [--set-cols:2]" : "col-span-full sm:col-span-3 [--set-cols:2] min-[400px]:[--set-cols:3]";
+  const span = cards.length === 1 ? "[--set-cols:1]" : cards.length === 2 ? "col-span-2 [--set-cols:2]" : "col-span-2 sm:col-span-3 [--set-cols:2] sm:[--set-cols:3]";
   const move = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth });
   return <div role="group" aria-label={set.name} className={`min-w-0 self-start rounded-xl bg-white/[0.025] outline outline-1 outline-white/10 outline-offset-4 ${span}`}>
     <div ref={strip} className="grid snap-x snap-mandatory grid-flow-col gap-3 overflow-x-auto rounded-[10px] scroll-smooth motion-reduce:scroll-auto [scrollbar-width:none]"
