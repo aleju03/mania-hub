@@ -2,17 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { History } from "lucide-react";
 import { useLingui } from "@lingui/react/macro";
-import { useAuth } from "../../lib/auth-context";
-import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { SkillHistoryModal } from "./SkillHistoryModal";
 
 export function SkillHistoryButton({ userId, keyCount }: { userId: number; keyCount: number }) {
-  const auth = useAuth();
-  if (!canUseAdminFeatures(auth)) return null;
-  return <AdminSkillHistoryButton userId={userId} keyCount={keyCount} />;
-}
-
-function AdminSkillHistoryButton({ userId, keyCount }: { userId: number; keyCount: number }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);

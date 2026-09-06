@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { track } from "#/lib/analytics";
 import { collectionsCardProperties } from "#/lib/analytics-collections";
@@ -15,8 +15,8 @@ import { useCardThumbnails } from "../useCardThumbnails";
 type ThumbnailError = ReturnType<typeof useCardThumbnails>["onThumbnailError"];
 const NO_CARDS: CollectedCard[] = [];
 
-/** A set occupies adjacent grid columns. Larger groups scroll within that
- * footprint, preserving both their order and the scale of surrounding cards.
+/** A set occupies adjacent grid columns, filling the row on phones for larger
+ * groups. Its ordered cards scroll within that footprint.
  */
 function SetTiles({ entry, renderCard, onThumbnailError }: {
   entry: LivePackShowcaseWallCard;
@@ -27,32 +27,35 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
   const set = entry.set!;
   const strip = useRef<HTMLDivElement>(null);
   const [start, setStart] = useState(0);
-  const [atEnd, setAtEnd] = useState(false);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
   const cards = set.cards as CollectedCard[];
+  const updateScroll = useCallback(() => {
+    const node = strip.current;
+    if (!node) return;
+    const width = node.firstElementChild?.getBoundingClientRect().width ?? 1;
+    setStart(Math.max(0, Math.floor(node.scrollLeft / (width + 12))));
+    // Snapping to the end can stop short of a complete card stride, and
+    // fractional pixels must not keep the previous button disabled.
+    setAtStart(node.scrollLeft <= 1);
+    setAtEnd(node.scrollLeft + node.clientWidth >= node.scrollWidth - 1);
+  }, []);
   useEffect(() => {
+    updateScroll();
     const node = strip.current;
     if (!node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      const width = node.firstElementChild?.getBoundingClientRect().width ?? 1;
-      setStart(Math.max(0, Math.floor(node.scrollLeft / (width + 12))));
-      setAtEnd(node.scrollLeft + node.clientWidth >= node.scrollWidth - 2);
-    });
+    const observer = new ResizeObserver(updateScroll);
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [cards.length, updateScroll]);
   const visible = useMemo(() => start > 0 ? cards.slice(Math.max(0, start - 1), start + 4) : NO_CARDS, [cards, start]);
   const extra = useCardThumbnails(visible);
-  const span = cards.length === 1 ? "[--set-cols:1]" : cards.length === 2 ? "col-span-2 [--set-cols:2]" : "col-span-2 sm:col-span-3 [--set-cols:2] sm:[--set-cols:3]";
+  const span = cards.length === 1 ? "[--set-cols:1]" : cards.length === 2 ? "col-span-2 [--set-cols:2]" : "col-span-full sm:col-span-3 [--set-cols:2] min-[400px]:[--set-cols:3]";
   const move = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth });
   return <div role="group" aria-label={set.name} className={`min-w-0 self-start rounded-xl bg-white/[0.025] outline outline-1 outline-white/10 outline-offset-4 ${span}`}>
     <div ref={strip} className="grid snap-x snap-mandatory grid-flow-col gap-3 overflow-x-auto rounded-[10px] scroll-smooth motion-reduce:scroll-auto [scrollbar-width:none]"
       style={{ gridAutoColumns: "calc((100% - (var(--set-cols) - 1) * 12px) / var(--set-cols))" }}
-      onScroll={(event) => {
-        const node = event.currentTarget;
-        const width = node.firstElementChild?.getBoundingClientRect().width ?? 1;
-        setStart(Math.max(0, Math.floor(node.scrollLeft / (width + 12))));
-        setAtEnd(node.scrollLeft + node.clientWidth >= node.scrollWidth - 2);
-      }}>
+      onScroll={updateScroll}>
       {cards.map((card, index) => <div key={packCardKeyOf(card)} className="min-w-0 snap-start">
         {index >= Math.max(0, start - 1) && index < start + 4
           ? renderCard(card, `set:${set.id}:${packCardKeyOf(card)}`, start > 0 ? extra.onThumbnailError : onThumbnailError)
@@ -61,9 +64,9 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
     </div>
     <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
       <span className="min-w-0 flex-1 truncate text-[10px] text-osu-f1">{set.name}</span>
-      {cards.length > 2 && <div className={`flex shrink-0 ${cards.length === 3 ? "sm:hidden" : ""}`}>
-        <button type="button" disabled={start === 0} aria-label={t`Previous cards in ${set.name}`} onClick={() => move(-1)} className="rounded p-1 text-osu-f1 hover:bg-white/5 hover:text-white disabled:opacity-25"><ChevronLeft size={12} /></button>
-        <button type="button" disabled={atEnd} aria-label={t`Next cards in ${set.name}`} onClick={() => move(1)} className="rounded p-1 text-osu-f1 hover:bg-white/5 hover:text-white disabled:opacity-25"><ChevronRight size={12} /></button>
+      {(!atStart || !atEnd) && <div className="flex shrink-0">
+        <button type="button" disabled={atStart} aria-label={t`Previous cards in ${set.name}`} onClick={() => move(-1)} className="flex size-11 cursor-pointer items-center justify-center rounded text-osu-f1 hover:bg-white/5 hover:text-white disabled:cursor-default disabled:opacity-25"><ChevronLeft size={12} /></button>
+        <button type="button" disabled={atEnd} aria-label={t`Next cards in ${set.name}`} onClick={() => move(1)} className="flex size-11 cursor-pointer items-center justify-center rounded text-osu-f1 hover:bg-white/5 hover:text-white disabled:cursor-default disabled:opacity-25"><ChevronRight size={12} /></button>
       </div>}
     </div>
   </div>;
@@ -96,7 +99,7 @@ export function ShowcaseWallGrid({ entries }: { entries: LivePackShowcaseWallCar
     </button>;
   };
   return <>
-    <div className={SHOWCASE_GRID_CLASS}>
+    <div className={`${SHOWCASE_GRID_CLASS} grid-flow-dense`}>
       {entries.map((entry) => entry.set ? <SetTiles key={`set:${entry.set.id}`} entry={entry} onThumbnailError={onThumbnailError}
         renderCard={(card, id, onError) => renderCard(entry, card, id, onError)} />
         : renderCard(entry, entry.card as CollectedCard, `${entry.collector.userId}:${packCardKeyOf(entry.card as CollectedCard)}`, onThumbnailError))}

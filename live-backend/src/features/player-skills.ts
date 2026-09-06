@@ -1219,6 +1219,8 @@ export interface ChartSkillInfo {
   // Whether that same label names handstream. Null when no label is stored.
   // Read by the Handstream near-tie (HANDSTREAM_NEAR_TIE_MSD).
   handstreamCluster: boolean | null;
+  /** Stamina leads the chart's MSD, with Handstream the strongest base skill. */
+  handstreamEndurance?: boolean;
   // The analyzer's raw tech score at 1.0x, zeroed when the jack veto strips
   // the tech tag. Read by the 4K speed tile's tech tiebreak
   // (TECH_NEAR_TIE_MIN_SCORE), which needs the score rather than the 0.5 tag.
@@ -1523,7 +1525,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
        two terms and discard the at-most-one returned non-ready row in JS. */
     const rows = (await exec(
       db,
-      `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.dan_dt_json, a.dan_ht_json,
+      `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.msd_json, a.dan_dt_json, a.dan_ht_json,
               json_extract(b.metadata_json, '$.total_length') as total_length,
               json_extract(b.metadata_json, '$.accuracy') as od,
               b.beatmapset_id, b.version
@@ -1584,6 +1586,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       const dtRawDan = readRawDan(danDt ?? undefined);
       const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
       const htRawDan = readRawDan(danHt ?? undefined);
+      const chartMsd = keyCount === 4
+        ? parseJson<{ values?: Record<string, number> } | null>(String(row.msd_json ?? ""), null)
+        : null;
       info.set(Number(row.beatmap_id), {
         patterns: patternIds,
         jackDemand: parsed?.jackDemand?.detected === true,
@@ -1598,6 +1603,8 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         handstreamCluster: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
           ? HANDSTREAM_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
+        handstreamEndurance: keyCount === 4 && !chartIsLn
+          && hasHandstreamEndurance(chartMsd?.values),
         techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
         chordjackScore: chordjackScore,
         motion: readMotionFeatures(parsed?.motion),
@@ -3919,6 +3926,16 @@ function bucketsForClear(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
   );
   if (override != null) return resolveTilesForClear([override], buckets, chart, values);
+  // Accuracy can reorder per-play SSRs without changing a chart's pattern.
+  // Preserve a Stamina-led chart's Handstream evidence when LeoBlack also
+  // reads a plain, non-trill pattern. Rate mods keep that chord structure.
+  // Explicit tech/trill labels keep their arbitration, and every jack veto
+  // still outranks this reading. Missing chart MSD keeps the per-play path.
+  if (chart?.handstreamEndurance === true && chart.techCategory === false
+    && chart.clusterTrill === false && !jackContaminated(chart.jackShare)) {
+    const stamina = buckets.find((bucket) => bucket.id === "stamina" && bucket.skillsets != null);
+    if (stamina) return [stamina];
+  }
   // The Jumpstream arbitration (TRILL_CLUSTER_CATEGORY). A trill label keeps
   // the tech pairing the bucket lists already give it; a plain label files
   // stamina; a tech-suffixed label hands the tile to the runner-up skillset,
@@ -4668,6 +4685,12 @@ const BASE_MSD_SKILLSETS = SKILL_RATING_SKILLSETS.filter(
   (skillset) => skillset !== "Overall" && skillset !== "Stamina",
 );
 
+/** Stamina first and Handstream second, excluding Overall from the ranking. */
+function hasHandstreamEndurance(values: Record<string, number> | undefined): boolean {
+  return dominantSkillset(values) === "Stamina"
+    && dominantSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS)) === "Handstream";
+}
+
 /**
  * The strongest skillset other than Jumpstream, which picks the tile for a
  * Jumpstream argmax LeoBlack's label cannot resolve (see the arbitration in
@@ -4687,8 +4710,9 @@ function jumpstreamRunnerUp(values: Record<string, number> | undefined, contamin
  * wins from within SPEED_NEAR_TIE_MSD of the top, a speed verdict yields to
  * tech when Technical is in the same band and the analyzer confidently calls
  * the chart tech (TECH_NEAR_TIE_MIN_SCORE) or when Technical simply outranks
- * Stream on a tech-tagged chart (TECH_NEAR_TIE_MSD_LEAD), Handstream wins from
- * within HANDSTREAM_NEAR_TIE_MSD of the top on a chart LeoBlack reads as
+ * Stream on a tech-tagged chart (TECH_NEAR_TIE_MSD_LEAD), Handstream wins when
+ * it is second to Stamina, or from within HANDSTREAM_NEAR_TIE_MSD of the
+ * top on a chart LeoBlack reads as
  * handstream, and Stamina has to earn it on length - though a Stamina argmax
  * that HAS earned it holds the tile against the near-tie when some other base
  * skillset stays beside Stream (the hold below). Still single-valued: the
@@ -4714,6 +4738,17 @@ function bucketingSkillset(
 ): string | null {
   const top = dominantSkillset(values);
   if (top == null) return top;
+  // Stamina first with Handstream second is endurance evidence even on a
+  // short practice cut. Preserve it before Stream's near-tie can replace it.
+  // Handstream first alone is not enough: Decoy, We Won't Be Alone and both
+  // Vagrant cuts are community-confirmed speed charts with that ordering and
+  // a weaker Stamina rating. The Fool's two reported charts instead lead on
+  // Stamina with Handstream immediately behind it. No chart identity is read.
+  // The chart-level jack overrides still run in bucketsForClear.
+  // Audited over 8,635 pack-labelled 4K rice charts on 2026-09-06: nine
+  // change tiles, with no Speed loss among 1,308 speed-pack charts and no
+  // changes in the stream, tech, jack or jumptrill groups.
+  if (hasHandstreamEndurance(values) && !jackContaminated(chartJackShare)) return "Handstream";
   const stream = Number(values?.Stream ?? 0);
   // Whether the play demanded endurance, the same reading the length gate at
   // the bottom uses: the LONGER of the 1.0x drain and the played time.
@@ -5365,7 +5400,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v26 (current): primarily jack charts no longer also credit 4K stamina,
+// v27 (current): Stamina-led 4K charts with Handstream second keep their tile
+// ahead of the speed near-tie, including lower-accuracy clears whose SSR order shifts.
+// Re-fold cached plays to move their existing dan evidence (2026-09-06).
+// v26: primarily jack charts no longer also credit 4K stamina,
 // regardless of length or MinaCalc endurance argmax (2026-09-04). Re-fold
 // stored plays so stamina tiles and their headlines lose the shared credit.
 // v25: 7K LN course attempts below 95% can credit the preceding
@@ -5396,7 +5434,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v26";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v27";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

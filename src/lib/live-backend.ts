@@ -1537,6 +1537,19 @@ export interface LivePlayerSkillHistoryPage {
   nextBefore: number | null;
 }
 
+export async function fetchLivePlayerSkillHistoryDirect(
+  userId: number,
+  keyCount: number,
+  options: { before?: number; signal?: AbortSignal } = {},
+): Promise<LivePlayerSkillHistoryPage> {
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (!Number.isInteger(keyCount) || keyCount < 4 || keyCount > 18) throw new Error("Invalid key count.");
+  if (options.before != null && (!Number.isSafeInteger(options.before) || options.before <= 0)) throw new Error("Invalid history cursor.");
+  const query = new URLSearchParams({ keys: String(keyCount) });
+  if (options.before != null) query.set("before", String(options.before));
+  return fetchLiveJson(`/api/profiles/${userId}/skill-history?${query}`, { cache: "no-store", signal: options.signal });
+}
+
 export async function fetchLivePlayerSkillPlaysDirect(
   userId: number,
   keyCount: number,

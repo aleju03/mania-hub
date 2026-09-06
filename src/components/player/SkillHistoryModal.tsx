@@ -4,10 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronRight, History, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
+  fetchLivePlayerSkillHistoryDirect,
   type LivePlayerSkillHistoryEntry,
   type LivePlayerSkillHistorySnapshot,
 } from "../../lib/live-backend";
-import { fetchPlayerSkillHistory } from "../../lib/player-skill-history";
 import { skillAxisMeta } from "../../lib/skill-axes";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
@@ -46,7 +46,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
     try {
       const page = await loadSkillHistoryDays(async (cursor) => {
         controller.signal.throwIfAborted();
-        return fetchPlayerSkillHistory({ data: { userId, keyCount, before: cursor }, signal: controller.signal });
+        return fetchLivePlayerSkillHistoryDirect(userId, keyCount, { before: cursor, signal: controller.signal });
       }, before);
       if (controller.signal.aborted) return;
       setItems((current) => before ? [...current, ...page.items] : page.items);

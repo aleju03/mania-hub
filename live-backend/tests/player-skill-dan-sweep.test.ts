@@ -7,6 +7,8 @@ import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_DAN_SWEEP_JOB,
   ensurePlayerSkillDanSweepSeeded,
+  loadChartSkillInfo,
+  danSkillsetBucketsForValues,
   recomputePlayerSkillDanChunk,
   runPlayerSkillDanSweepJob,
 } from "../src/features/player-skills.js";
@@ -247,6 +249,62 @@ describe("recomputePlayerSkillDanChunk", () => {
     db.close();
   });
 
+  it("refiles cached handstream-chart clears into stamina despite a Technical SSR lead", async () => {
+    const db = await makeDb();
+    const jackIds = [301, 302, 303, 304];
+    const handstreamIds = [321, 322, 323, 324];
+    for (const id of jackIds) await seedChart(db, id, 8);
+    for (const id of handstreamIds) {
+      await seedChart(db, id, 5);
+      await exec(db, `update beatmap_chart_analysis set key_count = 4, msd_json = json(?),
+        classification_json = json_set(classification_json, '$.clusterCategory', 'Jumpstream') where beatmap_id = ?`, [
+        json({ values: { Stream: 26.31, Jumpstream: 24.62, Handstream: 27.22, Stamina: 27.34, JackSpeed: 16.10, Chordjack: 19.22, Technical: 26.51 } }), id,
+      ]);
+    }
+    await seedRow(db, 42, [...jackIds, ...handstreamIds]);
+    const plays = json({ plays: [
+      ...jackIds.map((id) => ({ ...barePass(id), values: { Overall: 22, JackSpeed: 25 } })),
+      ...handstreamIds.map((id) => ({ ...barePass(id), values: { Overall: 23.37, Stream: 22.26, Jumpstream: 20.80, Handstream: 22.21, Stamina: 22.24, JackSpeed: 13.60, Chordjack: 16.46, Technical: 22.58 } })),
+    ] });
+    await exec(db, "update player_skill_ratings set plays_json = ? where user_id = 42", [plays]);
+
+    expect(await recomputePlayerSkillDanChunk(db, 0)).toMatchObject({ rewritten: 1 });
+    const row = (await exec(db, "select modes_json, plays_json from player_skill_ratings where user_id = 42", [])).rows[0];
+    const summary = parseJson<{ modes: Array<{ dan: { rc: { skillsets: Record<string, { rawDan: number }> } } }> }>(String(row.modes_json), { modes: [] });
+    expect(summary.modes[0].dan.rc.skillsets.stamina.rawDan).toBe(5);
+    expect(summary.modes[0].dan.rc.skillsets.jack.rawDan).toBe(8);
+    expect(summary.modes[0].dan.rc.skillsets.tech).toBeUndefined();
+    expect(summary.modes[0].dan.rc.skillsets.speed).toBeUndefined();
+    expect(String(row.plays_json)).toBe(plays);
+    db.close();
+  });
+
+  it("keeps handstream-styled speed charts off stamina when Stamina does not lead", async () => {
+    // Community-confirmed speed charts: Decoy, We Won't Be Alone, and the
+    // short and long Vagrant cuts. Names are labels for these test vectors,
+    // never inputs to chart classification.
+    const cases = [
+      { name: "Decoy", label: "Stream", values: { Stream: 32.49, Jumpstream: 25.78, Handstream: 32.82, Stamina: 30.37, JackSpeed: 18.58, Chordjack: 24.58, Technical: 31.36 } },
+      { name: "We Won't Be Alone", label: "Jumpstream", values: { Stream: 22.25, Jumpstream: 21.92, Handstream: 22.62, Stamina: 19.72, JackSpeed: 12.48, Chordjack: 17.37, Technical: 21.80 } },
+      { name: "Vagrant", label: "Jumpstream", values: { Stream: 25.11, Jumpstream: 23.39, Handstream: 25.72, Stamina: 24.20, JackSpeed: 14.78, Chordjack: 18.73, Technical: 25.43 } },
+      { name: "Vagrant (long)", label: "Jumpstream", values: { Stream: 27.05, Jumpstream: 25.38, Handstream: 27.63, Stamina: 26.67, JackSpeed: 15.78, Chordjack: 19.94, Technical: 26.99 } },
+    ];
+    const db = await makeDb();
+    for (const [index, fixture] of cases.entries()) {
+      const id = 801 + index;
+      await seedChart(db, id, 10);
+      await exec(db, `update beatmap_chart_analysis set key_count = 4, msd_json = json(?),
+        classification_json = json_set(classification_json, '$.clusterCategory', ?) where beatmap_id = ?`, [
+        json({ values: fixture.values }), fixture.label, id,
+      ]);
+      const chart = (await loadChartSkillInfo(db, [id])).get(id)!;
+      const tiles = danSkillsetBucketsForValues(4, "rc", fixture.values, 132, 1, chart);
+      expect(tiles, fixture.name).toContain("speed");
+      expect(tiles, fixture.name).not.toContain("stamina");
+    }
+    db.close();
+  });
+
   it("rewrites speedjack-tagged Jumpstream clears into the jack verdict", async () => {
     const db = await makeDb();
     const beatmapIds = [331, 332, 333, 334];
@@ -377,7 +435,7 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v26'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v27'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
@@ -397,7 +455,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
     // A job queued by older code is guarded at execution time too.
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v26'", [])).rows).toHaveLength(0);
+    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v27'", [])).rows).toHaveLength(0);
 
     await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
@@ -417,7 +475,7 @@ describe("recomputePlayerSkillDanChunk", () => {
     await exec(
       db,
       "insert into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v25", json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
+      ["player_skill_dan_sweep_done:v26", json({ finishedAt: "2026-08-30T00:00:00.000Z" }), "2026-08-30T00:00:00.000Z"],
     );
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     const jobs = (await exec(db, "select payload_json from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows;

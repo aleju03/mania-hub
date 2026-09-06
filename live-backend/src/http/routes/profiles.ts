@@ -16,7 +16,7 @@ import type { Db } from "../../db.js";
 import type { HttpContext } from "../context.js";
 import { createMapsResponseCache, pruneMapsResponseCache, serveMapsResponseCached, type MapsResponseCache } from "../maps-response-cache.js";
 import { prepareJsonResponse, type PreparedJsonResponse } from "../prepared-json.js";
-import { clampInteger, clampLimit, isAdmin } from "../request.js";
+import { clampInteger, clampLimit } from "../request.js";
 import { checkRate, negotiateEncoding, sendAccentEnrichedJson, sendJson } from "../respond.js";
 
 export async function handleProfileRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL, country: string): Promise<boolean> {
@@ -25,15 +25,6 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
-    }
-    // History is an admin preview while changes accumulate in the background.
-    // Gate before reading player data, including callers of the old public URL.
-    if (profileRoute.kind === "skill-history") {
-      res.setHeader("cache-control", "private, no-store");
-      if (!isAdmin(req, ctx)) {
-        sendJson(req, res, ctx, 401, { error: "unauthorized" });
-        return true;
-      }
     }
     if (profileRoute.kind === "cached-snapshot") {
       await handleCachedProfileSnapshot(req, res, ctx, url, profileRoute.key);
@@ -176,6 +167,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       return true;
     }
     if (profileRoute.kind === "skill-history") {
+      res.setHeader("cache-control", "private, no-store");
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
       const keyCount = Number(url.searchParams.get("keys"));
       const before = url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined;

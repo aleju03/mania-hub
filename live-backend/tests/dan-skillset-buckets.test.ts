@@ -550,6 +550,129 @@ describe("the dense-trill jack arm", () => {
   });
 });
 
+describe("Stamina first with Handstream as the strongest base skillset", () => {
+  // The Fool's full chart and short practice cut. Stamina rides on
+  // Handstream in both; Stream is only fifth/fourth. A close Stream rating
+  // must not replace that pattern with speed, even below four minutes and
+  // when LeoBlack calls the chordstream Jumpstream rather than Handstream.
+  const CHARTS = [
+    { length: 231, values: { Stream: 23.85, Jumpstream: 24.46, Handstream: 24.99, Stamina: 25.10, JackSpeed: 14.82, Chordjack: 17.38, Technical: 24.20 } },
+    { length: 125, values: { Stream: 26.31, Jumpstream: 24.62, Handstream: 27.22, Stamina: 27.34, JackSpeed: 16.10, Chordjack: 19.22, Technical: 26.51 } },
+  ];
+  const chart = {
+    ...SPEEDJACK_CHART,
+    patterns: ["tech", "jumpstream"],
+    clusterTrill: false,
+    techCategory: false,
+    handstreamCluster: false,
+    jackShare: 0.20,
+    techScore: 0.8,
+    motion: { sameHand: 0.1134, miniJack: 0.0001, oneHandTrill: 0.0153, crossHandTrill: 0.0613, roll4: 0.1022, rhythmBreak: 0.0074, chordSwing: 0.5928, densitySwing: 0.2359 },
+  };
+
+  it("keeps handstream endurance on stamina before the speed/tech near-tie", () => {
+    for (const { length, values } of CHARTS) {
+      for (const rate of [0.75, 1, 1.5]) {
+        // These rates exercise duration handling; values are supplied SSRs,
+        // not a claim that MinaCalc returns the same vector at every rate.
+        expect(danSkillsetBucketsForValues(4, "rc", values, length, rate, { ...chart, lengthSeconds: length }))
+          .toEqual(["stamina"]);
+      }
+      expect(danSkillsetBucketsForValues(4, "rc", values, length)).toEqual(["stamina"]);
+      // Removing the Stamina lead removes the new protection; a Handstream
+      // lead alone also describes the community-confirmed speed counterexamples.
+      expect(danSkillsetBucketsForValues(4, "rc", { ...values, Stamina: 0 }, length, 1, chart))
+        .not.toContain("stamina");
+    }
+  });
+
+  // Reviewed with a 4K player on 2026-09-06. These remain stamina even
+  // when Stream is close or the analyzer labels their texture as tech/trill.
+  // Keep full precision: K-ON's Stamina and Handstream both round to 22.60.
+  // Names identify test cases only; classification receives no chart identity.
+  it.each([
+    {
+      name: "Palette",
+      values: { Stream: 25.135000228881836, Jumpstream: 24.608999252319336, Handstream: 26.119497299194336, Stamina: 26.193302154541016, JackSpeed: 15.54000186920166, Chordjack: 18.020000457763672, Technical: 25.452499389648438 },
+      length: 166, techCategory: false, clusterTrill: false,
+      techScore: 0.665, jackShare: 0.132361248514406, lnRatio: 0.011171032357473035,
+    },
+    {
+      name: "Rinne — Reincarnation x1.2",
+      values: { Stream: 24.958999633789062, Jumpstream: 23.101497650146484, Handstream: 25.009998321533203, Stamina: 25.056495666503906, JackSpeed: 14.25999927520752, Chordjack: 17.14000129699707, Technical: 24.60999870300293 },
+      length: 229, techCategory: false, clusterTrill: false,
+      techScore: 0.612, jackShare: 0.03253801166626422, lnRatio: 0.0226943505552873,
+    },
+    {
+      name: "FUWANITY — K-ON!!!",
+      values: { Stream: 22.499000549316406, Jumpstream: 22.26599884033203, Handstream: 22.59549903869629, Stamina: 22.597997665405273, JackSpeed: 13.059999465942383, Chordjack: 15.860001564025879, Technical: 22.26949691772461 },
+      length: 230, techCategory: false, clusterTrill: false,
+      techScore: 0.688, jackShare: 0.0365752918039009, lnRatio: 0,
+    },
+    {
+      name: "Shiawase (VIP)",
+      values: { Stream: 31.521997451782227, Jumpstream: 23.940000534057617, Handstream: 32.19549560546875, Stamina: 32.20927810668945, JackSpeed: 18.739999771118164, Chordjack: 22.82000160217285, Technical: 30.39449691772461 },
+      length: 166, techCategory: true, clusterTrill: true,
+      techScore: 0.671, jackShare: 0.05207526984463168, lnRatio: 0,
+    },
+    {
+      name: "Phoenix — Gravity Noize",
+      values: { Stream: 22.134498596191406, Jumpstream: 20.88249969482422, Handstream: 22.436498641967773, Stamina: 22.493722915649414, JackSpeed: 13.059999465942383, Chordjack: 15.059999465942383, Technical: 22.292497634887695 },
+      length: 213, techCategory: false, clusterTrill: true,
+      techScore: 0.581, jackShare: 0.11364969434939563, lnRatio: 0.13210493441599,
+    },
+    {
+      name: "Kakushigoto — TheWorld's Insane",
+      values: { Stream: 20.725997924804688, Jumpstream: 20.333498001098633, Handstream: 21.878999710083008, Stamina: 21.97526741027832, JackSpeed: 12.739999771118164, Chordjack: 15.059999465942383, Technical: 21.0364990234375 },
+      length: 234, techCategory: false, clusterTrill: true,
+      techScore: 0.669, jackShare: 0.061647679244882785, lnRatio: 0.022858644245927484,
+    },
+  ])("keeps the confirmed stamina chart $name on stamina", (fixture) => {
+    const info = {
+      ...chart,
+      patterns: ["tech"],
+      lengthSeconds: fixture.length,
+      techCategory: fixture.techCategory,
+      clusterTrill: fixture.clusterTrill,
+      techScore: fixture.techScore,
+      jackShare: fixture.jackShare,
+      chordjackScore: 0,
+      lnRatio: fixture.lnRatio,
+    };
+    expect(danSkillsetBucketsForValues(4, "rc", fixture.values, fixture.length, 1, info))
+      .toEqual(["stamina"]);
+  });
+
+  it("still lets chart-level jack evidence veto the stamina reading", () => {
+    for (const { length, values } of CHARTS) {
+      expect(danSkillsetBucketsForValues(4, "rc", values, length, 1, { ...chart, jackShare: 0.35 }))
+        .not.toContain("stamina");
+      expect(danSkillsetBucketsForValues(4, "rc", values, length, 1, { ...chart, jackDemand: true }))
+        .toEqual(["jack"]);
+    }
+  });
+
+  it("keeps chart-level handstream evidence when lower accuracy changes the SSR leader", () => {
+    // A stored score on the practice cut: Technical overtakes Handstream at
+    // this goal, although the chart's standard-goal vector still leads on it.
+    const values = { Stream: 22.26, Jumpstream: 20.80, Handstream: 22.21, Stamina: 22.24, JackSpeed: 13.60, Chordjack: 16.46, Technical: 22.58 };
+    const known = { ...chart, handstreamEndurance: true };
+    for (const rate of [0.75, 1, 1.5]) {
+      expect(danSkillsetBucketsForValues(4, "rc", values, 125, rate, known)).toEqual(["stamina"]);
+    }
+    for (const conflicting of [
+      { ...known, handstreamEndurance: false },
+      { ...known, techCategory: true },
+      { ...known, clusterTrill: true },
+      { ...known, clusterTrill: null },
+      { ...known, jackShare: 0.35 },
+      { ...known, jackDemand: true },
+    ]) {
+      expect(danSkillsetBucketsForValues(4, "rc", values, 125, 1, conflicting)).not.toContain("stamina");
+    }
+  });
+});
+
 describe("the Handstream near-tie", () => {
   // Hold Angel [4K] Worship (5339691), LeoBlack label "Handstream". As a chart
   // Handstream 29.13 tops Technical 28.00, but MinaCalc's Handstream moves

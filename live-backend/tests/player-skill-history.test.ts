@@ -50,25 +50,25 @@ async function historyRequest(authorization?: string, adminToken = "test-admin-t
   return { status: res.statusCode, cacheControl: res.getHeader("cache-control"), body: JSON.parse(body) };
 }
 
-describe("skill history HTTP admin gate", () => {
-  it("rejects anonymous, invalid-token and bridge callers of the previously public URL", async () => {
+describe("public skill history HTTP access", () => {
+  it("serves history to anonymous, invalid-token and bridge callers", async () => {
     await seed();
     for (const token of [undefined, "Bearer wrong-token", "Bearer test-bridge-token"]) {
-      expect(await historyRequest(token)).toEqual({ status: 401, cacheControl: "private, no-store", body: { error: "unauthorized" } });
+      expect((await historyRequest(token)).status).toBe(200);
     }
   });
 
-  it("keeps recording in the background and serves those changes to an admin", async () => {
+  it("keeps recording in the background and serves those changes publicly", async () => {
     await seed();
     await update([mode(26)], 2);
-    const response = await historyRequest("Bearer test-admin-token");
+    const response = await historyRequest();
     expect(response.status).toBe(200);
     expect(response.cacheControl).toBe("private, no-store");
     expect(response.body.items.map((entry: { snapshot: { ratings: { Overall: number } } }) => entry.snapshot.ratings.Overall)).toEqual([26, 25]);
   });
 
-  it("fails closed when the backend admin token is missing", async () => {
-    expect((await historyRequest("Bearer test-admin-token", "")).status).toBe(401);
+  it("serves history when the backend admin token is missing", async () => {
+    expect((await historyRequest(undefined, "")).status).toBe(200);
   });
 });
 
