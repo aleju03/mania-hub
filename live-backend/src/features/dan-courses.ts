@@ -322,6 +322,7 @@ export function danCourseCreditOffset(
       ? COURSE_CREDIT_7K_LN_BELOW_BAR
       : COURSE_CREDIT_BELOW_BAR,
     belowBarWindow: COURSE_CREDIT_BELOW_BAR_WINDOW,
+    nearBarCap: 0.26,
     allowBelowBar,
   });
 }

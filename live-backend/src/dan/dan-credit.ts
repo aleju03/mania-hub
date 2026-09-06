@@ -100,7 +100,7 @@ export const DAN_CREDIT_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
 ];
 
 /**
- * The decay half, before the near-bar cap clamps its top. At a 96% bar:
+ * The rice decay half. At a 96% bar:
  * 95% -> -0.51, 94% -> -0.76, 92% -> -1.25, 91% -> -1.5, and below 91% no
  * credit at all. The value at 92% deepened from -1 (2026-08-28):
  * a scrape at the very edge of the window was still crediting inside the next
@@ -114,14 +114,16 @@ export const DAN_CREDIT_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
  * point credits the 91-92% passes the old window turned away and nothing that
  * already credited moves by a hair.
  *
- * A curve was tried here and reverted (2026-08-29): bending the line so a near
- * miss left the bar slowly was worth up to 0.15 of a level to every sub-bar
- * clear on these ladders, and the straight line reads truer. The knee is not
- * that bend: it sits at the old edge and keeps the line straight on both sides
- * of it. 4K LN, whose window is 2.5 points, keeps a shaped decay of its own.
+ * The final point below the bar is continuous (2026-09-06): 95% keeps its
+ * existing -0.5075, 95.5% credits -0.25375, and the penalty reaches zero at
+ * 96%. This removes the immediate -0.26 cliff without moving any credit at
+ * 95% or below, or at/above the bar. A near miss can keep the chart's display
+ * tier while contributing a smaller number; the accuracy still misses the
+ * full-clear requirement. LN and course curves keep their own anchors/caps.
  */
 export const DAN_CREDIT_BELOW_BAR_ANCHORS: DanCreditAnchors = [
-  [0, -0.26],
+  [0, 0],
+  [0.2, -0.5075],
   [0.8, -1.25],
   [1, -1.5],
 ];
@@ -202,10 +204,9 @@ export interface DanCreditOptions {
   belowBar?: DanCreditAnchors;
   belowBarWindow?: number;
   /**
-   * The smallest magnitude a sub-bar credit may take, so a near-miss can
-   * never be credited the chart's own dan (danCreditNearBarCapFor picks the
-   * ladder-aware value). Applied as a clamp on the interpolated offset, which
-   * keeps the anchor table ladder-free and stays monotone.
+   * The smallest magnitude a sub-bar credit may take. Rice uses zero for a
+   * continuous near-bar penalty; LN and courses retain a minimum deduction.
+   * Applied as a clamp on the interpolated offset.
    */
   nearBarCap?: number;
   /** Off for a ladder that credits from the bar up only (4K LN courses). */
@@ -247,7 +248,7 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
     const belowBar = options.belowBar ?? DAN_CREDIT_BELOW_BAR_ANCHORS;
     const s = Math.min(1, -delta / window);
     const offset = interpolateAnchors(belowBar, s);
-    return Math.min(offset, -(options.nearBarCap ?? 0.26));
+    return Math.min(offset, -(options.nearBarCap ?? 0));
   }
   const aboveBar = options.aboveBar ?? DAN_CREDIT_ABOVE_BAR_ANCHORS;
   if ((options.aboveBarScale ?? "headroom") === "delta") {
@@ -263,7 +264,7 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
 }
 
 /**
- * The ladder-aware near-bar cap. 0.26 is one hundredth inside the "-" tier of
+ * The ladder-aware near-bar cap. Rice has no cliff. LN's 0.26 is inside the "-" tier of
  * parseDan and danTableLabelFor (their "-" band opens at -0.25), so a sub-bar
  * credit on those ladders prints as at least the chart's level with a minus.
  * The 4K LN cap is 0.3, a hair deeper for the same reason and no deeper than
@@ -272,13 +273,12 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
  * ladder's own decay anchors instead, which reach the same -0.9 half a point
  * under the bar rather than at it.
  *
- * For a chart whose rawDan is not an integer this is a floor on the credit
- * rather than a label guarantee (a 15.2 chart credited at -0.26 still prints
- * bare epsilon); the load-bearing part is that a sub-bar credit can never
- * equal the chart's own dan.
+ * These are numerical deductions, not label guarantees: a reduced credit
+ * can still fall in the same display tier as the chart.
  */
 export function danCreditNearBarCapFor(side: "rc" | "ln", keyCount: number): number {
-  return keyCount === 4 && side === "ln" ? 0.3 : 0.26;
+  if (side === "rc") return 0;
+  return keyCount === 4 ? 0.3 : 0.26;
 }
 
 /**

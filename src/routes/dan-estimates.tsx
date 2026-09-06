@@ -406,10 +406,13 @@ function DanEstimatesPage() {
             <Trans>
               Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the
               bar still gives full credit. After that, bonus credit starts. It stays small until 99%,
-              then rises faster. Scores below the bar can still count at a lower level. Regular charts
-              count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those
-              cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart
-              is worth 1.5 levels less, and its bonus stops rising at 99.7%:
+              then rises faster. Scores below the bar can still count at a lower level. On regular
+              charts, the penalty rises smoothly from zero at 96% to about half a level at 95%.
+              A near miss can keep the same dan label while contributing less to the estimate;
+              it still falls short of a full clear. Regular charts count down to 5 percentage points
+              below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75
+              levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops
+              rising at 99.7%:
             </Trans>
           </P>
           <CreditCurveTabs />
@@ -1201,6 +1204,7 @@ function CreditCurveTabs() {
         ["98%", t`the chart's level +0.12`],
         ["97.5%", t`the chart's level +0.06`],
         ["96-97%", t`the chart's full level`],
+        ["95.5%", t`the chart's level -0.25`],
         ["95%", t`the chart's level -0.51`],
         ["94%", t`the chart's level -0.76`],
         ["92%", t`the chart's level -1.25`],
@@ -1362,7 +1366,7 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
   const x = (value: number) => CURVE_PAD.left + ((value - xLo) / (1 - xLo)) * plotW;
   const y = (offset: number) => CURVE_PAD.top + ((yHi - offset) / (yHi - yLo || 1)) * plotH;
 
-  // Split at the bar: the near-bar cap makes the credit jump there, and one
+  // Split at the bar: LN's near-bar cap makes the credit jump there, and one
   // polyline would draw that cliff as a slope through values nothing scores.
   const sample = (from: number, to: number) => {
     const points: string[] = [];
@@ -1374,7 +1378,8 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
     }
     return points.join(" ");
   };
-  const belowBarPoints = sample(lo, bar - 1e-6);
+  const hasBarCliff = (options.nearBarCap ?? 0) > 0;
+  const belowBarPoints = sample(lo, hasBarCliff ? bar - 1e-6 : bar);
   const aboveBarPoints = sample(bar, 1);
   // The near-bar cap makes the credit jump at the bar rather than meet it, so
   // the two halves end at different heights. Left as a bare gap it reads as a
@@ -1475,7 +1480,7 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
         <text x={x(1)} y={CURVE_HEIGHT - 8} textAnchor="end" className="fill-osu-f1 text-[11px] tabular-nums">100%</text>
         <polyline points={belowBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
         <polyline points={aboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
-        {barEdgeOffset != null && (
+        {hasBarCliff && barEdgeOffset != null && (
           <>
             <line
               x1={x(bar)}

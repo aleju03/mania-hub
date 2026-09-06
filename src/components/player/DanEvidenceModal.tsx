@@ -576,6 +576,7 @@ function ClearRow({
   // cover art and the played-at line move into the tooltip and only the three
   // numbers that set the estimate keep their own column.
   const played = play.playedAt ? formatTimeAgo(play.playedAt, locale) : null;
+  const reduced = clear.creditedDan < clear.chartDan;
   return (
     <button
       type="button"
@@ -586,9 +587,11 @@ function ClearRow({
         clear.ignoredAsStray ? "opacity-45" : clear.countsTowardDan ? "" : "opacity-60"
       }`}
       title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""}${
-        clear.creditedDanLabel !== clear.chartDanLabel
-          ? ` · ${t`A ${formatDan(clear.chartDanLabel)} chart, credited as ${formatDan(clear.creditedDanLabel)} at this accuracy`}`
-          : ""
+        reduced
+          ? ` · ${t`Below the full-clear requirement: reduced credit, even if the dan label stays the same`}`
+          : clear.creditedDanLabel !== clear.chartDanLabel
+            ? ` · ${t`A ${formatDan(clear.chartDanLabel)} chart, credited as ${formatDan(clear.creditedDanLabel)} at this accuracy`}`
+            : ""
       } · ${
         clear.ignoredAsStray
           ? t`Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average`
@@ -619,6 +622,7 @@ function ClearRow({
       {clear.ignoredAsStray ? (
         <span className="shrink-0 text-[10px] text-osu-f1">{t`not counted`}</span>
       ) : null}
+      {reduced ? <span className="shrink-0 text-[10px] text-osu-f1">{t`partial credit`}</span> : null}
       <span
         className={`w-16 shrink-0 text-right text-[11px] font-black sm:w-20 ${clear.ignoredAsStray ? "line-through" : ""}`}
         style={{ color }}

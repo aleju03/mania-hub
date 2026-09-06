@@ -985,9 +985,11 @@ function DanCreditCell({
   const { t } = useLingui();
   const chart = clear.chartDanLabel;
   const credit = clear.creditedDanLabel;
-  // Only a real credit shift is worth explaining; a bare pass credits the
-  // chart's own level and the two labels are the same words.
-  const title = credit === chart
+  // A reduced number can still sit in the chart's display tier.
+  const reduced = clear.creditedDan < clear.chartDan;
+  const title = reduced
+    ? t`Below the full-clear requirement: reduced credit, even if the dan label stays the same`
+    : credit === chart
     ? undefined
     : t`A ${chart} chart, credited as ${credit} at this accuracy`;
   return (
@@ -996,6 +998,7 @@ function DanCreditCell({
       <span className="text-[8px] font-semibold uppercase tracking-wide tabular-nums text-osu-f1">
         {formatAccuracy(clear.clearAccuracy)}
       </span>
+      {reduced ? <span className="text-[8px] text-osu-f1">{t`partial credit`}</span> : null}
     </div>
   );
 }

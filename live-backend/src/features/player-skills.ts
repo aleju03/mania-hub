@@ -5400,7 +5400,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v27 (current): Stamina-led 4K charts with Handstream second keep their tile
+// v28 (current): Rice chart credit is continuous in the final accuracy point
+// below the bar (2026-09-06). Re-fold cached plays so near misses gain the
+// revised credit in skillset averages and headlines, without rerunning MSD.
+// v27: Stamina-led 4K charts with Handstream second keep their tile
 // ahead of the speed near-tie, including lower-accuracy clears whose SSR order shifts.
 // Re-fold cached plays to move their existing dan evidence (2026-09-06).
 // v26: primarily jack charts no longer also credit 4K stamina,
@@ -5434,7 +5437,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v27";
+const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v28";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

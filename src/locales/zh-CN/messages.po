@@ -3012,6 +3012,11 @@ msgstr "低于 94.5%"
 msgid "Below the credit that sets the estimate"
 msgstr "低于决定估算的计入段位"
 
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Below the full-clear requirement: reduced credit, even if the dan label stays the same"
+msgstr "未达到完整通过要求：即使段位标签不变，计入值也会降低"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "best"
 msgstr "最佳"
@@ -6380,8 +6385,12 @@ msgid "hitsounds and interface samples"
 msgstr "打击音效与界面音效"
 
 #: src/routes/dan-estimates.tsx
-msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
-msgstr "达到准确率通过线，就按谱面段位给满额计入。通过线以上的第一个百分点同样是满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。低于通过线的成绩仍然可以按更低的段位计入。普通谱面计入到通过线以下 4 个百分点，6K/7K LN 谱面计入到 1 个百分点。在这些截止点上，谱面按低 1.25 级计入。4K LN 计入到 94.5%，在那里谱面低 1.5 级，加成则在 99.7% 停止上升："
+msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+msgstr "达到准确率通过线，就按谱面段位满额计入。通过线以上的第一个百分点同样满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。低于通过线的成绩仍然可以按更低的段位计入。普通谱面的扣减从 96% 时的零平滑增加到 95% 时的约半级。差一点通过的成绩可能保留相同的段位标签，但对估算的贡献更低，仍不算完整通过。普通谱面计入到通过线以下 5 个百分点，此时扣减 1.5 级。6K/7K LN 谱面计入到 92%，扣减 1.75 级。4K LN 计入到 94.5%，扣减 1.55 级，其加成在 99.7% 停止上升："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
+#~ msgstr "达到准确率通过线，就按谱面段位给满额计入。通过线以上的第一个百分点同样是满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。低于通过线的成绩仍然可以按更低的段位计入。普通谱面计入到通过线以下 4 个百分点，6K/7K LN 谱面计入到 1 个百分点。在这些截止点上，谱面按低 1.25 级计入。4K LN 计入到 94.5%，在那里谱面低 1.5 级，加成则在 99.7% 停止上升："
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own."
@@ -8418,6 +8427,7 @@ msgstr "最新的最佳成绩"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/GiftInbox.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 msgid "Next"
@@ -9780,6 +9790,11 @@ msgstr "页码，1 到 {totalPages}"
 msgid "Parsing the file and finding its beatmap."
 msgstr "正在解析文件并查找对应谱面。"
 
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "partial credit"
+msgstr "部分计入"
+
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
 msgid "Pass"
@@ -10327,6 +10342,7 @@ msgstr "预览图已上传。"
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/packs/GiftInbox.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
 msgid "Previous"
@@ -13413,6 +13429,10 @@ msgstr "谱面文件不可用，所以只会加载回放。"
 #: src/routes/dan-estimates.tsx
 msgid "the chart's full level"
 msgstr "谱面的完整段位"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.25"
+msgstr "谱面段位 -0.25"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.26"

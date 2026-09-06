@@ -42,7 +42,7 @@ describe("danCreditOffset", () => {
   });
 
   it("decays below the bar and stops at the credit window", () => {
-    expect(danCreditOffset(0.955, 0.96)).toBeCloseTo(-0.38375, 6);
+    expect(danCreditOffset(0.955, 0.96)).toBeCloseTo(-0.25375, 6);
     expect(danCreditOffset(0.94, 0.96)).toBeCloseTo(-0.755, 6);
     expect(danCreditOffset(0.92, 0.96)).toBeCloseTo(-1.25, 9);
     expect(danCreditOffset(0.91, 0.96)).toBeCloseTo(-1.5, 9);
@@ -53,14 +53,14 @@ describe("danCreditOffset", () => {
   it("extends the rice decay to 91% without re-pricing what already credited", () => {
     // The window went from four points to five (2026-08-31). The knee sits at
     // the old edge, so every accuracy the four-point window credited credits
-    // exactly the same today and only the 91-92% band is new.
+    // exactly the same below 95%; the final point now has a continuous taper.
     // The table as it stood before the widening: a straight line to -1.25 over
     // four points.
     const fourPointWindow = (accuracy: number) => danCreditOffset(accuracy, 0.96, {
       belowBar: [[0, -0.26], [1, -1.25]],
       belowBarWindow: 0.04,
     });
-    for (const accuracy of [0.9599, 0.958, 0.955, 0.95, 0.94, 0.93, 0.92]) {
+    for (const accuracy of [0.95, 0.94, 0.93, 0.92]) {
       expect(danCreditOffset(accuracy, 0.96)).toBeCloseTo(fourPointWindow(accuracy)!, 9);
     }
     expect(fourPointWindow(0.91)).toBeNull();
@@ -118,11 +118,43 @@ describe("danCreditOffset", () => {
 });
 
 describe("near-bar cap", () => {
-  it("keeps a near-miss from printing as a bare clear of the chart's level", () => {
-    const offset = danCreditOffset(0.9599, 0.96, { nearBarCap: danCreditNearBarCapFor("rc", 4) });
-    expect(danLabelForTest(15 + offset!, "rc", 4)).toBe("epsilon-");
-    const tableOffset = danCreditOffset(0.9599, 0.96, { nearBarCap: danCreditNearBarCapFor("rc", 7) });
-    expect(danLabelForTest(8 + tableOffset!, "rc", 7)).toBe("8-");
+  it("smooths rice near misses into full credit without a cliff at either join", () => {
+    for (const keyCount of [4, 6, 7]) {
+      const options = danCreditOptionsFor("rc", keyCount);
+      expect(danCreditNearBarCapFor("rc", keyCount)).toBe(0);
+      const at = (accuracy: number) => danCreditOffset(accuracy, 0.96, options)!;
+      expect(at(0.95)).toBeCloseTo(-0.5075, 9);
+      expect(at(0.955)).toBeCloseTo(-0.25375, 9);
+      expect(at(0.9599)).toBeCloseTo(-0.005075, 9);
+      expect(at(0.96)).toBe(0);
+      for (const edge of [0.95, 0.96]) {
+        expect(at(edge - 1e-7)).toBeLessThan(at(edge));
+        expect(at(edge - 1e-7)).toBeCloseTo(at(edge), 4);
+        expect(at(edge + 1e-7)).toBeCloseTo(at(edge), 4);
+      }
+    }
+  });
+
+  it("preserves every rice credit outside the last point below the bar", () => {
+    for (const bar of [0.95, 0.96]) {
+      const previous = { belowBar: [[0, -0.26], [0.8, -1.25], [1, -1.5]] as const, nearBarCap: 0.26 };
+      for (let step = 0; step <= 1000; step += 1) {
+        const accuracy = step / 1000;
+        if (accuracy > bar - 0.01 + 1e-9 && accuracy < bar) continue;
+        const before = danCreditOffset(accuracy, bar, previous);
+        const after = danCreditOffset(accuracy, bar, danCreditOptionsFor("rc", 4));
+        if (before == null) expect(after).toBeNull();
+        else expect(after).toBeCloseTo(before, 9);
+      }
+    }
+  });
+
+  it("credits a 95.842% on a 13.39 chart at gamma++ while retaining a numerical penalty", () => {
+    const credit = creditedDanFor(13.39, 0.9584224789616317, 0.96, "rc", 4)!;
+    expect(credit).toBeCloseTo(13.3099408073, 9);
+    expect(credit).toBeLessThan(13.39);
+    expect(danLabelForTest(credit, "rc", 4)).toBe("gamma++");
+    expect(creditedDanFor(13.39, 0.95, 0.96, "rc", 4)).toBeCloseTo(12.8825, 9);
   });
 
   it("keeps the 4K LN step at the bar small", () => {
