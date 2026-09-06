@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
+import type { Readable } from "node:stream";
 import type { GetObjectCommandOutput, S3Client } from "@aws-sdk/client-s3";
 import { loadS3Module, type S3Module } from "../shared/lazy-s3.js";
+import { getR2Object, R2_REQUEST_HANDLER_OPTIONS } from "../shared/r2-read.js";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
@@ -93,7 +95,7 @@ export async function readCachedBeatmapAudioAsset(
   assertReplayCacheKey(storageKey);
 
   try {
-    const object = await getObjectWithinCap(s3, client, config, storageKey);
+    const object = await getObjectWithinCap(client, config, storageKey);
     const blobKey = getPointerBlobKey(object.Metadata);
     if (!blobKey) {
       const buffer = await readObjectBody(object.Body, MAX_CACHED_OBJECT_BYTES);
@@ -108,7 +110,7 @@ export async function readCachedBeatmapAudioAsset(
     }
 
     await readObjectBody(object.Body, MAX_CACHED_OBJECT_BYTES);
-    const blob = await getObjectWithinCap(s3, client, config, blobKey);
+    const blob = await getObjectWithinCap(client, config, blobKey);
     const buffer = await readObjectBody(blob.Body, MAX_CACHED_OBJECT_BYTES);
     if (buffer.length === 0) return null;
     return {
@@ -124,16 +126,16 @@ export async function readCachedBeatmapAudioAsset(
 }
 
 async function getObjectWithinCap(
-  s3: S3Module,
   client: S3Client,
   config: Config,
   storageKey: string,
 ): Promise<GetObjectCommandOutput> {
-  const object = await client.send(new s3.GetObjectCommand({
+  const object = await getR2Object(client, {
     Bucket: requireBucket(config),
     Key: storageKey,
-  }));
+  });
   if ((object.ContentLength ?? 0) > MAX_CACHED_OBJECT_BYTES) {
+    (object.Body as Readable | undefined)?.destroy();
     throw new Error(`Cached audio object is too large (${object.ContentLength} bytes)`);
   }
   return object;
@@ -220,6 +222,7 @@ function getClient(s3: S3Module, config: Config): S3Client {
   if (cachedClient && cachedClientKey === clientKey) return cachedClient;
   cachedClientKey = clientKey;
   cachedClient = new s3.S3Client({
+    requestHandler: R2_REQUEST_HANDLER_OPTIONS,
     region: "auto",
     endpoint: config.r2Endpoint,
     forcePathStyle: true,
@@ -271,13 +274,6 @@ function getPublicObjectUrl(config: Config, storageKey: string): string | null {
 
 async function readObjectBody(body: GetObjectCommandOutput["Body"], maxBytes: number): Promise<Buffer> {
   if (!body) return Buffer.alloc(0);
-  const maybeTransform = body as { transformToByteArray?: () => Promise<Uint8Array> };
-  if (typeof maybeTransform.transformToByteArray === "function") {
-    const bytes = await maybeTransform.transformToByteArray();
-    if (bytes.byteLength > maxBytes) throw new Error(`Cached audio object is too large (${bytes.byteLength} bytes)`);
-    return Buffer.from(bytes);
-  }
-
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of body as AsyncIterable<Uint8Array | string>) {

@@ -1,5 +1,6 @@
 import type { Readable } from "node:stream";
 import { loadS3Module, type S3Module } from "../shared/lazy-s3.js";
+import { getR2Object, R2_REQUEST_HANDLER_OPTIONS, type R2ReadOptions } from "../shared/r2-read.js";
 import { logWarn } from "../logger.js";
 import type { Config } from "../config.js";
 
@@ -184,15 +185,15 @@ function skinObjectUrl(config: SkinStorageConfig, key: string): string {
   return `${origin}/api/skins/file/${encodeURIComponent(id)}/${encodeURIComponent(filename)}`;
 }
 
-export async function getSkinObject(config: SkinStorageConfig, key: string): Promise<SkinObjectStream | null> {
+export async function getSkinObject(config: SkinStorageConfig, key: string, options?: R2ReadOptions): Promise<SkinObjectStream | null> {
   if (!key.startsWith(SKINS_PREFIX) || !isSkinStorageConfigured(config)) return null;
   const s3 = await loadS3Module();
   const client = getClient(s3, config);
   try {
-    const object = await client.send(new s3.GetObjectCommand({
+    const object = await getR2Object(client, {
       Bucket: requireBucket(config),
       Key: key,
-    }));
+    }, { transferTimeoutMs: key.toLowerCase().endsWith(".osk") ? 300_000 : 30_000, ...options });
     if (!object.Body) return null;
     return {
       body: object.Body as Readable,
@@ -304,6 +305,7 @@ function getClient(s3: S3Module, config: SkinStorageConfig): InstanceType<S3Modu
     return cachedClient.client;
   }
   const client = new s3.S3Client({
+    requestHandler: R2_REQUEST_HANDLER_OPTIONS,
     region: "auto",
     endpoint: config.r2Endpoint,
     forcePathStyle: true,

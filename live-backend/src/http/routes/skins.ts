@@ -311,7 +311,20 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
       res.end(image.buffer);
       return true;
     }
-    const object = key ? await getSkinObject(ctx.config, key) : null;
+    // Stop queued/header-stage downloads as soon as the browser goes away.
+    // Image cache fills above are shared across browsers and keep their own
+    // deadline instead. Once pipeline owns this stream, its destroy path
+    // also aborts the underlying R2 request.
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    res.once("close", cancel);
+    if (res.destroyed) cancel();
+    let object;
+    try {
+      object = key ? await getSkinObject(ctx.config, key, { signal: controller.signal }) : null;
+    } finally {
+      res.off("close", cancel);
+    }
     if (!object) {
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
