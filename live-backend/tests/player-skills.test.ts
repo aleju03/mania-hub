@@ -7,6 +7,7 @@ import {
   PLAYER_SKILLS_SEED_VERSIONS,
   PLAYER_SKILLS_VERSION,
   aggregateSsrs,
+  selectMsdRatingPlays,
   computePlayerSkillRatings,
   computePlayerSkillsJob,
   danClearAverageWindowFor,
@@ -428,7 +429,74 @@ describe("aggregateSsrs", () => {
   });
 });
 
+describe("selectMsdRatingPlays", () => {
+  it("caps verified reuploads together, keeps unrelated charts and separates keymodes and Invert", () => {
+    const base = { identity: "a", beatmapId: 1, chartFamily: "verified", keyCount: 4, rate: 1,
+      goal: 0.95, pp: 0, values: { Overall: 30 }, patterns: [] };
+    const plays = [base,
+      { ...base, identity: "b", beatmapId: 2, values: { Overall: 29 } },
+      { ...base, identity: "c", beatmapId: 3, values: { Overall: 28 } },
+      { ...base, identity: "retry", values: { Overall: 27 } },
+      { ...base, identity: "other", beatmapId: 4, chartFamily: null },
+      { ...base, identity: "7k", keyCount: 7 },
+      { ...base, identity: "inverse", inverse: true },
+    ];
+    expect(selectMsdRatingPlays(plays).map((p) => p.identity).sort()).toEqual(["7k", "a", "b", "inverse", "other"]);
+    expect(selectMsdRatingPlays([...plays].reverse())).toEqual(selectMsdRatingPlays(plays));
+    expect(plays).toHaveLength(7);
+  });
+});
+
 describe("computePlayerSkillRatings", () => {
+  it("refreshes stored chart families before rating separate rate-edit uploads", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const { CHART_FAMILY_VERSION } = await import("../src/features/chart-families.js");
+      const now = new Date().toISOString();
+      for (const id of [101, 102, 103]) {
+        await exec(db, `insert into beatmap_chart_analysis
+          (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+          values (?, ?, 'ready', 4, ?, ?)`,
+        [id, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [] }), now]);
+        await exec(db, `insert into beatmap_chart_families
+          (beatmap_id, version, topology_key, family_key, file_hash) values (?, ?, 'topology', 'verified', ?)`,
+        [id, CHART_FAMILY_VERSION, String(id)]);
+      }
+      const retained = [101, 102, 103].map((beatmapId, index) => ({
+        identity: `official:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95, pp: 100,
+        values: { Overall: 30 - index, Stream: 25 - index }, patterns: [],
+      }));
+      const result = await computePlayerSkillRatings(db, failingOsu, [], retained);
+      expect(result.plays.map((p) => p.chartFamily)).toEqual(["verified", "verified", "verified"]);
+      expect(result.summary.modes[0].ratings.Stream).toBe(aggregateSsrs([25, 24]));
+    });
+  });
+
+  it("caps MSD at two Overall-selected rates while retaining every play for dan and reuse", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+      const initial = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 101 })], []);
+      const retained = [1, 0.95, 0.9, 0.85].map((rate, index) => ({
+        ...initial.plays[0], identity: `official:${index + 1}`, rate,
+        values: { Overall: 30 - index, Stream: index === 3 ? 50 : 25 - index },
+      }));
+      const result = await computePlayerSkillRatings(db, failingOsu, [], retained);
+      expect(result.plays).toHaveLength(4);
+      expect(result.summary.modes[0].ratings.Overall).toBe(aggregateSsrs([30, 29]));
+      expect(result.summary.modes[0].ratings.Stream).toBe(aggregateSsrs([25, 24]));
+      const now = new Date().toISOString();
+      await exec(db, `insert into player_skill_ratings
+        (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+        values (99, ?, 'ready', ?, ?, ?, ?)`,
+      [PLAYER_SKILLS_VERSION, JSON.stringify(result.summary), JSON.stringify({ plays: result.plays }), now, now]);
+      for (const sort of ["rating", "recent"] as const) {
+        const page = await getPlayerSkillPlays(db, 99, 4, "Stream", { sort });
+        expect(page.total).toBe(2);
+        expect(page.items.map((item) => item.rate).sort()).toEqual([0.95, 1]);
+      }
+    });
+  });
+
   it("rates supported plays per keymode and classifies the rest", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });

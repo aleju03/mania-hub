@@ -61,7 +61,10 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v27 (current): persists vibro exclusion explanations beside the rated pool,
+// v28 (current): only the best two Overall SSRs per verified chart family
+// contribute to MSD ratings. All plays remain available for dan and reuse.
+//
+// v27: persists vibro exclusion explanations beside the rated pool,
 // so already-recomputed profiles can explain the plays the detector removed.
 //
 // v26: checks ranked 4K uprates as well as tracked plays, including
@@ -89,7 +92,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 27;
+export const PLAYER_SKILLS_VERSION = 28;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -111,7 +114,7 @@ export const PLAYER_SKILLS_VERSION = 27;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -713,6 +716,8 @@ export function isPlayerSkillAxis(axis: string): boolean {
 export interface StoredPlaySsr {
   identity: string;
   beatmapId: number;
+  /** Note-verified rate-edit family, refreshed during compute; never a difficulty input. */
+  chartFamily?: string | null;
   keyCount: number;
   rate: number;
   goal: number;
@@ -1185,10 +1190,34 @@ async function computePlaySsrValues(
   return { values: blendLnTailValues(base.values, tails.values, keyCount), calcRuns: base.calcRuns + tails.calcRuns };
 }
 
+/** Etterna selects rate PBs by Overall once, before any skill-axis filtering.
+ * Our verified families also join separately uploaded rate edits. Invert is
+ * a different chart. Keep the full stored pool for dan and future recomputes.
+ */
+export function selectMsdRatingPlays(plays: StoredPlaySsr[]): StoredPlaySsr[] {
+  const ranked = plays.filter((play) => Number.isFinite(play?.values?.Overall) && play.values.Overall > 0)
+    .sort((a, b) => b.values.Overall - a.values.Overall
+      || b.goal - a.goal || a.beatmapId - b.beatmapId || a.rate - b.rate
+      || a.identity.localeCompare(b.identity));
+  const slots = new Set<string>();
+  const counts = new Map<string, number>();
+  return ranked.filter((play) => {
+    const slot = `${play.keyCount}:${playSlotKey(play.beatmapId, play.rate, play.inverse)}`;
+    if (slots.has(slot)) return false;
+    slots.add(slot);
+    const family = `${play.keyCount}:${play.chartFamily ?? `beatmap:${play.beatmapId}`}:${play.inverse === true}`;
+    const count = counts.get(family) ?? 0;
+    if (count >= 2) return false;
+    counts.set(family, count + 1);
+    return true;
+  });
+}
+
 function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
+  const eligible = selectMsdRatingPlays(plays);
   const ratings: Record<string, number> = {};
   for (const name of SKILL_RATING_SKILLSETS) {
-    ratings[name] = aggregateSsrs(plays.map((play) => Number(play.values[name] ?? 0)));
+    ratings[name] = aggregateSsrs(eligible.map((play) => Number(play.values[name] ?? 0)));
   }
   return ratings;
 }
@@ -1199,7 +1228,7 @@ function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
 // 4K-born skillset names mislead; other keymodes store it unpublished.
 function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPatternRating[] {
   const playsByPattern = new Map<string, StoredPlaySsr[]>();
-  for (const play of plays) {
+  for (const play of selectMsdRatingPlays(plays)) {
     for (const pattern of play.patterns) {
       const list = playsByPattern.get(pattern);
       if (list) list.push(play);
@@ -3013,6 +3042,7 @@ export async function computePlayerSkillRatings(
 
   const byKeyCount = new Map<number, StoredPlaySsr[]>();
   for (const play of analyzed) {
+    play.chartFamily = infoByBeatmap.get(play.beatmapId)?.chartFamily ?? null;
     const list = byKeyCount.get(play.keyCount);
     if (list) list.push(play);
     else byKeyCount.set(play.keyCount, [play]);
@@ -3547,7 +3577,7 @@ export async function getPlayerSkillPlays(
   const storedPlays = await loadLatestStoredPlayerSkillPlays(db, userId);
   if (!storedPlays) return empty;
   const patternId = axis.startsWith("pattern:") ? axis.slice("pattern:".length) : null;
-  const candidates = storedPlays
+  const candidates = selectMsdRatingPlays(storedPlays)
     .flatMap((play) => {
       if (!play || play.keyCount !== keyCount || !Number.isInteger(play.beatmapId) || play.beatmapId <= 0) return [];
       if (patternId && !Array.isArray(play.patterns)) return [];

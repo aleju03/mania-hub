@@ -312,12 +312,11 @@ describe("getPlayerSkillPlays filters", () => {
       const { getPlayerSkillPlays } = await import("../src/features/player-skills.js");
       await seed(db);
       const best = await getPlayerSkillPlays(db, 77, 4, "Overall");
-      expect(best.items.map((item) => item.rating)).toEqual([30, 28, 26, 24, 22]);
+      expect(best.items.map((item) => item.rating)).toEqual([30, 28, 24, 22]);
       const recent = await getPlayerSkillPlays(db, 77, 4, "Overall", { sort: "recent" });
       expect(recent.items.map((item) => item.playedAt)).toEqual([
         "2026-05-01T00:00:00Z",
         "2026-04-01T00:00:00Z",
-        "2026-03-01T00:00:00Z",
         "2026-02-01T00:00:00Z",
         "2026-01-01T00:00:00Z",
       ]);
@@ -329,10 +328,10 @@ describe("getPlayerSkillPlays filters", () => {
       const { getPlayerSkillPlays } = await import("../src/features/player-skills.js");
       await seed(db);
       const page = await getPlayerSkillPlays(db, 77, 4, "Overall", { hideRanked: true });
-      expect(page.items.map((item) => item.beatmapId)).toEqual([401, 401, 401, 403]);
-      expect(page.total).toBe(4);
+      expect(page.items.map((item) => item.beatmapId)).toEqual([401, 401, 403]);
+      expect(page.total).toBe(3);
       // The loved chart survives; only the ranked one is gone.
-      expect(page.unfilteredTotal).toBe(5);
+      expect(page.unfilteredTotal).toBe(4);
       expect(page.items.every((item) => item.beatmapStatus !== "ranked")).toBe(true);
     });
   });
@@ -371,14 +370,14 @@ describe("getPlayerSkillPlays filters", () => {
     });
   });
 
-  it("keeps the newest rates when the list is ordered by recency", async () => {
+  it("keeps the newest eligible rate when the list is ordered by recency", async () => {
     await withDb(async (db) => {
       const { getPlayerSkillPlays } = await import("../src/features/player-skills.js");
       await seed(db);
       const page = await getPlayerSkillPlays(db, 77, 4, "Overall", { sort: "recent", maxPerChart: 1 });
-      // 1.0x is the most recent of the three rates on 401, so it is the one
-      // the cap keeps here - the opposite of the rating list above.
-      expect(page.items.filter((item) => item.beatmapId === 401).map((item) => item.rate)).toEqual([1]);
+      // 1.0x is newest but outside the Overall-selected top two. Sorting or
+      // filtering must never promote it back into the rating's evidence.
+      expect(page.items.filter((item) => item.beatmapId === 401).map((item) => item.rate)).toEqual([1.3]);
       expect(page.total).toBe(3);
     });
   });
