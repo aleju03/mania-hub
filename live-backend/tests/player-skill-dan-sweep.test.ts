@@ -151,6 +151,21 @@ describe("recomputePlayerSkillDanChunk", () => {
     db.close();
   });
 
+  it("preserves Dan-only clears when refolding the stored headline", async () => {
+    const db = await makeDb();
+    const ids = [301, 302, 303, 304];
+    for (const id of ids) await seedChart(db, id, 8);
+    await seedRow(db, 11, ids);
+    const danOnly = ids.map((id) => ({ ...barePass(id), goal: 0.8, values: {}, ratingExcluded: true }));
+    await exec(db, "update player_skill_ratings set plays_json = ? where user_id = 11",
+      [json({ plays: [], danOnly })]);
+    expect(await recomputePlayerSkillDanChunk(db, 0)).toMatchObject({ rewritten: 1 });
+    const row = (await exec(db, "select modes_json, plays_json from player_skill_ratings where user_id = 11")).rows[0];
+    expect(JSON.parse(String(row.modes_json)).modes[0].dan.rc).toMatchObject({ rawDan: 8, clears: 4 });
+    expect(JSON.parse(String(row.plays_json))).toEqual({ plays: [], danOnly });
+    db.close();
+  });
+
   it("can patch only 4K LN while preserving RC and every other keymode", async () => {
     const db = await makeDb();
     const beatmapIds = [501, 502, 503, 504];

@@ -16079,3 +16079,11 @@ msgstr "你的心愿单"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Accuracy below skill rating range"
+msgstr "准确率低于技能评级范围"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "No MSD rating"
+msgstr "无 MSD 评级"

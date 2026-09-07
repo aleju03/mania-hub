@@ -16070,3 +16070,11 @@ msgstr "Tu lista de deseos"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "Video de YouTube"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Accuracy below skill rating range"
+msgstr "Precisión por debajo del rango de valoración"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "No MSD rating"
+msgstr "Sin valoración MSD"

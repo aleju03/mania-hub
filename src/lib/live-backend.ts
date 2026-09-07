@@ -28,8 +28,9 @@ export interface LivePlayerSkillPlay {
   keyCount: number;
   rating: number;
   overallRating: number;
-  /** Explanation-only play excluded from skill aggregation. */
+  /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
+  ratingExclusionReason?: "msd_floor";
   pp: number | null;
   accuracy: number | null;
   rate: number;

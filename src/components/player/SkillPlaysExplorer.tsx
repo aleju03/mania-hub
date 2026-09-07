@@ -588,6 +588,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             source: detail.play.source,
             rating: detail.play.rating,
             ratingExcluded: detail.play.ratingExcluded,
+            ratingExclusionReason: detail.play.ratingExclusionReason,
             ratingLabel: detail.ratingLabel,
             ratingColor: detail.ratingColor,
           }}

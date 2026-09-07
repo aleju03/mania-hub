@@ -61,7 +61,10 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v28 (current): only the best two Overall SSRs per verified chart family
+// v29 (current): retains sub-MSD-floor passes separately for Dan credit and
+// rejection explanations, without inventing SSRs. Prior SSRs remain reusable.
+//
+// v28: only the best two Overall SSRs per verified chart family
 // contribute to MSD ratings. All plays remain available for dan and reuse.
 //
 // v27: persists vibro exclusion explanations beside the rated pool,
@@ -92,7 +95,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 28;
+export const PLAYER_SKILLS_VERSION = 29;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -114,7 +117,7 @@ export const PLAYER_SKILLS_VERSION = 28;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -314,9 +317,9 @@ const LN_PATTERN_IDS = new Set(["ln", "lngeneral", "lnrelease", "lninverse", "ln
 // sits at or below it cannot be rated honestly: clamping the goal up to 0.8
 // rates the play as if it were an 80% play, which on a hard enough chart
 // awards near-full MSD for a scraped pass (a 61% DT pass once headlined a
-// profile at SSR 35). Such plays are excluded outright (ssrGoalForScore
-// returns null) and stored floor-rated plays from before the rule drop in
-// the retention pass.
+// profile at SSR 35). Such plays are excluded from MSD (ssrGoalForScore
+// returns null), but kept separately for Dan evidence. Stored floor-rated
+// plays from before the rule drop in the retention pass.
 const SSR_GOAL_MIN = 0.8;
 // The calc clamps goals above 0.965 internally (Etterna's SSR cap); goals
 // above it are served by extrapolating from the calc's slope between the MSD
@@ -660,8 +663,9 @@ export interface PlayerSkillPlay {
   keyCount: number;
   rating: number;
   overallRating: number;
-  /** An explanation-only play, excluded from skill aggregation. */
+  /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
+  ratingExclusionReason?: "msd_floor";
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -783,6 +787,8 @@ export interface StoredPlaySsr {
   // inverted chart's own verdict for it. Only the keymodes in
   // INVERSE_MOD_KEY_COUNTS ever store one.
   inverse?: boolean;
+  /** No valid SSR exists; retained only for Dan credit and rejection explanations. */
+  ratingExcluded?: boolean;
 }
 
 interface StoredModesSummary {
@@ -801,6 +807,8 @@ export interface StoredVibroExclusion {
 
 interface StoredPlayerSkillPlays {
   plays: StoredPlaySsr[];
+  /** Passed plays below the MSD goal floor; still subject to ordinary Dan gates. */
+  danOnly?: StoredPlaySsr[];
   vibroExcluded?: StoredVibroExclusion[];
 }
 
@@ -1195,7 +1203,7 @@ async function computePlaySsrValues(
  * a different chart. Keep the full stored pool for dan and future recomputes.
  */
 export function selectMsdRatingPlays(plays: StoredPlaySsr[]): StoredPlaySsr[] {
-  const ranked = plays.filter((play) => Number.isFinite(play?.values?.Overall) && play.values.Overall > 0)
+  const ranked = plays.filter((play) => !play?.ratingExcluded && Number.isFinite(play?.values?.Overall) && play.values.Overall > 0)
     .sort((a, b) => b.values.Overall - a.values.Overall
       || b.goal - a.goal || a.beatmapId - b.beatmapId || a.rate - b.rate
       || a.identity.localeCompare(b.identity));
@@ -2622,7 +2630,7 @@ export async function computePlayerSkillRatings(
   scores: OscScore[],
   previousPlays: StoredPlaySsr[],
   options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[]; previousVibroExcluded?: StoredVibroExclusion[] } = {},
-): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number }> {
+): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; danOnly: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number }> {
   const topPlays = scores.filter((score) => typeof score.pp === "number" && score.pp > 0);
   const trackedScores = options.trackedScores ?? [];
   const untrustedIdentities = options.untrustedIdentities ?? new Set<string>();
@@ -2711,14 +2719,20 @@ export async function computePlayerSkillRatings(
     }
     // Under Invert every object is a hold, so the LN goal fade is the whole
     // fade regardless of what the stored chart's hold share was.
-    const goal = ssrGoalForScore(score, inverse ? 1 : info?.lnRatio ?? null, odOverride ?? chartOd);
-    if (goal == null) {
-      if (source === "top") unsupportedPlays += 1;
-      return;
-    }
+    // The MSD floor must not erase a passed score from Dan evidence. Carry
+    // it through chart/mod validation, but never run MinaCalc at this floor.
+    const goal = ssrGoalForScore(score, inverse ? 1 : info?.lnRatio ?? null, odOverride ?? chartOd) ?? SSR_GOAL_MIN;
     const key = playSlotKey(beatmapId, rate, inverse);
     const existing = candidates.get(key);
-    if (!existing || goal > existing.goal || (goal === existing.goal && source === "top" && existing.source === "tracked")) {
+    const accuracy = calculateStableAccuracy(score.statistics ?? {}) || getDisplayedAccuracy(score);
+    const existingAccuracy = existing
+      ? calculateStableAccuracy(existing.score.statistics ?? {}) || getDisplayedAccuracy(existing.score)
+      : 0;
+    const tiedGoal = existing != null && goal === existing.goal;
+    const betterFloorAccuracy = tiedGoal && goal === SSR_GOAL_MIN && accuracy > existingAccuracy;
+    const tiedQuality = tiedGoal && (goal > SSR_GOAL_MIN || accuracy === existingAccuracy);
+    if (!existing || goal > existing.goal || betterFloorAccuracy
+      || (tiedQuality && source === "top" && existing.source === "tracked")) {
       candidates.set(key, {
         score, beatmapId, rate, goal, identity: getScoreIdentity(score), source,
         odOverride, chartOdPending: odOverride != null && chartOd == null, inverse,
@@ -2834,6 +2848,7 @@ export async function computePlayerSkillRatings(
     }
     if (
       previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal
+      && (goal > SSR_GOAL_MIN || previous.ratingExcluded === true)
       && (previous.inverse === true) === candidate.inverse
     ) {
       analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence });
@@ -2895,6 +2910,13 @@ export async function computePlayerSkillRatings(
       }
       if (vibro === false) rateVibroChecked = RATE_VIBRO_CHECK_VERSION;
     }
+    if (goal <= SSR_GOAL_MIN) {
+      analyzedByKey.set(key, {
+        ...exclusionPlay(keyCount), values: {}, ratingExcluded: true,
+        ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
+      });
+      continue;
+    }
     const ssr = await computePlaySsrValues(ratedText, {
       rate, keyCount, goal,
       lnRatio: candidate.inverse ? 1 : infoByBeatmap.get(beatmapId)?.lnRatio ?? null,
@@ -2930,8 +2952,8 @@ export async function computePlayerSkillRatings(
     // A stored goal at the calc floor means the play's real accuracy sat at
     // or below it (the clamp erased how far below), so its SSR is the
     // floor's, not the play's. Rated before the sub-floor exclusion existed;
-    // evict instead of retaining.
-    if (!(previous.goal > SSR_GOAL_MIN)) continue;
+    // evict instead of retaining. Explicit Dan-only records have no SSR to evict.
+    if (!(previous.goal > SSR_GOAL_MIN) && !previous.ratingExcluded) continue;
     // A stored play whose still-visible score turns out to carry a
     // chart-rewriting mod (HO/NR) was rated against a chart it never
     // played (rated before the exclusion existed); evict instead of
@@ -2971,7 +2993,10 @@ export async function computePlayerSkillRatings(
     const current = analyzedByKey.get(key);
     if (!current) {
       analyzedByKey.set(key, previous);
-    } else if (previous.goal > current.goal && previous.identity !== current.identity) {
+    } else if ((previous.goal > current.goal
+      || (previous.ratingExcluded && current.ratingExcluded
+        && (previous.stableAccuracy ?? previous.accuracy ?? 0) > (current.stableAccuracy ?? current.accuracy ?? 0)))
+      && previous.identity !== current.identity) {
       analyzedByKey.set(key, previous);
     }
   }
@@ -3000,6 +3025,9 @@ export async function computePlayerSkillRatings(
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
   const analyzed = [...analyzedByKey.values()];
+  const rated = analyzed.filter((play) => !play.ratingExcluded);
+  const danOnly = analyzed.filter((play) => play.ratingExcluded);
+  unsupportedPlays += danOnly.filter((play) => play.source === "top").length;
   // A newly eligible/better play on a slot replaces its former explanation.
   for (const key of analyzedByKey.keys()) excludedByKey.delete(key);
   const vibroExcluded = [...excludedByKey.values()];
@@ -3055,7 +3083,7 @@ export async function computePlayerSkillRatings(
   const modes: PlayerSkillModeBreakdown[] = [...byKeyCount.entries()]
     .map(([keyCount, list]) => ({
       keyCount,
-      analyzedPlays: list.length,
+      analyzedPlays: list.filter((play) => !play.ratingExcluded).length,
       ratings: aggregateModeRatings(list),
       patterns: aggregateModePatternRatings(list),
       dan: computeModeDan(keyCount, list, scoresByIdentity, infoByBeatmap, options.courseClears, rateVerdicts),
@@ -3064,13 +3092,14 @@ export async function computePlayerSkillRatings(
 
   return {
     summary: {
-      totalPlays: analyzed.length + pendingPlays + unsupportedPlays,
-      analyzedPlays: analyzed.length,
+      totalPlays: rated.length + pendingPlays + unsupportedPlays,
+      analyzedPlays: rated.length,
       pendingPlays,
       unsupportedPlays,
       modes,
     },
-    plays: analyzed,
+    plays: rated,
+    danOnly,
     vibroExcluded,
     untaggedBeatmapIds: [...new Set(untaggedBeatmapIds)],
     pendingRateVibroChecks: pendingRateVibroKeys.size,
@@ -3130,7 +3159,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       [userId, ...seedableVersions],
     )).rows.find((row) => typeof row.plays_json === "string" && row.plays_json.length > 0);
     const previousStored = parseJson<Partial<StoredPlayerSkillPlays>>(String(previousRow?.plays_json ?? ""), {});
-    const previousPlays = previousStored.plays ?? [];
+    const previousPlays = [...(previousStored.plays ?? []), ...(previousStored.danOnly ?? [])];
 
     const trackedScores = await loadTrackedScores(db, userId);
     const archived = await loadArchivedTrackedEvidence(db, userId);
@@ -3155,7 +3184,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
          where user_id = ? and analysis_version = ?`,
         args: [
           json(result.summary),
-          json({ version: PLAYER_SKILLS_VERSION, plays: result.plays, vibroExcluded: result.vibroExcluded }),
+          json({ version: PLAYER_SKILLS_VERSION, plays: result.plays, danOnly: result.danOnly, vibroExcluded: result.vibroExcluded }),
           accModel ? json(accModel) : null,
           snapshot.fetchedAt,
           computedAt,
@@ -3541,6 +3570,7 @@ async function loadLatestStoredPlayerSkillPayload(db: Db, userId: number): Promi
     const stored = parseJson<Partial<StoredPlayerSkillPlays> | null>(String(row.plays_json ?? ""), null);
     if (Array.isArray(stored?.plays)) return {
       plays: stored.plays,
+      danOnly: Array.isArray(stored.danOnly) ? stored.danOnly : [],
       vibroExcluded: Array.isArray(stored.vibroExcluded) ? stored.vibroExcluded : [],
     };
   }
@@ -3777,6 +3807,7 @@ function buildPlayerSkillPlay(
     coverUrl: map?.coverUrl ?? null,
     beatmapStatus: map?.status ?? null,
     keyCount,
+    ...(play.ratingExcluded ? { ratingExcluded: true, ratingExclusionReason: "msd_floor" as const } : {}),
     rating: Math.round(rating * 100) / 100,
     overallRating: Math.round(Number(play.values?.Overall ?? 0) * 100) / 100,
     pp: Number.isFinite(pp) && pp > 0 ? pp : null,
@@ -4365,7 +4396,7 @@ export async function getPlayerSkillDanEvidence(
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
   const stored = await loadLatestStoredPlayerSkillPayload(db, userId);
   if (!stored) return null;
-  const plays = stored.plays
+  const plays = [...stored.plays, ...(stored.danOnly ?? [])]
     .filter((play) => play && play.keyCount === keyCount && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
   const exclusions = options.includeRejected
     ? (stored.vibroExcluded ?? []).filter((entry) => entry?.play?.keyCount === keyCount
@@ -4571,7 +4602,8 @@ export async function getPlayerSkillDanEvidence(
           // the only number it can honestly carry.
           play: {
             ...buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata),
-            ...(entry.reason === "chart_vibro" || entry.reason === "rate_vibro" ? { ratingExcluded: true } : {}),
+            ...(entry.reason === "chart_vibro" || entry.reason === "rate_vibro"
+              ? { ratingExcluded: true, ratingExclusionReason: undefined } : {}),
           },
           reason: entry.reason,
           side: entry.side,
@@ -5731,8 +5763,9 @@ export async function recomputePlayerSkillDanChunk(
     const userId = Number(row.user_id);
     nextCursor = Math.max(nextCursor, userId);
     const summary = parseJson<StoredModesSummary | null>(String(row.modes_json ?? ""), null);
-    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
-    const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
+    const stored = parseJson<Partial<StoredPlayerSkillPlays> | null>(String(row.plays_json ?? ""), null);
+    const plays = [...(Array.isArray(stored?.plays) ? stored.plays : []),
+      ...(Array.isArray(stored?.danOnly) ? stored.danOnly : [])]
       .filter((play) => play
         && Number.isInteger(play.beatmapId)
         && play.beatmapId > 0

@@ -78,6 +78,7 @@ export interface MapDetailPlayContext {
   source: "top" | "tracked";
   rating: number;
   ratingExcluded?: boolean;
+  ratingExclusionReason?: "msd_floor";
   ratingLabel: string;
   ratingColor: string;
   // Dan evidence has two distinct values: the chart's base rating and the
@@ -117,8 +118,17 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
         )}
         {play.ratingExcluded ? (
           <div className="flex flex-col text-osu-red-light">
-            <span className="text-sm font-semibold"><Trans>Vibro detected</Trans></span>
-            <span className="mt-1 text-[9px] uppercase tracking-wide"><Trans>does not count</Trans></span>
+            {play.ratingExclusionReason === "msd_floor" ? (
+              <>
+                <span className="text-sm font-semibold"><Trans>Accuracy below skill rating range</Trans></span>
+                <span className="mt-1 text-[9px] uppercase tracking-wide"><Trans>No MSD rating</Trans></span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm font-semibold"><Trans>Vibro detected</Trans></span>
+                <span className="mt-1 text-[9px] uppercase tracking-wide"><Trans>does not count</Trans></span>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col">
@@ -131,7 +141,7 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
             <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
           </div>
         )}
-        {play.credit && !play.ratingExcluded ? (
+        {play.credit && (!play.ratingExcluded || play.ratingExclusionReason === "msd_floor") ? (
           <div className="flex flex-col">
             <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.credit.color }}>
               <span className="text-[16px] font-bold tabular-nums">{play.credit.rating.toFixed(2)}</span>

@@ -545,10 +545,90 @@ describe("computePlayerSkillRatings", () => {
       const floorRated = { ...healthy.plays[0], identity: "legacy-scrape", goal: 0.8, accuracy: 0.6156 };
       const purged = await computePlayerSkillRatings(db, failingOsu, [], [floorRated], {});
       expect(purged.summary.analyzedPlays).toBe(0);
+      // A still-retained raw score must not reuse that old clamped SSR either.
+      const withRawScore = await computePlayerSkillRatings(db, failingOsu, [scrape], [{
+        ...floorRated, identity: "official:9", rate: 1.5,
+      }]);
+      expect(withRawScore.plays).toEqual([]);
+      expect(withRawScore.danOnly).toMatchObject([{ values: {}, ratingExcluded: true }]);
       // The same stored play above the floor retains as before.
       const aboveFloor = { ...healthy.plays[0] };
       const retained = await computePlayerSkillRatings(db, failingOsu, [], [aboveFloor], {});
       expect(retained.summary.analyzedPlays).toBe(1);
+    });
+  });
+
+  it("keeps sub-MSD-floor passes as durable Dan credit or rejected evidence without rating them", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const now = new Date().toISOString();
+      for (const beatmapId of [101, 102]) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at)
+          values (?, 1, 'mania', 'test', ?, ?)`, [beatmapId, JSON.stringify({ accuracy: 8 }), now]);
+        await exec(db, `insert into beatmap_chart_analysis
+          (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+          values (?, ?, 'ready', 4, ?, ?)`, [beatmapId, CHART_ANALYSIS_VERSION,
+          JSON.stringify({ lnRatio: 0, patterns: [], rc: { rawDan: 5 }, jackDemand: { detected: true } }), now]);
+      }
+      // Judgements reproduce a 91.02% lazer pass: below the Wife/MSD floor,
+      // but above the 91% stable-formula minimum for reduced rice Dan credit.
+      const clear = play({ id: 901, beatmap_id: 101, pp: null, accuracy: 0.910203,
+        build_id: 8873, statistics: { ok: 69, meh: 36, good: 180, miss: 34, great: 732, perfect: 1003 } });
+      const rejected = play({ id: 902, beatmap_id: 102, pp: null, accuracy: 0.805238,
+        build_id: 8873, statistics: { ok: 189, meh: 75, good: 415, miss: 138, great: 816, perfect: 852 } });
+      expect(ssrGoalForScore(clear, 0, 8)).toBeNull();
+      const worseRetry = { ...rejected, id: 903, beatmap_id: 101 };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], {
+        trackedScores: [clear, worseRetry, rejected],
+      });
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly.map((entry) => entry.identity)).toEqual(["official:901", "official:902"]);
+      expect(result.danOnly.every((entry) => entry.ratingExcluded && Object.keys(entry.values).length === 0)).toBe(true);
+      expect(result.summary.modes[0]).toMatchObject({ analyzedPlays: 0, ratings: { Overall: 0 } });
+      expect(selectMsdRatingPlays(result.danOnly)).toEqual([]);
+
+      // Recompute after raw score retention: explanations and valid credit survive.
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], result.danOnly);
+      expect(retained.danOnly).toHaveLength(2);
+      await exec(db, `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, updated_at)
+        values (99, ?, 'ready', ?, ?, ?)`, [PLAYER_SKILLS_VERSION,
+        JSON.stringify(retained.summary), JSON.stringify({ plays: retained.plays, danOnly: retained.danOnly }), now]);
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true });
+      expect(evidence?.clears).toHaveLength(1);
+      expect(evidence?.clears[0]).toMatchObject({ play: { scoreId: 901, ratingExcluded: true, ratingExclusionReason: "msd_floor" } });
+      expect(evidence?.clears[0].creditedDan).toBeCloseTo(3.68, 2);
+      expect(evidence?.rejected).toMatchObject([{ reason: "below_bar", play: { scoreId: 902, ratingExcluded: true } }]);
+      expect((await getPlayerSkillPlays(db, 99, 4, "Overall")).items).toEqual([]);
+
+      // The production job must load and write the separate pool too.
+      await exec(db, `insert into profile_snapshots
+        (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+        values (99, '99', '{}', ?, 200, ?, ?, ?)`, [JSON.stringify([play({ id: 905, beatmap_id: 999 })]), now, now, now]);
+      await computePlayerSkillsJob(db, {
+        ...failingOsu,
+        getUserByKey: async (): Promise<never> => { throw new Error("no network in tests"); },
+        getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network in tests"); },
+      }, new JobQueue(db), { userId: 99 });
+      const persisted = (await exec(db, "select plays_json from player_skill_ratings where user_id = 99")).rows[0];
+      expect(JSON.parse(String(persisted.plays_json))).toMatchObject({ plays: [], danOnly: retained.danOnly });
+
+      // A later rated pass replaces the Dan-only slot, without duplicate evidence.
+      const improved = await computePlayerSkillRatings(db, failingOsu,
+        [play({ id: 904, beatmap_id: 101 })], retained.danOnly);
+      expect(improved.plays.map((entry) => entry.beatmapId)).toEqual([101]);
+      expect(improved.danOnly.map((entry) => entry.beatmapId)).toEqual([102]);
+    });
+  });
+
+  it("still applies played-rate vibro checks to sub-floor Dan evidence", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 108, buildSustainedRateChordBeatmapFile(), { source: "test" });
+      const result = await computePlayerSkillRatings(db, failingOsu,
+        [play({ id: 81, beatmap_id: 108, accuracy: 0.7, mods: [{ acronym: "DT" }] })], []);
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.vibroExcluded).toMatchObject([{ reason: "rate_vibro", play: { beatmapId: 108 } }]);
     });
   });
 

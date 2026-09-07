@@ -43,8 +43,8 @@ vi.mock("./SkillPlaysModal", () => ({
   }),
 }));
 vi.mock("#/components/maps/MapDetailModal", () => ({
-  MapDetailModal: ({ play }: { play: { ratingExcluded?: boolean } }) => (
-    <div data-testid="map-rating-state">{play.ratingExcluded ? "excluded" : "rated"}</div>
+  MapDetailModal: ({ play }: { play: { ratingExcluded?: boolean; ratingExclusionReason?: "msd_floor" } }) => (
+    <div data-testid="map-rating-state">{play.ratingExclusionReason ?? (play.ratingExcluded ? "excluded" : "rated")}</div>
   ),
 }));
 
@@ -112,6 +112,23 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     await waitFor(() => expect(screen.getByTestId("map-rating-state").textContent).toBe(excluded ? "excluded" : "rated"));
   });
 
+  it("passes the low-accuracy rating reason through when opening a Dan play", async () => {
+    fetchDanEvidence.mockResolvedValue({
+      clears: [],
+      rejected: [{
+        play: { ...play(101, "Best"), rating: 0, overallRating: 0,
+          ratingExcluded: true, ratingExclusionReason: "msd_floor" },
+        reason: "below_bar", side: "rc", chartDan: 5, chartDanLabel: "5",
+        clearAccuracy: 0.8, bar: 0.96, minAccuracy: 0.91, od: null,
+      }],
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41004} username="player" modes={[mode]} view="dan" />
+    </I18nProvider>);
+    fireEvent.click(await screen.findByText("Best 101"));
+    await waitFor(() => expect(screen.getByTestId("map-rating-state").textContent).toBe("msd_floor"));
+  });
+
   it("shows and filters every recorded mod, not only the rate mod", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
       const order = options.sort === "recent" ? "Recent" : "Best";
@@ -143,6 +160,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
   });
 
+  // Rendering and querying 60 rich rows can exceed 10s on a CPU-capped VPS.
   it("reveals 50 at a time and filters or swaps a prefetched order without another request", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
       const recent = options.sort === "recent";
@@ -172,5 +190,5 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     await waitFor(() => expect(screen.queryAllByText("Recent 59").length).toBeGreaterThan(0));
     expect(fetchSkillPlays).toHaveBeenCalledTimes(warmedRequestCount);
-  }, 10_000);
+  }, 30_000);
 });
