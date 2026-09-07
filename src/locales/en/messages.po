@@ -15194,12 +15194,16 @@ msgid "Vibro detected"
 msgstr "Vibro detected"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
-msgstr "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
+#~ msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
+#~ msgstr "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Vibro detected in this chart. This play does not count toward skill or dan ratings."
 msgstr "Vibro detected in this chart. This play does not count toward skill or dan ratings."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Vibro detected. This play does not count toward skill or dan ratings."
+msgstr "Vibro detected. This play does not count toward skill or dan ratings."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"

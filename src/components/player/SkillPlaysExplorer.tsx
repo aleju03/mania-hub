@@ -1048,9 +1048,8 @@ function DanRejectedRow({
   // rows below it are breaking.
   const minAccuracy = rejected.minAccuracy;
   const od = rejected.od;
-  const rate = rejected.play.rate.toFixed(2);
   const reason = rejected.reason === "rate_vibro"
-    ? t`Vibro detected at ${rate}×. This play does not count toward skill or dan ratings.`
+    ? t`Vibro detected. This play does not count toward skill or dan ratings.`
     : rejected.reason === "chart_vibro"
       ? t`Vibro detected in this chart. This play does not count toward skill or dan ratings.`
       : rejected.reason === "below_bar"

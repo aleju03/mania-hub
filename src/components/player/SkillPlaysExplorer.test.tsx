@@ -90,7 +90,7 @@ afterEach(() => {
 
 describe("SkillPlaysExplorer bounded cohorts", () => {
   it.each([
-    [41001, "rate_vibro", "Vibro detected at 1.50×. This play does not count toward skill or dan ratings."],
+    [41001, "rate_vibro", "Vibro detected. This play does not count toward skill or dan ratings."],
     [41002, "chart_vibro", "Vibro detected in this chart. This play does not count toward skill or dan ratings."],
     [41003, "chart_ineligible", "This chart is not built in a way a dan level can be read off a clear of it."],
   ] as const)("explains %s / %s without conflating vibro and structural ineligibility", async (userId, reason, text) => {

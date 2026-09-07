@@ -15195,12 +15195,16 @@ msgid "Vibro detected"
 msgstr "检测到 vibro"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
-msgstr "检测到 {rate}× 倍速下的 vibro。此成绩不计入技能或段位评分。"
+#~ msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
+#~ msgstr "检测到 {rate}× 倍速下的 vibro。此成绩不计入技能或段位评分。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Vibro detected in this chart. This play does not count toward skill or dan ratings."
 msgstr "此谱面检测到 vibro。此成绩不计入技能或段位评分。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Vibro detected. This play does not count toward skill or dan ratings."
+msgstr "检测到 vibro。此成绩不计入技能或段位评分。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"
