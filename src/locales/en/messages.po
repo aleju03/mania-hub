@@ -85,6 +85,11 @@ msgstr "? ranked score"
 msgid "? replay views"
 msgstr "? replay views"
 
+#. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
+#: src/components/player/DanEvidenceModal.tsx
+msgid "· {0}/{averageWindow} weighted"
+msgstr "· {0}/{averageWindow} weighted"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "(extra) Step 7: clearing a real course overrides all of it"
 #~ msgstr "(extra) Step 7: clearing a real course overrides all of it"
@@ -798,14 +803,19 @@ msgstr "{0}'s play"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0}/{averageWindow} plays"
-msgstr "{0}/{averageWindow} plays"
+#~ msgid "{0}/{averageWindow} plays"
+#~ msgstr "{0}/{averageWindow} plays"
 
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0}% GOAT slot, then 1 of {1} on the roster"
 msgstr "{0}% GOAT slot, then 1 of {1} on the roster"
+
+#. placeholder {0}: Math.round(clear.averagingWeight * 100)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0}% weight"
+msgstr "{0}% weight"
 
 #. placeholder {0}: Math.round(score.weight.percentage)
 #: src/routes/player/$username.tsx
@@ -1360,8 +1370,12 @@ msgid "{skillsetLabel} dan"
 msgstr "{skillsetLabel} dan"
 
 #: src/components/player/DanLevelBadge.tsx
-msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
-msgstr "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+#~ msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+#~ msgstr "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} weighted clears, so the estimate is still filling in."
+msgstr "{skillsFull} of {skillsTotal} skills have their full {perSkill} weighted clears, so the estimate is still filling in."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
@@ -1672,6 +1686,10 @@ msgstr "<0>Tracking is on.</0> Your recent plays are being pulled in and will be
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 msgstr "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "<1% weight"
+msgstr "<1% weight"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -2765,8 +2783,12 @@ msgid "avatar"
 msgstr "avatar"
 
 #: src/components/player/DanLevelBadge.tsx
-msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
-msgstr "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+#~ msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+#~ msgstr "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "Averaged over {windowHave} of {windowNeed} weighted clears, so the estimate is still filling in."
+msgstr "Averaged over {windowHave} of {windowNeed} weighted clears, so the estimate is still filling in."
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"
@@ -3374,6 +3396,10 @@ msgstr "changelog"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changelog"
 msgstr "Changelog"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Changes"
+msgstr "Changes"
 
 #: src/components/player/SkillHistoryModal.tsx
 #~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
@@ -4859,6 +4885,7 @@ msgstr "Does {hidden} have more or fewer ranked score than {shown}?"
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "Does {hidden} have more or less playtime than {shown}?"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "does not count"
 msgstr "does not count"
@@ -5101,8 +5128,12 @@ msgstr "Each player is equally likely, no matter how many favourites they have."
 #~ msgstr "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
-msgstr "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
+#~ msgid "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
+#~ msgstr "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
+msgstr "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
 
 #: src/lib/streak-game.ts
 msgid "Earlier"
@@ -6338,9 +6369,9 @@ msgstr "Hindi"
 msgid "Hint"
 msgstr "Hint"
 
-#: src/components/packs/collections/CollectorShelf.tsx
-#~ msgid "History"
-#~ msgstr "History"
+#: src/components/player/SkillHistoryModal.tsx
+msgid "History"
+msgstr "History"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Hit <0/> <1/>"
@@ -6596,6 +6627,10 @@ msgstr "Imported {0}"
 msgid "Imported note image height scaling."
 msgstr "Imported note image height scaling."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "importing"
+msgstr "importing"
+
 #. placeholder {0}: importProgress ?? 0
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Importing… {0}%"
@@ -6657,6 +6692,10 @@ msgstr "indigo"
 #: src/components/communities/field-options.tsx
 msgid "Indonesian"
 msgstr "Indonesian"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
+msgstr "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -8779,6 +8818,10 @@ msgstr "No rated keymode yet."
 msgid "No rated players here yet."
 msgstr "No rated players here yet."
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "No rating system changes yet."
+msgstr "No rating system changes yet."
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "No recent scores"
@@ -9719,6 +9762,14 @@ msgstr "Output height in pixels"
 msgid "Output width in pixels"
 msgstr "Output width in pixels"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "outside average"
+msgstr "outside average"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Outside this average's weighted window"
+msgstr "Outside this average's weighted window"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "overall"
 msgstr "overall"
@@ -10095,6 +10146,7 @@ msgid "Player not found."
 msgstr "Player not found."
 
 #: src/components/replay/ReplayControls.tsx
+#: src/components/replay/ReplaySideBySideView.tsx
 msgid "Player's skin"
 msgstr "Player's skin"
 
@@ -10525,6 +10577,10 @@ msgstr "qualified"
 msgid "Qualified"
 msgstr "Qualified"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "queued"
+msgstr "queued"
+
 #: src/routes/bbcode.tsx
 msgid "Quote"
 msgstr "Quote"
@@ -10637,24 +10693,48 @@ msgid "Rate mods count, and they count for what the chart is worth at that speed
 msgstr "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x), at <2/> or <3/> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. A speed nobody has rated that chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to start counting."
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
+
+#: src/routes/dan-estimates.tsx
+msgid "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
+msgstr "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
+msgstr "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rates per chart"
@@ -11272,6 +11352,7 @@ msgstr "Retention And Controls"
 
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
+#: src/components/player/AddScoreModal.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
 #: src/routes/skins.tsx
@@ -12489,6 +12570,10 @@ msgstr "skin.ini references:"
 msgid "skins"
 msgstr "skins"
 
+#: src/components/replay/ReplaySideBySideView.tsx
+msgid "Skins"
+msgstr "Skins"
+
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "Skins are unavailable right now"
@@ -12805,8 +12890,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "Step 4: your passes are sorted into four skills"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
-msgstr "Step 5: each skill's dan is the average of your 20 best passes in it"
+msgid "Step 5: each skill's dan is a weighted average of your best passes"
+msgstr "Step 5: each skill's dan is a weighted average of your best passes"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
+#~ msgstr "Step 5: each skill's dan is the average of your 20 best passes in it"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
@@ -13022,12 +13111,16 @@ msgid "Take it down for good?"
 msgstr "Take it down for good?"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 #~ msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+
+#: src/routes/dan-estimates.tsx
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -14707,8 +14800,8 @@ msgstr "Turned down{said} Editing it sends it back for approval."
 #~ msgstr "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 
 #: src/routes/dan-estimates.tsx
-msgid "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgid "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -14786,6 +14879,7 @@ msgid "unknown"
 msgstr "unknown"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/player/$username.tsx
 msgid "Unknown"
 msgstr "Unknown"
@@ -15095,6 +15189,18 @@ msgstr "vibro chart, estimates unreliable"
 msgid "Vibro chart: difficulty estimates are unreliable"
 msgstr "Vibro chart: difficulty estimates are unreliable"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Vibro detected"
+msgstr "Vibro detected"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
+msgstr "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Vibro detected in this chart. This play does not count toward skill or dan ratings."
+msgstr "Vibro detected in this chart. This play does not count toward skill or dan ratings."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"
 msgstr "Video URL or id"
@@ -15102,6 +15208,10 @@ msgstr "Video URL or id"
 #: src/components/communities/field-options.tsx
 msgid "Vietnamese"
 msgstr "Vietnamese"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "View"
+msgstr "View"
 
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
@@ -15312,6 +15422,11 @@ msgstr "Watch side by side"
 msgid "Watch two runs of the same map at once"
 msgstr "Watch two runs of the same map at once"
 
+#. placeholder {0}: record.skin.name
+#: src/components/replay/ReplaySideBySideView.tsx
+msgid "Watch with {name}'s own skin ({0})"
+msgstr "Watch with {name}'s own skin ({0})"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Watch with the player's own skin"
 msgstr "Watch with the player's own skin"
@@ -15489,6 +15604,14 @@ msgstr "Wishlist is full (5)"
 #: src/routes/farm-helper.tsx
 msgid "with {mods}"
 msgstr "with {mods}"
+
+#: src/routes/dan-estimates.tsx
+msgid "With different charts, your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "With different charts, your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+
+#: src/routes/dan-estimates.tsx
+msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 
 #: src/routes/farm-helper.tsx
 msgid "with no mods"
@@ -15833,8 +15956,8 @@ msgstr "Your estimate for a side is the plain arithmetic average of the skill da
 #~ msgstr "Your jack dan is the average of the five highlighted passes. The gamma pass does not make you gamma on its own: one chart can be a lucky run, a chart that happens to suit you, or the one attempt out of fifty that stayed above the accuracy bar. Averaged against the four below it, it can pull your dan up a fraction of a level, but it cannot set it."
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"
@@ -15921,6 +16044,10 @@ msgstr "Your sets"
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "your showcase"
+
+#: src/components/replay/ReplaySideBySideView.tsx
+msgid "Your skin"
+msgstr "Your skin"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."

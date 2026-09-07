@@ -14,6 +14,7 @@ import {
   replaySkinSettingsEmbedAssets,
   resolveCommunityPresetSave,
   loadOwnerReplaySkinCached,
+  loadPresetReplaySkinSettings,
   writeMyReplaySkinMemory,
   writeAppliedCommunityReplaySkin,
 } from "./replay-owner-skin";
@@ -454,5 +455,47 @@ describe("private replay skins", () => {
     })).toBe("https://live.test/api/skins/file/sk_private/hoarded.osk?t=secret-token");
     expect(skinOskFileUrl({ id: "sk_public", oskUrl: "https://cdn.test/skins/sk_public/mix.osk" }))
       .toBe("https://live.test/api/skins/file/sk_public/mix.osk");
+  });
+});
+
+describe("a preset as a skin source", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("uses a plain preset's own settings and touches no network", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const settings = await loadPresetReplaySkinSettings({
+      id: "p1",
+      name: "Mine",
+      settings: normalizeReplaySkinSettings({ ...DEFAULT_REPLAY_SKIN_SETTINGS, hitPosition: 137 }),
+      createdAt: 1,
+      updatedAt: 2,
+    });
+
+    expect(settings.hitPosition).toBe(137);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a community preset's colors and layout when its .osk cannot be downloaded", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false } as Response));
+
+    const settings = await loadPresetReplaySkinSettings({
+      id: "p2",
+      name: "pl0x",
+      settings: normalizeReplaySkinSettings({ ...DEFAULT_REPLAY_SKIN_SETTINGS, hitPosition: 141 }),
+      createdAt: 1,
+      updatedAt: 2,
+      community: {
+        skin: { id: "sk_1", name: "pl0x", oskUrl: "https://cdn.test/skins/sk_1/plox.osk" } as SkinSummary,
+        payload: dehydrateReplaySkinSettings(settingsWithAssets()),
+      },
+    });
+
+    expect(settings.hitPosition).toBe(141);
+    expect(replaySkinSettingsEmbedAssets(settings)).toBe(false);
   });
 });

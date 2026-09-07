@@ -1,3 +1,4 @@
+import { ensureChartFamilySweepSeeded } from "./features/chart-families.js";
 import { registerServingReadThreads } from "./serving-read-thread.js";
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
@@ -542,6 +543,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // same-column head stacks. Pure cached-.osu work, no API budget.
       void ensureDanEligibilityRecomputeSeeded(app.db, app.queue).catch((error) => {
         logWarn("dan_eligibility_seed_failed", errorContext(error));
+      });
+      void ensureChartFamilySweepSeeded(app.db, app.queue).catch((error) => {
+        logWarn("chart_family_seed_failed", errorContext(error));
       });
       void ensureDanFloorPinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[dan-floor-pin] seed failed", error));
       void ensureLnSubtypeRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-subtype] seed failed", error));

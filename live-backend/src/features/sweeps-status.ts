@@ -21,6 +21,8 @@ import {
   TOP_SCORES_BACKFILL_PROGRESS_META_KEY,
 } from "./top-scores-backfill.js";
 import { SKILL_BASELINE_CURVES_META_KEY, SKILL_BASELINE_JOB } from "./skill-baseline.js";
+import { CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB } from "./chart-families.js";
+import { PLAYER_SKILL_DAN_SWEEP_META_KEY, PLAYER_SKILL_DAN_SWEEP_JOB } from "./player-skills.js";
 import {
   JACK_DEMAND_RECOMPUTE_JOB,
   JACK_DEMAND_RECOMPUTE_META_KEY,
@@ -281,6 +283,47 @@ function chartAnalysisSweep(options: { id: string; label: string; description: s
 }
 
 const SWEEP_DEFINITIONS: SweepDefinition[] = [
+  chartAnalysisSweep({
+    id: "chart-family-backfill",
+    label: "Chart family backfill",
+    description: "Groups structurally matching rate reuploads from cached chart files before recalculating player dan evidence.",
+    doneKey: CHART_FAMILY_META_KEY,
+    jobType: CHART_FAMILY_SWEEP_JOB,
+  }),
+  {
+    id: "player-skill-dan-recompute",
+    label: "Player dan recalculation",
+    description: "Recalculates stored player dans after the chart family, jack demand and motion feature backfills finish.",
+    kind: "one-time",
+    read: async (db) => {
+      // This sweep can run again after a rate-verdict repair, so a live
+      // continuation takes precedence over a previous completion marker.
+      const jobs = await readInFlightJobs(db, { type: PLAYER_SKILL_DAN_SWEEP_JOB });
+      if (jobs.pending > 0) {
+        return {
+          status: "running",
+          updatedAt: jobs.updatedAt,
+          progress: collectProgressFields(jobs.payload, ["cursor"]),
+          detail: `${jobs.pending} chain job${jobs.pending === 1 ? "" : "s"} in flight`,
+        };
+      }
+      const reading = await readChainSweep(db, {
+        doneKey: PLAYER_SKILL_DAN_SWEEP_META_KEY,
+        jobType: PLAYER_SKILL_DAN_SWEEP_JOB,
+      });
+      if (reading.status !== "pending") return reading;
+      const dependencies = [
+        [CHART_FAMILY_META_KEY, "chart families"],
+        [JACK_DEMAND_RECOMPUTE_META_KEY, "jack demand"],
+        [MOTION_FEATURES_RECOMPUTE_META_KEY, "motion features"],
+      ];
+      const waiting: string[] = [];
+      for (const [key, label] of dependencies) {
+        if (!(await readMeta(db, key)).present) waiting.push(label);
+      }
+      return waiting.length ? { ...reading, detail: `waiting for ${waiting.join(", ")}` } : reading;
+    },
+  },
   {
     id: "activity-mods-backfill",
     label: "Archived mods backfill",
@@ -383,7 +426,7 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     id: "vibro-recompute",
     label: "Vibro recompute sweep",
     description: "Re-derives the vibro flag for stored chart analyses from the cached .osu corpus.",
-    doneKey: "vibro_recompute_done:v7",
+    doneKey: "vibro_recompute_done:v8",
     jobType: "recompute_vibro_sweep",
   }),
   chartAnalysisSweep({

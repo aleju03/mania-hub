@@ -198,11 +198,11 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
   const parts = [
     skills.tracked === false
       ? own
-        ? i18n._(msg`rated from ${plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
-        : i18n._(msg`rated from ${plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
+        ? i18n._(msg`rated from ${plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded`)
+        : i18n._(msg`rated from ${plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded`)
       : own
-        ? i18n._(msg`rated from ${plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`)
-        : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded`),
+        ? i18n._(msg`rated from ${plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded`)
+        : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded`),
   ];
   const pending = skills.pendingPlays;
   if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`));

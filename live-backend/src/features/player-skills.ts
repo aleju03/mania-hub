@@ -1,4 +1,5 @@
 import type { Db } from "../db.js";
+import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
 import { exec, json, parseJson } from "../db.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
@@ -60,7 +61,14 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v25 (current): rechecks stored rate plays for three-column roll vibro that
+// v27 (current): persists vibro exclusion explanations beside the rated pool,
+// so already-recomputed profiles can explain the plays the detector removed.
+//
+// v26: checks ranked 4K uprates as well as tracked plays, including
+// sustained chord vibro. PP still protects the normal-speed chart; it cannot
+// certify the faster pattern. Existing SSRs remain valid compute seeds.
+//
+// v25: rechecks stored rate plays for three-column roll vibro that
 // slipped the original four-column timing envelope. Existing SSRs remain
 // reusable; the new detector stamp evicts affected plays before aggregation.
 //
@@ -81,7 +89,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 25;
+export const PLAYER_SKILLS_VERSION = 27;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -103,7 +111,7 @@ export const PLAYER_SKILLS_VERSION = 25;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -516,9 +524,9 @@ export interface PlayerSkillDanVerdict {
    */
   beyondTable?: boolean;
   /**
-   * How full the averaging window behind this dan is: `have` clears out of the
+   * How full the averaging window behind this dan is: `have` weighted clears out of the
    * `need` a complete estimate averages over. On a skillset verdict that is
-   * its own window (min(clears, danClearAverageWindowFor)) out of the window;
+   * its own window (up to danClearAverageWindowFor weighted slots);
    * on a side headline it is every published skillset's window summed, so a
    * side with one thin skill reads as short even when the others are full.
    *
@@ -649,6 +657,8 @@ export interface PlayerSkillPlay {
   keyCount: number;
   rating: number;
   overallRating: number;
+  /** An explanation-only play, excluded from skill aggregation. */
+  ratingExcluded?: boolean;
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -756,9 +766,9 @@ export interface StoredPlaySsr {
   // whatever OD the chart currently stores.
   odOverride?: number | null;
   // The rate-vibro detector version this play's chart was checked at, at the
-  // play's own rate (RATE_VIBRO_CHECK_VERSION). Only rate plays on charts
-  // without pp-backed trust carry it; a play the check turns away is never
-  // stored. Absent means unchecked (rated before the check existed), and the
+  // play's own rate (RATE_VIBRO_CHECK_VERSION). Ranked 4K uprates carry it
+  // too; a play the check turns away leaves the rated pool and keeps only
+  // its separate exclusion record. Absent means unchecked, and the
   // retention pass checks it on the next compute.
   rateVibroChecked?: number;
   // True when the play was set under lazer's Invert mod and so was rated (SSR
@@ -776,6 +786,17 @@ interface StoredModesSummary {
   pendingPlays: number;
   unsupportedPlays: number;
   modes: PlayerSkillModeBreakdown[];
+}
+
+export interface StoredVibroExclusion {
+  play: StoredPlaySsr;
+  reason: "chart_vibro" | "rate_vibro";
+  checkedVersion: number;
+}
+
+interface StoredPlayerSkillPlays {
+  plays: StoredPlaySsr[];
+  vibroExcluded?: StoredVibroExclusion[];
 }
 
 /**
@@ -1202,6 +1223,8 @@ function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPattern
 // player-dan positioning. One row set on the same indexed query the tag
 // lookup always ran.
 export interface ChartSkillInfo {
+  /** Verified note layout shared by uniformly rated reuploads. */
+  chartFamily?: string | null;
   patterns: string[];
   /** Structurally detected 4K quadstream/minijack/jack-marathon demand. */
   jackDemand?: boolean;
@@ -1528,9 +1551,10 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.msd_json, a.dan_dt_json, a.dan_ht_json,
               json_extract(b.metadata_json, '$.total_length') as total_length,
               json_extract(b.metadata_json, '$.accuracy') as od,
-              b.beatmapset_id, b.version
+              b.beatmapset_id, b.version, f.family_key
          from beatmap_chart_analysis a
          left join beatmaps b on b.beatmap_id = a.beatmap_id
+         left join beatmap_chart_families f on f.beatmap_id = a.beatmap_id and f.version = ${CHART_FAMILY_VERSION}
         where a.analysis_version = ? and a.beatmap_id in (${placeholders})`,
       [CHART_ANALYSIS_VERSION, ...chunk],
     )).rows;
@@ -1590,6 +1614,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         ? parseJson<{ values?: Record<string, number> } | null>(String(row.msd_json ?? ""), null)
         : null;
       info.set(Number(row.beatmap_id), {
+        chartFamily: typeof row.family_key === "string" ? row.family_key : null,
         patterns: patternIds,
         jackDemand: parsed?.jackDemand?.detected === true,
         jackShare,
@@ -1854,6 +1879,8 @@ function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
 export type DanClearRejectReason =
   | "chart_unanalyzed"
   | "chart_ineligible"
+  | "chart_vibro"
+  | "rate_vibro"
   | "low_od"
   | "ez_windows"
   | "no_accuracy"
@@ -2078,11 +2105,11 @@ export function danSideFromClearEvidenceForTest(
   return danSideFromClears(keyCount, side, clears, infoByBeatmap, courseClears);
 }
 
-// How many best clears the dan averages over (2026-08-28, widened from 5).
+// How much weighted evidence the dan averages over (widened from 5 in August).
 // With five, a few strong credits could still set a skillset on their
 // own; twenty asks every ladder for a body of work, the same argument that
 // had already doubled 4K LN's bucket-less headline to ten. A pool smaller
-// than the window simply averages everything it has, down to the quorum.
+// than the window averages its available weight, down to the clear quorum.
 const DAN_CLEAR_AVERAGE_WINDOW = 20;
 
 // One window for every ladder now: twenty is past the ten 4K LN used to
@@ -2129,26 +2156,63 @@ export function danIgnoredStrayCount(sortedDesc: number[]): number {
   return ignored;
 }
 
-function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): PlayerSkillDanVerdict | null {
-  if (rawDans.length < DAN_CLEAR_QUORUM) return null;
-  const sorted = [...rawDans].sort((a, b) => b - a);
-  // The dan is the mean of the best danClearAverageWindowFor credited clears
-  // (all of them on a quorum-sized pool). One outlier clear cannot set the
-  // level on its own, but it is no longer discarded the way the old
-  // quorum-th-clear rule discarded everything above the 4th: it pulls the
-  // average up in proportion to how far it sits above the rest.
+export interface WeightedDanClear {
+  clear: DanClearEvidence;
+  /** 0.9^rank within this chart family, independently in each pool. */
+  repeatWeight: number;
+  /** Actual averaging weight: clipped at the window boundary, zero outside. */
+  weight: number;
+  ignoredAsStray: boolean;
+}
+
+export function compareDanClears(left: DanClearEvidence, right: DanClearEvidence): number {
+  return right.creditedDan - left.creditedDan
+    || left.play.beatmapId - right.play.beatmapId
+    || right.play.rate - left.play.rate
+    || Number(left.play.inverse === true) - Number(right.play.inverse === true)
+    || left.play.identity.localeCompare(right.play.identity);
+}
+
+/** The single selection/weighting path used by stored verdicts and evidence. */
+export function weightedDanClearWindow(
+  clears: DanClearEvidence[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
+  need = DAN_CLEAR_AVERAGE_WINDOW,
+): { entries: WeightedDanClear[]; window: WeightedDanClear[]; have: number } {
+  const ranks = new Map<string, number>();
+  let have = 0;
+  const entries = [...clears].sort(compareDanClears).map((clear): WeightedDanClear => {
+    const family = infoByBeatmap.get(clear.play.beatmapId)?.chartFamily ?? `beatmap:${clear.play.beatmapId}`;
+    // Invert rewrites the note structure and is independent evidence.
+    const key = `${clear.play.keyCount}:${clear.side}:${family}:${clear.play.inverse === true}`;
+    const rank = ranks.get(key) ?? 0;
+    ranks.set(key, rank + 1);
+    const repeatWeight = Math.pow(0.9, rank);
+    const weight = Math.min(repeatWeight, Math.max(0, need - have));
+    have += weight;
+    if (need - have < 1e-10) have = need;
+    return { clear, repeatWeight, weight, ignoredAsStray: false };
+  });
+  const window = entries.filter((entry) => entry.weight > 0);
+  const ignored = danIgnoredStrayCount(window.map((entry) => entry.clear.creditedDan));
+  for (const entry of window.slice(window.length - ignored)) entry.ignoredAsStray = true;
+  return { entries, window, have };
+}
+
+function danFromClears(clears: DanClearEvidence[], side: "rc" | "ln", keyCount: number, infoByBeatmap: Map<number, ChartSkillInfo>): PlayerSkillDanVerdict | null {
+  // Keep the existing clear quorum; reduced influence never disqualifies a
+  // legitimate thin pool or divides its mean by evidence it does not have.
+  if (clears.length < DAN_CLEAR_QUORUM) return null;
   const needed = danClearAverageWindowFor(side, keyCount);
-  const window = sorted.slice(0, needed);
-  // Strays leave the average but stay in the window's `have`: they are clears
-  // the player really has, they just do not set the level, and shrinking
-  // `have` would draw a complete window as if it were still filling in.
-  const counted = window.slice(0, window.length - danIgnoredStrayCount(window));
-  const rawDan = Math.round((counted.reduce((sum, value) => sum + value, 0) / counted.length) * 100) / 100;
+  const { window, have } = weightedDanClearWindow(clears, infoByBeatmap, needed);
+  const counted = window.filter((entry) => !entry.ignoredAsStray);
+  const weight = counted.reduce((sum, entry) => sum + entry.weight, 0);
+  const rawDan = Math.round(counted.reduce((sum, entry) => sum + entry.clear.creditedDan * entry.weight, 0) / weight * 100) / 100;
   return {
     rawDan,
     label: danLabelFor(rawDan, side, keyCount),
-    clears: sorted.filter((value) => value >= rawDan - DAN_ROUNDING_EPSILON).length,
-    clearWindow: { have: window.length, need: needed },
+    clears: clears.filter((clear) => clear.creditedDan >= rawDan - DAN_ROUNDING_EPSILON).length,
+    clearWindow: { have, need: needed },
     ...(isBeyondDanTable(rawDan, side, keyCount) ? { beyondTable: true } : {}),
   };
 }
@@ -2290,7 +2354,7 @@ function danSideFromClears(
 ): PlayerSkillDanSide | null {
   const best = bestDanCourseClear(courseClears, keyCount, side);
   const clearDans = list.map((clear) => clear.creditedDan);
-  const quorumDan = danFromClears(clearDans, side, keyCount);
+  const quorumDan = danFromClears(list, side, keyCount, infoByBeatmap);
   if (!quorumDan) return best ? danSideFromCourseClear(best, side, keyCount) : null;
   // Buckets are a subset of the side's clears, so a side under the quorum can
   // never have one: no verdict here means no skillset verdicts either.
@@ -2300,7 +2364,7 @@ function danSideFromClears(
     // A tile opens on its primary clears alone (see resolveTilesForClear), then
     // averages over everything filed there, shared clears included.
     if ((grouped.primaryByBucket.get(id)?.length ?? 0) < DAN_CLEAR_QUORUM) continue;
-    const bucketDan = danFromClears(bucketClears.map((clear) => clear.creditedDan), side, keyCount);
+    const bucketDan = danFromClears(bucketClears, side, keyCount, infoByBeatmap);
     if (bucketDan) skillsets[id] = bucketDan;
   }
   const headline = anchoredSkillsetDans(skillsets, clearDans, side, keyCount, danSkillsetBuckets(keyCount, side))
@@ -2311,7 +2375,7 @@ function danSideFromClears(
   // has no window left to fill and carries none.
   const windowed = withCourse.courseClear
     ? withCourse
-    : { ...withCourse, clearWindow: danHeadlineClearWindow(keyCount, side, grouped, clearDans.length) };
+    : { ...withCourse, clearWindow: danHeadlineClearWindow(keyCount, side, grouped, list, infoByBeatmap) };
   return Object.keys(skillsets).length > 0 ? { ...windowed, skillsets } : windowed;
 }
 
@@ -2332,19 +2396,21 @@ function danHeadlineClearWindow(
   keyCount: number,
   side: "rc" | "ln",
   grouped: GroupedDanClears,
-  sideClears: number,
+  sideClears: DanClearEvidence[],
+  infoByBeatmap: Map<number, ChartSkillInfo>,
 ): NonNullable<PlayerSkillDanVerdict["clearWindow"]> {
   const need = danClearAverageWindowFor(side, keyCount);
   const pools = grouped.primaryByBucket;
-  if (pools.size === 0) return { have: Math.min(sideClears, need), need };
+  if (pools.size === 0) return { have: weightedDanClearWindow(sideClears, infoByBeatmap, need).have, need };
   // Primary filings only, so a clear that carries two tiles fills one slot
   // rather than two and the sentence this draws ("averaged over N of M
   // clears") stays true.
   let have = 0;
   let full = 0;
   for (const bucketClears of pools.values()) {
-    have += Math.min(bucketClears.length, need);
-    if (bucketClears.length >= need) full += 1;
+    const filled = weightedDanClearWindow(bucketClears, infoByBeatmap, need).have;
+    have += filled;
+    if (filled >= need) full += 1;
   }
   return { have, need: need * pools.size, skills: { full, total: pools.size } };
 }
@@ -2471,16 +2537,22 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // The stored vibro flag is the chart at 1.0x, so a chart that only becomes
 // vibro under rate (a 163BPM 1/16 roll file is a 61ms per-finger shake at
 // 1.5x; chart-classifier's roll tier) rated as a legit hard play. Rate plays
-// on charts without pp-backed trust run the rate-safe roll and chart-soaked
-// chord-wall tiers - see detectRateVibro for why the rest stay at 1.0x - at
-// the play's rate
-// from the cached .osu: parse only, no MinaCalc, and the verdict is stamped on
+// without pp-backed trust and all 4K uprates run the rate-calibrated roll,
+// chord-wall and sustained-chord tiers at the played rate. See detectRateVibro
+// for why the other tiers stay at 1.0x. This reads the cached .osu: parse
+// only, no MinaCalc, and the verdict is stamped on
 // the stored play so a chart is checked once per detector version. Bump when
 // the tier changes so stored plays re-check on their next compute.
-export const RATE_VIBRO_CHECK_VERSION = 3;
+export const RATE_VIBRO_CHECK_VERSION = 4;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
+
+/** Ranked trust applies to the base chart, not to a faster 4K pattern.
+ * Wider keymodes retain their prior policy until they are rate-calibrated. */
+export function shouldCheckRateVibro(keyCount: number, rate: number, hasPpTrust: boolean): boolean {
+  return rate !== 1 && (!hasPpTrust || (keyCount === 4 && rate > 1));
+}
 
 function chartVibroAtRate(osuText: string, rate: number): boolean | null {
   try {
@@ -2520,8 +2592,8 @@ export async function computePlayerSkillRatings(
   osu: Pick<OsuApiClient, "getBeatmapFile">,
   scores: OscScore[],
   previousPlays: StoredPlaySsr[],
-  options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[] } = {},
-): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; untaggedBeatmapIds: number[] }> {
+  options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[]; previousVibroExcluded?: StoredVibroExclusion[] } = {},
+): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number }> {
   const topPlays = scores.filter((score) => typeof score.pp === "number" && score.pp > 0);
   const trackedScores = options.trackedScores ?? [];
   const untrustedIdentities = options.untrustedIdentities ?? new Set<string>();
@@ -2540,6 +2612,7 @@ export async function computePlayerSkillRatings(
     ...topPlays.map(beatmapIdOf),
     ...trackedScores.map(beatmapIdOf),
     ...previousPlays.map((play) => play.beatmapId),
+    ...(options.previousVibroExcluded ?? []).map((entry) => entry?.play?.beatmapId ?? 0),
   ]);
   // OD comes from the beatmaps row rather than chart analysis so it is known
   // for every enriched chart, analyzed or not; the goal is part of the SSR
@@ -2588,7 +2661,6 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    if (info?.vibro && !ppBackedChartIds.has(beatmapId)) return;
     const rate = getPlayRate(score.mods);
     if (rate == null) {
       if (source === "top") unsupportedPlays += 1;
@@ -2648,9 +2720,34 @@ export async function computePlayerSkillRatings(
   };
 
   const analyzedByKey = new Map<string, StoredPlaySsr>();
+  // Keep explanations beside the rated pool. They never seed SSR reuse or
+  // enter an aggregate, but survive when the original score ages out.
+  const excludedByKey = new Map<string, StoredVibroExclusion>();
+  const excludeVibro = (play: StoredPlaySsr, reason: StoredVibroExclusion["reason"], fresh = false) => {
+    const key = playSlotKey(play.beatmapId, play.rate, play.inverse);
+    const previous = excludedByKey.get(key);
+    if (!previous || (fresh && play.identity === previous.play.identity)
+      || (play.identity !== previous.play.identity && play.goal >= previous.play.goal)) {
+      excludedByKey.set(key, { play, reason, checkedVersion: RATE_VIBRO_CHECK_VERSION });
+    }
+  };
+  for (const excluded of options.previousVibroExcluded ?? []) {
+    const play = excluded?.play;
+    if (!play || !(play.beatmapId > 0) || !(play.rate > 0)
+      || (excluded.reason !== "chart_vibro" && excluded.reason !== "rate_vibro")) continue;
+    if (rewritingModIdentities.has(play.identity) || widenedWindowIdentities.has(play.identity)) continue;
+    if (play.source !== "top" && untrustedIdentities.has(play.identity)) continue;
+    const hasPpTrust = play.source === "top" || ppBackedChartIds.has(play.beatmapId);
+    if (excluded.reason === "chart_vibro" && (hasPpTrust || infoByBeatmap.get(play.beatmapId)?.vibro === false)) continue;
+    if (excluded.reason === "rate_vibro" && !shouldCheckRateVibro(play.keyCount, play.rate, hasPpTrust)) continue;
+    const candidateRate = candidateRateByIdentity.get(play.identity);
+    if (candidateRate != null && candidateRate !== play.rate) continue;
+    excludedByKey.set(playSlotKey(play.beatmapId, play.rate, play.inverse), excluded);
+  }
   let calcRuns = 0;
   let calcRunsTotal = 0;
   let rateVibroChecks = 0;
+  const pendingRateVibroKeys = new Set<string>();
   for (const [key, candidate] of candidates) {
     const { score, beatmapId, rate, goal, identity, source } = candidate;
     if (candidate.chartOdPending) {
@@ -2680,6 +2777,32 @@ export async function computePlayerSkillRatings(
       odOverride: difficultyAdjustOd(score.mods),
     };
     const previous = previousByIdentity.get(identity);
+    const exclusionPlay = (keyCount: number): StoredPlaySsr => ({
+      identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0,
+      // Freshly rejected plays need no MinaCalc pass. Existing vectors are
+      // kept as historical data only and are never presented as valid ratings.
+      values: previous?.beatmapId === beatmapId && previous.rate === rate ? previous.values : {},
+      patterns: infoByBeatmap.get(beatmapId)?.patterns ?? [],
+      ...clearEvidence,
+      ...(candidate.inverse ? { inverse: true } : {}),
+    });
+    const chartInfo = infoByBeatmap.get(beatmapId);
+    const chartVibro = chartInfo?.vibro && !ppBackedChartIds.has(beatmapId);
+    const exclusionKeyCount = chartInfo?.keyCount || (previous?.beatmapId === beatmapId ? previous.keyCount : 0);
+    if (chartVibro && isMsdSupportedKeyCount(exclusionKeyCount)) {
+      excludeVibro(exclusionPlay(exclusionKeyCount), "chart_vibro", true);
+      continue;
+    }
+    const previousExclusion = excludedByKey.get(key);
+    if (previousExclusion?.reason === "rate_vibro"
+      && previousExclusion.checkedVersion === RATE_VIBRO_CHECK_VERSION
+      && previousExclusion.play.identity === identity
+      && shouldCheckRateVibro(previousExclusion.play.keyCount, rate, ppBackedChartIds.has(beatmapId))) {
+      // Repeated compute passes must not spend their entire bounded budget
+      // on the same already-rejected candidates before reaching the tail.
+      excludeVibro(exclusionPlay(previousExclusion.play.keyCount), "rate_vibro", true);
+      continue;
+    }
     if (
       previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal
       && (previous.inverse === true) === candidate.inverse
@@ -2708,6 +2831,10 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       continue;
     }
+    if (chartVibro) {
+      excludeVibro(exclusionPlay(keyCount), "chart_vibro", true);
+      continue;
+    }
     // The keymode check the consider pass could not make without an analysis
     // row: Invert on any other keymode rewrote the chart, like HO/NR.
     if (candidate.inverse && !INVERSE_MOD_KEY_COUNTS.has(keyCount)) {
@@ -2723,13 +2850,20 @@ export async function computePlayerSkillRatings(
       continue;
     }
     // Rate vibro, ahead of the calc so a shake never costs a MinaCalc run.
-    // Same trust rule as the stored flag: pp-backed charts are ranked and
-    // ranked does not admit vibro, so only tracked-history charts check.
+    // Ranked 4K uprates also check: PP validates the base chart, not what
+    // DT/NC or a custom speed turns its note pattern into.
     let rateVibroChecked: number | undefined;
-    if (rate !== 1 && !ppBackedChartIds.has(beatmapId) && rateVibroChecks < MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
+    if (shouldCheckRateVibro(keyCount, rate, ppBackedChartIds.has(beatmapId))) {
+      if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
+        pendingRateVibroKeys.add(key);
+        continue;
+      }
       rateVibroChecks += 1;
       const vibro = chartVibroAtRate(ratedText, rate);
-      if (vibro) continue;
+      if (vibro) {
+        excludeVibro(exclusionPlay(keyCount), "rate_vibro", true);
+        continue;
+      }
       if (vibro === false) rateVibroChecked = RATE_VIBRO_CHECK_VERSION;
     }
     const ssr = await computePlaySsrValues(ratedText, {
@@ -2790,7 +2924,10 @@ export async function computePlayerSkillRatings(
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.source !== "top" &&
       !ppBackedChartIds.has(previous.beatmapId)
-    ) continue;
+    ) {
+      excludeVibro(previous, "chart_vibro");
+      continue;
+    }
     // A tracked-sourced play whose only surviving evidence is a mod-less
     // archived row was rated at an assumed rate that cannot be verified
     // (an HT/DC original would be inflated), so it drops instead of
@@ -2810,24 +2947,36 @@ export async function computePlayerSkillRatings(
     }
   }
   // Rate vibro for the plays that skipped the calc loop (reused or retained
-  // SSRs): rated before the check existed, or under an older detector. Same
-  // trust rule as above; a top-sourced play keeps its pp-backed trust after
-  // dropping off the top-200. A chart whose .osu is not cached stays as it is
+  // SSRs): rated before the check existed, or under an older detector. A
+  // top-sourced 4K uprate must recheck even after leaving the top-200.
+  // A chart whose .osu is not cached stays as it is
   // and checks on a later compute, like a pending play.
   for (const [key, play] of analyzedByKey) {
-    if (play.rate === 1 || play.source === "top" || ppBackedChartIds.has(play.beatmapId)) continue;
+    if (!shouldCheckRateVibro(play.keyCount, play.rate, play.source === "top" || ppBackedChartIds.has(play.beatmapId))) continue;
     if (play.rateVibroChecked === RATE_VIBRO_CHECK_VERSION) continue;
-    if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) break;
+    if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
+      pendingRateVibroKeys.add(key);
+      continue;
+    }
     const osuText = await loadOsuText(db, osu, play.beatmapId);
     const ratedText = osuText == null ? null : ratedOsuTextFor(osuText, play.inverse);
     if (ratedText == null) continue;
     rateVibroChecks += 1;
     const vibro = chartVibroAtRate(ratedText, play.rate);
-    if (vibro) analyzedByKey.delete(key);
+    if (vibro) {
+      excludeVibro(play, "rate_vibro");
+      analyzedByKey.delete(key);
+    }
     else if (vibro === false) analyzedByKey.set(key, { ...play, rateVibroChecked: RATE_VIBRO_CHECK_VERSION });
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
   const analyzed = [...analyzedByKey.values()];
+  // A newly eligible/better play on a slot replaces its former explanation.
+  for (const key of analyzedByKey.keys()) excludedByKey.delete(key);
+  const vibroExcluded = [...excludedByKey.values()];
+  // Preserve the existing shorter retry window when a large retained pool
+  // needs another pass through the bounded detector budget.
+  pendingPlays += pendingRateVibroKeys.size;
 
   // Pattern tags apply fresh every compute (never from the SSR cache):
   // analysis rows keep landing after the plays that referenced them. The info
@@ -2868,6 +3017,11 @@ export async function computePlayerSkillRatings(
     if (list) list.push(play);
     else byKeyCount.set(play.keyCount, [play]);
   }
+  // Keep the keymode reachable when its only plays are explanation rows.
+  // An empty rated pool has zero ratings and no credited chart clears.
+  for (const { play } of vibroExcluded) {
+    if (isMsdSupportedKeyCount(play.keyCount) && !byKeyCount.has(play.keyCount)) byKeyCount.set(play.keyCount, []);
+  }
   const modes: PlayerSkillModeBreakdown[] = [...byKeyCount.entries()]
     .map(([keyCount, list]) => ({
       keyCount,
@@ -2887,7 +3041,9 @@ export async function computePlayerSkillRatings(
       modes,
     },
     plays: analyzed,
+    vibroExcluded,
     untaggedBeatmapIds: [...new Set(untaggedBeatmapIds)],
+    pendingRateVibroChecks: pendingRateVibroKeys.size,
   };
 }
 
@@ -2905,7 +3061,7 @@ async function loadOsuText(db: Db, osu: Pick<OsuApiClient, "getBeatmapFile">, be
 
 type ProfileOsuClient = Pick<OsuApiClient, "getBeatmapFile" | "getUserByKey" | "getUserBestScoresWindow">;
 
-export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: { userId: number }): Promise<void> {
+export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: { userId: number; rateVibroPending?: number }): Promise<void> {
   const userId = Math.floor(Number(payload?.userId));
   if (!Number.isInteger(userId) || userId <= 0) return;
 
@@ -2943,7 +3099,8 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
        order by analysis_version desc`,
       [userId, ...seedableVersions],
     )).rows.find((row) => typeof row.plays_json === "string" && row.plays_json.length > 0);
-    const previousPlays = parseJson<{ plays?: StoredPlaySsr[] }>(String(previousRow?.plays_json ?? ""), {}).plays ?? [];
+    const previousStored = parseJson<Partial<StoredPlayerSkillPlays>>(String(previousRow?.plays_json ?? ""), {});
+    const previousPlays = previousStored.plays ?? [];
 
     const trackedScores = await loadTrackedScores(db, userId);
     const archived = await loadArchivedTrackedEvidence(db, userId);
@@ -2951,6 +3108,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       trackedScores: [...trackedScores, ...archived.scores],
       untrustedIdentities: archived.unknownModsIdentities,
       courseClears: await loadPlayerDanCourseClears(db, userId),
+      previousVibroExcluded: previousStored.vibroExcluded,
     });
     // Personal accuracy curve model (A7), fitted from the same rated plays in
     // this job (never on a request path) and persisted beside the ratings.
@@ -2967,7 +3125,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
          where user_id = ? and analysis_version = ?`,
         args: [
           json(result.summary),
-          json({ version: PLAYER_SKILLS_VERSION, plays: result.plays }),
+          json({ version: PLAYER_SKILLS_VERSION, plays: result.plays, vibroExcluded: result.vibroExcluded }),
           accModel ? json(accModel) : null,
           snapshot.fetchedAt,
           computedAt,
@@ -2982,6 +3140,22 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     // Charts with no analysis row yet contribute no pattern tags; queue them so
     // the next recompute (12h TTL) picks their tags up.
     await enqueueMissingChartAnalyses(db, queue, result.untaggedBeatmapIds).catch(() => {});
+    if (result.pendingRateVibroChecks > 0) {
+      // A version-current row leaves the roster drip, so its remaining rate
+      // checks need their own continuation. Distinct keys avoid trying to
+      // enqueue the job currently running. Stop a stalled chain rather than
+      // repeatedly revisiting the same uncheckable candidate pool.
+      if (payload.rateVibroPending == null || result.pendingRateVibroChecks < payload.rateVibroPending) {
+        await queue.enqueue(
+          PLAYER_SKILLS_JOB,
+          `player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:${userId}:${result.pendingRateVibroChecks}`,
+          { userId, rateVibroPending: result.pendingRateVibroChecks },
+          { priority: 5, runAfter: new Date(Date.now() + 60_000), replaceDone: true },
+        );
+      } else {
+        logWarn("player_skills_rate_vibro_recheck_stalled", { userId, pending: result.pendingRateVibroChecks });
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await exec(
@@ -3325,7 +3499,7 @@ export async function getPlayerSkillBreakdown(
  * it. A first compute has no payload and naturally falls through to an older
  * ready version (or null).
  */
-async function loadLatestStoredPlayerSkillPlays(db: Db, userId: number): Promise<StoredPlaySsr[] | null> {
+async function loadLatestStoredPlayerSkillPayload(db: Db, userId: number): Promise<StoredPlayerSkillPlays | null> {
   const rows = (await exec(
     db,
     `select plays_json from player_skill_ratings
@@ -3334,10 +3508,17 @@ async function loadLatestStoredPlayerSkillPlays(db: Db, userId: number): Promise
     [userId],
   )).rows;
   for (const row of rows) {
-    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
-    if (Array.isArray(stored?.plays)) return stored.plays;
+    const stored = parseJson<Partial<StoredPlayerSkillPlays> | null>(String(row.plays_json ?? ""), null);
+    if (Array.isArray(stored?.plays)) return {
+      plays: stored.plays,
+      vibroExcluded: Array.isArray(stored.vibroExcluded) ? stored.vibroExcluded : [],
+    };
   }
   return null;
+}
+
+async function loadLatestStoredPlayerSkillPlays(db: Db, userId: number): Promise<StoredPlaySsr[] | null> {
+  return (await loadLatestStoredPlayerSkillPayload(db, userId))?.plays ?? null;
 }
 
 /**
@@ -3592,6 +3773,10 @@ function buildPlayerSkillPlay(
 // verdict's `clears` count refers to). `ignoredAsStray` marks the clears the
 // stray rule dropped out of the average that produced the estimate.
 export interface PlayerSkillDanEvidencePlay {
+  /** Family influence in this section (best first: 1, .9, .81, ...). */
+  repeatWeight?: number;
+  /** Actual mean weight, after window clipping and stray exclusion. */
+  averagingWeight?: number;
   play: PlayerSkillPlay;
   chartDan: number;
   chartDanLabel: string;
@@ -3610,6 +3795,7 @@ export interface PlayerSkillDanEvidencePlay {
 }
 
 export interface PlayerSkillDanSkillsetEvidence {
+  weightedClears: number;
   // Bucket id from danSkillsetBuckets: "jack"/"tech"/"speed" plus "stamina"
   // (4K) or "stream" (6K/7K) on the rice side, and "ln" or the four
   // "ln*" subtypes on the LN side. Not a raw analyzer pattern tag.
@@ -3682,6 +3868,8 @@ export interface PlayerSkillDanRejectedPlay {
 }
 
 export interface PlayerSkillDanEvidence {
+  /** Effective evidence in the side-wide clear pool (not the tile headline). */
+  weightedClears: number;
   side: "rc" | "ln";
   keyCount: number;
   quorum: number;
@@ -3689,7 +3877,7 @@ export interface PlayerSkillDanEvidence {
   minAccuracy: number;
   /** The ladder's own pass bar, where a clear credits the chart's full dan. */
   barAccuracy: number;
-  /** How many best clears each dan averages over (danClearAverageWindowFor). */
+  /** Weighted slots each dan averages over (danClearAverageWindowFor). */
   averageWindow: number;
   dan: PlayerSkillDanSide | null;
   totalClears: number;
@@ -3713,14 +3901,11 @@ export const DAN_MIN_OD_FLOOR = DAN_MIN_OD;
 // an explanation, not a second leaderboard.
 export const DAN_EVIDENCE_MAX_REJECTED = 200;
 
-// Every play the average actually reads must ship: each list averages its best
-// DAN_CLEAR_AVERAGE_WINDOW clears, so a shorter cap would hide clears that set
-// the number the window exists to explain.
+// The all-clears list is paginated. Skillset lists ship their entire weighted
+// window, which can include more than twenty plays when rate variants overlap.
 const DAN_EVIDENCE_MAX_CLEARS = DAN_CLEAR_AVERAGE_WINDOW;
-const DAN_EVIDENCE_SKILLSET_PLAYS = DAN_CLEAR_AVERAGE_WINDOW;
 // Per-request ceiling for a read that pages the "all clears" list. Bounds the
-// payload and the metadata read, not the average: nothing past the window
-// participates in any number.
+// payload and the metadata read for the all-clears page, not the average.
 export const DAN_EVIDENCE_PAGE_MAX_CLEARS = 200;
 
 interface DanSkillsetBucket {
@@ -4148,12 +4333,18 @@ export async function getPlayerSkillDanEvidence(
   } = {},
 ): Promise<PlayerSkillDanEvidence | null> {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
-  const storedPlays = await loadLatestStoredPlayerSkillPlays(db, userId);
-  if (!storedPlays) return null;
-  const plays = storedPlays
+  const stored = await loadLatestStoredPlayerSkillPayload(db, userId);
+  if (!stored) return null;
+  const plays = stored.plays
     .filter((play) => play && play.keyCount === keyCount && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
-  const infoByBeatmap = await loadChartSkillInfo(db, plays.map((play) => play.beatmapId));
-  const rateVerdicts = await loadRateVerdictCredits(db, plays);
+  const exclusions = options.includeRejected
+    ? (stored.vibroExcluded ?? []).filter((entry) => entry?.play?.keyCount === keyCount
+      && Number.isInteger(entry.play.beatmapId) && entry.play.beatmapId > 0
+      && (entry.reason === "chart_vibro" || entry.reason === "rate_vibro"))
+    : [];
+  const explainedPlays = [...plays, ...exclusions.map((entry) => entry.play)];
+  const infoByBeatmap = await loadChartSkillInfo(db, explainedPlays.map((play) => play.beatmapId));
+  const rateVerdicts = await loadRateVerdictCredits(db, explainedPlays);
   // Verdicts missing for stored plays heal on view: the compute job fills its
   // own, but a player nobody recomputes (or plays rated before the credit
   // existed) would otherwise wait forever. The job key dedupes repeat opens.
@@ -4168,10 +4359,16 @@ export async function getPlayerSkillDanEvidence(
   const rejectSink: DanClearReject[] | undefined = options.includeRejected ? [] : undefined;
   const clears = collectDanClears(keyCount, plays, new Map(), infoByBeatmap, rateVerdicts, rejectSink)
     .filter((clear) => clear.side === side)
-    .sort((left, right) =>
-      right.creditedDan - left.creditedDan
-      || String(right.play.endedAt ?? "").localeCompare(String(left.play.endedAt ?? ""))
-      || left.play.beatmapId - right.play.beatmapId);
+    .sort(compareDanClears);
+  for (const entry of exclusions) {
+    const info = infoByBeatmap.get(entry.play.beatmapId);
+    const target = info ? danClearTargetFor(entry.play, info, keyCount, rateVerdicts) : null;
+    rejectSink?.push({
+      play: entry.play, reason: entry.reason,
+      side: target?.side ?? null, chartDan: target?.rawDan ?? null, chartDanLabel: target?.label ?? null,
+      accuracy: null, bar: null, minAccuracy: null, od: null,
+    });
+  }
   // A play whose chart names no side at this rate cannot be filed under one,
   // so it shows on both rather than vanishing from the surface that exists to
   // account for it.
@@ -4214,29 +4411,20 @@ export async function getPlayerSkillDanEvidence(
   // it contributes to ignored it.
   const ignoredBySection = new Map<string, Set<DanClearEvidence>>();
   const ignoredInAllClears = new Set<DanClearEvidence>();
-  const markStrays = (list: DanClearEvidence[], section: string) => {
-    const window = list.slice(0, danClearAverageWindowFor(side, keyCount));
-    const ignored = danIgnoredStrayCount(window.map((clear) => clear.creditedDan));
-    const marked = ignoredBySection.get(section) ?? new Set<DanClearEvidence>();
-    for (const clear of window.slice(window.length - ignored)) {
-      marked.add(clear);
-    }
-    ignoredBySection.set(section, marked);
-  };
-
-  // Skillset grouping, by bucket rather than by raw analyzer tag: the tag
-  // vocabulary is 18 ids deep and a player reads their dan through the four
-  // skills their scene actually names (DAN_SKILLSET_BUCKETS). The dans come
-  // off `dan.skillsets` rather than being recomputed here, because they are
-  // the terms the headline averaged - deriving them twice invites the window
-  // to explain a number it did not produce.
   const buckets = danSkillsetBuckets(keyCount, side);
   const bySkillset = groupDanClearsBySkillset(keyCount, side, clears, infoByBeatmap);
+  const windows = new Map<string, ReturnType<typeof weightedDanClearWindow>>();
+  const weightsBySection = new Map<string, Map<DanClearEvidence, WeightedDanClear>>();
+  const markWindow = (list: DanClearEvidence[], section: string) => {
+    const selection = weightedDanClearWindow(list, infoByBeatmap, danClearAverageWindowFor(side, keyCount));
+    windows.set(section, selection);
+    weightsBySection.set(section, new Map(selection.entries.map((entry) => [entry.clear, entry])));
+    ignoredBySection.set(section, new Set(selection.window.filter((entry) => entry.ignoredAsStray).map((entry) => entry.clear)));
+  };
+  markWindow(clears, ALL_CLEARS_SECTION);
+  for (const [id, list] of bySkillset.byBucket) markWindow(list, id);
   const publishedBucketIds = Object.keys(dan?.skillsets ?? {});
   if (publishedBucketIds.length >= DAN_SKILLSET_AVERAGE_MIN_BUCKETS) {
-    for (const bucketId of publishedBucketIds) {
-      markStrays(bySkillset.byBucket.get(bucketId) ?? [], bucketId);
-    }
     for (const clear of clears) {
       const contributingBuckets = publishedBucketIds.filter((bucketId) =>
         bySkillset.byBucket.get(bucketId)?.includes(clear) === true);
@@ -4246,7 +4434,6 @@ export async function getPlayerSkillDanEvidence(
       }
     }
   } else {
-    markStrays(clears, ALL_CLEARS_SECTION);
     for (const clear of ignoredBySection.get(ALL_CLEARS_SECTION) ?? []) ignoredInAllClears.add(clear);
   }
 
@@ -4281,7 +4468,7 @@ export async function getPlayerSkillDanEvidence(
     ...(courseSource ? [courseSource.beatmapId] : []),
     ...topClears.map((clear) => clear.play.beatmapId),
     ...rejectedPage.map((entry) => entry.play.beatmapId),
-    ...[...bySkillset.byBucket.values()].flatMap((list) => list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => clear.play.beatmapId)),
+    ...buckets.flatMap((bucket) => windows.get(bucket.id)!.window.map(({ clear }) => clear.play.beatmapId)),
   ];
   const metadata = await readPlayerSkillPlayMetadata(db, evidenceBeatmapIds);
   const toEvidencePlay = (clear: DanClearEvidence, section: string = ALL_CLEARS_SECTION): PlayerSkillDanEvidencePlay => {
@@ -4290,7 +4477,13 @@ export async function getPlayerSkillDanEvidence(
     // independently, and re-banding the number disagrees in the slivers
     // between the two band scales (an 11.29 stored as alpha+ prints alpha++).
     const chartDanLabel = clear.chartDanLabel ?? chartDanLabelFor(clear.chartDan, side, keyCount);
+    // A multi-tile headline has no single per-play weight: each tile assigns
+    // its own family rank. Its all-clears page therefore leaves weights to
+    // the tile lists instead of presenting a fictitious side-wide average.
+    const weighted = section === ALL_CLEARS_SECTION && publishedBucketIds.length >= DAN_SKILLSET_AVERAGE_MIN_BUCKETS
+      ? undefined : weightsBySection.get(section)?.get(clear);
     return {
+      ...(weighted ? { repeatWeight: weighted.repeatWeight, averagingWeight: weighted.ignoredAsStray ? 0 : weighted.weight } : {}),
       play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
       chartDan: Math.round(clear.chartDan * 100) / 100,
       chartDanLabel,
@@ -4315,10 +4508,11 @@ export async function getPlayerSkillDanEvidence(
       return {
         id: bucket.id,
         clears: list.length,
+        weightedClears: windows.get(bucket.id)!.have,
         dan: skillsetDan
           ? { rawDan: skillsetDan.rawDan, label: skillsetDan.label, ...(skillsetDan.headlineCapped ? { headlineCapped: true } : {}) }
           : null,
-        plays: list.slice(0, DAN_EVIDENCE_SKILLSET_PLAYS).map((clear) => toEvidencePlay(clear, bucket.id)),
+        plays: windows.get(bucket.id)!.window.map(({ clear }) => toEvidencePlay(clear, bucket.id)),
       };
     })
     .filter((skillset) => skillset.clears > 0);
@@ -4333,6 +4527,7 @@ export async function getPlayerSkillDanEvidence(
     averageWindow: danClearAverageWindowFor(side, keyCount),
     dan,
     totalClears: clears.length,
+    weightedClears: windows.get(ALL_CLEARS_SECTION)!.have,
     clears: topClears.map((clear) => toEvidencePlay(clear)),
     skillsets,
     anchorSkillset: buckets.find((bucket) => bucket.anchor)?.id ?? null,
@@ -4344,7 +4539,10 @@ export async function getPlayerSkillDanEvidence(
           // Rated at Overall, like every other row here: a rejected play has
           // no dan credit to print in that column, so its own skill rating is
           // the only number it can honestly carry.
-          play: buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata),
+          play: {
+            ...buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata),
+            ...(entry.reason === "chart_vibro" || entry.reason === "rate_vibro" ? { ratingExcluded: true } : {}),
+          },
           reason: entry.reason,
           side: entry.side,
           chartDan: entry.chartDan == null ? null : Math.round(entry.chartDan * 100) / 100,
@@ -5400,7 +5598,10 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v28 (current): Rice chart credit is continuous in the final accuracy point
+// v29 (current): Rate variants share diminishing influence (100%, 90%, 81%,
+// ...), including structurally verified reuploads. Re-fold after the family
+// backfill; chart difficulty and each clear's accuracy credit are unchanged.
+// v28: Rice chart credit is continuous in the final accuracy point
 // below the bar (2026-09-06). Re-fold cached plays so near misses gain the
 // revised credit in skillset averages and headlines, without rerunning MSD.
 // v27: Stamina-led 4K charts with Handstream second keep their tile
@@ -5437,7 +5638,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v28";
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v29";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -5462,10 +5663,10 @@ export interface PlayerSkillDanSweepPayload {
 async function playerSkillDanDependenciesReady(db: Db): Promise<boolean> {
   const rows = (await exec(
     db,
-    "select key from live_meta where key in (?, ?)",
-    [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY],
+    "select key from live_meta where key in (?, ?, ?)",
+    [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, CHART_FAMILY_META_KEY],
   )).rows;
-  return new Set(rows.map((row) => String(row.key))).size === 2;
+  return new Set(rows.map((row) => String(row.key))).size === 3;
 }
 
 export async function recomputePlayerSkillDanChunk(

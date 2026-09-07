@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play, SlidersHorizontal, Smartphone, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Palette, Pause, Play, SlidersHorizontal, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { getBeatmapAudioUrl, getInlineBackgroundUrl } from "../../lib/audio-url";
@@ -27,11 +27,19 @@ import { unpackReplayFrames } from "../../lib/replay-frames";
 import { buildKeypressHeatmap } from "../../lib/replay-keypress-heatmap";
 import {
   readReplayBackgroundDim,
+  readReplayOwnerSkinEnabled,
   readReplayStoryboardEnabled,
   readReplayVolume,
   writeReplayBackgroundDim,
   writeReplayStoryboardEnabled,
 } from "../../lib/replay-preferences";
+import {
+  fetchUserReplaySkin,
+  loadOwnerReplaySkinCached,
+  loadPresetReplaySkinSettings,
+  loadViewerReplaySkinSettings,
+  type OwnerReplaySkinRecord,
+} from "../../lib/replay-owner-skin";
 import { readReplayScrollSpeed } from "../../lib/replay-scroll-speed";
 import {
   SIDE_BY_SIDE_PORTRAIT_PHONE_QUERY,
@@ -42,7 +50,8 @@ import {
   resolveSideBySideLayout,
   type SideBySideViewport,
 } from "../../lib/replay-side-by-side";
-import { readReplaySkinSettings } from "../../lib/replay-skin";
+import { readReplaySkinPresets, readReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplaySkinPreset, ReplaySkinSettings } from "../../lib/replay-skin";
 import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../../lib/replay-storyboard";
 import { getScoreExpectedCounts, type ReplayLiveStats, type ReplayRendererLike, type ServerReplay } from "../../lib/replay-types";
 import {
@@ -102,6 +111,14 @@ const AUDIO_TAIL_GUARD_MS = 40;
 // handed to the wall clock and carries on silently. Long enough for ordinary
 // buffering to recover, short enough that an interruption never looks frozen.
 const AUDIO_STALL_GIVE_UP_MS = 2500;
+// Longest the two stages wait for their skins before they are built with
+// whatever is resolved. A skin that lands late is handed to the renderers the
+// moment it does, so a slow .osk costs a swap, not the comparison.
+const SIDE_SKIN_HOLD_MAX_MS = 2500;
+
+/* Which skin one playfield is drawn with. "player" is that run's own player's
+   published skin, and falls back to the viewer's when they have none. */
+type SideSkinChoice = { kind: "player" } | { kind: "viewer" } | { kind: "preset"; id: string };
 
 interface SideBySideSide {
   score: OsuScore;
@@ -414,9 +431,115 @@ export function ReplaySideBySideView({
     };
   }, [leftScoreId, rightScoreId]);
 
-  // Create the two renderers once both sides are loaded.
+  /* Skins, one per playfield. Each side defaults to its own player's published
+     skin (the same one the single viewer puts on, and off the same viewer
+     preference), and can be pointed at the viewer's skin or any of their saved
+     presets instead - two runs of one chart are easier to read side by side
+     when the two stages agree, and a player with no published skin is the case
+     the picker exists for. The renderers are built once: a pick after that is
+     handed to them with setSkinSettings rather than rebuilt around. */
+  const [skinPresets, setSkinPresets] = useState<ReplaySkinPreset[]>([]);
+  const [playerSkins, setPlayerSkins] = useState<[OwnerReplaySkinRecord | null, OwnerReplaySkinRecord | null]>([null, null]);
+  const [skinChoices, setSkinChoices] = useState<[SideSkinChoice, SideSkinChoice]>([{ kind: "viewer" }, { kind: "viewer" }]);
+  const [skinRecordsFor, setSkinRecordsFor] = useState<typeof sides>(null);
+  // The sides these stages may be built for: set once the skins are resolved
+  // (or the cap above fires), and never by a later pick, so choosing a skin
+  // mid-run never tears the two renderers down.
+  const [skinGate, setSkinGate] = useState<typeof sides>(null);
+  const [skinResolving, setSkinResolving] = useState(false);
+  const sideSkinsRef = useRef<(ReplaySkinSettings | null)[]>([null, null]);
+  // One deadline covers both steps (the pointer fetch and the decode), so a
+  // request that never answers costs the stages that long once, not twice.
+  const skinHoldDeadlineRef = useRef(0);
+
+  useEffect(() => {
+    setSkinPresets(readReplaySkinPresets());
+  }, []);
+
+  // The players' published skins, as pointers only: the .osk behind one is
+  // downloaded and decoded when a side is actually set to it.
   useEffect(() => {
     if (!sides) return;
+    let cancelled = false;
+    const preferred = readReplayOwnerSkinEnabled();
+    const initial: SideSkinChoice = preferred ? { kind: "player" } : { kind: "viewer" };
+    setPlayerSkins([null, null]);
+    setSkinChoices([initial, initial]);
+    setSkinRecordsFor(null);
+    setSkinGate(null);
+    sideSkinsRef.current = [null, null];
+    skinHoldDeadlineRef.current = performance.now() + SIDE_SKIN_HOLD_MAX_MS;
+    // A pointer that never arrives lets the stages carry on with the viewer's
+    // skin; the players' skins still swap in whenever they land.
+    const release = window.setTimeout(() => {
+      if (!cancelled) setSkinRecordsFor(sides);
+    }, SIDE_SKIN_HOLD_MAX_MS);
+    void Promise.all(sides.map((side) => {
+      const userId = side.score.user?.id;
+      return userId ? fetchUserReplaySkin(userId).catch(() => null) : Promise.resolve(null);
+    })).then((records) => {
+      if (cancelled) return;
+      setPlayerSkins([records[0] ?? null, records[1] ?? null]);
+      setSkinRecordsFor(sides);
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(release);
+    };
+  }, [sides]);
+
+  useEffect(() => {
+    if (!sides || skinRecordsFor !== sides) return;
+    let cancelled = false;
+    setSkinResolving(true);
+    const release = window.setTimeout(() => {
+      if (!cancelled) setSkinGate(sides);
+    }, Math.max(0, skinHoldDeadlineRef.current - performance.now()));
+    void Promise.all(sides.map(async (side, index): Promise<ReplaySkinSettings> => {
+      const choice = skinChoices[index];
+      if (choice.kind === "player") {
+        const record = playerSkins[index];
+        // Only this replay's keymode is decoded: a published skin can carry a
+        // profile per mode, and two stages decoding all of them is memory
+        // neither can draw.
+        const loaded = record ? await loadOwnerReplaySkinCached(record, undefined, side.replay.keyCount).catch(() => null) : null;
+        if (loaded) return loaded.settings;
+      }
+      if (choice.kind === "preset") {
+        const preset = skinPresets.find((candidate) => candidate.id === choice.id);
+        if (preset) {
+          const settings = await loadPresetReplaySkinSettings(preset).catch(() => null);
+          if (settings) return settings;
+        }
+      }
+      return await loadViewerReplaySkinSettings().catch(() => readReplaySkinSettings());
+    })).then((resolved) => {
+      if (cancelled) return;
+      sideSkinsRef.current = resolved;
+      for (const [index, renderer] of renderersRef.current.entries()) {
+        const settings = resolved[index];
+        if (settings) renderer.setSkinSettings(settings);
+      }
+      setSkinResolving(false);
+      setSkinGate(sides);
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(release);
+    };
+  }, [playerSkins, sides, skinChoices, skinPresets, skinRecordsFor]);
+
+  const pickSideSkin = useCallback((index: 0 | 1, choice: SideSkinChoice) => {
+    setSkinChoices((current) => {
+      const next: [SideSkinChoice, SideSkinChoice] = [current[0], current[1]];
+      next[index] = choice;
+      return next;
+    });
+  }, []);
+
+  // Create the two renderers once both sides are loaded.
+  useEffect(() => {
+    if (!sides || skinGate !== sides) return;
     let cancelled = false;
 
     void (async () => {
@@ -427,7 +550,6 @@ export function ReplaySideBySideView({
           t`Timed out loading the replay renderer.`,
         );
         if (cancelled) return;
-        const skinSettings = readReplaySkinSettings();
         const scrollSpeed = readReplayScrollSpeed();
         const canvases = [canvasLeftRef.current, canvasRightRef.current];
         const created: ReplayRendererLike[] = [];
@@ -451,6 +573,7 @@ export function ReplaySideBySideView({
               // the notes have to read at a glance on both stages at once.
               transparentBackground: true,
               blackPlayfield: true,
+              fullHeightLayout: true,
               // Bare stages: the middle column is the HUD here, and two copies
               // of every overlay (keypresses included) would just crowd the
               // playfields. Combo and the judgement pop stay, since both belong
@@ -467,7 +590,9 @@ export function ReplaySideBySideView({
               expectedCounts: getScoreExpectedCounts(side.score, side.replay),
               realTotalScore: getRealTotalScore(side),
               lifeBarFrames: side.replay.lifeBarFrames,
-              skinSettings,
+              // Null only when the hold above ran out; the resolved skin is
+              // handed over as soon as it lands.
+              skinSettings: sideSkinsRef.current[index] ?? readReplaySkinSettings(),
             },
           ) as ReplayRendererLike);
         }
@@ -518,7 +643,7 @@ export function ReplaySideBySideView({
       setReady(false);
       setIsPlaying(false);
     };
-  }, [readSharedClock, sides]);
+  }, [readSharedClock, sides, skinGate]);
 
   /* Storyboard. Fetched once per map (the bundle plus the .osu-embedded
      events), kept across toggles so switching it back on costs no refetch and
@@ -1123,6 +1248,16 @@ export function ReplaySideBySideView({
                   </button>
                 ))}
               </div>
+              {(playerSkins[0] || playerSkins[1] || skinPresets.length > 0) && (
+                <SkinPicker
+                  sides={sides}
+                  playerSkins={playerSkins}
+                  presets={skinPresets}
+                  choices={skinChoices}
+                  resolving={skinResolving}
+                  onPick={pickSideSkin}
+                />
+              )}
               <VisualSettings
                 dim={backgroundDim}
                 onSetDim={setBackgroundDim}
@@ -1287,6 +1422,112 @@ function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggl
             <span>{t`Storyboard`}</span>
             {storyboardLabel && <span className="text-[10px] font-medium opacity-75">{storyboardLabel}</span>}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* One skin per playfield, behind the palette button. Each side lists the skin
+   its player published (when they did), the viewer's own, and every skin
+   preset the viewer has saved, so a run by someone with no skin of their own
+   can still be watched in something other than the default. */
+function SkinPicker({ sides, playerSkins, presets, choices, resolving, onPick }: {
+  sides: [SideBySideSide, SideBySideSide];
+  playerSkins: [OwnerReplaySkinRecord | null, OwnerReplaySkinRecord | null];
+  presets: ReplaySkinPreset[];
+  choices: [SideSkinChoice, SideSkinChoice];
+  resolving: boolean;
+  onPick: (index: 0 | 1, choice: SideSkinChoice) => void;
+}) {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        title={t`Skins`}
+        aria-label={t`Skins`}
+        aria-expanded={open}
+        className={`rounded p-1 transition-colors cursor-pointer ${open ? "text-white" : "text-osu-f1 hover:text-white"}`}
+      >
+        <Palette className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 z-30 mb-2 w-64 rounded-lg border border-white/10 bg-[#0b0b12]/95 p-3 shadow-xl backdrop-blur">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-white/70">
+            <span>{t`Skins`}</span>
+            {resolving && <LoaderCircle className="h-3 w-3 animate-spin text-white/50" aria-hidden="true" />}
+          </div>
+          {sides.map((side, index) => {
+            const sideIndex = index as 0 | 1;
+            const choice = choices[sideIndex];
+            const record = playerSkins[sideIndex];
+            const name = side.score.user?.username ?? side.replay.header.playerName ?? t`Unknown`;
+            const options: { key: string; label: string; title?: string; choice: SideSkinChoice }[] = [
+              ...(record
+                ? [{
+                    key: "player",
+                    label: t`Player's skin`,
+                    title: t`Watch with ${name}'s own skin (${record.skin.name})`,
+                    choice: { kind: "player" } as SideSkinChoice,
+                  }]
+                : []),
+              { key: "viewer", label: t`Your skin`, choice: { kind: "viewer" } as SideSkinChoice },
+              ...presets.map((preset) => ({
+                key: `preset:${preset.id}`,
+                label: preset.name,
+                choice: { kind: "preset", id: preset.id } as SideSkinChoice,
+              })),
+            ];
+            const selectedKey = choice.kind === "preset"
+              ? `preset:${choice.id}`
+              : choice.kind === "player" && !record ? "viewer" : choice.kind;
+            return (
+              <div key={sideIndex} className="mt-3">
+                <div className={`truncate text-[11px] font-semibold ${SIDE_ACCENTS[sideIndex].text}`}>{name}</div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {options.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => onPick(sideIndex, option.choice)}
+                      title={option.title}
+                      aria-pressed={option.key === selectedKey}
+                      className={`max-w-full truncate rounded px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                        option.key === selectedKey
+                          ? "bg-osu-pink text-white"
+                          : "bg-white/10 text-osu-f1 hover:bg-white/20 hover:text-white"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

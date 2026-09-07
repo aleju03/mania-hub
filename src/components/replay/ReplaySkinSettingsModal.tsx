@@ -62,6 +62,7 @@ import { clearReplaySkinSounds, readReplaySkinSounds, writeReplaySkinSounds } fr
 import { useAuth } from "#/lib/auth-context";
 import { getLiveBackendUrl } from "#/lib/live-backend";
 import {
+  communityPresetCacheKey,
   dehydrateReplaySkinSettings,
   fetchMyReplaySkinCached,
   loadOwnerReplaySkin,
@@ -123,10 +124,6 @@ interface HydratedCommunityPreset {
   // Null means the visuals are cached but this preset's sounds have not been
   // recovered yet. An empty object is a known skin with no gameplay samples.
   sounds: Record<string, ArrayBuffer> | null;
-}
-
-function communityPresetCacheKey(preset: ReplaySkinPreset): string {
-  return `preset:${preset.id}:${preset.updatedAt}`;
 }
 
 // Assets tab (only mounted when an .osk archive rides along, i.e. the

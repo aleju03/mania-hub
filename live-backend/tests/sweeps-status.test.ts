@@ -6,6 +6,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { getSweepReports } from "../src/features/sweeps-status.js";
+import { CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB } from "../src/features/chart-families.js";
+import { PLAYER_SKILL_DAN_SWEEP_META_KEY, PLAYER_SKILL_DAN_SWEEP_JOB } from "../src/features/player-skills.js";
 import {
   TOP_SCORES_BACKFILL_DONE_META_KEY,
   TOP_SCORES_BACKFILL_JOB,
@@ -54,6 +56,8 @@ describe("sweeps status registry", () => {
     const reports = await getSweepReports(db);
     const ids = reports.map((entry) => entry.id);
     expect(ids).toEqual([
+      "chart-family-backfill",
+      "player-skill-dan-recompute",
       "activity-mods-backfill",
       "activity-combo-backfill",
       "top-scores-backfill",
@@ -97,6 +101,24 @@ describe("sweeps status registry", () => {
     const entry = await report("top-scores-backfill");
     expect(entry.status).toBe("pending");
     expect(entry.detail).toBe("not started");
+  });
+
+  it("shows the family backfill chain and the dan dependency waiting on it", async () => {
+    expect((await report("player-skill-dan-recompute")).detail).toContain("chart families");
+    await queue.enqueue(CHART_FAMILY_SWEEP_JOB, "families:100", { cursor: 100 });
+    expect(await report("chart-family-backfill")).toMatchObject({ status: "running", progress: { cursor: 100 } });
+    await seedMeta(CHART_FAMILY_META_KEY, "{}");
+    expect((await report("chart-family-backfill")).status).toBe("done");
+    expect((await report("player-skill-dan-recompute")).detail).not.toContain("chart families");
+  });
+
+  it("uses the current dan revision and shows a repair rerun over its old completion", async () => {
+    await seedMeta("player_skill_dan_sweep_done:v28", "{}");
+    expect((await report("player-skill-dan-recompute")).status).toBe("pending");
+    await seedMeta(PLAYER_SKILL_DAN_SWEEP_META_KEY, "{}");
+    expect((await report("player-skill-dan-recompute")).status).toBe("done");
+    await queue.enqueue(PLAYER_SKILL_DAN_SWEEP_JOB, "dan:200", { cursor: 200 });
+    expect(await report("player-skill-dan-recompute")).toMatchObject({ status: "running", progress: { cursor: 200 } });
   });
 
   it("reports done when the done key exists", async () => {

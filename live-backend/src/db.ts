@@ -3193,6 +3193,19 @@ async function migrateOsuProxyCache(db: Db): Promise<void> {
 
 async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
   await db.execute(`
+    create table if not exists beatmap_chart_families (
+      beatmap_id integer primary key,
+      version integer not null,
+      topology_key text not null,
+      family_key text not null,
+      file_hash text not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_beatmap_chart_families_topology
+      on beatmap_chart_families(topology_key, version)
+  `);
+  await db.execute(`
     create table if not exists beatmap_osu_files (
       beatmap_id integer primary key,
       beatmapset_id integer,

@@ -1,3 +1,4 @@
+import { CHART_FAMILY_META_KEY } from "../src/features/chart-families.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -47,9 +48,15 @@ async function markMotionFeaturesSwept(db: Db): Promise<void> {
   );
 }
 
+async function markChartFamiliesSwept(db: Db): Promise<void> {
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, '{}', ?)",
+    [CHART_FAMILY_META_KEY, "2026-09-06T00:00:00.000Z"]);
+}
+
 async function markDanDependenciesSwept(db: Db): Promise<void> {
   await markJackDemandSwept(db);
   await markMotionFeaturesSwept(db);
+  await markChartFamiliesSwept(db);
 }
 
 async function seedChart(
@@ -462,7 +469,7 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     await markDanDependenciesSwept(db);
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v28'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v29'", [])).rows[0];
     expect(done).toBeTruthy();
 
     // A boot past the done key schedules nothing.
@@ -482,13 +489,16 @@ describe("recomputePlayerSkillDanChunk", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
     // A job queued by older code is guarded at execution time too.
     await runPlayerSkillDanSweepJob(db, queue, { cursor: 0 });
-    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v28'", [])).rows).toHaveLength(0);
+    expect((await exec(db, "select 1 from live_meta where key = 'player_skill_dan_sweep_done:v29'", [])).rows).toHaveLength(0);
 
     await markJackDemandSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
 
     await markMotionFeaturesSwept(db);
+    await ensurePlayerSkillDanSweepSeeded(db, queue);
+    expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(0);
+    await markChartFamiliesSwept(db);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect((await exec(db, "select 1 from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows).toHaveLength(1);
     db.close();

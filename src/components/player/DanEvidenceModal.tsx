@@ -205,6 +205,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         color,
         dan: evidence.dan,
         clears: evidence.totalClears,
+        weightedClears: evidence.weightedClears ?? Math.min(evidence.totalClears, averageWindow),
         plays: moreClears.plays.length > 0 ? [...evidence.clears, ...moreClears.plays] : evidence.clears,
       },
       ...evidence.skillsets.map((skillset) => {
@@ -215,6 +216,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           color: meta?.color ?? color,
           dan: skillset.dan,
           clears: skillset.clears,
+          weightedClears: skillset.weightedClears ?? Math.min(skillset.clears, averageWindow),
           plays: skillset.plays,
         };
       }),
@@ -431,9 +433,12 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                             {/* Under the averaging window the count reads as
                                 progress toward it: this dan is averaged from
                                 fewer plays than it wants. */}
-                            {section.clears < averageWindow
-                              ? t`${section.clears}/${averageWindow} plays`
-                              : t`${section.clears} plays`}
+                            {t`${section.clears} plays`}
+                            {section.weightedClears < averageWindow ? (
+                              <span className="ml-1">
+                                {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} weighted`}
+                              </span>
+                            ) : null}
                           </span>
                           {open ? (
                             <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
@@ -444,15 +449,20 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   </div>
                   {/* Shown only while some column is short of the window, so a
                       filled-out breakdown carries no caveat at all. */}
-                  {sections.some((section) => section.clears < averageWindow) ? (
+                  {sections.some((section) => section.weightedClears < averageWindow) ? (
                     <div className="px-2 pt-2 text-[11px] text-osu-f1">
                       <Trans>
-                        Each skillset is the average of your {averageWindow} best clears in it. With
-                        fewer than {averageWindow} it averages what you have, so the number is less
-                        accurate until you reach {averageWindow}.
+                        Each skillset uses your best clears up to {averageWindow} weighted slots.
+                        With less evidence, it averages what you have and the estimate is still filling in.
                       </Trans>
                     </div>
                   ) : null}
+                  <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                    <Trans>
+                      Rates of the same chart share influence within each skillset: your best clear
+                      has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit.
+                    </Trans>
+                  </div>
                   {anchorSection && sections.length > 2 ? (
                     <div className="px-2 pt-2 text-[11px] text-osu-f1">
                       <Trans>
@@ -621,6 +631,18 @@ function ClearRow({
           player did clear it, it just does not set the level. */}
       {clear.ignoredAsStray ? (
         <span className="shrink-0 text-[10px] text-osu-f1">{t`not counted`}</span>
+      ) : null}
+      {!clear.ignoredAsStray && clear.averagingWeight != null && clear.averagingWeight < 1 ? (
+        <span
+          className="shrink-0 text-[10px] tabular-nums text-osu-f1"
+          title={clear.averagingWeight === 0
+            ? t`Outside this average's weighted window`
+            : t`Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged`}
+        >
+          {clear.averagingWeight === 0 ? t`outside average`
+            : clear.averagingWeight < 0.01 ? t`<1% weight`
+              : t`${Math.round(clear.averagingWeight * 100)}% weight`}
+        </span>
       ) : null}
       {reduced ? <span className="shrink-0 text-[10px] text-osu-f1">{t`partial credit`}</span> : null}
       <span

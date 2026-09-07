@@ -109,6 +109,18 @@ function buildRateChordWallBeatmapFile(): string {
   return buildStreamBeatmapFile().replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${lines.join("\n")}\n`);
 }
 
+// The fast chord section is under half the rows, so the legacy wall-share
+// arm misses it. Rotating the omitted column keeps individual jack runs short.
+function buildSustainedRateChordBeatmapFile(): string {
+  const lines: string[] = [];
+  for (let row = 0; row < 400; row++) {
+    for (let column = 0; column < 4; column++) {
+      if (column !== row % 4) lines.push(`${64 + column * 128},192,${100_000 + row * 100},1,0,0:0:0:0:`);
+    }
+  }
+  return `${buildStreamBeatmapFile()}\n${lines.join("\n")}\n`;
+}
+
 // The stream chart with every note turned into a ~250ms hold: same heads, so
 // the head-only calc sees the identical chart, while the tail-aware pass sees
 // the release rows.
@@ -910,8 +922,9 @@ describe("computePlayerSkillRatings", () => {
       const dan = result.summary.modes[0].dan!;
       // rc evidence uses stable-formula accuracy from the judgement counts,
       // rice-primary charts only: 8.0, 9.0 (DT), 9.0 (hybrid counts rice),
-      // 7.4. The dan is their average; the two 9.0s are the clears that reach it.
-      expect(dan.rc?.rawDan).toBe(8.35);
+      // 7.4. The 8.0 base-rate clear shares the DT chart and gets 90% weight:
+      // (9 + 9 + 8 * .9 + 7.4) / 3.9 = 8.36. Both 9.0s reach the estimate.
+      expect(dan.rc?.rawDan).toBe(8.36);
       expect(dan.rc?.clears).toBe(2);
       expect(dan.rc?.label).toBeTruthy();
       // The LN side labels on the numeric LN ladder (never the rice greek
@@ -1744,6 +1757,9 @@ describe("computePlayerSkillRatings", () => {
       expect(result.summary.unsupportedPlays).toBe(0);
       expect(result.plays[0].beatmapId).toBe(101);
       expect(result.plays[0].source).toBe("tracked");
+      expect(result.vibroExcluded).toMatchObject([{
+        reason: "chart_vibro", play: { beatmapId: 106, keyCount: 4, rate: 1 },
+      }]);
 
       // Retention: the top-sourced play keeps its pp-backed trust even after
       // dropping off the top-200, while the tracked-only chart stays out.
@@ -1771,8 +1787,8 @@ describe("computePlayerSkillRatings", () => {
       }
       // The stored flag is 1.0x, where the roll chart is legit: the NoMod
       // tracked play rates. The DT tracked play on the same chart is a shake
-      // and skips. Chart 107 has a top play at DT (pp-backed), so its tracked
-      // DT retry keeps the ranked trust and rates too.
+      // and skips. Chart 107 has a top play at DT (pp-backed), which also
+      // skips: ranked status cannot certify the faster pattern.
       const topScores = [play({ id: 1, beatmap_id: 107, accuracy: 0.9, mods: [{ acronym: "DT" }] })];
       const trackedScores = [
         play({ id: 2, beatmap_id: 106, accuracy: 0.99, pp: null }),
@@ -1781,17 +1797,18 @@ describe("computePlayerSkillRatings", () => {
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, topScores, [], { trackedScores });
       const rated = result.plays.map((entry) => `${entry.beatmapId}@${entry.rate}`).sort();
-      expect(rated).toEqual(["106@1", "107@1.5"]);
+      expect(rated).toEqual(["106@1"]);
       expect(result.summary.unsupportedPlays).toBe(0);
-      // The NoMod play never ran the check (the stored flag covers 1.0x); the
-      // trusted DT play never needed it.
+      // The surviving NoMod play never ran the rate check.
       expect(result.plays.every((entry) => entry.rateVibroChecked == null)).toBe(true);
 
       // Retention: a tracked DT play accepted by the previous detector drops
-      // on its next compute; a top-sourced one keeps its pp-backed trust.
+      // on its next compute, including one previously trusted as a top play.
       const stale = {
-        ...result.plays.find((entry) => entry.beatmapId === 107)!,
+        ...result.plays[0],
         beatmapId: 106,
+        rate: 1.5,
+        rateMod: "DT",
         identity: "official:9",
         source: "tracked" as const,
         rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
@@ -1799,7 +1816,7 @@ describe("computePlayerSkillRatings", () => {
       const dropped = await computePlayerSkillRatings(db, failingOsu, [], [stale], {});
       expect(dropped.plays.map((entry) => entry.beatmapId)).toEqual([]);
       const trusted = await computePlayerSkillRatings(db, failingOsu, [], [{ ...stale, source: "top" as const }], {});
-      expect(trusted.plays.map((entry) => entry.beatmapId)).toEqual([106]);
+      expect(trusted.plays.map((entry) => entry.beatmapId)).toEqual([]);
     });
   });
 
@@ -1843,17 +1860,67 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("stamps a rate play whose chart passes the check so it is parsed once", async () => {
+  it.each(["DT", "NC"])("removes fresh, reused and retained ranked %s chord-vibro plays", async (acronym) => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 108, buildSustainedRateChordBeatmapFile(), { source: "test" });
+      const normal = play({ id: 80, beatmap_id: 108, accuracy: 0.95 });
+      const fast = play({ id: 81, beatmap_id: 108, accuracy: 0.95, mods: [{ acronym }] });
+      const result = await computePlayerSkillRatings(db, failingOsu, [normal, fast], [], {});
+      expect(result.plays.map((entry) => `${entry.beatmapId}@${entry.rate}`)).toEqual(["108@1"]);
+      expect(result.vibroExcluded).toMatchObject([{
+        reason: "rate_vibro", checkedVersion: RATE_VIBRO_CHECK_VERSION,
+        play: { beatmapId: 108, rate: 1.5, rateMod: acronym, values: {} },
+      }]);
+      expect(result.vibroExcluded[0].play.values).toEqual({});
+      const onlyExcluded = await computePlayerSkillRatings(db, failingOsu, [fast], [], {});
+      expect(onlyExcluded.plays).toEqual([]);
+      expect(onlyExcluded.summary.analyzedPlays).toBe(0);
+      expect(onlyExcluded.summary.modes[0]).toMatchObject({ keyCount: 4, analyzedPlays: 0, ratings: { Overall: 0 }, dan: { rc: null, ln: null } });
+
+      const stale = {
+        ...result.plays[0], identity: "official:81", rate: 1.5, rateMod: acronym,
+        mods: [acronym], source: "top" as const, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      };
+      // An unchanged SSR takes the reuse path before the fresh-play detector.
+      const reused = await computePlayerSkillRatings(db, failingOsu, [normal, fast], [result.plays[0], stale], {});
+      expect(reused.plays.map((entry) => entry.rate)).toEqual([1]);
+      // A top play that aged out of osu!'s window must also lose the exemption.
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [result.plays[0], stale], {});
+      expect(retained.plays.map((entry) => entry.rate)).toEqual([1]);
+    });
+  });
+
+  it.each(["tracked", "top"] as const)("stamps a valid %s rate play so it is parsed once", async (source) => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
-      const trackedScores = [play({ id: 3, beatmap_id: 106, accuracy: 0.95, pp: null, mods: [{ acronym: "DT" }] })];
-      const result = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores });
+      const scores = [play({ id: 3, beatmap_id: 106, accuracy: 0.95, pp: source === "top" ? 100 : null, mods: [{ acronym: "DT" }] })];
+      const result = await computePlayerSkillRatings(db, failingOsu, source === "top" ? scores : [], [], {
+        trackedScores: source === "tracked" ? scores : [],
+      });
       expect(result.plays).toHaveLength(1);
       expect(result.plays[0].rateVibroChecked).toBe(RATE_VIBRO_CHECK_VERSION);
       // A retained stamped play survives without the .osu around.
       await exec(db, "delete from beatmap_osu_files where beatmap_id = 106");
       const retained = await computePlayerSkillRatings(db, failingOsu, [], result.plays, {});
       expect(retained.plays).toHaveLength(1);
+    });
+  });
+
+  it("keeps a large retained uprate pool pending until every play is checked", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
+      const seed = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 106, accuracy: 0.95 })], [], {});
+      const previous = Array.from({ length: 201 }, (_, index) => ({
+        ...seed.plays[0], identity: `official:${1000 + index}`, rate: (1100 + index) / 1000,
+        source: "top" as const, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      }));
+      const first = await computePlayerSkillRatings(db, failingOsu, [], previous, {});
+      expect(first.plays).toHaveLength(201);
+      expect(first.summary.pendingPlays).toBe(1);
+      expect(first.plays.filter((entry) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toHaveLength(200);
+      const second = await computePlayerSkillRatings(db, failingOsu, [], first.plays, {});
+      expect(second.summary.pendingPlays).toBe(0);
+      expect(second.plays.every((entry) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
     });
   });
 
@@ -2261,6 +2328,98 @@ describe("getPlayerSkillBreakdown", () => {
 });
 
 describe("computePlayerSkillsJob", () => {
+  it("persists vibro explanations outside both rating pools, including after the score ages out", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const now = new Date().toISOString();
+      const jobOsu = {
+        ...failingOsu,
+        getUserByKey: async (): Promise<never> => { throw new Error("no network in tests"); },
+        getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network in tests"); },
+      };
+      const normal = play({ id: 80, user_id: 99, beatmap_id: 108, accuracy: 0.95 });
+      const fast = play({ id: 81, user_id: 99, beatmap_id: 108, accuracy: 0.95, mods: [{ acronym: "DT" }] });
+      await storeCachedBeatmapFile(db, 108, buildSustainedRateChordBeatmapFile(), { source: "test" });
+      await exec(db, `insert into profile_snapshots
+        (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+        values (99, '99', '{}', ?, 200, ?, ?, ?)`, [JSON.stringify([normal, fast]), now, now, now]);
+      await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at)
+        values (108, 10, 'mania', 'test', ?, ?)`, [JSON.stringify({ accuracy: 8 }), now]);
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, dan_dt_json, updated_at)
+        values (108, ?, 'ready', 4, ?, ?, ?)`, [CHART_ANALYSIS_VERSION,
+        JSON.stringify({ lnRatio: 0, vibro: false, patterns: [], rc: { rawDan: 12 } }),
+        JSON.stringify({ rawDan: 18.38, primaryFamily: "rc", primaryLabel: "theta++" }), now]);
+
+      await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
+      const before = await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true });
+      expect(before?.totalClears).toBe(1);
+      expect(before?.totalRejected).toBe(1);
+      expect(before?.rejected?.[0]).toMatchObject({
+        reason: "rate_vibro", chartDan: 18.38, chartDanLabel: "theta++",
+        play: { beatmapId: 108, rate: 1.5, ratingExcluded: true },
+      });
+      expect((await getPlayerSkillPlays(db, 99, 4, "Overall")).items.map((entry) => entry.rate)).toEqual([1]);
+      expect((await getPlayerSkillDanEvidence(db, 99, 4, "rc"))?.rejected).toBeUndefined();
+
+      // Recomputing from the remaining normal score preserves the explanation
+      // without needing either the rejected raw score or its .osu file.
+      await exec(db, "update profile_snapshots set best_scores_json = ? where user_id = 99", [JSON.stringify([normal])]);
+      await exec(db, "delete from beatmap_osu_files where beatmap_id = 108");
+      await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
+      const after = await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true });
+      expect(after?.rejected).toEqual(before?.rejected);
+      expect(after?.clears).toEqual(before?.clears);
+
+      // A newer eligible play on that slot replaces its obsolete explanation.
+      await storeCachedBeatmapFile(db, 108, buildStreamBeatmapFile(), { source: "test" });
+      await exec(db, "update profile_snapshots set best_scores_json = ? where user_id = 99", [JSON.stringify([normal, { ...fast, id: 82 }])]);
+      await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
+      expect((await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true }))?.rejected).toEqual([]);
+      expect((await getPlayerSkillPlays(db, 99, 4, "Overall")).items).toHaveLength(2);
+    });
+  });
+
+  it("queues and drains a continuation when retained rate checks exceed one pass", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const now = new Date().toISOString();
+      const jobOsu = {
+        ...failingOsu,
+        getUserByKey: async (): Promise<never> => { throw new Error("no network in tests"); },
+        getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network in tests"); },
+      };
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
+      await exec(db, `insert into profile_snapshots
+        (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+        values (99, '99', '{}', ?, 200, ?, ?, ?)`, [JSON.stringify([play({ id: 41, beatmap_id: 777 })]), now, now, now]);
+      const plays = Array.from({ length: 201 }, (_, index) => ({
+        identity: `official:${1000 + index}`, beatmapId: 106, keyCount: 4, rate: (1100 + index) / 1000,
+        goal: 0.95, pp: 100, values: { Overall: 20, Stream: 18 }, patterns: [], source: "top",
+        rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      }));
+      await exec(db, `insert into player_skill_ratings
+        (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+        values (99, ?, 'ready', '{}', ?, ?, ?)`, [PLAYER_SKILLS_VERSION - 1, JSON.stringify({ plays }), now, now]);
+
+      await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
+      const followUps = (await exec(db, "select id, dedupe_key, payload_json, run_after from jobs where type = 'compute_player_skills'")).rows;
+      expect(followUps).toHaveLength(1);
+      expect(followUps[0].dedupe_key).toBe(`player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:99:1`);
+      expect(Date.parse(String(followUps[0].run_after))).toBeGreaterThan(Date.parse(now));
+      const payload = JSON.parse(String(followUps[0].payload_json));
+      expect(payload).toEqual({ userId: 99, rateVibroPending: 1 });
+
+      await exec(db, "update jobs set status = 'running' where id = ?", [Number(followUps[0].id)]);
+      await computePlayerSkillsJob(db, jobOsu, queue, payload);
+      await queue.complete(Number(followUps[0].id));
+      const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 99 and analysis_version = ?", [PLAYER_SKILLS_VERSION])).rows[0];
+      expect(JSON.parse(String(row.plays_json)).plays.every((entry: { rateVibroChecked?: number }) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
+      expect((await exec(db, "select id from jobs where type = 'compute_player_skills' and status = 'queued'")).rows).toHaveLength(0);
+    });
+  });
+
   it("seeds a version bump's first compute from the superseded row's plays", async () => {
     await withDb(async (db) => {
       const queue = new JobQueue(db);

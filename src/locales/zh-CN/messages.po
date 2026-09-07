@@ -94,6 +94,11 @@ msgstr "? Ranked 分数"
 msgid "? replay views"
 msgstr "? 次回放观看"
 
+#. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
+#: src/components/player/DanEvidenceModal.tsx
+msgid "· {0}/{averageWindow} weighted"
+msgstr "· 加权 {0}/{averageWindow}"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "(extra) Step 7: clearing a real course overrides all of it"
 #~ msgstr "（附加）第七步：通过真正的课题会盖过以上一切"
@@ -807,14 +812,19 @@ msgstr "{0} 的成绩"
 
 #. placeholder {0}: section.clears
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0}/{averageWindow} plays"
-msgstr "{0}/{averageWindow} 次游玩"
+#~ msgid "{0}/{averageWindow} plays"
+#~ msgstr "{0}/{averageWindow} 次游玩"
 
 #. placeholder {0}: (odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")
 #. placeholder {1}: HONORARY_PACK_POOL.length
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0}% GOAT slot, then 1 of {1} on the roster"
 msgstr "{0}% 的 GOAT 位，再从 {1} 人名单中抽 1 位"
+
+#. placeholder {0}: Math.round(clear.averagingWeight * 100)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0}% weight"
+msgstr "{0}% 权重"
 
 #. placeholder {0}: Math.round(score.weight.percentage)
 #: src/routes/player/$username.tsx
@@ -1369,8 +1379,12 @@ msgid "{skillsetLabel} dan"
 msgstr "{skillsetLabel} 段位"
 
 #: src/components/player/DanLevelBadge.tsx
-msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
-msgstr "{skillsTotal} 项技能中有 {skillsFull} 项已满 {perSkill} 次通过，估算仍在完善中。"
+#~ msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} clears, so the estimate is still filling in."
+#~ msgstr "{skillsTotal} 项技能中有 {skillsFull} 项已满 {perSkill} 次通过，估算仍在完善中。"
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "{skillsFull} of {skillsTotal} skills have their full {perSkill} weighted clears, so the estimate is still filling in."
+msgstr "{skillsTotal} 个技能中有 {skillsFull} 个达到了完整的 {perSkill} 次加权通过，估计仍在逐步完善。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{speedLabel} speed"
@@ -1681,6 +1695,10 @@ msgstr "<0>追踪已开启。</0>你最近的成绩正在导入，几分钟后�
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Your plays are not being tracked yet.</0> Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 msgstr "<0>你的成绩还没有被追踪。</0>登录不会自动开启追踪。开启后，社区喜爱和坟场谱面的新成绩才会计入你的技能评分。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "<1% weight"
+msgstr "<1% 权重"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "− bpm & length"
@@ -2774,8 +2792,12 @@ msgid "avatar"
 msgstr "头像"
 
 #: src/components/player/DanLevelBadge.tsx
-msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
-msgstr "基于 {windowHave}/{windowNeed} 次通过取平均，估算仍在完善中。"
+#~ msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
+#~ msgstr "基于 {windowHave}/{windowNeed} 次通过取平均，估算仍在完善中。"
+
+#: src/components/player/DanLevelBadge.tsx
+msgid "Averaged over {windowHave} of {windowNeed} weighted clears, so the estimate is still filling in."
+msgstr "目前按 {windowHave} 次加权通过取平均，目标是 {windowNeed} 次，估计仍在逐步完善。"
 
 #: src/routes/player/$username.tsx
 msgid "Avg active day"
@@ -3383,6 +3405,10 @@ msgstr "更新日志"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changelog"
 msgstr "更新日志"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "Changes"
+msgstr "更新"
 
 #: src/components/player/SkillHistoryModal.tsx
 #~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
@@ -4868,6 +4894,7 @@ msgstr "{hidden} 的 Ranked 分数比 {shown} 多还是少？"
 msgid "Does {hidden} have more or less playtime than {shown}?"
 msgstr "{hidden} 的游戏时长比 {shown} 多还是少？"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "does not count"
 msgstr "不计入"
@@ -5110,8 +5137,12 @@ msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
 #~ msgstr "每个技能都是其背后最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次的技能会按现有的通过来平均，所以随着通过增多它会越来越准。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
-msgstr "每个技能是你在它上面最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次时就取你现有的求平均，所以在凑够 {averageWindow} 次之前这个数字没那么准。"
+#~ msgid "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
+#~ msgstr "每个技能是你在它上面最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次时就取你现有的求平均，所以在凑够 {averageWindow} 次之前这个数字没那么准。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
+msgstr "每个技能取你最好的通过成绩，直到权重总和达到 {averageWindow}。证据不足时，就按已有的成绩取加权平均，估计仍在逐步完善。"
 
 #: src/lib/streak-game.ts
 msgid "Earlier"
@@ -6343,9 +6374,9 @@ msgstr "印地语"
 msgid "Hint"
 msgstr "提示条"
 
-#: src/components/packs/collections/CollectorShelf.tsx
-#~ msgid "History"
-#~ msgstr "历程"
+#: src/components/player/SkillHistoryModal.tsx
+msgid "History"
+msgstr "历程"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Hit <0/> <1/>"
@@ -6597,6 +6628,10 @@ msgstr "已导入 {0}"
 msgid "Imported note image height scaling."
 msgstr "导入的音符图片高度缩放。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "importing"
+msgstr "导入中"
+
 #. placeholder {0}: importProgress ?? 0
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Importing… {0}%"
@@ -6658,6 +6693,10 @@ msgstr "靛蓝"
 #: src/components/communities/field-options.tsx
 msgid "Indonesian"
 msgstr "印尼语"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
+msgstr "计入同谱面重复成绩的权重衰减及窗口上限后，在本次平均中的权重；段位折算值不变"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -8780,6 +8819,10 @@ msgstr "暂无已评分的键数。"
 msgid "No rated players here yet."
 msgstr "这里还没有已评分的玩家。"
 
+#: src/components/player/SkillHistoryModal.tsx
+msgid "No rating system changes yet."
+msgstr "评分系统暂无更新。"
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "暂无最近成绩"
@@ -9720,6 +9763,14 @@ msgstr "导出高度（像素）"
 msgid "Output width in pixels"
 msgstr "导出宽度（像素）"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "outside average"
+msgstr "不计入平均"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Outside this average's weighted window"
+msgstr "超出本次平均的加权窗口"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "overall"
 msgstr "综合"
@@ -10096,6 +10147,7 @@ msgid "Player not found."
 msgstr "找不到该玩家。"
 
 #: src/components/replay/ReplayControls.tsx
+#: src/components/replay/ReplaySideBySideView.tsx
 msgid "Player's skin"
 msgstr "玩家的皮肤"
 
@@ -10526,6 +10578,10 @@ msgstr "过审"
 msgid "Qualified"
 msgstr "过审"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "queued"
+msgstr "排队中"
+
 #: src/routes/bbcode.tsx
 msgid "Quote"
 msgstr "引用"
@@ -10638,24 +10694,48 @@ msgid "Rate mods count, and they count for what the chart is worth at that speed
 msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x)，以及 0.5x 到 2.0x 之间任意的 lazer 自定义倍速下的通过，都会按谱面在那个速度下的段位计入，每个速度单独评。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。如果某个速度还没有人评过这张谱面，你的估算第一次用到它时就会现算，所以冷门倍速的成绩可能要过一小会儿才开始计入。"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+#~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+#~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
-msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
+#~ msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 msgstr "仅依据 {plays} 个成绩评分，在更多 {keyCount}K 成绩被评分之前只能当作粗略估算"
+
+#: src/routes/dan-estimates.tsx
+msgid "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
+msgstr "同一谱面的不同倍率成绩，以及经验证仅改变倍率的重传谱面成绩，在每个技能中共享权重：最好的通过权重为 100%，下一次为 90%，再下一次为 81%，以此类推。每次通过的段位折算值不变，更好的成绩会占据权重最高的位置。两个倍率合计占 1.9 个加权名额，五个约占 4.1 个。平均值会纳入更多其他通过成绩，直到填满 20 个加权名额。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
+msgstr "同一谱面不同倍率的成绩在每个技能中共享权重：最好的通过权重为 100%，之后依次为 90%、81%，以此类推。每次通过的段位折算值保持不变。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rates per chart"
@@ -11273,6 +11353,7 @@ msgstr "数据保留与控制"
 
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
+#: src/components/player/AddScoreModal.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
 #: src/routes/skins.tsx
@@ -12490,6 +12571,10 @@ msgstr "skin.ini 中引用："
 msgid "skins"
 msgstr "皮肤"
 
+#: src/components/replay/ReplaySideBySideView.tsx
+msgid "Skins"
+msgstr "皮肤"
+
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "皮肤列表暂时不可用"
@@ -12806,8 +12891,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "第四步：你的通过会被分进四个技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
-msgstr "第五步：每个技能的段位，是你在它上面最好 20 次通过的平均"
+msgid "Step 5: each skill's dan is a weighted average of your best passes"
+msgstr "第五步：每个技能的段位，是你最好通过成绩的加权平均"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
+#~ msgstr "第五步：每个技能的段位，是你在它上面最好 20 次通过的平均"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is the average of your 5 best passes in it"
@@ -13023,12 +13112,16 @@ msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的 20 个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+#~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的 20 个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 #~ msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "取你在一个技能中获得段位折算值的通过成绩，按折算等级从高到低排序，并取加权平均，直到权重总和填满 20 个名额。这就是你在该技能上的段位。不会在这些证据之上额外加分，也没有哪一次通过能单独决定它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -14708,8 +14801,8 @@ msgstr "已被拒绝{said}修改后会重新提交审核。"
 #~ msgstr "20 次足够多，几次运气好的通过撑不起来。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "20 次足够多，光靠你最好的那几次通过撑不起来。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
+#~ msgid "Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "20 次足够多，光靠你最好的那几次通过撑不起来。达标通过不足 20 次时，就取你现有的求平均；某个技能上不到四次，它就没有自己的段位；某一侧不到四次，就干脆不给估算，而不是给一个站不住的。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty passes are a body of work, not a lucky handful. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -14787,6 +14880,7 @@ msgid "unknown"
 msgstr "未知"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/player/$username.tsx
 msgid "Unknown"
 msgstr "未知"
@@ -15096,6 +15190,18 @@ msgstr "Vibro 谱面，估计值不可靠"
 msgid "Vibro chart: difficulty estimates are unreliable"
 msgstr "Vibro 谱面：难度估算不可靠"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Vibro detected"
+msgstr "检测到 vibro"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Vibro detected at {rate}×. This play does not count toward skill or dan ratings."
+msgstr "检测到 {rate}× 倍速下的 vibro。此成绩不计入技能或段位评分。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Vibro detected in this chart. This play does not count toward skill or dan ratings."
+msgstr "此谱面检测到 vibro。此成绩不计入技能或段位评分。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"
 msgstr "视频链接或 ID"
@@ -15103,6 +15209,10 @@ msgstr "视频链接或 ID"
 #: src/components/communities/field-options.tsx
 msgid "Vietnamese"
 msgstr "越南语"
+
+#: src/components/player/SkillHistoryModal.tsx
+msgid "View"
+msgstr "视图"
 
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
@@ -15313,6 +15423,11 @@ msgstr "并排观看"
 msgid "Watch two runs of the same map at once"
 msgstr "同时观看同一张谱面的两份成绩"
 
+#. placeholder {0}: record.skin.name
+#: src/components/replay/ReplaySideBySideView.tsx
+msgid "Watch with {name}'s own skin ({0})"
+msgstr "用 {name} 自己的皮肤观看（{0}）"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Watch with the player's own skin"
 msgstr "用玩家自己的皮肤观看"
@@ -15490,6 +15605,14 @@ msgstr "愿望单已满（5）"
 #: src/routes/farm-helper.tsx
 msgid "with {mods}"
 msgstr "使用 {mods}"
+
+#: src/routes/dan-estimates.tsx
+msgid "With different charts, your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+msgstr "如果这些成绩来自不同谱面，你的叠段位就是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+
+#: src/routes/dan-estimates.tsx
+msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "不足 20 个加权名额时，就按你已有的证据取平均；不要求通过 20 张不同的谱面。某个技能的有效通过不足四次，就不会给出该技能的段位；某一侧不足四次时，也不会给出不可靠的估计。"
 
 #: src/routes/farm-helper.tsx
 msgid "with no mods"
@@ -15834,8 +15957,8 @@ msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术
 #~ msgstr "你的叠段位是高亮那五次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：一张谱面可能是运气好，可能刚好对你的口味，也可能是五十次里唯一一次准确率没掉下来的。和它下面那四次放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
-msgstr "你的叠段位是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+#~ msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+#~ msgstr "你的叠段位是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"
@@ -15922,6 +16045,10 @@ msgstr "你的卡组"
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "你的展示柜"
+
+#: src/components/replay/ReplaySideBySideView.tsx
+msgid "Your skin"
+msgstr "你的皮肤"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."

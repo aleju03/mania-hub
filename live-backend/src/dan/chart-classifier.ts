@@ -628,16 +628,90 @@ export function detectRollVibro(map: ManiaBeatmap, rate = 1): boolean {
 // chart's 0.68.
 const RATE_VIBRO_CHORD_WALL_MIN_RATIO = 0.5;
 
+// Repeated chords can reload two fingers on every row while rotating the
+// third finger out. Individual jack runs stay short and near-full chord pairs
+// need not occupy half the chart. Require speed, prevalence and sustained work
+// together so isolated DT bursts and ordinary fast chordjack stay eligible.
+// Calibrated on 4K rice (<=10% holds): no matches among 8,090 unique ranked/
+// loved charts at 1.0x or 5,599 with a recorded 96%+ DT clear. The same shape
+// occurs in fast chord-vibro packs; titles never participate in the detector.
+// Faster repeats need less chart-wide coverage, but must satisfy all three
+// requirements at that faster cutoff. A 36% share of 55ms chord repeats must
+// not be treated like 36% of 67ms repeats in a legitimate fast jack chart.
+const SUSTAINED_CHORD_VIBRO_BANDS = [
+  { gapMs: 70, columnShare: 0.4 },
+  { gapMs: 60, columnShare: 0.35 },
+] as const;
+const SUSTAINED_CHORD_VIBRO_MIN_ROW_SHARE = 0.2;
+// 32 consecutive chord rows are about two seconds near the 70ms boundary.
+// Count repetitions so a faster rate cannot make an already-vibro section
+// pass merely by shortening its real-time duration below two seconds.
+const SUSTAINED_CHORD_VIBRO_MIN_ROWS = 32;
+const SUSTAINED_CHORD_VIBRO_MAX_HOLD_RATIO = 0.1;
+
+/** A row qualifies when at least two distinct fingers each re-hit within
+ * the band's time window. A continuous section contains only such rows. */
+export function detectSustainedChordVibro(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || map.notes.length < RICE_VIBRO_MIN_NOTES || !Number.isFinite(rate) || rate <= 0) return false;
+  const rows = new Map<number, number>();
+  let holds = 0;
+  for (const note of map.notes) {
+    rows.set(note.time, (rows.get(note.time) ?? 0) | (1 << note.column));
+    if (note.isHold) holds++;
+  }
+  if (holds / map.notes.length > SUSTAINED_CHORD_VIBRO_MAX_HOLD_RATIO) return false;
+
+  const times = [...rows.keys()].sort((a, b) => a - b);
+  for (const band of SUSTAINED_CHORD_VIBRO_BANDS) {
+    const lastColumnTimes = new Array<number>(4).fill(-Infinity);
+    const cutoff = band.gapMs * rate;
+    let columnGaps = 0;
+    let fastColumnGaps = 0;
+    let chordRows = 0;
+    let consecutiveRows = 0;
+    let longestRun = 0;
+    for (const time of times) {
+      const mask = rows.get(time)!;
+      let fastFingers = 0;
+      for (let column = 0; column < 4; column++) {
+        if (!(mask & (1 << column))) continue;
+        const gap = time - lastColumnTimes[column];
+        if (Number.isFinite(gap) && gap > 0) {
+          columnGaps++;
+          if (gap <= cutoff) {
+            fastColumnGaps++;
+            fastFingers++;
+          }
+        }
+        lastColumnTimes[column] = time;
+      }
+      if (fastFingers >= 2) {
+        chordRows++;
+        consecutiveRows++;
+        longestRun = Math.max(longestRun, consecutiveRows);
+      } else {
+        consecutiveRows = 0;
+      }
+    }
+    if (columnGaps > 0
+      && fastColumnGaps / columnGaps >= band.columnShare
+      && chordRows / rows.size >= SUSTAINED_CHORD_VIBRO_MIN_ROW_SHARE
+      && longestRun >= SUSTAINED_CHORD_VIBRO_MIN_ROWS) return true;
+  }
+  return false;
+}
+
 /**
  * Rate-induced vibro shapes safe to use for player-skill eligibility.
  *
  * Do not replace this with detectRiceVibro(map, rate). Tiers 1-4 were
  * calibrated at 1.0x and the widened cutoffs call real 210-256BPM DT jack
- * clears vibro. The roll tier is rate-calibrated directly; the chord-wall arm
- * adds only chart-soaked near-full walls, leaving localized bursts alone.
+ * clears vibro. The roll and sustained-chord tiers are rate-calibrated
+ * directly; the chord-wall arm adds chart-soaked near-full walls.
  */
 export function detectRateVibro(map: ManiaBeatmap, rate = 1): boolean {
   if (detectRollVibro(map, rate)) return true;
+  if (detectSustainedChordVibro(map, rate)) return true;
   if (map.notes.length < RICE_VIBRO_BURST_MIN_NOTES) return false;
   return chordWallRatio(map, RICE_VIBRO_CHORD_WALL_GAP_MS * rate) >= RATE_VIBRO_CHORD_WALL_MIN_RATIO;
 }
@@ -646,6 +720,7 @@ export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
   if (map.notes.length >= RICE_VIBRO_MIN_NOTES) {
     const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
     if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
+    if (detectSustainedChordVibro(map, rate)) return true;
 
     // The wall tier's chord-size floor assumes 4 columns; wider keymodes carry
     // legit 4-note chords constantly, so it stays 4K-scoped.

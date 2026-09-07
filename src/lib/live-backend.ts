@@ -28,6 +28,8 @@ export interface LivePlayerSkillPlay {
   keyCount: number;
   rating: number;
   overallRating: number;
+  /** Explanation-only play excluded from skill aggregation. */
+  ratingExcluded?: boolean;
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -63,6 +65,8 @@ export interface LivePlayerSkillPlaysPage {
 export type LiveDanRejectReason =
   | "chart_unanalyzed"
   | "chart_ineligible"
+  | "chart_vibro"
+  | "rate_vibro"
   | "low_od"
   | "ez_windows"
   | "no_accuracy"
@@ -93,6 +97,9 @@ export interface LivePlayerDanRejectedPlay {
 // in that ladder's own currency (stable's 300-weighted accuracy, or ScoreV2's
 // for 4K LN), which is not always the accuracy the client displayed.
 export interface LivePlayerDanEvidencePlay {
+  /** Family influence within the displayed section; absent for multi-tile totals. */
+  repeatWeight?: number;
+  averagingWeight?: number;
   play: LivePlayerSkillPlay;
   chartDan: number;
   chartDanLabel: string;
@@ -108,6 +115,7 @@ export interface LivePlayerDanEvidencePlay {
 }
 
 export interface LivePlayerDanSkillsetEvidence {
+  weightedClears?: number;
   id: string;
   clears: number;
   /** headlineCapped: this tile sits further from the anchor tile than the
@@ -158,6 +166,7 @@ export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
 }
 
 export interface LivePlayerDanEvidence {
+  weightedClears?: number;
   side: "rc" | "ln";
   keyCount: number;
   quorum: number;
@@ -165,7 +174,7 @@ export interface LivePlayerDanEvidence {
   minAccuracy: number;
   /** The ladder's own pass bar, where a clear credits the chart's full dan. */
   barAccuracy: number;
-  /** How many best clears each dan averages over. Optional until the backend
+  /** Weighted slots each dan averages over. Optional until the backend
    *  that ships it is deployed; readers default to 20. */
   averageWindow?: number;
   dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean; courseClear?: LivePlayerDanCourseClear } | null;

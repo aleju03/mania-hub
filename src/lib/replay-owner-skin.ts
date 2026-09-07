@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { getLiveBackendUrl } from "./live-backend";
-import { REPLAY_SKIN_MAX_COLUMNS, normalizeReplaySkinSettings } from "./replay-skin";
-import type { ReplaySkinImageAsset, ReplaySkinSettings, ReplaySkinStageAssets } from "./replay-skin";
+import { REPLAY_SKIN_MAX_COLUMNS, normalizeReplaySkinSettings, readReplaySkinSettings } from "./replay-skin";
+import type { ReplaySkinImageAsset, ReplaySkinPreset, ReplaySkinSettings, ReplaySkinStageAssets } from "./replay-skin";
 import type { OskArchive } from "./replay-skin-import";
 import { skinOskFileUrl } from "./skins";
 import type { SkinSummary } from "./skins";
@@ -667,6 +667,44 @@ export function loadAppliedReplaySkinSettings(): Promise<ReplaySkinSettings | nu
     appliedFullSettings = entry;
   }
   return appliedFullSettings.promise;
+}
+
+// ---- skin sources a stage can be pointed at ---------------------------------
+
+// Shared with the settings modal so a preset decoded there and one decoded by
+// a stage are the same IndexedDB entry.
+export function communityPresetCacheKey(preset: ReplaySkinPreset): string {
+  return `preset:${preset.id}:${preset.updatedAt}`;
+}
+
+// The viewer's own skin as the stage should draw it: their applied community
+// skin with its art when there is one, their saved settings otherwise.
+export async function loadViewerReplaySkinSettings(): Promise<ReplaySkinSettings> {
+  const applied = await loadAppliedReplaySkinSettings().catch(() => null);
+  return applied ?? readReplaySkinSettings();
+}
+
+// A saved preset with its art. A community-linked preset stores asset paths
+// rather than pixels, so the .osk is rebuilt (decoded copy first); a download
+// that fails still leaves the preset's colors and layout.
+export async function loadPresetReplaySkinSettings(preset: ReplaySkinPreset): Promise<ReplaySkinSettings> {
+  const community = preset.community;
+  if (!community) return normalizeReplaySkinSettings(preset.settings);
+  const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
+  const key = communityPresetCacheKey(preset);
+  const cached = await readCachedReplaySkin(key).catch(() => null);
+  if (cached) return normalizeReplaySkinSettings(cached.settings);
+  const archive = await fetchSkinArchive(community.skin).catch(() => null);
+  if (!archive) return normalizeReplaySkinSettings(preset.settings);
+  const settings = await rehydrateOwnerReplaySkinSettings(community.payload, archive).catch(() => null);
+  if (!settings) return normalizeReplaySkinSettings(preset.settings);
+  // Sounds ride along even where the stage has no use for them: the entry is
+  // the one the modal reads, and there a missing sounds map means "not
+  // recovered yet" rather than "this skin ships none".
+  const { extractSkinSoundsFromArchive } = await import("./replay-skin-import");
+  const sounds = await extractSkinSoundsFromArchive(archive).catch(() => ({}));
+  void writeCachedReplaySkin(key, { settings, sounds }, Date.now()).catch(() => {});
+  return settings;
 }
 
 // ---- owner side (auth-cookie server fns, the goals bridge) ------------------

@@ -7,12 +7,17 @@ import type { LivePlayerSkillPlay } from "#/lib/live-backend";
 import type { MyDataSkillMode } from "#/lib/my-data";
 
 const fetchSkillPlays = vi.fn();
+const fetchDanEvidence = vi.fn();
 
 vi.mock("#/lib/live-backend", async (importOriginal) => {
   const actual = await importOriginal<typeof import("#/lib/live-backend")>();
   return {
     ...actual,
     fetchLivePlayerSkillPlaysDirect: fetchSkillPlays,
+    fetchLivePlayerDanEvidenceDirect: fetchDanEvidence,
+    loadLiveMapSearchEntry: async () => null,
+    peekLiveMapSearchEntry: () => null,
+    prefetchLiveMapSearchEntry: async () => null,
   };
 });
 
@@ -37,7 +42,11 @@ vi.mock("./SkillPlaysModal", () => ({
     covers: null,
   }),
 }));
-vi.mock("#/components/maps/MapDetailModal", () => ({ MapDetailModal: () => null }));
+vi.mock("#/components/maps/MapDetailModal", () => ({
+  MapDetailModal: ({ play }: { play: { ratingExcluded?: boolean } }) => (
+    <div data-testid="map-rating-state">{play.ratingExcluded ? "excluded" : "rated"}</div>
+  ),
+}));
 
 const { SkillPlaysExplorer } = await import("./SkillPlaysExplorer");
 
@@ -76,9 +85,33 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   fetchSkillPlays.mockReset();
+  fetchDanEvidence.mockReset();
 });
 
 describe("SkillPlaysExplorer bounded cohorts", () => {
+  it.each([
+    [41001, "rate_vibro", "Vibro detected at 1.50×. This play does not count toward skill or dan ratings."],
+    [41002, "chart_vibro", "Vibro detected in this chart. This play does not count toward skill or dan ratings."],
+    [41003, "chart_ineligible", "This chart is not built in a way a dan level can be read off a clear of it."],
+  ] as const)("explains %s / %s without conflating vibro and structural ineligibility", async (userId, reason, text) => {
+    const excluded = reason !== "chart_ineligible";
+    fetchDanEvidence.mockResolvedValue({
+      clears: [],
+      rejected: [{
+        play: { ...play(101, "Best"), rate: 1.5, ratingExcluded: excluded },
+        reason, side: "rc", chartDan: 18.38, chartDanLabel: "theta++",
+        clearAccuracy: null, bar: null, minAccuracy: null, od: null,
+      }],
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={userId} username="player" modes={[mode]} view="dan" />
+    </I18nProvider>);
+    fireEvent.click(await screen.findByText("does not count"));
+    expect(screen.getByText(text)).toBeTruthy();
+    fireEvent.click(screen.getByText("Best 101"));
+    await waitFor(() => expect(screen.getByTestId("map-rating-state").textContent).toBe(excluded ? "excluded" : "rated"));
+  });
+
   it("shows and filters every recorded mod, not only the rate mod", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
       const order = options.sort === "recent" ? "Recent" : "Best";

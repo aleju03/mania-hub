@@ -367,6 +367,9 @@ interface RendererOptions {
   showJudgements?: boolean;
   initialCombo?: number;
   barePlayfield?: boolean;
+  // Comparison panels can be portrait-shaped on a landscape screen. Scale
+  // their skins to the full panel height instead of the phone portrait cap.
+  fullHeightLayout?: boolean;
   // Draws the storyboard (with its backdrop, background and dim) and nothing
   // else: no notes, no stage, no HUD. Side by side runs one of these full
   // bleed behind both playfields, so the storyboard is drawn once for the
@@ -730,6 +733,7 @@ export class ManiaReplayRenderer {
   private dpr = 1;
   private antialias = true;
   private fullscreenLayout = false;
+  private fullHeightLayout = false;
 
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
   private receptorFlashTimestamps: number[];
@@ -913,6 +917,7 @@ export class ManiaReplayRenderer {
     this.hiddenCoverageReference = getManiaHiddenCoverageReference(this.combo);
     this.maxComboSoFar = this.combo;
     this.barePlayfield = options?.barePlayfield ?? false;
+    this.fullHeightLayout = options?.fullHeightLayout ?? false;
     this.storyboardOnly = options?.storyboardOnly ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
@@ -1756,9 +1761,9 @@ export class ManiaReplayRenderer {
     // taller, and at a fixed scroll number a taller stage means notes cover
     // more pixels per ms. Anchor the skin scale and the scroll speed to the
     // height the mobile viewer always had, so the extra height buys lookahead
-    // instead of bigger, faster notes. Fullscreen and bare (preview/card)
-    // renders keep native full-height scaling.
-    const compactPortrait = !this.barePlayfield && !this.fullscreenLayout && h > w;
+    // instead of bigger, faster notes. Fullscreen, comparisons and bare
+    // (preview/card) renders keep native full-height scaling.
+    const compactPortrait = !this.barePlayfield && !this.fullscreenLayout && !this.fullHeightLayout && h > w;
     const scaleHeight = compactPortrait ? Math.min(h, MOBILE_PORTRAIT_REFERENCE_HEIGHT) : h;
     const targetLayoutScale = scaleHeight / MANIA_SKIN_STAGE_HEIGHT;
     const widthCap = w * (this.barePlayfield ? 0.82 : 0.72);
@@ -1855,8 +1860,12 @@ export class ManiaReplayRenderer {
     if (this._isPlaying) return;
     this._isPlaying = true;
     this.lastRenderTime = performance.now();
+    // Paused wall time must never enter the external clock's prediction.
+    this.resetAudioClockSmoothing();
     this.resetFpsCounter(this.lastRenderTime);
-    this.tick();
+    // Let the transport resume audio and queue every comparison renderer
+    // before drawing; a synchronous tick delays the other side and the song.
+    this.animFrameId = requestAnimationFrame(() => this.tick());
   }
 
   pause() {

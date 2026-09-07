@@ -1275,7 +1275,8 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
     ? sides
     : [sides.reduce((best, entry) => (entry.side.clears > best.side.clears ? entry : best), sides[0]!)];
 
-  const emblemSize = ctx.design === 3 ? 420 : ctx.design === 2 ? 100 : 118;
+  // The square badge also needs room for its label, gap, and 24px frame padding.
+  const emblemSize = ctx.design === 3 ? 180 : ctx.design === 2 ? 100 : 118;
   const emblems = await Promise.all(chosen.map(async (entry) => ({
     ...entry,
     url: await danEmblemDataUrl(ctx.request, entry.side.label, entry.id === "ln" ? "ln" : "rc", entry.keyCount),

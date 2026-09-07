@@ -28,6 +28,11 @@ function snapshot(overall: number, ln: number): LivePlayerSkillHistorySnapshot {
   return { ratings: { Overall: overall, "pattern:ln": ln }, dan: { rc: null, ln: null } };
 }
 
+/** Day rows only, leaving out the rating-system notes between them. */
+function ratingRows(container: HTMLElement) {
+  return [...container.querySelectorAll("li")].filter((row) => row.querySelector("time"));
+}
+
 describe("skill history", () => {
   it("shows compact changes and only reveals skill details when a row is opened", async () => {
     fetchHistory.mockResolvedValue({ items: [{ id: 2, recordedAt: "2026-09-04T12:30:00Z", version: 24,
@@ -93,14 +98,14 @@ describe("skill history", () => {
     fetchHistory.mockResolvedValue({ items: [{ id: 1, recordedAt: "2026-09-04T12:30:00Z", version: 24,
       snapshot: snapshot(25.7, 25.42), previous: null }], nextBefore: null });
     const view = render(<I18nProvider i18n={getI18n("en")}><SkillHistoryModal userId={99} keyCount={7} onClose={() => {}} /></I18nProvider>);
-    await waitFor(() => expect(view.getAllByRole("listitem")).toHaveLength(1));
+    await waitFor(() => expect(ratingRows(view.baseElement as HTMLElement)).toHaveLength(1));
     fireEvent.click(view.getByRole("button", { name: "DEV · Simulate history" }));
-    expect(view.getAllByRole("listitem")).toHaveLength(12);
+    expect(ratingRows(view.baseElement as HTMLElement)).toHaveLength(12);
     expect(view.getAllByText("+0.07").length).toBeGreaterThan(0);
     expect(view.getByText("-0.03")).toBeTruthy();
     expect(view.getByText("25.70")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Show real history" }));
-    expect(view.getAllByRole("listitem")).toHaveLength(1);
+    expect(ratingRows(view.baseElement as HTMLElement)).toHaveLength(1);
     expect(view.getByText("25.70")).toBeTruthy();
     expect(fetchHistory).toHaveBeenCalledTimes(1);
   });
@@ -111,6 +116,41 @@ describe("skill history", () => {
     const view = render(<I18nProvider i18n={getI18n("en")}><SkillHistoryModal userId={99} keyCount={7} onClose={() => {}} /></I18nProvider>);
     await waitFor(() => expect(view.queryByRole("status")).toBeNull());
     expect(view.queryByRole("button", { name: /Simulate history/ })).toBeNull();
+  });
+
+  it("defaults to ratings and shows system changes separately, per keymode", async () => {
+    fetchHistory.mockResolvedValue({ items: [{ id: 2, recordedAt: "2026-09-06T12:30:00Z", version: 26,
+      snapshot: snapshot(25.7, 25.42), previous: snapshot(25.5, 25.2) }], nextBefore: null });
+    const view = render(<I18nProvider i18n={getI18n("en")}><SkillHistoryModal userId={99} keyCount={7} onClose={() => {}} /></I18nProvider>);
+    await waitFor(() => expect(view.getByText("25.70")).toBeTruthy());
+    expect(view.getByRole("button", { name: "History", pressed: true })).toBeTruthy();
+    expect(view.queryByText(/Reduced the rice dan penalty/)).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Changes" }));
+    expect(view.getByText(/Reduced the rice dan penalty/)).toBeTruthy();
+    expect(view.queryByText("25.70")).toBeNull();
+    expect(view.queryByText(/Adjusted 4K vibro detection/)).toBeNull();
+    const rows = [...view.baseElement.querySelectorAll("li")];
+    expect(rows[0].textContent).toContain("Reduced the rice dan penalty");
+    expect(view.getByText("2026-09-06")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "History" }));
+    expect(view.getByText("25.70")).toBeTruthy();
+    expect(view.queryByText(/Reduced the rice dan penalty/)).toBeNull();
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    const fourKey = render(<I18nProvider i18n={getI18n("en")}><SkillHistoryModal userId={99} keyCount={4} onClose={() => {}} /></I18nProvider>);
+    fireEvent.click(fourKey.getByRole("button", { name: "Changes" }));
+    expect(fourKey.getByText(/Adjusted 4K vibro detection/)).toBeTruthy();
+  });
+
+  it("shows system changes even when the player has no recorded history", async () => {
+    fetchHistory.mockResolvedValue({ items: [], nextBefore: null });
+    const view = render(<I18nProvider i18n={getI18n("en")}><SkillHistoryModal userId={99} keyCount={4} onClose={() => {}} /></I18nProvider>);
+    await waitFor(() => expect(view.getByText("No skill ratings have been recorded yet.")).toBeTruthy());
+    fireEvent.click(view.getByRole("button", { name: "Changes" }));
+    expect(view.getByText(/Adjusted 4K vibro detection/)).toBeTruthy();
+    expect(view.queryByText("No skill ratings have been recorded yet.")).toBeNull();
+    expect(view.queryByRole("button", { name: "DEV · Simulate history" })).toBeNull();
   });
 
   it("opens history for non-admin viewers", async () => {

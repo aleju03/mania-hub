@@ -587,6 +587,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             playedAt: detail.play.playedAt,
             source: detail.play.source,
             rating: detail.play.rating,
+            ratingExcluded: detail.play.ratingExcluded,
             ratingLabel: detail.ratingLabel,
             ratingColor: detail.ratingColor,
           }}
@@ -1047,27 +1048,32 @@ function DanRejectedRow({
   // rows below it are breaking.
   const minAccuracy = rejected.minAccuracy;
   const od = rejected.od;
-  const reason = rejected.reason === "below_bar"
-    ? (minAccuracy != null && bar != null && accuracy != null
-      ? t`Minimum required for dan credit is ${formatAccuracy(minAccuracy)}. This play got ${formatAccuracyAgainst(accuracy, minAccuracy)}.`
-      : bar != null && accuracy != null
-        ? t`Minimum required for dan credit is ${formatAccuracy(bar)}. This play got ${formatAccuracyAgainst(accuracy, bar)}.`
-        : t`This play is under the minimum accuracy required for dan credit.`)
-    : rejected.reason === "low_od"
-      ? (od != null
-        ? t`This play was judged at OD ${od.toFixed(1)}. A dan clear has to be played at a higher OD than that.`
-        : t`This play was judged at a lower OD than a dan clear has to be played at.`)
-      : rejected.reason === "ez_windows"
-        ? t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`
-        : rejected.reason === "chart_ineligible"
-          ? t`This chart is not built in a way a dan level can be read off a clear of it.`
-          : rejected.reason === "chart_unanalyzed"
-            ? t`This chart has not been analyzed yet, so there is no dan level to credit. It can count later.`
-            : rejected.reason === "no_chart_dan"
-              ? t`This chart has no dan level at the rate it was played at.`
-              : rejected.reason === "no_accuracy"
-                ? t`The judgement counts for this play are gone, so there is no accuracy to check it against.`
-                : t`This play counts for nothing on the dan estimate.`;
+  const rate = rejected.play.rate.toFixed(2);
+  const reason = rejected.reason === "rate_vibro"
+    ? t`Vibro detected at ${rate}×. This play does not count toward skill or dan ratings.`
+    : rejected.reason === "chart_vibro"
+      ? t`Vibro detected in this chart. This play does not count toward skill or dan ratings.`
+      : rejected.reason === "below_bar"
+        ? (minAccuracy != null && bar != null && accuracy != null
+          ? t`Minimum required for dan credit is ${formatAccuracy(minAccuracy)}. This play got ${formatAccuracyAgainst(accuracy, minAccuracy)}.`
+          : bar != null && accuracy != null
+            ? t`Minimum required for dan credit is ${formatAccuracy(bar)}. This play got ${formatAccuracyAgainst(accuracy, bar)}.`
+            : t`This play is under the minimum accuracy required for dan credit.`)
+        : rejected.reason === "low_od"
+          ? (od != null
+            ? t`This play was judged at OD ${od.toFixed(1)}. A dan clear has to be played at a higher OD than that.`
+            : t`This play was judged at a lower OD than a dan clear has to be played at.`)
+          : rejected.reason === "ez_windows"
+            ? t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`
+            : rejected.reason === "chart_ineligible"
+              ? t`This chart is not built in a way a dan level can be read off a clear of it.`
+              : rejected.reason === "chart_unanalyzed"
+                ? t`This chart has not been analyzed yet, so there is no dan level to credit. It can count later.`
+                : rejected.reason === "no_chart_dan"
+                  ? t`This chart has no dan level at the rate it was played at.`
+                  : rejected.reason === "no_accuracy"
+                    ? t`The judgement counts for this play are gone, so there is no accuracy to check it against.`
+                    : t`This play counts for nothing on the dan estimate.`;
   // The level it was aiming at, dimmed, with the block mark over its corner:
   // the reader sees what the clear would have been worth and that it is not,
   // in the same column and the same shape the credited rows use.

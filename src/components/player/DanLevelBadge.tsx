@@ -111,7 +111,7 @@ export function DanLevelBadge({
   const approx = beyondTable ? ">" : "~";
 
   const partial = clearWindow != null && clearWindow.need > 0 && clearWindow.have < clearWindow.need;
-  const windowHave = clearWindow?.have ?? 0;
+  const windowHave = (Math.floor((clearWindow?.have ?? 0) * 10) / 10).toLocaleString("en-US");
   const windowNeed = clearWindow?.need ?? 0;
   // A side names the skills it is short of rather than a clear sum, since that
   // is what the ring draws and the sum on its own reads as nearly done.
@@ -120,8 +120,8 @@ export function DanLevelBadge({
   const skillsTotal = windowSkills?.total ?? 0;
   const perSkill = windowSkills && windowSkills.total > 0 ? Math.round(windowNeed / windowSkills.total) : windowNeed;
   const windowTitle = windowSkills && windowSkills.total > 1
-    ? t`${skillsFull} of ${skillsTotal} skills have their full ${perSkill} clears, so the estimate is still filling in.`
-    : t`Averaged over ${windowHave} of ${windowNeed} clears, so the estimate is still filling in.`;
+    ? t`${skillsFull} of ${skillsTotal} skills have their full ${perSkill} weighted clears, so the estimate is still filling in.`
+    : t`Averaged over ${windowHave} of ${windowNeed} weighted clears, so the estimate is still filling in.`;
 
   if (!image) {
     return (

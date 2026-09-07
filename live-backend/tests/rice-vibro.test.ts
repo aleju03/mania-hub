@@ -332,3 +332,74 @@ describe("detectRiceVibro", () => {
     expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(false);
   });
 });
+
+describe("sustained chord vibro at rate", () => {
+  function mixedChordChart(gapMs = 100, burstLength = 400, ordinaryRows = 600) {
+    const notes = ordinary().slice(0, ordinaryRows);
+    for (let row = 0; row < 400; row++) {
+      const time = 100_000 + row * gapMs + Math.floor(row / burstLength) * 500;
+      for (let column = 0; column < 4; column++) {
+        if (column !== row % 4) notes.push({ column, time });
+      }
+    }
+    return parseManiaBeatmap(buildOsuFile(notes));
+  }
+
+  it("rejects sustained DT chord repetitions below the old half-chart wall floor", () => {
+    // Rotating triples interrupt individual fingers, but two fingers must
+    // re-hit on every chord. Only 40% of the rows are in the chord section.
+    const map = mixedChordChart();
+    expect(detectRiceVibro(map)).toBe(false);
+    expect(detectRateVibro(map)).toBe(false);
+    expect(detectRollVibro(map, 1.5)).toBe(false);
+    expect(detectRateVibro(map, 1.5)).toBe(true);
+    expect(detectRiceVibro(map, 1.5)).toBe(true);
+    expect(detectRateVibro(map, 1.25)).toBe(false);
+  });
+
+  it("retains the same amount of fast chord work when it is broken into short bursts", () => {
+    // The fast repeat and chord shares remain high, but no section sustains
+    // that demand for 32 consecutive chord rows.
+    expect(detectRateVibro(mixedChordChart(100, 20), 1.5)).toBe(false);
+  });
+
+  it("does not forgive a sustained section when a higher rate makes it shorter", () => {
+    // These sections last 2.6s at DT but only 1.95s at 2x. The repeated
+    // finger work remains present at both rates.
+    const map = mixedChordChart(100, 40);
+    expect(detectRateVibro(map, 1.5)).toBe(true);
+    expect(detectRateVibro(map, 2)).toBe(true);
+  });
+
+  it("measures custom rates and retains slower chordjack", () => {
+    const map = mixedChordChart(117);
+    expect(detectRateVibro(map, 1.5)).toBe(false);
+    expect(detectRateVibro(map, 1.7)).toBe(true);
+  });
+
+  it("recognizes faster chord repeats without lowering the slower-repeat floor", () => {
+    // More ordinary material brings the column share down to 36%, below the
+    // 70ms band's 40% floor. Repeats at 55ms still carry the fast chord demand.
+    const fast = mixedChordChart(82, 400, 1000);
+    expect(detectRateVibro(fast)).toBe(false);
+    expect(detectRollVibro(fast, 1.5)).toBe(false);
+    expect(detectRateVibro(fast, 1.5)).toBe(true);
+    // The same proportions at 67ms remain below the slower band's floor.
+    expect(detectRateVibro(mixedChordChart(100, 400, 1000), 1.5)).toBe(false);
+    expect(detectRateVibro(mixedChordChart(82, 20, 1000), 1.5)).toBe(false);
+  });
+
+  it("keeps the new chord arm scoped to 4K rice", () => {
+    const map = mixedChordChart();
+    expect(detectRateVibro({ ...map, keyCount: 7 }, 1.5)).toBe(false);
+    const notes = map.notes.map((note, index) => index % 8 === 0
+      ? { ...note, isHold: true, endTime: note.time + 25 }
+      : note);
+    expect(detectRateVibro({ ...map, notes }, 1.5)).toBe(false);
+  });
+
+  it("does not turn duplicated single-column notes into repeated chords", () => {
+    const notes = Array.from({ length: 400 }, (_, row) => ({ column: 0, time: 1000 + row * 100 }));
+    expect(detectRateVibro(parseManiaBeatmap(buildOsuFile([...notes, ...notes])), 1.5)).toBe(false);
+  });
+});

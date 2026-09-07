@@ -62,6 +62,13 @@ function scoreMapLabel(play: LiveScoreSubmissionPlay): string | null {
   return title ?? version;
 }
 
+interface QueuedScore {
+  key: number;
+  link: string;
+  status: "queued" | "running" | "failed";
+  error?: string;
+}
+
 interface AcceptedPlay {
   key: string;
   play: LiveScoreSubmissionPlay;
@@ -87,8 +94,10 @@ export function AddScoreModal({
   const locale = useLocale();
   const auth = useAuth();
   const [link, setLink] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submissions, setSubmissions] = useState<QueuedScore[]>([]);
+  const queueRef = useRef<QueuedScore[]>([]);
+  const processingRef = useRef(false);
+  const nextKeyRef = useRef(0);
   const [accepted, setAccepted] = useState<AcceptedPlay[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
@@ -153,48 +162,69 @@ export function AddScoreModal({
     }
   };
 
-  const send = async (raw: string) => {
-    const value = raw.trim();
-    if (!value || busy) return;
-    setBusy(true);
-    setError(null);
+  const updateSubmission = (key: number, patch: Partial<QueuedScore>) => {
+    if (!mountedRef.current) return;
+    setSubmissions((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
+  };
+
+  /* One request at a time, independent of the input and the dialog's lifetime.
+     A failed link keeps its own receipt and cannot strand the later pastes. */
+  const drainQueue = async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
     try {
-      const result = await submitLiveMissingScore(userId, value);
-      /* Counted before the mounted check: the paste's outcome is a fact on the
-         backend whether or not the dialog is still open to show it. */
-      if (result.ok) {
-        track("add_score_submitted", {
-          add_score_player: username,
-          add_score_map: scoreMapLabel(result.play),
-          // The paste landed on a score the backend already had, so nothing
-          // new was stored - a different outcome from a first submission, and
-          // the one that says how often people re-add what is tracked already.
-          add_score_repeat: result.alreadyTracked ? "1" : "0",
-        });
-      } else {
-        track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
+      while (queueRef.current.length > 0) {
+        const item = queueRef.current[0];
+        updateSubmission(item.key, { status: "running" });
+        try {
+          const result = await submitLiveMissingScore(userId, item.link);
+          if (result.ok) {
+            track("add_score_submitted", {
+              add_score_player: username,
+              add_score_map: scoreMapLabel(result.play),
+              add_score_repeat: result.alreadyTracked ? "1" : "0",
+            });
+            // Refresh the profile even when the dialog has since closed.
+            if (!result.alreadyTracked) onSubmitted?.();
+            if (mountedRef.current) {
+              const key = `${result.play.scoreId}:${item.key}`;
+              setAccepted((current) => [
+                { key, play: result.play, alreadyTracked: result.alreadyTracked, entry: null },
+                ...current.filter((accepted) => accepted.play.scoreId !== result.play.scoreId),
+              ]);
+              setSubmissions((current) => current.filter((queued) => queued.key !== item.key));
+              if (result.play.beatmapId != null) void fillEntry(key, result.play.beatmapId);
+            }
+          } else {
+            track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
+            updateSubmission(item.key, { status: "failed", error: failureMessage(result.reason, result.owner) });
+          }
+        } catch {
+          track("add_score_failed", { add_score_player: username, add_score_reason: "failed" });
+          updateSubmission(item.key, { status: "failed", error: t`Could not send that. Try again.` });
+        } finally {
+          queueRef.current.shift();
+        }
       }
-      if (!mountedRef.current) return;
-      if (!result.ok) {
-        setError(failureMessage(result.reason, result.owner));
-        return;
-      }
-      setLink("");
-      const key = `${result.play.scoreId}:${Date.now()}`;
-      setAccepted((current) => [
-        { key, play: result.play, alreadyTracked: result.alreadyTracked, entry: null },
-        ...current.filter((item) => item.play.scoreId !== result.play.scoreId),
-      ]);
-      if (!result.alreadyTracked) onSubmitted?.();
-      if (result.play.beatmapId != null) void fillEntry(key, result.play.beatmapId);
-    } catch {
-      track("add_score_failed", { add_score_player: username, add_score_reason: "failed" });
-      if (mountedRef.current) setError(t`Could not send that. Try again.`);
     } finally {
-      if (mountedRef.current) {
-        setBusy(false);
-        focusOnDesktop(inputRef.current);
-      }
+      processingRef.current = false;
+    }
+  };
+
+  const send = (raw: string, retryKey?: number) => {
+    const value = raw.trim();
+    if (!value) return;
+    // The ref also catches duplicate pastes before React renders the queue.
+    if (!queueRef.current.some((item) => item.link === value)) {
+      const item: QueuedScore = { key: ++nextKeyRef.current, link: value, status: "queued" };
+      queueRef.current.push(item);
+      setSubmissions((current) => [...current.filter((queued) => queued.key !== retryKey), item]);
+      void drainQueue();
+    }
+    // A completion must never clear or focus over the next link being typed.
+    if (retryKey == null) {
+      setLink("");
+      focusOnDesktop(inputRef.current);
     }
   };
 
@@ -212,6 +242,7 @@ export function AddScoreModal({
   };
 
   const [latest, ...older] = accepted;
+  const busy = submissions.some((item) => item.status !== "failed");
 
   return (
     <AnimatePresence>
@@ -255,21 +286,42 @@ export function AddScoreModal({
           </AnimatePresence>
 
           {older.length > 0 ? (
-            <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+            <div className="max-h-64 overflow-y-auto divide-y divide-white/[0.06] border-t border-white/[0.06]">
               {older.map((item) => (
                 <AcceptedRow key={item.key} item={item} />
               ))}
             </div>
           ) : null}
 
-          {error ? (
-            <p className="border-t border-white/[0.06] px-4 pt-2.5 text-[11.5px] text-osu-red-light sm:px-5">{error}</p>
+          {submissions.length > 0 ? (
+            <div aria-live="polite" className="max-h-48 overflow-y-auto divide-y divide-white/[0.06] border-t border-white/[0.06]">
+              {submissions.map((item) => (
+                <div key={item.key} className="flex items-center gap-3 px-4 py-2.5 sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[12px] text-osu-l2" title={item.link}>{item.link}</div>
+                    {item.error ? <p className="mt-1 text-[11.5px] text-osu-red-light">{item.error}</p> : null}
+                  </div>
+                  {item.status === "failed" ? (
+                    <button
+                      type="button"
+                      onClick={() => send(item.link, item.key)}
+                      className="shrink-0 cursor-pointer text-[11px] font-bold text-osu-pink-light hover:text-white"
+                    >
+                      {t`Retry`}
+                    </button>
+                  ) : (
+                    <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+                      {item.status === "running" ? <Loader2 className="h-3 w-3 animate-spin text-osu-pink" aria-hidden="true" /> : null}
+                      {item.status === "running" ? t`importing` : t`queued`}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           ) : null}
 
           <form
-            className={`relative flex items-center gap-3 px-4 sm:px-5 ${latest || error ? "py-3" : "py-4"} ${
-              latest && !error ? "border-t border-white/[0.06]" : ""
-            }`}
+            className={`relative flex items-center gap-3 px-4 sm:px-5 ${latest || submissions.length > 0 ? "border-t border-white/[0.06] py-3" : "py-4"}`}
             onSubmit={(event) => {
               event.preventDefault();
               void send(link);
@@ -301,7 +353,6 @@ export function AddScoreModal({
                 const text = event.clipboardData.getData("text");
                 if (!text.trim()) return;
                 event.preventDefault();
-                setLink(text.trim());
                 void send(text);
               }}
               placeholder={t`paste a score link for ${username}`}
@@ -310,16 +361,13 @@ export function AddScoreModal({
               aria-label={t`osu! score link`}
               className="min-w-0 flex-1 bg-transparent text-[14px] text-osu-l1 outline-none placeholder:text-osu-f1"
             />
-            {link.trim() || busy ? (
+            {link.trim() ? (
               <button
                 type="submit"
-                disabled={busy}
                 aria-label={t`Add score`}
                 className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-60"
               >
-                {busy
-                  ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
             ) : null}
             {latest ? null : (

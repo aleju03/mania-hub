@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ChevronRight, History, X } from "lucide-react";
+import { ChevronRight, History, Info, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerSkillHistoryDirect,
@@ -15,6 +15,7 @@ import { useNoDans } from "../../store";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { makeSkillHistoryPreview } from "./skill-history-preview";
 import { groupSkillHistoryByDay, loadSkillHistoryDays } from "./skill-history-days";
+import { SKILL_HISTORY_NOTES, type SkillHistoryNote } from "./skill-history-notes";
 
 const ROW_GRID = "grid grid-cols-[minmax(0,1fr)_54px_80px_12px] items-center gap-2 px-4";
 
@@ -30,9 +31,11 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [preview, setPreview] = useState<LivePlayerSkillHistoryEntry[] | null>(null);
+  const [mode, setMode] = useState<"history" | "changes">("history");
   const reduceMotion = useReducedMotion();
   const visibleItems = preview ?? items;
-  const visibleDays = groupSkillHistoryByDay(visibleItems);
+  const visibleRows = groupSkillHistoryByDay(visibleItems);
+  const notes = SKILL_HISTORY_NOTES.filter((note) => !note.keyCounts || note.keyCounts.includes(keyCount));
   const visibleLoading = loading && !preview;
   const visibleError = error && !preview;
   useBodyScrollLock(true);
@@ -114,49 +117,82 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </header>
-        <div className={`${ROW_GRID} shrink-0 border-b border-osu-b3/30 py-2 text-[10px] font-semibold uppercase tracking-wider text-osu-f1`}>
-          <span><Trans>Date</Trans></span><span className="text-right"><Trans>Rating</Trans></span><span className="text-right"><Trans context="skill rating difference">Change</Trans></span>
+        <div role="group" aria-label={t`View`} className="flex shrink-0 gap-5 border-b border-osu-b3/40 px-4">
+          {(["history", "changes"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={mode === value}
+              onClick={() => setMode(value)}
+              className={`-mb-px cursor-pointer border-b-2 py-2.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink-light ${mode === value ? "border-osu-pink-light text-osu-l1" : "border-transparent text-osu-f1 hover:text-white"}`}
+            >
+              {value === "history" ? <Trans>History</Trans> : <Trans>Changes</Trans>}
+            </button>
+          ))}
         </div>
-        <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
-          {visibleItems.length > 0 ? (
-            <ol>{visibleDays.map((entry) => <HistoryEntry key={`${preview ? "preview" : "real"}:${entry.day}`} entry={entry} />)}</ol>
-          ) : !visibleLoading && !visibleError ? (
-            <p className="px-4 py-8 text-center text-[12px] text-osu-f1"><Trans>No skill ratings have been recorded yet.</Trans></p>
-          ) : null}
-          {visibleLoading ? (
-            <div role="status" aria-label={t`Loading history…`}>
-              {Array.from({ length: visibleItems.length ? 2 : 6 }, (_, index) => (
-                <div key={index} className={`${ROW_GRID} py-3`} aria-hidden="true">
-                  <Skeleton className="h-3 w-24 max-w-full" /><Skeleton className="ml-auto h-3 w-10" /><Skeleton className="ml-auto h-3 w-10" />
-                </div>
-              ))}
-            </div>
-          ) : visibleError ? (
-            <div role="alert" className="px-4 py-5 text-center text-[12px] text-osu-f1">
-              <p><Trans>Could not load skill history.</Trans></p>
-              <button type="button" onClick={() => void loadPage(items.length ? nextBefore ?? undefined : undefined)} className="mt-2 cursor-pointer text-osu-pink-light hover:text-white"><Trans>Try again</Trans></button>
-            </div>
-          ) : !preview && nextBefore != null ? (
-            <button type="button" onClick={() => void loadPage(nextBefore)} className="w-full cursor-pointer py-3 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/25 hover:text-white"><Trans>Load older changes</Trans></button>
-          ) : null}
-        </div>
-        {visibleItems.at(-1)?.previous === null || import.meta.env.DEV ? (
-          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-osu-b3/40 px-4 py-2 text-[10px] text-osu-f1">
-            <span>{visibleItems.at(-1)?.previous === null ? <Trans>Earlier changes weren’t recorded.</Trans> : null}</span>
-            {import.meta.env.DEV ? (
-              <button
-                type="button"
-                onClick={() => setPreview((current) => current ? null : makeSkillHistoryPreview(keyCount, items[0]?.snapshot))}
-                className="ml-auto cursor-pointer text-osu-pink-light/80 transition-colors hover:text-white"
-              >
-                {preview ? "Show real history" : "DEV · Simulate history"}
-              </button>
+        {mode === "changes" ? (
+          <div className="min-h-0 overflow-y-auto overscroll-contain py-3">
+            {notes.length ? [...new Set(notes.map((note) => note.date))].map((date) => (
+              <section key={date} className="mb-3 last:mb-0">
+                <h3 className="px-4 pb-1 text-[10px] font-semibold text-osu-pink-light"><time dateTime={date}>{date}</time></h3>
+                <ul>{notes.filter((note) => note.date === date).map((note) => <NoteRow key={note.text} note={note} />)}</ul>
+              </section>
+            )) : <p className="px-4 py-5 text-center text-[12px] text-osu-f1"><Trans>No rating system changes yet.</Trans></p>}
+          </div>
+        ) : <>
+          <div className={`${ROW_GRID} shrink-0 border-b border-osu-b3/30 py-2 text-[10px] font-semibold uppercase tracking-wider text-osu-f1`}>
+            <span><Trans>Date</Trans></span><span className="text-right"><Trans>Rating</Trans></span><span className="text-right"><Trans context="skill rating difference">Change</Trans></span>
+          </div>
+          <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
+            {visibleItems.length > 0 ? (
+              <ol>{visibleRows.map((entry) => <HistoryEntry key={`${preview ? "preview" : "real"}:${entry.day}`} entry={entry} />)}</ol>
+            ) : !visibleLoading && !visibleError ? (
+              <p className="px-4 py-8 text-center text-[12px] text-osu-f1"><Trans>No skill ratings have been recorded yet.</Trans></p>
             ) : null}
-          </footer>
-        ) : null}
+            {visibleLoading ? (
+              <div role="status" aria-label={t`Loading history…`}>
+                {Array.from({ length: visibleItems.length ? 2 : 6 }, (_, index) => (
+                  <div key={index} className={`${ROW_GRID} py-3`} aria-hidden="true">
+                    <Skeleton className="h-3 w-24 max-w-full" /><Skeleton className="ml-auto h-3 w-10" /><Skeleton className="ml-auto h-3 w-10" />
+                  </div>
+                ))}
+              </div>
+            ) : visibleError ? (
+              <div role="alert" className="px-4 py-5 text-center text-[12px] text-osu-f1">
+                <p><Trans>Could not load skill history.</Trans></p>
+                <button type="button" onClick={() => void loadPage(items.length ? nextBefore ?? undefined : undefined)} className="mt-2 cursor-pointer text-osu-pink-light hover:text-white"><Trans>Try again</Trans></button>
+              </div>
+            ) : !preview && nextBefore != null ? (
+              <button type="button" onClick={() => void loadPage(nextBefore)} className="w-full cursor-pointer py-3 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/25 hover:text-white"><Trans>Load older changes</Trans></button>
+            ) : null}
+          </div>
+          {visibleItems.at(-1)?.previous === null || import.meta.env.DEV ? (
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-osu-b3/40 px-4 py-2 text-[10px] text-osu-f1">
+              <span>{visibleItems.at(-1)?.previous === null ? <Trans>Earlier changes weren’t recorded.</Trans> : null}</span>
+              {import.meta.env.DEV ? (
+                <button
+                  type="button"
+                  onClick={() => setPreview((current) => current ? null : makeSkillHistoryPreview(keyCount, items[0]?.snapshot))}
+                  className="ml-auto cursor-pointer text-osu-pink-light/80 transition-colors hover:text-white"
+                >
+                  {preview ? "Show real history" : "DEV · Simulate history"}
+                </button>
+              ) : null}
+            </footer>
+          ) : null}
+        </>}
       </motion.div>
     </motion.div>,
     document.body,
+  );
+}
+
+function NoteRow({ note }: { note: SkillHistoryNote }) {
+  return (
+    <li className="flex items-start gap-2 px-4 py-2.5 text-[11px] leading-snug text-osu-f1">
+      <Info className="mt-0.5 h-3 w-3 shrink-0 text-osu-pink-light" aria-hidden="true" />
+      <span>{note.text}</span>
+    </li>
   );
 }
 

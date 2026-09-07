@@ -77,6 +77,7 @@ export interface MapDetailPlayContext {
   playedAt: string | null;
   source: "top" | "tracked";
   rating: number;
+  ratingExcluded?: boolean;
   ratingLabel: string;
   ratingColor: string;
   // Dan evidence has two distinct values: the chart's base rating and the
@@ -114,16 +115,23 @@ function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
             </span>
           </div>
         )}
-        <div className="flex flex-col">
-          <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.ratingColor }}>
-            <span className="text-[16px] font-bold tabular-nums">{play.rating.toFixed(2)}</span>
-            {play.ratingDisplayName ? (
-              <span className="text-[10px] font-bold">{play.ratingDisplayName}</span>
-            ) : null}
-          </span>
-          <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
-        </div>
-        {play.credit ? (
+        {play.ratingExcluded ? (
+          <div className="flex flex-col text-osu-red-light">
+            <span className="text-sm font-semibold"><Trans>Vibro detected</Trans></span>
+            <span className="mt-1 text-[9px] uppercase tracking-wide"><Trans>does not count</Trans></span>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.ratingColor }}>
+              <span className="text-[16px] font-bold tabular-nums">{play.rating.toFixed(2)}</span>
+              {play.ratingDisplayName ? (
+                <span className="text-[10px] font-bold">{play.ratingDisplayName}</span>
+              ) : null}
+            </span>
+            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
+          </div>
+        )}
+        {play.credit && !play.ratingExcluded ? (
           <div className="flex flex-col">
             <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.credit.color }}>
               <span className="text-[16px] font-bold tabular-nums">{play.credit.rating.toFixed(2)}</span>

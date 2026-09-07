@@ -470,11 +470,11 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`Step 5: each skill's dan is the average of your 20 best passes in it`}>
+        <Section title={t`Step 5: each skill's dan is a weighted average of your best passes`}>
           <P>
             <Trans>
               Take your credited passes in one skill, sort them by the level each one credited, and
-              average the top 20. That is your dan in that skill. Nothing is added on top of the
+              average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the
               evidence, and no single pass can set it on its own.
             </Trans>
           </P>
@@ -487,7 +487,7 @@ function DanEstimatesPage() {
             </p>
             <p>
               <Trans>
-                Your jack dan is the average of your 20 best of these. The gamma pass does not make
+                With different charts, your jack dan is the average of your 20 best of these. The gamma pass does not make
                 you gamma on its own: averaged against everything below it, it can pull your dan up a
                 fraction of a level, but it cannot set it.
               </Trans>
@@ -495,8 +495,17 @@ function DanEstimatesPage() {
           </div>
           <P>
             <Trans>
-              Twenty is enough that a few of your best passes cannot carry it on their own. With fewer than 20 qualifying
-              passes the average is over what you have; a skill you have fewer than four in gets no
+              Rates and verified rate reuploads of the same chart share influence within each skill:
+              your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits
+              stay unchanged, and a better clear takes the strongest position. Two rates contribute
+              1.9 slots; five contribute about 4.1. The average reaches further into your other clears
+              to fill 20 weighted slots.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              With fewer than 20 weighted slots the average is over the evidence you have;
+              you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no
               dan of its own, and a side you have fewer than four on gets no estimate at all rather
               than a shaky one.
             </Trans>

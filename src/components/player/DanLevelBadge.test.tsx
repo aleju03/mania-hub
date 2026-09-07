@@ -36,12 +36,17 @@ describe("DanLevelBadge", () => {
     render(badge({ have: 65, need: 80, skills: { full: 3, total: 4 } }));
     // A side says it in skills: the clear sum reads as nearly done even when a
     // whole skill is missing, which is the reading the mark exists to prevent.
-    expect(screen.getByRole("img", { name: /3 of 4 skills have their full 20 clears/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /3 of 4 skills have their full 20 weighted clears/ })).toBeTruthy();
   });
 
   it("counts clears on a single pool, which has no skills to count", () => {
     render(badge({ have: 12, need: 20 }));
-    expect(screen.getByRole("img", { name: /12 of 20 clears/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /12 of 20 weighted clears/ })).toBeTruthy();
+  });
+
+  it("shows fractional evidence without rounding an incomplete window up to full", () => {
+    render(badge({ have: 19.99999, need: 20 }));
+    expect(screen.getByRole("img", { name: /19.9 of 20 weighted clears/ })).toBeTruthy();
   });
 
   it("draws nothing on a full window, or on a verdict that carries none", () => {

@@ -38,6 +38,7 @@ describe("side by side tab", () => {
     // Bare is not silent: what each hit was judged as still pops over the notes.
     expect(viewSource).toContain("showJudgements: true,");
     expect(viewSource).toContain("liveStats: true,");
+    expect(viewSource).toContain("fullHeightLayout: true,");
     expect(viewSource).toContain("renderer.getLiveStats?.()");
     // One clock for both sides is the whole premise.
     expect(viewSource).toContain("renderer.setExternalClock(");

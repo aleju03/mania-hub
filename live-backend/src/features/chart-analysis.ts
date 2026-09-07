@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
+import { storeChartFamily } from "./chart-families.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
@@ -302,6 +303,7 @@ export async function computeBeatmapChartAnalysis(
       throw new Error("Not a mania beatmap (Mode header is not 3)");
     }
     const map = parseManiaBeatmap(osuText);
+    await storeChartFamily(db, beatmapId, osuText, map);
     const starRating = Number((await exec(
       db,
       "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
@@ -818,7 +820,7 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v7";
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v8";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {
