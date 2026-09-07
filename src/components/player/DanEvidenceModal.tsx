@@ -457,12 +457,6 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       </Trans>
                     </div>
                   ) : null}
-                  <div className="px-2 pt-2 text-[11px] text-osu-f1">
-                    <Trans>
-                      Rates of the same chart share influence within each skillset: your best clear
-                      has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit.
-                    </Trans>
-                  </div>
                   {anchorSection && sections.length > 2 ? (
                     <div className="px-2 pt-2 text-[11px] text-osu-f1">
                       <Trans>
@@ -644,7 +638,6 @@ function ClearRow({
               : t`${Math.round(clear.averagingWeight * 100)}% weight`}
         </span>
       ) : null}
-      {reduced ? <span className="shrink-0 text-[10px] text-osu-f1">{t`partial credit`}</span> : null}
       <span
         className={`w-16 shrink-0 text-right text-[11px] font-black sm:w-20 ${clear.ignoredAsStray ? "line-through" : ""}`}
         style={{ color }}

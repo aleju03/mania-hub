@@ -9843,8 +9843,8 @@ msgstr "正在解析文件并查找对应谱面。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "partial credit"
-msgstr "部分计入"
+#~ msgid "partial credit"
+#~ msgstr "部分计入"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
@@ -10734,8 +10734,8 @@ msgid "Rates and verified rate reuploads of the same chart share influence withi
 msgstr "同一谱面的不同倍率成绩，以及经验证仅改变倍率的重传谱面成绩，在每个技能中共享权重：最好的通过权重为 100%，下一次为 90%，再下一次为 81%，以此类推。每次通过的段位折算值不变，更好的成绩会占据权重最高的位置。两个倍率合计占 1.9 个加权名额，五个约占 4.1 个。平均值会纳入更多其他通过成绩，直到填满 20 个加权名额。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
-msgstr "同一谱面不同倍率的成绩在每个技能中共享权重：最好的通过权重为 100%，之后依次为 90%、81%，以此类推。每次通过的段位折算值保持不变。"
+#~ msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
+#~ msgstr "同一谱面不同倍率的成绩在每个技能中共享权重：最好的通过权重为 100%，之后依次为 90%、81%，以此类推。每次通过的段位折算值保持不变。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rates per chart"

@@ -9834,8 +9834,8 @@ msgstr "Analizando el archivo y buscando su beatmap."
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "partial credit"
-msgstr "crédito parcial"
+#~ msgid "partial credit"
+#~ msgstr "crédito parcial"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
@@ -10725,8 +10725,8 @@ msgid "Rates and verified rate reuploads of the same chart share influence withi
 msgstr "Las distintas rates y las resubidas verificadas con cambios de rate de un mismo mapa comparten influencia dentro de cada skill: tu mejor clear tiene un peso del 100%, el siguiente del 90%, luego del 81%, y así sucesivamente. Sus créditos de dan no cambian, y un clear mejor ocupa la posición con más peso. Dos rates aportan 1.9 espacios; cinco, unos 4.1. El promedio incluye más de tus otros clears hasta completar 20 espacios ponderados."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
-msgstr "Las distintas rates de un mismo mapa comparten influencia dentro de cada skill: tu mejor clear tiene un peso del 100%, luego del 90%, del 81%, y así sucesivamente. Cada clear conserva su crédito de dan."
+#~ msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
+#~ msgstr "Las distintas rates de un mismo mapa comparten influencia dentro de cada skill: tu mejor clear tiene un peso del 100%, luego del 90%, del 81%, y así sucesivamente. Cada clear conserva su crédito de dan."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Rates per chart"

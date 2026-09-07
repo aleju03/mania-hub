@@ -999,7 +999,6 @@ function DanCreditCell({
       <span className="text-[8px] font-semibold uppercase tracking-wide tabular-nums text-osu-f1">
         {formatAccuracy(clear.clearAccuracy)}
       </span>
-      {reduced ? <span className="text-[8px] text-osu-f1">{t`partial credit`}</span> : null}
     </div>
   );
 }
