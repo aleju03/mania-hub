@@ -110,13 +110,15 @@ export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
   const locale = useLocale();
   const quality = play.vibroClearEvidence;
   const qualityRatio = quality?.max300Ratio == null ? "∞" : `${quality.ratioIsLowerBound ? "≥" : ""}${quality.max300Ratio.toFixed(2)}`;
+  const scoreAccuracy = play.accuracy == null ? null : formatAccuracy(play.accuracy);
+  const danAccuracy = play.dan?.accuracy == null ? null : formatAccuracy(play.dan.accuracy);
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
       {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
       {quality && <p className="text-[11px] text-[#ffcf70]"><Trans>Accepted clear on a vibro chart: {formatAccuracy(quality.stableAccuracy)} accuracy, {qualityRatio}:1 MAX:300, OD{quality.od}.</Trans></p>}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg bg-osu-b4/50 px-4 py-2.5">
-        {play.accuracy != null && <Stat label={t`Accuracy`} value={formatAccuracy(play.accuracy)} />}
+        {scoreAccuracy != null && <Stat label={t`Accuracy`} value={scoreAccuracy} />}
         {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
         {play.rateMod && (
           <div className="flex flex-col">
@@ -135,7 +137,7 @@ export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
         {play.dan ? (
           <>
             {play.dan.chartRating != null && <Stat label={t`Chart Dan`} value={`${play.dan.chartLabel ?? ""} (${play.dan.chartRating.toFixed(2)})`} />}
-            {play.dan.accuracy != null && <Stat label={t`Dan accuracy`} value={formatAccuracy(play.dan.accuracy)} />}
+            {danAccuracy != null && danAccuracy !== scoreAccuracy && <Stat label={t`Dan accuracy`} value={danAccuracy} />}
             {play.dan.rejection ? (
               <div className="flex max-w-md flex-col gap-1 text-osu-red-light">
                 <span className="text-sm font-semibold"><Trans>does not count</Trans></span>
