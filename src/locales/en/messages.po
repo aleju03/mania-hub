@@ -6356,6 +6356,10 @@ msgstr "Hide the plays the dan rules turned away"
 msgid "Hiding {label}"
 msgstr "Hiding {label}"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
+msgstr "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
+
 #: src/routes/packs.tsx
 msgid "Higher or lower"
 msgstr "Higher or lower"
@@ -13098,8 +13102,8 @@ msgstr "Sure? The card leaves the collection"
 #~ msgstr "Sure? The five cards are used up"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
-msgstr "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+#~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+#~ msgstr "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
 
 #: src/routes/maps.tsx
 msgid "SV"

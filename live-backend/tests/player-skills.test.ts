@@ -30,7 +30,7 @@ import {
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import type { OscScore } from "../src/shared/types.js";
-import { localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
+import { buildVibroOsu, localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
 import { conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { computeMsd } from "../src/dan/msd.js";
 import { loadStoredRateDanVerdicts, rateDanVerdictKey } from "../src/features/dan-estimates.js";
@@ -209,6 +209,76 @@ function play(overrides: Partial<OscScore>): OscScore {
 
 describe("localized vibro player credit", () => {
   const reviewedJudgements = { perfect: 1072, great: 418, good: 176, ok: 13, miss: 4 };
+
+  it.each([1, 1.5])("never rescues a perfect Arpia vibro clear at %sx", async (rate) => {
+    await withDb(async (db) => {
+      const text = vibroFixture(1545542).replace("OverallDifficulty:8", "OverallDifficulty:10");
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      expect(prepareVibroChart(text).analysis.status).toBe("excluded");
+      const result = await computePlayerSkillRatings(db, failingOsu, [play({
+        id: 42, beatmap_id: 101, accuracy: 1, statistics: { perfect: 522 },
+        mods: rate === 1 ? [] : [{ acronym: "DT" }],
+      })], []);
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.vibroExcluded).toHaveLength(1);
+    });
+  });
+
+  it("requires PP evidence even for an accurate dense-chord uprate", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, vibroFixture(4706643).replace("OverallDifficulty:8", "OverallDifficulty:9"), { source: "test" });
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: [play({
+        id: 42, beatmap_id: 101, pp: null, mods: [{ acronym: "DT" }], statistics: reviewedJudgements,
+      })] });
+      expect(result.plays).toEqual([]);
+      expect(result.vibroExcluded).toHaveLength(1);
+    });
+  });
+
+  it("does not override fixed walls even when only the uprate is vibro", async () => {
+    await withDb(async (db) => {
+      const notes: [number, number, number][] = [];
+      for (let row = 0; row < 400; row++) for (let column = 0; column < 4; column++) notes.push([1000 + row * 160, column, -1]);
+      const text = buildVibroOsu(notes).replace("OverallDifficulty:8", "OverallDifficulty:10");
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      expect(prepareVibroChart(text).analysis.status).toBe("clean");
+      expect(prepareVibroChart(text, 2).analysis.status).toBe("excluded");
+      const result = await computePlayerSkillRatings(db, failingOsu, [play({
+        id: 42, beatmap_id: 101, accuracy: 1, statistics: { perfect: notes.length },
+        mods: [{ acronym: "DT", settings: { speed_change: 2 } }],
+      })], []);
+      expect(result.plays).toEqual([]);
+      expect(result.vibroExcluded).toHaveLength(1);
+    });
+  });
+
+  it("revokes an older base-vibro approval and does not display its stale acceptance", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, vibroFixture(1545542).replace("OverallDifficulty:8", "OverallDifficulty:10"), { source: "test" });
+      const previous = { identity: "official:42", beatmapId: 101, keyCount: 4,
+        rate: 1.5, goal: 0.965, pp: 100, accuracy: 1, stableAccuracy: 1, customAccuracy: 1,
+        missShare: 0, ezWindows: false, mods: ["DT"], source: "top" as const, patterns: [],
+        values: { Overall: 99 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+        vibroClearEvidence: { version: 1 as const, stableAccuracy: 1, max300Ratio: null,
+          ratioIsLowerBound: false, od: 10, statistics: { perfect: 522 } },
+      };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      expect(result.plays).toEqual([]);
+      expect(result.vibroExcluded).toHaveLength(1);
+      // Historical score evidence survives internally, but is not an approval.
+      expect(result.vibroExcluded[0].play.vibroClearEvidence?.statistics).toEqual({ perfect: 522 });
+      const now = new Date().toISOString();
+      await exec(db, `insert into player_skill_ratings
+        (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+        values (99, ?, 'ready', ?, ?, ?, ?)`, [PLAYER_SKILLS_VERSION, JSON.stringify(result.summary),
+        JSON.stringify({ plays: [], danOnly: [], vibroExcluded: result.vibroExcluded }), now, now]);
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true });
+      expect(evidence?.rejected).toHaveLength(1);
+      expect(evidence?.rejected?.[0].play.ratingExcluded).toBe(true);
+      expect(evidence?.rejected?.[0].play.vibroClearEvidence).toBeUndefined();
+    });
+  });
 
   it("accepts one high-quality clear while keeping the chart and weaker plays excluded", async () => {
     await withDb(async (db) => {

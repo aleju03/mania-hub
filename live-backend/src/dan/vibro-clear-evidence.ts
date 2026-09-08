@@ -23,6 +23,8 @@ export interface VibroClearInput {
 }
 
 /** A score-quality exception, not a claim that judgements prove hand technique.
+ * This checks the score evidence only. The caller must also require a
+ * PP-backed uprate of a clean base chart with dense-chord-only detections.
  * Applies at the player layer only; chart classification never reads this. */
 export function assessVibroClear(input: VibroClearInput, od: number): VibroClearEvidence | undefined {
   if (!Number.isFinite(od) || od < 9 || input.widenedWindows !== false) return undefined;

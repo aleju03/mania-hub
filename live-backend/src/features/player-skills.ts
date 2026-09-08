@@ -64,7 +64,10 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v34 (current): accepts individual high-quality clears of flagged 4K rice
+// v35 (current): limits clear-quality exceptions to PP-backed uprates of
+// clean base charts with dense-chord detections. Base vibro cannot qualify.
+//
+// v34: accepts individual high-quality clears of flagged 4K rice
 // charts from judgement evidence, without changing any chart's vibro flag.
 //
 // v33: rechecks dense overlapping chord repetitions even when
@@ -114,7 +117,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 34;
+export const PLAYER_SKILLS_VERSION = 35;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -136,7 +139,7 @@ export const PLAYER_SKILLS_VERSION = 34;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -2603,7 +2606,7 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // detector stamp certifies both eligibility and any section-adjusted SSR;
 // restoring an old exclusion with no SSR therefore requires a calculator pass.
 // Hold-heavy and wider-key charts retain their legacy trust policy.
-export const RATE_VIBRO_CHECK_VERSION = 9;
+export const RATE_VIBRO_CHECK_VERSION = 10;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
@@ -2618,8 +2621,20 @@ function chartVibroAtRate(osuText: string, rate: number, hasPpTrust: boolean, ba
   try {
     const map = parseManiaBeatmap(osuText);
     const analysis = usesSectionVibro(map) ? analyzeVibroSections(map, rate) : null;
-    const clearEvidence = analysis?.status === "excluded" && inspectChartDanEligibility(map).eligible
-      ? assessVibroClear(quality, odOverride ?? map.od) : undefined;
+    // Strong judgements on a consistent vibro pattern do not prove that it
+    // was played without vibro. This exception only handles rate-induced
+    // dense-chord detections on a clean, PP-backed base chart. Explicit walls,
+    // jack streams, isolated jacks and rolls cannot be overridden by accuracy.
+    let clearEvidence: VibroClearEvidence | undefined;
+    if (analysis?.status === "excluded" && rate > 1 && hasPpTrust
+      && analysis.sections.length > 0
+      && analysis.sections.every((section) => section.reasons.length > 0
+        && section.reasons.every((reason) => reason === "dense_chord_repetition" || reason === "sustained_chords"))) {
+      const evidence = assessVibroClear(quality, odOverride ?? map.od);
+      if (evidence && inspectChartDanEligibility(map).eligible && analyzeVibroSections(map, 1).status === "clean") {
+        clearEvidence = evidence;
+      }
+    }
     return {
       vibro: analysis ? analysis.status === "excluded" && !clearEvidence
         : (!hasPpTrust && baseVibro) || (rate !== 1 && detectRateVibro(map, rate)),
@@ -4707,7 +4722,8 @@ export async function getPlayerSkillDanEvidence(
           play: {
             ...buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata),
             ...(entry.reason === "chart_vibro" || entry.reason === "rate_vibro"
-              ? { ratingExcluded: true, ratingExclusionReason: undefined } : {}),
+              ? { ratingExcluded: true, ratingExclusionReason: undefined,
+                vibroClearEvidence: undefined, vibroAdjustment: undefined } : {}),
           },
           reason: entry.reason,
           side: entry.side,

@@ -320,7 +320,7 @@ function MsdBlock({
         <div className="text-[11px] text-[#ffcf70]">
           {vibroAnalysis.status === "adjusted"
             ? <Trans>Adjusted rating: {(vibroAnalysis.excludedDurationMs / 1000).toFixed(1)}s of vibro excluded. Remaining patterns rated.</Trans>
-            : <Trans>Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count.</Trans>}
+            : <Trans>High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception.</Trans>}
           <details className="mt-1 text-osu-f1/75">
             <summary className="cursor-pointer"><Trans>Detected sections</Trans></summary>
             <ul className="mt-1 flex flex-wrap gap-x-3">

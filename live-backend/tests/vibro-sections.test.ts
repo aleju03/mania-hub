@@ -4,7 +4,7 @@ import { classifyChart, detectRateVibro, detectRiceVibro } from "../src/dan/char
 import { analyzeVibroSections, conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { buildVibroOsu, localizedVibroFixture, vibroCharts, vibroFixture } from "./vibro-fixtures.js";
 
-const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544];
+const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542];
 
 describe("section-based vibro ratings", () => {
   it.each(vibroCharts.filter((chart) => !VIBRO_CONTROLS.includes(chart.id)))("restores $source", ({ id }) => {

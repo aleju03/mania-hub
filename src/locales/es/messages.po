@@ -6352,6 +6352,10 @@ msgstr "Ocultar las jugadas que las reglas de dan descartaron"
 msgid "Hiding {label}"
 msgstr "Ocultando {label}"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
+msgstr "Una precisión alta nunca anula la exclusión de un mapa que ya es vibro a velocidad normal. Solo las jugadas más rápidas que cumplan los requisitos, en mapas limpios y con evidencia de PP, pueden recibir la excepción por acordes densos."
+
 #: src/routes/packs.tsx
 msgid "Higher or lower"
 msgstr "Higher or Lower"
@@ -13090,8 +13094,8 @@ msgstr "¿Seguro? La carta sale de la colección"
 #~ msgstr "¿Seguro? Las cinco cartas se gastan"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
-msgstr "Vibro sostenido detectado. Para contar, cada jugada requiere al menos un 95% de precisión, una proporción MAX:300 mínima de 2:1 y OD9+, sin ventanas de acierto ampliadas."
+#~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+#~ msgstr "Vibro sostenido detectado. Para contar, cada jugada requiere al menos un 95% de precisión, una proporción MAX:300 mínima de 2:1 y OD9+, sin ventanas de acierto ampliadas."
 
 #: src/routes/maps.tsx
 msgid "SV"

@@ -6361,6 +6361,10 @@ msgstr "隐藏被段位规则排除的成绩"
 msgid "Hiding {label}"
 msgstr "隐藏 {label}"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
+msgstr "高准确率不会推翻原速下的 Vibro 排除判定。只有在原速无 Vibro、具备 PP 成绩依据的谱面上，符合条件的加速成绩才可获得密集和弦例外。"
+
 #: src/routes/packs.tsx
 msgid "Higher or lower"
 msgstr "猜大小"
@@ -13099,8 +13103,8 @@ msgstr "确定？这张卡片将离开收藏册"
 #~ msgstr "确定？这五张卡会被用掉"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
-msgstr "检测到持续 Vibro。单次成绩需达到至少 95% 准确率、至少 2:1 的 MAX:300 比值和 OD9+，且不能放宽判定窗口，才会计入评分。"
+#~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+#~ msgstr "检测到持续 Vibro。单次成绩需达到至少 95% 准确率、至少 2:1 的 MAX:300 比值和 OD9+，且不能放宽判定窗口，才会计入评分。"
 
 #: src/routes/maps.tsx
 msgid "SV"
