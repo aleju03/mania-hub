@@ -15,6 +15,8 @@ import { useLocale } from "../../lib/locale-context";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
+import type { VibroAnalysis } from "#dan/vibro-sections";
+import type { VibroClearEvidenceSummary } from "#dan/vibro-clear-evidence";
 import { useNoDans } from "../../store";
 import {
   FamilyPatternChip,
@@ -66,6 +68,8 @@ function buildPreviewBeatmapset(entry: LiveMapSearchEntry, diffs: LiveMapSearchE
 // from a play row (the skill-plays modal) rather than from search. Rendered as
 // its own stat strip while that diff is the active one.
 export interface MapDetailPlayContext {
+  vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
+  vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
   username: string;
   accuracy: number | null;
@@ -93,12 +97,16 @@ export interface MapDetailPlayContext {
   };
 }
 
-function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
+export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
   const { t } = useLingui();
   const locale = useLocale();
+  const quality = play.vibroClearEvidence;
+  const qualityRatio = quality?.max300Ratio == null ? "∞" : `${quality.ratioIsLowerBound ? "≥" : ""}${quality.max300Ratio.toFixed(2)}`;
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
+      {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
+      {quality && <p className="text-[11px] text-[#ffcf70]"><Trans>Accepted clear on a vibro chart: {formatAccuracy(quality.stableAccuracy)} accuracy, {qualityRatio}:1 MAX:300, OD{quality.od}.</Trans></p>}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg bg-osu-b4/50 px-4 py-2.5">
         {play.accuracy != null && <Stat label={t`Accuracy`} value={formatAccuracy(play.accuracy)} />}
         {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
@@ -258,6 +266,7 @@ function MsdBlock({
   rate = 1,
   rateMsd = null,
   rateDan = null,
+  vibroAnalysis,
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
@@ -266,6 +275,7 @@ function MsdBlock({
   rate?: number;
   rateMsd?: Record<string, number> | null;
   rateDan?: { label: string; family: string; rawDan: number } | null;
+  vibroAnalysis?: VibroAnalysis;
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
@@ -302,10 +312,27 @@ function MsdBlock({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
-        {entry.vibro && (
+        {(vibroAnalysis ? vibroAnalysis.status === "excluded" : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">{t`vibro chart, estimates unreliable`}</span>
         )}
       </div>
+      {vibroAnalysis && vibroAnalysis.status !== "clean" && (
+        <div className="text-[11px] text-[#ffcf70]">
+          {vibroAnalysis.status === "adjusted"
+            ? <Trans>Adjusted rating: {(vibroAnalysis.excludedDurationMs / 1000).toFixed(1)}s of vibro excluded. Remaining patterns rated.</Trans>
+            : <Trans>Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count.</Trans>}
+          <details className="mt-1 text-osu-f1/75">
+            <summary className="cursor-pointer"><Trans>Detected sections</Trans></summary>
+            <ul className="mt-1 flex flex-wrap gap-x-3">
+              {vibroAnalysis.sections.map((section) => (
+                <li key={section.startTime}>
+                  {formatDuration(section.startTime / 1000 / (rateAdjusted ? rate : 1))}–{formatDuration(section.endTime / 1000 / (rateAdjusted ? rate : 1))}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
         {/* Verdict group: dan badge + Overall, split from the skillset grid.
             min-h keeps the row the badge's height even on diffs that have no
@@ -721,6 +748,7 @@ export function MapDetailModal({
                       rate={playRate}
                       rateMsd={rateMsd}
                       rateDan={rateDan}
+                      vibroAnalysis={playRate === 1 ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
                   )
                 ) : pending ? <PendingMsdBlock /> : null}

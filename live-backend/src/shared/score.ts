@@ -89,7 +89,7 @@ export interface ScoreHitCounts {
  * accuracy/grade helpers do. Used by the Discord bot to print an owo-style
  * `{ 320 / 300 / 200 / 100 / 50 / miss }` line.
  */
-export function getScoreHitCounts(score: ScoreLike): ScoreHitCounts {
+export function getScoreHitCounts(score: Pick<ScoreLike, "statistics">): ScoreHitCounts {
   const counts = getHitCounts(score.statistics);
   return {
     max: counts.countMax,

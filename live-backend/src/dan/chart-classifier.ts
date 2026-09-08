@@ -1,6 +1,7 @@
 // Shared by the backend and the frontend (which reaches it through the #dan/*
 // alias); the vendored LeoBlack tree it drives lives in live-backend/vendor.
-import type { ManiaBeatmap } from "./beatmap-parser.js";
+import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
+import { analyzeVibroSections, prepareVibroChart, usesSectionVibro, type VibroAnalysis } from "./vibro-sections.js";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator/types.js";
 import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
 import type { ManiaPatternAnalysis } from "./dan-estimator/types.js";
@@ -67,6 +68,7 @@ export interface ChartClassification {
   patterns: ManiaPatternAnalysis;
   clusters: { report: LeoBlackPatternReport; topFiveClusters: LeoBlackPatternCluster[] } | null;
   vibro: boolean;
+  vibroAnalysis?: VibroAnalysis;
   /** Whether this chart may testify toward a player's dan. The displayed
    * chart verdict remains available even when structural abuse makes clears
    * unsafe to credit. */
@@ -702,14 +704,17 @@ export function detectSustainedChordVibro(map: ManiaBeatmap, rate = 1): boolean 
 }
 
 /**
- * Rate-induced vibro shapes safe to use for player-skill eligibility.
+ * Full-map exclusion at the played rate. 4K rice shares the section policy
+ * with normal-speed chart analysis; adjusted charts return false here.
  *
- * Do not replace this with detectRiceVibro(map, rate). Tiers 1-4 were
+ * The legacy path for other charts must not use all of detectRiceVibro's
+ * tiers at rate. Tiers 1-4 were
  * calibrated at 1.0x and the widened cutoffs call real 210-256BPM DT jack
  * clears vibro. The roll and sustained-chord tiers are rate-calibrated
  * directly; the chord-wall arm adds chart-soaked near-full walls.
  */
 export function detectRateVibro(map: ManiaBeatmap, rate = 1): boolean {
+  if (usesSectionVibro(map)) return analyzeVibroSections(map, rate).status === "excluded";
   if (detectRollVibro(map, rate)) return true;
   if (detectSustainedChordVibro(map, rate)) return true;
   if (map.notes.length < RICE_VIBRO_BURST_MIN_NOTES) return false;
@@ -717,6 +722,7 @@ export function detectRateVibro(map: ManiaBeatmap, rate = 1): boolean {
 }
 
 export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
+  if (usesSectionVibro(map)) return analyzeVibroSections(map, rate).status === "excluded";
   if (map.notes.length >= RICE_VIBRO_MIN_NOTES) {
     const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
     if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
@@ -840,6 +846,14 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   const rate = getInputRate(input);
   const warnings: string[] = [];
   const danEligibility = inspectChartDanEligibility(map);
+  const sectionVibro = usesSectionVibro(map);
+  const prepared = prepareVibroChart(osuText, rate, map);
+  const vibroAnalysis = sectionVibro ? prepared.analysis : undefined;
+  if (prepared.analysis.status === "adjusted") {
+    osuText = prepared.osuText;
+    map = { ...parseManiaBeatmap(osuText), totalLength: map.totalLength };
+    warnings.push(`Adjusted rating: ${(prepared.analysis.excludedDurationMs / 1000).toFixed(1)}s of vibro excluded; remaining patterns rated at their original timestamps.`);
+  }
   if (!danEligibility.eligible) {
     warnings.push(
       `Player dan disabled: ${danEligibility.maxSameColumnHeadStack} objects share one column and head time.`,
@@ -856,7 +870,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     warnings.push(`Pattern clustering failed: ${error instanceof Error ? error.message : String(error)}.`);
   }
 
-  const longjackVibro = clusters
+  const longjackVibro = !sectionVibro && clusters
     ? detectVibroFromLongjackPattern(
       clusters.report,
       PATTERNS_CONFIG.LONGJACK_VIBRO_RATIO_THRESHOLD,
@@ -864,7 +878,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     )
     : false;
   const lnVibro = detectLnVibro(map, rate);
-  const riceVibro = detectRiceVibro(map, rate);
+  const riceVibro = sectionVibro ? vibroAnalysis?.status === "excluded" : detectRiceVibro(map, rate);
   const vibro = longjackVibro || lnVibro || riceVibro;
   if (lnVibro) {
     warnings.push("Staggered LN-spam (vibro) detected; LN difficulty is likely overestimated.");
@@ -910,7 +924,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
 
   const rcConfidence = vibro ? 0.35 : 0.72;
   if (vibro) {
-    warnings.push("Vibro-like longjack clusters detected; RC difficulty is likely overestimated.");
+    warnings.push("Vibro detected; ordinary difficulty estimates are unreliable.");
   }
 
   let rc: DanVerdictHalf | null = null;
@@ -1019,6 +1033,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     patterns,
     clusters,
     vibro,
+    ...(vibroAnalysis ? { vibroAnalysis } : {}),
     danEligibility,
     companellaPending: mixed?.mixedCompanellaPlan != null,
     warnings,

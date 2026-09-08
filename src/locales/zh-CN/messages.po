@@ -2137,6 +2137,12 @@ msgstr "强调色"
 msgid "Accept"
 msgstr "接受"
 
+#. placeholder {0}: formatAccuracy(quality.stableAccuracy)
+#. placeholder {1}: quality.od
+#: src/components/maps/MapDetailModal.tsx
+msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+msgstr "Vibro 谱面的有效成绩：准确率 {0}，MAX:300 比值 {qualityRatio}:1，OD{1}。"
+
 #: src/components/layout/Nav.tsx
 msgid "Account"
 msgstr "账号"
@@ -2183,6 +2189,10 @@ msgstr "准确率 <0>{0}</0>"
 #: src/routes/terms.tsx
 msgid "Accuracy And Availability"
 msgstr "准确性与可用性"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Accuracy below skill rating range"
+msgstr "准确率低于技能评级范围"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
@@ -2389,6 +2399,11 @@ msgstr "正在加入…"
 #: src/routes/report.tsx
 #~ msgid "Additional information you sent"
 #~ msgstr "你发送的补充信息"
+
+#. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
+msgstr ""
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -3378,7 +3393,7 @@ msgstr "更换"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Change"
-msgstr "更换"
+msgstr "变化"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgctxt "skill rating difference"
@@ -4798,6 +4813,10 @@ msgstr "取消选择 {0}"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
 msgstr "在 .osk 中检测到"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Detected sections"
+msgstr ""
 
 #: src/routes/discord.tsx
 msgid "dev preview"
@@ -8745,6 +8764,10 @@ msgstr "无 Mod"
 msgid "No mods in top plays"
 msgstr "最佳成绩里没有 Mod"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "No MSD rating"
+msgstr "无 MSD 评级"
+
 #: src/components/farm-helper/FarmersList.tsx
 msgid "No nearby players have farmed this yet."
 msgstr "还没有水平相近的玩家刷过这张。"
@@ -10694,36 +10717,52 @@ msgid "Rate mods count, and they count for what the chart is worth at that speed
 msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x)，以及 0.5x 到 2.0x 之间任意的 lazer 自定义倍速下的通过，都会按谱面在那个速度下的段位计入，每个速度单独评。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。如果某个速度还没有人评过这张谱面，你的估算第一次用到它时就会现算，所以冷门倍速的成绩可能要过一小会儿才开始计入。"
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr ""
+
+#: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+#~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "评分依据 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+#~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "评分依据最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+#~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "评分依据你的 osu! 最佳成绩中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，未 ranked 的 vibro 谱面已排除"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
+#~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "评分依据你的最佳成绩和已追踪历史中的 {plays} 个成绩，DT 与 HT 按实际速率计算，准确率按各谱面 OD 判定窗口下的 MAX:300 比例加权，vibro 成绩已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
@@ -13059,6 +13098,10 @@ msgstr "确定？这张卡片将离开收藏册"
 #~ msgid "Sure? The five cards are used up"
 #~ msgstr "确定？这五张卡会被用掉"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+msgstr "检测到持续 Vibro。单次成绩需达到至少 95% 准确率、至少 2:1 的 MAX:300 比值和 OD9+，且不能放宽判定窗口，才会计入评分。"
+
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
@@ -15206,6 +15249,10 @@ msgstr "此谱面检测到 vibro。此成绩不计入技能或段位评分。"
 msgid "Vibro detected. This play does not count toward skill or dan ratings."
 msgstr "检测到 vibro。此成绩不计入技能或段位评分。"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"
 msgstr "视频链接或 ID"
@@ -16079,11 +16126,3 @@ msgstr "你的心愿单"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube 视频"
-
-#: src/components/maps/MapDetailModal.tsx
-msgid "Accuracy below skill rating range"
-msgstr "准确率低于技能评级范围"
-
-#: src/components/maps/MapDetailModal.tsx
-msgid "No MSD rating"
-msgstr "无 MSD 评级"

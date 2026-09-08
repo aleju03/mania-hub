@@ -1,6 +1,7 @@
 import type { ManiaBeatmap } from "./beatmap-parser";
 import { classifyChart, type ChartClassification, type ClassifyChartInput } from "#dan/chart-classifier";
 import { getInputRate } from "#dan/dan-estimator/labels";
+import { prepareVibroChart } from "#dan/vibro-sections";
 import type { CompanellaEstimate } from "#leoblack/estimator/companellaEstimator";
 
 // Companella is LeoBlack's ONNX dan model: a 10-feature MLP over the eight
@@ -87,7 +88,7 @@ export async function classifyChartWithCompanella(
   if (!first.companellaPending || first.sunnySr == null) return first;
 
   const companella = await computeCompanellaEstimate({
-    osuText,
+    osuText: prepareVibroChart(osuText, getInputRate(input), map).osuText,
     rate: getInputRate(input),
     keyCount: map.keyCount,
     sunnyStar: first.sunnySr,

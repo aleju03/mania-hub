@@ -60,11 +60,11 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
     if (ratePercent === 150) {
       const row = (await exec(
         ctx.db,
-        `select msd_dt_json, dan_dt_json from beatmap_chart_analysis
+        `select key_count, msd_dt_json, dan_dt_json from beatmap_chart_analysis
          where beatmap_id = ? and analysis_version = ? limit 1`,
         [beatmapId, CHART_ANALYSIS_VERSION],
       )).rows[0];
-      const { danDt, msdDt } = parseDtRateVerdict(row);
+      const { danDt, msdDt, vibroAnalysisDt } = parseDtRateVerdict(row);
       if (msdDt || danDt) {
         sendJson(req, res, ctx, 200, {
           beatmapId,
@@ -73,6 +73,7 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
           status: "ready",
           dan: danDt,
           msd: msdDt,
+          ...(vibroAnalysisDt ? { vibroAnalysis: vibroAnalysisDt } : {}),
         });
         return true;
       }
@@ -136,6 +137,7 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
       clusters: Array.isArray(classification?.clusters) ? classification.clusters : [],
       clusterCategory: typeof classification?.clusterCategory === "string" ? classification.clusterCategory : null,
       modeTag: typeof classification?.modeTag === "string" ? classification.modeTag : null,
+      ...(classification?.vibroAnalysis ? { vibroAnalysis: classification.vibroAnalysis } : {}),
       verdictText: typeof classification?.verdictText === "string" ? classification.verdictText : null,
       lnRatio: Number.isFinite(Number(classification?.lnRatio)) ? Number(classification?.lnRatio) : null,
       // LN-adjusted (tail-aware, keymode-blended) MSD; null for rice charts or

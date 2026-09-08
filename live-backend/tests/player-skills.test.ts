@@ -10,6 +10,7 @@ import {
   selectMsdRatingPlays,
   computePlayerSkillRatings,
   computePlayerSkillsJob,
+  collectDanClearsForTest,
   danClearAverageWindowFor,
   danIgnoredStrayCount,
   estimateWifeAccuracy,
@@ -29,6 +30,10 @@ import {
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import type { OscScore } from "../src/shared/types.js";
+import { localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
+import { conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
+import { computeMsd } from "../src/dan/msd.js";
+import { loadStoredRateDanVerdicts, rateDanVerdictKey } from "../src/features/dan-estimates.js";
 
 async function withDb(run: (db: Awaited<ReturnType<typeof createDb>>) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), "mania-live-skills-"));
@@ -201,6 +206,168 @@ function play(overrides: Partial<OscScore>): OscScore {
     ...overrides,
   };
 }
+
+describe("localized vibro player credit", () => {
+  const reviewedJudgements = { perfect: 1072, great: 418, good: 176, ok: 13, miss: 4 };
+
+  it("accepts one high-quality clear while keeping the chart and weaker plays excluded", async () => {
+    await withDb(async (db) => {
+      const text = vibroFixture(4706643).replace("OverallDifficulty:8", "OverallDifficulty:9");
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+        values (101, 1, 'ready', 4, ?, ?)`, [JSON.stringify({ lnRatio: 0, rc: { rawDan: 15 }, vibro: false }), new Date().toISOString()]);
+      const score = play({ id: 42, beatmap_id: 101, mods: [{ acronym: "DT" }], statistics: reviewedJudgements });
+      const accepted = await computePlayerSkillRatings(db, failingOsu, [score], []);
+      expect(accepted.vibroExcluded).toEqual([]);
+      expect(accepted.plays).toHaveLength(1);
+      expect(accepted.plays[0].vibroClearEvidence?.max300Ratio).toBeCloseTo(1072 / 418);
+      expect(accepted.plays[0].values.Overall).toBeGreaterThan(0);
+      expect(prepareVibroChart(text, 1.5).analysis.status).toBe("excluded");
+      const key = rateDanVerdictKey(101, 150);
+      const verdict = (await loadStoredRateDanVerdicts(db, [{ beatmapId: 101, ratePercent: 150 }])).get(key);
+      expect(verdict).toBeTruthy();
+      const clears = collectDanClearsForTest(4, accepted.plays, await loadChartSkillInfo(db, [101]),
+        new Map([[key, { rawDan: verdict!.rawDan, side: "rc", displayName: verdict!.displayName }]]));
+      expect(clears).toHaveLength(1);
+      expect(clears[0].creditedDan).toBeLessThan(clears[0].chartDan);
+
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [{
+        ...accepted.plays[0], rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      }]);
+      expect(retained.plays).toHaveLength(1);
+      expect(retained.plays[0].vibroClearEvidence?.max300Ratio).toBeCloseTo(1072 / 418);
+      expect(retained.plays[0].values).toEqual(accepted.plays[0].values);
+
+      const weaker = { ...score, statistics: { perfect: 600, great: 890, good: 176, ok: 13, miss: 4 } };
+      const rejected = await computePlayerSkillRatings(db, failingOsu, [weaker], accepted.plays);
+      expect(rejected.plays).toEqual([]);
+      expect(rejected.vibroExcluded).toHaveLength(1);
+      // A corrected judgement distribution invalidates that same score's cached rejection.
+      const corrected = await computePlayerSkillRatings(db, failingOsu, [score], [], {
+        previousVibroExcluded: rejected.vibroExcluded,
+      });
+      expect(corrected.plays).toHaveLength(1);
+      expect(corrected.vibroExcluded).toEqual([]);
+    });
+  });
+
+  it("preserves a reviewed clear from older summaries after its raw score has aged out", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, vibroFixture(4706643).replace("OverallDifficulty:8", "OverallDifficulty:9"), { source: "test" });
+      const previous = { identity: "official:42", beatmapId: 101, keyCount: 4,
+        rate: 1.5, goal: 0.9173, pp: 100, accuracy: 0.9576153693800753,
+        stableAccuracy: 0.9576153693800753, customAccuracy: 0.9375742721330956,
+        missShare: 0.0023767082590612004, ezWindows: false, mods: ["DT"],
+        source: "top" as const, patterns: [], values: { Overall: 40 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1 };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      expect(result.plays).toHaveLength(1);
+      expect(result.plays[0].vibroClearEvidence?.ratioIsLowerBound).toBe(true);
+      expect(result.plays[0].vibroClearEvidence?.max300Ratio).toBeGreaterThan(2);
+      expect(result.vibroExcluded).toEqual([]);
+    });
+  });
+
+  it("does not turn missing mod evidence into known NoMod evidence during retention", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, vibroFixture(4706643, 1.5).replace("OverallDifficulty:8", "OverallDifficulty:9"), { source: "test" });
+      const score = play({ id: 42, beatmap_id: 101, mods: undefined, statistics: reviewedJudgements });
+      const first = await computePlayerSkillRatings(db, failingOsu, [score], []);
+      expect(first.plays).toEqual([]);
+      expect(first.vibroExcluded).toHaveLength(1);
+      expect(first.vibroExcluded[0].play.mods).toBeUndefined();
+      expect(first.vibroExcluded[0].play.ezWindows).toBeUndefined();
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [], {
+        previousVibroExcluded: first.vibroExcluded.map((entry) => ({ ...entry, checkedVersion: RATE_VIBRO_CHECK_VERSION - 1 })),
+      });
+      expect(retained.plays).toEqual([]);
+      expect(retained.vibroExcluded).toHaveLength(1);
+    });
+  });
+
+  it.each(["low_od", "ez", "missing_mod_evidence", "stacked"])("does not approve %s from accuracy alone", async (condition) => {
+    await withDb(async (db) => {
+      let text = vibroFixture(4706643).replace("OverallDifficulty:8", condition === "low_od" ? "OverallDifficulty:8" : "OverallDifficulty:9");
+      if (condition === "stacked") text += Array.from({ length: 8 }, () => "64,192,1000,1,0,0:0:0:0:").join("\n") + "\n";
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      const score = play({ id: 42, beatmap_id: 101, mods: [{ acronym: "DT" }, ...(condition === "ez" ? [{ acronym: "EZ" }] : [])], statistics: reviewedJudgements });
+      if (condition === "missing_mod_evidence") {
+        const previous = { identity: "official:42", beatmapId: 101, keyCount: 4,
+          rate: 1.5, goal: 0.9173, pp: 100, stableAccuracy: 0.9576153693800753,
+          customAccuracy: 0.9375742721330956, missShare: 0.0023767082590612004,
+          source: "top" as const, patterns: [], values: { Overall: 40 } };
+        expect((await computePlayerSkillRatings(db, failingOsu, [], [previous])).plays).toEqual([]);
+      } else {
+        expect((await computePlayerSkillRatings(db, failingOsu, [score], [])).plays).toEqual([]);
+      }
+    });
+  });
+
+  it("evicts a cached clean verdict on the reported repeated-jack chart, regardless of pp trust", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, vibroFixture(4871104), { source: "test" });
+      const previous = { identity: "official:42", beatmapId: 101, keyCount: 4,
+        rate: 1, goal: 0.95, pp: 100, accuracy: 0.99, stableAccuracy: 0.99,
+        source: "top" as const, patterns: [], values: { Overall: 30 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1 };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.vibroExcluded).toMatchObject([{
+        checkedVersion: RATE_VIBRO_CHECK_VERSION, reason: "rate_vibro", play: { beatmapId: 101 },
+      }]);
+    });
+  });
+
+  it("recomputes retained SSRs with conservative accuracy and restores aged-out exclusions", async () => {
+    await withDb(async (db) => {
+      const text = localizedVibroFixture();
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      const previous = { identity: "official:42", beatmapId: 101, keyCount: 4,
+        rate: 1, goal: 0.95, pp: 0, accuracy: 0.96, stableAccuracy: 0.96,
+        source: "tracked" as const, patterns: [], values: { Overall: 999 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1 };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      const adjusted = result.plays[0];
+      expect(adjusted?.vibroAdjustment).toBeDefined();
+      expect(adjusted.accuracy).toBe(0.96);
+      expect(adjusted.goal).toBe(0.95);
+      const prepared = prepareVibroChart(text);
+      const expected = await computeMsd(prepared.osuText, { keyCount: 4,
+        scoreGoal: conservativeVibroAccuracy(previous.goal, prepared.analysis.judgementShare) });
+      expect(adjusted.values.Overall).toBeCloseTo(expected!.values.Overall, 5);
+      const restored = await computePlayerSkillRatings(db, failingOsu, [], [], {
+        previousVibroExcluded: [{ play: { ...previous, values: {} }, reason: "chart_vibro", checkedVersion: RATE_VIBRO_CHECK_VERSION - 1 }],
+      });
+      expect(restored.vibroExcluded).toEqual([]);
+      expect(restored.plays).toHaveLength(1);
+      expect(restored.plays[0].values.Overall).toBeCloseTo(adjusted.values.Overall, 5);
+      const again = await computePlayerSkillRatings(db, failingOsu, [], restored.plays);
+      expect(again.plays[0].values).toEqual(restored.plays[0].values);
+      expect(again.plays[0].vibroAdjustment).toEqual(restored.plays[0].vibroAdjustment);
+    });
+  });
+
+  it("uses the filtered dan verdict and a lower-bound clear accuracy", async () => {
+    await withDb(async (db) => {
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+        values (101, 1, 'ready', 4, ?, ?)`, [JSON.stringify({ lnRatio: 0, rc: { rawDan: 20 }, patterns: [] }), new Date().toISOString()]);
+      const info = await loadChartSkillInfo(db, [101]);
+      const adjusted = { identity: "official:42", beatmapId: 101, keyCount: 4,
+        rate: 1, goal: 0.95, pp: 0, accuracy: 0.96, stableAccuracy: 0.96,
+        source: "tracked" as const, patterns: [], values: { Overall: 20 },
+        vibroAdjustment: { excludedDurationMs: 3000, timeShare: 0.05, noteShare: 0.1, judgementShare: 0.1 } };
+      const clears = collectDanClearsForTest(4, [adjusted], info,
+        new Map([[rateDanVerdictKey(101, 100), { rawDan: 8, side: "rc" as const, displayName: "8" }]]));
+      expect(clears).toHaveLength(1);
+      expect(clears[0].chartDan).toBe(8);
+      expect(clears[0].accuracy).toBeCloseTo(0.9555556);
+      expect(clears[0].creditedDan).toBeLessThan(8);
+      // An old unfiltered 20-dan chart row cannot stand in for a missing
+      // adjusted verdict while its bounded computation is pending.
+      expect(collectDanClearsForTest(4, [adjusted], info)).toEqual([]);
+    });
+  });
+});
 
 describe("getRateModAcronym", () => {
   it("names the rate mod so NC/DC stay apart from DT/HT", () => {
@@ -574,9 +741,9 @@ describe("computePlayerSkillRatings", () => {
       // Judgements reproduce a 91.02% lazer pass: below the Wife/MSD floor,
       // but above the 91% stable-formula minimum for reduced rice Dan credit.
       const clear = play({ id: 901, beatmap_id: 101, pp: null, accuracy: 0.910203,
-        build_id: 8873, statistics: { ok: 69, meh: 36, good: 180, miss: 34, great: 732, perfect: 1003 } });
+        statistics: { ok: 69, meh: 36, good: 180, miss: 34, great: 732, perfect: 1003 } });
       const rejected = play({ id: 902, beatmap_id: 102, pp: null, accuracy: 0.805238,
-        build_id: 8873, statistics: { ok: 189, meh: 75, good: 415, miss: 138, great: 816, perfect: 852 } });
+        statistics: { ok: 189, meh: 75, good: 415, miss: 138, great: 816, perfect: 852 } });
       expect(ssrGoalForScore(clear, 0, 8)).toBeNull();
       const worseRetry = { ...rejected, id: 903, beatmap_id: 101 };
       const result = await computePlayerSkillRatings(db, failingOsu, [], [], {
@@ -1879,7 +2046,7 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("skips vibro charts for tracked plays but trusts pp-backed charts as misflags", async () => {
+  it("rechecks stale 4K chart flags against note structure for both tracked and pp-backed plays", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
       await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
@@ -1892,31 +2059,27 @@ describe("computePlayerSkillRatings", () => {
           [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, vibro: true, patterns: [] }), new Date().toISOString()],
         );
       }
-      // Chart 101 has a top play (pp-backed, so ranked - its vibro flag is a
-      // misflag): both the top play and the tracked retry on it count. Chart
-      // 106 is tracked-only, so its vibro flag stands and the play skips.
+      // Both actual files are ordinary streams. Neither obsolete flag should
+      // disqualify a play, regardless of whether its chart has earned pp.
       const topScores = [play({ id: 1, beatmap_id: 101, accuracy: 0.9 })];
       const trackedScores = [
         play({ id: 2, beatmap_id: 101, accuracy: 0.99, pp: null }),
         play({ id: 3, beatmap_id: 106, accuracy: 0.99, pp: null }),
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, topScores, [], { trackedScores });
-      expect(result.summary.analyzedPlays).toBe(1);
+      expect(result.summary.analyzedPlays).toBe(2);
       expect(result.summary.unsupportedPlays).toBe(0);
       expect(result.plays[0].beatmapId).toBe(101);
       expect(result.plays[0].source).toBe("tracked");
-      expect(result.vibroExcluded).toMatchObject([{
-        reason: "chart_vibro", play: { beatmapId: 106, keyCount: 4, rate: 1 },
-      }]);
+      expect(result.vibroExcluded).toEqual([]);
 
-      // Retention: the top-sourced play keeps its pp-backed trust even after
-      // dropping off the top-200, while the tracked-only chart stays out.
+      // Both sources remain eligible when only the durable record survives.
       const topSourced = { ...result.plays[0], source: "top" as const };
       const retained = await computePlayerSkillRatings(db, failingOsu, [], [topSourced], {});
       expect(retained.summary.analyzedPlays).toBe(1);
       const trackedSourced = { ...result.plays[0], beatmapId: 106, source: "tracked" as const };
       const dropped = await computePlayerSkillRatings(db, failingOsu, [], [trackedSourced], {});
-      expect(dropped.summary.analyzedPlays).toBe(0);
+      expect(dropped.summary.analyzedPlays).toBe(1);
     });
   });
 
@@ -1947,8 +2110,8 @@ describe("computePlayerSkillRatings", () => {
       const rated = result.plays.map((entry) => `${entry.beatmapId}@${entry.rate}`).sort();
       expect(rated).toEqual(["106@1"]);
       expect(result.summary.unsupportedPlays).toBe(0);
-      // The surviving NoMod play never ran the rate check.
-      expect(result.plays.every((entry) => entry.rateVibroChecked == null)).toBe(true);
+      // Normal-speed 4K now uses the same physical-timing check too.
+      expect(result.plays.every((entry) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
 
       // Retention: a tracked DT play accepted by the previous detector drops
       // on its next compute, including one previously trusted as a top play.

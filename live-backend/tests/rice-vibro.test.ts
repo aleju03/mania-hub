@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import { detectRateVibro, detectRiceVibro, detectRollVibro } from "../src/dan/chart-classifier.js";
+import { analyzeVibroSections } from "../src/dan/vibro-sections.js";
 
 // Synthetic charts for the rice-vibro detector. Thresholds were calibrated on
 // the real corpus (see chart-classifier.ts); these tests pin the behaviour at
@@ -185,7 +186,7 @@ describe("detectRiceVibro", () => {
     expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes, 7)))).toBe(false);
   });
 
-  it("flags cross-column spam no per-column tier can see (tier 4)", () => {
+  it("adjusts localized cross-column spam instead of rejecting the whole chart", () => {
     // The "Hello (BPM) 2023" ending: alternating [01][23] pairs every 14ms,
     // ~71 rows/s, closing an otherwise ordinary chart. Per-column runs are
     // short and the fast gaps are a tenth of the file, so tiers 1-3 all read
@@ -195,7 +196,9 @@ describe("detectRiceVibro", () => {
       const time = 200_000 + row * 14;
       for (const column of row % 2 === 0 ? [0, 1] : [2, 3]) notes.push({ column, time });
     }
-    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
+    const map = parseManiaBeatmap(buildOsuFile(notes));
+    expect(detectRiceVibro(map)).toBe(false);
+    expect(analyzeVibroSections(map).status).toBe("adjusted");
   });
 
   it("leaves the legit row-density ceiling alone", () => {
@@ -228,7 +231,8 @@ describe("detectRiceVibro", () => {
     }
     const map = parseManiaBeatmap(buildOsuFile(notes));
     expect(detectRiceVibro(map)).toBe(false);
-    expect(detectRiceVibro(map, 1.5)).toBe(true);
+    expect(detectRiceVibro(map, 1.5)).toBe(false);
+    expect(analyzeVibroSections(map, 1.5).status).toBe("adjusted");
   });
 
   it("flags fast chord jacks that alternate chord sizes (tier 5)", () => {
@@ -308,8 +312,9 @@ describe("detectRiceVibro", () => {
       }
     }
     const localizedMap = parseManiaBeatmap(buildOsuFile(localized));
-    expect(detectRiceVibro(localizedMap, 1.7)).toBe(true);
+    expect(detectRiceVibro(localizedMap, 1.7)).toBe(false);
     expect(detectRateVibro(localizedMap, 1.7)).toBe(false);
+    expect(analyzeVibroSections(localizedMap, 1.7).status).toBe("adjusted");
 
     // Likewise, scaling the broad same-column tier catches sustained 210BPM
     // DT jack, but the rate-safe detector deliberately does not: it is neither
@@ -324,7 +329,7 @@ describe("detectRiceVibro", () => {
     const jackMap = parseManiaBeatmap(buildOsuFile(jacks));
     expect(detectRiceVibro(jackMap)).toBe(false);
     expect(detectRiceVibro(jackMap, 1.5)).toBe(true);
-    expect(detectRateVibro(jackMap, 1.5)).toBe(false);
+    expect(detectRateVibro(jackMap, 1.5)).toBe(true); // Same sustained jack at the same physical speed.
   });
 
   it("ignores tiny charts", () => {
@@ -377,15 +382,16 @@ describe("sustained chord vibro at rate", () => {
     expect(detectRateVibro(map, 1.7)).toBe(true);
   });
 
-  it("recognizes faster chord repeats without lowering the slower-repeat floor", () => {
+  it("recognizes sustained fast chords without letting easy filler dilute them", () => {
     // More ordinary material brings the column share down to 36%, below the
     // 70ms band's 40% floor. Repeats at 55ms still carry the fast chord demand.
     const fast = mixedChordChart(82, 400, 1000);
     expect(detectRateVibro(fast)).toBe(false);
     expect(detectRollVibro(fast, 1.5)).toBe(false);
     expect(detectRateVibro(fast, 1.5)).toBe(true);
-    // The same proportions at 67ms remain below the slower band's floor.
-    expect(detectRateVibro(mixedChordChart(100, 400, 1000), 1.5)).toBe(false);
+    // A long 67ms repeated-chord section is still substantial after adding
+    // easy singles. Local structure and time/note coverage now decide it.
+    expect(detectRateVibro(mixedChordChart(100, 400, 1000), 1.5)).toBe(true);
     expect(detectRateVibro(mixedChordChart(82, 20, 1000), 1.5)).toBe(false);
   });
 
@@ -400,6 +406,8 @@ describe("sustained chord vibro at rate", () => {
 
   it("does not turn duplicated single-column notes into repeated chords", () => {
     const notes = Array.from({ length: 400 }, (_, row) => ({ column: 0, time: 1000 + row * 100 }));
-    expect(detectRateVibro(parseManiaBeatmap(buildOsuFile([...notes, ...notes])), 1.5)).toBe(false);
+    const result = analyzeVibroSections(parseManiaBeatmap(buildOsuFile([...notes, ...notes])), 1.5);
+    expect(result.status).toBe("excluded"); // Sustained single-finger vibro.
+    expect(result.sections.every((section) => !section.reasons.includes("sustained_chords") && !section.reasons.includes("repeated_chord"))).toBe(true);
   });
 });

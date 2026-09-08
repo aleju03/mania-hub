@@ -11,4 +11,8 @@
 // came from the kNN can move, in both directions, and the ones that were pinned
 // at 15 gain their real level.
 // Earlier bumps: `git log -S DAN_ESTIMATE_CACHE_VERSION`.
-export const DAN_ESTIMATE_CACHE_VERSION = 15;
+// v16: localized 4K rice vibro is removed before rating the remaining chart.
+// v18: section policy detects sustained streams of short repeated jacks.
+// v19: slower short chord repetitions share sustained walls' speed floor.
+// v20: dense overlapping chord repetitions are localized before rating.
+export const DAN_ESTIMATE_CACHE_VERSION = 20;

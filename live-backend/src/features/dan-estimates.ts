@@ -2,7 +2,8 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
-import { computeMsd, msdChartErrorFallback } from "../dan/msd.js";
+import { computeMsd, msdChartErrorFallback, type MsdResult } from "../dan/msd.js";
+import type { VibroAnalysis } from "../dan/vibro-sections.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -80,10 +81,11 @@ interface ComputedDanEstimate {
   status: DanEstimateStatus;
   value: LeanDanEstimate | null;
   msd: Record<string, number> | null;
+  vibroAnalysis?: VibroAnalysis;
 }
 
 type CachedDanEstimate =
-  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null }
+  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null; vibroAnalysis?: VibroAnalysis }
   | { found: false };
 
 export function normalizeDanEstimateItems(
@@ -203,6 +205,7 @@ export interface RateAdjustedChartAnalysis {
   // way. Null when the estimator has no table for this keymode.
   dan: { label: string; family: string; rawDan: number } | null;
   msd: Record<string, number> | null;
+  vibroAnalysis?: VibroAnalysis;
 }
 
 export async function getRateAdjustedChartAnalysis(
@@ -216,18 +219,18 @@ export async function getRateAdjustedChartAnalysis(
 
   const cached = await readCachedDanEstimate(db, request);
   if (cached.found && (cached.msd != null || cached.status === "unavailable")) {
-    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd);
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis);
   }
   if (cached.found) {
     // The verdict was cached before MSD was stored beside it (the batch
     // endpoint and its job still store the dan alone). Fill in the MSD rather
     // than re-running the estimator for a verdict already in hand.
     const msd = await fillCachedRateMsd(db, osu, request);
-    return toRateAdjustedAnalysis(request, cached.status, cached.value, msd);
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, msd?.values ?? null, msd?.vibroAnalysis);
   }
 
   const computed = await computeAndStoreDanEstimate(db, osu, request, "api:chart_analysis_rate", { withMsd: true });
-  return toRateAdjustedAnalysis(request, computed.status, computed.value, computed.msd);
+  return toRateAdjustedAnalysis(request, computed.status, computed.value, computed.msd, computed.vibroAnalysis);
 }
 
 function toRateAdjustedAnalysis(
@@ -235,6 +238,7 @@ function toRateAdjustedAnalysis(
   status: DanEstimateStatus,
   estimate: LeanDanEstimate | null,
   msd: Record<string, number> | null,
+  vibroAnalysis?: VibroAnalysis,
 ): RateAdjustedChartAnalysis {
   return {
     beatmapId: request.beatmapId,
@@ -243,6 +247,7 @@ function toRateAdjustedAnalysis(
     status,
     dan: estimate ? { label: estimate.displayName, family: estimate.family, rawDan: estimate.rawDan } : null,
     msd,
+    ...(vibroAnalysis ? { vibroAnalysis } : {}),
   };
 }
 
@@ -251,7 +256,7 @@ async function fillCachedRateMsd(
   db: Db,
   osu: OsuApiClient,
   request: NormalizedDanEstimateRequest,
-): Promise<Record<string, number> | null> {
+): Promise<MsdResult | null> {
   let parsed: ParsedDanBeatmap;
   try {
     parsed = await getParsedDanBeatmap(db, osu, request.beatmapId, "api:chart_analysis_rate");
@@ -266,7 +271,7 @@ async function fillCachedRateMsd(
      where estimator_version = ? and beatmap_id = ? and rate_percent = ?`,
     [JSON.stringify(msd), nowIso(), DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent],
   );
-  return msd.values;
+  return msd;
 }
 
 export async function enqueueDanEstimate(queue: JobQueue, request: NormalizedDanEstimateRequest): Promise<void> {
@@ -296,7 +301,7 @@ async function computeAndStoreDanEstimate(
   options: { withMsd?: boolean } = {},
 ): Promise<ComputedDanEstimate> {
   const cached = await readCachedDanEstimate(db, request);
-  if (cached.found) return { status: cached.status, value: cached.value, msd: cached.msd };
+  if (cached.found) return { status: cached.status, value: cached.value, msd: cached.msd, vibroAnalysis: cached.vibroAnalysis };
 
   const starRating = await readBeatmapStarRating(db, request.beatmapId);
   let parsed: ParsedDanBeatmap;
@@ -388,7 +393,7 @@ async function classifyAndStoreDanEstimate(
     msdJson: msd ? JSON.stringify(msd) : null,
   });
 
-  return { status: "ready", value: lean, msd: msd?.values ?? null };
+  return { status: "ready", value: lean, msd: msd?.values ?? null, vibroAnalysis: classification.vibroAnalysis };
 }
 
 /**
@@ -597,6 +602,7 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
   if (!row) return { found: false };
   const status = String(row.status ?? "");
   const msd = readStoredMsd(row.msd_json);
+  const vibroAnalysis = parseJson<MsdResult | null>(row.msd_json, null)?.vibroAnalysis;
   if (status === "unsupported" || status === "unavailable") {
     return { found: true, status, value: null, msd };
   }
@@ -619,6 +625,7 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
     found: true,
     status: "ready",
     msd,
+    vibroAnalysis,
     value: {
       label,
       variant: row.variant == null ? null : String(row.variant),

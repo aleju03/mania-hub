@@ -11,6 +11,12 @@ import {
   runVibroRecomputeJob,
 } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
+import { localizedVibroFixture } from "./vibro-fixtures.js";
+import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
+import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
+import { prepareVibroChart } from "../src/dan/vibro-sections.js";
+import { getRateAdjustedChartAnalysis } from "../src/features/dan-estimates.js";
+import { OsuApiClient } from "../src/osu/client.js";
 
 let dir = "";
 
@@ -85,6 +91,54 @@ async function seedAnalyzedChart(db: Db, beatmapId: number, gapMs: number): Prom
 }
 
 describe("vibro recompute sweep", () => {
+  it("restarts an older detector's continuation instead of skipping already-scanned charts", async () => {
+    const db = await makeDb();
+    await seedAnalyzedChart(db, 1, 20);
+    await runVibroRecomputeJob(db, new JobQueue(db), { cursor: 999, revision: "vibro_recompute_done:v9" });
+    const row = (await exec(db, "select classification_json from beatmap_chart_analysis where beatmap_id = 1")).rows[0];
+    expect(JSON.parse(String(row.classification_json)).vibro).toBe(true);
+  });
+
+  it("restores old false positives and replaces inflated base and rate values with adjusted ratings", async () => {
+    const db = await makeDb();
+    await seedAnalyzedChart(db, 1, 100);
+    await storeCachedBeatmapFile(db, 1, localizedVibroFixture(), { source: "test" });
+    const now = "2026-09-07T00:00:00Z";
+    await exec(db, `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, updated_at)
+      values (10, 'Test', 'Test', 'Test', 'graveyard', '{}', ?)`, [now]);
+    await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, version, metadata_json, updated_at)
+      values (1, 10, 'mania', 'graveyard', 4, 5, 'test', '{"total_length":120,"mode":"mania"}', ?)`, [now]);
+    await exec(db, `insert into beatmap_skill_vectors (beatmap_id, analysis_version, status, skills_json, updated_at)
+      values (1, ?, 'ready', '{"primary":"stream","patterns":{}}', ?)`, [ACTIVITY_SKILL_ANALYSIS_VERSION, now]);
+    await exec(db, `update beatmap_chart_analysis set classification_json = '{"lnRatio":0,"vibro":true}',
+      msd_json = '{"values":{"Overall":999}}', msd_overall = 999,
+      msd_dt_json = '{"values":{"Overall":999}}', dan_dt_json = '{"rawDan":99}' where beatmap_id = 1`);
+    await exec(db, "update map_search_index set vibro = 1 where beatmap_id = 1");
+    await recomputeVibroChunk(db, 0);
+    const row = (await exec(db, "select * from beatmap_chart_analysis where beatmap_id = 1")).rows[0];
+    const classification = JSON.parse(String(row.classification_json));
+    expect(classification.vibro).toBe(false);
+    expect(classification.vibroAnalysis.status).toBe("adjusted");
+    expect(Number(row.msd_overall)).toBeLessThan(999);
+    const dt = JSON.parse(String(row.msd_dt_json));
+    expect(dt.values.Overall).toBeLessThan(999);
+    expect(dt.vibroAnalysis.status).toBe("adjusted");
+    expect(Number((await exec(db, "select vibro from map_search_index where beatmap_id = 1")).rows[0].vibro)).toBe(0);
+
+    // Arbitrary-rate responses preserve the explanation on cache hits too.
+    const osu = { getBeatmapFile: async () => { throw new Error("No network"); } } as unknown as OsuApiClient;
+    const fresh = await getRateAdjustedChartAnalysis(db, osu, 1, 1.2);
+    const cached = await getRateAdjustedChartAnalysis(db, osu, 1, 1.2);
+    expect(fresh?.vibroAnalysis?.status).toBe("adjusted");
+    expect(cached).toEqual(fresh);
+
+    // Running again on clean material clears the previous adjustment metadata.
+    await storeCachedBeatmapFile(db, 1, prepareVibroChart(localizedVibroFixture()).osuText, { source: "test" });
+    await recomputeVibroChunk(db, 0);
+    const clean = JSON.parse(String((await exec(db, "select classification_json from beatmap_chart_analysis where beatmap_id = 1")).rows[0].classification_json));
+    expect(clean.vibroAnalysis.status).toBe("clean");
+  });
+
   it("flags staggered LN spam and patches analysis + index, leaving legit LN charts alone", async () => {
     const db = await makeDb();
     await seedAnalyzedChart(db, 1, 20); // vibro: 20ms staggered hold rows

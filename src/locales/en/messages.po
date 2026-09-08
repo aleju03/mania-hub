@@ -2128,6 +2128,12 @@ msgstr "Accent colour"
 msgid "Accept"
 msgstr "Accept"
 
+#. placeholder {0}: formatAccuracy(quality.stableAccuracy)
+#. placeholder {1}: quality.od
+#: src/components/maps/MapDetailModal.tsx
+msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+msgstr "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+
 #: src/components/layout/Nav.tsx
 msgid "Account"
 msgstr "Account"
@@ -2174,6 +2180,10 @@ msgstr "Accuracy <0>{0}</0>"
 #: src/routes/terms.tsx
 msgid "Accuracy And Availability"
 msgstr "Accuracy And Availability"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Accuracy below skill rating range"
+msgstr "Accuracy below skill rating range"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
@@ -2380,6 +2390,11 @@ msgstr "Adding you…"
 #: src/routes/report.tsx
 #~ msgid "Additional information you sent"
 #~ msgstr "Additional information you sent"
+
+#. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
+msgstr "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -4789,6 +4804,10 @@ msgstr "Deselect {0}"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
 msgstr "Detected in the .osk"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Detected sections"
+msgstr "Detected sections"
 
 #: src/routes/discord.tsx
 msgid "dev preview"
@@ -8744,6 +8763,10 @@ msgstr "No mods"
 msgid "No mods in top plays"
 msgstr "No mods in top plays"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "No MSD rating"
+msgstr "No MSD rating"
+
 #: src/components/farm-helper/FarmersList.tsx
 msgid "No nearby players have farmed this yet."
 msgstr "No nearby players have farmed this yet."
@@ -10693,36 +10716,52 @@ msgid "Rate mods count, and they count for what the chart is worth at that speed
 msgstr "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x), at <2/> or <3/> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. A speed nobody has rated that chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to start counting."
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+
+#: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
+msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 #~ msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
 
 #: src/components/player/SkillBreakdown.tsx
-msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
-msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
+#~ msgstr "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, vibro plays excluded"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
@@ -13058,6 +13097,10 @@ msgstr "Sure? The card leaves the collection"
 #~ msgid "Sure? The five cards are used up"
 #~ msgstr "Sure? The five cards are used up"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+msgstr "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
+
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
@@ -15205,6 +15248,10 @@ msgstr "Vibro detected in this chart. This play does not count toward skill or d
 msgid "Vibro detected. This play does not count toward skill or dan ratings."
 msgstr "Vibro detected. This play does not count toward skill or dan ratings."
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
+msgstr "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"
 msgstr "Video URL or id"
@@ -16078,11 +16125,3 @@ msgstr "Your wishlist"
 #: src/routes/bbcode.tsx
 msgid "YouTube video"
 msgstr "YouTube video"
-
-#: src/components/maps/MapDetailModal.tsx
-msgid "Accuracy below skill rating range"
-msgstr "Accuracy below skill rating range"
-
-#: src/components/maps/MapDetailModal.tsx
-msgid "No MSD rating"
-msgstr "No MSD rating"

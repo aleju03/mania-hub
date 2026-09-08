@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import type { VibroAnalysis } from "#dan/vibro-sections";
+import type { VibroClearEvidenceSummary } from "#dan/vibro-clear-evidence";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
@@ -14,6 +16,8 @@ import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource
 export type LivePlayerSkills = MyDataSkillBreakdown;
 
 export interface LivePlayerSkillPlay {
+  vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
+  vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
   beatmapsetId: number | null;
   title: string;
@@ -2158,6 +2162,7 @@ export interface LiveMapSearchEntry {
   // once the DT-rate sweep covers the chart; used to show real DT difficulty.
   danDt?: { label: string; family: string; rawDan: number } | null;
   msdDt?: Record<string, number> | null;
+  vibroAnalysisDt?: VibroAnalysis;
   // LN-adjusted (tail-aware) MSD at 1.0x for hold-bearing charts, on bulk
   // search rows and diffs as well as the single-map detail entry (absent only
   // on payloads cached before the field shipped). Already blended server-side;
@@ -2379,6 +2384,7 @@ export interface LiveChartAnalysisCluster {
 // in the in-house vocabulary plus the LeoBlack cluster readout. Backs the map
 // detail modal's keymode-honest pattern strip for non-4K charts.
 export interface LiveChartAnalysisDetail {
+  vibroAnalysis?: VibroAnalysis;
   beatmapId: number;
   status: string;
   keyCount: number | null;
@@ -2409,6 +2415,7 @@ export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveCha
 // "unsupported" is a keymode the estimator has no table for (MSD can still be
 // there), "unavailable" means the .osu is gone from every mirror.
 export interface LiveRateChartAnalysis {
+  vibroAnalysis?: VibroAnalysis;
   beatmapId: number;
   rate: number;
   ratePercent: number;

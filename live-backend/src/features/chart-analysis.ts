@@ -23,6 +23,7 @@ import { MSD_SKILLSETS } from "./farm-helper-shape.js";
 import { inspectChartDanEligibility, type ChartDanEligibility } from "../dan/dan-eligibility.js";
 import { classifyFourKeyJackDemand, type FourKeyJackDemandVerdict } from "../dan/jack-demand.js";
 import { motionFeatures, type MotionFeatures } from "../dan/motion-features.js";
+import { analyzeVibroSections, usesSectionVibro, type VibroAnalysis } from "../dan/vibro-sections.js";
 
 // Per-beatmap chart analysis at 1.0x: the unified classifier verdict (dan
 // estimate, pattern clusters, in-house pattern hits) plus the Etterna MSD
@@ -54,6 +55,7 @@ interface LeanChartClassification {
   lnRatio: number;
   sunnySr: number | null;
   vibro: boolean;
+  vibroAnalysis?: VibroAnalysis;
   danEligibility: ChartDanEligibility;
   verdictText: string | null;
   rc: LeanVerdictHalf | null;
@@ -110,6 +112,7 @@ function leanClassification(
     lnRatio: classification.lnRatio,
     sunnySr: classification.sunnySr,
     vibro: classification.vibro,
+    ...(classification.vibroAnalysis ? { vibroAnalysis: classification.vibroAnalysis } : {}),
     danEligibility: classification.danEligibility,
     verdictText: classification.verdictText,
     rc: leanHalf(classification.rc),
@@ -813,14 +816,14 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 // Vibro detectors arrive after the corpus was analyzed (v1: LN vibro; v2: rice
 // vibro for sustained jack hammering and 4K chord walls). Re-running every
 // analysis (a CHART_ANALYSIS_VERSION bump) would burn hours of CPU to refresh
-// one boolean; instead a boot-seeded job sweeps unflagged charts from the
-// cached .osu corpus once per meta-key version, patches classification_json
-// and the search index in place, and marks itself done in live_meta. Purely
-// local work, no osu! API.
+// one boolean. The v9 section policy also revisits flagged 4K rice charts,
+// restoring false positives and recomputing localized-section ratings and
+// existing rate columns. The sweep remains cached-file-only, with cooperative
+// yields between charts. No osu! API calls.
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v8";
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v12";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {
@@ -838,11 +841,11 @@ export async function recomputeVibroChunk(
 ): Promise<VibroRecomputeChunkResult> {
   const rows = (await exec(
     db,
-    `select a.beatmap_id as beatmap_id
+    `select a.beatmap_id as beatmap_id, a.classification_json, a.msd_dt_json, a.msd_ht_json
      from beatmap_chart_analysis a
      where a.analysis_version = ? and a.status = 'ready'
        and a.beatmap_id > ?
-       and coalesce(json_extract(a.classification_json, '$.vibro'), 0) != 1
+       and (a.key_count = 4 or coalesce(json_extract(a.classification_json, '$.vibro'), 0) != 1)
      order by a.beatmap_id
      limit ?`,
     [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
@@ -856,14 +859,47 @@ export async function recomputeVibroChunk(
     const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
     if (!osuText) continue;
     let vibro = false;
+    let map;
     try {
-      const map = parseManiaBeatmap(osuText);
+      map = parseManiaBeatmap(osuText);
       vibro = detectRiceVibro(map) || detectLnVibro(map);
     } catch {
       continue;
     }
     // Parsing is the CPU burst; yield between charts so ingest/SSE keep moving.
     await new Promise<void>((resolve) => setImmediate(resolve));
+    if (usesSectionVibro(map)) {
+      const old = parseJson<LeanChartClassification | null>(row.classification_json, null);
+      const analysis = analyzeVibroSections(map);
+      if (vibro && !old?.vibro) flagged.push(beatmapId);
+      if (options.dryRun) continue;
+      // Recompute affected numbers, not just the flag. Clear prior false
+      // positives too; the old add-only sweep could never restore a chart.
+      if (analysis.status === "adjusted" || old?.vibroAnalysis?.status === "adjusted" || old?.vibro !== vibro) {
+        const star = Number((await exec(db, "select difficulty_rating from beatmaps where beatmap_id = ?", [beatmapId])).rows[0]?.difficulty_rating ?? 0);
+        const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(msdChartErrorFallback);
+        if (!msd) throw new Error(`Vibro repair could not rate chart ${beatmapId}`);
+        const classification = await classifyChartWithCompanella(map, osuText, { starRating: star || undefined }, { msdValues: msd.values });
+        const lean = leanClassification(classification, computeNoteBpm(osuText), motionFeatures(map.notes, map.keyCount));
+        const tails = lean.lnRatio > LN_TAIL_MIN_RATIO
+          ? await computeMsd(osuText, { keyCount: map.keyCount, lnTailTaps: true }).catch(msdChartErrorFallback) : null;
+        await exec(db, `update beatmap_chart_analysis set classification_json = ?, msd_json = ?, msd_ln_json = ?,
+          primary_label = ?, primary_family = ?, raw_dan = ?, msd_overall = ?, updated_at = ?
+          where beatmap_id = ? and analysis_version = ?`,
+        [json(lean), json(msd), tails ? json(tails) : null, lean.primary?.displayName ?? null,
+          lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+          lean.primary?.rawDan ?? null, msd.values.Overall ?? null, nowIso(), beatmapId, CHART_ANALYSIS_VERSION]);
+        await import("./map-search.js").then((module) => module.upsertMapSearchIndexRow(db, beatmapId));
+      } else {
+        await exec(db, `update beatmap_chart_analysis set classification_json = json_set(classification_json,
+          '$.vibroAnalysis', json(?)) where beatmap_id = ? and analysis_version = ?`,
+        [json(analysis), beatmapId, CHART_ANALYSIS_VERSION]);
+      }
+      // Previously materialized rates must follow the same section policy.
+      if (row.msd_dt_json != null && !await storeDtRateVerdict(db, beatmapId)) throw new Error(`Vibro DT repair failed for ${beatmapId}`);
+      if (row.msd_ht_json != null && !await storeHtRateVerdict(db, beatmapId)) throw new Error(`Vibro HT repair failed for ${beatmapId}`);
+      continue;
+    }
     if (!vibro) continue;
 
     flagged.push(beatmapId);
@@ -895,8 +931,11 @@ export async function ensureVibroRecomputeSeeded(db: Db, queue: JobQueue): Promi
   await enqueueVibroRecompute(queue, 0);
 }
 
-export async function runVibroRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
-  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+export async function runVibroRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number; revision?: string } | undefined): Promise<void> {
+  // A continuation queued before a deploy must not skip the prefix that was
+  // scanned by the old detector, then mark the new revision complete.
+  const cursor = payload?.revision === VIBRO_RECOMPUTE_META_KEY
+    ? Math.max(0, Math.floor(Number(payload.cursor ?? 0))) : 0;
   const result = await recomputeVibroChunk(db, cursor);
   if (result.done) {
     const now = nowIso();
@@ -927,7 +966,7 @@ async function enqueueVibroRecompute(queue: JobQueue, cursor: number): Promise<v
   await queue.enqueue(
     VIBRO_RECOMPUTE_JOB,
     `${VIBRO_RECOMPUTE_JOB}:${cursor}`,
-    { cursor },
+    { cursor, revision: VIBRO_RECOMPUTE_META_KEY },
     { priority: -10, replaceDone: true },
   );
 }
@@ -2247,6 +2286,7 @@ export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boo
 
     const lean = leanClassification(classification);
     const danDt = {
+      vibroAnalysis: lean.vibroAnalysis,
       primaryLabel: lean.primary?.displayName ?? null,
       primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
       rawDan: lean.primary?.rawDan ?? null,
@@ -3286,6 +3326,7 @@ export async function recomputeSunnyRepinDtChunk(
 
       const lean = leanClassification(classification);
       const danDt = {
+        vibroAnalysis: lean.vibroAnalysis,
         primaryLabel: lean.primary?.displayName ?? null,
         primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
         rawDan: lean.primary?.rawDan ?? null,
@@ -3587,6 +3628,7 @@ export async function recomputeLeoblackRepinDtChunk(
 
       const lean = leanClassification(classification);
       const danDt = {
+        vibroAnalysis: lean.vibroAnalysis,
         primaryLabel: lean.primary?.displayName ?? null,
         primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
         rawDan: lean.primary?.rawDan ?? null,

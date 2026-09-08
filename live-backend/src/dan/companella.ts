@@ -4,6 +4,7 @@
 import type { ManiaBeatmap } from "./beatmap-parser.js";
 import { classifyChart, type ChartClassification, type ClassifyChartInput } from "./chart-classifier.js";
 import { getInputRate } from "./dan-estimator/labels.js";
+import { prepareVibroChart } from "./vibro-sections.js";
 import { computeMsd, msdChartErrorFallback } from "./msd.js";
 import type { CompanellaEstimate } from "../../vendor/leoblack/estimator/companellaEstimator.js";
 
@@ -87,7 +88,7 @@ export async function classifyChartWithCompanella(
   if (!first.companellaPending || first.sunnySr == null) return first;
 
   const companella = await computeCompanellaEstimate({
-    osuText,
+    osuText: prepareVibroChart(osuText, getInputRate(input), map).osuText,
     rate: getInputRate(input),
     keyCount: map.keyCount,
     sunnyStar: first.sunnySr,

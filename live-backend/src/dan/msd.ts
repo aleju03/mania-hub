@@ -1,4 +1,6 @@
 import { computeMsdOnThread, MsdThreadUnavailableError } from "./msd-thread.js";
+import { prepareVibroChart, usesSectionVibro, VIBRO_SECTION_VERSION, type VibroAnalysis } from "./vibro-sections.js";
+import { parseManiaBeatmap } from "./beatmap-parser.js";
 
 // Thin backend facade over the vendored MinaCalc wasm harness
 // (vendor/leoblack/ett). calc.js handles the Node specifics itself (wasmBinary
@@ -8,6 +10,8 @@ import { computeMsdOnThread, MsdThreadUnavailableError } from "./msd-thread.js";
 export interface MsdResult {
   etternaVersion: string;
   values: Record<string, number>;
+  vibroAnalysis?: VibroAnalysis;
+  vibroVersion?: number;
 }
 
 export interface MsdOptions {
@@ -93,5 +97,9 @@ export async function computeMsd(
   const keyCount = options.keyCount;
   if (keyCount != null && !isMsdSupportedKeyCount(keyCount)) return null;
 
-  return computeMsdOnThread(osuText, options);
+  const map = parseManiaBeatmap(osuText);
+  const prepared = prepareVibroChart(osuText, options.rate ?? 1, map);
+  const msd = await computeMsdOnThread(prepared.osuText, options);
+  return msd ? { ...msd, vibroVersion: VIBRO_SECTION_VERSION,
+    ...(usesSectionVibro(map) ? { vibroAnalysis: prepared.analysis } : {}) } : null;
 }

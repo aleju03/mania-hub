@@ -15,11 +15,14 @@ import { invertManiaOsuText } from "../dan/invert-mod.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
-import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
+import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreHitCounts, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor, detectRateVibro } from "../dan/chart-classifier.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
+import { analyzeVibroSections, conservativeVibroAccuracy, usesSectionVibro, type VibroAnalysis } from "../dan/vibro-sections.js";
+import { assessVibroClear, summarizeVibroClear, type VibroClearEvidence, type VibroClearEvidenceSummary, type VibroClearInput } from "../dan/vibro-clear-evidence.js";
+import { inspectChartDanEligibility } from "../dan/dan-eligibility.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
@@ -61,7 +64,23 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v29 (current): retains sub-MSD-floor passes separately for Dan credit and
+// v34 (current): accepts individual high-quality clears of flagged 4K rice
+// charts from judgement evidence, without changing any chart's vibro flag.
+//
+// v33: rechecks dense overlapping chord repetitions even when
+// changing shapes and light rows interrupt the old consecutive-row detector.
+//
+// v32: restores slower repeated chord bursts after aligning their
+// speed floor with sustained walls. Rechecks exclusions and adjusted ratings.
+//
+// v31: rechecks sustained streams of short repeated jacks, including
+// fixed jumps with quad accents that the first section policy missed.
+//
+// v30: rates localized 4K rice vibro from the remaining notes, with
+// conservative accuracy. Rechecks all speeds and restores obsolete exclusions;
+// affected SSRs are recomputed before receiving the current detector stamp.
+//
+// v29: retains sub-MSD-floor passes separately for Dan credit and
 // rejection explanations, without inventing SSRs. Prior SSRs remain reusable.
 //
 // v28: only the best two Overall SSRs per verified chart family
@@ -95,7 +114,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 29;
+export const PLAYER_SKILLS_VERSION = 34;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -117,7 +136,7 @@ export const PLAYER_SKILLS_VERSION = 29;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -648,6 +667,8 @@ export const PLAYER_SKILL_PATTERN_AXES = [
 ] as const;
 
 export interface PlayerSkillPlay {
+  vibroAdjustment?: StoredPlaySsr["vibroAdjustment"];
+  vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
   beatmapsetId: number | null;
   title: string;
@@ -780,6 +801,9 @@ export interface StoredPlaySsr {
   // its separate exclusion record. Absent means unchecked, and the
   // retention pass checks it on the next compute.
   rateVibroChecked?: number;
+  /** Rating-only adjustment; original score accuracy and goal stay intact. */
+  vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
+  vibroClearEvidence?: VibroClearEvidence;
   // True when the play was set under lazer's Invert mod and so was rated (SSR
   // and dan alike) against the inverted chart (dan/invert-mod.ts) rather than
   // the stored one. Its slot key carries it, so it never displaces a plain
@@ -803,6 +827,8 @@ export interface StoredVibroExclusion {
   play: StoredPlaySsr;
   reason: "chart_vibro" | "rate_vibro";
   checkedVersion: number;
+  /** Invalidate a cached rejection when osu! corrects this score's counts. */
+  judgementSignature?: string;
 }
 
 interface StoredPlayerSkillPlays {
@@ -1835,6 +1861,7 @@ function rateVerdictPairFor(play: StoredPlaySsr): RateDanVerdictPair | null {
     if (percent < MIN_RATE_PERCENT || percent > MAX_RATE_PERCENT) return null;
     return { beatmapId: play.beatmapId, ratePercent: percent, modVariant: INVERSE_MOD_VARIANT };
   }
+  if ((play.vibroAdjustment || play.vibroClearEvidence) && play.rate === 1) return { beatmapId: play.beatmapId, ratePercent: 100 };
   const ratePercent = clearRatePercent(play.rate);
   return ratePercent == null ? null : { beatmapId: play.beatmapId, ratePercent };
 }
@@ -1871,8 +1898,8 @@ function missingRateVerdictPairs(
     const info = infoByBeatmap.get(play.beatmapId);
     if (!info) continue;
     // The sweeps' columns only describe the stored chart, never a mod variant.
-    if (pair.modVariant == null && pair.ratePercent === 150 && info.dtFamily != null) continue;
-    if (pair.modVariant == null && pair.ratePercent === 75 && info.htFamily != null) continue;
+    if (!play.vibroAdjustment && !play.vibroClearEvidence && pair.modVariant == null && pair.ratePercent === 150 && info.dtFamily != null) continue;
+    if (!play.vibroAdjustment && !play.vibroClearEvidence && pair.modVariant == null && pair.ratePercent === 75 && info.htFamily != null) continue;
     const key = rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant);
     if (rateVerdicts.has(key)) continue;
     missing.set(key, pair);
@@ -1964,7 +1991,7 @@ function danClearTargetFor(
 ): DanClearTarget | null {
   const target = (rawDan: number | null, side: "rc" | "ln", label: string | null): DanClearTarget | null =>
     rawDan == null ? null : { rawDan, side, label };
-  if (play.inverse) {
+  if (play.inverse || play.vibroAdjustment || play.vibroClearEvidence) {
     // Rated against the inverted chart, whose verdict is its own row at every
     // rate (the chart-analysis columns describe the chart before the mod).
     const pair = rateVerdictPairFor(play);
@@ -2084,6 +2111,7 @@ function collectDanClears(
       // For a stable-only row judged against a v2 bar, threshold is already
       // the converted 97.5%, so the credit window and the bonus headroom both
       // shift with it: the whole scale rides the converted bar, deliberately.
+      if (play.vibroAdjustment) accuracy = conservativeVibroAccuracy(accuracy, play.vibroAdjustment.judgementShare);
       const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount);
       if (creditedDan == null) {
         // The bar is where a clear credits the chart's full dan, but a pass
@@ -2571,29 +2599,36 @@ const MAX_CALC_RUNS_PER_COMPUTE = 150;
 // the result is corpus-shared, so a backlog drains across computes quickly.
 const MAX_RATE_VERDICT_COMPUTES = 24;
 
-// The stored vibro flag is the chart at 1.0x, so a chart that only becomes
-// vibro under rate (a 163BPM 1/16 roll file is a 61ms per-finger shake at
-// 1.5x; chart-classifier's roll tier) rated as a legit hard play. Rate plays
-// without pp-backed trust and all 4K uprates run the rate-calibrated roll,
-// chord-wall and sustained-chord tiers at the played rate. See detectRateVibro
-// for why the other tiers stay at 1.0x. This reads the cached .osu: parse
-// only, no MinaCalc, and the verdict is stamped on
-// the stored play so a chart is checked once per detector version. Bump when
-// the tier changes so stored plays re-check on their next compute.
-export const RATE_VIBRO_CHECK_VERSION = 4;
+// All 4K rice plays use the same local timing policy, including 1.0x. A
+// detector stamp certifies both eligibility and any section-adjusted SSR;
+// restoring an old exclusion with no SSR therefore requires a calculator pass.
+// Hold-heavy and wider-key charts retain their legacy trust policy.
+export const RATE_VIBRO_CHECK_VERSION = 9;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
 
-/** Ranked trust applies to the base chart, not to a faster 4K pattern.
- * Wider keymodes retain their prior policy until they are rate-calibrated. */
+/** 4K needs the file even at 1.0x to determine section-policy applicability. */
 export function shouldCheckRateVibro(keyCount: number, rate: number, hasPpTrust: boolean): boolean {
-  return rate !== 1 && (!hasPpTrust || (keyCount === 4 && rate > 1));
+  return keyCount === 4 || (rate !== 1 && !hasPpTrust);
 }
 
-function chartVibroAtRate(osuText: string, rate: number): boolean | null {
+function chartVibroAtRate(osuText: string, rate: number, hasPpTrust: boolean, baseVibro: boolean,
+  quality: VibroClearInput, odOverride?: number | null) {
   try {
-    return detectRateVibro(parseManiaBeatmap(osuText), rate);
+    const map = parseManiaBeatmap(osuText);
+    const analysis = usesSectionVibro(map) ? analyzeVibroSections(map, rate) : null;
+    const clearEvidence = analysis?.status === "excluded" && inspectChartDanEligibility(map).eligible
+      ? assessVibroClear(quality, odOverride ?? map.od) : undefined;
+    return {
+      vibro: analysis ? analysis.status === "excluded" && !clearEvidence
+        : (!hasPpTrust && baseVibro) || (rate !== 1 && detectRateVibro(map, rate)),
+      clearEvidence,
+      adjustment: analysis?.status === "adjusted" ? {
+        excludedDurationMs: analysis.excludedDurationMs, timeShare: analysis.timeShare,
+        noteShare: analysis.noteShare, judgementShare: analysis.judgementShare,
+      } : undefined,
+    };
   } catch {
     return null;
   }
@@ -2656,10 +2691,8 @@ export async function computePlayerSkillRatings(
   // reuse key, so an OD landing later shifts the goal and the play recomputes.
   const odByBeatmap = await loadBeatmapOds(db, [...topPlays.map(beatmapIdOf), ...trackedScores.map(beatmapIdOf)]);
 
-  // A top play means pp was awarded, so the chart is ranked - and true vibro
-  // does not pass mania ranking criteria. A vibro flag on such a chart is the
-  // detector misfiring on dense legit jacks, so pp-backed charts are trusted
-  // and the vibro exclusion only applies to tracked-history charts.
+  // PP-backed trust remains the legacy policy for hold-heavy/wider charts.
+  // 4K rice uses the actual note structure for every source and speed.
   const ppBackedChartIds = new Set(
     topPlays.map(beatmapIdOf).filter((id) => Number.isInteger(id) && id > 0),
   );
@@ -2766,12 +2799,19 @@ export async function computePlayerSkillRatings(
   // Keep explanations beside the rated pool. They never seed SSR reuse or
   // enter an aggregate, but survive when the original score ages out.
   const excludedByKey = new Map<string, StoredVibroExclusion>();
+  const judgementSignature = (score: OscScore | undefined) => {
+    if (!score?.statistics) return undefined;
+    const counts = Object.values(getScoreHitCounts(score));
+    return counts.some((count) => count > 0) ? JSON.stringify(counts) : undefined;
+  };
   const excludeVibro = (play: StoredPlaySsr, reason: StoredVibroExclusion["reason"], fresh = false) => {
     const key = playSlotKey(play.beatmapId, play.rate, play.inverse);
     const previous = excludedByKey.get(key);
-    if (!previous || (fresh && play.identity === previous.play.identity)
+    if (!previous || ((fresh || previous.checkedVersion !== RATE_VIBRO_CHECK_VERSION) && play.identity === previous.play.identity)
       || (play.identity !== previous.play.identity && play.goal >= previous.play.goal)) {
-      excludedByKey.set(key, { play, reason, checkedVersion: RATE_VIBRO_CHECK_VERSION });
+      excludedByKey.set(key, { play, reason, checkedVersion: RATE_VIBRO_CHECK_VERSION,
+        judgementSignature: judgementSignature(scoresByIdentity.get(play.identity)),
+      });
     }
   };
   for (const excluded of options.previousVibroExcluded ?? []) {
@@ -2781,7 +2821,7 @@ export async function computePlayerSkillRatings(
     if (rewritingModIdentities.has(play.identity) || widenedWindowIdentities.has(play.identity)) continue;
     if (play.source !== "top" && untrustedIdentities.has(play.identity)) continue;
     const hasPpTrust = play.source === "top" || ppBackedChartIds.has(play.beatmapId);
-    if (excluded.reason === "chart_vibro" && (hasPpTrust || infoByBeatmap.get(play.beatmapId)?.vibro === false)) continue;
+    if (play.keyCount !== 4 && excluded.reason === "chart_vibro" && (hasPpTrust || infoByBeatmap.get(play.beatmapId)?.vibro === false)) continue;
     if (excluded.reason === "rate_vibro" && !shouldCheckRateVibro(play.keyCount, play.rate, hasPpTrust)) continue;
     const candidateRate = candidateRateByIdentity.get(play.identity);
     if (candidateRate != null && candidateRate !== play.rate) continue;
@@ -2815,8 +2855,8 @@ export async function computePlayerSkillRatings(
       missShare: getMissShare(score.statistics),
       endedAt: score.ended_at ?? score.created_at ?? null,
       rateMod: getRateModAcronym(score.mods),
-      mods: getModAcronyms(score.mods, false),
-      ezWindows: ezWindowScale(score) > 1,
+      mods: score.mods == null ? undefined : getModAcronyms(score.mods, false),
+      ezWindows: score.mods == null ? undefined : ezWindowScale(score) > 1,
       odOverride: difficultyAdjustOd(score.mods),
     };
     const previous = previousByIdentity.get(identity);
@@ -2832,7 +2872,7 @@ export async function computePlayerSkillRatings(
     const chartInfo = infoByBeatmap.get(beatmapId);
     const chartVibro = chartInfo?.vibro && !ppBackedChartIds.has(beatmapId);
     const exclusionKeyCount = chartInfo?.keyCount || (previous?.beatmapId === beatmapId ? previous.keyCount : 0);
-    if (chartVibro && isMsdSupportedKeyCount(exclusionKeyCount)) {
+    if (chartVibro && exclusionKeyCount !== 4 && isMsdSupportedKeyCount(exclusionKeyCount)) {
       excludeVibro(exclusionPlay(exclusionKeyCount), "chart_vibro", true);
       continue;
     }
@@ -2840,6 +2880,9 @@ export async function computePlayerSkillRatings(
     if (previousExclusion?.reason === "rate_vibro"
       && previousExclusion.checkedVersion === RATE_VIBRO_CHECK_VERSION
       && previousExclusion.play.identity === identity
+      && previousExclusion.judgementSignature === judgementSignature(score)
+      && previousExclusion.play.ezWindows === clearEvidence.ezWindows
+      && previousExclusion.play.odOverride === clearEvidence.odOverride
       && shouldCheckRateVibro(previousExclusion.play.keyCount, rate, ppBackedChartIds.has(beatmapId))) {
       // Repeated compute passes must not spend their entire bounded budget
       // on the same already-rejected candidates before reaching the tail.
@@ -2851,7 +2894,10 @@ export async function computePlayerSkillRatings(
       && (goal > SSR_GOAL_MIN || previous.ratingExcluded === true)
       && (previous.inverse === true) === candidate.inverse
     ) {
-      analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence });
+      analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence,
+        // A corrected score must re-earn its exception from the current counts.
+        ...(previous.vibroClearEvidence ? { rateVibroChecked: undefined } : {}),
+      });
       continue;
     }
     if (calcRunsTotal >= MAX_CALC_RUNS_PER_COMPUTE) {
@@ -2875,7 +2921,7 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       continue;
     }
-    if (chartVibro) {
+    if (chartVibro && keyCount !== 4) {
       excludeVibro(exclusionPlay(keyCount), "chart_vibro", true);
       continue;
     }
@@ -2897,28 +2943,41 @@ export async function computePlayerSkillRatings(
     // Ranked 4K uprates also check: PP validates the base chart, not what
     // DT/NC or a custom speed turns its note pattern into.
     let rateVibroChecked: number | undefined;
+    let vibroAdjustment: StoredPlaySsr["vibroAdjustment"];
+    let vibroClearEvidence: StoredPlaySsr["vibroClearEvidence"];
     if (shouldCheckRateVibro(keyCount, rate, ppBackedChartIds.has(beatmapId))) {
       if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
         pendingRateVibroKeys.add(key);
         continue;
       }
       rateVibroChecks += 1;
-      const vibro = chartVibroAtRate(ratedText, rate);
-      if (vibro) {
+      const check = chartVibroAtRate(ratedText, rate, ppBackedChartIds.has(beatmapId), chartInfo?.vibro === true,
+        { ...clearEvidence, statistics: score.statistics, widenedWindows: score.mods == null || ezWindowScale(score) > 1 }, candidate.odOverride);
+      if (check?.vibro) {
         excludeVibro(exclusionPlay(keyCount), "rate_vibro", true);
         continue;
       }
-      if (vibro === false) rateVibroChecked = RATE_VIBRO_CHECK_VERSION;
+      if (check) {
+        rateVibroChecked = RATE_VIBRO_CHECK_VERSION;
+        vibroAdjustment = check.adjustment;
+        vibroClearEvidence = check.clearEvidence;
+      } else {
+        pendingPlays += 1;
+        continue;
+      }
     }
-    if (goal <= SSR_GOAL_MIN) {
+    const ratingGoal = vibroAdjustment ? conservativeVibroAccuracy(goal, vibroAdjustment.judgementShare) : goal;
+    if (ratingGoal <= SSR_GOAL_MIN) {
       analyzedByKey.set(key, {
         ...exclusionPlay(keyCount), values: {}, ratingExcluded: true,
+        ...(vibroAdjustment ? { vibroAdjustment } : {}),
+        ...(vibroClearEvidence ? { vibroClearEvidence } : {}),
         ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
       });
       continue;
     }
     const ssr = await computePlaySsrValues(ratedText, {
-      rate, keyCount, goal,
+      rate, keyCount, goal: ratingGoal,
       lnRatio: candidate.inverse ? 1 : infoByBeatmap.get(beatmapId)?.lnRatio ?? null,
     });
     if (!ssr) {
@@ -2928,6 +2987,8 @@ export async function computePlayerSkillRatings(
     analyzedByKey.set(key, {
       identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: ssr.values, patterns: [], ...clearEvidence,
       ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
+      ...(vibroAdjustment ? { vibroAdjustment } : {}),
+      ...(vibroClearEvidence ? { vibroClearEvidence } : {}),
       ...(candidate.inverse ? { inverse: true } : {}),
     });
     // MinaCalc runs on its own thread. Retain the cooperative yield for the
@@ -2947,8 +3008,18 @@ export async function computePlayerSkillRatings(
   // is now vibro-flagged - unless the chart earned pp-backed trust, either
   // now or when the play was rated (top-sourced plays keep that trust after
   // dropping off the top-200).
-  for (const previous of previousPlays) {
+  // Old exclusion records are durable score evidence too. Reconsider them
+  // even when the source play has aged out, but never reuse their empty SSRs.
+  const reconsidered = [...excludedByKey.values()].filter((entry) => entry.play.keyCount === 4
+    && entry.checkedVersion !== RATE_VIBRO_CHECK_VERSION).map((entry) => ({ ...entry.play,
+    ratingExcluded: entry.play.ratingExcluded || entry.play.goal <= SSR_GOAL_MIN, rateVibroChecked: undefined }));
+  for (let previous of [...previousPlays, ...reconsidered]) {
     if (!previous || !(previous.beatmapId > 0) || !(previous.rate > 0) || !previous.values) continue;
+    if (previous.vibroClearEvidence && scoresByIdentity.has(previous.identity)) {
+      // The fresh candidate may just have failed. Do not resurrect its old
+      // acceptance through retention without checking the corrected counts.
+      previous = { ...previous, rateVibroChecked: undefined };
+    }
     // A stored goal at the calc floor means the play's real accuracy sat at
     // or below it (the clamp erased how far below), so its SSR is the
     // floor's, not the play's. Rated before the sub-floor exclusion existed;
@@ -2973,6 +3044,7 @@ export async function computePlayerSkillRatings(
     if (previous.odOverride != null && daWidensHitWindows(previous.odOverride, (await chartOdFor(previous.beatmapId)) ?? null)) continue;
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
+      previous.keyCount !== 4 &&
       previous.source !== "top" &&
       !ppBackedChartIds.has(previous.beatmapId)
     ) {
@@ -3016,13 +3088,43 @@ export async function computePlayerSkillRatings(
     const ratedText = osuText == null ? null : ratedOsuTextFor(osuText, play.inverse);
     if (ratedText == null) continue;
     rateVibroChecks += 1;
-    const vibro = chartVibroAtRate(ratedText, play.rate);
-    if (vibro) {
+    const check = chartVibroAtRate(ratedText, play.rate,
+      play.source === "top" || ppBackedChartIds.has(play.beatmapId), infoByBeatmap.get(play.beatmapId)?.vibro === true,
+      { ...play, statistics: scoresByIdentity.get(play.identity)?.statistics ?? play.vibroClearEvidence?.statistics,
+        widenedWindows: play.ezWindows === true || play.mods?.includes("EZ")
+          || (play.ezWindows == null && play.mods == null) }, play.odOverride);
+    if (check?.vibro) {
       excludeVibro(play, "rate_vibro");
       analyzedByKey.delete(key);
     }
-    else if (vibro === false) analyzedByKey.set(key, { ...play, rateVibroChecked: RATE_VIBRO_CHECK_VERSION });
+    else if (check) {
+      const ratingGoal = check.adjustment ? conservativeVibroAccuracy(play.goal, check.adjustment.judgementShare) : play.goal;
+      const needsCalc = ratingGoal > SSR_GOAL_MIN && (check.adjustment != null || play.vibroAdjustment != null || !(play.values.Overall > 0));
+      if (needsCalc && calcRunsTotal >= MAX_CALC_RUNS_PER_COMPUTE) {
+        pendingRateVibroKeys.add(key);
+        continue;
+      }
+      const ssr = needsCalc ? await computePlaySsrValues(ratedText, {
+        rate: play.rate, keyCount: play.keyCount, goal: ratingGoal,
+        lnRatio: play.inverse ? 1 : infoByBeatmap.get(play.beatmapId)?.lnRatio,
+      }) : null;
+      if (needsCalc && !ssr) { pendingRateVibroKeys.add(key); continue; }
+      calcRunsTotal += ssr?.calcRuns ?? 0;
+      analyzedByKey.set(key, {
+        ...play, values: ratingGoal <= SSR_GOAL_MIN ? {} : ssr?.values ?? play.values,
+        ratingExcluded: ratingGoal <= SSR_GOAL_MIN,
+        vibroAdjustment: check.adjustment, vibroClearEvidence: check.clearEvidence, rateVibroChecked: RATE_VIBRO_CHECK_VERSION,
+      });
+    }
     await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  // An old exclusion is not restored until its fresh check and SSR succeed.
+  // Keep the durable explanation for retries when the file/budget is missing.
+  for (const [key, play] of analyzedByKey) {
+    if (excludedByKey.has(key) && play.rateVibroChecked !== RATE_VIBRO_CHECK_VERSION) {
+      analyzedByKey.delete(key);
+      pendingRateVibroKeys.add(key);
+    }
   }
   const analyzed = [...analyzedByKey.values()];
   const rated = analyzed.filter((play) => !play.ratingExcluded);
@@ -3808,6 +3910,8 @@ function buildPlayerSkillPlay(
     beatmapStatus: map?.status ?? null,
     keyCount,
     ...(play.ratingExcluded ? { ratingExcluded: true, ratingExclusionReason: "msd_floor" as const } : {}),
+    ...(play.vibroAdjustment ? { vibroAdjustment: play.vibroAdjustment } : {}),
+    ...(play.vibroClearEvidence ? { vibroClearEvidence: summarizeVibroClear(play.vibroClearEvidence) } : {}),
     rating: Math.round(rating * 100) / 100,
     overallRating: Math.round(Number(play.values?.Overall ?? 0) * 100) / 100,
     pp: Number.isFinite(pp) && pp > 0 ? pp : null,

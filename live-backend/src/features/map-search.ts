@@ -6,6 +6,7 @@ import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
 import { PATTERN_AXIS_KEY_COUNTS } from "./player-skills.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
+import { VIBRO_SECTION_VERSION, type VibroAnalysis } from "../dan/vibro-sections.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
 
@@ -160,6 +161,7 @@ export interface MapSearchEntry {
 // `diffs` carries every filter-matching diff of the set, easiest first, so the
 // UI can show the spread and switch diffs without another request.
 export interface MapSearchSetEntry extends MapSearchEntry {
+  vibroAnalysisDt?: VibroAnalysis;
   diffCount: number;
   diffs: MapSearchEntry[];
   /** Rate-adjusted (1.5x / DT) dan + MSD from the DT-rate analysis sweep, so the
@@ -1728,14 +1730,14 @@ export async function getMapSearchSetEntry(db: Db, beatmapId: number): Promise<M
   // the detail page re-requests this endpoint, so each diff gets its own.
   const dtRow = (await exec(
     db,
-    "select msd_dt_json, dan_dt_json, msd_ln_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
+    "select key_count, msd_dt_json, dan_dt_json, msd_ln_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
     [beatmapId, CHART_ANALYSIS_VERSION],
   )).rows[0];
-  const { danDt, msdDt } = parseDtRateVerdict(dtRow);
+  const { danDt, msdDt, vibroAnalysisDt } = parseDtRateVerdict(dtRow);
   // The analysis row can be fresher than the index copy (the LN sweep updates
   // it in place); prefer it, fall back to the index-derived blend.
   const msdLn = parseLnAdjustedMsd(dtRow, entry.msd, entry.keyCount) ?? entry.msdLn;
-  return { ...entry, diffCount: diffs.length, diffs, danDt, msdDt, msdLn };
+  return { ...entry, diffCount: diffs.length, diffs, danDt, msdDt, msdLn, vibroAnalysisDt };
 }
 
 // msd_ln_json stores the raw tail-aware calc run; the entry carries the
@@ -1759,11 +1761,13 @@ function parseLnAdjustedMsd(
 export function parseDtRateVerdict(row: Record<string, unknown> | undefined): {
   danDt: { label: string; family: string; rawDan: number } | null;
   msdDt: Record<string, number> | null;
+  vibroAnalysisDt?: VibroAnalysis;
 } {
   if (!row) return { danDt: null, msdDt: null };
   const msdParsed = row.msd_dt_json == null
     ? null
-    : parseJson<{ values?: Record<string, number> } | null>(row.msd_dt_json, null);
+    : parseJson<{ values?: Record<string, number>; vibroAnalysis?: VibroAnalysis; vibroVersion?: number } | null>(row.msd_dt_json, null);
+  if (Number(row.key_count) === 4 && msdParsed?.vibroVersion !== VIBRO_SECTION_VERSION) return { danDt: null, msdDt: null };
   const msdDt = msdParsed && msdParsed.values && typeof msdParsed.values === "object" ? msdParsed.values : null;
   const danParsed = row.dan_dt_json == null
     ? null
@@ -1772,7 +1776,7 @@ export function parseDtRateVerdict(row: Record<string, unknown> | undefined): {
   const danDt = danParsed && danParsed.primaryLabel != null && rawDan != null && Number.isFinite(rawDan)
     ? { label: String(danParsed.primaryLabel), family: String(danParsed.primaryFamily ?? "dan"), rawDan }
     : null;
-  return { danDt, msdDt };
+  return { danDt, msdDt, ...(msdParsed?.vibroAnalysis ? { vibroAnalysisDt: msdParsed.vibroAnalysis } : {}) };
 }
 
 // Fetch index entries for a set of beatmap ids (used by collection detail).
