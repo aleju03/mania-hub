@@ -1,7 +1,8 @@
+import type { InStatement } from "@libsql/client";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   BUG_REPORT_MAX_SCREENSHOTS,
@@ -36,6 +37,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  db.close();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
@@ -82,21 +85,19 @@ describe("bug reports", () => {
     // A filed report is unread by construction: nobody has opened it yet.
     expect((await countUnseenBugReports(db)).count).toBe(2);
 
-    const marked = await markBugReportsSeen(db, { ids: [first.report.id] });
+    const marked = await markBugReportsSeen(db, { reports: [{ id: first.report.id, reporterMessageCount: 0 }] });
     expect(marked.marked).toBe(1);
     expect(marked.alert.count).toBe(1);
     // The board marks the tab a waiting report sits behind, so the split
     // matters as much as the total.
     expect(marked.alert.byStatus.new).toBe(1);
 
-    // A reporter coming back makes it unread again; the owner's own answer
-    // does not. Both stamps are epoch ms, so the follow-up has to land in a
-    // later millisecond than the read for the comparison to mean anything.
-    await new Promise((resolve) => setTimeout(resolve, 2));
+    // A reporter coming back makes it unread again; an answer acknowledging
+    // that displayed follow-up clears it.
     await addReporterBugReportMessage(db, { id: first.report.id, userId: 7, body: "Still happening today." });
     expect((await countUnseenBugReports(db)).count).toBe(2);
 
-    await addAdminBugReportMessage(db, { id: first.report.id, body: "Looking at it now." });
+    await addAdminBugReportMessage(db, { id: first.report.id, body: "Looking at it now.", reporterMessageCount: 1 });
     const afterAnswer = await countUnseenBugReports(db);
     expect(afterAnswer.count).toBe(1);
     expect(afterAnswer.latestAt).toBe((await getBugReport(db, second.report.id))?.createdAt);
@@ -110,10 +111,108 @@ describe("bug reports", () => {
     const first = await submit();
     if (!first.ok) throw new Error("setup failed");
     const before = (await getBugReport(db, first.report.id))?.updatedAt;
-    await markBugReportsSeen(db, { ids: [first.report.id] });
+    await markBugReportsSeen(db, { reports: [{ id: first.report.id, reporterMessageCount: 0 }] });
     const after = await getBugReport(db, first.report.id);
     expect(after?.updatedAt).toBe(before);
     expect(after?.adminSeenAt).toBeGreaterThan(0);
+  });
+
+  it("keeps replies outside the displayed snapshot unread, even in the same millisecond", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.now());
+    const created = await submit();
+    if (!created.ok) throw new Error("setup failed");
+    const { id } = created.report;
+    const snapshot = await listBugReports(db);
+    const receipt = { id, reporterMessageCount: snapshot.reports[0]!.messages.length };
+
+    await addReporterBugReportMessage(db, { id, userId: 7, body: "Arrived after the snapshot." });
+    const stale = await markBugReportsSeen(db, { reports: [receipt] });
+    expect(stale.marked).toBe(0);
+    expect(stale.alert.count).toBe(1);
+
+    expect((await markBugReportsSeen(db, { reports: [{ id, reporterMessageCount: 1 }] })).alert.count).toBe(0);
+    // Even a follow-up created in the same millisecond as the read is new.
+    await addReporterBugReportMessage(db, { id, userId: 7, body: "Another same-millisecond reply." });
+    expect((await countUnseenBugReports(db)).count).toBe(1);
+    expect((await markBugReportsSeen(db, { reports: [{ id, reporterMessageCount: 1 }] })).marked).toBe(0);
+    expect((await markBugReportsSeen(db, { reports: [{ id, reporterMessageCount: 2 }] })).alert.count).toBe(0);
+    // An older tab's acknowledgement cannot undo the newer read either.
+    expect((await markBugReportsSeen(db, { reports: [receipt] })).alert.count).toBe(0);
+  });
+
+  it("does not acknowledge a newer reporter message when answering an older view", async () => {
+    const created = await submit();
+    if (!created.ok) throw new Error("setup failed");
+    const { id } = created.report;
+    await addReporterBugReportMessage(db, { id, userId: 7, body: "A new detail while the admin was typing." });
+    const answered = await addAdminBugReportMessage(db, { id, body: "Answer to the original report.", reporterMessageCount: 0 });
+    expect(answered.ok).toBe(true);
+    expect((await countUnseenBugReports(db)).count).toBe(1);
+    // Older clients may still send replies, but cannot acknowledge unseen data.
+    await addAdminBugReportMessage(db, { id, body: "Answer without a snapshot." });
+    expect((await countUnseenBugReports(db)).count).toBe(1);
+    await addAdminBugReportMessage(db, { id, body: "Now answering the new detail.", reporterMessageCount: 1 });
+    expect((await countUnseenBugReports(db)).count).toBe(0);
+  });
+
+  it("ignores invalid or impossible snapshot counts", async () => {
+    const created = await submit();
+    if (!created.ok) throw new Error("setup failed");
+    const { id } = created.report;
+    for (const reporterMessageCount of [undefined, null, "0", -1, 0.5, NaN, Infinity, 1]) {
+      expect((await markBugReportsSeen(db, { reports: [{ id, reporterMessageCount }] })).marked).toBe(0);
+    }
+    expect((await countUnseenBugReports(db)).count).toBe(1);
+  });
+
+  it.each(["backfill", "completion"])("resumes the unread migration after an interruption at %s", async (phase) => {
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const first = await submit();
+    const second = await submit({ reporterKey: "user:8", userId: 8, body: "Another historical report." });
+    if (!first.ok || !second.ok) throw new Error("setup failed");
+    await exec(db, "alter table bug_reports drop column admin_seen_at");
+    await exec(db, "delete from live_meta where key = 'bug_reports_admin_seen:v1'");
+    const interrupted = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "execute") return async (statement: InStatement) => {
+          const sql = typeof statement === "string" ? statement : statement.sql;
+          const values = typeof statement === "string" ? [] : statement.args;
+          const shouldInterrupt = phase === "backfill"
+            ? sql.includes("update bug_reports set admin_seen_at = updated_at")
+            : sql.includes("insert into live_meta") && Array.isArray(values)
+              && values[0] === "bug_reports_admin_seen:v1" && String(values[1]).includes('"done":true');
+          if (shouldInterrupt) throw new Error("simulated migration interruption");
+          return target.execute(statement);
+        };
+        const value = Reflect.get(target, prop, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    now += 100;
+    await expect(migrate(interrupted)).rejects.toThrow("simulated migration interruption");
+    // Reopen to verify the checkpoint and ALTER really survived the failed pass.
+    db.close();
+    db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    now += 100;
+    const fresh = await submit({ reporterKey: "user:9", userId: 9, body: "Filed during the interrupted migration." });
+    if (!fresh.ok) throw new Error("setup failed");
+    await addReporterBugReportMessage(db, { id: first.report.id, userId: 7, body: "New activity during migration retry." });
+    await migrate(db);
+    await migrate(db);
+    expect((await getBugReport(db, second.report.id))?.adminSeenAt).toBe(second.report.updatedAt);
+    expect((await countUnseenBugReports(db)).count).toBe(2);
+  });
+
+  it("preserves existing unread state when upgrading the original badge migration", async () => {
+    const first = await submit();
+    const second = await submit({ reporterKey: "user:8", userId: 8, body: "Still unread before the upgrade." });
+    if (!first.ok || !second.ok) throw new Error("setup failed");
+    await markBugReportsSeen(db, { reports: [{ id: first.report.id, reporterMessageCount: 0 }] });
+    await exec(db, "delete from live_meta where key = 'bug_reports_admin_seen:v1'");
+    await migrate(db);
+    expect((await countUnseenBugReports(db)).count).toBe(1);
+    expect((await getBugReport(db, second.report.id))?.adminSeenAt).toBeNull();
   });
 
   it("accepts a signed-out report and refuses one with nothing to act on", async () => {

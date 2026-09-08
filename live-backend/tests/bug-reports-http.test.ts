@@ -137,12 +137,40 @@ describe("bug report HTTP routes", () => {
     expect(unseen.status).toBe(200);
     expect(unseen.body?.count).toBe(1);
 
-    const seen = await call(request("POST", "/api/admin/bug-reports/seen", { ids: [id] }, `Bearer ${ADMIN_TOKEN}`));
+    const seen = await call(request("POST", "/api/admin/bug-reports/seen", { reports: [{ id, reporterMessageCount: 0 }] }, `Bearer ${ADMIN_TOKEN}`));
     expect(seen.status).toBe(200);
     expect((seen.body?.alert as { count?: number }).count).toBe(0);
 
     const after = await call(request("GET", "/api/admin/bug-reports/unseen", undefined, `Bearer ${ADMIN_TOKEN}`));
     expect(after.body?.count).toBe(0);
+  });
+
+  it("requires the displayed snapshot to acknowledge through either admin endpoint", async () => {
+    const admin = `Bearer ${ADMIN_TOKEN}`;
+    const bridge = `Bearer ${BRIDGE_TOKEN}`;
+    const submitted = await call(request("POST", "/api/bug-reports/submit", {
+      body: "Report before the board fetched.", reporterKey: "user:7", userId: 7,
+    }, bridge));
+    const id = String(submitted.body?.id);
+    await call(request("POST", "/api/bug-reports/reply", { id, userId: 7, body: "New reply after the fetch." }, bridge));
+    for (const body of [{ ids: [id] }, { reports: [{ id, reporterMessageCount: 0 }] }]) {
+      const stale = await call(request("POST", "/api/admin/bug-reports/seen", body, admin));
+      expect(stale.body?.marked).toBe(0);
+    }
+    expect((await call(request("POST", "/api/admin/bug-reports/seen", {
+      reports: [{ id, reporterMessageCount: 1 }],
+    }, bridge))).status).toBe(401);
+    expect((await call(request("GET", "/api/admin/bug-reports/seen", undefined, admin))).status).toBe(405);
+    const staleReply = await call(request("POST", "/api/admin/bug-reports/reply", {
+      id, body: "Answer to the old view.", reporterMessageCount: 0,
+    }, admin));
+    expect(staleReply.status).toBe(200);
+    expect((await call(request("GET", "/api/admin/bug-reports/unseen", undefined, admin))).body?.count).toBe(1);
+    const currentReply = await call(request("POST", "/api/admin/bug-reports/reply", {
+      id, body: "Answer to the new reply.", reporterMessageCount: 1,
+    }, admin));
+    expect(currentReply.status).toBe(200);
+    expect((await call(request("GET", "/api/admin/bug-reports/unseen", undefined, admin))).body?.count).toBe(0);
   });
 
   it("promotes through the admin route once and writes the linked todo", async () => {

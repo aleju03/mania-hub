@@ -38,6 +38,7 @@ import {
   BUG_REPORT_MAX_SCREENSHOTS,
   BUG_REPORT_MESSAGE_MAX,
   bugReportHasUnreadReporterActivity,
+  bugReportSeenReceipt,
   bugReportThreadMessages,
   clearClosedBugReports,
   deleteBugReport,
@@ -841,14 +842,15 @@ function BugReportsAdminPage() {
       /* Showing a report is reading it, so the rows on screen are stamped and
          the nav dot is told the new count straight away. Only these ids: a
          reply sitting under another filter is still waiting for you. */
-      const arrived = page.reports.filter(bugReportHasUnreadReporterActivity).map((report) => report.id);
+      const arrived = page.reports.filter(bugReportHasUnreadReporterActivity).map(bugReportSeenReceipt);
       if (arrived.length) {
         setChipsFading(false);
-        setUnreadIds((previous) => new Set([...previous, ...arrived]));
+        setUnreadIds((previous) => new Set([...previous, ...arrived.map((report) => report.id)]));
       }
       const alert = arrived.length
-        ? await markBugReportsSeen({ data: { ids: arrived } })
+        ? await markBugReportsSeen({ data: { reports: arrived } })
         : await getBugReportAlert();
+      if (request !== requestRef.current) return;
       publishBugReportAlert(alert);
       setUnread(alert.byStatus);
     } catch {
@@ -896,7 +898,11 @@ function BugReportsAdminPage() {
   const sendReply = useCallback(async (id: string, body: string, files: File[]) => {
     let warning: string | null = null;
     await act(id, async () => {
-      const result = await replyToBugReportAsAdmin({ data: { id, body, screenshotCount: files.length } });
+      const displayed = reports?.find((report) => report.id === id);
+      const result = await replyToBugReportAsAdmin({ data: {
+        id, body, screenshotCount: files.length,
+        reporterMessageCount: displayed ? bugReportSeenReceipt(displayed).reporterMessageCount : undefined,
+      } });
       if (!files.length) return;
       const uploaded = result.uploadToken && result.messageId
         ? await uploadBugReportScreenshots(id, result.uploadToken, files, () => {}, result.messageId)
@@ -904,7 +910,7 @@ function BugReportsAdminPage() {
       if (uploaded < files.length) warning = "The reply was sent, but at least one image did not upload.";
     });
     if (warning) setError(warning);
-  }, [act]);
+  }, [act, reports]);
 
   const pages = useMemo(() => ({
     from: total === 0 ? 0 : offset + 1,

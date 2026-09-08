@@ -138,7 +138,7 @@ export interface BugReport {
   repliedAt: number | null;
   /** Append-only conversation after the original report body. */
   messages: BugReportMessage[];
-  /** When the owner last read this report on the board; null until they have. */
+  /** Read acknowledgement for the current reporter activity; reset on follow-up. */
   adminSeenAt: number | null;
   /** The admin_todos row this was promoted into, if it was. */
   todoId: string | null;
@@ -795,6 +795,15 @@ const REPORTER_ACTIVITY_SQL = `max(
   ), 0)
 )`;
 
+// Reporter messages are append-only, so their count is a stable snapshot version
+// even when two messages share a timestamp. Admin messages do not advance it.
+const REPORTER_MESSAGE_COUNT_SQL = `(select count(*) from bug_report_messages
+  where report_id = bug_reports.id and author_role = 'reporter')`;
+
+function normalizeReporterMessageCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 const UNSEEN_SQL = `${REPORTER_ACTIVITY_SQL} > coalesce(bug_reports.admin_seen_at, 0)`;
 
 export interface BugReportAlert {
@@ -835,38 +844,39 @@ export async function countUnseenBugReports(db: Db): Promise<BugReportAlert> {
 }
 
 /**
- * Stamp reports as read. The board sends the ids it just put on screen, so
- * nothing the owner never saw is cleared; `all` is the deliberate "mark
- * everything" for the rare case where they know they are done with the queue.
- *
- * `updated_at` is untouched on purpose: it is the board's sort key and the
- * reporter's "last activity", and reading a row is neither.
+ * Acknowledge only the reporter-message count the board actually displayed.
+ * A newer follow-up makes the conditional update a no-op. `all` deliberately
+ * acknowledges the current queue. Reading never changes the board's sort key.
  */
 export async function markBugReportsSeen(
   db: Db,
-  input: { ids?: unknown; all?: unknown } = {},
+  input: { reports?: unknown; all?: unknown } = {},
 ): Promise<{ marked: number; alert: BugReportAlert }> {
-  const ids = Array.isArray(input.ids)
-    ? input.ids.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, LIST_LIMIT_MAX)
-    : [];
   const now = Date.now();
   let marked = 0;
-  if (input.all === true) {
+  if (input?.all === true) {
     const updated = await exec(
       db,
-      `update bug_reports set admin_seen_at = ? where ${UNSEEN_SQL}`,
+      `update bug_reports set admin_seen_at = max(?, ${REPORTER_ACTIVITY_SQL}) where ${UNSEEN_SQL}`,
       [now],
     );
     marked = updated.rowsAffected ?? 0;
-  } else if (ids.length) {
-    const placeholders = ids.map(() => "?").join(", ");
-    const updated = await exec(
-      db,
-      `update bug_reports set admin_seen_at = ?
-        where id in (${placeholders}) and ${UNSEEN_SQL}`,
-      [now, ...ids],
-    );
-    marked = updated.rowsAffected ?? 0;
+  } else if (Array.isArray(input?.reports)) {
+    const statements = input.reports.slice(0, LIST_LIMIT_MAX).flatMap((report: unknown) => {
+      if (!report || typeof report !== "object") return [];
+      const { id, reporterMessageCount } = report as Record<string, unknown>;
+      const count = normalizeReporterMessageCount(reporterMessageCount);
+      if (typeof id !== "string" || !id || count == null) return [];
+      return [{
+        sql: `update bug_reports set admin_seen_at = max(?, ${REPORTER_ACTIVITY_SQL})
+          where id = ? and ${REPORTER_MESSAGE_COUNT_SQL} = ? and ${UNSEEN_SQL}`,
+        args: [now, id, count],
+      }];
+    });
+    if (statements.length) {
+      const results = await execBatch(db, statements);
+      marked = results.reduce((sum, result) => sum + (result.rowsAffected ?? 0), 0);
+    }
   }
   return { marked, alert: await countUnseenBugReports(db) };
 }
@@ -921,8 +931,10 @@ export async function addReporterBugReportMessage(
       ],
     },
     {
+      // Invalidate the acknowledgement in the same transaction as the insert;
+      // timestamp comparisons alone miss a reply in the same millisecond.
       sql: `update bug_reports
-               set updated_at = ?
+               set updated_at = ?, admin_seen_at = null
              where id = ? and exists (select 1 from bug_report_messages where id = ?)`,
       args: [now, id, messageId],
     },
@@ -934,10 +946,11 @@ export async function addReporterBugReportMessage(
 
 /** Append an owner response. `reply`/`replied_at` keep the newest answer in the
  *  old columns for rolling-deploy compatibility; the message row is the
- *  durable history the new clients render. */
+ *  durable history the new clients render. Only a matching displayed reporter
+ *  count acknowledges the thread; an answer from an older view must not. */
 export async function addAdminBugReportMessage(
   db: Db,
-  input: { id?: unknown; body?: unknown; screenshotCount?: unknown },
+  input: { id?: unknown; body?: unknown; screenshotCount?: unknown; reporterMessageCount?: unknown },
 ): Promise<AddBugReportMessageResult> {
   const id = typeof input.id === "string" ? input.id : "";
   const body = normalizeMessageBody(input.body);
@@ -959,8 +972,11 @@ export async function addAdminBugReportMessage(
       args: [messageId, id, body, now, uploadToken, uploadToken ? now + BUG_REPORT_UPLOAD_TOKEN_TTL_MS : null],
     },
     {
-      sql: "update bug_reports set reply = ?, replied_at = ?, updated_at = ?, admin_seen_at = ? where id = ?",
-      args: [body, now, now, now, id],
+      sql: `update bug_reports set reply = ?, replied_at = ?, updated_at = ?,
+        admin_seen_at = case when ${REPORTER_MESSAGE_COUNT_SQL} = ?
+          then max(coalesce(admin_seen_at, 0), ?, ${REPORTER_ACTIVITY_SQL}) else admin_seen_at end
+        where id = ?`,
+      args: [body, now, now, normalizeReporterMessageCount(input.reporterMessageCount), now, id],
     },
   ]);
   const updated = await getById(db, id);

@@ -966,7 +966,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ ids?: unknown; all?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ reports?: unknown; all?: unknown }>((await readBody(req)) || "{}", {});
     const result = await markBugReportsSeen(ctx.serveWriteDb ?? ctx.db, body);
     sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
@@ -1011,7 +1011,7 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ id?: unknown; body?: unknown; screenshotCount?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ id?: unknown; body?: unknown; screenshotCount?: unknown; reporterMessageCount?: unknown }>((await readBody(req)) || "{}", {});
     const result = await addAdminBugReportMessage(ctx.serveWriteDb ?? ctx.db, body);
     if (!result.ok) {
       sendJson(req, res, ctx, result.reason === "invalid_message" ? 400 : 404, { error: result.reason });

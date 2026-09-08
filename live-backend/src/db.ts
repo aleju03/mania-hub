@@ -2892,16 +2892,30 @@ async function migrateBugReports(db: Db): Promise<void> {
     create index if not exists idx_bug_reports_user
       on bug_reports(user_id, created_at desc)
   `);
-  // Added after the table shipped: when the owner last read this report. What
-  // it is compared against is the reporter's side of the thread, so the board
-  // and the nav dot can say "somebody wrote and nobody has looked yet". Null
-  // means never opened, which is what a freshly filed report is.
+  // Persist the historical cutoff BEFORE adding the column. A failed pass may
+  // leave the ALTER committed; the next pass must still finish its backfill.
+  // An existing column without our marker is an upgrade from the original
+  // unread feature: preserve its live read/unread state rather than clear it.
   const reportColumns = (await db.execute("pragma table_info(bug_reports)")).rows.map((row) => String(row.name));
+  const seenMigrationKey = "bug_reports_admin_seen:v1";
+  let seenMigration = await readMigrationSentinel<{ cutoffAt: number | null; done: boolean } | null>(db, seenMigrationKey, null);
+  if (!seenMigration) {
+    seenMigration = { cutoffAt: reportColumns.includes("admin_seen_at") ? null : Date.now(), done: false };
+    await setMigrationSentinel(db, seenMigrationKey, seenMigration);
+  }
   if (!reportColumns.includes("admin_seen_at")) {
     await db.execute("alter table bug_reports add column admin_seen_at integer");
-    // Everything already filed has been read; the dot is about what arrives
-    // from here on, not about lighting up every tab on the deploy that adds it.
-    await db.execute("update bug_reports set admin_seen_at = updated_at");
+  }
+  if (!seenMigration.done) {
+    if (seenMigration.cutoffAt != null) {
+      // A report or follow-up arriving during a retry must remain unread.
+      await db.execute({
+        sql: `update bug_reports set admin_seen_at = updated_at
+          where admin_seen_at is null and created_at <= ? and updated_at <= ?`,
+        args: [seenMigration.cutoffAt, seenMigration.cutoffAt],
+      });
+    }
+    await setMigrationSentinel(db, seenMigrationKey, { ...seenMigration, done: true });
   }
   // Replies are a conversation, not one mutable cell. The report body remains
   // the first reporter message on bug_reports; everything after it is appended

@@ -82,7 +82,7 @@ export interface BugReport {
   reply: string | null;
   repliedAt: number | null;
   messages: BugReportMessage[];
-  /** When the board last read this report; null until it has. */
+  /** Read acknowledgement for current reporter activity; reset on follow-up. */
   adminSeenAt: number | null;
   todoId: string | null;
   todoSeq: number | null;
@@ -150,6 +150,12 @@ export function bugReportThreadMessages<T extends BugReportMessageBase>(
     screenshotKeys: [],
     screenshotCount: 0,
   } as unknown as T];
+}
+
+/** Reporter messages are append-only; this count identifies the displayed
+ * snapshot independently of timestamp ties and admin responses. */
+export function bugReportSeenReceipt(report: Pick<BugReport, "id" | "messages">): { id: string; reporterMessageCount: number } {
+  return { id: report.id, reporterMessageCount: report.messages.filter((message) => message.author === "reporter").length };
 }
 
 /** Whether the reporter's side of the thread has said something since the board
@@ -346,8 +352,9 @@ export const updateBugReport = createServerFn({ method: "POST" })
   });
 
 export const replyToBugReportAsAdmin = createServerFn({ method: "POST" })
-  .validator((data: { id: string; body: string; screenshotCount?: number }) => ({
+  .validator((data: { id: string; body: string; screenshotCount?: number; reporterMessageCount?: number }) => ({
     id: String(data?.id ?? ""),
+    reporterMessageCount: data?.reporterMessageCount,
     body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
     screenshotCount: Math.min(Math.max(0, Math.floor(Number(data?.screenshotCount ?? 0))), BUG_REPORT_MAX_SCREENSHOTS),
   }))
@@ -433,18 +440,16 @@ export const getBugReportAlert = createServerFn({ method: "GET" }).handler(async
   }
 });
 
-/** Stamp the reports the board just showed as read. `all` is the explicit
- *  "clear the queue" the board offers when what is waiting sits outside the
- *  filter being looked at. */
+/** Acknowledge displayed snapshots; `all` deliberately clears the current queue. */
 export const markBugReportsSeen = createServerFn({ method: "POST" })
-  .validator((data: { ids?: string[]; all?: boolean } | undefined) => ({
-    ids: Array.isArray(data?.ids) ? data.ids.map((id) => String(id)).slice(0, 200) : [],
+  .validator((data: { reports?: { id: string; reporterMessageCount: number }[]; all?: boolean } | undefined) => ({
+    reports: Array.isArray(data?.reports) ? data.reports.slice(0, 200) : [],
     all: data?.all === true,
   }))
   .handler(async ({ data }): Promise<BugReportAlert> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Bug reports seen");
-    if (!data.all && !data.ids.length) return NO_ALERT;
+    if (!data.all && !data.reports.length) return NO_ALERT;
     const response = await adminFetch("/api/admin/bug-reports/seen", {
       method: "POST",
       body: JSON.stringify(data),

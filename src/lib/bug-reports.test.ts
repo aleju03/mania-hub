@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bugReportThreadMessages } from "./bug-reports";
+import { bugReportSeenReceipt, bugReportThreadMessages } from "./bug-reports";
 
 describe("bug report thread compatibility", () => {
   it("uses the append-only messages when the backend supplies them", () => {
@@ -28,4 +28,16 @@ describe("bug report thread compatibility", () => {
       screenshotCount: 0,
     }]);
   });
+});
+
+it("acknowledges only the reporter messages in the displayed snapshot", () => {
+  const message = { body: "Text", createdAt: 123, editedAt: null, screenshotKeys: [] };
+  expect(bugReportSeenReceipt({
+    id: "report",
+    messages: [
+      { ...message, id: "m1", author: "reporter" },
+      { ...message, id: "m2", author: "admin" },
+      { ...message, id: "m3", author: "reporter" },
+    ],
+  })).toEqual({ id: "report", reporterMessageCount: 2 });
 });
