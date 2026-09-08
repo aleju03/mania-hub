@@ -6,7 +6,7 @@ import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../../features/admin-todos.js";
 import { clearReviewedTranslationReports, deleteTranslationReport, listTranslationReports, updateTranslationReport, type UpdateTranslationReportInput } from "../../features/translation-reports.js";
-import { addAdminBugReportMessage, clearClosedBugReports, deleteBugReport, editAdminBugReportMessage, getBugReport, listBugReports, promoteBugReportToTodo, updateBugReport, type UpdateBugReportInput } from "../../features/bug-reports.js";
+import { addAdminBugReportMessage, clearClosedBugReports, countUnseenBugReports, deleteBugReport, editAdminBugReportMessage, getBugReport, listBugReports, markBugReportsSeen, promoteBugReportToTodo, updateBugReport, type UpdateBugReportInput } from "../../features/bug-reports.js";
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
 import { cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../../features/chart-analysis.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../features/dan-benchmark.js";
@@ -943,6 +943,32 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       offset: url.searchParams.get("offset") ?? undefined,
     });
     sendJson(req, res, ctx, 200, page);
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/unseen") {
+    // The nav dot's poll: how many reports have something the owner has not
+    // read. Deliberately its own tiny endpoint rather than a field on the
+    // board's page, because every admin page asks for it and none of them
+    // wants the rows.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await countUnseenBugReports(ctx.db));
+    return true;
+  }
+  if (url.pathname === "/api/admin/bug-reports/seen") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ ids?: unknown; all?: unknown }>((await readBody(req)) || "{}", {});
+    const result = await markBugReportsSeen(ctx.serveWriteDb ?? ctx.db, body);
+    sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
   }
   if (url.pathname === "/api/admin/bug-reports/get") {

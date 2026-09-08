@@ -138,6 +138,8 @@ export interface BugReport {
   repliedAt: number | null;
   /** Append-only conversation after the original report body. */
   messages: BugReportMessage[];
+  /** When the owner last read this report on the board; null until they have. */
+  adminSeenAt: number | null;
   /** The admin_todos row this was promoted into, if it was. */
   todoId: string | null;
   /** Human-readable admin todo number, when the linked todo still exists. */
@@ -337,7 +339,7 @@ export function isBugReportScreenshotKey(id: string, key: unknown, messageId?: s
 
 const STORED_COLUMNS =
   "id, status, body, page_path, context_json, user_id, username, screenshot_keys, admin_note, reply, replied_at, todo_id, created_at, updated_at, resolved_at";
-const SELECT_COLUMNS = `${STORED_COLUMNS}, (
+const SELECT_COLUMNS = `${STORED_COLUMNS}, admin_seen_at, (
   select seq from admin_todos where admin_todos.id = bug_reports.todo_id
 ) as todo_seq, (
   select coalesce(json_group_array(json_object(
@@ -370,6 +372,7 @@ function rowToReport(row: Record<string, unknown>): BugReport {
     reply: row.reply == null ? null : String(row.reply),
     repliedAt: row.replied_at == null ? null : Number(row.replied_at),
     messages: parseMessages(row.messages_json),
+    adminSeenAt: row.admin_seen_at == null ? null : Number(row.admin_seen_at),
     todoId: row.todo_id == null ? null : String(row.todo_id),
     todoSeq: row.todo_seq == null ? null : Number(row.todo_seq),
     createdAt: Number(row.created_at),
@@ -493,6 +496,7 @@ export async function createBugReport(db: Db, input: BugReportInput): Promise<Cr
     reply: null,
     repliedAt: null,
     messages: [],
+    adminSeenAt: null,
     todoId: null,
     todoSeq: null,
     createdAt: now,
@@ -776,6 +780,97 @@ export async function listBugReportsForUser(db: Db, userId: unknown, limit = 20)
   return rows.map((row) => toBugReportForReporter(rowToReport(row as Record<string, unknown>)));
 }
 
+/**
+ * What "somebody is waiting on you" means: the newest thing the reporter's side
+ * of the thread has to say - the original report, or their latest follow-up -
+ * against the stamp the board writes when the owner reads the row. An admin
+ * message is not activity to be notified about; it is the answer.
+ */
+const REPORTER_ACTIVITY_SQL = `max(
+  bug_reports.created_at,
+  coalesce((
+    select max(created_at) from bug_report_messages
+     where bug_report_messages.report_id = bug_reports.id
+       and bug_report_messages.author_role = 'reporter'
+  ), 0)
+)`;
+
+const UNSEEN_SQL = `${REPORTER_ACTIVITY_SQL} > coalesce(bug_reports.admin_seen_at, 0)`;
+
+export interface BugReportAlert {
+  /** Reports with reporter activity the owner has not opened yet. */
+  count: number;
+  /** When the newest of those arrived, for a badge that wants to say "2m ago". */
+  latestAt: number | null;
+  /** The same rows split by status, so the board can mark the tab they are
+   *  behind instead of announcing a number the page cannot show. */
+  byStatus: Record<BugReportStatus, number>;
+}
+
+function emptyStatusCounts(): Record<BugReportStatus, number> {
+  return { new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0 };
+}
+
+/** The dot's whole payload: one indexless scan of a table that holds thousands
+ *  of rows at most, so it stays a poll rather than a projection to keep in
+ *  step. */
+export async function countUnseenBugReports(db: Db): Promise<BugReportAlert> {
+  const rows = (await exec(
+    db,
+    `select status, count(*) as n, max(${REPORTER_ACTIVITY_SQL}) as latest
+       from bug_reports where ${UNSEEN_SQL} group by status`,
+  )).rows;
+  const byStatus = emptyStatusCounts();
+  let count = 0;
+  let latestAt: number | null = null;
+  for (const row of rows) {
+    const status = normalizeBugReportStatus(row.status);
+    const n = Number(row.n ?? 0);
+    count += n;
+    if (status) byStatus[status] += n;
+    const latest = Number(row.latest ?? 0);
+    if (Number.isFinite(latest) && latest > 0) latestAt = Math.max(latestAt ?? 0, latest);
+  }
+  return { count, latestAt, byStatus };
+}
+
+/**
+ * Stamp reports as read. The board sends the ids it just put on screen, so
+ * nothing the owner never saw is cleared; `all` is the deliberate "mark
+ * everything" for the rare case where they know they are done with the queue.
+ *
+ * `updated_at` is untouched on purpose: it is the board's sort key and the
+ * reporter's "last activity", and reading a row is neither.
+ */
+export async function markBugReportsSeen(
+  db: Db,
+  input: { ids?: unknown; all?: unknown } = {},
+): Promise<{ marked: number; alert: BugReportAlert }> {
+  const ids = Array.isArray(input.ids)
+    ? input.ids.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, LIST_LIMIT_MAX)
+    : [];
+  const now = Date.now();
+  let marked = 0;
+  if (input.all === true) {
+    const updated = await exec(
+      db,
+      `update bug_reports set admin_seen_at = ? where ${UNSEEN_SQL}`,
+      [now],
+    );
+    marked = updated.rowsAffected ?? 0;
+  } else if (ids.length) {
+    const placeholders = ids.map(() => "?").join(", ");
+    const updated = await exec(
+      db,
+      `update bug_reports set admin_seen_at = ?
+        where id in (${placeholders}) and ${UNSEEN_SQL}`,
+      [now, ...ids],
+    );
+    marked = updated.rowsAffected ?? 0;
+  }
+  return { marked, alert: await countUnseenBugReports(db) };
+}
+
 function normalizeMessageBody(value: unknown): string | null {
   return text(value, MESSAGE_MAX);
 }
@@ -864,8 +959,8 @@ export async function addAdminBugReportMessage(
       args: [messageId, id, body, now, uploadToken, uploadToken ? now + BUG_REPORT_UPLOAD_TOKEN_TTL_MS : null],
     },
     {
-      sql: "update bug_reports set reply = ?, replied_at = ?, updated_at = ? where id = ?",
-      args: [body, now, now, id],
+      sql: "update bug_reports set reply = ?, replied_at = ?, updated_at = ?, admin_seen_at = ? where id = ?",
+      args: [body, now, now, now, id],
     },
   ]);
   const updated = await getById(db, id);

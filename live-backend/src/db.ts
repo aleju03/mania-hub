@@ -2892,6 +2892,17 @@ async function migrateBugReports(db: Db): Promise<void> {
     create index if not exists idx_bug_reports_user
       on bug_reports(user_id, created_at desc)
   `);
+  // Added after the table shipped: when the owner last read this report. What
+  // it is compared against is the reporter's side of the thread, so the board
+  // and the nav dot can say "somebody wrote and nobody has looked yet". Null
+  // means never opened, which is what a freshly filed report is.
+  const reportColumns = (await db.execute("pragma table_info(bug_reports)")).rows.map((row) => String(row.name));
+  if (!reportColumns.includes("admin_seen_at")) {
+    await db.execute("alter table bug_reports add column admin_seen_at integer");
+    // Everything already filed has been read; the dot is about what arrives
+    // from here on, not about lighting up every tab on the deploy that adds it.
+    await db.execute("update bug_reports set admin_seen_at = updated_at");
+  }
   // Replies are a conversation, not one mutable cell. The report body remains
   // the first reporter message on bug_reports; everything after it is appended
   // here so both sides keep the full history. `legacy_reply` identifies rows

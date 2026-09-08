@@ -82,6 +82,8 @@ export interface BugReport {
   reply: string | null;
   repliedAt: number | null;
   messages: BugReportMessage[];
+  /** When the board last read this report; null until it has. */
+  adminSeenAt: number | null;
   todoId: string | null;
   todoSeq: number | null;
   createdAt: number;
@@ -148,6 +150,17 @@ export function bugReportThreadMessages<T extends BugReportMessageBase>(
     screenshotKeys: [],
     screenshotCount: 0,
   } as unknown as T];
+}
+
+/** Whether the reporter's side of the thread has said something since the board
+ *  last read the row. The same rule the backend counts on, so a card's mark and
+ *  the nav dot cannot disagree. */
+export function bugReportHasUnreadReporterActivity(report: BugReport): boolean {
+  const lastReporterMessage = report.messages.reduce(
+    (newest, message) => (message.author === "reporter" ? Math.max(newest, message.createdAt) : newest),
+    0,
+  );
+  return Math.max(report.createdAt, lastReporterMessage) > (report.adminSeenAt ?? 0);
 }
 
 export const submitBugReport = createServerFn({ method: "POST" })
@@ -379,6 +392,66 @@ export const editBugReportMessageAsAdmin = createServerFn({ method: "POST" })
     });
     if (!response.ok) throw new Error(`Bug report message edit failed (${response.status}).`);
     return await response.json() as { report: BugReport };
+  });
+
+export interface BugReportAlert {
+  /** Reports carrying reporter words the board has not been shown yet. */
+  count: number;
+  latestAt: number | null;
+  /** The same rows per status, so the board marks the tab they sit behind. */
+  byStatus: Record<BugReportStatus, number>;
+}
+
+function emptyUnreadByStatus(): Record<BugReportStatus, number> {
+  return { new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0 };
+}
+
+const NO_ALERT: BugReportAlert = { count: 0, latestAt: null, byStatus: emptyUnreadByStatus() };
+
+function toAlert(payload: Partial<BugReportAlert> | undefined): BugReportAlert {
+  return {
+    count: Number(payload?.count ?? 0),
+    latestAt: payload?.latestAt ?? null,
+    byStatus: { ...emptyUnreadByStatus(), ...(payload?.byStatus ?? {}) },
+  };
+}
+
+/** Backs the red dot in the nav. Polled from every page an admin is on, so it
+ *  answers with zero rather than throwing when the backend is unreachable or
+ *  the viewer is not an admin: a dot is not worth an error boundary. */
+export const getBugReportAlert = createServerFn({ method: "GET" }).handler(async (): Promise<BugReportAlert> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const { readCurrentAuth } = await import("./auth-server");
+  if (!(await readCurrentAuth()).canUseAdminFeatures) return NO_ALERT;
+  try {
+    const response = await adminFetch("/api/admin/bug-reports/unseen");
+    if (!response.ok) return NO_ALERT;
+    return toAlert(await response.json() as Partial<BugReportAlert>);
+  } catch {
+    return NO_ALERT;
+  }
+});
+
+/** Stamp the reports the board just showed as read. `all` is the explicit
+ *  "clear the queue" the board offers when what is waiting sits outside the
+ *  filter being looked at. */
+export const markBugReportsSeen = createServerFn({ method: "POST" })
+  .validator((data: { ids?: string[]; all?: boolean } | undefined) => ({
+    ids: Array.isArray(data?.ids) ? data.ids.map((id) => String(id)).slice(0, 200) : [],
+    all: data?.all === true,
+  }))
+  .handler(async ({ data }): Promise<BugReportAlert> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Bug reports seen");
+    if (!data.all && !data.ids.length) return NO_ALERT;
+    const response = await adminFetch("/api/admin/bug-reports/seen", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Bug reports seen failed (${response.status}).`);
+    const payload = await response.json() as { alert?: Partial<BugReportAlert> };
+    return toAlert(payload.alert);
   });
 
 /* Deleting takes the row first and the images after: an orphaned object nobody

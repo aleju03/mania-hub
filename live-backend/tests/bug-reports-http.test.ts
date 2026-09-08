@@ -120,6 +120,31 @@ describe("bug report HTTP routes", () => {
     expect(mine.body?.reports).toEqual([]);
   });
 
+  it("reports the unread count to an admin only and clears it on demand", async () => {
+    const submitted = await call(request(
+      "POST",
+      "/api/bug-reports/submit",
+      { body: "Rankings show yesterday's numbers.", reporterKey: "user:7", userId: 7 },
+      `Bearer ${BRIDGE_TOKEN}`,
+    ));
+    const id = String(submitted.body?.id);
+
+    // The bridge token opens the write side; the unread count is triage.
+    expect((await call(request("GET", "/api/admin/bug-reports/unseen", undefined, `Bearer ${BRIDGE_TOKEN}`))).status)
+      .toBe(401);
+
+    const unseen = await call(request("GET", "/api/admin/bug-reports/unseen", undefined, `Bearer ${ADMIN_TOKEN}`));
+    expect(unseen.status).toBe(200);
+    expect(unseen.body?.count).toBe(1);
+
+    const seen = await call(request("POST", "/api/admin/bug-reports/seen", { ids: [id] }, `Bearer ${ADMIN_TOKEN}`));
+    expect(seen.status).toBe(200);
+    expect((seen.body?.alert as { count?: number }).count).toBe(0);
+
+    const after = await call(request("GET", "/api/admin/bug-reports/unseen", undefined, `Bearer ${ADMIN_TOKEN}`));
+    expect(after.body?.count).toBe(0);
+  });
+
   it("promotes through the admin route once and writes the linked todo", async () => {
     const submitted = await call(request(
       "POST",

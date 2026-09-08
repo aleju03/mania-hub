@@ -11,6 +11,7 @@ import { SettingsDrawer } from "./SettingsDrawer";
 import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
+import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { searchPlayers } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
@@ -163,6 +164,20 @@ function adminToolSearch(tool: AdminTool): never | undefined {
   return "search" in tool ? (tool.search as never) : undefined;
 }
 
+/* The unread badge. It rides the Admin button and the one tool the count is
+   about, so the menu does not have to be opened to know whether it is worth
+   opening. Same pill the bug report board wears on its status tabs. */
+function UnreadBadge({ count, className = "" }: { count: number; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute inline-flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-osu-red px-1 text-[9px] font-bold tabular-nums leading-none text-white ${className}`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 export function Nav() {
   const { t, i18n } = useLingui();
   const locale = useLocale();
@@ -202,6 +217,9 @@ export function Nav() {
   );
   const devToolsTitle = adminMode ? "Admin tools" : "Dev tools";
   const adminTools = adminToolsFor(adminMode);
+  // Reporters answering a thread are the one admin surface that goes stale
+  // silently, so the button says so before it is opened.
+  const bugReportAlert = useBugReportAlert(adminMode);
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
@@ -787,12 +805,13 @@ export function Nav() {
                 <button
                   type="button"
                   onClick={() => setAdminMenuOpen((open) => !open)}
-                  className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold whitespace-nowrap hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                  title={devToolsTitle}
+                  className="relative px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold whitespace-nowrap hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                  title={bugReportAlert.count ? `${devToolsTitle} - ${bugReportAlert.count} unread bug report${bugReportAlert.count === 1 ? "" : "s"}` : devToolsTitle}
                   aria-haspopup="menu"
                   aria-expanded={adminMenuOpen}
                 >
                   {devToolsLabel}
+                  {bugReportAlert.count ? <UnreadBadge count={bugReportAlert.count} className="-right-1.5 -top-1.5" /> : null}
                 </button>
                 {adminMenuOpen && (
                   /* Two columns: eight tools in one column ran most of the way
@@ -815,7 +834,7 @@ export function Nav() {
                           search={adminToolSearch(tool)}
                           onClick={() => setAdminMenuOpen(false)}
                           style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
-                          className={`admin-tool-link px-3 py-2 text-[11px] font-semibold transition-colors ${
+                          className={`admin-tool-link relative px-3 py-2 text-[11px] font-semibold transition-colors ${
                             index > 1 ? "border-t border-osu-b3/30" : ""
                           } ${index % 2 === 1 ? "border-l border-osu-b3/30" : ""} ${
                             full ? "col-span-2 text-center" : ""
@@ -823,6 +842,9 @@ export function Nav() {
                           role="menuitem"
                         >
                           {tool.label}
+                          {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
+                            <UnreadBadge count={bugReportAlert.count} className="right-2 top-1/2 -translate-y-1/2" />
+                          ) : null}
                         </Link>
                       );
                     })}
@@ -1263,9 +1285,12 @@ export function Nav() {
                         search={adminToolSearch(tool)}
                         onClick={() => setMenuOpen(false)}
                         style={{ "--admin-tool-accent": tool.accent } as CSSProperties}
-                        className="admin-tool-card text-center px-3 py-2 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border"
+                        className="admin-tool-card relative text-center px-3 py-2 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer border"
                       >
                         {tool.label}
+                        {tool.to === "/admin/bug-reports" && bugReportAlert.count ? (
+                          <UnreadBadge count={bugReportAlert.count} className="right-1.5 top-1.5" />
+                        ) : null}
                       </Link>
                     ))}
                   </div>

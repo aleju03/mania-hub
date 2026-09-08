@@ -33,15 +33,19 @@ import {
   uploadBugReportScreenshots,
   useBugReportScreenshots,
 } from "../../lib/bug-report-screenshots";
+import { publishBugReportAlert } from "../../lib/bug-report-alert";
 import {
   BUG_REPORT_MAX_SCREENSHOTS,
   BUG_REPORT_MESSAGE_MAX,
+  bugReportHasUnreadReporterActivity,
   bugReportThreadMessages,
   clearClosedBugReports,
   deleteBugReport,
   editBugReportMessageAsAdmin,
+  getBugReportAlert,
   getBugReportScreenshotUrls,
   listBugReports,
+  markBugReportsSeen,
   promoteBugReportToTodo,
   replyToBugReportAsAdmin,
   updateBugReport,
@@ -195,6 +199,20 @@ function formatWhen(ms: number): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/* A card keeps its chip for the visit even after the page has been stamped
+   read, so a glance down the list still shows what arrived while you were
+   away. Which words it uses says whether this is a first report or somebody
+   coming back to one. */
+function unreadLabel(report: BugReport): string {
+  return bugReportThreadMessages(report).some((message) => message.author === "reporter") ? "New reply" : "New";
+}
+
+function unreadFor(unread: Record<BugReportStatus, number>, filter: StatusFilter): number {
+  return filter === "all"
+    ? Object.values(unread).reduce((sum, n) => sum + n, 0)
+    : unread[filter];
 }
 
 function countFor(counts: BugReportCounts, filter: StatusFilter): number {
@@ -592,6 +610,8 @@ function Editor({
 
 function ReportCard({
   report,
+  unread,
+  unreadFading,
   busy,
   onStatus,
   onNote,
@@ -601,6 +621,8 @@ function ReportCard({
   onDelete,
 }: {
   report: BugReport;
+  unread: boolean;
+  unreadFading: boolean;
   busy: boolean;
   onStatus: (status: BugReportStatus) => void;
   onNote: (note: string) => void;
@@ -651,6 +673,15 @@ function ReportCard({
               <span className="rounded bg-osu-b4/60 px-1.5 py-0.5 text-[10.5px] text-osu-l2">{report.pagePath}</span>
             ) : null}
             <span className={`rounded-md border px-1.5 py-0.5 text-[10.5px] ${meta.pill}`}>{meta.label}</span>
+            {unread ? (
+              <span
+                className={`rounded-full bg-osu-red px-1.5 py-[1.5px] text-[9.5px] font-bold uppercase tracking-wide leading-none text-white transition-opacity duration-500 ${
+                  unreadFading ? "opacity-0" : "opacity-100"
+                }`}
+              >
+                {unreadLabel(report)}
+              </span>
+            ) : null}
             {report.todoId ? (
               <Link
                 to="/admin/todos"
@@ -771,6 +802,17 @@ function BugReportsAdminPage() {
   const [deleteAsk, setDeleteAsk] = useState<BugReport | null>(null);
   const [clearAsk, setClearAsk] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Which rows arrived unread on this load. The load stamps them read the
+     moment it shows them, so the chip is an arrival flash: it points out what
+     came in while you were away, fades a few seconds later, and does not sit
+     on a report you have plainly just read. */
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set());
+  const [chipsFading, setChipsFading] = useState(false);
+  /* What is still waiting, per status: the tab it sits behind wears the dot,
+     which is also how it gets cleared - opening that tab reads those rows. */
+  const [unread, setUnread] = useState<Record<BugReportStatus, number>>(() => ({
+    new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0,
+  }));
   // Guards against a slow response for an old filter landing after a newer one.
   const requestRef = useRef(0);
 
@@ -795,6 +837,20 @@ function BugReportsAdminPage() {
       setCounts(page.counts);
       setTotal(page.total);
       setError(null);
+
+      /* Showing a report is reading it, so the rows on screen are stamped and
+         the nav dot is told the new count straight away. Only these ids: a
+         reply sitting under another filter is still waiting for you. */
+      const arrived = page.reports.filter(bugReportHasUnreadReporterActivity).map((report) => report.id);
+      if (arrived.length) {
+        setChipsFading(false);
+        setUnreadIds((previous) => new Set([...previous, ...arrived]));
+      }
+      const alert = arrived.length
+        ? await markBugReportsSeen({ data: { ids: arrived } })
+        : await getBugReportAlert();
+      publishBugReportAlert(alert);
+      setUnread(alert.byStatus);
     } catch {
       if (request !== requestRef.current) return;
       setReports([]);
@@ -803,6 +859,20 @@ function BugReportsAdminPage() {
   }, [status, search, offset]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Long enough to catch the eye on a page you just opened, short enough that
+  // it is gone by the time you have read the report under it.
+  useEffect(() => {
+    if (!unreadIds.size || chipsFading) return;
+    const fade = setTimeout(() => setChipsFading(true), 6000);
+    return () => clearTimeout(fade);
+  }, [unreadIds, chipsFading]);
+
+  useEffect(() => {
+    if (!chipsFading) return;
+    const clear = setTimeout(() => setUnreadIds(new Set()), 700);
+    return () => clearTimeout(clear);
+  }, [chipsFading]);
 
   // Any filter change starts at the top; keeping an old offset lands on an
   // empty page whenever the new filter has fewer rows than the old one.
@@ -856,6 +926,7 @@ function BugReportsAdminPage() {
               {counts.new} waiting{counts.total ? ` · ${counts.total} filed` : ""}
               <span className="hidden sm:inline"> · what players say is broken</span>
             </p>
+
           </div>
 
           <div className="flex items-center gap-2">
@@ -910,6 +981,14 @@ function BugReportsAdminPage() {
                   <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
                     {meta?.label ?? "All"}
                   </span>
+                  {unreadFor(unread, filter) > 0 ? (
+                    <span
+                      title={`${unreadFor(unread, filter)} unread`}
+                      className="ml-auto inline-flex h-[15px] min-w-[15px] flex-shrink-0 items-center justify-center rounded-full bg-osu-red px-1 text-[9.5px] font-bold tabular-nums leading-none text-white"
+                    >
+                      {unreadFor(unread, filter)}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="mt-0.5 block text-[17px] font-bold tabular-nums text-white">
                   {countFor(counts, filter)}
@@ -941,6 +1020,8 @@ function BugReportsAdminPage() {
                 key={report.id}
                 report={report}
                 busy={busyId === report.id}
+                unread={unreadIds.has(report.id)}
+                unreadFading={chipsFading}
                 onStatus={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, status: next } }))}
                 onNote={(note) => void act(report.id, () => updateBugReport({ data: { id: report.id, adminNote: note } }))}
                 onReply={(body, files) => void sendReply(report.id, body, files)}

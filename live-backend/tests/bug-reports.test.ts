@@ -13,6 +13,7 @@ import {
   attachBugReportScreenshot,
   authorizeBugReportScreenshot,
   clearClosedBugReports,
+  countUnseenBugReports,
   createBugReport,
   deleteBugReport,
   editAdminBugReportMessage,
@@ -20,6 +21,7 @@ import {
   linkBugReportTodo,
   listBugReports,
   listBugReportsForUser,
+  markBugReportsSeen,
   promoteBugReportToTodo,
   updateBugReport,
 } from "../src/features/bug-reports.js";
@@ -70,6 +72,48 @@ describe("bug reports", () => {
     expect(stored?.userId).toBe(7);
     expect(stored?.username).toBe("reporter");
     expect(stored?.screenshotKeys).toEqual([]);
+  });
+
+  it("counts what the owner has not read and clears it when they do", async () => {
+    const first = await submit();
+    const second = await submit({ body: "Snipes tab never loads for me.", reporterKey: "user:8", userId: 8 });
+    if (!first.ok || !second.ok) throw new Error("setup failed");
+
+    // A filed report is unread by construction: nobody has opened it yet.
+    expect((await countUnseenBugReports(db)).count).toBe(2);
+
+    const marked = await markBugReportsSeen(db, { ids: [first.report.id] });
+    expect(marked.marked).toBe(1);
+    expect(marked.alert.count).toBe(1);
+    // The board marks the tab a waiting report sits behind, so the split
+    // matters as much as the total.
+    expect(marked.alert.byStatus.new).toBe(1);
+
+    // A reporter coming back makes it unread again; the owner's own answer
+    // does not. Both stamps are epoch ms, so the follow-up has to land in a
+    // later millisecond than the read for the comparison to mean anything.
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await addReporterBugReportMessage(db, { id: first.report.id, userId: 7, body: "Still happening today." });
+    expect((await countUnseenBugReports(db)).count).toBe(2);
+
+    await addAdminBugReportMessage(db, { id: first.report.id, body: "Looking at it now." });
+    const afterAnswer = await countUnseenBugReports(db);
+    expect(afterAnswer.count).toBe(1);
+    expect(afterAnswer.latestAt).toBe((await getBugReport(db, second.report.id))?.createdAt);
+
+    const cleared = (await markBugReportsSeen(db, { all: true })).alert;
+    expect(cleared.count).toBe(0);
+    expect(cleared.latestAt).toBeNull();
+  });
+
+  it("reading a report does not reorder the board", async () => {
+    const first = await submit();
+    if (!first.ok) throw new Error("setup failed");
+    const before = (await getBugReport(db, first.report.id))?.updatedAt;
+    await markBugReportsSeen(db, { ids: [first.report.id] });
+    const after = await getBugReport(db, first.report.id);
+    expect(after?.updatedAt).toBe(before);
+    expect(after?.adminSeenAt).toBeGreaterThan(0);
   });
 
   it("accepts a signed-out report and refuses one with nothing to act on", async () => {
