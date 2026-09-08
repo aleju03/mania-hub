@@ -80,7 +80,7 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     if (!checkRate(req, res, ctx, "danEstimate")) return true;
-    const analysis = await getRateAdjustedChartAnalysis(ctx.serveWriteDb ?? ctx.db, ctx.osu, beatmapId, rate);
+    const analysis = await getRateAdjustedChartAnalysis(ctx.serveWriteDb ?? ctx.db, ctx.osu, beatmapId, rate, ctx.queue);
     if (!analysis) {
       sendJson(req, res, ctx, 400, { error: "invalid_rate" });
       return true;

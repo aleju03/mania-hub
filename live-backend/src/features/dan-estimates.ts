@@ -19,6 +19,9 @@ const INLINE_DAN_ESTIMATE_CONCURRENCY = 2;
 export const MIN_RATE_PERCENT = 50;
 export const MAX_RATE_PERCENT = 200;
 const MAX_PARSED_DAN_BEATMAPS = 100;
+// Enumerate version equality probes so SQLite can also seek beatmap_id in
+// the composite primary key. A version range scans the whole estimate cache.
+const SERVING_VERSIONS_SQL = Array.from({ length: DAN_ESTIMATE_CACHE_VERSION }, (_, index) => DAN_ESTIMATE_CACHE_VERSION - index).join(", ");
 
 interface ParsedDanBeatmap {
   map: ManiaBeatmap;
@@ -85,7 +88,7 @@ interface ComputedDanEstimate {
 }
 
 type CachedDanEstimate =
-  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null; vibroAnalysis?: VibroAnalysis }
+  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null; vibroAnalysis?: VibroAnalysis; stale?: boolean }
   | { found: false };
 
 export function normalizeDanEstimateItems(
@@ -146,11 +149,13 @@ export async function getDanEstimateBatch(
   const requests = normalizeDanEstimateItems(items);
   const results: Record<string, LeanDanEstimate | null> = {};
   const missing: NormalizedDanEstimateRequest[] = [];
+  const refreshing: NormalizedDanEstimateRequest[] = [];
 
   for (const request of requests) {
-    const cached = await readCachedDanEstimate(db, request);
+    const cached = await readCachedDanEstimate(db, request, { allowPrevious: true });
     if (cached.found) {
       results[request.key] = cached.value;
+      if (cached.stale) refreshing.push(request);
     } else {
       missing.push(request);
     }
@@ -175,6 +180,12 @@ export async function getDanEstimateBatch(
   }
 
   const pending: string[] = [];
+  for (const request of refreshing) {
+    pending.push(request.key);
+    await enqueueDanEstimate(queue, request).catch((error) => logWarn("dan_estimate_refresh_enqueue_failed", {
+      beatmap_id: request.beatmapId, error: String(error),
+    }));
+  }
   for (const request of missing) {
     if (computedKeys.has(request.key)) continue;
     pending.push(request.key);
@@ -213,11 +224,18 @@ export async function getRateAdjustedChartAnalysis(
   osu: OsuApiClient,
   beatmapId: number,
   rate: number,
+  queue?: JobQueue,
 ): Promise<RateAdjustedChartAnalysis | null> {
   const [request] = normalizeDanEstimateItems([{ beatmapId, rate }]);
   if (!request) return null;
 
-  const cached = await readCachedDanEstimate(db, request);
+  const cached = await readCachedDanEstimate(db, request, { allowPrevious: queue != null });
+  if (cached.found && cached.stale && queue) {
+    await enqueueDanEstimate(queue, request).catch((error) => logWarn("dan_estimate_refresh_enqueue_failed", {
+      beatmap_id: request.beatmapId, error: String(error),
+    }));
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis);
+  }
   if (cached.found && (cached.msd != null || cached.status === "unavailable")) {
     return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis);
   }
@@ -413,6 +431,8 @@ export interface RateDanVerdictPair {
 }
 
 export interface StoredRateDanVerdict {
+  /** Still creditable while its current-version replacement is queued. */
+  stale?: boolean;
   rawDan: number;
   // "ln" or "dan", the estimator's primary-family split (companella.ts).
   family: string;
@@ -467,12 +487,13 @@ async function collectStoredRateDanVerdicts(
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = (await exec(
       db,
-      `select beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name${modColumn} from ${table}
-       where estimator_version = ? and beatmap_id in (${placeholders})`,
-      [DAN_ESTIMATE_CACHE_VERSION, ...chunk],
+      `select estimator_version, beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name${modColumn} from ${table}
+       where estimator_version in (${SERVING_VERSIONS_SQL}) and beatmap_id in (${placeholders})
+       order by estimator_version desc`,
+      chunk,
     )).rows;
-    // Current star ratings for the chunk, so stale or poisoned rows read as
-    // absent (recomputable with the canonical rating) instead of crediting.
+    // Changed or poisoned star ratings still invalidate a row, even when its
+    // estimator version is otherwise eligible for a serving fallback.
     const currentStarRatings = new Map<number, number>();
     for (const row of (await exec(
       db,
@@ -482,16 +503,20 @@ async function collectStoredRateDanVerdicts(
       const value = Number(row.difficulty_rating);
       if (Number.isFinite(value) && value > 0) currentStarRatings.set(Number(row.beatmap_id), value);
     }
+    const seen = new Set<string>();
     for (const row of rows) {
       const modVariant = row.mod_variant === INVERSE_MOD_VARIANT ? INVERSE_MOD_VARIANT : undefined;
       const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent), modVariant);
-      if (!wanted.has(key)) continue;
+      if (!wanted.has(key) || seen.has(key)) continue;
+      // A newer terminal or invalid result must never resurrect an older clear.
+      seen.add(key);
+      const stale = Number(row.estimator_version) !== DAN_ESTIMATE_CACHE_VERSION;
       const status = String(row.status ?? "");
       if (status === "unsupported" || status === "unavailable") {
-        verdicts.set(key, null);
+        if (!stale) verdicts.set(key, null);
         continue;
       }
-      // A malformed or out-of-date ready row stays absent, matching
+      // A malformed ready row stays absent, matching
       // readCachedDanEstimate: recomputable, not resolved.
       const rawDan = Number(row.raw_dan);
       const family = row.family == null ? "" : String(row.family);
@@ -499,7 +524,7 @@ async function collectStoredRateDanVerdicts(
       const storedStarRating = row.star_rating == null ? null : Number(row.star_rating);
       if (storedStarRatingInvalidatesRow(storedStarRating, currentStarRatings.get(Number(row.beatmap_id)))) continue;
       const displayName = typeof row.display_name === "string" && row.display_name.trim() ? row.display_name.trim() : null;
-      verdicts.set(key, { rawDan, family, displayName });
+      verdicts.set(key, { rawDan, family, displayName, ...(stale ? { stale: true } : {}) });
     }
     if (offset + chunk.length < ids.length) {
       await new Promise<void>((resolve) => setImmediate(resolve));
@@ -589,21 +614,30 @@ async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number,
   }
 }
 
-async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateRequest): Promise<CachedDanEstimate> {
+// Compute paths stay current-only so a serving fallback cannot suppress work.
+async function readCachedDanEstimate(
+  db: Db,
+  request: NormalizedDanEstimateRequest,
+  options: { allowPrevious?: boolean } = {},
+): Promise<CachedDanEstimate> {
   const { table, keyColumns, keyValues } = danEstimateTable(request);
+  const versionFilter = options.allowPrevious ? `estimator_version in (${SERVING_VERSIONS_SQL})` : "estimator_version = ?";
   const row = (await exec(
     db,
     `select *
      from ${table}
-     where ${keyColumns.map((column) => `${column} = ?`).join(" and ")}
+     where ${versionFilter} and ${keyColumns.slice(1).map((column) => `${column} = ?`).join(" and ")}
+     order by estimator_version desc
      limit 1`,
-    keyValues,
+    options.allowPrevious ? keyValues.slice(1) : keyValues,
   )).rows[0];
   if (!row) return { found: false };
+  const stale = Number(row.estimator_version) !== DAN_ESTIMATE_CACHE_VERSION;
   const status = String(row.status ?? "");
   const msd = readStoredMsd(row.msd_json);
   const vibroAnalysis = parseJson<MsdResult | null>(row.msd_json, null)?.vibroAnalysis;
   if (status === "unsupported" || status === "unavailable") {
+    if (stale) return { found: false };
     return { found: true, status, value: null, msd };
   }
   if (status !== "ready") return { found: false };
@@ -626,6 +660,7 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
     status: "ready",
     msd,
     vibroAnalysis,
+    ...(stale ? { stale: true } : {}),
     value: {
       label,
       variant: row.variant == null ? null : String(row.variant),
@@ -633,7 +668,7 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
       rawDan,
       family,
       confidence,
-      estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
+      estimatorVersion: Number(row.estimator_version),
     },
   };
 }

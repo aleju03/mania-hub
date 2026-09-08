@@ -26,8 +26,13 @@ import {
   describeBrowser,
   normalizeBugReportSourcePath,
 } from "../lib/bug-report-context";
+import {
+  imagesFromClipboard,
+  uploadBugReportScreenshots,
+  useBugReportScreenshots,
+  type BugReportUploadStatus,
+} from "../lib/bug-report-screenshots";
 import { track } from "../lib/analytics";
-import { MAX_IMAGE_UPLOAD_BYTES, isUploadableImage } from "../lib/catbox-upload";
 import { formatTimeAgo } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
 import { pageSeo } from "../lib/seo";
@@ -63,7 +68,6 @@ const REPLY_AUTHOR = {
 } as const;
 const REPORTER_THREAD_PREVIEW_COUNT = 6;
 
-type UploadStatus = "waiting" | "uploading" | "done" | "failed";
 type Phase = "idle" | "sending" | "sent";
 
 type ReportSearch = { from?: string };
@@ -91,13 +95,12 @@ function ReportPage() {
   const sourcePagePath = search.from;
 
   const [body, setBody] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const images = useBugReportScreenshots();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [uploadWarning, setUploadWarning] = useState(false);
-  const [uploads, setUploads] = useState<UploadStatus[]>([]);
+  const [uploads, setUploads] = useState<BugReportUploadStatus[]>([]);
   const [dragActive, setDragActive] = useState(false);
-  const [previews, setPreviews] = useState<string[]>([]);
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   const [clientContext, setClientContext] = useState<BugReportContext | null>(null);
   const [mine, setMine] = useState<MyBugReport[] | null>(null);
@@ -141,12 +144,6 @@ function ReportPage() {
     track("bug_report_open", { from: sourcePagePath ?? "direct" });
   }, [sourcePagePath]);
 
-  useEffect(() => {
-    const urls = files.map((file) => URL.createObjectURL(file));
-    setPreviews(urls);
-    return () => { urls.forEach((url) => URL.revokeObjectURL(url)); };
-  }, [files]);
-
   // Grows with the text instead of holding a scrollbar in a six-row box.
   useEffect(() => {
     const field = textareaRef.current;
@@ -163,27 +160,8 @@ function ReportPage() {
   };
 
   const addFiles = (picked: FileList | File[] | null) => {
-    if (!picked) return;
-    const incoming = Array.from(picked);
-    if (!incoming.length) return;
     setError(null);
-    const next = [...files];
-    for (const file of incoming) {
-      if (next.length >= BUG_REPORT_MAX_SCREENSHOTS) {
-        setError(t`Up to ${BUG_REPORT_MAX_SCREENSHOTS} images.`);
-        break;
-      }
-      if (!isUploadableImage(file)) {
-        setError(t`That file is not an image.`);
-        continue;
-      }
-      if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-        setError(t`Images have to be under 5MB.`);
-        continue;
-      }
-      next.push(file);
-    }
-    setFiles(next);
+    images.add(picked);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -193,7 +171,7 @@ function ReportPage() {
     setPhase("sending");
     setError(null);
     setUploadWarning(false);
-    const selectedFiles = files.slice();
+    const selectedFiles = images.files.slice();
     setUploads(selectedFiles.map(() => "waiting"));
     try {
       const context = collectBugReportContext({ locale, country });
@@ -212,7 +190,7 @@ function ReportPage() {
         return;
       }
       if (selectedFiles.length && result.uploadToken) {
-        const uploaded = await uploadScreenshots(result.id, result.uploadToken, selectedFiles, (index, status) => {
+        const uploaded = await uploadBugReportScreenshots(result.id, result.uploadToken, selectedFiles, (index, status) => {
           setUploads((current) => current.map((entry, itemIndex) => (itemIndex === index ? status : entry)));
         });
         if (uploaded < selectedFiles.length) setUploadWarning(true);
@@ -226,7 +204,7 @@ function ReportPage() {
         signed_in: signedIn,
       });
       setBody("");
-      setFiles([]);
+      images.clear();
       setUploads([]);
       setPhase("sent");
       refreshMine();
@@ -306,13 +284,10 @@ function ReportPage() {
                 autoFocus
                 onChange={(event) => setBody(event.target.value.slice(0, BUG_REPORT_BODY_MAX))}
                 onPaste={(event) => {
-                  const images = Array.from(event.clipboardData?.items ?? [])
-                    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-                    .map((item) => item.getAsFile())
-                    .filter((file): file is File => Boolean(file));
-                  if (!images.length) return;
+                  const pasted = imagesFromClipboard(event);
+                  if (!pasted.length) return;
                   event.preventDefault();
-                  addFiles(images);
+                  addFiles(pasted);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -323,42 +298,24 @@ function ReportPage() {
                 rows={1}
                 placeholder={t`What seems wrong?`}
                 className={`block max-h-[420px] w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[14px] leading-relaxed text-osu-l1 outline-none placeholder:text-osu-f1/55 disabled:opacity-60 ${
-                  files.length ? "min-h-[84px]" : "min-h-[136px]"
+                  images.files.length ? "min-h-[84px]" : "min-h-[136px]"
                 }`}
               />
 
-              {files.length ? (
-                <ul className="flex flex-wrap gap-2 px-4 pb-1 pt-1">
-                  {files.map((file, index) => (
-                    <li key={`${file.name}-${index}`} className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setLightbox({ urls: previews, index })}
-                        aria-label={t`Open image`}
-                        className="block cursor-zoom-in"
-                      >
-                        <ScreenshotThumb url={previews[index]} />
-                      </button>
-                      {uploads[index] ? <UploadBadge status={uploads[index]!} /> : null}
-                      {!busy ? (
-                        <button
-                          type="button"
-                          onClick={() => setFiles(files.filter((_, i) => i !== index))}
-                          aria-label={t`Remove image`}
-                          className="absolute -right-1.5 -top-1.5 cursor-pointer rounded-full border border-osu-b3/50 bg-osu-b5 p-0.5 text-osu-l2 transition-colors duration-[120ms] hover:text-white"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <PendingScreenshots
+                files={images.files}
+                previews={images.previews}
+                uploads={uploads}
+                busy={busy}
+                className="px-4 pb-1 pt-1"
+                onOpen={(index) => setLightbox({ urls: images.previews, index })}
+                onRemove={images.removeAt}
+              />
 
               <div className="flex items-center gap-2 border-t border-osu-b3/25 px-2.5 py-2">
                 <button
                   type="button"
-                  disabled={busy || files.length >= BUG_REPORT_MAX_SCREENSHOTS}
+                  disabled={busy || images.files.length >= BUG_REPORT_MAX_SCREENSHOTS}
                   onClick={() => fileInputRef.current?.click()}
                   title={t`Add an image`}
                   aria-label={t`Add an image`}
@@ -402,7 +359,9 @@ function ReportPage() {
               </div>
             </div>
 
-            {error ? <p className="mt-2 text-[12px] text-osu-pink-light">{error}</p> : null}
+            {error ?? images.error
+              ? <p className="mt-2 text-[12px] text-osu-pink-light">{error ?? images.error}</p>
+              : null}
 
             <p className="mt-2.5 text-[11px] leading-relaxed text-osu-f1" title={String(clientContext?.userAgent ?? "")}>
               <Trans>Sent along with it:</Trans>{" "}
@@ -502,7 +461,7 @@ function LoginLink({ label }: { label: React.ReactNode }) {
   );
 }
 
-function UploadBadge({ status }: { status: UploadStatus }) {
+function UploadBadge({ status }: { status: BugReportUploadStatus }) {
   if (status === "done") {
     return (
       <span className="absolute inset-0 grid place-items-center rounded-md bg-osu-b6/55 text-emerald-300">
@@ -524,18 +483,74 @@ function UploadBadge({ status }: { status: UploadStatus }) {
   );
 }
 
+/** The picked-but-not-yet-sent images under whatever is being written. */
+function PendingScreenshots({
+  files,
+  previews,
+  uploads,
+  busy,
+  className = "",
+  onOpen,
+  onRemove,
+}: {
+  files: File[];
+  previews: string[];
+  uploads: BugReportUploadStatus[];
+  busy: boolean;
+  className?: string;
+  onOpen: (index: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  const { t } = useLingui();
+  if (!files.length) return null;
+  return (
+    <ul className={`flex flex-wrap gap-2 ${className}`}>
+      {files.map((file, index) => (
+        <li key={`${file.name}-${index}`} className="relative">
+          <button
+            type="button"
+            onClick={() => onOpen(index)}
+            aria-label={t`Open image`}
+            className="block cursor-zoom-in"
+          >
+            <ScreenshotThumb url={previews[index]} />
+          </button>
+          {uploads[index] ? <UploadBadge status={uploads[index]!} /> : null}
+          {!busy ? (
+            <button
+              type="button"
+              onClick={() => onRemove(index)}
+              aria-label={t`Remove image`}
+              className="absolute -right-1.5 -top-1.5 cursor-pointer rounded-full border border-osu-b3/50 bg-osu-b5 p-0.5 text-osu-l2 transition-colors duration-[120ms] hover:text-white"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ScreenshotThumb({ url }: { url: string | undefined }) {
   return url
     ? <img src={url} alt="" className="h-14 w-20 rounded-md border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-85" />
     : <div className="h-14 w-20 rounded-md border border-osu-b3/30 bg-osu-b4/60" />;
 }
 
+/** Signed URLs cost a round trip each and expire, so they are asked for on the
+ *  click rather than for every report and message on the page. The same reader
+ *  serves the report's own images and any one follow-up's. */
 function ReporterScreenshots({
-  report,
+  reportId,
+  messageId,
+  count,
   onOpen,
   align,
 }: {
-  report: MyBugReport;
+  reportId: string;
+  messageId?: string;
+  count: number;
   onOpen: (urls: string[], index: number) => void;
   align: "start" | "end";
 }) {
@@ -546,13 +561,13 @@ function ReporterScreenshots({
   useEffect(() => {
     if (!open || urls) return;
     let cancelled = false;
-    void getBugReportScreenshotUrls({ data: { id: report.id } })
+    void getBugReportScreenshotUrls({ data: { id: reportId, messageId } })
       .then((next) => { if (!cancelled) setUrls(next); })
       .catch(() => { if (!cancelled) setUrls([]); });
     return () => { cancelled = true; };
-  }, [open, report.id, urls]);
+  }, [open, reportId, messageId, urls]);
 
-  if (report.screenshotCount <= 0) return null;
+  if (count <= 0) return null;
   if (!open) {
     return (
       <button
@@ -561,9 +576,9 @@ function ReporterScreenshots({
         className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-pink-light"
       >
         <ImagePlus className="h-3.5 w-3.5" />
-        {report.screenshotCount === 1
+        {count === 1
           ? <Trans>1 screenshot</Trans>
-          : <Trans>{report.screenshotCount} screenshots</Trans>}
+          : <Trans>{count} screenshots</Trans>}
       </button>
     );
   }
@@ -629,9 +644,11 @@ function MessageBubble({
 function ReporterThread({
   report,
   locale,
+  onOpenImage,
 }: {
   report: MyBugReport;
   locale: ReturnType<typeof useLocale>;
+  onOpenImage: (urls: string[], index: number) => void;
 }) {
   const messages = bugReportThreadMessages(report);
   const [expanded, setExpanded] = useState(false);
@@ -661,8 +678,26 @@ function ReporterThread({
           ? formatTimeAgo(new Date(message.createdAt).toISOString(), locale)
           : null;
         const spacing = opensRun && index > 0 ? "pt-2.5" : "";
+        const screenshots = message.screenshotCount > 0
+          ? (
+            <div className={`mt-1.5 flex ${admin ? "" : "justify-end"}`}>
+              <ReporterScreenshots
+                reportId={report.id}
+                messageId={message.id}
+                count={message.screenshotCount}
+                onOpen={onOpenImage}
+                align={admin ? "start" : "end"}
+              />
+            </div>
+          )
+          : null;
         if (!admin) {
-          return <MessageBubble key={message.id} mine time={time} className={spacing}>{message.body}</MessageBubble>;
+          return (
+            <div key={message.id} className={spacing}>
+              <MessageBubble mine time={time}>{message.body}</MessageBubble>
+              {screenshots}
+            </div>
+          );
         }
         return (
           <div key={message.id} className={`flex items-end gap-2 ${spacing}`}>
@@ -676,6 +711,7 @@ function ReporterThread({
                 </span>
               ) : null}
               <MessageBubble mine={false} time={time}>{message.body}</MessageBubble>
+              {screenshots}
             </div>
           </div>
         );
@@ -688,35 +724,68 @@ function ReporterReplyComposer({
   report,
   onSent,
   onCancel,
+  onOpenImage,
 }: {
   report: MyBugReport;
-  onSent: (report: MyBugReport) => void;
+  onSent: (report: MyBugReport, uploadWarning: boolean) => void;
   onCancel: () => void;
+  onOpenImage: (urls: string[], index: number) => void;
 }) {
   const { t } = useLingui();
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<BugReportUploadStatus[]>([]);
+  const images = useBugReportScreenshots();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const send = async () => {
     const body = draft.trim();
     if (!body || busy) return;
     setBusy(true);
     setError(null);
+    const selectedFiles = images.files.slice();
+    setUploads(selectedFiles.map(() => "waiting"));
     try {
-      const result = await replyToMyBugReport({ data: { id: report.id, body } });
+      const result = await replyToMyBugReport({
+        data: { id: report.id, body, screenshotCount: selectedFiles.length },
+      });
       if (!result.ok) {
         setError(result.reason === "too_many_messages"
           ? t`Too many updates today. Try again tomorrow.`
           : result.reason === "invalid_message"
             ? t`Write something first.`
             : t`Could not send that update. Try again.`);
+        setUploads([]);
         return;
       }
+      // The words are already stored, so a failed image is a line under the
+      // thread rather than a lost reply.
+      let uploaded = 0;
+      if (selectedFiles.length) {
+        uploaded = result.uploadToken && result.messageId
+          ? await uploadBugReportScreenshots(report.id, result.uploadToken, selectedFiles, (index, status) => {
+            setUploads((current) => current.map((entry, itemIndex) => (itemIndex === index ? status : entry)));
+          }, result.messageId)
+          : 0;
+      }
+      // The reply answered before its images were attached, so the counts it
+      // came back with are one write behind what is now stored.
+      const sentReport: MyBugReport = uploaded > 0
+        ? {
+          ...result.report,
+          messages: result.report.messages.map((message) => (
+            message.id === result.messageId ? { ...message, screenshotCount: uploaded } : message
+          )),
+        }
+        : result.report;
       setDraft("");
-      onSent(result.report);
+      images.clear();
+      setUploads([]);
+      onSent(sentReport, uploaded < selectedFiles.length);
     } catch {
       setError(t`Could not send that update. Try again.`);
+      setUploads([]);
     } finally {
       setBusy(false);
     }
@@ -724,7 +793,17 @@ function ReporterReplyComposer({
 
   return (
     <div className="mt-2.5 flex justify-end">
-      <div className="w-full max-w-[min(88%,34rem)] rounded-2xl rounded-br-md bg-osu-pink/10 px-3.5 py-2.5 ring-1 ring-osu-pink/20">
+      <div
+        onDragOver={(event) => {
+          if (!busy) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (busy) return;
+          event.preventDefault();
+          images.add(event.dataTransfer.files);
+        }}
+        className="w-full max-w-[min(88%,34rem)] rounded-2xl rounded-br-md bg-osu-pink/10 px-3.5 py-2.5 ring-1 ring-osu-pink/20"
+      >
         <textarea
           autoFocus
           value={draft}
@@ -732,6 +811,12 @@ function ReporterReplyComposer({
           maxLength={BUG_REPORT_MESSAGE_MAX}
           rows={2}
           onChange={(event) => setDraft(event.target.value)}
+          onPaste={(event) => {
+            const pasted = imagesFromClipboard(event);
+            if (!pasted.length) return;
+            event.preventDefault();
+            images.add(pasted);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Escape" && !draft.trim()) onCancel();
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -742,7 +827,37 @@ function ReporterReplyComposer({
           placeholder={t`Anything else that might help?`}
           className="block w-full resize-y bg-transparent text-[13.5px] leading-relaxed text-osu-c1 outline-none placeholder:text-osu-f1/55 disabled:opacity-60"
         />
+        <PendingScreenshots
+          files={images.files}
+          previews={images.previews}
+          uploads={uploads}
+          busy={busy}
+          className="pt-2"
+          onOpen={(index) => onOpenImage(images.previews, index)}
+          onRemove={images.removeAt}
+        />
         <div className="mt-2 flex items-center gap-3">
+          <button
+            type="button"
+            disabled={busy || images.files.length >= BUG_REPORT_MAX_SCREENSHOTS}
+            onClick={() => fileInputRef.current?.click()}
+            title={t`Add an image`}
+            aria-label={t`Add an image`}
+            className="inline-flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-osu-f1 transition-colors duration-[120ms] hover:bg-osu-b4/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ImagePlus className="h-4 w-4" />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              images.add(event.target.files);
+              event.target.value = "";
+            }}
+          />
           <button
             type="button"
             onClick={onCancel}
@@ -760,7 +875,9 @@ function ReporterReplyComposer({
             {busy ? t`Sending...` : t`Send`}
           </button>
         </div>
-        {error ? <p className="mt-1.5 text-[11.5px] text-osu-pink-light">{error}</p> : null}
+        {error ?? images.error
+          ? <p className="mt-1.5 text-[11.5px] text-osu-pink-light">{error ?? images.error}</p>
+          : null}
       </div>
     </div>
   );
@@ -771,35 +888,50 @@ function ReporterReply({
   report,
   onSent,
   conversation,
+  onOpenImage,
 }: {
   report: MyBugReport;
   onSent: (report: MyBugReport) => void;
   conversation: boolean;
+  onOpenImage: (urls: string[], index: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [uploadWarning, setUploadWarning] = useState(false);
   if (open) {
     return (
       <ReporterReplyComposer
         report={report}
         onCancel={() => setOpen(false)}
-        onSent={(updated) => {
+        onOpenImage={onOpenImage}
+        onSent={(updated, warning) => {
           setOpen(false);
+          setUploadWarning(warning);
           onSent(updated);
         }}
       />
     );
   }
   return (
-    <div className={`mt-3 flex ${conversation ? "justify-end" : ""}`}>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-osu-b5/40 px-4 py-2 text-[12.5px] text-osu-f1 ring-1 ring-osu-b3/25 transition-colors duration-[120ms] hover:bg-osu-b4/50 hover:text-osu-l2"
-      >
-        <MessageSquare className="h-3.5 w-3.5" />
-        {conversation ? <Trans>Write a reply</Trans> : <Trans>Add more details</Trans>}
-      </button>
-    </div>
+    <>
+      {uploadWarning ? (
+        <p className={`mt-2 text-[11.5px] text-osu-pink-light ${conversation ? "text-right" : ""}`}>
+          <Trans>Your reply was sent, but at least one image did not upload.</Trans>
+        </p>
+      ) : null}
+      <div className={`mt-3 flex ${conversation ? "justify-end" : ""}`}>
+        <button
+          type="button"
+          onClick={() => {
+            setUploadWarning(false);
+            setOpen(true);
+          }}
+          className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-osu-b5/40 px-4 py-2 text-[12.5px] text-osu-f1 ring-1 ring-osu-b3/25 transition-colors duration-[120ms] hover:bg-osu-b4/50 hover:text-osu-l2"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          {conversation ? <Trans>Write a reply</Trans> : <Trans>Add more details</Trans>}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -859,9 +991,14 @@ function ReportRow({
             <>
               <MessageBubble mine time={null}>{report.body}</MessageBubble>
               <div className="mt-1.5 flex justify-end">
-                <ReporterScreenshots report={report} onOpen={onOpenImage} align="end" />
+                <ReporterScreenshots
+                  reportId={report.id}
+                  count={report.screenshotCount}
+                  onOpen={onOpenImage}
+                  align="end"
+                />
               </div>
-              <ReporterThread report={report} locale={locale} />
+              <ReporterThread report={report} locale={locale} onOpenImage={onOpenImage} />
             </>
           ) : (
             <div className="pl-6">
@@ -869,12 +1006,22 @@ function ReportRow({
                 {report.body}
               </p>
               <div className="mt-2">
-                <ReporterScreenshots report={report} onOpen={onOpenImage} align="start" />
+                <ReporterScreenshots
+                  reportId={report.id}
+                  count={report.screenshotCount}
+                  onOpen={onOpenImage}
+                  align="start"
+                />
               </div>
             </div>
           )}
           <div className={messages.length ? "" : "pl-6"}>
-            <ReporterReply report={report} onSent={onReportUpdated} conversation={messages.length > 0} />
+            <ReporterReply
+              report={report}
+              onSent={onReportUpdated}
+              conversation={messages.length > 0}
+              onOpenImage={onOpenImage}
+            />
           </div>
         </div>
       ) : null}
@@ -919,6 +1066,7 @@ function StatusChip({ status }: { status: BugReportStatus }) {
   const label: Record<BugReportStatus, string> = {
     new: t`open`,
     investigating: t`looking into it`,
+    pending: t`on the to-do list`,
     fixed: t`fixed`,
     wontfix: t`not a bug`,
     duplicate: t`already reported`,
@@ -928,7 +1076,7 @@ function StatusChip({ status }: { status: BugReportStatus }) {
   };
   const tone = status === "fixed"
     ? "bg-emerald-400/10 text-emerald-200"
-    : status === "new" || status === "investigating" || status === "notabug"
+    : status === "new" || status === "investigating" || status === "pending" || status === "notabug"
       ? "bg-osu-pink/10 text-osu-pink-light"
       : "bg-osu-b4/60 text-osu-l2";
   return (
@@ -937,37 +1085,4 @@ function StatusChip({ status }: { status: BugReportStatus }) {
       {label[status]}
     </span>
   );
-}
-
-/**
- * Uploads run one at a time against the ticket the submit handed back. A
- * failure is not fatal: the report itself is already filed, and the words are
- * the part that matters.
- */
-async function uploadScreenshots(
-  id: string,
-  token: string,
-  files: File[],
-  onProgress: (index: number, status: UploadStatus) => void,
-): Promise<number> {
-  let uploaded = 0;
-  for (let index = 0; index < files.length; index++) {
-    const file = files[index]!;
-    onProgress(index, "uploading");
-    try {
-      const response = await fetch(
-        `/api/bug-report-upload?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&index=${index}`,
-        { method: "POST", headers: { "content-type": file.type || "image/png" }, body: file },
-      );
-      if (response.ok) {
-        uploaded += 1;
-        onProgress(index, "done");
-      } else {
-        onProgress(index, "failed");
-      }
-    } catch {
-      onProgress(index, "failed");
-    }
-  }
-  return uploaded;
 }

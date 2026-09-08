@@ -985,13 +985,20 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ id?: unknown; body?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ id?: unknown; body?: unknown; screenshotCount?: unknown }>((await readBody(req)) || "{}", {});
     const result = await addAdminBugReportMessage(ctx.serveWriteDb ?? ctx.db, body);
     if (!result.ok) {
       sendJson(req, res, ctx, result.reason === "invalid_message" ? 400 : 404, { error: result.reason });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, report: result.report });
+    // Same shape the reporter's reply answers with: the ticket for the images
+    // this message said it was about to send.
+    sendJson(req, res, ctx, 200, {
+      ok: true,
+      report: result.report,
+      messageId: result.messageId,
+      uploadToken: result.uploadToken,
+    });
     return true;
   }
   if (url.pathname === "/api/admin/bug-reports/edit-message") {

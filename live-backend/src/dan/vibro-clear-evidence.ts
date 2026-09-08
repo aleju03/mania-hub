@@ -1,5 +1,18 @@
 import { calculateStableAccuracy, getScoreHitCounts } from "../shared/score.js";
 import type { OsuScoreStatistics } from "../shared/types.js";
+import type { VibroReason, VibroSection } from "./vibro-sections.js";
+
+const CLEAR_EVIDENCE_PATTERNS: ReadonlySet<VibroReason> = new Set([
+  "dense_chord_repetition",
+  "sustained_chords",
+]);
+
+/** Pattern gate only; the caller still requires a PP-backed uprate, a clean
+ * base chart, valid structure and qualifying judgement/window evidence. */
+export function hasOnlyClearEvidencePatterns(sections: readonly VibroSection[]): boolean {
+  return sections.length > 0 && sections.every((section) => section.reasons.length > 0
+    && section.reasons.every((reason) => CLEAR_EVIDENCE_PATTERNS.has(reason)));
+}
 
 export interface VibroClearEvidence {
   version: 1;

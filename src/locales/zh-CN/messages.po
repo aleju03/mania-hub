@@ -677,8 +677,8 @@ msgstr "{0} 个成绩"
 
 #. placeholder {0}: report.screenshotCount
 #: src/routes/report.tsx
-msgid "{0} screenshots"
-msgstr "{0} 张截图"
+#~ msgid "{0} screenshots"
+#~ msgstr "{0} 张截图"
 
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
@@ -922,6 +922,10 @@ msgstr "{count} 名关注者"
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
 msgstr "{count} 次回放观看"
+
+#: src/routes/report.tsx
+msgid "{count} screenshots"
+msgstr "{count} 张截图"
 
 #: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
@@ -3393,7 +3397,7 @@ msgstr "更换"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Change"
-msgstr "变化"
+msgstr "更换"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgctxt "skill rating difference"
@@ -3443,6 +3447,10 @@ msgstr "谱面"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "chart dan"
+msgstr "谱面段位"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chart Dan"
 msgstr "谱面段位"
 
 #: src/routes/replay.tsx
@@ -4619,9 +4627,17 @@ msgstr "段位"
 msgid "Dan (est.)"
 msgstr "段位(估算)"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Dan accuracy"
+msgstr "段位准确率"
+
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Dan course"
 msgstr "段位类型"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Dan credit"
+msgstr "段位贡献"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -5434,6 +5450,10 @@ msgstr "全部"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "压缩包里的其他所有文件"
+
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Excluded sections"
+#~ msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Excludes all dan-related stuff from the website"
@@ -6630,7 +6650,7 @@ msgstr "Imagemap 区域 {0}/{1}"
 msgid "Images from {sourceName}"
 msgstr "来自 {sourceName} 的图片"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "Images have to be under 5MB."
 msgstr "图片需小于 5MB。"
 
@@ -9424,6 +9444,10 @@ msgstr "单图"
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
 msgstr "已展示"
+
+#: src/routes/report.tsx
+msgid "on the to-do list"
+msgstr "已列入待办"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13106,6 +13130,10 @@ msgstr "确定？这张卡片将离开收藏册"
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
 #~ msgstr "检测到持续 Vibro。单次成绩需达到至少 95% 准确率、至少 2:1 的 MAX:300 比值和 OD9+，且不能放宽判定窗口，才会计入评分。"
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Sustained vibro detected. This chart does not count toward ordinary skill or dan ratings."
+#~ msgstr ""
+
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
@@ -13334,7 +13362,7 @@ msgstr "这看起来不像是 Discord 邀请链接。"
 msgid "That doesn't look like an osu! score link."
 msgstr "这看起来不像 osu! 成绩链接。"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "That file is not an image."
 msgstr "该文件不是图片。"
 
@@ -15006,7 +15034,7 @@ msgstr "未评分"
 msgid "unreadable"
 msgstr "无法读取"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
 
@@ -16079,6 +16107,10 @@ msgstr "无法加载你的回放皮肤"
 #: src/routes/replay_.uploads.tsx
 msgid "Your Replay Uploads"
 msgstr "你上传的回放"
+
+#: src/routes/report.tsx
+msgid "Your reply was sent, but at least one image did not upload."
+msgstr "回复已发送，但至少有一张图片没能上传。"
 
 #: src/routes/report.tsx
 msgid "Your reports"

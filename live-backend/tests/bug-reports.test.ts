@@ -279,6 +279,142 @@ describe("bug reports", () => {
       if (!created.ok) return;
       expect(created.uploadToken).toBeNull();
     });
+
+    it("hangs a follow-up's images on that message and nowhere else", async () => {
+      const created = await submit();
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const { id } = created.report;
+
+      const plain = await addReporterBugReportMessage(db, { id, userId: 7, body: "No image on this one." });
+      expect(plain.ok && plain.uploadToken).toBeNull();
+
+      const withImage = await addReporterBugReportMessage(db, {
+        id,
+        userId: 7,
+        body: "Here is what it looks like.",
+        screenshotCount: 1,
+      });
+      expect(withImage.ok).toBe(true);
+      if (!withImage.ok || !withImage.uploadToken) return;
+      const { messageId, uploadToken } = withImage;
+      const key = `bug-reports/${id}/m/${messageId}/0.png`;
+
+      expect(await authorizeBugReportScreenshot(db, { id, messageId, token: uploadToken, key }))
+        .toEqual({ ok: true, alreadyAttached: false });
+      expect(await attachBugReportScreenshot(db, { id, messageId, token: uploadToken, key }))
+        .toEqual({ ok: true, screenshotKeys: [key] });
+
+      const stored = await getBugReport(db, id);
+      // The image is on the message it was sent with, not on the report body.
+      expect(stored?.screenshotKeys).toEqual([]);
+      expect(stored?.messages.map((message) => message.screenshotKeys)).toEqual([[], [key]]);
+      expect((await listBugReportsForUser(db, 7))[0]?.messages.map((message) => message.screenshotCount))
+        .toEqual([0, 1]);
+    });
+
+    it("refuses a message ticket used for the report, another message or a report-shaped key", async () => {
+      const created = await submit({ screenshotCount: 1 });
+      expect(created.ok).toBe(true);
+      if (!created.ok || !created.uploadToken) return;
+      const { id } = created.report;
+
+      const first = await addReporterBugReportMessage(db, { id, userId: 7, body: "One.", screenshotCount: 1 });
+      const second = await addReporterBugReportMessage(db, { id, userId: 7, body: "Two.", screenshotCount: 1 });
+      expect(first.ok && second.ok).toBe(true);
+      if (!first.ok || !second.ok || !first.uploadToken || !second.uploadToken) return;
+
+      // A message ticket does not open the report row, and the report's own
+      // does not open a message.
+      expect(await attachBugReportScreenshot(db, {
+        id,
+        token: first.uploadToken,
+        key: `bug-reports/${id}/0.png`,
+      })).toEqual({ ok: false, reason: "invalid_token" });
+      expect(await attachBugReportScreenshot(db, {
+        id,
+        messageId: first.messageId,
+        token: created.uploadToken,
+        key: `bug-reports/${id}/m/${first.messageId}/0.png`,
+      })).toEqual({ ok: false, reason: "invalid_token" });
+      // One message cannot write into another's folder, whichever ticket it holds.
+      expect(await attachBugReportScreenshot(db, {
+        id,
+        messageId: first.messageId,
+        token: first.uploadToken,
+        key: `bug-reports/${id}/m/${second.messageId}/0.png`,
+      })).toEqual({ ok: false, reason: "invalid_key" });
+      // Nor into the report's own.
+      expect(await attachBugReportScreenshot(db, {
+        id,
+        messageId: first.messageId,
+        token: first.uploadToken,
+        key: `bug-reports/${id}/0.png`,
+      })).toEqual({ ok: false, reason: "invalid_key" });
+      expect(await attachBugReportScreenshot(db, {
+        id,
+        messageId: "missing",
+        token: first.uploadToken,
+        key: `bug-reports/${id}/m/missing/0.png`,
+      })).toEqual({ ok: false, reason: "report_not_found" });
+    });
+
+    it("lets the owner answer with images on their own message ticket", async () => {
+      const created = await submit();
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const { id } = created.report;
+
+      const answered = await addAdminBugReportMessage(db, {
+        id,
+        body: "Fixed, this is what it looks like now.",
+        screenshotCount: 1,
+      });
+      expect(answered.ok).toBe(true);
+      if (!answered.ok || !answered.uploadToken) return;
+      const key = `bug-reports/${id}/m/${answered.messageId}/0.png`;
+      expect(await attachBugReportScreenshot(db, {
+        id,
+        messageId: answered.messageId,
+        token: answered.uploadToken,
+        key,
+      })).toEqual({ ok: true, screenshotKeys: [key] });
+
+      const stored = await getBugReport(db, id);
+      expect(stored?.messages.map(({ author, screenshotKeys }) => ({ author, screenshotKeys })))
+        .toEqual([{ author: "admin", screenshotKeys: [key] }]);
+      // The reporter reads it back as a count, like any other message.
+      expect((await listBugReportsForUser(db, 7))[0]?.messages.map((message) => message.screenshotCount))
+        .toEqual([1]);
+      // An answer without images mints nothing.
+      const plain = await addAdminBugReportMessage(db, { id, body: "One more thing." });
+      expect(plain.ok && plain.uploadToken).toBeNull();
+    });
+
+    it("hands back a follow-up's images to delete with the report", async () => {
+      const created = await submit({ screenshotCount: 1 });
+      expect(created.ok).toBe(true);
+      if (!created.ok || !created.uploadToken) return;
+      const { id } = created.report;
+      const reportKey = `bug-reports/${id}/0.png`;
+      await attachBugReportScreenshot(db, { id, token: created.uploadToken, key: reportKey });
+
+      const reply = await addReporterBugReportMessage(db, { id, userId: 7, body: "And this.", screenshotCount: 1 });
+      expect(reply.ok).toBe(true);
+      if (!reply.ok || !reply.uploadToken) return;
+      const messageKey = `bug-reports/${id}/m/${reply.messageId}/0.png`;
+      await attachBugReportScreenshot(db, {
+        id,
+        messageId: reply.messageId,
+        token: reply.uploadToken,
+        key: messageKey,
+      });
+
+      await updateBugReport(db, { id, status: "fixed" });
+      const cleared = await clearClosedBugReports(db);
+      expect(cleared.cleared).toBe(1);
+      expect(cleared.screenshotKeys.sort()).toEqual([reportKey, messageKey].sort());
+    });
   });
 
   it("filters, counts and searches the admin board", async () => {
@@ -290,7 +426,16 @@ describe("bug reports", () => {
 
     const all = await listBugReports(db);
     expect(all.total).toBe(2);
-    expect(all.counts).toEqual({ new: 1, investigating: 0, fixed: 1, wontfix: 0, duplicate: 0, notabug: 0, total: 2 });
+    expect(all.counts).toEqual({
+      new: 1,
+      investigating: 0,
+      pending: 0,
+      fixed: 1,
+      wontfix: 0,
+      duplicate: 0,
+      notabug: 0,
+      total: 2,
+    });
 
     const open = await listBugReports(db, { status: "new" });
     expect(open.reports).toHaveLength(1);
@@ -329,7 +474,10 @@ describe("bug reports", () => {
       { author: "admin", body: "Found it. I am shipping the fix." },
     ]);
     expect(stored?.reply).toBe("Found it. I am shipping the fix.");
-    expect((await listBugReportsForUser(db, 7))[0]?.messages).toEqual(stored?.messages);
+    // The reporter's copy is the same thread with counts in place of keys.
+    expect((await listBugReportsForUser(db, 7))[0]?.messages).toEqual(
+      stored?.messages.map(({ screenshotKeys, ...message }) => ({ ...message, screenshotCount: screenshotKeys.length })),
+    );
     expect((await listBugReports(db, { search: "hard refresh" })).reports[0]?.id).toBe(id);
   });
 

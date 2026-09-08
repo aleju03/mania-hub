@@ -82,7 +82,9 @@ async function flush() {
       const responseKey = estimateResponseKey(request.beatmapId, request.rate);
       const key = estimateKey(request.beatmapId, request.rate);
       if (livePending.has(responseKey)) {
-        schedulePendingRetry(key);
+        // A previous-version estimate remains visible during background work.
+        if (results[responseKey] != null) cache.set(key, results[responseKey]);
+        schedulePendingRetry(key, request);
         continue;
       }
       clearPendingRetry(key);
@@ -109,19 +111,22 @@ function requestEstimate(
   return undefined;
 }
 
-function schedulePendingRetry(key: string) {
+function schedulePendingRetry(key: string, request: PendingRequest) {
   if (pendingRetryTimers.has(key)) return;
   const retryCount = (pendingRetryCounts.get(key) ?? 0) + 1;
   pendingRetryCounts.set(key, retryCount);
   if (retryCount > 8) {
     pendingRetryCounts.delete(key);
-    cache.set(key, null);
+    if (!cache.has(key)) cache.set(key, null);
     return;
   }
   const retryDelay = Math.min(30_000, 1500 * 2 ** Math.min(5, retryCount - 1));
   pendingRetryTimers.set(key, setTimeout(() => {
     pendingRetryTimers.delete(key);
-    for (const fn of listeners) fn();
+    // Explicitly fetch again: a visible fallback is already in cache, so a
+    // render alone would keep returning it without requesting its replacement.
+    pending.set(key, request);
+    scheduleFlush();
   }, retryDelay));
 }
 

@@ -1,3 +1,4 @@
+import { ensureLeoblackFusionSeeded } from "./features/leoblack-fusion.js";
 import { ensureChartFamilySweepSeeded } from "./features/chart-families.js";
 import { registerServingReadThreads } from "./serving-read-thread.js";
 import { createServer } from "node:http";
@@ -560,6 +561,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureLnLeoblackRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-leoblack] seed failed", error));
       void ensureSunnyRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin] seed failed", error));
       void ensureSunnyRepinDtRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin-dt] seed failed", error));
+      void ensureLeoblackFusionSeeded(app.db, app.queue).catch((error) => logWarn("leoblack_fusion_seed_failed", { error: String(error) }));
       void ensureLeoblackRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[leoblack-repin] seed failed", error));
       void ensureLeoblackRepinDtRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[leoblack-repin-dt] seed failed", error));
       void ensureDtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[dt-rate-analysis] seed failed", error));

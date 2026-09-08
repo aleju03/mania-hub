@@ -1,13 +1,95 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
-import { getDanEstimateBatch, loadStoredRateDanVerdicts, normalizeDanEstimateItems, rateDanVerdictKey } from "../src/features/dan-estimates.js";
+import { computeDanEstimateJob, getDanEstimateBatch, getRateAdjustedChartAnalysis, loadStoredRateDanVerdicts, normalizeDanEstimateItems, rateDanVerdictKey } from "../src/features/dan-estimates.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 describe("normalizeDanEstimateItems", () => {
+  it("serves the previous estimate and MSD while queued, then replaces them with the job's current result", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-dan-refresh-"));
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    try {
+      await migrate(db);
+      const queue = new JobQueue(db);
+      const now = new Date().toISOString();
+      await exec(db, `insert into dan_estimates
+        (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, msd_json, computed_at, updated_at)
+        values (?, 991, 120, 'ready', '8', '8', 8, 'dan', 0.9, '{"values":{"Overall":20}}', ?, ?)`,
+      [DAN_ESTIMATE_CACHE_VERSION - 1, now, now]);
+      const osu = { getBeatmapFile: vi.fn(async () => buildFourKeyBeatmapFile()) };
+      const items = [{ beatmapId: 991, rate: 1.2 }];
+      const batch = await getDanEstimateBatch(db, queue, osu as never, items, { computeMissing: true });
+      expect(batch.results["991:120"]).toMatchObject({ rawDan: 8, estimatorVersion: DAN_ESTIMATE_CACHE_VERSION - 1 });
+      expect(batch.pending).toEqual(["991:120"]);
+      expect(osu.getBeatmapFile).not.toHaveBeenCalled();
+      expect(await getRateAdjustedChartAnalysis(db, osu as never, 991, 1.2, queue)).toMatchObject({
+        status: "ready", dan: { rawDan: 8 }, msd: { Overall: 20 },
+      });
+      expect((await exec(db, "select id from jobs where type = 'compute_dan_estimate'")).rows).toHaveLength(1);
+      const failedQueue = { enqueue: async () => { throw new Error("queue busy"); } };
+      expect((await getDanEstimateBatch(db, failedQueue as never, osu as never, items)).results["991:120"]?.rawDan).toBe(8);
+
+      await computeDanEstimateJob(db, osu as never, items[0]);
+      const fresh = await getDanEstimateBatch(db, queue, osu as never, items);
+      expect(fresh.pending).toEqual([]);
+      expect(fresh.results["991:120"]?.estimatorVersion).toBe(DAN_ESTIMATE_CACHE_VERSION);
+      expect(osu.getBeatmapFile).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps old rate and Invert credit separate, honors current negatives, and rejects poisoned fallbacks", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-dan-fallback-"));
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    try {
+      await migrate(db);
+      const now = new Date().toISOString();
+      await exec(db, "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, difficulty_rating, updated_at) values (992, 1, 'mania', '4K', 4.2, ?)", [now]);
+      for (const table of ["dan_estimates", "dan_mod_estimates"]) {
+        const modColumn = table === "dan_mod_estimates" ? ", mod_variant" : "";
+        const modValue = table === "dan_mod_estimates" ? ", 'IN'" : "";
+        for (const rate of [120, 130, 140]) {
+          await exec(db, `insert into ${table}
+            (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, star_rating, computed_at, updated_at${modColumn})
+            values (?, 992, ?, 'ready', '8', 'old', ?, 'dan', 0.9, ?, ?, ?${modValue})`,
+          [DAN_ESTIMATE_CACHE_VERSION - 1, rate, table === "dan_estimates" ? 8 : 9, rate === 140 ? 1000 : 4.2, now, now]);
+        }
+      }
+      const pairs = [120, 130, 140].flatMap((ratePercent) => [
+        { beatmapId: 992, ratePercent }, { beatmapId: 992, ratePercent, modVariant: "IN" as const },
+      ]);
+      const old = await loadStoredRateDanVerdicts(db, pairs);
+      expect(old.get("992:120")).toMatchObject({ rawDan: 8, stale: true });
+      expect(old.get(rateDanVerdictKey(992, 120, "IN"))).toMatchObject({ rawDan: 9, stale: true });
+      expect(old.has("992:140")).toBe(false);
+      expect(old.has(rateDanVerdictKey(992, 140, "IN"))).toBe(false);
+      await exec(db, `insert into dan_estimates
+        (estimator_version, beatmap_id, rate_percent, status, computed_at, updated_at)
+        values (?, 992, 120, 'unsupported', ?, ?)`, [DAN_ESTIMATE_CACHE_VERSION, now, now]);
+      await exec(db, `insert into dan_estimates
+        (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, star_rating, computed_at, updated_at)
+        values (?, 992, 130, 'ready', '7', 'new', 7, 'dan', 0.9, 4.2, ?, ?)`, [DAN_ESTIMATE_CACHE_VERSION, now, now]);
+      const fresh = await loadStoredRateDanVerdicts(db, pairs);
+      expect(fresh.get("992:120")).toBeNull();
+      expect(fresh.get("992:130")).toEqual({ rawDan: 7, family: "dan", displayName: "new" });
+      expect(fresh.get(rateDanVerdictKey(992, 120, "IN"))).toMatchObject({ rawDan: 9, stale: true });
+      const batch = await getDanEstimateBatch(db, new JobQueue(db), {} as never,
+        [120, 130, 140].map((rate) => ({ beatmapId: 992, rate: rate / 100 })));
+      expect(batch.results["992:120"]).toBeNull();
+      expect(batch.results["992:130"]?.rawDan).toBe(7);
+      expect(batch.results["992:140"]).toBeUndefined();
+      expect(batch.pending).toEqual(["992:140"]);
+    } finally {
+      db.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("deduplicates response keys, clamps unusual rates and drops client star ratings", () => {
     expect(normalizeDanEstimateItems([
       // starRating is client input on a public endpoint whose row is keyed

@@ -567,10 +567,23 @@ export async function putJsonArtifact(storageKey: string, value: unknown): Promi
 export type BugReportImageExt = "png" | "jpg" | "gif" | "webp" | "bmp" | "avif";
 export type BugReportScreenshotPutResult = "stored" | "exists" | "unavailable";
 
-export function getBugReportScreenshotKey(reportId: string, index: number, ext: BugReportImageExt): string {
+/** A follow-up message keeps its images in `m/<messageId>/` under the report's
+ *  own folder, so a report still deletes as one prefix. */
+export function getBugReportScreenshotKey(
+  reportId: string,
+  index: number,
+  ext: BugReportImageExt,
+  messageId?: string | null,
+): string {
   const id = reportId.replace(/[^A-Za-z0-9-]/g, "");
   if (!id) throw new Error("Bug report id is required for a screenshot key");
-  return `${BUG_REPORTS_PREFIX}${id}/${Math.max(0, Math.floor(index))}.${ext}`;
+  let folder = `${BUG_REPORTS_PREFIX}${id}`;
+  if (messageId) {
+    const message = messageId.replace(/[^A-Za-z0-9-]/g, "");
+    if (!message) throw new Error("Bug report message id is required for a message screenshot key");
+    folder += `/m/${message}`;
+  }
+  return `${folder}/${Math.max(0, Math.floor(index))}.${ext}`;
 }
 
 export async function putBugReportScreenshot(

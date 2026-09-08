@@ -668,8 +668,8 @@ msgstr "{0} scores"
 
 #. placeholder {0}: report.screenshotCount
 #: src/routes/report.tsx
-msgid "{0} screenshots"
-msgstr "{0} screenshots"
+#~ msgid "{0} screenshots"
+#~ msgstr "{0} screenshots"
 
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
@@ -913,6 +913,10 @@ msgstr "{count} followers"
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
 msgstr "{count} replay views"
+
+#: src/routes/report.tsx
+msgid "{count} screenshots"
+msgstr "{count} screenshots"
 
 #: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
@@ -3436,6 +3440,10 @@ msgstr "Chart"
 msgid "chart dan"
 msgstr "chart dan"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chart Dan"
+msgstr "Chart Dan"
+
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
 msgstr "Chart loaded. Fetching the replay."
@@ -4610,9 +4618,17 @@ msgstr "Dan"
 msgid "Dan (est.)"
 msgstr "Dan (est.)"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Dan accuracy"
+msgstr "Dan accuracy"
+
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Dan course"
 msgstr "Dan course"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Dan credit"
+msgstr "Dan credit"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -5429,6 +5445,10 @@ msgstr "everything"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "everything else the archive ships"
+
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Excluded sections"
+#~ msgstr "Excluded sections"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Excludes all dan-related stuff from the website"
@@ -6629,7 +6649,7 @@ msgstr "Imagemap area {0}/{1}"
 msgid "Images from {sourceName}"
 msgstr "Images from {sourceName}"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "Images have to be under 5MB."
 msgstr "Images have to be under 5MB."
 
@@ -9423,6 +9443,10 @@ msgstr "on a map"
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
 msgstr "On Showcase"
+
+#: src/routes/report.tsx
+msgid "on the to-do list"
+msgstr "on the to-do list"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13105,6 +13129,10 @@ msgstr "Sure? The card leaves the collection"
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
 #~ msgstr "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Sustained vibro detected. This chart does not count toward ordinary skill or dan ratings."
+#~ msgstr "Sustained vibro detected. This chart does not count toward ordinary skill or dan ratings."
+
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
@@ -13333,7 +13361,7 @@ msgstr "That does not look like a Discord invite link."
 msgid "That doesn't look like an osu! score link."
 msgstr "That doesn't look like an osu! score link."
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "That file is not an image."
 msgstr "That file is not an image."
 
@@ -15005,7 +15033,7 @@ msgstr "Unrated"
 msgid "unreadable"
 msgstr "unreadable"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 
@@ -16078,6 +16106,10 @@ msgstr "Your replay skin could not be loaded"
 #: src/routes/replay_.uploads.tsx
 msgid "Your Replay Uploads"
 msgstr "Your Replay Uploads"
+
+#: src/routes/report.tsx
+msgid "Your reply was sent, but at least one image did not upload."
+msgstr "Your reply was sent, but at least one image did not upload."
 
 #: src/routes/report.tsx
 msgid "Your reports"

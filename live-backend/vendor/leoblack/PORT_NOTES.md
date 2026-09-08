@@ -1,9 +1,10 @@
 # LeoBlack analyzer port
 
 Vendored calculation layer from LeoBlackMT/osumania_map_analyser (the tosu overlay
-"ManiaMapAnalyser by Leo_Black"), upstream commit `5a6144c` (2026-08-30 HEAD at
-re-copy time; see "Re-pin at 5a6144c" below for what moved). MIT, see LICENSE in
-this directory.
+"ManiaMapAnalyser by Leo_Black"), reviewed through upstream commit `a36a21b`
+(2026-09-06 HEAD, ported 2026-09-07). The calculation files match that revision
+except for the local adaptations below; see "Re-pin at a36a21b" for this update.
+MIT, see LICENSE in this directory.
 
 Post-pin-adjacent files that ride along without changing default behavior: the
 ReworkPP feature (`classicMod`/`withPpMetrics` options threaded into
@@ -42,12 +43,12 @@ and must NOT be overwritten on a re-copy:
   file" guard is separate and intentional: absurd-density meme charts get
   all-zero skillsets from the calc itself, which we store verbatim.
 - `estimator/companellaEstimator.js` (`getOrtNamespace` divergence, see Companella).
-- `patterns/clustering.js`: the mixed-BPM cluster pool no longer averages in the
+- `patterns/clustering.js` and `patterns/config.js`: the mixed-BPM cluster pool no longer averages in the
   MsPerBeat 0 sentinel that Density/Inverse windows carry (`resolvedMspb` in
   `findPatterns.js`); only timed windows vote, and an all-sentinel pool stays
   BPM 0. Upstream averages the zeros in, which read as four-digit BPMs
   ("~4497BPM Mixed Inverse") with matching inflated importance on inverse-heavy
-  charts; still unfixed upstream as of 2026-08-24 (their `js/patterns` last
+  charts; still unfixed upstream as of 2026-09-07 (their `js/patterns` last
   changed 2026-08-09). Covered by `live-backend/tests/leoblack-clustering.test.ts`;
   the one-shot `recompute_inverse_cluster_bpm_sweep` re-analyzed stored rows.
   Extended 2026-08-21: "timed" now means MsPerBeat at or above
@@ -157,8 +158,10 @@ and must NOT be overwritten on a re-copy:
 `estimator/companellaEstimator.js` is LeoBlack's ONNX dan model: a 10-feature MLP over
 the eight MinaCalc skillsets plus Interlude SR and Sunny SR, weights in
 `companella/dan_model.onnx` (300KB, vendored). Mixed asks for it on the RC half of 4K
-LN-hybrid charts under 9 Sunny stars and returns `mixedCompanellaPlan` unapplied when it
-is missing. Entry points are `src/lib/companella.ts` and `live-backend/src/dan/companella.ts`.
+LN-hybrid charts under 9 Sunny stars, and since the September 7 port also on
+low-band rice charts for Azusa/Companella fusion. It returns `mixedCompanellaPlan`
+unapplied when inference is missing. Entry points are `src/lib/companella.ts` and
+`live-backend/src/dan/companella.ts`.
 
 - **Runtime is `onnxruntime-web` from npm, not upstream's vendored `estimator/companella/ort/`.**
   Upstream slimmed that dir from 78MB to 11.9MB in `36edb44`/`c96cb8d`; we still don't want
@@ -378,6 +381,69 @@ everything above or below it -> `1++`, with a negative rawDan, so `1++` reads
 as harder than `1` while being easier). About a thousand 4K rows already sit
 there. Fixing it means deciding how Intro should read below Reform 1, which is
 a labelling call rather than a port one.
+
+## Re-pin at a36a21b (2026-09-07)
+
+Reviewed the complete upstream range `5a6144c..a36a21b`; copied the four changed
+files in our calculation layer verbatim. The substantial update is
+[PR #64 / d137c26](https://github.com/LeoBlackMT/osumania_map_analyser/commit/d137c2645883079db705ae222f0007e52b7d240a):
+
+- Mixed blends low-band Azusa and Companella RC numerics at 0.5/0.5, deriving
+  the label from the blended number. The new rice plan requires Roxy to have
+  declined the chart, Sunny < 9, and Azusa < 11. The narrow 15%-18% hold Mix
+  band can also blend; higher-LN charts keep the original pure Companella RC
+  half. Inference failure keeps the unrefined Azusa/Sunny result.
+- Azusa now enforces its documented 18% hold ceiling (`UnsupportedLN`) instead
+  of applying its rice model to charts outside its training scope.
+- Sunny falls back to chart OD when an explicit override is not finite
+  (`934324f`), preventing NaN ratings from options such as `"none"`.
+- The vendored pipeline catches optional SunnyWindow failures (`aba7d1f`).
+  Our facades still do not call that pipeline, so this is diff maintenance.
+
+Integration fixes live in our TS facades, keeping the upstream JS verbatim:
+
+- Check the original Azusa result with `sunnyLowEndReroute` before its numeric
+  hint is lost in fusion, then clear the pending plan on a Sunny reroute.
+  Without this, the existing 2-nps easy-chart fixture jumped from below Intro
+  1 to Reform 3 after real ONNX inference. It now remains below Intro and pays
+  no inference cost. Null/non-finite supplied model numerics retain the fallback.
+- Resolve an out-of-scope rice fusion plan before requesting ONNX: upstream's
+  apply step keeps Azusa at 11+, but leaves the unnecessary plan pending.
+- Extend the plan declarations and describe the fallback without assuming
+  that it always comes from Sunny.
+
+Paired comparison using frozen source copies, identical local labels and cached
+`.osz` files, real MinaCalc/ONNX inference, rate 1.0:
+
+| Family | Charts | Exact before -> after | Same dan including variants before -> after |
+| --- | --- | --- | --- |
+| Rice | 381 | 91 -> 95 | 245 (64.30%) -> 262 (68.77%) |
+| LN | 85 | 28 -> 28 | 51 (60.00%) -> 51 (60.00%) |
+
+51 rice labels changed: 24 wrong-to-same-dan, 7 same-dan-to-wrong. No rice
+verdict previously at 11+ changed; all LN labels stayed identical. This is a
+net gain, not a claim that every individual chart improves. The local cached
+comparison has one fewer rice chart than the live-label benchmark runner.
+
+The standard live-label runner also improved: 382 rice charts, exact 92 -> 94,
+same-dan 246 (64.40%) -> 262 (68.59%), zero errors. Verification: 2,791 backend
+tests and 6 frontend estimator tests passed, plus backend and root TypeScript.
+
+Rollout: shared dan estimate cache v16 (combined with the section-vibro rollout). The boot-seeded
+`recompute_leoblack_fusion_sweep` (`features/leoblack-fusion.ts`) repairs cached
+4K charts with at most 18% holds, including their stored DT/HT and custom-rate
+verdicts; high normal-speed SR is still considered when a lower-rate verdict
+exists. Ten-chart links yield between work and run at background priority.
+Unaffected v15 rate caches, including 7K Invert, can retain their evidence under
+v16; older stale caches are not promoted. Missing files are left to normal
+on-demand recovery. Completion rebuilds map collections and schedules the
+player-dan fold; the fold notices this producer's timestamp even if a prior
+pass was already running. `CHART_ANALYSIS_VERSION` stays unchanged, preserving
+live map/farm-helper reads throughout the repair.
+
+Marathon correction remains disabled. No wasm, MinaCalc default, ONNX weights,
+interval tables or pattern logic changed. Desktop-shell/Linux/Etterna/Malody
+bridges and new `.mc`/`.sm`/`.ssc` converters are outside this osu! chart port.
 
 ## Benchmark vs our labels (2026-07-03, `dan_benchmark_labels` in Turso)
 

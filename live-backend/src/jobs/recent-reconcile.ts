@@ -5,7 +5,10 @@ import type { JobStatus } from "./queue.js";
 
 export const RECENT_RECONCILE_JOB_TYPE = "reconcile_user_recent_scores";
 
+export const RECENT_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
+
 export interface RecentReconcilePayload {
+  kind?: "gap_repair" | "follow_up";
   userId: number;
   source?: string;
   processLeaderboardFeatures?: boolean;
@@ -20,8 +23,38 @@ export function nextRecentReconcileCadence(previous: number | undefined, changed
   return { unchangedPolls, delayMs: 2 * 60_000 * 2 ** Math.max(0, unchangedPolls - 1) };
 }
 
-// A fresh score means the user's recent-score list is worth refreshing now:
-// osu! can flip fields such as has_replay shortly after oSC emits the score.
+// The durable gate survives restarts and dedupe-key changes. Reserve atomically
+// before spending API budget, including retries and competing worker lanes.
+export async function reserveRecentReconcileRequest(db: Db, userId: number, jobId?: number): Promise<number> {
+  const now = Date.now();
+  const key = `recent-reconcile:next-allowed:${userId}`;
+  const result = await exec(db,
+    `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+     on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at
+     where json_extract(live_meta.value_json, '$.nextAllowedAt') <= ?
+       and not exists (
+         select 1 from jobs
+         where id = json_extract(live_meta.value_json, '$.jobId')
+           and status = 'running' and id != ?
+       )`,
+    [key, json({ nextAllowedAt: now + RECENT_RECONCILE_MIN_INTERVAL_MS, jobId: jobId ?? null }), nowIso(), now, jobId ?? -1]);
+  if (result.rowsAffected > 0) return 0;
+  const row = (await exec(db, "select json_extract(value_json, '$.nextAllowedAt') as next_allowed_at from live_meta where key = ?", [key])).rows[0];
+  // If the request outlives its cooldown, its running job still owns the gate.
+  return Math.max(30_000, Number(row.next_allowed_at) - Date.now());
+}
+
+export async function finishRecentReconcileRequest(db: Db, userId: number): Promise<void> {
+  await exec(db,
+    `update live_meta
+     set value_json = json_set(value_json, '$.nextAllowedAt', max(json_extract(value_json, '$.nextAllowedAt'), ?), '$.jobId', null),
+         updated_at = ? where key = ?`,
+    [Date.now() + RECENT_RECONCILE_MIN_INTERVAL_MS, nowIso(), `recent-reconcile:next-allowed:${userId}`]);
+}
+
+// Fresh feed activity resets the cadence, but never bypasses the per-user
+// cooldown, API retry backoff, or pressure admission. It also makes this gap
+// repair mandatory: a delayed job must still recover those newly seen plays.
 export async function promotePendingRecentReconcileJobs(db: Db, userId: number, priority = 70): Promise<number> {
   const safeUserId = Math.floor(userId);
   if (!Number.isFinite(safeUserId) || safeUserId <= 0) return 0;
@@ -29,56 +62,23 @@ export async function promotePendingRecentReconcileJobs(db: Db, userId: number, 
   const result = await exec(
     db,
     `update jobs
-     set status = 'queued',
-         priority = max(priority, ?),
-         run_after = ?,
-         locked_by = null,
-         locked_until = null,
-         last_error = null,
-         payload_json = json_set(payload_json, '$.unchangedPolls', 0),
+     set priority = max(priority, ?),
+         run_after = max(
+           case when status = 'failed' then run_after else min(run_after, ?) end,
+           coalesce((select strftime('%Y-%m-%dT%H:%M:%fZ', json_extract(value_json, '$.nextAllowedAt') / 1000.0, 'unixepoch')
+                     from live_meta where key = ?),
+                    case when dedupe_key like 'recent:user:%:next:%'
+                      then strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+2 minutes')
+                      else ? end)
+         ),
+         payload_json = json_set(payload_json, '$.unchangedPolls', 0, '$.kind', 'gap_repair'),
          updated_at = ?
      where type = ?
        and status in ('queued', 'failed', 'deferred_pressure')
        and (payload_json = ? or dedupe_key = ? or dedupe_key like ?)`,
-    [
-      priority,
-      now,
-      now,
-      RECENT_RECONCILE_JOB_TYPE,
-      json({ userId: safeUserId }),
-      `recent:user:${safeUserId}`,
-      `recent:user:${safeUserId}:%`,
-    ],
-  );
-  return Number(result.rowsAffected ?? 0);
-}
-
-// Pressure-deferred jobs only reactivate when queue depth drops below the
-// recovery threshold, which a busy queue can fail to reach for hours. A fresh
-// score from the user is a stronger signal: revive their parked reconcile so
-// the catch-up chain (which picks up plays oSC does not carry) keeps running.
-export async function requeueDeferredRecentReconcileJobs(db: Db, userId: number): Promise<number> {
-  const safeUserId = Math.floor(userId);
-  if (!Number.isFinite(safeUserId) || safeUserId <= 0) return 0;
-  const now = nowIso();
-  const result = await exec(
-    db,
-    `update jobs
-     set status = 'queued',
-         run_after = ?,
-         last_error = null,
-         updated_at = ?
-     where type = ?
-       and status = 'deferred_pressure'
-       and (payload_json = ? or dedupe_key = ? or dedupe_key like ?)`,
-    [
-      now,
-      now,
-      RECENT_RECONCILE_JOB_TYPE,
-      json({ userId: safeUserId }),
-      `recent:user:${safeUserId}`,
-      `recent:user:${safeUserId}:%`,
-    ],
+    [priority, now, `recent-reconcile:next-allowed:${safeUserId}`, now, now,
+      RECENT_RECONCILE_JOB_TYPE, json({ userId: safeUserId }),
+      `recent:user:${safeUserId}`, `recent:user:${safeUserId}:%`],
   );
   return Number(result.rowsAffected ?? 0);
 }

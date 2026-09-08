@@ -1,3 +1,4 @@
+import { LEOBLACK_FUSION_JOB, runLeoblackFusionJob } from "./features/leoblack-fusion.js";
 import { CHART_FAMILY_SWEEP_JOB, runChartFamilySweepJob } from "./features/chart-families.js";
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
@@ -29,7 +30,7 @@ import { ACTIVITY_DETAIL_ON_DEMAND_JOB, runActivityDetailOnDemandJob } from "./f
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { JobLeaseLostError, maintainJobLease } from "./jobs/lease.js";
-import { hasPendingRecentReconcileJob, nextRecentReconcileCadence, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs, type RecentReconcilePayload } from "./jobs/recent-reconcile.js";
+import { hasPendingRecentReconcileJob, nextRecentReconcileCadence, RECENT_RECONCILE_JOB_TYPE, reserveRecentReconcileRequest, finishRecentReconcileRequest, type RecentReconcilePayload } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import { readWorkersPaused, writeJobMemoryMetric } from "./live/runtime-status.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
@@ -77,7 +78,7 @@ export class JobWatchdogTimeoutError extends Error {
 }
 
 class DeferredJobError extends Error {
-  constructor(readonly delayMs: number) { super("bounded job batch completed; continuation pending"); }
+  constructor(readonly delayMs: number, message = "bounded job batch completed; continuation pending") { super(message); }
 }
 
 interface WorkerActiveJob {
@@ -213,7 +214,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // Tunable via CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run
     // flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_FAMILY_SWEEP_JOB, CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, JACK_DEMAND_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, NKEY_MSD_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB],
+    jobTypes: [LEOBLACK_FUSION_JOB, CHART_FAMILY_SWEEP_JOB, CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, JACK_DEMAND_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, NKEY_MSD_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -706,7 +707,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "reconcile_user_recent_scores") {
-      await this.reconcileUserRecentScores(job.payload as RecentReconcilePayload, job.id, signal);
+      await this.reconcileUserRecentScores(job.payload as RecentReconcilePayload, job.id, signal, job.dedupeKey);
       return;
     }
     if (job.type === "refresh_country_roster") {
@@ -869,6 +870,10 @@ export class WorkerRunner {
     }
     if (job.type === SUNNY_REPIN_RECOMPUTE_JOB) {
       await runSunnyRepinRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === LEOBLACK_FUSION_JOB) {
+      await runLeoblackFusionJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === LEOBLACK_REPIN_RECOMPUTE_JOB) {
@@ -1197,9 +1202,18 @@ export class WorkerRunner {
     }
   }
 
-  private async reconcileUserRecentScores(payload: RecentReconcilePayload, currentJobId?: number, signal?: AbortSignal): Promise<void> {
+  private async reconcileUserRecentScores(payload: RecentReconcilePayload, currentJobId?: number, signal?: AbortSignal, dedupeKey?: string): Promise<void> {
     const userId = Number(payload.userId);
     if (!Number.isFinite(userId) || userId <= 0) return;
+    const followUp = payload.kind === "follow_up"
+      || (payload.kind == null && dedupeKey?.startsWith(`recent:user:${userId}:next:`));
+    if (followUp && !await this.getLatestActiveScoreAt(userId)) {
+      logInfo("recent_reconcile_expired", { user_id: userId, job_id: currentJobId });
+      return;
+    }
+    throwIfAborted(signal);
+    const retryDelayMs = await reserveRecentReconcileRequest(this.db, userId, currentJobId);
+    if (retryDelayMs > 0) throw new DeferredJobError(retryDelayMs, "recent-score per-user cooldown");
     const source = payload.source === "osu_recent_fallback" ? "osu_recent_fallback" : "osu_recent";
     const caller = source === "osu_recent_fallback" ? "job:osu_recent_fallback" : "job:reconcile_user_recent_scores";
     let recentScores: OscScore[];
@@ -1211,6 +1225,8 @@ export class WorkerRunner {
         return;
       }
       throw error;
+    } finally {
+      await finishRecentReconcileRequest(this.db, userId);
     }
     const scores = recentScores
       .filter((score) => score.passed)
@@ -1223,10 +1239,8 @@ export class WorkerRunner {
     throwIfAborted(signal);
     const latestTrackedScoreAt = await this.getLatestActiveScoreAt(userId);
     if (latestTrackedScoreAt) {
-      if (await requeueDeferredRecentReconcileJobs(this.db, userId) > 0) return;
       if (await hasPendingRecentReconcileJob(this.db, userId, {
         excludeJobId: currentJobId,
-        statuses: ["queued", "failed"],
       })) return;
       const latestScoreAt = scores.reduce<string>((latest, score) => {
         const timestamp = score.ended_at ?? score.created_at;
@@ -1242,7 +1256,7 @@ export class WorkerRunner {
       await this.queue.enqueue(
         RECENT_RECONCILE_JOB_TYPE,
         `recent:user:${userId}:next:${bucket}`,
-        { ...payload, userId, latestScoreAt, unchangedPolls: cadence.unchangedPolls },
+        { ...payload, kind: "follow_up", userId, latestScoreAt, unchangedPolls: cadence.unchangedPolls },
         { priority: 25, runAfter },
       );
     }

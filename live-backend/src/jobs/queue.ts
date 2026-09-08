@@ -30,7 +30,6 @@ export const JOB_LEASE_MS = 60_000;
 const QUEUE_TARGET_DEPTH = 100;
 const QUEUE_SOFT_PRESSURE_DEPTH = 80;
 const QUEUE_RECOVERY_DEPTH = 60;
-const PRESSURE_DEFER_MS = 30 * 60_000;
 
 // Empty by design. Globally-sheddable background types repeatedly starved on
 // prod: the queue's steady state sits AT the soft-pressure cap (recent-score
@@ -131,8 +130,7 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   osc_country_catchup: 2,
   // The top-scores backfill sweep chains its next chunk (runAfter +15min)
   // from inside the running job: runner + queued continuation. A reserve of 1
-  // would break its pacing — the continuation would enqueue as deferred and
-  // reactivation resets run_after to now, collapsing the 15-minute gap.
+  // would park the continuation until the next reserve refill.
   backfill_user_top_scores_sweep: 2,
   // The archived-combo sweep has its own worker lane and chains the next
   // chunk from inside the running one. Keep both the runner and its paced
@@ -162,7 +160,7 @@ export class JobQueue {
     const pressureStatus = await this.pressureStatusFor(type, options.priority ?? 0, dedupeKey);
     const now = nowIso();
     const status = pressureStatus.defer ? "deferred_pressure" : "queued";
-    const runAfter = pressureStatus.defer ? new Date(Date.now() + PRESSURE_DEFER_MS) : options.runAfter ?? new Date();
+    const runAfter = options.runAfter ?? new Date();
     await exec(
       this.db,
       // run_after merge: normally the earliest request wins so an urgent
@@ -478,7 +476,6 @@ export class JobQueue {
        set status = 'deferred_pressure',
            locked_by = null,
            locked_until = null,
-           run_after = ?,
            last_error = ?,
            updated_at = ?
        where id = (
@@ -492,7 +489,6 @@ export class JobQueue {
          limit 1
        )`,
       [
-        new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
         `deferred by ${type} reserve (outranked)`,
         nowIso(),
         nowIso(),
@@ -512,7 +508,6 @@ export class JobQueue {
        set status = 'deferred_pressure',
            locked_by = null,
            locked_until = null,
-           run_after = ?,
            last_error = ?,
            updated_at = ?
        where id in (
@@ -525,7 +520,6 @@ export class JobQueue {
          limit ?
        )`,
       [
-        new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
         `deferred by queue pressure`,
         nowIso(),
         nowIso(),
@@ -546,7 +540,6 @@ export class JobQueue {
        set status = 'deferred_pressure',
            locked_by = null,
            locked_until = null,
-           run_after = ?,
            last_error = ?,
            updated_at = ?
        where id in (
@@ -564,7 +557,6 @@ export class JobQueue {
          limit ?
        )`,
       [
-        new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
         `deferred by ${type} cap`,
         nowIso(),
         nowIso(),
@@ -577,8 +569,8 @@ export class JobQueue {
 
   private async reactivateDeferred(limit: number, type?: string): Promise<number> {
     if (limit <= 0) return 0;
-    // run_after is reset so reactivated jobs are runnable immediately and count
-    // toward depth; the parked run_after was only the +30min pressure stamp.
+    // Pressure changes admission, not the requested schedule or retry backoff.
+    // Only revive due jobs so future appointments cannot consume the refill.
     // Without a type this serves the shared pool, so reserved-lane types are
     // excluded; they only re-enter through their own lane's refill.
     const now = nowIso();
@@ -591,20 +583,19 @@ export class JobQueue {
     // Even a zero-row UPDATE takes SQLite's writer lock. Empty lanes poll
     // frequently, so only enter the write path when there is work to revive.
     const waiting = (await exec(this.db,
-      `select 1 from jobs where status = 'deferred_pressure' ${typeFilter.sql} limit 1`,
-      typeFilter.args)).rows[0];
+      `select 1 from jobs where status = 'deferred_pressure' and run_after <= ? ${typeFilter.sql} limit 1`,
+      [now, ...typeFilter.args])).rows[0];
     if (!waiting) return 0;
     const result = await exec(
       this.db,
       `update jobs
        set status = 'queued',
-           run_after = ?,
            last_error = null,
            updated_at = ?
        where id in (
          select id
          from jobs
-         where status = 'deferred_pressure'
+         where status = 'deferred_pressure' and run_after <= ?
          ${typeFilter.sql}
          order by priority desc, run_after asc, updated_at asc, id asc
          limit ?

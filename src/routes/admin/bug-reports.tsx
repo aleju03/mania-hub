@@ -5,7 +5,9 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Copy,
+  ImagePlus,
   Inbox,
   Layers,
   Lightbulb,
@@ -27,6 +29,12 @@ import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { describeBrowser } from "../../lib/bug-report-context";
 import {
+  imagesFromClipboard,
+  uploadBugReportScreenshots,
+  useBugReportScreenshots,
+} from "../../lib/bug-report-screenshots";
+import {
+  BUG_REPORT_MAX_SCREENSHOTS,
   BUG_REPORT_MESSAGE_MAX,
   bugReportThreadMessages,
   clearClosedBugReports,
@@ -114,6 +122,13 @@ const STATUS_META: Record<BugReportStatus, StatusMeta> = {
     pill: "border-osu-yellow/35 bg-osu-yellow/10 text-osu-yellow",
     edge: "border-l-osu-yellow/60",
   },
+  pending: {
+    label: "Pending",
+    Icon: Clock,
+    text: "text-violet-300",
+    pill: "border-violet-400/30 bg-violet-400/10 text-violet-200",
+    edge: "border-l-violet-400/50",
+  },
   fixed: {
     label: "Fixed",
     Icon: Check,
@@ -144,15 +159,32 @@ const STATUS_META: Record<BugReportStatus, StatusMeta> = {
   },
 };
 
-const FILTERS: StatusFilter[] = ["new", "investigating", "fixed", "wontfix", "duplicate", "notabug", "all"];
+const FILTERS: StatusFilter[] = [
+  "new",
+  "investigating",
+  "pending",
+  "fixed",
+  "wontfix",
+  "duplicate",
+  "notabug",
+  "all",
+];
 
 /* Every status a row can be moved to, in the order they get used. The row
    drops whichever one it is already on. */
-const STATUS_MOVES: BugReportStatus[] = ["investigating", "fixed", "wontfix", "duplicate", "notabug", "new"];
+const STATUS_MOVES: BugReportStatus[] = [
+  "investigating",
+  "pending",
+  "fixed",
+  "wontfix",
+  "duplicate",
+  "notabug",
+  "new",
+];
 
-/* What "clear closed" takes. `notabug` is left out on purpose: a question or a
-   suggestion is parked there, not finished with, so it survives the sweep the
-   same way new and investigating do. */
+/* What "clear closed" takes. `notabug` and `pending` are left out on purpose:
+   a question parked in one and a job queued in the other are not finished
+   with, so they survive the sweep the same way new and investigating do. */
 const CLOSED_STATUSES: BugReportStatus[] = ["fixed", "wontfix", "duplicate"];
 
 function formatWhen(ms: number): string {
@@ -185,12 +217,23 @@ const SAVE_CLASS =
 /* Signed URLs expire and each row costs a signing round trip, so a row asks
    for its own the first time it scrolls near the viewport instead of on the
    list load. The thumbnails then sit in the row: no click to see them. */
-function Screenshots({ report }: { report: BugReport }) {
+function Screenshots({
+  reportId,
+  messageId,
+  count,
+  className = "mt-2",
+  size = "h-24",
+}: {
+  reportId: string;
+  messageId?: string;
+  count: number;
+  className?: string;
+  size?: string;
+}) {
   const [urls, setUrls] = useState<string[] | null>(null);
   const [visible, setVisible] = useState(false);
   const [zoom, setZoom] = useState<number | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const count = report.screenshotKeys.length;
 
   useEffect(() => {
     if (!count || visible) return;
@@ -215,20 +258,20 @@ function Screenshots({ report }: { report: BugReport }) {
   useEffect(() => {
     if (!visible || urls) return;
     let cancelled = false;
-    void getBugReportScreenshotUrls({ data: { id: report.id } })
+    void getBugReportScreenshotUrls({ data: { id: reportId, messageId } })
       .then((next) => { if (!cancelled) setUrls(next); })
       .catch(() => { if (!cancelled) setUrls([]); });
     return () => { cancelled = true; };
-  }, [visible, urls, report.id]);
+  }, [visible, urls, reportId, messageId]);
 
   if (!count) return null;
 
   return (
-    <div ref={hostRef} className="mt-2">
+    <div ref={hostRef} className={className}>
       {!urls ? (
         <div className="flex flex-wrap gap-2">
-          {report.screenshotKeys.map((key) => (
-            <Skeleton key={key} className="h-24 w-40 rounded-lg" />
+          {Array.from({ length: count }, (_, index) => (
+            <Skeleton key={index} className={`${size} w-40 rounded-lg`} />
           ))}
         </div>
       ) : !urls.length ? (
@@ -241,7 +284,7 @@ function Screenshots({ report }: { report: BugReport }) {
                 src={url}
                 alt=""
                 loading="lazy"
-                className="h-24 rounded-lg border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80"
+                className={`${size} rounded-lg border border-osu-b3/30 object-cover transition-opacity duration-[120ms] hover:opacity-80`}
               />
             </button>
           ))}
@@ -337,13 +380,22 @@ function AdminThreadMessage({
               />
             </div>
           ) : (
-            <p className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed text-osu-l1 ${
-              admin
-                ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
-                : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
-            }`}>
-              {message.body}
-            </p>
+            <>
+              <p className={`w-fit max-w-full whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed text-osu-l1 ${
+                admin
+                  ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
+                  : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
+              }`}>
+                {message.body}
+              </p>
+              <Screenshots
+                reportId={report.id}
+                messageId={message.id}
+                count={message.screenshotKeys.length}
+                className="mt-1.5"
+                size="h-20"
+              />
+            </>
           )}
         </div>
       </div>
@@ -413,12 +465,17 @@ function AdminThread({
   );
 }
 
+/* One editor for both the private note and the thread reply. A reply can carry
+   images the way the reporter's can: pasted, dropped or picked, and sent with
+   the words rather than as a second step. A note is text; nobody but you reads
+   it, so there is nothing to show anyone. */
 function Editor({
   value,
   placeholder,
   saveLabel,
   tone,
   busy,
+  attachments = false,
   onSave,
   onCancel,
 }: {
@@ -427,12 +484,18 @@ function Editor({
   saveLabel: string;
   tone: "note" | "reply";
   busy: boolean;
-  onSave: (next: string) => void;
+  attachments?: boolean;
+  onSave: (next: string, files: File[]) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const images = useBugReportScreenshots();
   useEffect(() => { ref.current?.focus(); }, []);
+
+  const files = attachments ? images.files : [];
+  const save = () => onSave(draft, files);
 
   return (
     <div className="space-y-2">
@@ -440,25 +503,88 @@ function Editor({
         ref={ref}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
+        onPaste={(event) => {
+          if (!attachments) return;
+          const pasted = imagesFromClipboard(event);
+          if (!pasted.length) return;
+          event.preventDefault();
+          images.add(pasted);
+        }}
+        onDragOver={(event) => {
+          if (attachments && !busy) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (!attachments || busy) return;
+          event.preventDefault();
+          images.add(event.dataTransfer.files);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") onCancel();
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onSave(draft);
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) save();
         }}
         rows={tone === "reply" ? 3 : 2}
         maxLength={tone === "reply" ? BUG_REPORT_MESSAGE_MAX : undefined}
         placeholder={placeholder}
         className={`${FIELD_CLASS} resize-y ${tone === "reply" ? "border-osu-pink/25 bg-osu-pink/[0.05]" : ""}`}
       />
+      {files.length ? (
+        <div className="flex flex-wrap gap-2">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="relative">
+              <img
+                src={images.previews[index]}
+                alt=""
+                className="h-16 w-24 rounded-lg border border-osu-b3/30 object-cover"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => images.removeAt(index)}
+                aria-label="Remove image"
+                className="absolute -right-1.5 -top-1.5 cursor-pointer rounded-full border border-osu-b3/50 bg-osu-b5 p-0.5 text-osu-l2 transition-colors duration-[120ms] hover:text-white disabled:opacity-40"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="flex items-center gap-2">
         <button
           type="button"
-          disabled={busy || draft === value || (tone === "reply" && !draft.trim())}
-          onClick={() => onSave(draft)}
+          disabled={busy || (draft === value && !files.length) || (tone === "reply" && !draft.trim())}
+          onClick={save}
           className={SAVE_CLASS}
         >
           {saveLabel}
         </button>
+        {attachments ? (
+          <>
+            <button
+              type="button"
+              disabled={busy || files.length >= BUG_REPORT_MAX_SCREENSHOTS}
+              onClick={() => fileRef.current?.click()}
+              title="Add an image"
+              className={ACTION_CLASS}
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+              Image
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                images.add(event.target.files);
+                event.target.value = "";
+              }}
+            />
+          </>
+        ) : null}
         <button type="button" onClick={onCancel} className={ACTION_CLASS}>Cancel</button>
+        {images.error ? <span className="text-[11px] text-osu-pink-light">{images.error}</span> : null}
       </div>
     </div>
   );
@@ -478,7 +604,7 @@ function ReportCard({
   busy: boolean;
   onStatus: (status: BugReportStatus) => void;
   onNote: (note: string) => void;
-  onReply: (reply: string) => void;
+  onReply: (reply: string, files: File[]) => void;
   onEditMessage: (messageId: string, body: string) => void;
   onPromote: () => void;
   onDelete: () => void;
@@ -538,7 +664,7 @@ function ReportCard({
 
           <p className="mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-white">{report.body}</p>
           <ContextLine context={report.context} />
-          <Screenshots report={report} />
+          <Screenshots reportId={report.id} count={report.screenshotKeys.length} />
         </div>
       </div>
 
@@ -566,7 +692,8 @@ function ReportCard({
             saveLabel={editing === "reply" ? "Send reply" : "Save note"}
             tone={editing}
             busy={busy}
-            onSave={(next) => (editing === "reply" ? onReply(next) : onNote(next))}
+            attachments={editing === "reply"}
+            onSave={(next, files) => (editing === "reply" ? onReply(next, files) : onNote(next))}
             onCancel={() => setEditing(null)}
           />
         </div>
@@ -632,6 +759,7 @@ function BugReportsAdminPage() {
   const [counts, setCounts] = useState<BugReportCounts>({
     new: 0,
     investigating: 0,
+    pending: 0,
     fixed: 0,
     wontfix: 0,
     duplicate: 0,
@@ -692,6 +820,22 @@ function BugReportsAdminPage() {
     }
   }, [load]);
 
+  /* The reply is stored before its images are, so a failed upload is a line on
+     the board rather than a lost answer. The warning is set after the reload
+     act() runs, which is what clears the error line. */
+  const sendReply = useCallback(async (id: string, body: string, files: File[]) => {
+    let warning: string | null = null;
+    await act(id, async () => {
+      const result = await replyToBugReportAsAdmin({ data: { id, body, screenshotCount: files.length } });
+      if (!files.length) return;
+      const uploaded = result.uploadToken && result.messageId
+        ? await uploadBugReportScreenshots(id, result.uploadToken, files, () => {}, result.messageId)
+        : 0;
+      if (uploaded < files.length) warning = "The reply was sent, but at least one image did not upload.";
+    });
+    if (warning) setError(warning);
+  }, [act]);
+
   const pages = useMemo(() => ({
     from: total === 0 ? 0 : offset + 1,
     to: Math.min(offset + PAGE_SIZE, total),
@@ -747,7 +891,7 @@ function BugReportsAdminPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40 lg:grid-cols-7">
+        <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40 lg:grid-cols-8">
           {FILTERS.map((filter) => {
             const active = status === filter;
             const meta = filter === "all" ? null : STATUS_META[filter];
@@ -799,7 +943,7 @@ function BugReportsAdminPage() {
                 busy={busyId === report.id}
                 onStatus={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, status: next } }))}
                 onNote={(note) => void act(report.id, () => updateBugReport({ data: { id: report.id, adminNote: note } }))}
-                onReply={(body) => void act(report.id, () => replyToBugReportAsAdmin({ data: { id: report.id, body } }))}
+                onReply={(body, files) => void sendReply(report.id, body, files)}
                 onEditMessage={(messageId, body) => void act(report.id, () => (
                   editBugReportMessageAsAdmin({ data: { id: report.id, messageId, body } })
                 ))}
@@ -857,7 +1001,7 @@ function BugReportsAdminPage() {
       {clearAsk ? (
         <ConfirmModal
           title="Clear every closed report?"
-          body={`${closedCount(counts)} fixed, won't fix and duplicate reports go for good, screenshots included. New, investigating and not-a-bug ones stay.`}
+          body={`${closedCount(counts)} fixed, won't fix and duplicate reports go for good, screenshots included. New, investigating, pending and not-a-bug ones stay.`}
           confirmLabel="Clear"
           danger
           onConfirm={() => void act("clear", async () => { await clearClosedBugReports(); })}

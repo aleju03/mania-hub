@@ -80,6 +80,7 @@ describe("sweeps status registry", () => {
       "ln-leoblack-recompute",
       "sunny-repin-recompute",
       "sunny-repin-dt-recompute",
+      "leoblack-fusion",
       "leoblack-repin-recompute",
       "leoblack-repin-dt-recompute",
       "msd-poison-recovery",

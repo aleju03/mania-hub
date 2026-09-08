@@ -88,6 +88,26 @@ OverallDifficulty:8
 }
 
 describe("chart analysis", () => {
+  it("keeps a ready chart readable during refresh and after a transient failure", async () => {
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, classification_json, computed_at, updated_at)
+        values (990, ?, 'ready', '{"rc":{"rawDan":8}}', ?, ?)`, [CHART_ANALYSIS_VERSION, now, now]);
+      const osu = { getBeatmapFile: async () => {
+        const during = (await exec(db, "select status, classification_json from beatmap_chart_analysis where beatmap_id = 990")).rows[0];
+        expect(during.status).toBe("ready");
+        expect(JSON.parse(String(during.classification_json)).rc.rawDan).toBe(8);
+        throw new Error("temporary upstream failure");
+      } };
+      await expect(computeBeatmapChartAnalysis(db, osu, { beatmapId: 990 })).rejects.toThrow("temporary upstream failure");
+      const after = (await exec(db, "select status, classification_json, computed_at from beatmap_chart_analysis where beatmap_id = 990")).rows[0];
+      expect(after.status).toBe("ready");
+      expect(after.computed_at).toBe(now);
+      expect(JSON.parse(String(after.classification_json)).rc.rawDan).toBe(8);
+    });
+  });
+
   it("stores classification and MSD for a mania chart", async () => {
     await withDb(async (db) => {
       const osu = { getBeatmapFile: async () => buildStreamBeatmapFile() };

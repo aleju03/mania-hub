@@ -4,7 +4,7 @@ import { detectRateVibro, detectRiceVibro, detectRollVibro } from "../src/dan/ch
 import { analyzeVibroSections } from "../src/dan/vibro-sections.js";
 
 // Synthetic charts for the rice-vibro detector. Thresholds were calibrated on
-// the real corpus (see chart-classifier.ts); these tests pin the behaviour at
+// the real corpus (see vibro-detection.ts and vibro-sections.ts); these tests pin the behaviour at
 // the shapes that motivated each tier.
 
 const COLUMN_X: Record<number, number[]> = {
@@ -332,9 +332,11 @@ describe("detectRiceVibro", () => {
     expect(detectRateVibro(jackMap, 1.5)).toBe(true); // Same sustained jack at the same physical speed.
   });
 
-  it("ignores tiny charts", () => {
+  it("applies the same repetition policy to short charts", () => {
     const notes = Array.from({ length: 100 }, (_, index) => ({ column: 0, time: 1000 + index * 90 }));
-    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(false);
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
+    const stream = notes.map((note, index) => ({ ...note, column: index % 4 }));
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(stream)))).toBe(false);
   });
 });
 

@@ -20,11 +20,19 @@ import { reporterKeyFor } from "./reporter-key";
    signed-in only, and the form says so before it is submitted rather than
    after. */
 
-export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate" | "notabug";
+export type BugReportStatus =
+  | "new"
+  | "investigating"
+  | "pending"
+  | "fixed"
+  | "wontfix"
+  | "duplicate"
+  | "notabug";
 
 export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "new",
   "investigating",
+  "pending",
   "fixed",
   "wontfix",
   "duplicate",
@@ -42,13 +50,23 @@ export interface BugReportContext {
 
 export type BugReportMessageAuthor = "reporter" | "admin";
 
-export interface BugReportMessage {
+interface BugReportMessageBase {
   id: string;
   author: BugReportMessageAuthor;
   body: string;
   createdAt: number;
   /** Set when the owner corrected the message after sending it. */
   editedAt: number | null;
+}
+
+/** As the admin board reads a message: the keys, so a row can ask for signed URLs. */
+export interface BugReportMessage extends BugReportMessageBase {
+  screenshotKeys: string[];
+}
+
+/** As the reporter reads their own: the count, like the report body's images. */
+export interface MyBugReportMessage extends BugReportMessageBase {
+  screenshotCount: number;
 }
 
 export interface BugReport {
@@ -80,7 +98,7 @@ export interface MyBugReport {
   screenshotCount: number;
   reply: string | null;
   repliedAt: number | null;
-  messages: BugReportMessage[];
+  messages: MyBugReportMessage[];
   createdAt: number;
   updatedAt: number;
 }
@@ -88,6 +106,7 @@ export interface MyBugReport {
 export interface BugReportCounts {
   new: number;
   investigating: number;
+  pending: number;
   fixed: number;
   wontfix: number;
   duplicate: number;
@@ -107,24 +126,28 @@ export type SubmitBugReportResult =
 export type BugReportReplyFailReason = "invalid_message" | "too_many_messages" | "not_found" | "failed";
 
 export type ReplyToBugReportResult =
-  | { ok: true; report: MyBugReport }
+  | { ok: true; report: MyBugReport; messageId: string; uploadToken: string | null }
   | { ok: false; reason: BugReportReplyFailReason };
 
 /** Rolling deployments can briefly pair a new frontend with a backend that
  *  still exposes only the old single reply. Turn that value into one synthetic
  *  message until the message-table migration is serving the real history. */
-export function bugReportThreadMessages(
-  report: Pick<BugReport, "messages" | "reply" | "repliedAt"> | Pick<MyBugReport, "messages" | "reply" | "repliedAt">,
-): BugReportMessage[] {
+export function bugReportThreadMessages<T extends BugReportMessageBase>(
+  report: { messages: T[]; reply: string | null; repliedAt: number | null },
+): T[] {
   if (Array.isArray(report.messages) && report.messages.length) return report.messages;
   if (!report.reply) return [];
+  // The synthetic row carries both screenshot shapes so it reads as either
+  // side's message type; a legacy reply never had images of its own.
   return [{
     id: "legacy-admin-reply",
     author: "admin",
     body: report.reply,
     createdAt: report.repliedAt ?? 0,
     editedAt: null,
-  }];
+    screenshotKeys: [],
+    screenshotCount: 0,
+  } as unknown as T];
 }
 
 export const submitBugReport = createServerFn({ method: "POST" })
@@ -215,9 +238,10 @@ export const listMyBugReports = createServerFn({ method: "GET" }).handler(async 
  *  names only the report and words; the verified osu! id is injected here and
  *  checked against the stored owner again by the backend. */
 export const replyToMyBugReport = createServerFn({ method: "POST" })
-  .validator((data: { id: string; body: string }) => ({
+  .validator((data: { id: string; body: string; screenshotCount?: number }) => ({
     id: String(data?.id ?? ""),
     body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
+    screenshotCount: Math.min(Math.max(0, Math.floor(Number(data?.screenshotCount ?? 0))), BUG_REPORT_MAX_SCREENSHOTS),
   }))
   .handler(async ({ data }): Promise<ReplyToBugReportResult> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -232,13 +256,27 @@ export const replyToMyBugReport = createServerFn({ method: "POST" })
       const response = await fetch(`${base}/api/bug-reports/reply`, {
         method: "POST",
         headers: bridgeAuthHeaders(true),
-        body: JSON.stringify({ id: data.id, body: data.body, userId: viewer.id }),
+        body: JSON.stringify({
+          id: data.id,
+          body: data.body,
+          userId: viewer.id,
+          screenshotCount: data.screenshotCount,
+        }),
       });
       const payload = await response.json().catch(() => ({})) as {
         report?: MyBugReport;
+        messageId?: string;
+        uploadToken?: string | null;
         error?: string;
       };
-      if (response.ok && payload.report) return { ok: true, report: payload.report };
+      if (response.ok && payload.report) {
+        return {
+          ok: true,
+          report: payload.report,
+          messageId: payload.messageId ?? "",
+          uploadToken: payload.uploadToken ?? null,
+        };
+      }
       if (payload.error === "invalid_message") return { ok: false, reason: "invalid_message" };
       if (payload.error === "too_many_messages") return { ok: false, reason: "too_many_messages" };
       if (response.status === 404) return { ok: false, reason: "not_found" };
@@ -295,11 +333,16 @@ export const updateBugReport = createServerFn({ method: "POST" })
   });
 
 export const replyToBugReportAsAdmin = createServerFn({ method: "POST" })
-  .validator((data: { id: string; body: string }) => ({
+  .validator((data: { id: string; body: string; screenshotCount?: number }) => ({
     id: String(data?.id ?? ""),
     body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
+    screenshotCount: Math.min(Math.max(0, Math.floor(Number(data?.screenshotCount ?? 0))), BUG_REPORT_MAX_SCREENSHOTS),
   }))
-  .handler(async ({ data }): Promise<{ report: BugReport }> => {
+  .handler(async ({ data }): Promise<{
+    report: BugReport;
+    messageId: string;
+    uploadToken: string | null;
+  }> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Bug report reply");
     const response = await adminFetch("/api/admin/bug-reports/reply", {
@@ -307,7 +350,16 @@ export const replyToBugReportAsAdmin = createServerFn({ method: "POST" })
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error(`Bug report reply failed (${response.status}).`);
-    return await response.json() as { report: BugReport };
+    const payload = await response.json() as {
+      report: BugReport;
+      messageId?: string;
+      uploadToken?: string | null;
+    };
+    return {
+      report: payload.report,
+      messageId: payload.messageId ?? "",
+      uploadToken: payload.uploadToken ?? null,
+    };
   });
 
 /** Fix an already sent answer. The backend stamps the row as edited and only
@@ -394,7 +446,10 @@ export const promoteBugReportToTodo = createServerFn({ method: "POST" })
  * and no screenshot ever has a public one.
  */
 export const getBugReportScreenshotUrls = createServerFn({ method: "GET" })
-  .validator((data: { id: string }) => data)
+  .validator((data: { id: string; messageId?: string }) => ({
+    id: String(data?.id ?? ""),
+    messageId: data?.messageId ? String(data.messageId) : null,
+  }))
   .handler(async ({ data }): Promise<string[]> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
@@ -404,8 +459,8 @@ export const getBugReportScreenshotUrls = createServerFn({ method: "GET" })
     const { readCurrentAuth } = await import("./auth-server");
     const auth = await readCurrentAuth();
     const keys = auth.canUseAdminFeatures
-      ? await adminScreenshotKeys(data.id)
-      : await ownScreenshotKeys(base, data.id, auth.viewer?.id ?? null);
+      ? await adminScreenshotKeys(data.id, data.messageId)
+      : await ownScreenshotKeys(base, data.id, auth.viewer?.id ?? null, data.messageId);
     if (!keys.length) return [];
 
     const { getBugReportScreenshotUrl } = await import("./r2-cache");
@@ -413,12 +468,13 @@ export const getBugReportScreenshotUrls = createServerFn({ method: "GET" })
     return urls.filter((url): url is string => Boolean(url));
   });
 
-async function adminScreenshotKeys(id: string): Promise<string[]> {
+async function adminScreenshotKeys(id: string, messageId: string | null): Promise<string[]> {
   try {
     const response = await adminFetch(`/api/admin/bug-reports/get?id=${encodeURIComponent(id)}`);
     if (!response.ok) return [];
     const payload = await response.json() as { report?: BugReport };
-    return payload.report?.screenshotKeys ?? [];
+    if (!messageId) return payload.report?.screenshotKeys ?? [];
+    return payload.report?.messages.find((message) => message.id === messageId)?.screenshotKeys ?? [];
   } catch {
     return [];
   }
@@ -426,11 +482,17 @@ async function adminScreenshotKeys(id: string): Promise<string[]> {
 
 // The backend matches the report's stored user id against this one, so an
 // anonymous report answers to nobody and an account cannot ask for another's.
-async function ownScreenshotKeys(base: string, id: string, userId: number | null): Promise<string[]> {
+async function ownScreenshotKeys(
+  base: string,
+  id: string,
+  userId: number | null,
+  messageId: string | null,
+): Promise<string[]> {
   if (!userId) return [];
+  const message = messageId ? `&messageId=${encodeURIComponent(messageId)}` : "";
   try {
     const response = await fetch(
-      `${base}/api/bug-reports/screenshots?id=${encodeURIComponent(id)}&userId=${userId}`,
+      `${base}/api/bug-reports/screenshots?id=${encodeURIComponent(id)}&userId=${userId}${message}`,
       { headers: { ...bridgeAuthHeaders(), connection: "close" } },
     );
     if (!response.ok) return [];

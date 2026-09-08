@@ -94,7 +94,7 @@ describe("vibro recompute sweep", () => {
   it("restarts an older detector's continuation instead of skipping already-scanned charts", async () => {
     const db = await makeDb();
     await seedAnalyzedChart(db, 1, 20);
-    await runVibroRecomputeJob(db, new JobQueue(db), { cursor: 999, revision: "vibro_recompute_done:v9" });
+    await runVibroRecomputeJob(db, new JobQueue(db), { cursor: 999, revision: "vibro_recompute_done:v8" });
     const row = (await exec(db, "select classification_json from beatmap_chart_analysis where beatmap_id = 1")).rows[0];
     expect(JSON.parse(String(row.classification_json)).vibro).toBe(true);
   });

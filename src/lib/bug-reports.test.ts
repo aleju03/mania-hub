@@ -23,6 +23,9 @@ describe("bug report thread compatibility", () => {
       body: "Please try again now.",
       createdAt: 123,
       editedAt: null,
+      // Both sides' screenshot shapes, so the synthetic row reads as either.
+      screenshotKeys: [],
+      screenshotCount: 0,
     }]);
   });
 });

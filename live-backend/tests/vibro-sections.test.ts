@@ -4,7 +4,7 @@ import { classifyChart, detectRateVibro, detectRiceVibro } from "../src/dan/char
 import { analyzeVibroSections, conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { buildVibroOsu, localizedVibroFixture, vibroCharts, vibroFixture } from "./vibro-fixtures.js";
 
-const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542];
+const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854];
 
 describe("section-based vibro ratings", () => {
   it.each(vibroCharts.filter((chart) => !VIBRO_CONTROLS.includes(chart.id)))("restores $source", ({ id }) => {
@@ -87,7 +87,107 @@ describe("section-based vibro ratings", () => {
     expect(fast.status).toBe("excluded");
     expect(fast.sections.some((section) => section.reasons.includes("dense_chord_repetition"))).toBe(true);
     expect(analyzeVibroSections(build(100)).status).toBe("clean");
-    expect(analyzeVibroSections(build(25, 24)).status).toBe("clean");
+    // Breaks prevent a dense 64-row window, but the individual very fast
+    // repetitions are now independently eligible for short-burst detection.
+    expect(analyzeVibroSections(build(25, 24)).sections.some((section) => section.reasons.includes("dense_chord_repetition"))).toBe(false);
+  });
+
+  it.each([5589167, 4704087])("removes localized rapid bursts before rating chart %s", (id) => {
+    const text = vibroFixture(id);
+    const map = parseManiaBeatmap(text);
+    const result = analyzeVibroSections(map);
+    expect(result.status).toBe("adjusted");
+    expect(classifyChart(map, text).vibro).toBe(false);
+    const checkpoints = id === 5589167 ? [35_600] : [35_700, 35_800, 39_250, 40_600, 42_300, 45_100, 45_500];
+    for (const time of checkpoints) {
+      expect(result.sections.some((section) => section.startTime <= time && section.endTime >= time
+        && section.reasons.includes("rapid_jack_burst"))).toBe(true);
+    }
+    expect(result.noteShare).toBeLessThan(0.15);
+    const prepared = prepareVibroChart(text);
+    const retained = parseManiaBeatmap(prepared.osuText);
+    expect(retained.notes).toHaveLength(result.remainingNotes);
+    expect(retained.notes.every((note) => !result.sections.some((section) => note.time >= section.startTime && note.time <= section.endTime))).toBe(true);
+    expect(analyzeVibroSections({ ...map, title: "unrelated", creator: "unrelated", od: 5 })).toEqual(result);
+    for (const rate of [0.75, 1.5]) {
+      const rated = analyzeVibroSections(map, rate);
+      const baked = analyzeVibroSections(parseManiaBeatmap(vibroFixture(id, rate)));
+      expect(baked.status).toBe(rated.status);
+      // Integer-ms baked files round boundary gaps (e.g. 37/38ms at HT).
+      // Identical physical timestamps must preserve exact note coverage.
+      const exactBaked = analyzeVibroSections({ ...map, notes: map.notes.map((note) => ({
+        ...note, time: note.time / rate, endTime: note.endTime / rate,
+      })) });
+      expect(exactBaked.noteShare).toBe(rated.noteShare);
+    }
+  });
+
+  it("distinguishes rapid short repetitions from triples, doubles, and slower jacks", () => {
+    const build = (mask: number, hits: number, gap: number) => {
+      const notes: [number, number, number][] = Array.from({ length: 800 }, (_, row) => [1000 + row * 100, row % 4, -1]);
+      for (let row = 0; row < hits; row++) {
+        for (let column = 0; column < 4; column++) if (mask & (1 << column)) notes.push([90_000 + row * gap, column, -1]);
+      }
+      return parseManiaBeatmap(buildVibroOsu(notes));
+    };
+    for (const [mask, hits, gap] of [[1, 4, 27], [1, 9, 45], [3, 4, 37], [15, 7, 50]]) {
+      expect(analyzeVibroSections(build(mask, hits, gap)).status).toBe("adjusted");
+    }
+    for (const [mask, hits, gap] of [[1, 3, 27], [3, 2, 20], [3, 4, 60], [1, 20, 83]]) {
+      expect(analyzeVibroSections(build(mask, hits, gap)).status).toBe("clean");
+    }
+  });
+
+  it.each([
+    [5358361, 1, 33_450, 34_200],
+    [3948472, 1, 4_600, 8_100],
+    [3261945, 1, 82_500, 86_400],
+    [2695088, 1, 73_500, 74_000],
+    [3813854, 1, 48_200, 60_100],
+    [5259004, 1, 93_750, 93_800],
+    [3116797, 1.5, 34_700, 35_400],
+    [3947848, 1.5, 98_500, 102_500],
+    [2743517, 1.5, 39_400, 44_400],
+  ])("removes the retained repetition class in %s at %s", (id, rate, first, last) => {
+    const text = vibroFixture(id);
+    const map = parseManiaBeatmap(text);
+    const result = analyzeVibroSections(map, rate);
+    for (const time of [first, last]) {
+      expect(result.sections.some((section) => section.startTime <= time && section.endTime >= time)).toBe(true);
+    }
+    expect(analyzeVibroSections({ ...map, title: "unrelated", creator: "unrelated", od: 5 }, rate)).toEqual(result);
+    const baked = analyzeVibroSections({ ...map, notes: map.notes.map((note) => ({
+      ...note, time: note.time / rate, endTime: note.endTime / rate,
+    })) });
+    expect(baked.status).toBe(result.status);
+    expect(baked.noteShare).toBe(result.noteShare);
+    if (result.status === "adjusted") {
+      const retained = parseManiaBeatmap(prepareVibroChart(text, rate).osuText);
+      expect(retained.notes).toHaveLength(result.remainingNotes);
+      expect(retained.notes.every((note) => !result.sections.some((section) => note.time >= section.startTime && note.time <= section.endTime))).toBe(true);
+    }
+  });
+
+  it("finds short-chart walls, irregular fast jacks, and pairs through extra rows", () => {
+    const wall = Array.from({ length: 11 }, (_, row) =>
+      Array.from({ length: 4 }, (_, column) => [1000 + row * 83, column, -1] as [number, number, number])).flat();
+    // A chart with fewer than 200 notes is not automatically clean.
+    expect(analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(wall))).status).toBe("excluded");
+    const irregular: [number, number, number][] = [];
+    let time = 1000;
+    for (let row = 0; row < 40; row++) {
+      irregular.push([time, 0, -1], [time, 1 + row % 3, -1]);
+      time += row % 3 === 0 ? 80 : 40;
+    }
+    expect(analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(irregular))).status).toBe("excluded");
+    const pair: [number, number, number][] = [];
+    for (let row = 0; row < 60; row++) {
+      pair.push([1000 + row * 80, 0, -1], [1000 + row * 80, 1, -1]);
+      if (row % 3 === 0) pair.push([1020 + row * 80, 2, -1]);
+    }
+    expect(analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(pair))).status).toBe("excluded");
+    const slower = pair.map(([time, column, hold]) => [time * 1.25, column, hold] as [number, number, number]);
+    expect(analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(slower))).status).toBe("clean");
   });
 
   it.each([95, 100])("does not turn %sms jump-jack bursts into vibro through duration alone", (gap) => {

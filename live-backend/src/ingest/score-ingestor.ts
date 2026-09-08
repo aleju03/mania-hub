@@ -327,15 +327,10 @@ export class ScoreIngestor {
     const dedupeKey = `recent:user:${userId}`;
     if (await promotePendingRecentReconcileJobs(this.db, userId) > 0) return;
     if (await hasPendingRecentReconcileJob(this.db, userId)) return;
-    const row = (await exec(
-      this.db,
-      "select status, updated_at from jobs where dedupe_key = ?",
-      [dedupeKey],
-    )).rows[0];
-    if (row && String(row.status) !== "done") return;
-    const updatedAt = row?.updated_at == null ? 0 : new Date(String(row.updated_at)).getTime();
-    if (Number.isFinite(updatedAt) && Date.now() - updatedAt < 2 * 60_000) return;
-    await this.queue.enqueue(RECENT_RECONCILE_JOB_TYPE, dedupeKey, { userId }, { priority: 70, replaceDone: true });
+    // The worker's durable per-user gate delays requests during cooldown.
+    // Keep the repair queued: dropping it here could lose the final feed play
+    // when no follow-up exists and the user stops sending scores.
+    await this.queue.enqueue(RECENT_RECONCILE_JOB_TYPE, dedupeKey, { userId, kind: "gap_repair" }, { priority: 70, replaceDone: true });
   }
 
   private async getTrackedCountries(score: OscScore, countryAllowlist?: string[]): Promise<string[]> {

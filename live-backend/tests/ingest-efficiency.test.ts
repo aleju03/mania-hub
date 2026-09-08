@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { exec, migrate } from "../src/db.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
-import { nextRecentReconcileCadence, promotePendingRecentReconcileJobs, type RecentReconcilePayload } from "../src/jobs/recent-reconcile.js";
+import { nextRecentReconcileCadence, promotePendingRecentReconcileJobs, reserveRecentReconcileRequest, type RecentReconcilePayload } from "../src/jobs/recent-reconcile.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import type { OscScore } from "../src/shared/types.js";
 import { WorkerRunner } from "../src/workers.js";
@@ -79,8 +79,142 @@ describe("recent-score adaptive polling", () => {
         userId: 101, unchangedPolls: 3, latestScoreAt: "old", source: "osu_recent_fallback", processLeaderboardFeatures: true,
       }, { runAfter: new Date(Date.now() + 480_000) });
       expect(await promotePendingRecentReconcileJobs(db, 101)).toBe(1);
-      const [job] = await queue.claim("fast", 1);
-      expect(job.payload).toMatchObject({ unchangedPolls: 0, source: "osu_recent_fallback", processLeaderboardFeatures: true });
+      const row = (await exec(db, "select run_after, payload_json from jobs where dedupe_key = 'recent:user:101:next:1'")).rows[0];
+      expect(Date.parse(String(row.run_after))).toBeGreaterThan(Date.now());
+      expect(JSON.parse(String(row.payload_json))).toMatchObject({ unchangedPolls: 0, source: "osu_recent_fallback", processLeaderboardFeatures: true });
+    } finally { db.close(); }
+  });
+
+  it.each([undefined, "follow_up"] as const)("expires stale follow-ups before the API call (kind=%s)", async (kind) => {
+    const { db, queue, events, ingestor, score } = await setup();
+    try {
+      vi.useFakeTimers({ now: new Date("2026-09-04T12:00:00.000Z") });
+      await ingestor.ingestBatch([{ ...score, ended_at: "2026-09-04T11:29:59.000Z" }], "osu_recent", options);
+      await queue.enqueue("reconcile_user_recent_scores", `recent:user:${score.user_id}:next:1`, { userId: score.user_id, kind });
+      const osu = { getUserRecentScores: vi.fn().mockResolvedValue([]) };
+      await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      expect(osu.getUserRecentScores).not.toHaveBeenCalled();
+      expect((await exec(db, "select status from jobs where type = 'reconcile_user_recent_scores'")).rows[0].status).toBe("done");
+    } finally { db.close(); }
+  });
+
+  it.each([undefined, "gap_repair"] as const)("retains delayed initial gap repairs without active rows (kind=%s)", async (kind) => {
+    const { db, queue, events, ingestor } = await setup();
+    try {
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101, kind }, { runAfter: new Date(Date.now() - 86_400_000) });
+      const osu = { getUserRecentScores: vi.fn().mockResolvedValue([]) };
+      await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+      expect((await exec(db, "select status from jobs where type = 'reconcile_user_recent_scores'")).rows[0].status).toBe("done");
+    } finally { db.close(); }
+  });
+
+  it("serializes competing jobs and keeps the cooldown through fresh feed promotions and runner restarts", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    try {
+      vi.useFakeTimers({ now: new Date("2026-09-04T12:00:00.000Z") });
+      for (const key of ["recent:user:101", "recent:user:101:manual"]) {
+        await queue.enqueue("reconcile_user_recent_scores", key, { userId: 101 });
+      }
+      const osu = { getUserRecentScores: vi.fn().mockResolvedValue([]) };
+      await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(new Date("2026-09-04T12:00:30.000Z"));
+      await promotePendingRecentReconcileJobs(db, 101);
+      const pending = (await exec(db, "select run_after from jobs where status = 'queued' and type = 'reconcile_user_recent_scores'")).rows;
+      expect(pending).toHaveLength(1);
+      expect(pending[0].run_after).toBe("2026-09-04T12:02:00.000Z");
+      const restarted = new WorkerRunner(db, new JobQueue(db), events, osu as never, ingestor);
+      await restarted.runOnce();
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(new Date("2026-09-04T12:02:00.000Z"));
+      await restarted.runOnce();
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(2);
+    } finally { db.close(); }
+  });
+
+  it("keeps a slow in-flight request exclusive after two minutes and cools down from completion", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    let resolveRequest!: (scores: OscScore[]) => void;
+    let running: Promise<void> | undefined;
+    try {
+      vi.useFakeTimers({ now: new Date("2026-09-04T12:00:00.000Z") });
+      let started!: () => void;
+      const startedPromise = new Promise<void>(resolve => { started = resolve; });
+      const osu = { getUserRecentScores: vi.fn(() => {
+        started();
+        return new Promise<OscScore[]>(resolve => { resolveRequest = resolve; });
+      }) };
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 });
+      running = new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      await startedPromise;
+      vi.setSystemTime(new Date("2026-09-04T12:03:00.000Z"));
+      // Model the lease renewal of the still-active worker without ticking the watchdog.
+      await exec(db, "update jobs set locked_until = '2026-09-04T12:04:00.000Z' where status = 'running'");
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:101:manual", { userId: 101 });
+      await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+      resolveRequest([]);
+      await running;
+      await promotePendingRecentReconcileJobs(db, 101);
+      const pending = (await exec(db, "select run_after from jobs where status = 'queued' and type = 'reconcile_user_recent_scores'")).rows[0];
+      expect(pending.run_after).toBe("2026-09-04T12:05:00.000Z");
+    } finally {
+      resolveRequest?.([]);
+      await running;
+      db.close();
+    }
+  });
+
+  it("resets a follow-up to gap repair at the cooldown boundary and preserves failed retry delays", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    try {
+      vi.useFakeTimers({ now: new Date("2026-09-04T12:00:00.000Z") });
+      expect(await reserveRecentReconcileRequest(db, 101)).toBe(0);
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:101:next:1", { userId: 101, kind: "follow_up", unchangedPolls: 3 }, { runAfter: new Date(Date.now() + 480_000) });
+      vi.setSystemTime(new Date("2026-09-04T12:00:30.000Z"));
+      await promotePendingRecentReconcileJobs(db, 101);
+      let row = (await exec(db, "select * from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
+      expect(row.run_after).toBe("2026-09-04T12:02:00.000Z");
+      expect(JSON.parse(String(row.payload_json))).toMatchObject({ kind: "gap_repair", unchangedPolls: 0 });
+      await exec(db, "update jobs set status = 'failed', run_after = '2026-09-04T12:10:00.000Z' where id = ?", [Number(row.id)]);
+      await promotePendingRecentReconcileJobs(db, 101);
+      row = (await exec(db, "select * from jobs where id = ?", [Number(row.id)])).rows[0];
+      expect(row.run_after).toBe("2026-09-04T12:10:00.000Z");
+      // Fresh evidence upgraded even the legacy :next: key to mandatory repair.
+      vi.setSystemTime(new Date("2026-09-04T13:00:00.000Z"));
+      const osu = { getUserRecentScores: vi.fn().mockResolvedValue([]) };
+      await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+    } finally { db.close(); }
+  });
+
+  it("preserves two/four/eight-minute appointments through pressure deferral and refill", async () => {
+    const { db, queue } = await setup();
+    try {
+      const start = Date.parse("2026-09-04T12:00:00.000Z");
+      vi.useFakeTimers({ now: start });
+      for (let id = 1; id <= 10; id++) {
+        await queue.enqueue("reconcile_user_recent_scores", `recent:user:${id}`, { userId: id });
+      }
+      for (const minutes of [2, 4, 8]) {
+        await queue.enqueue("reconcile_user_recent_scores", `recent:user:101:next:${minutes}`, { userId: 101, kind: "follow_up" }, { runAfter: new Date(start + minutes * 60_000) });
+      }
+      const parked = (await exec(db, "select status, run_after from jobs where dedupe_key like 'recent:user:101:next:%' order by run_after")).rows;
+      expect(parked.map(row => row.status)).toEqual(Array(3).fill("deferred_pressure"));
+      expect(parked.map(row => row.run_after)).toEqual([2, 4, 8].map(minutes => new Date(start + minutes * 60_000).toISOString()));
+      const blockers = await queue.claim("test", 10, { types: ["reconcile_user_recent_scores"] });
+      for (const job of blockers) await queue.complete(job.id);
+      await queue.shedPressure();
+      expect(await queue.claim("test", 1, { types: ["reconcile_user_recent_scores"] })).toEqual([]);
+      for (const minutes of [2, 4, 8]) {
+        vi.setSystemTime(start + minutes * 60_000);
+        await queue.shedPressure();
+        const claimed = await queue.claim("test", 10, { types: ["reconcile_user_recent_scores"] });
+        expect(claimed.map(job => job.dedupeKey)).toEqual([`recent:user:101:next:${minutes}`]);
+        expect(claimed[0].runAfter).toBe(new Date(start + minutes * 60_000).toISOString());
+        await queue.complete(claimed[0].id);
+      }
     } finally { db.close(); }
   });
 
@@ -99,16 +233,18 @@ describe("recent-score adaptive polling", () => {
       let next = (await exec(db, "select run_after, payload_json from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
       expect(next.run_after).toBe("2026-09-04T12:08:00.000Z");
       await exec(db, "delete from jobs where type = 'reconcile_user_recent_scores'");
+      vi.setSystemTime(new Date("2026-09-04T12:08:00.000Z"));
       osu.getUserRecentScores.mockResolvedValue([{ ...initial, has_replay: true }]);
       await reconcile(payload);
       next = (await exec(db, "select run_after, payload_json from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
-      expect(next.run_after).toBe("2026-09-04T12:02:00.000Z");
+      expect(next.run_after).toBe("2026-09-04T12:10:00.000Z");
       expect(JSON.parse(String(next.payload_json)).unchangedPolls).toBe(0);
       await exec(db, "delete from jobs where type = 'reconcile_user_recent_scores'");
+      vi.setSystemTime(new Date("2026-09-04T12:10:00.000Z"));
       await ingestor.ingestBatch([{ ...initial, id: 9011, ended_at: "2026-09-04T11:59:00.000Z" }], "osu_scores_fallback", options);
       await reconcile(payload);
       next = (await exec(db, "select run_after, payload_json from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
-      expect(next.run_after).toBe("2026-09-04T12:02:00.000Z");
+      expect(next.run_after).toBe("2026-09-04T12:12:00.000Z");
       expect(JSON.parse(String(next.payload_json)).latestScoreAt).toBe("2026-09-04T11:59:00.000Z");
     } finally { db.close(); }
   });

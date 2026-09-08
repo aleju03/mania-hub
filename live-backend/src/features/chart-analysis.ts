@@ -1,3 +1,4 @@
+import { detectLnVibro, detectRiceVibro } from "../dan/vibro-detection.js";
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
@@ -7,7 +8,7 @@ import { storeChartFamily } from "./chart-families.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
-import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
+import { classifyChart, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
 import { LN_TAIL_MIN_RATIO, computeMsd, msdChartErrorFallback } from "../dan/msd.js";
@@ -280,12 +281,14 @@ export async function computeBeatmapChartAnalysis(
   if (!Number.isFinite(beatmapId) || beatmapId <= 0) return;
 
   const now = nowIso();
+  // Existing ready payloads remain readable until the completed replacement
+  // is written. The job lease tracks refresh work independently of this row.
   await exec(
     db,
     `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, updated_at)
      values (?, ?, 'running', ?)
      on conflict(beatmap_id, analysis_version) do update set
-       status = 'running',
+       status = case when beatmap_chart_analysis.status = 'ready' then 'ready' else 'running' end,
        error = null,
        updated_at = excluded.updated_at`,
     [beatmapId, CHART_ANALYSIS_VERSION, now],
@@ -391,7 +394,8 @@ export async function computeBeatmapChartAnalysis(
       `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, error, updated_at)
        values (?, ?, ?, ?, ?)
        on conflict(beatmap_id, analysis_version) do update set
-         status = excluded.status,
+         status = case when excluded.status = 'failed' and beatmap_chart_analysis.status = 'ready'
+           then 'ready' else excluded.status end,
          error = excluded.error,
          updated_at = excluded.updated_at`,
       [beatmapId, CHART_ANALYSIS_VERSION, status, message.slice(0, 500), failedAt],
@@ -823,7 +827,7 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v12";
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v9";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {

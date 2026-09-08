@@ -2,10 +2,11 @@
 // can be tested with plain Request objects (no TanStack server context).
 //
 // A screenshot attached to a bug report goes browser -> here -> R2, then the
-// key is recorded on the report in the live backend. The credential is the
-// upload ticket minted when the report row was created, not a login: the whole
-// point of /report is that a signed-out visitor can file one, and the ticket
-// already names exactly one report and expires in minutes.
+// key is recorded in the live backend, on the report or on the follow-up
+// message it was sent with. The credential is the upload ticket minted when
+// that row was created, not a login: the whole point of /report is that a
+// signed-out visitor can file one, and the ticket already names exactly one row
+// and expires in minutes.
 //
 // The bytes are checked before they are stored: capped at the shared image
 // limit, and typed by magic bytes rather than by whatever Content-Type the
@@ -52,6 +53,10 @@ export async function handleBugReportUploadPost(
 
   const url = new URL(request.url);
   const id = (url.searchParams.get("id") ?? "").trim();
+  // Present when the image belongs to a follow-up rather than to the report
+  // body. The ticket is then the one that reply minted, and the key sits under
+  // that message's own folder.
+  const messageId = (url.searchParams.get("messageId") ?? "").trim() || null;
   const token = (url.searchParams.get("token") ?? "").trim();
   const index = Number(url.searchParams.get("index"));
   if (!id || !token || !Number.isInteger(index) || index < 0 || index >= MAX_SCREENSHOTS) {
@@ -78,7 +83,7 @@ export async function handleBugReportUploadPost(
   const putScreenshot = seams.putScreenshot ?? putBugReportScreenshot;
   const deleteScreenshots = seams.deleteScreenshots ?? deleteBugReportScreenshots;
 
-  const key = getBugReportScreenshotKey(id, index, imageMimeExtension(mime) as BugReportImageExt);
+  const key = getBugReportScreenshotKey(id, index, imageMimeExtension(mime) as BugReportImageExt, messageId);
   // Check the ticket before R2 sees a write. The report id is not treated as a
   // secret, and a stale request must not be able to overwrite/delete an object
   // merely because it knows the deterministic index key.
@@ -87,7 +92,7 @@ export async function handleBugReportUploadPost(
     const response = await fetchFn(`${base}/api/bug-reports/authorize-screenshot`, {
       method: "POST",
       headers: { ...bridgeAuthHeaders(true), connection: "close" },
-      body: JSON.stringify({ id, token, key }),
+      body: JSON.stringify({ id, messageId, token, key }),
     });
     authorization = await response.json().catch(() => ({})) as typeof authorization;
     if (!response.ok || authorization.ok !== true) {
@@ -120,7 +125,7 @@ export async function handleBugReportUploadPost(
     const response = await fetchFn(`${base}/api/bug-reports/attach`, {
       method: "POST",
       headers: { ...bridgeAuthHeaders(true), connection: "close" },
-      body: JSON.stringify({ id, token, key }),
+      body: JSON.stringify({ id, messageId, token, key }),
     });
     const payload = await response.json().catch(() => ({})) as { error?: string; screenshotKeys?: string[] };
     if (!response.ok) {

@@ -42,11 +42,14 @@ vi.mock("./SkillPlaysModal", () => ({
     covers: null,
   }),
 }));
-vi.mock("#/components/maps/MapDetailModal", () => ({
-  MapDetailModal: ({ play }: { play: { ratingExcluded?: boolean; ratingExclusionReason?: "msd_floor" } }) => (
-    <div data-testid="map-rating-state">{play.ratingExclusionReason ?? (play.ratingExcluded ? "excluded" : "rated")}</div>
-  ),
-}));
+vi.mock("#/components/maps/MapDetailModal", async (importOriginal) => {
+  const { PlayContextBlock } = await importOriginal<typeof import("#/components/maps/MapDetailModal")>();
+  return {
+    MapDetailModal: ({ play }: { play: import("#/components/maps/MapDetailModal").MapDetailPlayContext }) => (
+      <div data-testid="map-rating-state"><PlayContextBlock play={play} /></div>
+    ),
+  };
+});
 
 const { SkillPlaysExplorer } = await import("./SkillPlaysExplorer");
 
@@ -106,13 +109,15 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     render(<I18nProvider i18n={getI18n("en")}>
       <SkillPlaysExplorer userId={userId} username="player" modes={[mode]} view="dan" />
     </I18nProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     fireEvent.click(await screen.findByText("does not count"));
     expect(screen.getByText(text)).toBeTruthy();
     fireEvent.click(screen.getByText("Best 101"));
-    await waitFor(() => expect(screen.getByTestId("map-rating-state").textContent).toBe(excluded ? "excluded" : "rated"));
+    expect(within(screen.getByTestId("map-rating-state")).getByText(text)).toBeTruthy();
+    expect(screen.queryByText("No MSD rating")).toBeNull();
   });
 
-  it("passes the low-accuracy rating reason through when opening a Dan play", async () => {
+  it("keeps rejected low-accuracy passes in Recent and explains Dan rejection in the popup", async () => {
     fetchDanEvidence.mockResolvedValue({
       clears: [],
       rejected: [{
@@ -125,8 +130,36 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     render(<I18nProvider i18n={getI18n("en")}>
       <SkillPlaysExplorer userId={41004} username="player" modes={[mode]} view="dan" />
     </I18nProvider>);
+    await waitFor(() => expect(fetchDanEvidence).toHaveBeenCalled());
+    expect(screen.queryByText("Best 101")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     fireEvent.click(await screen.findByText("Best 101"));
-    await waitFor(() => expect(screen.getByTestId("map-rating-state").textContent).toBe("msd_floor"));
+    const popup = within(screen.getByTestId("map-rating-state"));
+    expect(popup.getByText("Minimum required for dan credit is 91.00%. This play got 80.00%.")).toBeTruthy();
+    expect(popup.getByText("Chart Dan")).toBeTruthy();
+    expect(screen.queryByText("No MSD rating")).toBeNull();
+    expect(screen.queryByText("Accuracy below skill rating range")).toBeNull();
+  });
+
+  it("keeps eligible Dan-only clears in Best and shows their Dan credit", async () => {
+    fetchDanEvidence.mockResolvedValue({
+      clears: [{
+        play: { ...play(102, "Best"), rating: 0, overallRating: 0,
+          ratingExcluded: true, ratingExclusionReason: "msd_floor" },
+        chartDan: 5, chartDanLabel: "5", creditedDan: 3.68, creditedDanLabel: "4-",
+        clearAccuracy: 0.9172, skillsets: ["jack"], countsTowardDan: false,
+      }],
+      rejected: [],
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41005} username="player" modes={[mode]} view="dan" />
+    </I18nProvider>);
+    fireEvent.click(await screen.findByText("Best 102"));
+    const popup = within(screen.getByTestId("map-rating-state"));
+    expect(popup.getByText("4- (3.68)")).toBeTruthy();
+    expect(popup.getByText("Dan credit")).toBeTruthy();
+    expect(screen.queryByText("No MSD rating")).toBeNull();
+    expect(popup.queryByText("does not count")).toBeNull();
   });
 
   it("shows and filters every recorded mod, not only the rate mod", async () => {

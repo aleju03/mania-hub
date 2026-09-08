@@ -1701,7 +1701,8 @@ describe("live backend", () => {
     expect(await queue.depth()).toBe(1);
   });
 
-  it("reactivates parked reserved-lane jobs as immediately runnable", async () => {
+  it("reactivates parked reserved-lane jobs only when their schedule is due", async () => {
+    vi.useFakeTimers();
     const { db, queue } = await setup();
     const future = new Date(Date.now() + 30 * 60_000).toISOString();
     const now = new Date().toISOString();
@@ -1718,6 +1719,9 @@ describe("live backend", () => {
 
     // Reserved-lane jobs stay out of the shared depth pool entirely.
     expect(await queue.depth()).toBe(0);
+    expect(await queue.claim("test-worker", 5, { types: ["analyze_activity_beatmap"] })).toEqual([]);
+    vi.setSystemTime(new Date(future));
+    await queue.shedPressure();
     const claimed = await queue.claim("test-worker", 5, { types: ["analyze_activity_beatmap"] });
     expect(claimed).toHaveLength(5);
   });
@@ -1976,7 +1980,22 @@ describe("live backend", () => {
     expect(rows[0].dedupe_key).toBe("recent:user:101");
   });
 
-  it("revives a pressure-deferred recent reconciliation instead of enqueueing a duplicate", async () => {
+  it("retains a fresh gap repair during cooldown even when no follow-up exists", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 });
+    const [previous] = await queue.claim("test", 1, { types: ["reconcile_user_recent_scores"] });
+    await queue.complete(previous.id);
+    vi.setSystemTime(new Date("2026-05-12T00:05:30.000Z"));
+    await ingestor.ingestBatch([{ ...score, ended_at: new Date().toISOString() }]);
+    const row = (await exec(db, "select status, payload_json from jobs where dedupe_key = 'recent:user:101'")).rows[0];
+    expect(row.status).toBe("queued");
+    expect(JSON.parse(String(row.payload_json))).toMatchObject({ kind: "gap_repair" });
+  });
+
+  it("promotes a pressure-deferred reconciliation without bypassing admission or cooldown", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
     const { db, ingestor } = await setup();
@@ -1995,8 +2014,8 @@ describe("live backend", () => {
     const rows = (await exec(db, "select dedupe_key, status, run_after from jobs where type = 'reconcile_user_recent_scores'")).rows;
     expect(rows).toHaveLength(1);
     expect(rows[0].dedupe_key).toBe("recent:user:101:next:123");
-    expect(rows[0].status).toBe("queued");
-    expect(Date.parse(String(rows[0].run_after))).toBeLessThanOrEqual(Date.now());
+    expect(rows[0].status).toBe("deferred_pressure");
+    expect(Date.parse(String(rows[0].run_after))).toBe(Date.now() + 2 * 60_000);
   });
 
   it("promotes a queued delayed recent reconciliation after fresh oSC ingestion", async () => {
@@ -2020,7 +2039,7 @@ describe("live backend", () => {
     expect(rows[0].dedupe_key).toBe("recent:user:101:next:123");
     expect(rows[0].status).toBe("queued");
     expect(Number(rows[0].priority)).toBe(70);
-    expect(Date.parse(String(rows[0].run_after))).toBeLessThanOrEqual(Date.now());
+    expect(Date.parse(String(rows[0].run_after))).toBe(Date.now() + 2 * 60_000);
   });
 
   it("only runs the direct osu scores fallback when oSC intake is stale", () => {
@@ -2351,6 +2370,7 @@ describe("live backend", () => {
     const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
 
     await worker.runOnce();
+    vi.setSystemTime(new Date(Date.now() + 2 * 60_000));
     await queue.enqueue("reconcile_user_recent_scores", "recent:user:101:manual", { userId: 101 }, { priority: 100 });
     await worker.runOnce();
 

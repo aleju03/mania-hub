@@ -2847,7 +2847,7 @@ async function migrateBugReports(db: Db): Promise<void> {
   // Player-filed bug reports (see features/bug-reports.ts). Same open-write
   // shape as translation_reports above: signed-out visitors may file, so
   // user_id is nullable and `reporter_key` carries the opaque per-reporter
-  // bucket the caps key on. status is new|investigating|fixed|wontfix|
+  // bucket the caps key on. status is new|investigating|pending|fixed|wontfix|
   // duplicate|notabug, timestamps are epoch ms. Durable: retention never
   // prunes this table.
   //
@@ -2917,6 +2917,14 @@ async function migrateBugReports(db: Db): Promise<void> {
   const messageColumns = (await db.execute("pragma table_info(bug_report_messages)")).rows.map((row) => String(row.name));
   if (!messageColumns.includes("edited_at")) {
     await db.execute("alter table bug_report_messages add column edited_at integer");
+  }
+  // Added after the table shipped: a follow-up can carry screenshots of its
+  // own, so a message row holds the same trio the report row does - the keys
+  // it owns plus the short-lived upload ticket minted when it was written.
+  if (!messageColumns.includes("screenshot_keys")) {
+    await db.execute("alter table bug_report_messages add column screenshot_keys text");
+    await db.execute("alter table bug_report_messages add column upload_token text");
+    await db.execute("alter table bug_report_messages add column token_expires_at integer");
   }
   await db.execute(`
     create unique index if not exists idx_bug_report_messages_legacy

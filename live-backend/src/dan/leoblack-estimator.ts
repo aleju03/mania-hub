@@ -259,10 +259,19 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
 // precomputedDanielResult: Roxy canonicalizes the beatmap timing before running
 // its references, so an externally computed Daniel sees subtly different input
 // and shifts the meta numerics on charts with unusual timing (verified on the
-// dan corpus). The pass-through below is the fastest form that keeps output
-// byte-identical to upstream.
+// dan corpus). Leave the calculation chain intact; only resolve fusion plans
+// that upstream's own apply step would decline.
 export function runLeoBlackMixed(osuText: string, options: LeoBlackEstimatorOptions = {}): LeoBlackReworkResult {
-  return runMixedEstimatorFromText(osuText, options);
+  const result = runMixedEstimatorFromText(osuText, options);
+  const plan = result.mixedCompanellaPlan;
+  // Upstream creates a plan before checking the Azusa < Alpha fusion scope.
+  // Its apply step keeps Azusa outside that scope, but leaves the plan pending.
+  // Resolve that no-op here so we never load ONNX for a verdict it cannot move.
+  if (plan?.fuseRc && plan.onDisagree === "azusa"
+    && (plan.rcNumeric == null || !Number.isFinite(plan.rcNumeric) || plan.rcNumeric >= 11)) {
+    return { ...result, mixedCompanellaPlan: null };
+  }
+  return result;
 }
 
 // Direct Sunny baseline (no Roxy/Azusa/Daniel routing). The classifier uses it

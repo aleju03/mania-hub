@@ -2050,13 +2050,19 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("computes and stores a missing rate verdict during the skill compute, then credits it", async () => {
+  it.each([false, true])("computes and stores a rate verdict during the skill compute (previous version: %s), then credits it", async (hasPrevious) => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
       const { DAN_ESTIMATE_CACHE_VERSION } = await import("../src/dan/dan-estimator/cache-version.js");
       const now = new Date().toISOString();
       const beatmapIds = [251, 252, 253, 254];
       for (const beatmapId of beatmapIds) {
+        if (hasPrevious) {
+          await exec(db, `insert into dan_estimates
+            (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, computed_at, updated_at)
+            values (?, ?, 120, 'ready', '8', '8', 8, 'dan', 0.9, ?, ?)`,
+          [DAN_ESTIMATE_CACHE_VERSION - 1, beatmapId, now, now]);
+        }
         await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
         await exec(
           db,

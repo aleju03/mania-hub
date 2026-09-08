@@ -8,8 +8,8 @@
 //
 // Two sources, deliberately filtered in two different places:
 //   MSD  - /skill-plays, one 200-play cohort for each ordering.
-//   Dan  - /dan-evidence, merged from the best/newest 200 clears and rejected
-//          plays into the same bounded 200-play cohort.
+//   Dan  - /dan-evidence, best credited clears or newest clears and rejected
+//          passes, capped at 200 plays for either ordering.
 //
 // The cohort is fetched once, cached briefly, filtered in memory, and revealed
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
@@ -35,7 +35,7 @@ import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
-import { MapDetailModal } from "#/components/maps/MapDetailModal";
+import { MapDetailModal, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
 import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "#/lib/dan-images";
 import {
   SKILL_PLAYS_RATE_CAPS,
@@ -177,7 +177,7 @@ function loadDanCohort(
     });
     const rows: DanRow[] = [
       ...payload.clears.map((clear): DanRow => ({ kind: "clear", play: clear.play, dan: clear.creditedDan, clear })),
-      ...(payload.rejected ?? []).map((rejected): DanRow => ({
+      ...(sort === "recent" ? payload.rejected ?? [] : []).map((rejected): DanRow => ({
         kind: "rejected",
         play: rejected.play,
         dan: rejected.chartDan,
@@ -261,9 +261,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   const [refreshSpinning, setRefreshSpinning] = useState(false);
   const lastRefreshAtRef = useRef(0);
   const refreshSpinTimerRef = useRef<number | null>(null);
-  // The rating column travels with the play: the detail card prints the same
-  // number the row did, under the same name, and the dan list's rows carry the
-  // Overall rating their evidence payload rated them at.
+  // The detail card carries the selected view's rating and evidence.
   const [detail, setDetail] = useState<
     {
       play: LivePlayerSkillPlay;
@@ -271,6 +269,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
       status: "ready" | "pending" | "missing" | "error";
       ratingLabel: string;
       ratingColor: string;
+      dan?: MapDetailPlayContext["dan"];
     } | null
   >(null);
   const mountedRef = useRef(true);
@@ -325,7 +324,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   const activeFilterCount = (maxPerChart !== 0 ? 1 : 0)
     + Object.keys(modFilter).length
     + (hideRanked ? 1 : 0)
-    + (view === "dan" && !showRejected ? 1 : 0);
+    + (view === "dan" && sort === "recent" && !showRejected ? 1 : 0);
 
   const cycleMod = useCallback((mod: string, reverse: boolean) => {
     setModFilter((current) => {
@@ -379,8 +378,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
     });
   }, [activeAxisKey, mode, side, sort, username, view]);
 
-  const openDetail = useCallback((play: LivePlayerSkillPlay, rating: { label: string; color: string }) => {
-    const context = { ratingLabel: rating.label, ratingColor: rating.color };
+  const openDetail = useCallback((play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => {
+    const context = { ratingLabel: rating.label, ratingColor: rating.color, dan: rating.dan };
     // A hovered row answers from memory, so the card opens complete; otherwise
     // the stub carries it until the catalog request lands.
     const cached = peekLiveMapSearchEntry(play.beatmapId);
@@ -520,7 +519,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
                 pressed: hideRanked,
                 onChange: () => setHideRanked((current) => !current),
               },
-              ...(view === "dan"
+              ...(view === "dan" && sort === "recent"
                 ? [{
                   key: "uncounted",
                   label: t`not counted`,
@@ -586,6 +585,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             rateMod: rateModFor(detail.play.rate, detail.play.rateMod),
             playedAt: detail.play.playedAt,
             source: detail.play.source,
+            dan: detail.dan,
             rating: detail.play.rating,
             ratingExcluded: detail.play.ratingExcluded,
             ratingExclusionReason: detail.play.ratingExclusionReason,
@@ -630,7 +630,7 @@ function MsdPlaysList({
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
   onSettled?: (() => void) | undefined;
-  onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string }) => void;
+  onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => void;
 }) {
   const { t, i18n } = useLingui();
   const cacheKey = msdCohortKey(userId, keyCount, axis, sort);
@@ -780,11 +780,10 @@ function DanPlaysList({
   refreshNonce: number;
   onAvailableMods: (mods: string[]) => void;
   onSettled?: (() => void) | undefined;
-  onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string }) => void;
+  onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => void;
 }) {
   const { t, i18n } = useLingui();
-  // A dan row's own number is the dan; the rating the detail card shows is the
-  // play's Overall SSR, which is what the evidence payload rated it at.
+  // Carry the same Dan evidence into the detail popup as the list row.
   const overallLabel = i18n._(OVERALL_AXIS_META.labelMsg);
   const cacheKey = danCohortKey(userId, keyCount, side, sort);
   const [cohort, setCohort] = useState<DanRow[]>(() => peekCachedCohort(danCohortCache, cacheKey) ?? []);
@@ -879,7 +878,22 @@ function DanPlaysList({
       >
         {visibleRows.map((row, index) => {
           const key = `${row.kind}:${rowKey(row.play, index)}`;
-          const open = () => onOpen(row.play, { label: overallLabel, color: OVERALL_AXIS_META.color });
+          const open = () => onOpen(row.play, {
+            label: overallLabel,
+            color: OVERALL_AXIS_META.color,
+            dan: row.kind === "clear" ? {
+              chartRating: row.clear.chartDan,
+              chartLabel: row.clear.chartDanLabel,
+              creditedRating: row.clear.creditedDan,
+              creditedLabel: row.clear.creditedDanLabel,
+              accuracy: row.clear.clearAccuracy,
+            } : {
+              chartRating: row.rejected.chartDan,
+              chartLabel: row.rejected.chartDanLabel,
+              accuracy: row.rejected.clearAccuracy,
+              rejection: <DanRejectionExplanation rejected={row.rejected} />,
+            },
+          });
           const prefetch = () => prefetchLiveMapSearchEntry(row.play.beatmapId);
           return row.kind === "rejected" ? (
             <DanRejectedRow
@@ -1021,23 +1035,11 @@ function DanCreditCell({
  * where the row is smallest. The tail is its own button: it expands the reason
  * under the row instead of opening the map, and the row keeps its own tap.
  */
-function DanRejectedRow({
-  rejected,
-  keyCount,
-  position,
-  expanded,
-  onToggle,
-  onOpen,
-  onPrefetch,
-}: {
-  rejected: LivePlayerDanRejectedPlay;
-  keyCount: number;
-  position: number;
-  expanded: boolean;
-  onToggle: () => void;
-  onOpen: () => void;
-  onPrefetch: () => void;
-}) {
+function DanRejectionExplanation({ rejected }: { rejected: LivePlayerDanRejectedPlay }) {
+  return <>{useDanRejectionReason(rejected)}</>;
+}
+
+function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
   const { t } = useLingui();
   // Written out here rather than in a helper taking `t`: the Lingui macro only
   // sees a `t` it can follow to a useLingui call in the same scope, and a `t`
@@ -1075,6 +1077,27 @@ function DanRejectedRow({
                   : rejected.reason === "no_accuracy"
                     ? t`The judgement counts for this play are gone, so there is no accuracy to check it against.`
                     : t`This play counts for nothing on the dan estimate.`;
+  return reason;
+}
+
+function DanRejectedRow({
+  rejected,
+  keyCount,
+  position,
+  expanded,
+  onToggle,
+  onOpen,
+  onPrefetch,
+}: {
+  rejected: LivePlayerDanRejectedPlay;
+  keyCount: number;
+  position: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+  onPrefetch: () => void;
+}) {
+  const reason = useDanRejectionReason(rejected);
   // The level it was aiming at, dimmed, with the block mark over its corner:
   // the reader sees what the clear would have been worth and that it is not,
   // in the same column and the same shape the credited rows use.

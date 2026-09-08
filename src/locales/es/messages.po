@@ -668,8 +668,8 @@ msgstr "{0} scores"
 
 #. placeholder {0}: report.screenshotCount
 #: src/routes/report.tsx
-msgid "{0} screenshots"
-msgstr "{0} capturas"
+#~ msgid "{0} screenshots"
+#~ msgstr "{0} capturas"
 
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
@@ -913,6 +913,10 @@ msgstr "{count} seguidores"
 #: src/lib/streak-game.ts
 msgid "{count} replay views"
 msgstr "{count} vistas de replays"
+
+#: src/routes/report.tsx
+msgid "{count} screenshots"
+msgstr "{count} capturas"
 
 #: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
@@ -3384,7 +3388,7 @@ msgstr "cambiar"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Change"
-msgstr "Cambio"
+msgstr "Cambiar"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgctxt "skill rating difference"
@@ -3435,6 +3439,10 @@ msgstr "Chart"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "chart dan"
 msgstr "dan del chart"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chart Dan"
+msgstr "Dan del mapa"
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -4610,9 +4618,17 @@ msgstr "Dan"
 msgid "Dan (est.)"
 msgstr "Dan (est.)"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Dan accuracy"
+msgstr "Precisión para dan"
+
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Dan course"
 msgstr "Tipo de dan"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Dan credit"
+msgstr "Crédito de dan"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -5425,6 +5441,10 @@ msgstr "todo"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "todo lo demás que trae el archivo"
+
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Excluded sections"
+#~ msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Excludes all dan-related stuff from the website"
@@ -6621,7 +6641,7 @@ msgstr "Área de imagemap {0}/{1}"
 msgid "Images from {sourceName}"
 msgstr "Imágenes de {sourceName}"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "Images have to be under 5MB."
 msgstr "Las imágenes tienen que pesar menos de 5MB."
 
@@ -9415,6 +9435,10 @@ msgstr "en un mapa"
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
 msgstr "En Destacados"
+
+#: src/routes/report.tsx
+msgid "on the to-do list"
+msgstr "en la lista de pendientes"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13097,6 +13121,10 @@ msgstr "¿Seguro? La carta sale de la colección"
 #~ msgid "Sustained vibro detected. Individual clears need 95%+ accuracy, at least 2:1 MAX:300 and OD9+ without widened hit windows to count."
 #~ msgstr "Vibro sostenido detectado. Para contar, cada jugada requiere al menos un 95% de precisión, una proporción MAX:300 mínima de 2:1 y OD9+, sin ventanas de acierto ampliadas."
 
+#: src/components/maps/MapDetailModal.tsx
+#~ msgid "Sustained vibro detected. This chart does not count toward ordinary skill or dan ratings."
+#~ msgstr ""
+
 #: src/routes/maps.tsx
 msgid "SV"
 msgstr "SV"
@@ -13325,7 +13353,7 @@ msgstr "Eso no parece un enlace de invitación de Discord."
 msgid "That doesn't look like an osu! score link."
 msgstr "Eso no parece un enlace a un score de osu!."
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "That file is not an image."
 msgstr "Ese archivo no es una imagen."
 
@@ -14997,7 +15025,7 @@ msgstr "Sin clasificar"
 msgid "unreadable"
 msgstr "ilegible"
 
-#: src/routes/report.tsx
+#: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
 
@@ -16070,6 +16098,10 @@ msgstr "No se pudo cargar tu skin de replay"
 #: src/routes/replay_.uploads.tsx
 msgid "Your Replay Uploads"
 msgstr "Tus replays subidos"
+
+#: src/routes/report.tsx
+msgid "Your reply was sent, but at least one image did not upload."
+msgstr "Tu respuesta se envió, pero al menos una imagen no se subió."
 
 #: src/routes/report.tsx
 msgid "Your reports"

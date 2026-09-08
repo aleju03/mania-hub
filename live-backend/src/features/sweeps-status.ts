@@ -22,6 +22,7 @@ import {
 } from "./top-scores-backfill.js";
 import { SKILL_BASELINE_CURVES_META_KEY, SKILL_BASELINE_JOB } from "./skill-baseline.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB } from "./chart-families.js";
+import { LEOBLACK_FUSION_JOB, LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { PLAYER_SKILL_DAN_SWEEP_META_KEY, PLAYER_SKILL_DAN_SWEEP_JOB } from "./player-skills.js";
 import {
   JACK_DEMAND_RECOMPUTE_JOB,
@@ -533,6 +534,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     description: "Re-derives the 1.5x dan verdict from the stored DT MSD on every row carrying one, since the main re-pin sweep preserves the DT columns.",
     doneKey: "sunny_repin_dt_recompute_done:v1",
     jobType: "recompute_sunny_repin_dt_sweep",
+  }),
+  chartAnalysisSweep({
+    id: "leoblack-fusion",
+    label: "LeoBlack low-band fusion refresh",
+    description: "Refreshes low-band 4K rice ratings and their stored rate variants after the Azusa/Companella update, then recalculates player dans.",
+    doneKey: LEOBLACK_FUSION_META_KEY,
+    jobType: LEOBLACK_FUSION_JOB,
   }),
   chartAnalysisSweep({
     id: "leoblack-repin-recompute",

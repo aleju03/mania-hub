@@ -22,11 +22,19 @@ import { getAdminTodo, type AdminTodo } from "./admin-todos.js";
 // Triage is admin-only (/admin/bug-reports). The table is durable: retention
 // never prunes it.
 
-export type BugReportStatus = "new" | "investigating" | "fixed" | "wontfix" | "duplicate" | "notabug";
+export type BugReportStatus =
+  | "new"
+  | "investigating"
+  | "pending"
+  | "fixed"
+  | "wontfix"
+  | "duplicate"
+  | "notabug";
 
 export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "new",
   "investigating",
+  "pending",
   "fixed",
   "wontfix",
   "duplicate",
@@ -40,6 +48,10 @@ export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
  * /report is a question or a feature request rather than something broken, and
  * those are worth keeping: it is a parking tier, so "clear closed" leaves it
  * alone and nothing there is stamped resolved.
+ *
+ * `pending` is open for the same reason from the other direction: it is the
+ * queue for something acknowledged and meant to be done later, so it survives
+ * the sweep and stays open on the reporter's own list too.
  */
 export const BUG_REPORT_CLOSED_STATUSES: readonly BugReportStatus[] = ["fixed", "wontfix", "duplicate"];
 
@@ -99,7 +111,13 @@ export interface BugReportMessage {
   createdAt: number;
   /** Set when the message was corrected after it was sent; null otherwise. */
   editedAt: number | null;
+  /** Screenshots attached to this follow-up, in the private bucket. */
+  screenshotKeys: string[];
 }
+
+/** A message as its reporter reads it: the count, not the object keys, exactly
+ *  like the report body's own screenshots. */
+export type BugReportMessageForReporter = Omit<BugReportMessage, "screenshotKeys"> & { screenshotCount: number };
 
 export interface BugReport {
   id: string;
@@ -138,7 +156,7 @@ export interface BugReportForReporter {
   screenshotCount: number;
   reply: string | null;
   repliedAt: number | null;
-  messages: BugReportMessage[];
+  messages: BugReportMessageForReporter[];
   createdAt: number;
   updatedAt: number;
 }
@@ -168,7 +186,7 @@ export type AuthorizeBugReportScreenshotResult =
   | { ok: false; reason: "report_not_found" | "invalid_token" | "invalid_key" | "too_many_screenshots" };
 
 export type AddBugReportMessageResult =
-  | { ok: true; report: BugReport }
+  | { ok: true; report: BugReport; messageId: string; uploadToken: string | null }
   | { ok: false; reason: "report_not_found" | "not_owner" | "anonymous_report" | "invalid_message" | "too_many_messages" };
 
 export type EditBugReportMessageResult =
@@ -178,6 +196,7 @@ export type EditBugReportMessageResult =
 export interface BugReportCounts {
   new: number;
   investigating: number;
+  pending: number;
   fixed: number;
   wontfix: number;
   duplicate: number;
@@ -288,6 +307,7 @@ function parseMessages(value: unknown): BugReportMessage[] {
         body,
         createdAt,
         editedAt: row.editedAt == null || !Number.isFinite(editedAt) ? null : editedAt,
+        screenshotKeys: parseScreenshotKeys(row.screenshots),
       }];
     });
   } catch {
@@ -295,11 +315,24 @@ function parseMessages(value: unknown): BugReportMessage[] {
   }
 }
 
-export function isBugReportScreenshotKey(id: string, key: unknown): key is string {
+/**
+ * A screenshot belongs either to the report body or to one follow-up message,
+ * and the key says which: a message keeps its images in `m/<messageId>/` under
+ * the report's own folder, so deleting a report still takes every object below
+ * one prefix and no message can name another's file.
+ */
+export function isBugReportScreenshotKey(id: string, key: unknown, messageId?: string | null): key is string {
   if (typeof key !== "string" || !id) return false;
   const exts = SCREENSHOT_KEY_EXTS.join("|");
-  return new RegExp(`^bug-reports/${id.replace(/[^A-Za-z0-9-]/g, "")}/[0-${BUG_REPORT_MAX_SCREENSHOTS - 1}]\\.(${exts})$`)
-    .test(key);
+  const reportSegment = id.replace(/[^A-Za-z0-9-]/g, "");
+  if (!reportSegment) return false;
+  let folder = `bug-reports/${reportSegment}`;
+  if (messageId != null) {
+    const messageSegment = messageId.replace(/[^A-Za-z0-9-]/g, "");
+    if (!messageSegment) return false;
+    folder += `/m/${messageSegment}`;
+  }
+  return new RegExp(`^${folder}/[0-${BUG_REPORT_MAX_SCREENSHOTS - 1}]\\.(${exts})$`).test(key);
 }
 
 const STORED_COLUMNS =
@@ -312,10 +345,11 @@ const SELECT_COLUMNS = `${STORED_COLUMNS}, (
     'author', message.author_role,
     'body', message.body,
     'createdAt', message.created_at,
-    'editedAt', message.edited_at
+    'editedAt', message.edited_at,
+    'screenshots', message.screenshot_keys
   )), '[]')
   from (
-    select id, author_role, body, created_at, edited_at, rowid as insertion_order
+    select id, author_role, body, created_at, edited_at, screenshot_keys, rowid as insertion_order
       from bug_report_messages
      where report_id = bug_reports.id
      order by created_at, insertion_order
@@ -360,7 +394,10 @@ export function toBugReportForReporter(report: BugReport): BugReportForReporter 
     screenshotCount: report.screenshotKeys.length,
     reply: report.reply,
     repliedAt: report.repliedAt,
-    messages: report.messages,
+    messages: report.messages.map(({ screenshotKeys, ...message }) => ({
+      ...message,
+      screenshotCount: screenshotKeys.length,
+    })),
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -525,28 +562,24 @@ function hasScreenshotIndex(keys: string[], key: string): boolean {
  */
 export async function authorizeBugReportScreenshot(
   db: Db,
-  input: { id?: unknown; token?: unknown; key?: unknown },
+  input: { id?: unknown; messageId?: unknown; token?: unknown; key?: unknown },
 ): Promise<AuthorizeBugReportScreenshotResult> {
   const id = typeof input.id === "string" ? input.id : "";
+  const messageId = typeof input.messageId === "string" && input.messageId ? input.messageId : null;
   const token = typeof input.token === "string" ? input.token : "";
   if (!id || !token) return { ok: false, reason: "invalid_token" };
 
-  const row = (await exec(
-    db,
-    "select screenshot_keys, upload_token, token_expires_at from bug_reports where id = ? limit 1",
-    [id],
-  )).rows[0] as Record<string, unknown> | undefined;
-  if (!row) return { ok: false, reason: "report_not_found" };
-  const storedToken = row.upload_token == null ? "" : String(row.upload_token);
-  const expiresAt = row.token_expires_at == null ? 0 : Number(row.token_expires_at);
-  if (!storedToken || storedToken !== token || expiresAt <= Date.now()) return { ok: false, reason: "invalid_token" };
-  if (!isBugReportScreenshotKey(id, input.key)) return { ok: false, reason: "invalid_key" };
+  const target = await readScreenshotTarget(db, id, messageId);
+  if (!target) return { ok: false, reason: "report_not_found" };
+  if (!target.token || target.token !== token || target.expiresAt <= Date.now()) {
+    return { ok: false, reason: "invalid_token" };
+  }
+  if (!isBugReportScreenshotKey(id, input.key, messageId)) return { ok: false, reason: "invalid_key" };
 
-  const keys = parseScreenshotKeys(row.screenshot_keys);
-  if (keys.includes(input.key) || hasScreenshotIndex(keys, input.key)) {
+  if (target.keys.includes(input.key) || hasScreenshotIndex(target.keys, input.key)) {
     return { ok: true, alreadyAttached: true };
   }
-  if (keys.length >= BUG_REPORT_MAX_SCREENSHOTS) return { ok: false, reason: "too_many_screenshots" };
+  if (target.keys.length >= BUG_REPORT_MAX_SCREENSHOTS) return { ok: false, reason: "too_many_screenshots" };
   return { ok: true, alreadyAttached: false };
 }
 
@@ -558,9 +591,10 @@ export async function authorizeBugReportScreenshot(
  */
 export async function attachBugReportScreenshot(
   db: Db,
-  input: { id?: unknown; token?: unknown; key?: unknown },
+  input: { id?: unknown; messageId?: unknown; token?: unknown; key?: unknown },
 ): Promise<AttachBugReportScreenshotResult> {
   const id = typeof input.id === "string" ? input.id : "";
+  const messageId = typeof input.messageId === "string" && input.messageId ? input.messageId : null;
   const token = typeof input.token === "string" ? input.token : "";
   if (!id || !token) return { ok: false, reason: "invalid_token" };
 
@@ -569,43 +603,105 @@ export async function attachBugReportScreenshot(
   // so two requests cannot both read [] and have the last writer erase the
   // first one's key.
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const row = (await exec(
-      db,
-      "select screenshot_keys, upload_token, token_expires_at from bug_reports where id = ? limit 1",
-      [id],
-    )).rows[0] as Record<string, unknown> | undefined;
-    if (!row) return { ok: false, reason: "report_not_found" };
+    const target = await readScreenshotTarget(db, id, messageId);
+    if (!target) return { ok: false, reason: "report_not_found" };
 
-    const storedToken = row.upload_token == null ? "" : String(row.upload_token);
-    const expiresAt = row.token_expires_at == null ? 0 : Number(row.token_expires_at);
-    if (!storedToken || storedToken !== token || expiresAt <= Date.now()) return { ok: false, reason: "invalid_token" };
-    if (!isBugReportScreenshotKey(id, input.key)) return { ok: false, reason: "invalid_key" };
-
-    const keys = parseScreenshotKeys(row.screenshot_keys);
-    if (keys.includes(input.key) || hasScreenshotIndex(keys, input.key)) {
-      return { ok: true, screenshotKeys: keys };
+    if (!target.token || target.token !== token || target.expiresAt <= Date.now()) {
+      return { ok: false, reason: "invalid_token" };
     }
-    if (keys.length >= BUG_REPORT_MAX_SCREENSHOTS) return { ok: false, reason: "too_many_screenshots" };
+    if (!isBugReportScreenshotKey(id, input.key, messageId)) return { ok: false, reason: "invalid_key" };
 
-    const rawKeys = typeof row.screenshot_keys === "string" ? row.screenshot_keys : null;
-    const next = [...keys, input.key];
-    const updated = await exec(
-      db,
-      `update bug_reports set screenshot_keys = ?, updated_at = ?
-        where id = ? and upload_token = ? and token_expires_at > ?
-          and ${rawKeys == null ? "screenshot_keys is null" : "screenshot_keys = ?"}`,
-      rawKeys == null
-        ? [JSON.stringify(next), Date.now(), id, token, Date.now()]
-        : [JSON.stringify(next), Date.now(), id, token, Date.now(), rawKeys],
-    );
-    if ((updated.rowsAffected ?? 0) > 0) return { ok: true, screenshotKeys: next };
+    if (target.keys.includes(input.key) || hasScreenshotIndex(target.keys, input.key)) {
+      return { ok: true, screenshotKeys: target.keys };
+    }
+    if (target.keys.length >= BUG_REPORT_MAX_SCREENSHOTS) return { ok: false, reason: "too_many_screenshots" };
+
+    const next = [...target.keys, input.key];
+    if (await writeScreenshotKeys(db, id, messageId, token, target.rawKeys, next)) {
+      return { ok: true, screenshotKeys: next };
+    }
   }
   return { ok: false, reason: "too_many_screenshots" };
 }
 
+interface ScreenshotTarget {
+  /** The stored JSON exactly as read, so the write can compare-and-swap on it. */
+  rawKeys: string | null;
+  keys: string[];
+  token: string;
+  expiresAt: number;
+}
+
+/** The report row, or one of its message rows when the images belong to a
+ *  follow-up. Both carry the same three columns, so everything above this line
+ *  treats them the same way. */
+async function readScreenshotTarget(db: Db, id: string, messageId: string | null): Promise<ScreenshotTarget | null> {
+  const row = (messageId
+    ? await exec(
+      db,
+      `select screenshot_keys, upload_token, token_expires_at from bug_report_messages
+        where id = ? and report_id = ? limit 1`,
+      [messageId, id],
+    )
+    : await exec(
+      db,
+      "select screenshot_keys, upload_token, token_expires_at from bug_reports where id = ? limit 1",
+      [id],
+    )).rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    rawKeys: typeof row.screenshot_keys === "string" ? row.screenshot_keys : null,
+    keys: parseScreenshotKeys(row.screenshot_keys),
+    token: row.upload_token == null ? "" : String(row.upload_token),
+    expiresAt: row.token_expires_at == null ? 0 : Number(row.token_expires_at),
+  };
+}
+
+async function writeScreenshotKeys(
+  db: Db,
+  id: string,
+  messageId: string | null,
+  token: string,
+  rawKeys: string | null,
+  next: string[],
+): Promise<boolean> {
+  const now = Date.now();
+  const keysClause = rawKeys == null ? "screenshot_keys is null" : "screenshot_keys = ?";
+  const compare = rawKeys == null ? [] : [rawKeys];
+  if (!messageId) {
+    const updated = await exec(
+      db,
+      `update bug_reports set screenshot_keys = ?, updated_at = ?
+        where id = ? and upload_token = ? and token_expires_at > ? and ${keysClause}`,
+      [JSON.stringify(next), now, id, token, now, ...compare],
+    );
+    return (updated.rowsAffected ?? 0) > 0;
+  }
+  const updated = await exec(
+    db,
+    `update bug_report_messages set screenshot_keys = ?
+      where id = ? and report_id = ? and upload_token = ? and token_expires_at > ? and ${keysClause}`,
+    [JSON.stringify(next), messageId, id, token, now, ...compare],
+  );
+  if ((updated.rowsAffected ?? 0) === 0) return false;
+  // An image landing on a follow-up is activity on the report, same as the
+  // words were, so the board keeps it where the reporter expects to find it.
+  await exec(db, "update bug_reports set updated_at = ? where id = ?", [now, id]);
+  return true;
+}
+
 export async function countBugReports(db: Db): Promise<BugReportCounts> {
   const rows = (await exec(db, "select status, count(*) as n from bug_reports group by status")).rows;
-  const counts: BugReportCounts = { new: 0, investigating: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0, total: 0 };
+  const counts: BugReportCounts = {
+    new: 0,
+    investigating: 0,
+    pending: 0,
+    fixed: 0,
+    wontfix: 0,
+    duplicate: 0,
+    notabug: 0,
+    total: 0,
+  };
   for (const row of rows) {
     const status = normalizeBugReportStatus(row.status);
     const n = Number(row.n ?? 0);
@@ -690,7 +786,7 @@ function normalizeMessageBody(value: unknown): string | null {
  *  once concurrently. */
 export async function addReporterBugReportMessage(
   db: Db,
-  input: { id?: unknown; userId?: unknown; body?: unknown },
+  input: { id?: unknown; userId?: unknown; body?: unknown; screenshotCount?: unknown },
 ): Promise<AddBugReportMessageResult> {
   const id = typeof input.id === "string" ? input.id : "";
   const userId = normalizeUserId(input.userId);
@@ -704,15 +800,30 @@ export async function addReporterBugReportMessage(
   const messageId = randomUUID();
   const now = Date.now();
   const windowStart = now - REPORTER_WINDOW_MS;
+  // A follow-up carries its own ticket rather than reusing the report's: that
+  // one was minted at submit and is long expired by the time somebody comes
+  // back with a screenshot of what they meant.
+  const uploadToken = Number(input.screenshotCount) > 0 ? randomUUID() : null;
   const [inserted] = await execBatch(db, [
     {
-      sql: `insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
-        select ?, ?, 'reporter', ?, ?, 0
+      sql: `insert into bug_report_messages
+              (id, report_id, author_role, body, created_at, legacy_reply, upload_token, token_expires_at)
+        select ?, ?, 'reporter', ?, ?, 0, ?, ?
          where (
            select count(*) from bug_report_messages
             where report_id = ? and author_role = 'reporter' and created_at >= ?
          ) < ?`,
-      args: [messageId, id, body, now, id, windowStart, BUG_REPORT_MESSAGES_PER_REPORTER_PER_DAY],
+      args: [
+        messageId,
+        id,
+        body,
+        now,
+        uploadToken,
+        uploadToken ? now + BUG_REPORT_UPLOAD_TOKEN_TTL_MS : null,
+        id,
+        windowStart,
+        BUG_REPORT_MESSAGES_PER_REPORTER_PER_DAY,
+      ],
     },
     {
       sql: `update bug_reports
@@ -723,7 +834,7 @@ export async function addReporterBugReportMessage(
   ]);
   if ((inserted?.rowsAffected ?? 0) === 0) return { ok: false, reason: "too_many_messages" };
   const updated = await getById(db, id);
-  return updated ? { ok: true, report: updated } : { ok: false, reason: "report_not_found" };
+  return updated ? { ok: true, report: updated, messageId, uploadToken } : { ok: false, reason: "report_not_found" };
 }
 
 /** Append an owner response. `reply`/`replied_at` keep the newest answer in the
@@ -731,7 +842,7 @@ export async function addReporterBugReportMessage(
  *  durable history the new clients render. */
 export async function addAdminBugReportMessage(
   db: Db,
-  input: { id?: unknown; body?: unknown },
+  input: { id?: unknown; body?: unknown; screenshotCount?: unknown },
 ): Promise<AddBugReportMessageResult> {
   const id = typeof input.id === "string" ? input.id : "";
   const body = normalizeMessageBody(input.body);
@@ -742,11 +853,15 @@ export async function addAdminBugReportMessage(
 
   const messageId = randomUUID();
   const now = Date.now();
+  // The owner answers with screenshots on the same terms the reporter does:
+  // a ticket on this message, spent by the upload route.
+  const uploadToken = Number(input.screenshotCount) > 0 ? randomUUID() : null;
   await execBatch(db, [
     {
-      sql: `insert into bug_report_messages (id, report_id, author_role, body, created_at, legacy_reply)
-            values (?, ?, 'admin', ?, ?, 0)`,
-      args: [messageId, id, body, now],
+      sql: `insert into bug_report_messages
+              (id, report_id, author_role, body, created_at, legacy_reply, upload_token, token_expires_at)
+            values (?, ?, 'admin', ?, ?, 0, ?, ?)`,
+      args: [messageId, id, body, now, uploadToken, uploadToken ? now + BUG_REPORT_UPLOAD_TOKEN_TTL_MS : null],
     },
     {
       sql: "update bug_reports set reply = ?, replied_at = ?, updated_at = ? where id = ?",
@@ -754,7 +869,9 @@ export async function addAdminBugReportMessage(
     },
   ]);
   const updated = await getById(db, id);
-  return updated ? { ok: true, report: updated } : { ok: false, reason: "report_not_found" };
+  return updated
+    ? { ok: true, report: updated, messageId, uploadToken }
+    : { ok: false, reason: "report_not_found" };
 }
 
 /** Correct one of the owner's own messages in place. A reporter has usually
@@ -810,7 +927,8 @@ export interface UpdateBugReportInput {
 /**
  * Triage one report. Fields left undefined keep their stored value, so a
  * status flip needs only `{ id, status }`. `resolvedAt` follows the status:
- * stamped only for fixed/wontfix/duplicate, cleared for new/investigating/notabug.
+ * stamped only for fixed/wontfix/duplicate, cleared for the open tiers
+ * (new/investigating/pending/notabug).
  * `reply` is retained as a rolling-deploy compatibility input. A changed,
  * non-empty value appends an admin message instead of replacing history.
  */
@@ -932,11 +1050,15 @@ export async function promoteBugReportToTodo(db: Db, id: string): Promise<Promot
 export async function deleteBugReport(db: Db, id: string): Promise<{ deleted: boolean; screenshotKeys: string[] }> {
   const existing = await getById(db, id);
   if (!existing) return { deleted: false, screenshotKeys: [] };
+  const screenshotKeys = [
+    ...existing.screenshotKeys,
+    ...existing.messages.flatMap((message) => message.screenshotKeys),
+  ];
   const [, result] = await execBatch(db, [
     { sql: "delete from bug_report_messages where report_id = ?", args: [id] },
     { sql: "delete from bug_reports where id = ?", args: [id] },
   ]);
-  return { deleted: (result?.rowsAffected ?? 0) > 0, screenshotKeys: existing.screenshotKeys };
+  return { deleted: (result?.rowsAffected ?? 0) > 0, screenshotKeys };
 }
 
 /** Drop everything already closed (fixed + wontfix + duplicate). "new" and "investigating" are untouched. */
@@ -944,8 +1066,11 @@ export async function clearClosedBugReports(db: Db): Promise<{ cleared: number; 
   const placeholders = BUG_REPORT_CLOSED_STATUSES.map(() => "?").join(", ");
   const rows = (await exec(
     db,
-    `select screenshot_keys from bug_reports where status in (${placeholders})`,
-    [...BUG_REPORT_CLOSED_STATUSES],
+    `select screenshot_keys from bug_reports where status in (${placeholders})
+      union all
+     select screenshot_keys from bug_report_messages
+      where report_id in (select id from bug_reports where status in (${placeholders}))`,
+    [...BUG_REPORT_CLOSED_STATUSES, ...BUG_REPORT_CLOSED_STATUSES],
   )).rows;
   const screenshotKeys = rows.flatMap((row) => parseScreenshotKeys((row as Record<string, unknown>).screenshot_keys));
   const [, result] = await execBatch(db, [

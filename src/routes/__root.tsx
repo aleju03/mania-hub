@@ -664,37 +664,42 @@ function RootLayout() {
               <GhostLayer />
             </>
           )}
-          <footer className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
-            <KofiSupportButton />
-            <span>·</span>
-            <Link to="/privacy" className="hover:text-osu-pink-light/60 transition-colors">
-              <Trans>privacy</Trans>
-            </Link>
-            <span>·</span>
-            <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
-              <Trans>terms</Trans>
-            </Link>
-            <span>·</span>
-            <Link
-              to="/report"
-              search={{ from: currentPath === "/report" ? undefined : currentPath }}
-              className="hover:text-osu-pink-light/60 transition-colors"
-            >
-              <Trans>report a bug</Trans>
-            </Link>
-            <span>·</span>
-            <ChangelogFooterLink />
-            <span>·</span>
-            <span>
-              <Trans>made by</Trans>{" "}
-              <a
-                href="https://osu.ppy.sh/users/7095193"
-                target="_blank"
-                rel="noopener noreferrer"
+          <footer className="relative px-16 py-2 text-center text-[10px] text-osu-pink-light/30">
+            <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
+              <KofiSupportButton />
+              <span>·</span>
+              <Link to="/privacy" className="hover:text-osu-pink-light/60 transition-colors">
+                <Trans>privacy</Trans>
+              </Link>
+              <span>·</span>
+              <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
+                <Trans>terms</Trans>
+              </Link>
+              <span>·</span>
+              <Link
+                to="/report"
+                search={{ from: currentPath === "/report" ? undefined : currentPath }}
                 className="hover:text-osu-pink-light/60 transition-colors"
               >
-                aleju03
-              </a>
+                <Trans>report a bug</Trans>
+              </Link>
+              <span>·</span>
+              <ChangelogFooterLink />
+              <span>·</span>
+              <span>
+                <Trans>made by</Trans>{" "}
+                <a
+                  href="https://osu.ppy.sh/users/7095193"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-osu-pink-light/60 transition-colors"
+                >
+                  aleju03
+                </a>
+              </span>
+            </div>
+            <span className="absolute right-4 top-1/2 -translate-y-1/2">
+              {import.meta.env.VITE_APP_VERSION || "v2.176"}
             </span>
           </footer>
         </AnalyticsProvider>

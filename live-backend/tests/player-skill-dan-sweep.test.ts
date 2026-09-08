@@ -1,4 +1,6 @@
+import { LEOBLACK_FUSION_META_KEY } from "../src/features/leoblack-fusion.js";
 import { CHART_FAMILY_META_KEY } from "../src/features/chart-families.js";
+import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +11,7 @@ import {
   PLAYER_SKILL_DAN_SWEEP_JOB,
   ensurePlayerSkillDanSweepSeeded,
   loadChartSkillInfo,
+  getPlayerSkillDanEvidence,
   danSkillsetBucketsForValues,
   recomputePlayerSkillDanChunk,
   runPlayerSkillDanSweepJob,
@@ -110,6 +113,38 @@ async function seedRow(db: Db, userId: number, beatmapIds: number[]): Promise<vo
 }
 
 describe("recomputePlayerSkillDanChunk", () => {
+  it("preserves custom-rate credit through a version bump while evidence reads queue replacements", async () => {
+    const db = await makeDb();
+    try {
+      const ids = [301, 302, 303, 304];
+      for (const id of ids) {
+        await seedChart(db, id, 8);
+        await exec(db, `insert into dan_estimates
+          (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, computed_at, updated_at)
+          values (?, ?, 120, 'ready', '8', '8', 8, 'dan', 0.9, '2026-09-01', '2026-09-01')`,
+        [DAN_ESTIMATE_CACHE_VERSION - 1, id]);
+      }
+      await seedRow(db, 11, ids);
+      await exec(db, "update player_skill_ratings set plays_json = ? where user_id = 11",
+        [json({ plays: ids.map((id) => ({ ...barePass(id), rate: 1.2 })) })]);
+      const queue = new JobQueue(db);
+      const before = await getPlayerSkillDanEvidence(db, 11, 4, "rc", queue);
+      expect(before?.clears).toHaveLength(4);
+      expect((await exec(db, "select id from jobs where type = 'compute_dan_estimate'")).rows).toHaveLength(4);
+      expect(await recomputePlayerSkillDanChunk(db, 0)).toMatchObject({ rewritten: 1 });
+      const row = (await exec(db, "select modes_json from player_skill_ratings where user_id = 11")).rows[0];
+      expect(JSON.parse(String(row.modes_json)).modes[0].dan.rc).toMatchObject({ rawDan: 8, clears: 4 });
+      // The next completed model result is allowed to change credit.
+      await exec(db, `insert into dan_estimates
+        (estimator_version, beatmap_id, rate_percent, status, computed_at, updated_at)
+        values (?, 301, 120, 'unsupported', '2026-09-08', '2026-09-08')`, [DAN_ESTIMATE_CACHE_VERSION]);
+      const after = await getPlayerSkillDanEvidence(db, 11, 4, "rc", queue);
+      expect(after?.clears).toHaveLength(3);
+    } finally {
+      db.close();
+    }
+  });
+
   it("replaces a stale Gamma LN course floor with the discounted 10++ credit", async () => {
     const db = await makeDb();
     await seedRow(db, 71, [2556940]);
@@ -559,7 +594,10 @@ describe("recomputePlayerSkillDanChunk", () => {
     db.close();
   });
 
-  it("automatically re-runs when the Sunny DT repair finished midway through a pass", async () => {
+  it.each([
+    ["Sunny DT", SUNNY_REPIN_DT_META_KEY],
+    ["LeoBlack fusion", LEOBLACK_FUSION_META_KEY],
+  ])("automatically re-runs when the %s repair finished midway through a pass", async (_name, repairKey) => {
     const db = await makeDb();
     const queue = new JobQueue(db);
     for (const beatmapId of [451, 452, 453, 454]) await seedChart(db, beatmapId, 8);
@@ -567,7 +605,7 @@ describe("recomputePlayerSkillDanChunk", () => {
 
     const startedAt = "2026-08-27T00:00:00.000Z";
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
-      [SUNNY_REPIN_DT_META_KEY, json({ finishedAt: "2026-08-27T00:00:30.000Z" }), "2026-08-27T00:00:30.000Z"]);
+      [repairKey, json({ finishedAt: "2026-08-27T00:00:30.000Z" }), "2026-08-27T00:00:30.000Z"]);
     await markDanDependenciesSwept(db);
     // Model the production worker accurately: the cursor-0 job is still
     // running while its handler tries to schedule the required second pass.

@@ -119,7 +119,14 @@ export async function handleBugReportRoutes(
       sendJson(req, res, ctx, status, { error: result.reason });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, report: toBugReportForReporter(result.report) });
+    // Same shape as submit: the words are stored, and a client that said it
+    // has images gets the ticket they upload against.
+    sendJson(req, res, ctx, 200, {
+      ok: true,
+      report: toBugReportForReporter(result.report),
+      messageId: result.messageId,
+      uploadToken: result.uploadToken,
+    });
     return true;
   }
 
@@ -137,7 +144,13 @@ export async function handleBugReportRoutes(
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { screenshotKeys: report.screenshotKeys });
+    // With a message id it is that follow-up's images; without one, the
+    // report's own. Either way the owner check above is the same.
+    const messageId = url.searchParams.get("messageId");
+    const screenshotKeys = messageId
+      ? report.messages.find((message) => message.id === messageId)?.screenshotKeys ?? []
+      : report.screenshotKeys;
+    sendJson(req, res, ctx, 200, { screenshotKeys });
     return true;
   }
 

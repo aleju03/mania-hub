@@ -115,4 +115,61 @@ describe("replay pause/resume timing", () => {
     drawFrame();
     expect(renderer.currentTime).toBe(clock.time);
   });
+
+  it("draws the next frame after a transient render failure without waiting for recovery", () => {
+    const clock = { time: 10_000, stalled: false };
+    const renderer = createPlayback(() => clock);
+    const error = new Error("Transient render failure");
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderer.render.mockImplementationOnce(() => { throw error; });
+    renderer.play();
+
+    expect(drawFrame).not.toThrow();
+    expect(frames.size).toBe(1);
+    expect(report).toHaveBeenCalledWith("[replay] frame failed, continuing", error);
+
+    now += 16;
+    clock.time += 24;
+    drawFrame();
+    expect(renderer.currentTime).toBe(clock.time);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+    expect(frames.size).toBe(1);
+    renderer.pause();
+    expect(frames.size).toBe(0);
+  });
+
+  it("recovers from clock errors and reports repeated frame failures only once", () => {
+    const clock = { time: 10_000, stalled: false };
+    const readClock = vi.fn(() => clock);
+    const renderer = createPlayback(readClock);
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    readClock.mockImplementationOnce(() => { throw new Error("Clock unavailable"); });
+    renderer.render.mockImplementationOnce(() => { throw new Error("Render unavailable"); });
+    renderer.play();
+
+    expect(drawFrame).not.toThrow();
+    now += 16;
+    clock.time += 24;
+    expect(drawFrame).not.toThrow();
+    now += 16;
+    clock.time += 24;
+    drawFrame();
+    expect(renderer.currentTime).toBe(clock.time);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(frames.size).toBe(1);
+  });
+
+  it("does not restart playback when a failed frame pauses the renderer", () => {
+    const renderer = createPlayback(() => ({ time: 10_000, stalled: false }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    renderer.render.mockImplementationOnce(() => {
+      renderer.pause();
+      throw new Error("Context lost");
+    });
+    renderer.play();
+
+    expect(drawFrame).not.toThrow();
+    expect(frames.size).toBe(0);
+  });
 });

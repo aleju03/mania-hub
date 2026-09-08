@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis } from "../../lib/live-backend";
@@ -68,6 +68,14 @@ function buildPreviewBeatmapset(entry: LiveMapSearchEntry, diffs: LiveMapSearchE
 // from a play row (the skill-plays modal) rather than from search. Rendered as
 // its own stat strip while that diff is the active one.
 export interface MapDetailPlayContext {
+  dan?: {
+    chartRating: number | null;
+    chartLabel: string | null;
+    creditedRating?: number;
+    creditedLabel?: string;
+    accuracy: number | null;
+    rejection?: ReactNode;
+  };
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
   vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
@@ -124,7 +132,20 @@ export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
             </span>
           </div>
         )}
-        {play.ratingExcluded ? (
+        {play.dan ? (
+          <>
+            {play.dan.chartRating != null && <Stat label={t`Chart Dan`} value={`${play.dan.chartLabel ?? ""} (${play.dan.chartRating.toFixed(2)})`} />}
+            {play.dan.accuracy != null && <Stat label={t`Dan accuracy`} value={formatAccuracy(play.dan.accuracy)} />}
+            {play.dan.rejection ? (
+              <div className="flex max-w-md flex-col gap-1 text-osu-red-light">
+                <span className="text-sm font-semibold"><Trans>does not count</Trans></span>
+                <span className="text-xs">{play.dan.rejection}</span>
+              </div>
+            ) : play.dan.creditedRating != null ? (
+              <Stat label={t`Dan credit`} value={`${play.dan.creditedLabel ?? ""} (${play.dan.creditedRating.toFixed(2)})`} />
+            ) : null}
+          </>
+        ) : play.ratingExcluded ? (
           <div className="flex flex-col text-osu-red-light">
             {play.ratingExclusionReason === "msd_floor" ? (
               <>
@@ -149,7 +170,7 @@ export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
             <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
           </div>
         )}
-        {play.credit && (!play.ratingExcluded || play.ratingExclusionReason === "msd_floor") ? (
+        {!play.dan && play.credit && (!play.ratingExcluded || play.ratingExclusionReason === "msd_floor") ? (
           <div className="flex flex-col">
             <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.credit.color }}>
               <span className="text-[16px] font-bold tabular-nums">{play.credit.rating.toFixed(2)}</span>
@@ -738,7 +759,7 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd ? (
+                {!play?.dan && (active.msd ? (
                   ratePending ? (
                     <PendingMsdBlock label={t`MSD at ${formatRate(playRate)}`} />
                   ) : (
@@ -751,7 +772,7 @@ export function MapDetailModal({
                       vibroAnalysis={playRate === 1 ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
                   )
-                ) : pending ? <PendingMsdBlock /> : null}
+                ) : pending ? <PendingMsdBlock /> : null)}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* The card's filled primary chip (the index's family verdict)

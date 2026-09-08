@@ -6,7 +6,7 @@ import type { CompanellaEstimate } from "#leoblack/estimator/companellaEstimator
 
 // Companella is LeoBlack's ONNX dan model: a 10-feature MLP over the eight
 // MinaCalc skillsets plus Interlude SR and Sunny SR. Mixed reaches for it on
-// the RC half of 4K LN-hybrid charts under 9 stars, where Sunny alone is weak
+// low-band 4K RC charts and the RC half of LN hybrids under 9 stars
 // (see mixedEstimator.js). Inference is async, so this lives beside the sync
 // classifyChart rather than inside it and callers opt in.
 
@@ -32,8 +32,7 @@ export function isCompanellaSupported(keyCount: number): boolean {
 /**
  * Compute the two inputs Mixed does not already have (MinaCalc MSD and
  * Interlude SR) and run the model. Returns null when the chart is out of scope
- * or any stage fails, which leaves callers on the Sunny fallback that shipped
- * before Companella was wired.
+ * or any stage fails, which leaves callers on their unrefined Azusa or Sunny estimate.
  */
 export async function computeCompanellaEstimate(
   input: CompanellaFeatureInput,

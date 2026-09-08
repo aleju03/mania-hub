@@ -1,5 +1,7 @@
+import { detectRateVibro } from "../dan/vibro-detection.js";
 import type { Db } from "../db.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
+import { LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { exec, json, parseJson } from "../db.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
@@ -18,10 +20,10 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreHitCounts, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor, detectRateVibro } from "../dan/chart-classifier.js";
+import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { analyzeVibroSections, conservativeVibroAccuracy, usesSectionVibro, type VibroAnalysis } from "../dan/vibro-sections.js";
-import { assessVibroClear, summarizeVibroClear, type VibroClearEvidence, type VibroClearEvidenceSummary, type VibroClearInput } from "../dan/vibro-clear-evidence.js";
+import { assessVibroClear, hasOnlyClearEvidencePatterns, summarizeVibroClear, type VibroClearEvidence, type VibroClearEvidenceSummary, type VibroClearInput } from "../dan/vibro-clear-evidence.js";
 import { inspectChartDanEligibility } from "../dan/dan-eligibility.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
@@ -64,24 +66,11 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v35 (current): limits clear-quality exceptions to PP-backed uprates of
-// clean base charts with dense-chord detections. Base vibro cannot qualify.
-//
-// v34: accepts individual high-quality clears of flagged 4K rice
-// charts from judgement evidence, without changing any chart's vibro flag.
-//
-// v33: rechecks dense overlapping chord repetitions even when
-// changing shapes and light rows interrupt the old consecutive-row detector.
-//
-// v32: restores slower repeated chord bursts after aligning their
-// speed floor with sustained walls. Rechecks exclusions and adjusted ratings.
-//
-// v31: rechecks sustained streams of short repeated jacks, including
-// fixed jumps with quad accents that the first section policy missed.
-//
-// v30: rates localized 4K rice vibro from the remaining notes, with
-// conservative accuracy. Rechecks all speeds and restores obsolete exclusions;
-// affected SSRs are recomputed before receiving the current detector stamp.
+// v30 (current): rates localized 4K rice vibro from the remaining notes with
+// conservative accuracy, rechecks every speed and restores obsolete exclusions.
+// Clear-quality exceptions require PP-backed uprates of clean base charts with
+// dense-chord detections. Affected SSRs are recomputed before receiving the
+// current detector stamp. Includes the final short-jack section policy.
 //
 // v29: retains sub-MSD-floor passes separately for Dan credit and
 // rejection explanations, without inventing SSRs. Prior SSRs remain reusable.
@@ -117,7 +106,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 35;
+export const PLAYER_SKILLS_VERSION = 30;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -139,7 +128,7 @@ export const PLAYER_SKILLS_VERSION = 35;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -1834,7 +1823,7 @@ export interface DanClearEvidence {
  * computed yet, which the skill compute fills in and the evidence read
  * enqueues.
  */
-type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null } | null>;
+type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null; stale?: boolean } | null>;
 
 /**
  * The rate a clear at this play would be credited at, or null when the play is
@@ -1879,7 +1868,7 @@ async function loadRateVerdictCredits(db: Db, plays: StoredPlaySsr[]): Promise<R
   const stored = await loadStoredRateDanVerdicts(db, pairs);
   const credits: RateVerdictMap = new Map();
   for (const [key, verdict] of stored) {
-    credits.set(key, verdict ? { rawDan: verdict.rawDan, side: verdict.family === "ln" ? "ln" : "rc", displayName: verdict.displayName } : null);
+    credits.set(key, verdict ? { rawDan: verdict.rawDan, side: verdict.family === "ln" ? "ln" : "rc", displayName: verdict.displayName, ...(verdict.stale ? { stale: true } : {}) } : null);
   }
   return credits;
 }
@@ -1904,7 +1893,7 @@ function missingRateVerdictPairs(
     if (!play.vibroAdjustment && !play.vibroClearEvidence && pair.modVariant == null && pair.ratePercent === 150 && info.dtFamily != null) continue;
     if (!play.vibroAdjustment && !play.vibroClearEvidence && pair.modVariant == null && pair.ratePercent === 75 && info.htFamily != null) continue;
     const key = rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant);
-    if (rateVerdicts.has(key)) continue;
+    if (rateVerdicts.has(key) && !rateVerdicts.get(key)?.stale) continue;
     missing.set(key, pair);
   }
   return [...missing.values()];
@@ -2606,7 +2595,7 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // detector stamp certifies both eligibility and any section-adjusted SSR;
 // restoring an old exclusion with no SSR therefore requires a calculator pass.
 // Hold-heavy and wider-key charts retain their legacy trust policy.
-export const RATE_VIBRO_CHECK_VERSION = 10;
+export const RATE_VIBRO_CHECK_VERSION = 5;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
@@ -2627,9 +2616,7 @@ function chartVibroAtRate(osuText: string, rate: number, hasPpTrust: boolean, ba
     // jack streams, isolated jacks and rolls cannot be overridden by accuracy.
     let clearEvidence: VibroClearEvidence | undefined;
     if (analysis?.status === "excluded" && rate > 1 && hasPpTrust
-      && analysis.sections.length > 0
-      && analysis.sections.every((section) => section.reasons.length > 0
-        && section.reasons.every((reason) => reason === "dense_chord_repetition" || reason === "sustained_chords"))) {
+      && hasOnlyClearEvidencePatterns(analysis.sections)) {
       const evidence = assessVibroClear(quality, odOverride ?? map.od);
       if (evidence && inspectChartDanEligibility(map).eligible && analyzeVibroSections(map, 1).status === "clean") {
         clearEvidence = evidence;
@@ -3181,6 +3168,12 @@ export async function computePlayerSkillRatings(
         rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant),
         { rawDan: lean.rawDan, side: lean.family === "ln" ? "ln" : "rc", displayName: lean.displayName },
       );
+    } else {
+      // A completed negative verdict supersedes the old credit. A parser
+      // failure that wrote nothing leaves the serving fallback intact.
+      const key = rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant);
+      const resolved = await loadStoredRateDanVerdicts(db, [pair]);
+      if (resolved.has(key) && resolved.get(key) === null) rateVerdicts.set(key, null);
     }
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
@@ -5979,7 +5972,7 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */
 async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
-  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY]) {
+  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY]) {
     const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
     if (!row) continue;
     const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;

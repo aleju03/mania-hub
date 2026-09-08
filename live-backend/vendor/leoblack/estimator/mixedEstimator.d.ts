@@ -1,6 +1,6 @@
 export interface LeoBlackEstimatorOptions {
   speedRate?: number;
-  odFlag?: number | null;
+  odFlag?: number | string | null;
   cvtFlag?: string | null;
   withGraph?: boolean;
   /** Use the -ext interval tables where a keymode has them (upstream's extended estimation range). */
@@ -16,6 +16,17 @@ export interface LeoBlackEstimatorOptions {
   marathonCorrection?: { durationS: number; ettValues: Record<string, number> | null } | null;
 }
 
+export interface MixedCompanellaPlan {
+  lnRatio: number;
+  lnDifficulty: string;
+  /** Low-band Azusa/Companella blend; absent for the original hybrid path. */
+  fuseRc?: boolean;
+  onDisagree?: "azusa" | "companella";
+  rcEstDiff?: string;
+  rcNumeric?: number | null;
+  rcNumericHint?: string | null;
+}
+
 export interface LeoBlackReworkResult {
   star: number;
   lnRatio: number;
@@ -24,7 +35,7 @@ export interface LeoBlackReworkResult {
   estDiff: string;
   numericDifficulty: number | null;
   numericDifficultyHint: string | null;
-  mixedCompanellaPlan: { lnRatio: number; lnDifficulty: string } | null;
+  mixedCompanellaPlan: MixedCompanellaPlan | null;
   /** The sub-algorithm the Mixed routing actually selected (Sunny/Roxy/Azusa/Daniel/Companella). */
   actualEstimatorAlgorithm?: string;
   /** Roxy/Azusa pre-calibration raw signal; absent when Sunny produced the result. */

@@ -53,6 +53,31 @@ describe("bug report screenshot upload", () => {
     expect(testSeams.deleteScreenshots).not.toHaveBeenCalled();
   });
 
+  it("puts a follow-up's image under that message and names it to the backend", async () => {
+    const id = `report-${requestId += 1}`;
+    const messageId = "9a1b-message";
+    const key = `bug-reports/${id}/m/${messageId}/0.png`;
+    const fetchFn = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ ok: true, alreadyAttached: false }))
+      .mockResolvedValueOnce(Response.json({ ok: true, screenshotKeys: [key] }));
+    const testSeams = seams(fetchFn);
+    const request = new Request(
+      `${ORIGIN}/api/bug-report-upload?id=${id}&messageId=${messageId}&token=ticket&index=0`,
+      {
+        method: "POST",
+        headers: { "content-type": "image/webp", "sec-fetch-site": "same-origin" },
+        body: PNG_BYTES as unknown as BodyInit,
+      },
+    );
+    const response = await handleBugReportUploadPost(request, testSeams);
+
+    expect(response.status).toBe(200);
+    expect(testSeams.putScreenshot).toHaveBeenCalledWith(key, PNG_BYTES, "image/png");
+    for (const call of fetchFn.mock.calls) {
+      expect(JSON.parse(String((call[1] as RequestInit).body))).toMatchObject({ id, messageId, key });
+    }
+  });
+
   it("treats a replayed logical index as success without replacing its object", async () => {
     const fetchFn = vi.fn<typeof fetch>(async () => Response.json({ ok: true, alreadyAttached: true }));
     const testSeams = seams(fetchFn);
