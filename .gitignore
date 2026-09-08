@@ -24,6 +24,8 @@ tmp-*.ts
 __pycache__/
 cache/replay-fixtures/
 cache/replay-captures/
+# Local investigation notes and one-off audit/capture reports
+/local-notes/
 capture-replays/*
 !capture-replays/.gitkeep
 

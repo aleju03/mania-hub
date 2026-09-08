@@ -9,6 +9,8 @@ Countries are dynamic, not hardcoded: the backend's `country_registry` tracks pe
 
 ## Deep-dive docs
 
+Keep one-off audits, investigation notes, and capture reports in `local-notes/` (gitignored), not in `docs/`. Do not commit them. `docs/` holds maintained reference documentation.
+
 Read the file matching the task before working on that area; do not read them all up front.
 
 - `docs/backend.md`: live backend module map, ingest flow, job queue + job types, HTTP surface + rate buckets, replay video export, retention/storage/caching.

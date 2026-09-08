@@ -13,6 +13,8 @@ Countries are dynamic, not hardcoded: the backend keeps a `country_registry` wit
 
 This file is the condensed guide. The deep reference lives in `docs/` - read the file matching the task on demand: `docs/backend.md` (ingest, jobs, HTTP surface, retention), `docs/features.md` (per-feature models incl. skins/uploaded-replay privacy), `docs/packs.md` (pack economy, streak/blitz, GOAT poll), `docs/discord.md` (bot + `/communities`), `docs/admin.md` (ghost, todos, analytics), `docs/frontend.md` (routes, live data flow, BBCode editor). `AGENTS.md` is the equivalent condensed guide for other coding agents; keep the two aligned when conventions change.
 
+Keep one-off audits, investigation notes, and capture reports in `local-notes/` (gitignored), not in `docs/`. Do not commit them. `docs/` holds maintained reference documentation.
+
 ## Commands
 
 Do not start dev servers or run builds unprompted; the user usually has servers running locally (frontend `3000`, live backend `7227`).
