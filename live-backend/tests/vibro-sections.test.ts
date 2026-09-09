@@ -4,9 +4,80 @@ import { classifyChart, detectRateVibro, detectRiceVibro } from "../src/dan/char
 import { analyzeVibroSections, conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { buildVibroOsu, localizedVibroFixture, vibroCharts, vibroFixture } from "./vibro-fixtures.js";
 
-const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854, 1545540];
+const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854, 1545540, 3261949];
 
 describe("section-based vibro ratings", () => {
+  it("covers the reported short repetitions and their later reprises without metadata shortcuts", () => {
+    const map = parseManiaBeatmap(vibroFixture(3261949));
+    const analysis = analyzeVibroSections(map);
+    for (const time of [
+      26_000, 46_781, 47_114, 47_447, 47_966, 48_336, 48_633, 48_929, 49_225,
+      50_336, 50_633, 52_151, 52_818, 53_965, 54_298, 54_631, 55_076, 55_446,
+      55_742, 56_039, 56_409, 57_744, 59_298, 59_816, 60_224, 65_445, 66_408,
+      70_704, 71_371, 72_482, 74_556, 80_000,
+    ]) {
+      expect(analysis.sections.some((section) => section.startTime <= time && section.endTime >= time), `missing ${time}ms`).toBe(true);
+    }
+    expect(analysis.status).toBe("excluded");
+    expect(analysis.noteShare).toBeGreaterThan(0.5);
+    expect(analyzeVibroSections({ ...map, title: "unrelated", creator: "unrelated", od: 3 })).toEqual(analysis);
+    expect(analyzeVibroSections({ ...map, notes: map.notes.map((note) => ({ ...note, column: 3 - note.column })) })).toEqual(analysis);
+    const baked = { ...map, notes: map.notes.map((note) => ({ ...note, time: note.time / 1.2, endTime: note.endTime / 1.2 })) };
+    expect(analyzeVibroSections(baked).noteShare).toBe(analyzeVibroSections(map, 1.2).noteShare);
+  });
+
+  it("adjusts coherent short hand-jack phrases but keeps isolated, separated and slower bursts eligible", () => {
+    const build = (groups: number, gap: number, pause = 0) => {
+      const notes: [number, number, number][] = Array.from({ length: 800 }, (_, row) => [1000 + row * 100, row % 4, -1]);
+      let time = 90_000;
+      const add = (mask: number) => {
+        for (let column = 0; column < 4; column++) if (mask & (1 << column)) notes.push([time, column, -1]);
+      };
+      for (let group = 0; group < groups; group++) {
+        if (group === 0 || pause > 0) {
+          if (group > 0) time += pause;
+          add(15);
+        }
+        for (let row = 1; row <= 3; row++) {
+          time += gap;
+          add(row === 3 ? 15 : group % 2 === 0 ? 3 : 12);
+        }
+      }
+      return parseManiaBeatmap(buildVibroOsu(notes));
+    };
+    const phrase = analyzeVibroSections(build(8, 74));
+    expect(phrase.status).toBe("adjusted");
+    expect(phrase.sections).toContainEqual({ startTime: 90_000, endTime: 91_776, reasons: ["repeated_chord"] });
+    expect(analyzeVibroSections(build(1, 74)).status).toBe("clean");
+    expect(analyzeVibroSections(build(2, 74)).status).toBe("clean");
+    expect(analyzeVibroSections(build(8, 89)).status).toBe("clean");
+    expect(analyzeVibroSections(build(8, 100)).status).toBe("clean");
+    expect(analyzeVibroSections(build(8, 74, 2000)).status).toBe("clean");
+    expect(analyzeVibroSections(build(8, 74), 0.75).status).toBe("clean");
+  });
+
+  it("does not use a long wall to promote the short bursts beside it", () => {
+    const notes: [number, number, number][] = Array.from({ length: 800 }, (_, row) => [1000 + row * 100, row % 4, -1]);
+    for (let row = 0; row < 108; row++) {
+      const mask = row < 4 || row >= 104 ? 3 : 15;
+      // Stay above the existing 75ms dense-chord band's speed, isolating
+      // whether the new recurring-burst policy expands the wall.
+      for (let column = 0; column < 4; column++) if (mask & (1 << column)) notes.push([90_000 + row * 79, column, -1]);
+    }
+    const analysis = analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(notes)));
+    expect(analysis.sections.length).toBeGreaterThan(0);
+    expect(analysis.sections.every((section) => section.startTime >= 90_316 && section.endTime <= 98_137)).toBe(true);
+  });
+
+  it("does not treat varied chords as fixed-pair repetitions", () => {
+    const notes: [number, number, number][] = Array.from({ length: 800 }, (_, row) => [1000 + row * 100, row % 4, -1]);
+    for (let row = 0; row < 40; row++) {
+      const mask = [7, 11, 13, 14][row % 4];
+      for (let column = 0; column < 4; column++) if (mask & (1 << column)) notes.push([90_000 + row * 74, column, -1]);
+    }
+    expect(analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(notes))).status).toBe("clean");
+  });
+
   it("finds both accompanied single-column runs in the reported anonymous chart", () => {
     const map = parseManiaBeatmap(vibroFixture(1545540));
     const analysis = analyzeVibroSections(map);

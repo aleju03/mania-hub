@@ -19,4 +19,5 @@
 // is reserved for player ratings and cached as its own internal chart variant.
 // v18: refresh rate metadata and player variants for accompanied longjacks.
 // Ordinary full-chart difficulty calculations themselves remain unchanged.
-export const DAN_ESTIMATE_CACHE_VERSION = 18;
+// v19: refresh repeated-burst coverage and the remaining-material variants.
+export const DAN_ESTIMATE_CACHE_VERSION = 19;

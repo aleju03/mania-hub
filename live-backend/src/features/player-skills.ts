@@ -67,6 +67,8 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
+// v32: recheck dense phrases of short repeated jacks, alternating jumps and
+// rolls. Localized adjustments and the score-quality policy are unchanged.
 // v31: sustained single-column jacks cannot hide behind sparse accompaniment.
 // Recheck stored plays with the new detector, reusing unaffected SSRs.
 // v30: rates localized 4K rice vibro from the remaining notes with
@@ -109,7 +111,7 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 31;
+export const PLAYER_SKILLS_VERSION = 32;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -131,7 +133,7 @@ export const PLAYER_SKILLS_VERSION = 31;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -2605,7 +2607,7 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // detector stamp certifies both eligibility and any section-adjusted SSR;
 // restoring an old exclusion with no SSR therefore requires a calculator pass.
 // Hold-heavy and wider-key charts retain their legacy trust policy.
-export const RATE_VIBRO_CHECK_VERSION = 6;
+export const RATE_VIBRO_CHECK_VERSION = 7;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;

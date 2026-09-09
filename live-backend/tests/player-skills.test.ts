@@ -416,16 +416,19 @@ describe("localized vibro player credit", () => {
     });
   });
 
-  it("removes a previously adjusted high-accuracy clear when accompanied longjacks make the chart excluded", async () => {
+  it.each([
+    { id: 1545540, accuracy: 0.9998 },
+    { id: 3261949, accuracy: 0.9699 },
+  ])("removes the stale adjusted credit for chart $id when complete detection makes it excluded", async ({ id, accuracy }) => {
     await withDb(async (db) => {
-      await storeCachedBeatmapFile(db, 101, vibroFixture(1545540), { source: "test" });
+      await storeCachedBeatmapFile(db, 101, vibroFixture(id), { source: "test" });
       await exec(db, `insert into beatmap_chart_analysis
         (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
         values (101, 1, 'ready', 4, ?, ?)`,
       [JSON.stringify({ lnRatio: 0, rc: { rawDan: 15.85 }, vibro: false }), new Date().toISOString()]);
       const previous = {
         identity: "official:42", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.96, pp: 0,
-        accuracy: 0.9998, stableAccuracy: 0.9998, source: "tracked" as const, patterns: [],
+        accuracy, stableAccuracy: accuracy, source: "tracked" as const, patterns: [],
         values: { Overall: 30 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
         vibroAdjustment: { excludedDurationMs: 7868, timeShare: 0.102883, noteShare: 0.200559, judgementShare: 0.200559 },
       };

@@ -827,9 +827,9 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
-// v11 also catches accompanied single-column longjacks. Revisit cached
+// v12 also catches coherent phrases of short repetitions. Revisit cached
 // classifications and rate metadata so player eligibility follows the fix.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v11";
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v12";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {

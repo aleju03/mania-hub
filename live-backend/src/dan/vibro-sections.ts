@@ -1,6 +1,10 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 
-export const VIBRO_SECTION_VERSION = 2;
+export const VIBRO_SECTION_VERSION = 3;
+
+// Short repetitions need faster reloads than the 92ms sustained-longjack
+// floor, plus corroborating bursts in the same local phrase.
+const RECURRING_REPETITION_GAP_MS = 80;
 
 export type VibroReason =
   | "repeated_wall"
@@ -69,6 +73,7 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   scanDenseChords(scan);
   scanFastRolls(scan, repeatedFingers);
   scanExtremeDensity(scan);
+  scanRecurringRepetitions(scan);
 
   result.sections = mergeSections(scan.intervals);
   if (result.sections.length > 0) measureSectionCoverage(result, map, scan);
@@ -81,6 +86,7 @@ interface VibroScan {
   readonly prefixNotes: readonly number[];
   readonly rate: number;
   readonly intervals: VibroSection[];
+  readonly repetitionBursts: VibroSection[];
 }
 
 function buildVibroScan(map: ManiaBeatmap, rate: number): VibroScan {
@@ -90,7 +96,7 @@ function buildVibroScan(map: ManiaBeatmap, rate: number): VibroScan {
   const rows = times.map((time) => masks.get(time)!);
   const prefixNotes = [0];
   for (const mask of rows) prefixNotes.push(prefixNotes.at(-1)! + bitCount(mask));
-  return { times, rows, prefixNotes, rate, intervals: [] };
+  return { times, rows, prefixNotes, rate, intervals: [], repetitionBursts: [] };
 }
 
 function addSection(scan: VibroScan, start: number, end: number, reason: VibroReason): void {
@@ -230,6 +236,36 @@ function scanFixedFingerWindows(scan: VibroScan): void {
         if (band.minHits * fingers / localNotes >= band.minShare) addSection(scan, times[first], times[last], band.reason);
       }
     }
+    collectShortRepetitions(scan, indices, fingers);
+  }
+}
+
+/** Short jacks below the immediate-burst speed need nearby repetition evidence. */
+function collectShortRepetitions(scan: VibroScan, indices: number[], fingers: number): void {
+  const { times, prefixNotes, rate, repetitionBursts } = scan;
+  const minHits = fingers === 1 ? 6 : 4;
+  const maxHits = fingers === 1 ? 24 : fingers === 2 ? 11 : 7;
+  let start = 0;
+  for (let end = 1; end <= indices.length; end++) {
+    // Keep a whole run together across rounding and minor rhythm changes.
+    // Splitting long walls into short candidates would manufacture recurrence.
+    if (end < indices.length && times[indices[end]] - times[indices[end - 1]] <= 100 * rate) continue;
+    const hits = end - start;
+    if (hits >= minHits && hits <= maxHits) {
+      for (let i = start + minHits - 1; i < end; i++) {
+        const first = indices[i - minHits + 1], last = indices[i];
+        // Short runs need faster finger reloads than a sustained longjack:
+        // ordinary ~90ms speedjack bursts must not become vibro by repetition.
+        if (times[last] - times[first] > (minHits - 1) * RECURRING_REPETITION_GAP_MS * rate) continue;
+        const share = minHits * fingers / (prefixNotes[last + 1] - prefixNotes[first]);
+        // Quad accents at both ends of a four-hit pair leave 8 of 12 heads
+        // on that pair. They must not erase the repetition in its middle.
+        if (fingers === 1 ? share <= 0.5 || minHits / (last - first + 1) < 0.9 : fingers === 2 && share < 2 / 3) continue;
+        repetitionBursts.push({ startTime: times[first], endTime: times[last],
+          reasons: [fingers === 1 ? "isolated_jack" : fingers === 2 ? "repeated_chord" : "repeated_wall"] });
+      }
+    }
+    start = end;
   }
 }
 
@@ -340,6 +376,20 @@ function scanFastRolls(scan: VibroScan, repeatedFingers: readonly number[]): voi
     if (i - rollStart >= 8) {
       const fast = repeatedFingers.slice(rollStart, i).reduce((a, b) => a + b, 0);
       const notes = prefixNotes[i] - prefixNotes[rollStart];
+      // Count returns inside this burst, without borrowing hits from the
+      // preceding chord or jack passage.
+      const lastTimes = new Array<number>(4).fill(-Infinity);
+      let contextualFast = 0;
+      for (let row = rollStart - 1; row < i; row++) {
+        for (let column = 0; column < 4; column++) {
+          if (!(rows[row] & (1 << column))) continue;
+          if (times[row] - lastTimes[column] <= RECURRING_REPETITION_GAP_MS * rate) contextualFast++;
+          lastTimes[column] = times[row];
+        }
+      }
+      if (contextualFast / notes >= 0.25) {
+        scan.repetitionBursts.push({ startTime: times[rollStart - 1], endTime: times[i - 1], reasons: ["fast_roll"] });
+      }
       if (fast / notes >= 0.25) {
         const section: VibroSection = { startTime: times[rollStart - 1], endTime: times[i - 1], reasons: ["fast_roll"] };
         if (i - rollStart >= 24) intervals.push(section);
@@ -352,6 +402,64 @@ function scanFastRolls(scan: VibroScan, repeatedFingers: readonly number[]): voi
   if (rollBursts.length >= 4 && rollBurstNotes / prefixNotes.at(-1)! >= 0.2) intervals.push(...rollBursts);
 }
 
+/** Alternating fixed jumps reload the same fingers even though adjacent rows differ. */
+function collectAlternatingChords(scan: VibroScan): void {
+  const { times, rows, rate, repetitionBursts } = scan;
+  let start = 0;
+  for (let i = 1; i <= times.length; i++) {
+    if (i < times.length && bitCount(rows[i]) === 2 && bitCount(rows[i - 1]) === 2
+      && !(rows[i] & rows[i - 1]) && times[i] - times[i - 1] <= 50 * rate
+      && (i === start + 1 || (rows[i] === rows[i - 2] && times[i] - times[i - 2] <= RECURRING_REPETITION_GAP_MS * rate))) continue;
+    if (i - start >= 8) repetitionBursts.push({ startTime: times[start], endTime: times[i - 1], reasons: ["repeated_chord"] });
+    start = i;
+  }
+}
+
+/** Three nearby bursts must cover 24 rows and 70% of their local phrase.
+ * Keep their exact intervals, not the pauses between them. */
+function scanRecurringRepetitions(scan: VibroScan): void {
+  collectAlternatingChords(scan);
+  // Merge overlapping finger windows first: one repeated jump must not count
+  // as three bursts merely because both fingers and their pair were detected.
+  // A shared quad accent can end one hand's burst and start the other's.
+  // Preserve that boundary; overlapping windows still represent one burst.
+  const bursts = mergeSections(scan.repetitionBursts, false);
+  if (bursts.length < 3) return;
+  const indices = new Map(scan.times.map((time, index) => [time, index]));
+  const prefixDuration = [0], prefixRows = [0], prefixJacks = [0];
+  for (const [i, burst] of bursts.entries()) {
+    prefixDuration.push(prefixDuration.at(-1)! + burst.endTime - burst.startTime);
+    const sharedRow = i > 0 && bursts[i - 1].endTime === burst.startTime;
+    prefixRows.push(prefixRows.at(-1)! + indices.get(burst.endTime)! - indices.get(burst.startTime)! + (sharedRow ? 0 : 1));
+    prefixJacks.push(prefixJacks.at(-1)! + (burst.reasons.some((reason) => reason !== "fast_roll") ? 1 : 0));
+  }
+  // Difference counts avoid revisiting every burst for overlapping windows.
+  const included = new Int32Array(bursts.length + 1);
+  let phraseStart = 0;
+  for (let end = 0; end < bursts.length; end++) {
+    if (end > 0 && bursts[end].startTime - bursts[end - 1].endTime > 1000 * scan.rate) phraseStart = end;
+    for (let start = end - 2; start >= phraseStart; start--) {
+      const span = bursts[end].endTime - bursts[start].startTime;
+      if (span > 6400 * scan.rate) break;
+      const duration = prefixDuration[end + 1] - prefixDuration[start];
+      const sharedFirstRow = start > 0 && bursts[start - 1].endTime === bursts[start].startTime;
+      const rows = prefixRows[end + 1] - prefixRows[start] + (sharedFirstRow ? 1 : 0);
+      // Rolls can join a repetitive jack passage, but must not establish one
+      // on their own: ordinary short roll charts retain their existing rule.
+      const jacks = prefixJacks[end + 1] - prefixJacks[start];
+      if (jacks >= 2 && rows >= 24 && duration / span >= 0.7) {
+        included[start]++;
+        included[end + 1]--;
+      }
+    }
+  }
+  let support = 0;
+  for (let i = 0; i < bursts.length; i++) {
+    support += included[i];
+    if (support > 0) scan.intervals.push(bursts[i]);
+  }
+}
+
 function scanExtremeDensity(scan: VibroScan): void {
   const { times, rate } = scan;
   let windowStart = 0;
@@ -361,11 +469,11 @@ function scanExtremeDensity(scan: VibroScan): void {
   }
 }
 
-function mergeSections(intervals: VibroSection[]): VibroSection[] {
+function mergeSections(intervals: VibroSection[], mergeTouching = true): VibroSection[] {
   const sections: VibroSection[] = [];
   for (const section of intervals.sort((a, b) => a.startTime - b.startTime)) {
     const previous = sections.at(-1);
-    if (previous && section.startTime <= previous.endTime) {
+    if (previous && (section.startTime < previous.endTime || (mergeTouching && section.startTime === previous.endTime))) {
       previous.endTime = Math.max(previous.endTime, section.endTime);
       previous.reasons = [...new Set([...previous.reasons, ...section.reasons])];
     } else sections.push({ ...section });
