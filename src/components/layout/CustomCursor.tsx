@@ -51,19 +51,19 @@ function cursorRadius(settings: CursorSettings): number {
   return 15 * (settings.size / 100);
 }
 
-/* The cursor is a glowing orb like typical osu! skin cursors: a colored bloom
-   around a white-hot core. It is prerendered into a sprite so the per-frame
-   cost is a single drawImage. */
-function buildCursorSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } {
-  const radius = cursorRadius(settings);
-  const glowRadius = radius * (1 + 1.8 * (settings.glow / 100));
-  const size = Math.ceil(glowRadius * 2 + 4);
+/* Let the browser move the orb as a native cursor, independently of page
+   rendering. Only the decorative trail/smoke should wait for animation frames.
+   Keep PNGs within Chromium/Firefox's 128px limit, including the pressed orb;
+   constrain the outer glow at extreme settings without shrinking the core. */
+function buildNativeCursor(settings: CursorSettings, pressScale = 1): string {
+  const radius = cursorRadius(settings) * pressScale;
+  const glowRadius = Math.min(62, radius * (1 + 1.8 * (settings.glow / 100)));
+  const size = Math.ceil((glowRadius * 2 + 4) / 2) * 2;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(size * scale);
-  canvas.height = Math.ceil(size * scale);
+  canvas.width = size;
+  canvas.height = size;
   const context = canvas.getContext("2d");
-  if (!context) return { canvas, size };
-  context.scale(scale, scale);
+  if (!context) return "auto";
   const c = size / 2;
   const color = settings.color;
 
@@ -96,7 +96,7 @@ function buildCursorSprite(settings: CursorSettings, scale: number): { canvas: H
   context.arc(c, c, radius * 0.34, 0, Math.PI * 2);
   context.fill();
 
-  return { canvas, size };
+  return `url("${canvas.toDataURL("image/png")}") ${c} ${c}, auto`;
 }
 
 function buildTrailSprite(settings: CursorSettings, scale: number): { canvas: HTMLCanvasElement; size: number } {
@@ -146,10 +146,8 @@ function CursorOverlay() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    document.documentElement.dataset.customCursor = "true";
-
     let settings: CursorSettings = readCursorSettings();
-    const pointer = { x: -100, y: -100, visible: false, pressed: false };
+    const pointer = { x: -100, y: -100, pressed: false };
     let pressScale = 1;
     let smoking = false;
     let smokeStartsStroke = true;
@@ -165,7 +163,14 @@ function CursorOverlay() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    let cursorSprite = buildCursorSprite(settings, dpr);
+    const root = document.documentElement;
+    let normalCursor = buildNativeCursor(settings);
+    let pressedCursor = buildNativeCursor(settings, 1.25);
+    const updateNativeCursor = () => {
+      root.style.setProperty("--custom-cursor", pointer.pressed ? pressedCursor : normalCursor);
+    };
+    updateNativeCursor();
+    root.dataset.customCursor = "true";
     let trailSprite = buildTrailSprite(settings, dpr);
 
     const resize = () => {
@@ -174,10 +179,8 @@ function CursorOverlay() {
     };
     resize();
 
-    /* The overlay must keep drawing while the window is merely unfocused
-       (e.g. the user is on a second monitor but hovers this page); the native
-       cursor stays hidden regardless of focus. Only pause when the tab is
-       actually hidden. */
+    /* Effects still animate when hovering an unfocused window, but pause in
+       hidden tabs. The native cursor doesn't depend on this render loop. */
     const isPageVisible = () => document.visibilityState === "visible";
 
     const draw = (time: number) => {
@@ -228,13 +231,7 @@ function CursorOverlay() {
       const targetScale = pointer.pressed ? 1.25 : 1;
       pressScale += (targetScale - pressScale) * Math.min(1, dt * 18);
 
-      if (pointer.visible) {
-        const size = cursorSprite.size * pressScale;
-        context.drawImage(cursorSprite.canvas, pointer.x - size / 2, pointer.y - size / 2, size, size);
-      }
-
       const idle =
-        !pointer.visible &&
         smoke.length === 0 &&
         trail.length === 0 &&
         Math.abs(pressScale - targetScale) < 0.01;
@@ -252,14 +249,10 @@ function CursorOverlay() {
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (event.pointerType === "touch") {
-        pointer.visible = false;
-        return;
-      }
+      if (event.pointerType === "touch") return;
       const now = performance.now();
       pointer.x = event.clientX;
       pointer.y = event.clientY;
-      pointer.visible = true;
 
       if (settings.trail) {
         const last = trail[trail.length - 1];
@@ -288,11 +281,13 @@ function CursorOverlay() {
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
       pointer.pressed = true;
+      updateNativeCursor();
       ensureRunning();
     };
 
     const handlePointerUp = () => {
       pointer.pressed = false;
+      updateNativeCursor();
       ensureRunning();
     };
 
@@ -312,26 +307,33 @@ function CursorOverlay() {
     const handleBlur = () => {
       smoking = false;
       pointer.pressed = false;
+      smokeStartsStroke = true;
+      updateNativeCursor();
+      ensureRunning();
     };
 
     const handleMouseLeave = () => {
-      pointer.visible = false;
-      ensureRunning();
+      smokeStartsStroke = true;
     };
 
     const handleVisibilityChange = () => {
       if (isPageVisible()) {
         ensureRunning();
-      } else if (rafId != null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-        lastFrameAt = null;
+      } else {
+        handleBlur();
+        if (rafId != null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+          lastFrameAt = null;
+        }
       }
     };
 
     const unsubscribeSettings = subscribeCursorSettings((next) => {
       settings = next;
-      cursorSprite = buildCursorSprite(next, dpr);
+      normalCursor = buildNativeCursor(next);
+      pressedCursor = buildNativeCursor(next, 1.25);
+      updateNativeCursor();
       trailSprite = buildTrailSprite(next, dpr);
       if (!next.trail) trail.length = 0;
       ensureRunning();
@@ -351,6 +353,7 @@ function CursorOverlay() {
 
     return () => {
       delete document.documentElement.dataset.customCursor;
+      root.style.removeProperty("--custom-cursor");
       if (rafId != null) cancelAnimationFrame(rafId);
       unsubscribeSettings();
       window.removeEventListener("resize", resize);

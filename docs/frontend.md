@@ -27,6 +27,8 @@ Keep authenticated osu! API access on the server. Do not put osu! credentials or
 
 ## Client state
 
+The optional osu! cursor (`src/components/layout/CustomCursor.tsx`) uses a generated PNG as the native CSS cursor so movement is independent of page rendering. Its canvas draws only the trail and C-key smoke, and stops when those effects expire. Keep that canvas synchronized: `desynchronized` caused an opaque black overlay on some Windows drivers. Native cursor images, including the pressed variant, stay within 128×128 pixels; extreme glow settings compress the outer glow to fit.
+
 Client state uses Zustand in `src/store.ts`, persisted to localStorage under `mania-hub-cache-v5`; bump the version on breaking shape changes. Data is country-keyed with `fetchedAt` plus TTL checks from `src/lib/cache.ts`. Persistence holds immutable snapshots for 250ms and serializes only the latest one, skipping updates whose persisted fields have not changed. Feed trimming happens at serialization; the stored format and 60-score per-country limit stay the same. `pagehide` and hidden-document events flush synchronously, with quota eviction and retry handling. Critical preferences (theme, hidden users, avatar accents) live in separate storage keys so they survive quota errors. Check `useHasHydrated()` before trusting persisted state during SSR hydration.
 
 ## OG images and SEO

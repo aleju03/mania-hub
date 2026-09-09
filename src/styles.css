@@ -126,7 +126,7 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 html[data-custom-cursor="true"],
 html[data-custom-cursor="true"] * {
-  cursor: none !important;
+  cursor: var(--custom-cursor, auto) !important;
 }
 @media (hover: hover) and (pointer: fine) {
   .player-score-row:hover .score-position-indicator {
