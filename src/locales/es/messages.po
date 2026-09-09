@@ -7656,6 +7656,10 @@ msgstr "Cargando..."
 msgid "Loading…"
 msgstr "Cargando…"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "localized vibro detected"
+msgstr "vibro localizado detectado"
+
 #: src/routes/communities.tsx
 msgid "Log in to post"
 msgstr "Inicia sesión para publicar"

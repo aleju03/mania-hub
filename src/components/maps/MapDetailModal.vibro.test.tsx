@@ -29,6 +29,7 @@ it.each(["adjusted", "excluded"] as const)("shows readable sections without play
   };
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={entry} vibroAnalysis={analysis} /></I18nProvider>);
   expect(screen.getByText("Detected sections")).toBeTruthy();
+  expect(screen.getByText(status === "adjusted" ? "localized vibro detected" : "vibro chart, estimates unreliable")).toBeTruthy();
   expect(screen.getByText("0:39.43–0:42.89")).toBeTruthy();
   expect(screen.getByText("1:28.49–1:51.00")).toBeTruthy();
   expect(screen.getByText("1:00.00–1:01.01")).toBeTruthy();

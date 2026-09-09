@@ -657,14 +657,24 @@ function ReportCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {report.userId ? (
+            {report.userId && report.username ? (
+              <Link
+                to="/player/$username"
+                params={{ username: report.username }}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-[13px] font-bold text-white transition-colors duration-[120ms] hover:text-osu-pink-light"
+              >
+                {report.username}
+              </Link>
+            ) : report.userId ? (
               <a
                 href={`https://osu.ppy.sh/users/${report.userId}`}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="text-[13px] font-bold text-white transition-colors duration-[120ms] hover:text-osu-pink-light"
               >
-                {report.username || report.userId}
+                {report.userId}
               </a>
             ) : (
               <span className="text-[13px] font-bold text-osu-l2">signed out</span>

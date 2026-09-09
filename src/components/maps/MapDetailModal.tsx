@@ -462,8 +462,10 @@ export function MsdBlock({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
-        {(vibroAnalysis ? vibroAnalysis.status === "excluded" : entry.vibro) && (
-          <span className="text-[9.5px] font-semibold text-[#ffcf70]">{t`vibro chart, estimates unreliable`}</span>
+        {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
+          <span className="text-[9.5px] font-semibold text-[#ffcf70]">
+            {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected` : t`vibro chart, estimates unreliable`}
+          </span>
         )}
       </div>
       {vibroAnalysis && vibroAnalysis.status !== "clean" && (

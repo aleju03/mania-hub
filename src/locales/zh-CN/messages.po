@@ -7665,6 +7665,10 @@ msgstr "加载中..."
 msgid "Loading…"
 msgstr "加载中…"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "localized vibro detected"
+msgstr "检测到局部 Vibro"
+
 #: src/routes/communities.tsx
 msgid "Log in to post"
 msgstr "登录后发布"
