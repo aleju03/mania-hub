@@ -118,7 +118,11 @@ export class TokenBucketLimiter {
         path,
         fn,
         lane,
-        priority: lanePriority(lane),
+        // Recovering finite recent history precedes ordinary job/bulk work.
+        // Keep its background lane so it gets no interactive burst or early
+        // 429 recovery; the shared API budget and starvation guard still apply.
+        priority: caller === "job:reconcile_user_recent_scores" || caller === "job:osu_recent_fallback"
+          ? 35 : lanePriority(lane),
         seq: this.sequence++,
         queuedAt: Date.now(),
         resolve,
@@ -442,15 +446,16 @@ export class OsuApiClient {
     return [...firstPage, ...secondPage.value];
   }
 
-  async getUserRecentScores(userId: number, caller = "unknown"): Promise<OscScore[]> {
+  async getUserRecentScores(userId: number, caller = "unknown", options: { includeFails?: boolean } = {}): Promise<OscScore[]> {
+    const includeFails = options.includeFails !== false;
     const apiScores = await this.getJson<OscScore[]>(
-      `/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=${USER_RECENT_SCORES_LIMIT}`,
+      `/users/${userId}/scores/recent?mode=mania&include_fails=${includeFails ? 1 : 0}&limit=${USER_RECENT_SCORES_LIMIT}`,
       caller,
     );
     if (!apiScores.some((score) => score.id <= 0)) return apiScores;
 
     try {
-      const webScores = await this.getUserRecentScoresWeb(userId, caller);
+      const webScores = await this.getUserRecentScoresWeb(userId, caller, includeFails);
       return mergeRecentScoreIds(apiScores, webScores);
     } catch (error) {
       console.warn("[osu] failed to resolve id-zero recent scores from web endpoint", {
@@ -583,8 +588,8 @@ export class OsuApiClient {
     }));
   }
 
-  private async getUserRecentScoresWeb(userId: number, caller: string): Promise<OscScore[]> {
-    const path = `/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=${USER_RECENT_SCORES_LIMIT}`;
+  private async getUserRecentScoresWeb(userId: number, caller: string, includeFails: boolean): Promise<OscScore[]> {
+    const path = `/users/${userId}/scores/recent?mode=mania&include_fails=${includeFails ? 1 : 0}&limit=${USER_RECENT_SCORES_LIMIT}`;
     return this.coalesce(`web:${path}`, () => this.limiter.schedule(caller, `web:${path}`, async () => {
       const response = await this.fetchImpl(`https://osu.ppy.sh${path}`, {
         headers: { accept: "application/json" },

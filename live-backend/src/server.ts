@@ -1,4 +1,5 @@
 import { ensureLeoblackFusionSeeded } from "./features/leoblack-fusion.js";
+import { prioritizePendingRecentRepairs } from "./jobs/recent-reconcile.js";
 import { ensureChartFamilySweepSeeded } from "./features/chart-families.js";
 import { registerServingReadThreads } from "./serving-read-thread.js";
 import { createServer } from "node:http";
@@ -533,6 +534,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   if (runWorkers) {
     if (app.config.enableWorkers) {
+      const prioritized = await prioritizePendingRecentRepairs(app.db);
+      if (prioritized) logInfo("recent_reconcile_prioritized", { jobs: prioritized });
       app.worker.start();
       // Pure background work (no osu! API): kick off / resume the global map
       // search index build so Search and Collections have data to serve, and

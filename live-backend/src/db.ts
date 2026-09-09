@@ -1418,6 +1418,9 @@ async function migrateDanEstimateMsd(db: Db): Promise<void> {
   if (!columns.includes("msd_json")) {
     await db.execute("alter table dan_estimates add column msd_json text");
   }
+  // The primary key starts with estimator_version; per-chart sweep lookups
+  // across versions otherwise scan every stored rate for each chart.
+  await db.execute("create index if not exists idx_dan_estimates_beatmap_rate on dan_estimates(beatmap_id, rate_percent)");
 }
 
 async function migrateMapsFarmedOverlay(db: Db): Promise<void> {

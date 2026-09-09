@@ -4,6 +4,7 @@ import { nowIso } from "../shared/score.js";
 import type { JobStatus } from "./queue.js";
 
 export const RECENT_RECONCILE_JOB_TYPE = "reconcile_user_recent_scores";
+export const RECENT_RECONCILE_REPAIR_PRIORITY = 150;
 
 export const RECENT_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
 
@@ -55,7 +56,7 @@ export async function finishRecentReconcileRequest(db: Db, userId: number): Prom
 // Fresh feed activity resets the cadence, but never bypasses the per-user
 // cooldown, API retry backoff, or pressure admission. It also makes this gap
 // repair mandatory: a delayed job must still recover those newly seen plays.
-export async function promotePendingRecentReconcileJobs(db: Db, userId: number, priority = 70): Promise<number> {
+export async function promotePendingRecentReconcileJobs(db: Db, userId: number, priority = RECENT_RECONCILE_REPAIR_PRIORITY): Promise<number> {
   const safeUserId = Math.floor(userId);
   if (!Number.isFinite(safeUserId) || safeUserId <= 0) return 0;
   const now = nowIso();
@@ -80,6 +81,22 @@ export async function promotePendingRecentReconcileJobs(db: Db, userId: number, 
       RECENT_RECONCILE_JOB_TYPE, json({ userId: safeUserId }),
       `recent:user:${safeUserId}`, `recent:user:${safeUserId}:%`],
   );
+  return Number(result.rowsAffected ?? 0);
+}
+
+// Upgrade existing repairs as well as new feed work, including leased jobs
+// inherited from the previous worker. Priority alone never preempts a lease.
+// Keep every job, deadline, cooldown and attempt; optional follow-ups retain
+// their cadence.
+export async function prioritizePendingRecentRepairs(db: Db): Promise<number> {
+  const result = await exec(db,
+    `update jobs set priority = ?
+     where type = ? and status in ('queued', 'failed', 'deferred_pressure', 'running')
+       and priority < ?
+       and (json_extract(payload_json, '$.kind') = 'gap_repair'
+         or (json_extract(payload_json, '$.kind') is null
+           and dedupe_key not like 'recent:user:%:next:%'))`,
+    [RECENT_RECONCILE_REPAIR_PRIORITY, RECENT_RECONCILE_JOB_TYPE, RECENT_RECONCILE_REPAIR_PRIORITY]);
   return Number(result.rowsAffected ?? 0);
 }
 

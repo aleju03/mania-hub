@@ -13,7 +13,7 @@ import { evaluateScoreGoals } from "../features/goals.js";
 import { invalidateFarmHelperCacheForUser } from "../features/farm-helper.js";
 import { resolveFarmHelperFeedbackForScore } from "../features/farm-helper-feedback.js";
 import type { JobQueue } from "../jobs/queue.js";
-import { hasPendingRecentReconcileJob, promotePendingRecentReconcileJobs, RECENT_RECONCILE_JOB_TYPE } from "../jobs/recent-reconcile.js";
+import { hasPendingRecentReconcileJob, promotePendingRecentReconcileJobs, RECENT_RECONCILE_JOB_TYPE, RECENT_RECONCILE_REPAIR_PRIORITY } from "../jobs/recent-reconcile.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay, toLeanTrackerScore } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -330,7 +330,7 @@ export class ScoreIngestor {
     // The worker's durable per-user gate delays requests during cooldown.
     // Keep the repair queued: dropping it here could lose the final feed play
     // when no follow-up exists and the user stops sending scores.
-    await this.queue.enqueue(RECENT_RECONCILE_JOB_TYPE, dedupeKey, { userId, kind: "gap_repair" }, { priority: 70, replaceDone: true });
+    await this.queue.enqueue(RECENT_RECONCILE_JOB_TYPE, dedupeKey, { userId, kind: "gap_repair" }, { priority: RECENT_RECONCILE_REPAIR_PRIORITY, replaceDone: true });
   }
 
   private async getTrackedCountries(score: OscScore, countryAllowlist?: string[]): Promise<string[]> {

@@ -2038,7 +2038,7 @@ describe("live backend", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].dedupe_key).toBe("recent:user:101:next:123");
     expect(rows[0].status).toBe("queued");
-    expect(Number(rows[0].priority)).toBe(70);
+    expect(Number(rows[0].priority)).toBe(150);
     expect(Date.parse(String(rows[0].run_after))).toBe(Date.now() + 2 * 60_000);
   });
 
@@ -2483,7 +2483,7 @@ describe("live backend", () => {
     expect(rows.map((row) => row.dedupe_key)).toEqual(["recent:user:101", "recent:user:101:next:123"]);
   });
 
-  it("resolves id-zero API recent scores from the osu! web recent endpoint", async () => {
+  it.each([undefined, false])("resolves id-zero API recent scores with matching web filters (includeFails=%s)", async (includeFails) => {
     const { db, ingestor } = await setup();
     const apiScore: OscScore = {
       id: 0,
@@ -2538,13 +2538,14 @@ describe("live backend", () => {
       osuApiTargetPerMinute: 60_000,
     }, fetchMock as never);
 
-    const scores = await osu.getUserRecentScores(101, "test:recent-web-fallback");
+    const scores = await osu.getUserRecentScores(101, "test:recent-web-fallback", { includeFails });
 
     const recentUrls = fetchMock.mock.calls
       .map(([input]) => String(input))
       .filter((url) => url.includes("/users/101/scores/recent"));
     expect(recentUrls).toHaveLength(2);
     expect(recentUrls.every((url) => new URL(url).searchParams.get("limit") === "100")).toBe(true);
+    expect(recentUrls.every((url) => new URL(url).searchParams.get("include_fails") === (includeFails === false ? "0" : "1"))).toBe(true);
     expect(scores[0].id).toBe(123456);
     expect(scores[0].type).toBe("solo_score");
     expect(scores[0].rank).toBe("A");
@@ -4980,6 +4981,10 @@ describe("live backend", () => {
       "select rank, source, is_tracked from country_rosters where country = 'CR' and user_id = 888",
     )).rows[0];
     expect(`${row.rank ?? "null"}:${row.source}:${row.is_tracked}`).toBe("null:manual:1");
+    const repair = (await exec(db,
+      "select priority, payload_json from jobs where dedupe_key = 'recent:user:888'")).rows[0];
+    expect(Number(repair.priority)).toBe(150);
+    expect(JSON.parse(String(repair.payload_json))).toEqual({ userId: 888, kind: "gap_repair" });
   });
 
   it("does not let ranked manual members self-remove or consume manual cap slots", async () => {

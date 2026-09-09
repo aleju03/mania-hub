@@ -21,23 +21,32 @@ export async function recomputeLeoblackFusionChunk(
   options: { limit?: number; interMapPauseMs?: number } = {},
 ): Promise<{ nextCursor: number; scanned: number; rewritten: number; done: boolean }> {
   const limit = Math.max(1, Math.floor(options.limit ?? CHUNK));
-  const rows = (await exec(db, `
-    select a.beatmap_id, a.msd_dt_json is not null as has_dt,
+  // Bound the primary-key walk before testing eligibility. Filtering on
+  // status first made SQLite scan/sort the whole ready corpus for every ten
+  // repairs; on production that blocked ingest for ~16 seconds per chunk.
+  const page = (await exec(db, `
+    select a.beatmap_id, a.status, a.key_count,
+           json_extract(a.classification_json, '$.lnRatio') as ln_ratio,
+           a.msd_dt_json is not null as has_dt,
            a.msd_ht_json is not null as has_ht,
            json_extract(a.classification_json, '$.sunnySr') < 9 as refresh_base
     from beatmap_chart_analysis a
-    where a.analysis_version = ? and a.status = 'ready' and a.key_count = 4
-      and json_extract(a.classification_json, '$.lnRatio') <= 0.18
-      and a.beatmap_id > ?
-      and (json_extract(a.classification_json, '$.sunnySr') < 9
-        or a.msd_dt_json is not null or a.msd_ht_json is not null
-        or exists (select 1 from dan_estimates d where d.beatmap_id = a.beatmap_id))
+    where a.analysis_version = ? and a.beatmap_id > ?
     order by a.beatmap_id limit ?`,
   [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), limit])).rows;
   let nextCursor = cursor;
   let rewritten = 0;
-  for (const row of rows) {
+  let scanned = 0;
+  for (const row of page) {
     const beatmapId = Number(row.beatmap_id);
+    nextCursor = beatmapId;
+    if (row.status !== "ready" || Number(row.key_count) !== 4
+      || row.ln_ratio == null || Number(row.ln_ratio) > 0.18) continue;
+    const rates = (await exec(db,
+      "select distinct rate_percent from dan_estimates where beatmap_id = ? order by rate_percent",
+      [beatmapId])).rows;
+    if (!Number(row.refresh_base) && !Number(row.has_dt) && !Number(row.has_ht) && rates.length === 0) continue;
+    scanned += 1;
     const osuText = await readCachedBeatmapFile(db, beatmapId);
     if (osuText) {
       try {
@@ -52,9 +61,6 @@ export async function recomputeLeoblackFusionChunk(
         if (Number(row.has_ht) && !await storeHtRateVerdict(db, beatmapId)) {
           throw new Error(`LeoBlack fusion HT repair failed for ${beatmapId}`);
         }
-        const rates = (await exec(db,
-          "select distinct rate_percent from dan_estimates where beatmap_id = ? order by rate_percent",
-          [beatmapId])).rows;
         for (const rate of rates) {
           await computeAndStoreRateDanVerdictFromText(db, beatmapId, Number(rate.rate_percent), osuText);
           await new Promise<void>((resolve) => setImmediate(resolve));
@@ -69,12 +75,11 @@ export async function recomputeLeoblackFusionChunk(
         throw error;
       }
     }
-    nextCursor = beatmapId;
     const pauseMs = Math.max(0, options.interMapPauseMs ?? 0);
     if (pauseMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, pauseMs));
     else await new Promise<void>((resolve) => setImmediate(resolve));
   }
-  return { nextCursor, scanned: rows.length, rewritten, done: rows.length < limit };
+  return { nextCursor, scanned, rewritten, done: page.length < limit };
 }
 
 export async function ensureLeoblackFusionSeeded(db: Db, queue: JobQueue): Promise<void> {

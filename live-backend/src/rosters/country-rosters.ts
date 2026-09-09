@@ -1,4 +1,5 @@
 import type { Db } from "../db.js";
+import { RECENT_RECONCILE_JOB_TYPE, RECENT_RECONCILE_REPAIR_PRIORITY } from "../jobs/recent-reconcile.js";
 import { exec, execBatch, json, variantPpUpdateStatement, type DbStatement } from "../db.js";
 import { readConfig, type Config } from "../config.js";
 import { getActiveCountryCodes, markCountryRosterRefreshed } from "../countries.js";
@@ -209,7 +210,7 @@ export async function addManualRosterMember(
   // Backfill so the activity tab fills in promptly instead of only tracking from the next play.
   // Both jobs dedupe on their keys, so repeated opt-in clicks collapse into one unit of work.
   await queue.enqueue("enrich_user", `user:${userId}`, { userId }, { priority: 100 });
-  await queue.enqueue("reconcile_user_recent_scores", `recent:user:${userId}`, { userId }, { priority: 70, replaceDone: true });
+  await queue.enqueue(RECENT_RECONCILE_JOB_TYPE, `recent:user:${userId}`, { userId, kind: "gap_repair" }, { priority: RECENT_RECONCILE_REPAIR_PRIORITY, replaceDone: true });
   return { ...base, ok: true, status: alreadyManual ? "already_member" : "added" };
 }
 

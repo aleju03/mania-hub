@@ -105,6 +105,7 @@ describe("recent-score adaptive polling", () => {
       const osu = { getUserRecentScores: vi.fn().mockResolvedValue([]) };
       await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
       expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+      expect(osu.getUserRecentScores).toHaveBeenCalledWith(101, "job:reconcile_user_recent_scores", { includeFails: false });
       expect((await exec(db, "select status from jobs where type = 'reconcile_user_recent_scores'")).rows[0].status).toBe("done");
     } finally { db.close(); }
   });

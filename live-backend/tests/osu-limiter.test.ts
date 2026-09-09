@@ -120,6 +120,29 @@ describe("token bucket limiter", () => {
     expect(calls).toHaveLength(3);
     expect(calls[2].status).toBe(null);
   });
+
+  it("prioritizes score recovery over ordinary jobs without bypassing pacing or pauses", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-09T12:00:00Z") });
+    const limiter = new TokenBucketLimiter(60, 60);
+    const calls: string[] = [];
+    const first = limiter.schedule("job:enrich_user", "/users/1", async () => { calls.push("first"); });
+    await vi.advanceTimersByTimeAsync(0);
+    const ordinary = limiter.schedule("job:enrich_user", "/users/2", async () => { calls.push("ordinary"); });
+    const repair = limiter.schedule("job:reconcile_user_recent_scores", "/users/3/scores/recent", async () => { calls.push("repair"); });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(calls).toEqual(["first"]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toEqual(["first", "repair"]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await Promise.all([first, ordinary, repair]);
+    limiter.pause(60_000);
+    const paused = limiter.schedule("job:reconcile_user_recent_scores", "/users/4/scores/recent", async () => { calls.push("after-pause"); });
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(calls).toEqual(["first", "repair", "ordinary"]);
+    await vi.advanceTimersByTimeAsync(1);
+    await paused;
+    expect(calls.at(-1)).toBe("after-pause");
+  });
 });
 
 describe("api call log durations", () => {

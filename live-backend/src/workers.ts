@@ -153,15 +153,13 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 10_000,
   },
   {
-    // Same structural gap as the roster lane: a queue reserve with no lane of
-    // its own. Ingest re-requests a user's reconcile directly, which masks the
-    // starvation most of the time, but nothing guarantees the parked ones
-    // drain. Deliberately slow -- one osu! call each, and urgent reconciles
-    // (priority 70) still win a fast-lane slot.
+    // Recent history expires upstream after 24 hours. Four dedicated slots
+    // keep repairs moving while other API jobs wait; the shared limiter still
+    // controls request volume. Fast also reserves one of its slots for these.
     name: "recent-reconcile",
     jobTypes: [RECENT_RECONCILE_JOB_TYPE],
-    claimLimit: 1,
-    intervalMs: 10_000,
+    claimLimit: 4,
+    intervalMs: 1_000,
   },
   {
     // Keep global backfill separate and slow so socket outages can be repaired
@@ -437,8 +435,25 @@ export class WorkerRunner {
   private async runLaneOnce(lane: WorkerLane): Promise<void> {
     if (await this.isPaused()) return;
     const laneWorkerId = `${this.workerId}:${lane.name}`;
-    const jobs = await this.claimJobs(laneWorkerId, lane.claimLimit, { types: lane.jobTypes });
+    const jobs = lane.name === "fast" && lane.jobTypes?.includes(RECENT_RECONCILE_JOB_TYPE)
+      ? await this.claimFastJobs(laneWorkerId, lane)
+      : await this.claimJobs(laneWorkerId, lane.claimLimit, { types: lane.jobTypes });
     await this.runJobs(laneWorkerId, jobs, lane.name);
+  }
+
+  private async claimFastJobs(workerId: string, lane: WorkerLane): Promise<Job[]> {
+    // Guarantee a recovery slot even during a profile-view burst, but leave
+    // the other slots available for metadata and interactive refreshes. If
+    // they are idle, let repairs use them too instead of wasting capacity.
+    const recentTypes = [RECENT_RECONCILE_JOB_TYPE];
+    const jobs = await this.claimJobs(workerId, 1, { types: recentTypes });
+    jobs.push(...await this.claimJobs(workerId, lane.claimLimit - jobs.length, {
+      types: lane.jobTypes!.filter((type) => type !== RECENT_RECONCILE_JOB_TYPE),
+    }));
+    if (jobs.length < lane.claimLimit) {
+      jobs.push(...await this.claimJobs(workerId, lane.claimLimit - jobs.length, { types: recentTypes }));
+    }
+    return jobs;
   }
 
   private async claimJobs(workerId: string, limit: number, options?: ClaimOptions): Promise<Job[]> {
@@ -1218,7 +1233,9 @@ export class WorkerRunner {
     const caller = source === "osu_recent_fallback" ? "job:osu_recent_fallback" : "job:reconcile_user_recent_scores";
     let recentScores: OscScore[];
     try {
-      recentScores = await this.osu.getUserRecentScores(userId, caller);
+      // We only ingest passed plays. Ask upstream to filter before applying
+      // its 100-result cap so retries/fails cannot crowd recoverable scores out.
+      recentScores = await this.osu.getUserRecentScores(userId, caller, { includeFails: false });
     } catch (error) {
       if (error instanceof OsuApiError && error.status === 404) {
         logInfo("reconcile_user_recent_scores_missing", { user_id: userId, path: error.path });

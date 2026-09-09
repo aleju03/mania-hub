@@ -843,23 +843,25 @@ export async function recomputeVibroChunk(
   limit = VIBRO_RECOMPUTE_CHUNK,
   options: { dryRun?: boolean } = {},
 ): Promise<VibroRecomputeChunkResult> {
-  const rows = (await exec(
+  // Select a bounded primary-key page before filtering status/JSON. The
+  // status index otherwise scans and sorts the remaining corpus every tick.
+  const page = (await exec(
     db,
-    `select a.beatmap_id as beatmap_id, a.classification_json, a.msd_dt_json, a.msd_ht_json
+    `select a.beatmap_id as beatmap_id, a.status, a.key_count,
+            a.classification_json, a.msd_dt_json, a.msd_ht_json
      from beatmap_chart_analysis a
-     where a.analysis_version = ? and a.status = 'ready'
-       and a.beatmap_id > ?
-       and (a.key_count = 4 or coalesce(json_extract(a.classification_json, '$.vibro'), 0) != 1)
+     where a.analysis_version = ? and a.beatmap_id > ?
      order by a.beatmap_id
      limit ?`,
     [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
   )).rows;
 
-  let nextCursor = cursor;
+  const nextCursor = page.length ? Number(page[page.length - 1].beatmap_id) : cursor;
+  const rows = page.filter((row) => row.status === "ready"
+    && (Number(row.key_count) === 4 || Number(parseJson<{ vibro?: boolean } | null>(row.classification_json, null)?.vibro ?? 0) !== 1));
   const flagged: number[] = [];
   for (const row of rows) {
     const beatmapId = Number(row.beatmap_id);
-    nextCursor = Math.max(nextCursor, beatmapId);
     const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
     if (!osuText) continue;
     let vibro = false;
@@ -918,7 +920,7 @@ export async function recomputeVibroChunk(
     await exec(db, "update map_search_index set vibro = 1 where beatmap_id = ?", [beatmapId]);
   }
 
-  return { nextCursor, scanned: rows.length, flagged, done: rows.length < limit };
+  return { nextCursor, scanned: rows.length, flagged, done: page.length < Math.max(1, Math.floor(limit)) };
 }
 
 // Boot watchdog: seed the sweep once per meta-key version, resume if a chain

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -91,6 +91,28 @@ async function seedAnalyzedChart(db: Db, beatmapId: number, gapMs: number): Prom
 }
 
 describe("vibro recompute sweep", () => {
+  it("bounds its indexed scan even when a whole page is ineligible", async () => {
+    const db = await makeDb();
+    try {
+      for (let id = 1; id <= 3; id++) await seedAnalyzedChart(db, id, 100);
+      await exec(db, "update beatmap_chart_analysis set key_count = 7, classification_json = '{\"vibro\":true}' where beatmap_id < 3");
+      await exec(db, "delete from beatmap_osu_files");
+      const execute = vi.spyOn(db, "execute");
+      expect(await recomputeVibroChunk(db, 0, 2))
+        .toEqual({ nextCursor: 2, scanned: 0, flagged: [], done: false });
+      const query = execute.mock.calls.map(([arg]) => typeof arg === "string" ? { sql: arg, args: [] } : arg)
+        .find((arg) => arg.sql.includes("from beatmap_chart_analysis a"))!;
+      const plan = (await db.execute({ ...query, sql: `explain query plan ${query.sql}` })).rows
+        .map((row) => String(row.detail)).join("\n");
+      expect(plan).toContain("beatmap_id>?");
+      expect(plan).not.toContain("TEMP B-TREE");
+      expect(plan).not.toContain("status_updated");
+      execute.mockRestore();
+      expect(await recomputeVibroChunk(db, 2, 2))
+        .toEqual({ nextCursor: 3, scanned: 1, flagged: [], done: true });
+    } finally { db.close(); }
+  });
+
   it("restarts an older detector's continuation instead of skipping already-scanned charts", async () => {
     const db = await makeDb();
     await seedAnalyzedChart(db, 1, 20);

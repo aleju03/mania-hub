@@ -38,6 +38,35 @@ async function seed(db: Db, id: number, sunnySr = 4, lnRatio = 0, keys = 4): Pro
 afterEach(() => vi.restoreAllMocks());
 
 describe("LeoBlack fusion rollout", () => {
+  it("advances bounded pages through ineligible charts without prematurely completing", async () => {
+    await withDb(async (db) => {
+      for (let id = 1; id <= 5; id++) await seed(db, id, 4, 0.5);
+      await seed(db, 6);
+      await exec(db, "delete from beatmap_osu_files");
+      const execute = vi.spyOn(db, "execute");
+      expect(await recomputeLeoblackFusionChunk(db, 0, { limit: 2 }))
+        .toEqual({ nextCursor: 2, scanned: 0, rewritten: 0, done: false });
+      const query = execute.mock.calls.map(([arg]) => typeof arg === "string" ? { sql: arg, args: [] } : arg)
+        .find((arg) => arg.sql.includes("from beatmap_chart_analysis a"))!;
+      const plan = (await db.execute({ ...query, sql: `explain query plan ${query.sql}` })).rows
+        .map((row) => String(row.detail)).join("\n");
+      expect(plan).toContain("beatmap_id>?");
+      expect(plan).not.toContain("TEMP B-TREE");
+      expect(plan).not.toContain("status_updated");
+      expect(await recomputeLeoblackFusionChunk(db, 2, { limit: 2 }))
+        .toEqual({ nextCursor: 4, scanned: 0, rewritten: 0, done: false });
+      expect(await recomputeLeoblackFusionChunk(db, 4, { limit: 2 }))
+        .toEqual({ nextCursor: 6, scanned: 1, rewritten: 0, done: false });
+      expect(await recomputeLeoblackFusionChunk(db, 6, { limit: 2 }))
+        .toEqual({ nextCursor: 6, scanned: 0, rewritten: 0, done: true });
+      const ratePlan = (await exec(db,
+        "explain query plan select distinct rate_percent from dan_estimates where beatmap_id = ? order by rate_percent", [6])).rows
+        .map((row) => String(row.detail)).join("\n");
+      expect(ratePlan).toContain("SEARCH");
+      expect(ratePlan).toContain("idx_dan_estimates_beatmap_rate");
+    });
+  });
+
   it("refreshes low-band charts and existing HT/custom-rate verdicts, including high base SR", async () => {
     await withDb(async (db) => {
       await seed(db, 1);
