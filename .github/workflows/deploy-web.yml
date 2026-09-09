@@ -47,6 +47,25 @@ jobs:
 
       - run: npm ci
 
+      - name: Authorise SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Ninja has its own counter, serialized by deploy-web-ninja. Start after
+      # the v2.176 fallback previously served on this channel.
+      - name: Choose app version
+        run: |
+          previous=$(ssh "$VPS_USER@$VPS_HOST" "if [ -f '$WEB_DIR/app-version-counter' ]; then cat '$WEB_DIR/app-version-counter'; else printf '176'; fi")
+          if [[ ! "$previous" =~ ^[0-9]{1,9}$ ]]; then
+            echo "Invalid app version counter"; exit 1
+          fi
+          next=$((10#$previous + 1))
+          echo "APP_VERSION_COUNTER=$next" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION=v2.$next" >> "$GITHUB_ENV"
+
       # `npm run build` already ends in scripts/verify-build-assets.mjs, which
       # fails the build if the output references an asset that is not there.
       - name: Build
@@ -54,13 +73,6 @@ jobs:
 
       - name: Fail early if the server bundle is missing
         run: test -f .output/server/index.mjs || { echo "no .output/server/index.mjs - wrong nitro preset?"; exit 1; }
-
-      - name: Authorise SSH
-        run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       # Upload into a per-commit release dir, then flip a symlink. A half-copied
       # release is never the one being served, and the previous one stays on
@@ -109,6 +121,12 @@ jobs:
             if [ "$code" != "200" ]; then echo "ninja.mania-tracker.com returned $code"; exit 1; fi
             echo "  ninja.mania-tracker.com ok"
           '
+
+      # Consume the number only after a successful deployment, including a
+      # manual upload with restart disabled, matching the production workflow.
+      - name: Record successful app version
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "printf '%s\n' '$APP_VERSION_COUNTER' > '$WEB_DIR/app-version-counter.new' && mv '$WEB_DIR/app-version-counter.new' '$WEB_DIR/app-version-counter'"
 
       # Keep the 3 newest releases; older ones are just disk. Never touches
       # whatever `current` points at.
