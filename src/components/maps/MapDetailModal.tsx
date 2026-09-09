@@ -186,13 +186,10 @@ export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
   );
 }
 
-function Stat({ label, value, aside }: { label: string; value: string; aside?: string | null }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">
-        {value}
-        {aside && <span className="ml-1.5 text-[11px] font-medium text-osu-f1">{aside}</span>}
-      </span>
+    <div className="flex min-w-0 flex-col">
+      <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{value}</span>
       <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
     </div>
   );
@@ -213,7 +210,7 @@ function realBpm(bpm: number, noteBpm: number | null | undefined): string | null
 // only the number waits. Same 16px value height, so nothing moves when it lands.
 function PendingStat({ label }: { label: string }) {
   return (
-    <div className="flex flex-col">
+    <div className="flex min-w-0 flex-col">
       <Skeleton className="h-4 w-10" />
       <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
     </div>
@@ -726,10 +723,10 @@ export function MapDetailModal({
 
                 {/* Stats */}
                 {numbersKnown || pending ? (
-                  <div className="grid grid-cols-5 gap-2 rounded-lg bg-osu-b4/50 px-4 py-2.5">
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-3 rounded-lg bg-osu-b4/50 px-4 py-2.5 sm:grid sm:grid-cols-5 sm:gap-2">
                     {numbersKnown ? (
                       <>
-                        <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} aside={realBpmStat ? t`timed at ${Math.round(active.bpm)}` : null} />
+                        <Stat label={t`BPM`} value={realBpmStat ?? String(Math.round(active.bpm))} />
                         <Stat label={t`Length`} value={formatDuration(active.length)} />
                         <Stat label={t`Plays`} value={formatNumber(active.playCount)} />
                         <Stat label={t`LN notes`} value={formatNumber(active.lnCount)} />
@@ -742,6 +739,13 @@ export function MapDetailModal({
                     ) : (
                       [t`BPM`, t`Length`, t`Plays`, t`LN notes`, t`OD`].map((label) => <PendingStat key={label} label={label} />)
                     )}
+                    {/* The osu! timing figure, when the note-weighted tempo took
+                        the stat. Its own row: inline it would run under the next
+                        stat on a phone, and giving one cell a second line leaves
+                        the rest of the row with a gap under their values. */}
+                    {numbersKnown && realBpmStat ? (
+                      <span className="w-full col-span-full -mt-1 text-[10px] text-osu-f1/70">{t`timed at ${Math.round(active.bpm)}`}</span>
+                    ) : null}
                   </div>
                 ) : null}
 
