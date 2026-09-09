@@ -1397,9 +1397,8 @@ describe("live backend", () => {
   it("keeps global maps refresh runnable during queue pressure", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
-    // refresh_profile_user is the shared-pool filler here (cap 30): it still
-    // counts toward shared depth and still gets trimmed by shedding, which is
-    // what puts the queue under pressure for this test.
+    // An oversized profile pool is trimmed to its own reserve without
+    // displacing global maps work.
     for (let index = 0; index < 120; index += 1) {
       await exec(
         db,
@@ -1613,11 +1612,11 @@ describe("live backend", () => {
 
     await queue.shedPressure();
 
-    // The backlog is trimmed to its reserve and counts for nothing in the
-    // shared pool, so the parked profile refreshes all come back.
-    expect(await queue.depth()).toBe(30);
+    // Both types stay outside shared depth. Profiles refill to their own
+    // reserve and leave overflow safely parked for the dedicated worker.
+    expect(await queue.depth()).toBe(0);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'enrich_user' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(10);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_snapshot' and status = 'deferred_pressure'")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_snapshot' and status = 'deferred_pressure'")).rows[0].count)).toBe(20);
   });
 
   // The cost of the reserve: an enqueue past it parks regardless of priority,

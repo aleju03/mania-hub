@@ -43,21 +43,18 @@ const QUEUE_RECOVERY_DEPTH = 60;
 // acceptable.
 const SHEDDABLE_TYPES: string[] = [];
 
-const ACTIVE_TYPE_CAPS: Record<string, number> = {
-  // Profile views enqueue their own osu! refresh, so a traffic spike is the one
-  // thing that can turn page loads into queue depth. Only bites above
-  // QUEUE_TARGET_DEPTH, and the profile still serves its stored snapshot while
-  // the overflow waits, so this trades a little staleness for keeping ingest
-  // and top-play confirmation moving.
-  refresh_profile_user: 30,
-  refresh_profile_snapshot: 10,
-};
+const ACTIVE_TYPE_CAPS: Record<string, number> = {};
 
 // Types with a reserved lane: invisible to the shared depth/shedding pool so
 // they drain steadily even when the queue hovers above the soft-pressure line,
 // but capped to this many active jobs so they cannot crowd anything out. The
 // osu! API token bucket still governs their actual request rate.
 const RESERVED_LANE_TYPES: Record<string, number> = {
+  // Profile refreshes must refill even while unrelated CPU jobs keep the
+  // shared queue above its recovery threshold. Full snapshots also have a
+  // dedicated worker; user refreshes retain their fast-lane priority.
+  refresh_profile_user: 30,
+  refresh_profile_snapshot: 10,
   // Admin leaderboard imports come in bursts; the worker lane drains them
   // one at a time, so the reserve only has to keep them out of the shedder.
   import_beatmap_leaderboard: 3,
@@ -153,6 +150,7 @@ const ENQUEUE_SHED_INTERVAL_MS = 2_000;
 
 export class JobQueue {
   private lastShedAt = 0;
+  private readonly claimsByWorker = new Map<string, number>();
 
   constructor(private readonly db: Db) {}
 
@@ -201,6 +199,15 @@ export class JobQueue {
   }
 
   async claim(workerId: string, limit = 1, options: ClaimOptions = {}): Promise<Job[]> {
+    if (limit <= 0) return [];
+    // Keep four priority turns, then serve the oldest due work. Continuous
+    // higher-priority arrivals must not strand chart sweeps, snapshots, or
+    // any other job sharing a lane. run_after measures the current request,
+    // unlike created_at on deduped jobs reused for months.
+    const turn = (this.claimsByWorker.get(workerId) ?? 0) + 1;
+    this.claimsByWorker.set(workerId, turn % 5);
+    const oldestFirst = turn % 5 === 0;
+    const order = oldestFirst ? "run_after asc, id asc" : "priority desc, run_after asc, id asc";
     const now = nowIso();
     const lockedUntil = new Date(Date.now() + JOB_LEASE_MS).toISOString();
     const typeFilter = buildTypeFilter(options.types);
@@ -210,7 +217,7 @@ export class JobQueue {
        where ((status in ('queued', 'failed') and run_after <= ?)
           or (status = 'running' and locked_until <= ?))
        ${typeFilter.sql}
-       order by priority desc, run_after asc
+       order by ${order}
        limit ?`,
       [now, now, ...typeFilter.args, limit],
     )).rows;
@@ -235,7 +242,7 @@ export class JobQueue {
         if (reserve == null) continue;
         const activeOfType = await activeDepth(this.db, type);
         if (activeOfType < reserve) {
-          await this.reactivateDeferred(reserve - activeOfType, type);
+          await this.reactivateDeferred(reserve - activeOfType, type, oldestFirst);
         }
       }
     }
@@ -567,7 +574,7 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0);
   }
 
-  private async reactivateDeferred(limit: number, type?: string): Promise<number> {
+  private async reactivateDeferred(limit: number, type?: string, oldestFirst = false): Promise<number> {
     if (limit <= 0) return 0;
     // Pressure changes admission, not the requested schedule or retry backoff.
     // Only revive due jobs so future appointments cannot consume the refill.
@@ -597,7 +604,7 @@ export class JobQueue {
          from jobs
          where status = 'deferred_pressure' and run_after <= ?
          ${typeFilter.sql}
-         order by priority desc, run_after asc, updated_at asc, id asc
+         order by ${oldestFirst ? "run_after asc, id asc" : "priority desc, run_after asc, updated_at asc, id asc"}
          limit ?
        )`,
       [now, now, ...typeFilter.args, Math.max(0, Math.floor(limit))],

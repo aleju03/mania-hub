@@ -112,6 +112,14 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 750,
   },
   {
+    // A full user + best-200 refresh must progress under sustained recovery
+    // and profile-user traffic. The shared API limiter still paces its calls.
+    name: "profile-snapshots",
+    jobTypes: [PROFILE_SNAPSHOT_REFRESH_JOB],
+    claimLimit: 1,
+    intervalMs: 1_000,
+  },
+  {
     // enrich_user also rides the fast lane, where a priority-100 interactive
     // enrichment wins a slot immediately -- but the priority-10 drip enqueues
     // never do, because that lane claims priority-desc and ingest keeps it
@@ -197,8 +205,8 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     // SKILL_VECTOR_BACKFILL_JOB shares this lane because it runs the same
-    // per-map compute as analyze_activity_beatmap; its deep negative priority
-    // keeps interactive analyses ahead of the sweep chain.
+    // per-map compute as analyze_activity_beatmap. Priority favors interactive
+    // analyses, while the queue's oldest-first turns keep the chains moving.
     name: "activity-analysis",
     jobTypes: ["analyze_activity_beatmap", SKILL_VECTOR_BACKFILL_JOB, ACTIVITY_BACKFILL_JOB],
     claimLimit: 1,

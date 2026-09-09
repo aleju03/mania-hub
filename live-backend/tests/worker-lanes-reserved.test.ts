@@ -35,6 +35,62 @@ describe("worker lanes for reserved types", () => {
   it("gives rosters and reconciles a dedicated lane while keeping them in fast", () => {
     expect(laneNames("refresh_country_roster")).toEqual(["fast", "country-rosters"]);
     expect(laneNames("reconcile_user_recent_scores")).toEqual(["fast", "recent-reconcile"]);
+    expect(laneNames("refresh_profile_snapshot")).toEqual(["fast", "profile-snapshots"]);
+  });
+
+  it("drains deferred snapshots under sustained shared pressure and fast traffic", async () => {
+    await withDb(async (db, queue) => {
+      const now = new Date().toISOString();
+      for (let i = 0; i < 110; i++) {
+        await exec(db, `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+          values ('compute_player_skills', ?, 'queued', 100, ?, 0, '{}', ?, ?)`, [`skills:${i}`, now, now, now]);
+      }
+      for (let i = 0; i < 15; i++) {
+        await queue.enqueue("refresh_profile_snapshot", `snapshot:${i}`, { userId: i }, { priority: 80 });
+        await queue.enqueue("refresh_profile_user", `profile:${i}`, { userId: i }, { priority: 120 });
+        await queue.enqueue("reconcile_user_recent_scores", `repair:${i}`, { userId: i }, { priority: 150 });
+      }
+      expect(await queue.depth()).toBe(110);
+      expect(Number((await exec(db, "select count(*) as n from jobs where type = 'refresh_profile_snapshot' and status = 'deferred_pressure'")).rows[0].n)).toBe(5);
+      const lane = lanes.find((entry) => entry.name === "profile-snapshots")!;
+      const completed: string[] = [];
+      for (let turn = 0; turn < 20; turn++) {
+        const jobs = await queue.claim("snapshots-worker", lane.claimLimit, { types: lane.jobTypes });
+        for (const job of jobs) {
+          expect(job.type).toBe("refresh_profile_snapshot");
+          completed.push(job.dedupeKey);
+          await queue.complete(job.id);
+        }
+      }
+      expect(new Set(completed).size).toBe(15);
+      expect(await queue.depth()).toBe(110);
+    });
+  });
+
+  it("serves both old chart sweeps while fresh high-priority analyses keep arriving", async () => {
+    await withDb(async (db, queue) => {
+      const now = Date.now();
+      const types = ["analyze_beatmap_chart", "recompute_leoblack_fusion_sweep", "recompute_vibro_sweep"];
+      await queue.enqueue(types[1], "fusion", {}, { priority: -10, runAfter: new Date(now - 120_000) });
+      await queue.enqueue(types[2], "vibro", {}, { priority: -10, runAfter: new Date(now - 110_000) });
+      await queue.enqueue(types[1], "leased", {}, { priority: -10, runAfter: new Date(now - 180_000) });
+      await exec(db, "update jobs set status = 'running', locked_by = 'other', locked_until = ? where dedupe_key = 'leased'", [new Date(now + 600_000).toISOString()]);
+      await queue.enqueue(types[1], "retry", {}, { priority: 200, runAfter: new Date(now + 600_000) });
+      await exec(db, "update jobs set status = 'failed' where dedupe_key = 'retry'");
+      const claimed: string[] = [];
+      for (let turn = 0; turn < 10; turn++) {
+        await queue.enqueue(types[0], `fresh:${turn}`, {}, { priority: 4 });
+        const jobs = await queue.claim("chart-worker", 1, { types });
+        expect(jobs).toHaveLength(1);
+        claimed.push(jobs[0].dedupeKey);
+        await queue.complete(jobs[0].id);
+      }
+      expect(claimed.slice(0, 4).every((key) => key.startsWith("fresh:"))).toBe(true);
+      expect(claimed[4]).toBe("fusion");
+      expect(claimed[9]).toBe("vibro");
+      expect(claimed).not.toContain("leased");
+      expect(claimed).not.toContain("retry");
+    });
   });
 
   it("claims a roster even while higher-priority fast work floods the queue", async () => {
