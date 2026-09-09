@@ -190,13 +190,19 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
   );
 }
 
-export function CollectionCardPlaceholder({ tier }: { tier: ManiaCardTier | null }) {
+export function CollectionCardPlaceholder({ tier, showCaption = true }: {
+  tier: ManiaCardTier | null;
+  /* The stub under the face stands in for the line of text a grid prints
+     below its cards. A surface that prints none passes false, or its
+     placeholders would be taller than the tiles that replace them. */
+  showCaption?: boolean;
+}) {
   return (
     <div>
       <div className="relative" style={{ aspectRatio: "5 / 7" }}>
         <CollectionCardFacePlaceholder tier={tier} />
       </div>
-      <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />
+      {showCaption && <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />}
     </div>
   );
 }

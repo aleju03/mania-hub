@@ -110,8 +110,6 @@ export interface MyDataSummary {
     top: MyDataModStat[];
   };
   keyStats: MyDataKeyStat[];
-  cardsCollected: number;
-  cardCopies: number;
   goalsOpen: number;
   goalsCompleted: number;
   generatedAt: string;
@@ -350,12 +348,6 @@ export async function getMyDataSummary(db: Db, userId: number): Promise<MyDataSu
     [userId],
   )).rows;
 
-  const cards = (await exec(
-    db,
-    "select count(*) as distinct_cards, coalesce(sum(copies), 0) as copies from pack_collection_cards where owner_user_id = ?",
-    [userId],
-  )).rows[0];
-
   const goals = (await exec(
     db,
     `select coalesce(sum(case when status = 'open' then 1 else 0 end), 0) as open_count,
@@ -401,8 +393,6 @@ export async function getMyDataSummary(db: Db, userId: number): Promise<MyDataSu
     rhythm,
     mods,
     keyStats: officialVariantKeyStats(profile, keyStatsRows),
-    cardsCollected: Number(cards?.distinct_cards ?? 0),
-    cardCopies: Number(cards?.copies ?? 0),
     goalsOpen: Number(goals?.open_count ?? 0),
     goalsCompleted: Number(goals?.completed_count ?? 0),
     generatedAt: new Date().toISOString(),

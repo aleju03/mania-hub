@@ -58,6 +58,7 @@ import {
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
 import { SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
+import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
@@ -3724,6 +3725,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   ) : null;
   return (
     <div ref={panelRef} style={heldHeight != null ? { minHeight: heldHeight } : undefined}>
+      <SharedSkillPlay userId={user.id} username={user.username} />
       {untrackedNote}
       {rated ? (
         <div className={`mb-3 flex flex-wrap items-center gap-1 ${view === "ratings" ? SKILLS_COLUMN_CLASS : ""}`}>

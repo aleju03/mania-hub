@@ -15,6 +15,7 @@ import { localizedVibroFixture } from "./vibro-fixtures.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { prepareVibroChart } from "../src/dan/vibro-sections.js";
+import { computeMsdOnThread } from "../src/dan/msd-thread.js";
 import { getRateAdjustedChartAnalysis } from "../src/features/dan-estimates.js";
 import { OsuApiClient } from "../src/osu/client.js";
 
@@ -121,7 +122,7 @@ describe("vibro recompute sweep", () => {
     expect(JSON.parse(String(row.classification_json)).vibro).toBe(true);
   });
 
-  it("restores old false positives and replaces inflated base and rate values with adjusted ratings", async () => {
+  it("restores full-chart base and rate ratings while retaining detected sections", async () => {
     const db = await makeDb();
     await seedAnalyzedChart(db, 1, 100);
     await storeCachedBeatmapFile(db, 1, localizedVibroFixture(), { source: "test" });
@@ -142,9 +143,15 @@ describe("vibro recompute sweep", () => {
     expect(classification.vibro).toBe(false);
     expect(classification.vibroAnalysis.status).toBe("adjusted");
     expect(Number(row.msd_overall)).toBeLessThan(999);
+    expect(JSON.parse(String(row.msd_json)).values).toEqual(
+      (await computeMsdOnThread(localizedVibroFixture(), { keyCount: 4 })).values,
+    );
+    expect(JSON.parse(String(row.msd_json)).vibroAdjusted).toBe(false);
     const dt = JSON.parse(String(row.msd_dt_json));
     expect(dt.values.Overall).toBeLessThan(999);
     expect(dt.vibroAnalysis.status).toBe("adjusted");
+    expect(dt.vibroAdjusted).toBe(false);
+    expect(dt.values).toEqual((await computeMsdOnThread(localizedVibroFixture(), { keyCount: 4, rate: 1.5 })).values);
     expect(Number((await exec(db, "select vibro from map_search_index where beatmap_id = 1")).rows[0].vibro)).toBe(0);
 
     // Arbitrary-rate responses preserve the explanation on cache hits too.

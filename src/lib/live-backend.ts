@@ -15,7 +15,18 @@ import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
 
+export interface LivePlayerSkillScoreDetails {
+  statistics: OsuScoreStatistics | null;
+  maxCombo: number | null;
+  totalScore: number | null;
+  rank: string | null;
+  scoreUrl: string | null;
+}
+
 export interface LivePlayerSkillPlay {
+  score?: LivePlayerSkillScoreDetails | null;
+  /** The play's own SSR vector at its accuracy and rate, not base chart MSD. */
+  skillRatings?: Record<string, number>;
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
   vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
@@ -1571,6 +1582,7 @@ export async function fetchLivePlayerSkillPlaysDirect(
   options: {
     limit?: number;
     offset?: number;
+    scoreId?: number;
     signal?: AbortSignal;
     /** "recent" reorders the same set by when each play was set. */
     sort?: "rating" | "recent";
@@ -1592,6 +1604,7 @@ export async function fetchLivePlayerSkillPlaysDirect(
   });
   // Filters and order stay off the query string at their defaults, so an
   // unfiltered read keeps the URL (and the backend's cache key) it always had.
+  if (options.scoreId != null) query.set("scoreId", String(options.scoreId));
   if (options.sort === "recent") query.set("sort", "recent");
   if (options.hideRanked) query.set("hideRanked", "1");
   if (Number.isFinite(options.maxPerChart) && Number(options.maxPerChart) > 0) {
@@ -1689,6 +1702,7 @@ export async function fetchLivePlayerDanEvidenceDirect(
   keyCount: number,
   side: "rc" | "ln",
   options: {
+    scoreId?: number;
     signal?: AbortSignal;
     limit?: number;
     offset?: number;
@@ -1710,6 +1724,7 @@ export async function fetchLivePlayerDanEvidenceDirect(
       query.set("rejectedLimit", String(options.rejectedLimit));
     }
   }
+  if (options.scoreId != null) query.set("scoreId", String(options.scoreId));
   if (options.sort === "recent") query.set("sort", "recent");
   // Pages the "all clears" list past the default window (server-clamped).
   if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
@@ -2168,8 +2183,8 @@ export interface LiveMapSearchEntry {
   // on payloads cached before the field shipped). Already blended server-side;
   // matches the skill-rating engine's valuation.
   msdLn?: Record<string, number> | null;
-  // Vibro-like chart per the classifier: ratings are unreliable and dan-scoped
-  // searches skip these server-side.
+  // Vibro-like chart per the classifier; informational while browsing.
+  // Player eligibility never hides its ordinary estimate from search.
   vibro?: boolean;
   // Search results are one entry per beatmapset: the top-level fields describe
   // the representative diff and `diffs` lists every filter-matching diff of the

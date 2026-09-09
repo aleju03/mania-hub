@@ -187,8 +187,6 @@ export interface MyDataSummary {
     top: MyDataModStat[];
   };
   keyStats: MyDataKeyStat[];
-  cardsCollected: number;
-  cardCopies: number;
   goalsOpen: number;
   goalsCompleted: number;
   generatedAt: string;

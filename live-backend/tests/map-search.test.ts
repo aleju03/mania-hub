@@ -308,7 +308,7 @@ describe("map search index", () => {
     expect(await facet(["loved"])).toEqual([4]);
   });
 
-  it("filters by dan tokens with facet semantics (±0.5, vibro excluded)", async () => {
+  it("filters ordinary dan estimates without hiding vibro charts", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
     await seedAnalysis(db, 1, { rawDan: 9.6, label: "10--" });
@@ -321,17 +321,16 @@ describe("map search index", () => {
       return page.items.map((item) => item.beatmapId).sort();
     };
 
-    expect(await ids("dan=10")).toEqual([1]);
-    expect(await ids("dan>=10")).toEqual([1]);
+    expect(await ids("dan=10")).toEqual([1, 2]);
+    expect(await ids("dan>=10")).toEqual([1, 2]);
     expect(await ids("dan=9")).toEqual([]);
     expect(await ids("dan>=11")).toEqual([]);
     expect(await ids("dan<10")).toEqual([]);
   });
 
-  it("excludes vibro charts from pattern-facet searches", async () => {
+  it("keeps vibro charts discoverable with pattern facets", async () => {
     const db = await makeDb();
-    // A mash chart classifies as ln-primary by density alone; the pattern
-    // facet must not surface it, but it stays reachable without the facet.
+    // Player eligibility does not remove charts from ordinary browsing.
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "ln", patterns: { ln: 1 } });
     await seedAnalysis(db, 1, { rawDan: 12.0, label: "12", vibro: true });
     await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "ln", patterns: { ln: 0.9 } });
@@ -339,7 +338,7 @@ describe("map search index", () => {
     await buildAll(db);
 
     const lnOnly = await getMapSearchPage(db, { ...baseQuery(), patterns: ["ln"] });
-    expect(lnOnly.items.map((item) => item.beatmapId)).toEqual([2]);
+    expect(lnOnly.items.map((item) => item.beatmapId).sort()).toEqual([1, 2]);
 
     const all = await getMapSearchPage(db, baseQuery());
     expect(all.total).toBe(2);
@@ -1209,7 +1208,7 @@ describe("map search primary derivation", () => {
     expect(all.items[0].primaryPattern).toBe("ln");
   });
 
-  it("excludes vibro charts from dan-filtered searches only", async () => {
+  it("keeps ordinary dan estimates searchable while retaining the vibro warning", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "ln", patterns: { ln: 1 } });
     await seedAnalysis(db, 1, { lnRatio: 0.9, vibro: true, rawDan: 10.2, label: "10+", family: "ln" });
@@ -1223,7 +1222,7 @@ describe("map search primary derivation", () => {
     expect(unfiltered.items.find((item) => item.beatmapId === 2)?.vibro).toBe(false);
 
     const danScoped = await getMapSearchPage(db, { ...baseQuery(), danMin: 10, danMax: 10 });
-    expect(danScoped.items.map((item) => item.beatmapId)).toEqual([2]);
+    expect(danScoped.items.map((item) => item.beatmapId).sort()).toEqual([1, 2]);
   });
 });
 

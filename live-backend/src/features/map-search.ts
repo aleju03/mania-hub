@@ -152,7 +152,7 @@ export interface MapSearchEntry {
    *  calc covers this chart or when the chart has no meaningful LN content.
    *  On bulk rows so detail surfaces show the final value from first paint. */
   msdLn: Record<string, number> | null;
-  /** Vibro-like chart per the classifier; ratings are unreliable, dan filters skip these. */
+  /** Vibro-like chart per the classifier; informational for browsing and estimates. */
   vibro: boolean;
 }
 
@@ -1142,7 +1142,7 @@ type SearchTokenFilter =
   // Dates compare lexicographically against the ISO ranked_date; [start, end)
   // spans the literal's precision (2019, 2019-06, or 2019-06-15).
   | { kind: "date"; op: TokenOp; start: string; end: string }
-  // Dan levels widen ±0.5 on raw_dan like the facet, and exclude vibro charts.
+  // Dan levels widen ±0.5 on raw_dan like the facet.
   | { kind: "dan"; op: TokenOp; value: number }
   // Exact id match, from an `id=`/`set=` token or a pasted osu! beatmap link.
   | { kind: "id"; column: "beatmap_id" | "beatmapset_id"; negate: boolean; value: number };
@@ -1466,8 +1466,6 @@ function applyTokenFilter(filter: SearchTokenFilter, p: string, conditions: stri
         conditions.push(`${col} <= ?`);
         args.push(hi);
       }
-      // Same rationale as the dan facet: vibro dans are inflated noise.
-      conditions.push(`${p}vibro = 0`);
       return;
     }
   }
@@ -1550,11 +1548,6 @@ function buildWhereParts(query: MapSearchQuery, p = "", fts = false): { conditio
   }
   if (patternClauses.length > 0) {
     conditions.push(`(${patternClauses.join(" or ")})`);
-    // Vibro charts are pattern noise: mash files classify as jack/chordjack/ln
-    // by density alone, so a pattern-scoped search returning them buries the
-    // real charts (same policy as the dan filter). They stay reachable
-    // without the pattern facet.
-    conditions.push(`${p}vibro = 0`);
   }
 
   // Excluded families and subfamilies are also ORed into one match, then the
@@ -1562,8 +1555,7 @@ function buildWhereParts(query: MapSearchQuery, p = "", fts = false): { conditio
   // the chart. Family exclusions follow the card's secondary-pattern threshold
   // (>= 0.5), rather than checking only primary_pattern; otherwise a
   // Chordjack-primary chart visibly tagged Stream survives a Stream exclusion.
-  // Unlike an include-only pattern search this does not hide vibro charts
-  // globally; it only removes vibro rows that match an excluded tag.
+  // The same tag rules apply regardless of player vibro eligibility.
   const excluded = [...new Set(query.patternsExclude)];
   const excludedFamilies = excluded.filter((pattern) => PATTERN_COLUMNS[pattern]);
   const excludedSubs = excluded.filter((pattern) => SUB_PATTERN_SET.has(pattern));
@@ -1583,9 +1575,8 @@ function buildWhereParts(query: MapSearchQuery, p = "", fts = false): { conditio
   // danMin/danMax are integer dan levels, inclusive of the whole dan: verdict
   // "N" spans N±0.5 on raw_dan (tier offsets ±0.4, boundary halves ±0.5), so
   // the bounds widen half a step. min == max matches exactly one dan.
-  // Vibro charts are excluded outright: their estimated dans are inflated
-  // (mash-heavy charts overrate on every engine), so a dan-scoped search
-  // returning them is noise. They stay reachable without the dan filter.
+  // Vibro eligibility belongs to player ratings; browsing keeps the chart's
+  // ordinary estimate and exposes its detected sections as information.
   if (query.danMin != null) {
     conditions.push(`${p}raw_dan >= ?`);
     args.push(query.danMin - 0.5);
@@ -1593,9 +1584,6 @@ function buildWhereParts(query: MapSearchQuery, p = "", fts = false): { conditio
   if (query.danMax != null) {
     conditions.push(`${p}raw_dan <= ?`);
     args.push(query.danMax + 0.5);
-  }
-  if (query.danMin != null || query.danMax != null) {
-    conditions.push(`${p}vibro = 0`);
   }
 
   if (query.country) {
@@ -1766,8 +1754,10 @@ export function parseDtRateVerdict(row: Record<string, unknown> | undefined): {
   if (!row) return { danDt: null, msdDt: null };
   const msdParsed = row.msd_dt_json == null
     ? null
-    : parseJson<{ values?: Record<string, number>; vibroAnalysis?: VibroAnalysis; vibroVersion?: number } | null>(row.msd_dt_json, null);
-  if (Number(row.key_count) === 4 && msdParsed?.vibroVersion !== VIBRO_SECTION_VERSION) return { danDt: null, msdDt: null };
+    : parseJson<{ values?: Record<string, number>; vibroAnalysis?: VibroAnalysis; vibroVersion?: number; vibroAdjusted?: boolean } | null>(row.msd_dt_json, null);
+  // Older 4K rate columns may contain player-adjusted estimates. Let the
+  // ordinary rate cache fill these until the restoration sweep reaches them.
+  if (Number(row.key_count) === 4 && (msdParsed?.vibroVersion !== VIBRO_SECTION_VERSION || msdParsed.vibroAdjusted !== false)) return { danDt: null, msdDt: null };
   const msdDt = msdParsed && msdParsed.values && typeof msdParsed.values === "object" ? msdParsed.values : null;
   const danParsed = row.dan_dt_json == null
     ? null

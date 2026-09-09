@@ -33,7 +33,7 @@ import type { OscScore } from "../src/shared/types.js";
 import { buildVibroOsu, localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
 import { conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { computeMsd } from "../src/dan/msd.js";
-import { loadStoredRateDanVerdicts, rateDanVerdictKey } from "../src/features/dan-estimates.js";
+import { VIBRO_ADJUSTED_VARIANT, loadStoredRateDanVerdicts, rateDanVerdictKey } from "../src/features/dan-estimates.js";
 
 async function withDb(run: (db: Awaited<ReturnType<typeof createDb>>) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), "mania-live-skills-"));
@@ -416,25 +416,57 @@ describe("localized vibro player credit", () => {
     });
   });
 
-  it("uses the filtered dan verdict and a lower-bound clear accuracy", async () => {
+  it("removes a previously adjusted high-accuracy clear when accompanied longjacks make the chart excluded", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, vibroFixture(1545540), { source: "test" });
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+        values (101, 1, 'ready', 4, ?, ?)`,
+      [JSON.stringify({ lnRatio: 0, rc: { rawDan: 15.85 }, vibro: false }), new Date().toISOString()]);
+      const previous = {
+        identity: "official:42", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.96, pp: 0,
+        accuracy: 0.9998, stableAccuracy: 0.9998, source: "tracked" as const, patterns: [],
+        values: { Overall: 30 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+        vibroAdjustment: { excludedDurationMs: 7868, timeShare: 0.102883, noteShare: 0.200559, judgementShare: 0.200559 },
+      };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.summary.modes.find((mode) => mode.keyCount === 4)?.dan?.rc).toBeNull();
+      expect(result.vibroExcluded).toMatchObject([{
+        reason: "rate_vibro", checkedVersion: RATE_VIBRO_CHECK_VERSION,
+        play: { identity: previous.identity, beatmapId: 101 },
+      }]);
+      const again = await computePlayerSkillRatings(db, failingOsu, [], [], { previousVibroExcluded: result.vibroExcluded });
+      expect(again.plays).toEqual([]);
+      expect(again.danOnly).toEqual([]);
+      expect(again.vibroExcluded).toHaveLength(1);
+    });
+  });
+
+  it.each([0.75, 1, 1.2, 1.5])("uses only the player variant and conservative dan accuracy at %sx", async (rate) => {
     await withDb(async (db) => {
       await exec(db, `insert into beatmap_chart_analysis
         (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
         values (101, 1, 'ready', 4, ?, ?)`, [JSON.stringify({ lnRatio: 0, rc: { rawDan: 20 }, patterns: [] }), new Date().toISOString()]);
       const info = await loadChartSkillInfo(db, [101]);
       const adjusted = { identity: "official:42", beatmapId: 101, keyCount: 4,
-        rate: 1, goal: 0.95, pp: 0, accuracy: 0.96, stableAccuracy: 0.96,
+        rate, goal: 0.95, pp: 0, accuracy: 0.96, stableAccuracy: 0.96,
         source: "tracked" as const, patterns: [], values: { Overall: 20 },
         vibroAdjustment: { excludedDurationMs: 3000, timeShare: 0.05, noteShare: 0.1, judgementShare: 0.1 } };
       const clears = collectDanClearsForTest(4, [adjusted], info,
-        new Map([[rateDanVerdictKey(101, 100), { rawDan: 8, side: "rc" as const, displayName: "8" }]]));
+        new Map([
+          [rateDanVerdictKey(101, Math.round(rate * 100)), { rawDan: 20, side: "rc" as const, displayName: "kappa" }],
+          [rateDanVerdictKey(101, Math.round(rate * 100), VIBRO_ADJUSTED_VARIANT), { rawDan: 8, side: "rc" as const, displayName: "8" }],
+        ]));
       expect(clears).toHaveLength(1);
       expect(clears[0].chartDan).toBe(8);
       expect(clears[0].accuracy).toBeCloseTo(0.9555556);
       expect(clears[0].creditedDan).toBeLessThan(8);
       // An old unfiltered 20-dan chart row cannot stand in for a missing
       // adjusted verdict while its bounded computation is pending.
-      expect(collectDanClearsForTest(4, [adjusted], info)).toEqual([]);
+      expect(collectDanClearsForTest(4, [adjusted], info,
+        new Map([[rateDanVerdictKey(101, Math.round(rate * 100)), { rawDan: 20, side: "rc" as const }]]))).toEqual([]);
     });
   });
 });
@@ -2373,6 +2405,7 @@ describe("computePlayerSkillRatings", () => {
       // stored judgement counts.
       expect(plays.get(113)?.rate).toBe(1.5);
       expect(plays.get(113)?.missShare).toBeCloseTo(4 / 384, 5);
+      expect(plays.get(113)?.score).toMatchObject({ statistics: { perfect: 300, great: 80, miss: 4 }, rank: "S", maxCombo: null });
       expect(result.summary.modes[0].dan?.rc ?? null).toBeNull();
     });
   });

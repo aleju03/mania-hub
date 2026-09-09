@@ -1,3 +1,4 @@
+import { skillPlaySharePath } from "../../lib/skill-play-share";
 // The Skills tab's plays explorer: the rated plays behind a profile, listed
 // rather than summarized.
 //
@@ -585,6 +586,12 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             rateMod: rateModFor(detail.play.rate, detail.play.rateMod),
             playedAt: detail.play.playedAt,
             source: detail.play.source,
+            mods: playModAcronyms(detail.play),
+            daOd: detail.play.daOd ?? null,
+            scoreId: detail.play.scoreId,
+            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
+            score: detail.play.score,
+            skillRatings: detail.play.skillRatings,
             dan: detail.dan,
             rating: detail.play.rating,
             ratingExcluded: detail.play.ratingExcluded,
@@ -887,11 +894,13 @@ function DanPlaysList({
               creditedRating: row.clear.creditedDan,
               creditedLabel: row.clear.creditedDanLabel,
               accuracy: row.clear.clearAccuracy,
+              family: side,
             } : {
               chartRating: row.rejected.chartDan,
               chartLabel: row.rejected.chartDanLabel,
               accuracy: row.rejected.clearAccuracy,
               rejection: <DanRejectionExplanation rejected={row.rejected} />,
+              family: row.rejected.side ?? side,
             },
           });
           const prefetch = () => prefetchLiveMapSearchEntry(row.play.beatmapId);
@@ -1035,7 +1044,7 @@ function DanCreditCell({
  * where the row is smallest. The tail is its own button: it expands the reason
  * under the row instead of opening the map, and the row keeps its own tap.
  */
-function DanRejectionExplanation({ rejected }: { rejected: LivePlayerDanRejectedPlay }) {
+export function DanRejectionExplanation({ rejected }: { rejected: LivePlayerDanRejectedPlay }) {
   return <>{useDanRejectionReason(rejected)}</>;
 }
 

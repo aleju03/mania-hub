@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { ChevronDown, ChevronLeft, ChevronRight, FolderOpen, ImageIcon, Loader2, Music, Pause, Play, Volume2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Download, FolderOpen, ImageIcon, Loader2, Music, Pause, Play, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -328,7 +328,7 @@ function SkinAssetViewer({
   const { t, i18n } = useLingui();
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [url, setUrl] = useState<string | null>(null);
+  const [resolvedAsset, setResolvedAsset] = useState<{ path: string; url: string } | null>(null);
   const [failed, setFailed] = useState(false);
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
   const [surface, setSurface] = useState<ViewerSurface>("checker");
@@ -337,6 +337,7 @@ function SkinAssetViewer({
   // Frames in the order they animate; a still asset is just its own path.
   const framePaths = useMemo(() => sortedFramePaths(entry), [entry]);
   const path = framePaths[Math.min(frame, framePaths.length - 1)] ?? entry.primaryPath;
+  const url = resolvedAsset?.path === path ? resolvedAsset.url : null;
 
   useEffect(() => {
     setFrame(0);
@@ -345,11 +346,15 @@ function SkinAssetViewer({
 
   useEffect(() => {
     let cancelled = false;
+    setResolvedAsset(null);
     setFailed(false);
+    setNatural(null);
     void resolve(path).then((resolved) => {
       if (cancelled) return;
-      if (resolved) setUrl(resolved);
+      if (resolved) setResolvedAsset({ path, url: resolved });
       else setFailed(true);
+    }).catch(() => {
+      if (!cancelled) setFailed(true);
     });
     return () => {
       cancelled = true;
@@ -405,14 +410,31 @@ function SkinAssetViewer({
             <div className="truncate text-[13px] font-bold text-white">{caption}</div>
             <div className="truncate text-[10.5px] text-osu-f1">{path}</div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t`Close`}
-            className="ml-auto shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-white"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {url ? (
+              <a
+                href={url}
+                download={path.slice(path.lastIndexOf("/") + 1)}
+                aria-label={t`Download`}
+                title={t`Download`}
+                className="grid h-8 w-8 place-items-center rounded-md text-osu-f1 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+              </a>
+            ) : (
+              <button type="button" disabled aria-label={t`Download`} title={t`Download`} className="grid h-8 w-8 place-items-center rounded-md text-osu-f1 opacity-40">
+                <Download className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t`Close`}
+              className="grid h-8 w-8 place-items-center rounded-md text-osu-f1 transition-colors cursor-pointer hover:bg-white/5 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         <div className="relative grid min-h-[240px] flex-1 place-items-center overflow-auto" style={SURFACE_STYLES[surface]}>
@@ -424,7 +446,10 @@ function SkinAssetViewer({
                 width: event.currentTarget.naturalWidth,
                 height: event.currentTarget.naturalHeight,
               })}
-              onError={() => setFailed(true)}
+              onError={() => {
+                setFailed(true);
+                setNatural(null);
+              }}
               className={actualSize ? "max-w-none" : "max-h-[58vh] max-w-full object-contain"}
               style={actualSize && natural ? { width: natural.width, height: natural.height } : undefined}
             />
@@ -577,12 +602,16 @@ export function SkinAssetTile({
   }, [entry.primaryPath]);
 
   useEffect(() => {
+    setUrl(null);
+    setFailed(false);
     if (isSound) return;
     let cancelled = false;
     void resolve(entry.primaryPath).then((resolved) => {
       if (cancelled) return;
       if (resolved) setUrl(resolved);
       else setFailed(true);
+    }).catch(() => {
+      if (!cancelled) setFailed(true);
     });
     return () => {
       cancelled = true;
@@ -631,8 +660,8 @@ export function SkinAssetTile({
           onOpen ? "cursor-pointer transition-colors hover:border-osu-pink/45" : ""
         }`}
       >
-        {url ? (
-          <img src={url} alt={entry.name} loading="lazy" className="max-h-full max-w-full object-contain" />
+        {url && !failed ? (
+          <img src={url} alt={entry.name} loading="lazy" onError={() => setFailed(true)} className="max-h-full max-w-full object-contain" />
         ) : (
           <span className="text-[10px] text-osu-f1/50">{failed ? <Trans>unreadable</Trans> : "..."}</span>
         )}

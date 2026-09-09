@@ -136,7 +136,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     fireEvent.click(await screen.findByText("Best 101"));
     const popup = within(screen.getByTestId("map-rating-state"));
     expect(popup.getByText("Minimum required for dan credit is 91.00%. This play got 80.00%.")).toBeTruthy();
-    expect(popup.getByText("Chart Dan")).toBeTruthy();
+    expect(popup.getByText("Chart estimate")).toBeTruthy();
     expect(screen.queryByText("No MSD rating")).toBeNull();
     expect(screen.queryByText("Accuracy below skill rating range")).toBeNull();
   });
@@ -156,8 +156,9 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     </I18nProvider>);
     fireEvent.click(await screen.findByText("Best 102"));
     const popup = within(screen.getByTestId("map-rating-state"));
-    expect(popup.getByText("4- (3.68)")).toBeTruthy();
-    expect(popup.getByText("Dan credit")).toBeTruthy();
+    expect(popup.getByText("4-")).toBeTruthy();
+    expect(popup.getByText("3.68")).toBeTruthy();
+    expect(popup.getByText("Your credit")).toBeTruthy();
     expect(screen.queryByText("No MSD rating")).toBeNull();
     expect(popup.queryByText("does not count")).toBeNull();
   });

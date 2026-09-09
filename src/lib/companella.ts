@@ -87,7 +87,7 @@ export async function classifyChartWithCompanella(
   if (!first.companellaPending || first.sunnySr == null) return first;
 
   const companella = await computeCompanellaEstimate({
-    osuText: prepareVibroChart(osuText, getInputRate(input), map).osuText,
+    osuText: input.adjustVibro ? prepareVibroChart(osuText, getInputRate(input), map).osuText : osuText,
     rate: getInputRate(input),
     keyCount: map.keyCount,
     sunnyStar: first.sunnySr,

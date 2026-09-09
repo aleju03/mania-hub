@@ -11,7 +11,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
-import { INVERSE_MOD_VARIANT, MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
+import { INVERSE_MOD_VARIANT, VIBRO_ADJUSTED_VARIANT, MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import type { RateDanVerdictPair } from "./dan-estimates.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
@@ -29,6 +29,7 @@ import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
+import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillScoreDetails } from "./player-skill-score-details.js";
 
 // Etterna-style player skill ratings from the player's plays: each play gets
 // MinaCalc SSRs (the MSD skillsets computed at the play's music rate with the
@@ -66,7 +67,9 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-// v30 (current): rates localized 4K rice vibro from the remaining notes with
+// v31: sustained single-column jacks cannot hide behind sparse accompaniment.
+// Recheck stored plays with the new detector, reusing unaffected SSRs.
+// v30: rates localized 4K rice vibro from the remaining notes with
 // conservative accuracy, rechecks every speed and restores obsolete exclusions.
 // Clear-quality exceptions require PP-backed uprates of clean base charts with
 // dense-chord detections. Affected SSRs are recomputed before receiving the
@@ -106,7 +109,7 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 30;
+export const PLAYER_SKILLS_VERSION = 31;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -128,7 +131,7 @@ export const PLAYER_SKILLS_VERSION = 30;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -659,6 +662,8 @@ export const PLAYER_SKILL_PATTERN_AXES = [
 ] as const;
 
 export interface PlayerSkillPlay {
+  score: PlayerSkillScoreDetails | null;
+  skillRatings: Record<string, number>;
   vibroAdjustment?: StoredPlaySsr["vibroAdjustment"];
   vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
@@ -731,6 +736,7 @@ export function isPlayerSkillAxis(axis: string): boolean {
 }
 
 export interface StoredPlaySsr {
+  score?: PlayerSkillScoreDetails | null;
   identity: string;
   beatmapId: number;
   /** Note-verified rate-edit family, refreshed during compute; never a difficulty input. */
@@ -1181,10 +1187,10 @@ async function runMsdAtGoal(
   options: { rate: number; keyCount: number; goal: number; lnTailTaps?: boolean },
 ): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
   const { rate, keyCount, goal, lnTailTaps = false } = options;
-  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps }).catch(msdChartErrorFallback);
+  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps, adjustVibro: true }).catch(msdChartErrorFallback);
   if (!capped) return null;
   if (goal <= SSR_CALC_GOAL_CAP) return { values: capped.values, calcRuns: 1 };
-  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps }).catch(msdChartErrorFallback);
+  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps, adjustVibro: true }).catch(msdChartErrorFallback);
   if (!base) return { values: capped.values, calcRuns: 1 };
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
   const values: Record<string, number> = {};
@@ -1853,7 +1859,11 @@ function rateVerdictPairFor(play: StoredPlaySsr): RateDanVerdictPair | null {
     if (percent < MIN_RATE_PERCENT || percent > MAX_RATE_PERCENT) return null;
     return { beatmapId: play.beatmapId, ratePercent: percent, modVariant: INVERSE_MOD_VARIANT };
   }
-  if ((play.vibroAdjustment || play.vibroClearEvidence) && play.rate === 1) return { beatmapId: play.beatmapId, ratePercent: 100 };
+  if (play.vibroAdjustment) {
+    const ratePercent = play.rate === 1 ? 100 : clearRatePercent(play.rate);
+    return ratePercent == null ? null : { beatmapId: play.beatmapId, ratePercent, modVariant: VIBRO_ADJUSTED_VARIANT };
+  }
+  if (play.vibroClearEvidence && play.rate === 1) return { beatmapId: play.beatmapId, ratePercent: 100 };
   const ratePercent = clearRatePercent(play.rate);
   return ratePercent == null ? null : { beatmapId: play.beatmapId, ratePercent };
 }
@@ -2595,7 +2605,7 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // detector stamp certifies both eligibility and any section-adjusted SSR;
 // restoring an old exclusion with no SSR therefore requires a calculator pass.
 // Hold-heavy and wider-key charts retain their legacy trust policy.
-export const RATE_VIBRO_CHECK_VERSION = 5;
+export const RATE_VIBRO_CHECK_VERSION = 6;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
@@ -2849,6 +2859,7 @@ export async function computePlayerSkillRatings(
     }
     scoresByIdentity.set(identity, score);
     const clearEvidence = {
+      score: playerSkillScoreDetails(score, previousByIdentity.get(identity)?.score),
       source,
       accuracy: getDisplayedAccuracy(score),
       stableAccuracy: calculateStableAccuracy(score.statistics ?? {}) || null,
@@ -3361,7 +3372,7 @@ async function loadTrackedScores(db: Db, userId: number): Promise<OscScore[]> {
 }
 
 // Tracked plays whose raw payloads aged out of score_events still left a
-// durable day-best trace in player_activity_maps (2y retention). Rows
+// durable day-best trace in player_activity_maps (kept by default). Rows
 // written since best_mods_json/best_statistics_json shipped carry the full
 // skill evidence (real rate from mods, wife goal and miss share from the
 // judgement counts - dan-clear eligible). Older rows with no stored mods
@@ -3384,7 +3395,8 @@ export interface ArchivedTrackedEvidence {
 export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promise<ArchivedTrackedEvidence> {
   const rows = (await exec(
     db,
-    `select m.day, m.beatmap_id, m.best_score_id, m.best_accuracy, m.best_mods_json, m.best_statistics_json
+    `select m.day, m.beatmap_id, m.best_score_id, m.best_solo_score_id, m.best_accuracy, m.best_mods_json, m.best_statistics_json,
+       m.best_rank, m.best_max_combo, m.best_total_score
      from player_activity_maps m
      join beatmaps b on b.beatmap_id = m.beatmap_id and b.mode = 'mania'
      where m.user_id = ?
@@ -3408,15 +3420,20 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promi
     const mods = parseJson<OscScore["mods"] | null>(String(row.best_mods_json ?? ""), null);
     const statistics = parseJson<OscScore["statistics"] | null>(String(row.best_statistics_json ?? ""), null);
     const score = {
-      id: Number.isFinite(scoreId) && scoreId > 0 ? scoreId : 0,
+      id: Number(row.best_solo_score_id) > 0 ? Number(row.best_solo_score_id) : Number.isFinite(scoreId) && scoreId > 0 ? scoreId : 0,
+      ...(Number(row.best_solo_score_id) > 0 ? {
+        type: "solo_score",
+        legacy_score_id: scoreId !== Number(row.best_solo_score_id) ? scoreId : undefined,
+      } : {}),
       user_id: userId,
       beatmap_id: beatmapId,
       accuracy,
       mods: Array.isArray(mods) ? mods : [],
       passed: true,
-      rank: "A",
-      score: 0,
-      max_combo: 0,
+      rank: row.best_rank == null ? "" : String(row.best_rank),
+      score: Number(row.best_total_score) || 0,
+      total_score: Number(row.best_total_score) || 0,
+      max_combo: Number(row.best_max_combo) || 0,
       pp: null,
       statistics: statistics ?? {},
       // Day-anchored timestamp: rows are immutable once the day closes, so
@@ -3731,7 +3748,9 @@ export async function getPlayerSkillPlays(
   // set of plays. Plays stored before the gate keep their old tags until the
   // profile's next recompute.
   const ranked = candidates.sort(comparePlayerSkillPlays(sort));
-  const cohort = ranked.slice(0, PLAYER_SKILL_PLAYS_MAX);
+  const cohort = options.scoreId != null
+    ? ranked.filter(({ play }) => play.identity === `official:${options.scoreId}`)
+    : ranked.slice(0, PLAYER_SKILL_PLAYS_MAX);
 
   // The active order chooses the osu-style 200-play cohort first. Filters then
   // narrow that fixed cohort rather than pulling rank 201 in, so the explorer
@@ -3748,13 +3767,16 @@ export async function getPlayerSkillPlays(
 
   const page = matches.slice(offset, offset + limit);
   const metadata = await readPlayerSkillPlayMetadata(db, page.map(({ play }) => play.beatmapId));
-  const items = page.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata));
+  const scoreDetails = await loadPlayerSkillScoreDetails(db, userId, page.map(({ play }) => play));
+  const items = page.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata, scoreDetails));
   return { items, total: matches.length, unfilteredTotal: cohort.length, limit, offset };
 }
 
 export type PlayerSkillPlaysSort = "rating" | "recent";
 
 export interface PlayerSkillPlaysOptions {
+  /** Exact retained play for a shared score link, outside the list window. */
+  scoreId?: number;
   limit?: number;
   offset?: number;
   /** "recent" reorders the same set by when each play was set, newest first. */
@@ -3896,6 +3918,7 @@ function buildPlayerSkillPlay(
   rating: number,
   keyCount: number,
   metadata: Map<number, PlayerSkillPlayMetadata>,
+  scoreDetails: Map<string, PlayerSkillScoreDetails>,
 ): PlayerSkillPlay {
   const map = metadata.get(play.beatmapId);
   const officialId = /^official:(\d+)$/.exec(play.identity ?? "");
@@ -3908,6 +3931,8 @@ function buildPlayerSkillPlay(
     ? storedRateMod
     : mods?.find((mod) => RATE_MOD_ACRONYMS.has(mod)) ?? null;
   return {
+    score: scoreDetails.get(play.identity) ?? null,
+    skillRatings: { ...play.values },
     beatmapId: play.beatmapId,
     beatmapsetId: map?.beatmapsetId ?? null,
     title: map?.title ?? "Unknown map",
@@ -4497,6 +4522,7 @@ export async function getPlayerSkillDanEvidence(
   // already ships; `clearsOffset` starts the page partway down the same
   // ordering, leaving every other field of the payload as the full read.
   options: {
+    scoreId?: number;
     maxClears?: number;
     clearsOffset?: number;
     includeRejected?: boolean;
@@ -4563,7 +4589,9 @@ export async function getPlayerSkillDanEvidence(
       return (right.chartDan ?? -1) - (left.chartDan ?? -1) || left.play.beatmapId - right.play.beatmapId;
     })
     : rejectedForSide;
-  const rejectedPage = rejectedForPage.slice(0, Math.max(1, Math.min(
+  const rejectedPage = (options.scoreId != null
+    ? rejectedForPage.filter((entry) => entry.play.identity === `official:${options.scoreId}`)
+    : rejectedForPage).slice(0, Math.max(1, Math.min(
     Math.floor(Number(options.rejectedLimit) || DAN_EVIDENCE_MAX_REJECTED),
     DAN_EVIDENCE_MAX_REJECTED,
   )));
@@ -4627,7 +4655,9 @@ export async function getPlayerSkillDanEvidence(
       return right.creditedDan - left.creditedDan || left.play.beatmapId - right.play.beatmapId;
     })
     : clears;
-  const topClears = clearsForPage.slice(clearsOffset, clearsOffset + maxClears);
+  const topClears = options.scoreId != null
+    ? clearsForPage.filter((clear) => clear.play.identity === `official:${options.scoreId}`)
+    : clearsForPage.slice(clearsOffset, clearsOffset + maxClears);
   // The best verified course pass is shown when it set the headline or sits
   // on the headline's own level: a pass on the Azimuth course is still the
   // fact players want to see when their average reads azimuth+ on its own,
@@ -4644,6 +4674,11 @@ export async function getPlayerSkillDanEvidence(
     ...buckets.flatMap((bucket) => windows.get(bucket.id)!.window.map(({ clear }) => clear.play.beatmapId)),
   ];
   const metadata = await readPlayerSkillPlayMetadata(db, evidenceBeatmapIds);
+  const scoreDetails = await loadPlayerSkillScoreDetails(db, userId, [
+    ...topClears.map((clear) => clear.play),
+    ...rejectedPage.map((entry) => entry.play),
+    ...buckets.flatMap((bucket) => windows.get(bucket.id)!.window.map(({ clear }) => clear.play)),
+  ]);
   const toEvidencePlay = (clear: DanClearEvidence, section: string = ALL_CLEARS_SECTION): PlayerSkillDanEvidencePlay => {
     // Prefer the verdict's own stored label, so the modal names the chart the
     // same way the maps page does; the verdict's tier and its rawDan are set
@@ -4657,7 +4692,7 @@ export async function getPlayerSkillDanEvidence(
       ? undefined : weightsBySection.get(section)?.get(clear);
     return {
       ...(weighted ? { repeatWeight: weighted.repeatWeight, averagingWeight: weighted.ignoredAsStray ? 0 : weighted.weight } : {}),
-      play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata),
+      play: buildPlayerSkillPlay(clear.play, Number(clear.play.values?.Overall ?? 0), keyCount, metadata, scoreDetails),
       chartDan: Math.round(clear.chartDan * 100) / 100,
       chartDanLabel,
       creditedDan: Math.round(clear.creditedDan * 100) / 100,
@@ -4713,7 +4748,7 @@ export async function getPlayerSkillDanEvidence(
           // no dan credit to print in that column, so its own skill rating is
           // the only number it can honestly carry.
           play: {
-            ...buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata),
+            ...buildPlayerSkillPlay(entry.play, Number(entry.play.values?.Overall ?? 0), keyCount, metadata, scoreDetails),
             ...(entry.reason === "chart_vibro" || entry.reason === "rate_vibro"
               ? { ratingExcluded: true, ratingExclusionReason: undefined,
                 vibroClearEvidence: undefined, vibroAdjustment: undefined } : {}),

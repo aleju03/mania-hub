@@ -1,7 +1,7 @@
 // Shared by the backend and the frontend (which reaches it through the #dan/*
 // alias); the vendored LeoBlack tree it drives lives in live-backend/vendor.
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
-import { prepareVibroChart, usesSectionVibro, type VibroAnalysis } from "./vibro-sections.js";
+import { analyzeVibroSections, prepareVibroChart, usesSectionVibro, type VibroAnalysis } from "./vibro-sections.js";
 import { detectLnVibro, detectRiceVibro } from "./vibro-detection.js";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator/types.js";
 import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
@@ -87,6 +87,8 @@ export interface ChartClassification {
 }
 
 export interface ClassifyChartInput extends DanEstimateInput {
+  /** Player-rating policy only. Ordinary chart estimates always rate all notes. */
+  adjustVibro?: boolean;
   /** Which half becomes the primary verdict; "auto" picks LN at the keymode's identity line (lnPrimaryMinRatioFor). */
   preferFamily?: "rc" | "ln" | "auto";
   /**
@@ -441,9 +443,9 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   const warnings: string[] = [];
   const danEligibility = inspectChartDanEligibility(map);
   const sectionVibro = usesSectionVibro(map);
-  const prepared = prepareVibroChart(osuText, rate, map);
-  const vibroAnalysis = sectionVibro ? prepared.analysis : undefined;
-  if (prepared.analysis.status === "adjusted") {
+  const prepared = input.adjustVibro ? prepareVibroChart(osuText, rate, map) : null;
+  const vibroAnalysis = sectionVibro ? prepared?.analysis ?? analyzeVibroSections(map, rate) : undefined;
+  if (prepared?.analysis.status === "adjusted") {
     osuText = prepared.osuText;
     map = { ...parseManiaBeatmap(osuText), totalLength: map.totalLength };
     warnings.push(`Adjusted rating: ${(prepared.analysis.excludedDurationMs / 1000).toFixed(1)}s of vibro excluded; remaining patterns rated at their original timestamps.`);

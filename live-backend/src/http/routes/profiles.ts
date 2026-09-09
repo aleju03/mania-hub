@@ -193,6 +193,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       // using these query controls and ordinary endpoint paging.
       const maxPerChart = clampInteger(url.searchParams.get("maxPerChart"), 0, 50, 0);
       const page = await getPlayerSkillPlays(ctx.db, userId, keyCount, axis, {
+        ...(url.searchParams.has("scoreId") ? { scoreId: clampInteger(url.searchParams.get("scoreId"), 1, Number.MAX_SAFE_INTEGER, 0) } : {}),
         limit: clampInteger(url.searchParams.get("limit"), 1, PLAYER_SKILL_PLAYS_MAX, 50),
         offset: clampInteger(url.searchParams.get("offset"), 0, 5_000, 0),
         sort: url.searchParams.get("sort") === "recent" ? "recent" : "rating",
@@ -252,6 +253,7 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         side,
         ctx.serveWriteQueue ?? ctx.queue,
         {
+          ...(url.searchParams.has("scoreId") ? { scoreId: clampInteger(url.searchParams.get("scoreId"), 1, Number.MAX_SAFE_INTEGER, 0) } : {}),
           ...(limit > 0 ? { maxClears: limit } : {}),
           clearsOffset: offset,
           ...(includeRejected ? { includeRejected } : {}),

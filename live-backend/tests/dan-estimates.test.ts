@@ -18,11 +18,11 @@ describe("normalizeDanEstimateItems", () => {
       await exec(db, `insert into dan_estimates
         (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, msd_json, computed_at, updated_at)
         values (?, 991, 120, 'ready', '8', '8', 8, 'dan', 0.9, '{"values":{"Overall":20}}', ?, ?)`,
-      [DAN_ESTIMATE_CACHE_VERSION - 1, now, now]);
+      [15, now, now]);
       const osu = { getBeatmapFile: vi.fn(async () => buildFourKeyBeatmapFile()) };
       const items = [{ beatmapId: 991, rate: 1.2 }];
       const batch = await getDanEstimateBatch(db, queue, osu as never, items, { computeMissing: true });
-      expect(batch.results["991:120"]).toMatchObject({ rawDan: 8, estimatorVersion: DAN_ESTIMATE_CACHE_VERSION - 1 });
+      expect(batch.results["991:120"]).toMatchObject({ rawDan: 8, estimatorVersion: 15 });
       expect(batch.pending).toEqual(["991:120"]);
       expect(osu.getBeatmapFile).not.toHaveBeenCalled();
       expect(await getRateAdjustedChartAnalysis(db, osu as never, 991, 1.2, queue)).toMatchObject({
@@ -57,7 +57,7 @@ describe("normalizeDanEstimateItems", () => {
           await exec(db, `insert into ${table}
             (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, star_rating, computed_at, updated_at${modColumn})
             values (?, 992, ?, 'ready', '8', 'old', ?, 'dan', 0.9, ?, ?, ?${modValue})`,
-          [DAN_ESTIMATE_CACHE_VERSION - 1, rate, table === "dan_estimates" ? 8 : 9, rate === 140 ? 1000 : 4.2, now, now]);
+          [15, rate, table === "dan_estimates" ? 8 : 9, rate === 140 ? 1000 : 4.2, now, now]);
         }
       }
       const pairs = [120, 130, 140].flatMap((ratePercent) => [

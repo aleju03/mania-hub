@@ -1,5 +1,5 @@
 import { computeMsdOnThread, MsdThreadUnavailableError } from "./msd-thread.js";
-import { prepareVibroChart, usesSectionVibro, VIBRO_SECTION_VERSION, type VibroAnalysis } from "./vibro-sections.js";
+import { analyzeVibroSections, prepareVibroChart, usesSectionVibro, VIBRO_SECTION_VERSION, type VibroAnalysis } from "./vibro-sections.js";
 import { parseManiaBeatmap } from "./beatmap-parser.js";
 
 // Thin backend facade over the vendored MinaCalc wasm harness
@@ -12,9 +12,13 @@ export interface MsdResult {
   values: Record<string, number>;
   vibroAnalysis?: VibroAnalysis;
   vibroVersion?: number;
+  /** False on full-chart estimates; true when applying player-rating policy. */
+  vibroAdjusted?: boolean;
 }
 
 export interface MsdOptions {
+  /** Explicitly opt player SSRs into localized vibro removal. */
+  adjustVibro?: boolean;
   rate?: number;
   keyCount?: number;
   scoreGoal?: number;
@@ -98,8 +102,9 @@ export async function computeMsd(
   if (keyCount != null && !isMsdSupportedKeyCount(keyCount)) return null;
 
   const map = parseManiaBeatmap(osuText);
-  const prepared = prepareVibroChart(osuText, options.rate ?? 1, map);
-  const msd = await computeMsdOnThread(prepared.osuText, options);
-  return msd ? { ...msd, vibroVersion: VIBRO_SECTION_VERSION,
-    ...(usesSectionVibro(map) ? { vibroAnalysis: prepared.analysis } : {}) } : null;
+  const prepared = options.adjustVibro ? prepareVibroChart(osuText, options.rate ?? 1, map) : null;
+  const analysis = usesSectionVibro(map) ? prepared?.analysis ?? analyzeVibroSections(map, options.rate ?? 1) : undefined;
+  const msd = await computeMsdOnThread(prepared?.osuText ?? osuText, options);
+  return msd ? { ...msd, vibroVersion: VIBRO_SECTION_VERSION, vibroAdjusted: options.adjustVibro === true,
+    ...(analysis ? { vibroAnalysis: analysis } : {}) } : null;
 }

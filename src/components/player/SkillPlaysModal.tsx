@@ -1,3 +1,4 @@
+import { skillPlaySharePath } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -319,6 +320,12 @@ export function SkillPlaysModal({
             rateMod: rateModFor(detail.play.rate, detail.play.rateMod),
             playedAt: detail.play.playedAt,
             source: detail.play.source,
+            mods: detail.play.mods ?? null,
+            daOd: detail.play.daOd ?? null,
+            scoreId: detail.play.scoreId,
+            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, axis),
+            score: detail.play.score,
+            skillRatings: detail.play.skillRatings,
             rating: detail.play.rating,
             ratingLabel: label,
             ratingColor: color,

@@ -11,8 +11,12 @@
 // came from the kNN can move, in both directions, and the ones that were pinned
 // at 15 gain their real level.
 // Earlier bumps: `git log -S DAN_ESTIMATE_CACHE_VERSION`.
-// v16 (current): localized 4K rice vibro is removed before rating, including
+// v16: localized 4K rice vibro is removed before rating, including
 // short fixed-pair/irregular jack windows and dense chord repetitions. Also
 // includes LeoBlack's low-band Azusa/Companella fusion. These changes ship as
 // one cache invalidation from production v15.
-export const DAN_ESTIMATE_CACHE_VERSION = 16;
+// v17: ordinary chart estimates rate every note. Localized vibro adjustment
+// is reserved for player ratings and cached as its own internal chart variant.
+// v18: refresh rate metadata and player variants for accompanied longjacks.
+// Ordinary full-chart difficulty calculations themselves remain unchanged.
+export const DAN_ESTIMATE_CACHE_VERSION = 18;

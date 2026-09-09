@@ -134,3 +134,20 @@ export function danScaleImage(value: number, context: DanScaleContext): string |
   if (context === "ln") return getDanImageSrc(label, "ln", 4);
   return getDanImageSrc(label, undefined, 4);
 }
+
+/** Which ladder a chart's verdict is read on, from its keymode and side. */
+export function danScaleContextFor(keyCount: number | null | undefined, family?: string | null): DanScaleContext {
+  const ln = family === "ln";
+  if (keyCount === 7) return ln ? "7k-ln" : "7k";
+  if (keyCount === 6) return ln ? "6k-ln" : "6k";
+  return ln ? "ln" : "reform";
+}
+
+// The first and last course of a ladder, as integer levels on the rawDan axis.
+// Bands center on these integers, with boundaries half a level either side.
+export function danLadderBounds(context: DanScaleContext): { min: number; max: number } {
+  if (context === "7k" || context === "7k-ln") return { min: 0, max: 14 };
+  if (context === "6k" || context === "6k-ln") return { min: 0, max: 14 };
+  if (context === "ln") return { min: 1, max: 17 };
+  return { min: 1, max: 20 };
+}

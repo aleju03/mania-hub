@@ -346,8 +346,8 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
     // stay eligible.
     const jackTagClause =
       recipe.pattern === "jack" ? " and (pattern_tags = '' or instr(pattern_tags, 'jack') > 0)" : "";
-    // Vibro charts are excluded outright: both difficulty axes are unreliable
-    // on them (same policy as the search dan filter).
+    // Auto-curated packs omit vibro charts because both difficulty axes are
+    // unreliable on them. Ordinary map search remains unrestricted.
     const rows = (await exec(
       db,
       `select beatmap_id, beatmapset_id, covers_json, title, search_text, ${metric} as metric, ${axisColumn} as axis_value

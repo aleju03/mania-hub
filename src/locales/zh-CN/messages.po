@@ -2406,8 +2406,8 @@ msgstr "正在加入…"
 
 #. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
 #: src/components/maps/MapDetailModal.tsx
-msgid "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
-msgstr ""
+#~ msgid "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
+#~ msgstr ""
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -3450,8 +3450,17 @@ msgid "chart dan"
 msgstr "谱面段位"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Chart Dan"
-msgstr "谱面段位"
+#~ msgid "Chart Dan"
+#~ msgstr "谱面段位"
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Chart estimate"
+msgstr "谱面估计"
+
+#. placeholder {0}: chart.toFixed(2)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Chart estimate: {0}"
+msgstr "谱面估计值：{0}"
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -4164,6 +4173,10 @@ msgstr "无法加载这些成绩。"
 msgid "Could not load this leaderboard."
 msgstr "无法加载该排行榜。"
 
+#: src/components/player/SharedSkillPlay.tsx
+msgid "Could not load this score."
+msgstr "无法加载此成绩。"
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Could not load your journal."
 #~ msgstr "无法加载你的日志。"
@@ -4505,10 +4518,13 @@ msgstr "创建卡组来整理你的卡片。"
 msgid "Created {0}"
 msgstr "已创建 {0}"
 
-#: src/components/player/DanEvidenceModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
 msgstr "计入"
+
+#: src/components/maps/DanProgressRail.tsx
+#~ msgid "Credited"
+#~ msgstr "已贡献"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -4635,7 +4651,7 @@ msgstr "段位准确率"
 msgid "Dan course"
 msgstr "段位类型"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/DanProgressRail.tsx
 msgid "Dan credit"
 msgstr "段位贡献"
 
@@ -4659,6 +4675,10 @@ msgstr "段位估计：{0}（{1}，置信度低）"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "段位估计：{0}（{1}）"
+
+#: src/components/maps/DanProgressRail.tsx
+#~ msgid "Dan ladder"
+#~ msgstr "段位阶梯"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
@@ -4898,6 +4918,7 @@ msgstr "已复制 Discord 视频链接"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/me/TrackingToasts.tsx
+#: src/components/player/SharedSkillPlay.tsx
 msgid "Dismiss"
 msgstr "关闭"
 
@@ -4997,6 +5018,10 @@ msgstr "完成"
 #: src/routes/farm-helper.tsx
 msgid "done with it"
 msgstr "刷够了"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Download"
+msgstr ""
 
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
@@ -6382,8 +6407,8 @@ msgid "Hiding {label}"
 msgstr "隐藏 {label}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
-msgstr "高准确率不会推翻原速下的 Vibro 排除判定。只有在原速无 Vibro、具备 PP 成绩依据的谱面上，符合条件的加速成绩才可获得密集和弦例外。"
+#~ msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
+#~ msgstr "高准确率不会推翻原速下的 Vibro 排除判定。只有在原速无 Vibro、具备 PP 成绩依据的谱面上，符合条件的加速成绩才可获得密集和弦例外。"
 
 #: src/routes/packs.tsx
 msgid "Higher or lower"
@@ -6954,9 +6979,14 @@ msgstr "判定图大小"
 msgid "Judgements"
 msgstr "判定"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Judgments"
 msgstr "判定"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Judgments unavailable"
+msgstr "判定数据不可用"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Jump to a page"
@@ -7579,6 +7609,10 @@ msgstr "正在加载成绩…"
 #~ msgid "Loading sets…"
 #~ msgstr "正在加载卡组…"
 
+#: src/components/player/SharedSkillPlay.tsx
+msgid "Loading shared score…"
+msgstr "正在加载分享的成绩…"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Loading skin…"
 msgstr "正在加载皮肤…"
@@ -7941,6 +7975,10 @@ msgstr "由 osu!mania 玩家自己做的谱面收藏册。"
 msgid "Map completion percentage."
 msgstr "谱面完成度百分比。"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Map info"
+msgstr "谱面信息"
+
 #: src/routes/maps.tsx
 msgid "Map search"
 msgstr "谱面搜索"
@@ -8042,6 +8080,10 @@ msgstr "正在为回放匹配对应谱面。"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "MAX"
 msgstr "MAX"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Max combo"
+msgstr "最大连击"
 
 #: src/routes/maps.tsx
 msgid "Max PP"
@@ -8337,6 +8379,10 @@ msgstr "{0} 下的 MSD"
 #: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "MSD 成绩"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD skill rating"
+msgstr "MSD 技能评级"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -8667,6 +8713,10 @@ msgstr "未找到收藏者。对方需要先打开一个卡包。"
 msgid "No countries found"
 msgstr "未找到国家/地区"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "No dan credit"
+msgstr "无段位贡献"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
 msgstr "隐藏段位"
@@ -8789,8 +8839,8 @@ msgid "No mods in top plays"
 msgstr "最佳成绩里没有 Mod"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "No MSD rating"
-msgstr "无 MSD 评级"
+#~ msgid "No MSD rating"
+#~ msgstr "无 MSD 评级"
 
 #: src/components/farm-helper/FarmersList.tsx
 msgid "No nearby players have farmed this yet."
@@ -10727,7 +10777,6 @@ msgstr "排行榜"
 msgid "Rarity"
 msgstr "稀有度"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rate"
 msgstr "速率"
@@ -11421,6 +11470,7 @@ msgstr "数据保留与控制"
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
+#: src/components/player/SharedSkillPlay.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
 #: src/routes/skins.tsx
@@ -11658,6 +11708,7 @@ msgstr "缩放皮肤的打击特效图。"
 msgid "score"
 msgstr "成绩"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/player/$username.tsx
@@ -12194,9 +12245,17 @@ msgstr "分享码"
 msgid "Share code copied"
 msgstr "分享码已复制"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Share map"
+msgstr "分享谱面"
+
 #: src/routes/dan-estimates.tsx
 msgid "Share of players at each dan level"
 msgstr "各段位玩家占比"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Share score"
+msgstr "分享成绩"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Share this replay"
@@ -12543,6 +12602,14 @@ msgstr "技能"
 #: src/routes/player/$username.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "这一天打过的谱面已排队等待技能分析。"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Skill breakdown"
+msgstr "技能明细"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Skill breakdown unavailable"
+msgstr "技能明细不可用"
 
 #: src/lib/signature-shared.ts
 msgid "Skill radar"
@@ -14494,6 +14561,10 @@ msgstr "这是个刚打出的成绩。osu! 需要一点时间才能下载回放�
 msgid "This score is for {0}, not mania."
 msgstr "这个成绩属于 {0}，不是 mania。"
 
+#: src/components/player/SharedSkillPlay.tsx
+msgid "This score is no longer in the player's rated history."
+msgstr "此成绩已不在该玩家的评级记录中。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "this skin"
 msgstr "这套皮肤"
@@ -15994,6 +16065,15 @@ msgstr "你的收藏已发生变化，没有送出任何卡片。请刷新后重
 #: src/routes/player/$username.tsx
 msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
 msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的成绩。"
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your credit"
+msgstr "你的计入值"
+
+#. placeholder {0}: landedValue.toFixed(2)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your credit: {0}"
+msgstr "你的计入值：{0}"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your description shows up here."

@@ -820,14 +820,16 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 // Vibro detectors arrive after the corpus was analyzed (v1: LN vibro; v2: rice
 // vibro for sustained jack hammering and 4K chord walls). Re-running every
 // analysis (a CHART_ANALYSIS_VERSION bump) would burn hours of CPU to refresh
-// one boolean. The v9 section policy also revisits flagged 4K rice charts,
-// restoring false positives and recomputing localized-section ratings and
-// existing rate columns. The sweep remains cached-file-only, with cooperative
-// yields between charts. No osu! API calls.
+// one boolean. The section policy also revisits flagged 4K rice charts and
+// existing rate columns. v10 restores full-chart ratings previously replaced
+// by player-adjusted values while retaining the detection metadata. The sweep
+// remains cached-file-only, with cooperative yields between charts.
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v9";
+// v11 also catches accompanied single-column longjacks. Revisit cached
+// classifications and rate metadata so player eligibility follows the fix.
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v11";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {
@@ -879,8 +881,8 @@ export async function recomputeVibroChunk(
       const analysis = analyzeVibroSections(map);
       if (vibro && !old?.vibro) flagged.push(beatmapId);
       if (options.dryRun) continue;
-      // Recompute affected numbers, not just the flag. Clear prior false
-      // positives too; the old add-only sweep could never restore a chart.
+      // Restore ordinary full-chart numbers for localized detections, including
+      // rows written with the former player adjustment. Also repair old flags.
       if (analysis.status === "adjusted" || old?.vibroAnalysis?.status === "adjusted" || old?.vibro !== vibro) {
         const star = Number((await exec(db, "select difficulty_rating from beatmaps where beatmap_id = ?", [beatmapId])).rows[0]?.difficulty_rating ?? 0);
         const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(msdChartErrorFallback);
@@ -901,7 +903,7 @@ export async function recomputeVibroChunk(
           '$.vibroAnalysis', json(?)) where beatmap_id = ? and analysis_version = ?`,
         [json(analysis), beatmapId, CHART_ANALYSIS_VERSION]);
       }
-      // Previously materialized rates must follow the same section policy.
+      // Previously materialized rates must also contain full-chart estimates.
       if (row.msd_dt_json != null && !await storeDtRateVerdict(db, beatmapId)) throw new Error(`Vibro DT repair failed for ${beatmapId}`);
       if (row.msd_ht_json != null && !await storeHtRateVerdict(db, beatmapId)) throw new Error(`Vibro HT repair failed for ${beatmapId}`);
       continue;

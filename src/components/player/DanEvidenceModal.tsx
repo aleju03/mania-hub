@@ -1,3 +1,4 @@
+import { skillPlaySharePath } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
@@ -538,15 +539,25 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             rateMod: rateModFor(detail.clear.play.rate, detail.clear.play.rateMod),
             playedAt: detail.clear.play.playedAt,
             source: detail.clear.play.source,
+            mods: detail.clear.play.mods ?? null,
+            daOd: detail.clear.play.daOd ?? null,
+            scoreId: detail.clear.play.scoreId,
+            sharePath: skillPlaySharePath(username, detail.clear.play.scoreId, detail.clear.play.keyCount, detail.clear.play.beatmapId, `dan:${side}`),
+            score: detail.clear.play.score,
+            skillRatings: detail.clear.play.skillRatings,
             rating: detail.clear.chartDan,
             ratingLabel: t`chart dan`,
             ratingColor: color,
-            ratingDisplayName: formatDan(detail.clear.chartDanLabel),
-            credit: {
-              rating: detail.clear.creditedDan,
-              displayName: formatDan(detail.clear.creditedDanLabel),
-              label: t`Credit`,
-              color,
+            // The chart's dan and the level this clear credited are the rail's
+            // two marks, so the score screen reads them as dan rather than as a
+            // generic rating pair.
+            dan: {
+              chartRating: detail.clear.chartDan,
+              chartLabel: detail.clear.chartDanLabel,
+              creditedRating: detail.clear.creditedDan,
+              creditedLabel: detail.clear.creditedDanLabel,
+              accuracy: detail.clear.clearAccuracy,
+              family: side,
             },
           }}
         />

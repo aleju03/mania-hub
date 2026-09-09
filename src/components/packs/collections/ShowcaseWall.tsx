@@ -50,6 +50,9 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
   }, [cards.length, updateScroll]);
   const visible = useMemo(() => start > 0 ? cards.slice(Math.max(0, start - 1), start + 4) : NO_CARDS, [cards, start]);
   const extra = useCardThumbnails(visible);
+  /* Three columns, measured against four on a full wall: four leaves more
+     holes at 7 columns, and spends about a tenth more rows on the same cards
+     everywhere, since dense flow already backfills what a 3 wide set leaves. */
   const span = cards.length === 1 ? "[--set-cols:1]" : cards.length === 2 ? "col-span-2 [--set-cols:2]" : "col-span-2 sm:col-span-3 [--set-cols:2] sm:[--set-cols:3]";
   const move = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth });
   return <div role="group" aria-label={set.name} className={`min-w-0 self-start rounded-xl bg-white/[0.025] outline outline-1 outline-white/10 outline-offset-4 ${span}`}>
@@ -59,14 +62,14 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
       {cards.map((card, index) => <div key={packCardKeyOf(card)} className="min-w-0 snap-start">
         {index >= Math.max(0, start - 1) && index < start + 4
           ? renderCard(card, `set:${set.id}:${packCardKeyOf(card)}`, start > 0 ? extra.onThumbnailError : onThumbnailError)
-          : <CollectionCardPlaceholder tier={card.tier} />}
+          : <CollectionCardPlaceholder tier={card.tier} showCaption={false} />}
       </div>)}
     </div>
-    <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
+    <div className="flex items-center gap-2 px-1 pt-1">
       <span className="min-w-0 flex-1 truncate text-[10px] text-osu-f1">{set.name}</span>
       {(!atStart || !atEnd) && <div className="flex shrink-0">
-        <button type="button" disabled={atStart} aria-label={t`Previous cards in ${set.name}`} onClick={() => move(-1)} className="flex size-11 cursor-pointer items-center justify-center rounded text-osu-f1 hover:bg-white/5 hover:text-white disabled:cursor-default disabled:opacity-25"><ChevronLeft size={12} /></button>
-        <button type="button" disabled={atEnd} aria-label={t`Next cards in ${set.name}`} onClick={() => move(1)} className="flex size-11 cursor-pointer items-center justify-center rounded text-osu-f1 hover:bg-white/5 hover:text-white disabled:cursor-default disabled:opacity-25"><ChevronRight size={12} /></button>
+        <button type="button" disabled={atStart} aria-label={t`Previous cards in ${set.name}`} onClick={() => move(-1)} className="relative flex size-8 cursor-pointer items-center justify-center rounded text-osu-f1 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] hover:bg-white/5 hover:text-white disabled:cursor-default disabled:opacity-25"><ChevronLeft size={12} /></button>
+        <button type="button" disabled={atEnd} aria-label={t`Next cards in ${set.name}`} onClick={() => move(1)} className="relative flex size-8 cursor-pointer items-center justify-center rounded text-osu-f1 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] hover:bg-white/5 hover:text-white disabled:cursor-default disabled:opacity-25"><ChevronRight size={12} /></button>
       </div>}
     </div>
   </div>;

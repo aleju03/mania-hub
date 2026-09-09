@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis } from "../../lib/live-backend";
+import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
 import { formatAccuracy, formatDuration, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
+import { getManiaJudgementCounts, getManiaGradeFromAccuracy } from "../../lib/score";
+import { GradeImg } from "../ui/GradeImg";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
-import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, getDanImageSrc } from "../../lib/dan-images";
+import { DanProgressRail } from "./DanProgressRail";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
+import type { AppLocale } from "../../lib/locale";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -68,6 +72,9 @@ function buildPreviewBeatmapset(entry: LiveMapSearchEntry, diffs: LiveMapSearchE
 // from a play row (the skill-plays modal) rather than from search. Rendered as
 // its own stat strip while that diff is the active one.
 export interface MapDetailPlayContext {
+  sharePath?: string | null;
+  score?: LivePlayerSkillScoreDetails | null;
+  skillRatings?: Record<string, number>;
   dan?: {
     chartRating: number | null;
     chartLabel: string | null;
@@ -75,6 +82,8 @@ export interface MapDetailPlayContext {
     creditedLabel?: string;
     accuracy: number | null;
     rejection?: ReactNode;
+    /** The ladder side the clear testifies for, which picks the rail's courses. */
+    family?: "rc" | "ln" | null;
   };
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
   vibroClearEvidence?: VibroClearEvidenceSummary;
@@ -103,85 +112,181 @@ export interface MapDetailPlayContext {
     label: string;
     color: string;
   };
+  // Every mod acronym the score carried, when the projection still knows them.
+  // Absent is not NoMod: an older retained play only remembers its speed mod,
+  // and `rateMod` alone stands in for the badge row then.
+  mods?: string[] | null;
+  /** The OD a Difficulty Adjust play set, for the DA badge's tail. */
+  daOd?: number | null;
+  // Historical identity; its namespace is ambiguous. Only score.scoreUrl
+  // provides a verified external link.
+  scoreId?: number | null;
 }
 
-export function PlayContextBlock({ play }: { play: MapDetailPlayContext }) {
+// The judgement palette, same values the replay OG card draws its chips with
+// (JUDGEMENT_COLORS in routes/api/og.ts).
+const JUDGEMENT_COLOR: Record<string, string> = {
+  MAX: "#ffcc22",
+  "300": "#66ccff",
+  "200": "#b3d944",
+  "100": "#88b300",
+  "50": "#ff8e5d",
+  Miss: "#ed7887",
+};
+
+// Keep all six cells in place, including zero counts and missing old data.
+function JudgementStrip({ statistics, locale }: { statistics: LivePlayerSkillScoreDetails["statistics"]; locale: AppLocale }) {
+  const { t } = useLingui();
+  const judgements = getManiaJudgementCounts(statistics ?? {});
+  const available = judgements.some(({ value }) => value > 0);
+  return (
+    <div className="grid grid-cols-6 gap-2 border-y border-white/5 py-4" aria-label={available ? t`Judgments` : t`Judgments unavailable`}>
+      {judgements.map(({ label, value }) => (
+        <div key={label} className="flex min-w-0 flex-col">
+          <span
+            className={`text-[15px] font-bold leading-none tabular-nums ${available && value > 0 ? "" : "text-osu-f1/40"}`}
+            style={available && value > 0 ? { color: JUDGEMENT_COLOR[label] } : undefined}
+          >
+            {available ? formatNumber(value, locale) : "—"}
+          </span>
+          <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/60">{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The DA badge's tail: "OD 9" rather than "OD 9.0" when the value is whole. */
+function formatDaOd(od: number): string {
+  return Number.isInteger(od) ? String(od) : od.toFixed(1);
+}
+
+// The score's mods, as the badge row of a score screen. A play whose full mod
+// list aged out still shows its speed mod, which is all the projection kept.
+function PlayModRow({ play }: { play: MapDetailPlayContext }) {
+  const mods = play.mods && play.mods.length > 0
+    ? [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))]
+    : play.rateMod
+      ? [play.rateMod.acronym]
+      : [];
+  if (mods.length === 0) return null;
+  return (
+    <span className="flex flex-wrap items-center justify-end gap-1">
+      {mods.map((mod) => (
+        <ModBadge
+          key={mod}
+          mod={mod}
+          size={0.75}
+          rate={play.rateMod?.acronym === mod ? play.rateMod.rate : undefined}
+          detail={mod === "DA" && typeof play.daOd === "number" ? `OD ${formatDaOd(play.daOd)}` : undefined}
+        />
+      ))}
+    </span>
+  );
+}
+
+// Everything displayed here arrives with the play list. Opening a score or
+// switching tabs must not fetch osu! or insert another row after first paint.
+export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; entry?: LiveMapSearchEntry | null }) {
   const { t } = useLingui();
   const locale = useLocale();
+  const noDans = useNoDans();
+  const score = play.score;
+  const grade = score?.rank || (play.accuracy != null ? getManiaGradeFromAccuracy(play.accuracy, play.mods ?? []) : null);
   const quality = play.vibroClearEvidence;
   const qualityRatio = quality?.max300Ratio == null ? "∞" : `${quality.ratioIsLowerBound ? "≥" : ""}${quality.max300Ratio.toFixed(2)}`;
   const scoreAccuracy = play.accuracy == null ? null : formatAccuracy(play.accuracy);
   const danAccuracy = play.dan?.accuracy == null ? null : formatAccuracy(play.dan.accuracy);
+  const showRail = !noDans && play.dan != null && play.dan.chartRating != null;
+  const rejected = play.dan?.rejection != null;
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
+    <div className="flex flex-col gap-2.5">
+      <div className={`grid gap-2.5 ${showRail || !play.dan ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
+        <div className="flex min-w-0 flex-col gap-5 rounded-xl bg-osu-b4/50 p-4 sm:p-5">
+          <div className="flex min-h-5 items-start justify-between gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
+            <PlayModRow play={play} />
+          </div>
+          <div className="flex flex-1 flex-wrap items-center justify-between gap-x-5 gap-y-3 py-1">
+            <div className="flex items-center gap-3">
+              {grade ? <GradeImg grade={grade} size={42} /> : null}
+              <div className="flex flex-col">
+                <span className="text-[36px] font-bold leading-none tabular-nums text-osu-l1">{scoreAccuracy ?? "—"}</span>
+                <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/70">{t`Accuracy`}</span>
+              </div>
+            </div>
+            {danAccuracy != null && danAccuracy !== scoreAccuracy && <Stat label={t`Dan accuracy`} value={danAccuracy} />}
+          </div>
+          <JudgementStrip statistics={score?.statistics ?? null} locale={locale} />
+          <div className={`grid gap-x-3 gap-y-4 ${play.pp != null ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
+            <Stat label={t`Max combo`} value={score?.maxCombo != null ? `${formatNumber(score.maxCombo, locale)}x` : "—"} />
+            <Stat label={t`Score`} value={score?.totalScore != null ? formatNumber(score.totalScore, locale) : "—"} />
+            {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
+            <div className="flex flex-col" title={play.playedAt ? formatTimeAgoTooltip(play.playedAt, locale) : undefined}>
+              <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{play.playedAt ? formatTimeAgo(play.playedAt, locale) : "—"}</span>
+              <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
+                {play.source === "top" ? t`profile top play` : t`tracked history`}
+              </span>
+            </div>
+          </div>
+        </div>
+        {showRail && play.dan ? (
+          <div className="rounded-xl bg-osu-b4/50 p-4">
+            <DanProgressRail
+              context={danScaleContextFor(entry?.keyCount, play.dan.family)}
+              chart={play.dan.chartRating}
+              chartLabel={play.dan.chartLabel}
+              landed={play.dan.creditedRating ?? null}
+              landedLabel={play.dan.creditedLabel ?? null}
+              rejected={rejected}
+            />
+          </div>
+        ) : !play.dan ? <PlaySkillRatings play={play} /> : null}
+      </div>
       {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
       {quality && <p className="text-[11px] text-[#ffcf70]"><Trans>Accepted clear on a vibro chart: {formatAccuracy(quality.stableAccuracy)} accuracy, {qualityRatio}:1 MAX:300, OD{quality.od}.</Trans></p>}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg bg-osu-b4/50 px-4 py-2.5">
-        {scoreAccuracy != null && <Stat label={t`Accuracy`} value={scoreAccuracy} />}
-        {play.pp != null && <Stat label={t`PP`} value={formatPP(play.pp)} />}
-        {play.rateMod && (
-          <div className="flex flex-col">
-            <ModBadge mod={play.rateMod.acronym} rate={play.rateMod.rate} size={0.7} />
-            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{t`Rate`}</span>
-          </div>
-        )}
-        {play.playedAt && (
-          <div className="flex flex-col" title={formatTimeAgoTooltip(play.playedAt, locale)}>
-            <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{formatTimeAgo(play.playedAt, locale)}</span>
-            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">
-              {play.source === "top" ? t`profile top play` : t`tracked history`}
-            </span>
-          </div>
-        )}
-        {play.dan ? (
-          <>
-            {play.dan.chartRating != null && <Stat label={t`Chart Dan`} value={`${play.dan.chartLabel ?? ""} (${play.dan.chartRating.toFixed(2)})`} />}
-            {danAccuracy != null && danAccuracy !== scoreAccuracy && <Stat label={t`Dan accuracy`} value={danAccuracy} />}
-            {play.dan.rejection ? (
-              <div className="flex max-w-md flex-col gap-1 text-osu-red-light">
-                <span className="text-sm font-semibold"><Trans>does not count</Trans></span>
-                <span className="text-xs">{play.dan.rejection}</span>
-              </div>
-            ) : play.dan.creditedRating != null ? (
-              <Stat label={t`Dan credit`} value={`${play.dan.creditedLabel ?? ""} (${play.dan.creditedRating.toFixed(2)})`} />
-            ) : null}
-          </>
-        ) : play.ratingExcluded ? (
-          <div className="flex flex-col text-osu-red-light">
-            {play.ratingExclusionReason === "msd_floor" ? (
-              <>
-                <span className="text-sm font-semibold"><Trans>Accuracy below skill rating range</Trans></span>
-                <span className="mt-1 text-[9px] uppercase tracking-wide"><Trans>No MSD rating</Trans></span>
-              </>
-            ) : (
-              <>
-                <span className="text-sm font-semibold"><Trans>Vibro detected</Trans></span>
-                <span className="mt-1 text-[9px] uppercase tracking-wide"><Trans>does not count</Trans></span>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.ratingColor }}>
-              <span className="text-[16px] font-bold tabular-nums">{play.rating.toFixed(2)}</span>
-              {play.ratingDisplayName ? (
-                <span className="text-[10px] font-bold">{play.ratingDisplayName}</span>
-              ) : null}
-            </span>
-            <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{play.ratingLabel} rating</span>
-          </div>
-        )}
-        {!play.dan && play.credit && (!play.ratingExcluded || play.ratingExclusionReason === "msd_floor") ? (
-          <div className="flex flex-col">
-            <span className="flex items-baseline gap-1.5 leading-none" style={{ color: play.credit.color }}>
-              <span className="text-[16px] font-bold tabular-nums">{play.credit.rating.toFixed(2)}</span>
-              <span className="text-[10px] font-bold">{play.credit.displayName}</span>
-            </span>
-            <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">{play.credit.label}</span>
-          </div>
-        ) : null}
+      {play.dan?.rejection ? (
+        <div className="flex flex-col gap-1 rounded-lg bg-osu-red/10 px-3.5 py-2.5 text-osu-red-light">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em]"><Trans>does not count</Trans></span>
+          <span className="text-xs leading-relaxed">{play.dan.rejection}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
+  const { t, i18n } = useLingui();
+  const skills = MSD_SKILLSETS.map((name) => ({ name, value: play.skillRatings?.[name] ?? 0 }))
+    .filter(({ value }) => Number.isFinite(value) && value >= 1)
+    .sort((a, b) => b.value - a.value);
+  const max = Math.max(1, ...skills.map(({ value }) => value));
+  return (
+    <div className="flex flex-col gap-4 rounded-xl bg-osu-b4/50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>MSD skill rating</Trans></div>
+          <div className="mt-1 text-xs text-osu-l2">{play.ratingLabel}</div>
+        </div>
+        {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: play.ratingColor }}>{play.rating.toFixed(2)}</span>}
       </div>
+      {play.ratingExcluded ? (
+        <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : t`Vibro detected`}</p>
+      ) : (
+        <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
+          {skills.map(({ name, value }) => (
+            <div key={name} className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2">
+              <span className="text-[10px] text-osu-l2">{i18n._(MSD_SKILLSET_LABELS[name])}</span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                <span className="block h-full rounded-full bg-osu-pink/70" style={{ width: `${value / max * 100}%` }} />
+              </span>
+              <span className="text-right text-[11px] font-semibold tabular-nums text-osu-l1">{value.toFixed(2)}</span>
+            </div>
+          ))}
+          {skills.length === 0 && <p className="text-[11px] text-osu-f1/70"><Trans>Skill breakdown unavailable</Trans></p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -270,6 +375,29 @@ function formatRate(rate: number): string {
   return `${rate.toFixed(2)}\u00d7`;
 }
 
+/** Round before splitting minutes so fractions never leak floating-point digits. */
+function formatSectionTime(milliseconds: number): string {
+  const centiseconds = Math.max(0, Math.round(milliseconds / 10));
+  const minutes = Math.floor(centiseconds / 6000);
+  const seconds = ((centiseconds % 6000) / 100).toFixed(2).padStart(5, "0");
+  return `${minutes}:${seconds}`;
+}
+
+/** Group nearby detections for readability only; never expand calculator exclusions. */
+function groupDetectedSections(sections: VibroAnalysis["sections"], rate: number) {
+  const ranges: Array<{ startTime: number; endTime: number }> = [];
+  const maxGapMs = 250 * rate;
+  for (const section of [...sections].sort((a, b) => a.startTime - b.startTime)) {
+    const previous = ranges.at(-1);
+    if (previous && section.startTime - previous.endTime <= maxGapMs) {
+      previous.endTime = Math.max(previous.endTime, section.endTime);
+    } else {
+      ranges.push({ startTime: section.startTime, endTime: section.endTime });
+    }
+  }
+  return ranges;
+}
+
 /** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
 function danSuffix(label: string): string {
   return label.match(/[+-]+$/)?.[0] ?? "";
@@ -280,7 +408,7 @@ function danSuffix(label: string): string {
 // Sorted by value with the top skillset tinted; no bars, the numbers carry it.
 // The skillset names are MinaCalc's 4K taxonomy for every keymode; the
 // ClustersBlock below is where charts speak their own keymode's language.
-function MsdBlock({
+export function MsdBlock({
   entry,
   msdLn,
   rate = 1,
@@ -305,8 +433,8 @@ function MsdBlock({
   // never landed the whole block falls back to 1.0x and says so.
   const rateAdjusted = rate !== 1 && rateMsd != null;
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
-  // chart has holds: they match what the skill-rating engine credits a play
-  // here. Bulk search rows carry them, so the final number shows from first
+  // chart has holds, using the release-weighting policy shared with player
+  // ratings. Bulk search rows carry them, so the final number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
   const msd = rateAdjusted ? rateMsd : msdLn ?? entry.msdLn ?? entry.msd ?? null;
@@ -324,6 +452,8 @@ function MsdBlock({
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
   const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
+  const sectionRate = rateAdjusted ? rate : 1;
+  const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
   const danImage = dan
     ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry.keyCount)
     : null;
@@ -337,21 +467,16 @@ function MsdBlock({
         )}
       </div>
       {vibroAnalysis && vibroAnalysis.status !== "clean" && (
-        <div className="text-[11px] text-[#ffcf70]">
-          {vibroAnalysis.status === "adjusted"
-            ? <Trans>Adjusted rating: {(vibroAnalysis.excludedDurationMs / 1000).toFixed(1)}s of vibro excluded. Remaining patterns rated.</Trans>
-            : <Trans>High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception.</Trans>}
-          <details className="mt-1 text-osu-f1/75">
-            <summary className="cursor-pointer"><Trans>Detected sections</Trans></summary>
-            <ul className="mt-1 flex flex-wrap gap-x-3">
-              {vibroAnalysis.sections.map((section) => (
-                <li key={section.startTime}>
-                  {formatDuration(section.startTime / 1000 / (rateAdjusted ? rate : 1))}–{formatDuration(section.endTime / 1000 / (rateAdjusted ? rate : 1))}
-                </li>
-              ))}
-            </ul>
-          </details>
-        </div>
+        <details className="text-[11px] text-osu-f1/75">
+          <summary className="w-fit cursor-pointer"><Trans>Detected sections</Trans></summary>
+          <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+            {displaySections.map((section) => (
+              <li key={section.startTime} className="whitespace-nowrap rounded bg-osu-b4/40 px-2 py-1 font-mono text-osu-f1/85 tabular-nums">
+                {formatSectionTime(section.startTime / sectionRate)}–{formatSectionTime(section.endTime / sectionRate)}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
         {/* Verdict group: dan badge + Overall, split from the skillset grid.
@@ -509,11 +634,16 @@ export function MapDetailModal({
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  // Opened from a play row, the score is what was clicked; the map's own detail
+  // waits behind the second tab. Opened from search there is no score at all,
+  // so the tab bar stays out and the map detail is the whole card.
+  const [tab, setTab] = useState<"score" | "map">("score");
 
   useEffect(() => {
     setSelectedDiffId(entry ? entry.beatmapId : null);
     setShareCopied(false);
-  }, [entry]);
+    setTab("score");
+  }, [entry?.beatmapId, play?.scoreId, play?.playedAt]);
 
   useEffect(() => {
     if (!entry) return;
@@ -534,6 +664,9 @@ export function MapDetailModal({
   const diffs = useMemo(() => (entry ? entryDiffs(entry) : []), [entry]);
   const mixedKeys = useMemo(() => new Set(diffs.map((diff) => diff.keyCount)).size > 1, [diffs]);
   const active = diffs.find((diff) => diff.beatmapId === selectedDiffId) ?? entry;
+  // The diff the score was set on, whatever the picker is pointing at: the
+  // score tab is about that one chart and nothing else in the set.
+  const playDiff = play ? diffs.find((diff) => diff.beatmapId === play.beatmapId) ?? entry : null;
   const realBpmStat = active ? realBpm(active.bpm, active.noteBpm) : null;
 
   // A tracked play can name a chart the catalog never indexed, and a stub built
@@ -692,7 +825,38 @@ export function MapDetailModal({
                 </div>
               </div>
 
+              {/* Two tabs only when a score opened the card: the play first,
+                  the map's own detail behind it. */}
+              {play ? (
+                <div role="tablist" className="flex shrink-0 items-center gap-1 border-b border-white/5 px-3.5 pt-2.5">
+                  {([["score", t`Score`], ["map", t`Map info`]] as const).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === id}
+                      onClick={() => {
+                        // The banner names the diff on screen, so returning to
+                        // the score returns the selection to the diff it was set on.
+                        if (id === "score") setSelectedDiffId(play.beatmapId);
+                        setShareCopied(false);
+                        setTab(id);
+                      }}
+                      className={`-mb-px cursor-pointer border-b-2 px-2.5 pb-2 text-[11.5px] font-bold uppercase tracking-[0.06em] transition-colors ${
+                        tab === id ? "border-osu-pink text-white" : "border-transparent text-osu-f1/70 hover:text-osu-l1"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
+                {play && tab === "score" ? (
+                  <PlayContextBlock play={play} entry={playDiff} />
+                ) : (
+                  <>
                 {/* Diff picker: every matching diff of the set, easiest first */}
                 {diffs.length > 1 && (
                   <div className="flex flex-wrap gap-1.5">
@@ -749,10 +913,6 @@ export function MapDetailModal({
                   </div>
                 ) : null}
 
-                {/* The play this modal was opened from, while its diff is the
-                    active one (it says nothing about the set's other diffs). */}
-                {play && play.beatmapId === active.beatmapId && <PlayContextBlock play={play} />}
-
                 {/* The catalog entry brought nothing back: say so where its
                     numbers would have been, the osu! link below still works. */}
                 {status === "missing" || status === "error" ? (
@@ -765,7 +925,7 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {!play?.dan && (active.msd ? (
+                {active.msd ? (
                   ratePending ? (
                     <PendingMsdBlock label={t`MSD at ${formatRate(playRate)}`} />
                   ) : (
@@ -778,7 +938,7 @@ export function MapDetailModal({
                       vibroAnalysis={playRate === 1 ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
                   )
-                ) : pending ? <PendingMsdBlock /> : null)}
+                ) : pending ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* The card's filled primary chip (the index's family verdict)
@@ -845,8 +1005,13 @@ export function MapDetailModal({
                 ) : pending ? (
                   <div className="h-[300px] shrink-0 rounded-lg bg-osu-b4/30" aria-hidden="true" />
                 ) : null}
+                  </>
+                )}
+              </div>
 
-                {/* Actions */}
+              {/* Actions: one footer under both tabs, so switching tabs never
+                  moves the links. */}
+              <div className="shrink-0 border-t border-white/5 p-3.5">
                 <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
                   <a
                     href={setKnown ? osuBeatmapUrl(active) : `https://osu.ppy.sh/beatmaps/${active.beatmapId}`}
@@ -887,16 +1052,19 @@ export function MapDetailModal({
                   ) : null}
                   <button
                     type="button"
+                    disabled={play != null && tab === "score" && !play.sharePath && !play.score?.scoreUrl}
+                    title={play != null && tab === "score" ? t`Share score` : t`Share map`}
                     onClick={() => {
-                      // /maps?map=<id> reopens this modal for whoever gets the
-                      // link; the selected diff rides along in the id.
-                      const url = `${window.location.origin}/maps?map=${active.beatmapId}`;
+                      const url = play && tab === "score"
+                        ? (play.sharePath ? `${window.location.origin}${play.sharePath}` : play.score?.scoreUrl)
+                        : `${window.location.origin}/maps?map=${active.beatmapId}`;
+                      if (!url) return;
                       void navigator.clipboard?.writeText(url).then(() => {
                         setShareCopied(true);
                         window.setTimeout(() => setShareCopied(false), 1600);
                       }).catch(() => {});
                     }}
-                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer sm:justify-start sm:px-3"
+                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 sm:justify-start sm:px-3"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />

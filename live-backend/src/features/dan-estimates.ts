@@ -21,7 +21,11 @@ export const MAX_RATE_PERCENT = 200;
 const MAX_PARSED_DAN_BEATMAPS = 100;
 // Enumerate version equality probes so SQLite can also seek beatmap_id in
 // the composite primary key. A version range scans the whole estimate cache.
-const SERVING_VERSIONS_SQL = Array.from({ length: DAN_ESTIMATE_CACHE_VERSION }, (_, index) => DAN_ESTIMATE_CACHE_VERSION - index).join(", ");
+const SERVING_VERSIONS = Array.from({ length: DAN_ESTIMATE_CACHE_VERSION }, (_, index) => DAN_ESTIMATE_CACHE_VERSION - index);
+// v16 mixed player-adjusted numbers into ordinary chart estimates. They are
+// valid as fallback player evidence, never as a public chart estimate.
+const SERVING_VERSIONS_SQL = SERVING_VERSIONS.filter((version) => version !== 16).join(", ");
+const VARIANT_SERVING_VERSIONS_SQL = SERVING_VERSIONS.join(", ");
 
 interface ParsedDanBeatmap {
   map: ManiaBeatmap;
@@ -54,14 +58,18 @@ export interface DanEstimateRequest {
 }
 
 /**
- * A lazer mod that rewrites the chart before it is played, so the verdict is
- * for the rewritten chart rather than the stored one. Only Invert today: a
- * play under it is rated against invertManiaOsuText's chart, and its verdict
- * lives in dan_mod_estimates, keyed once more by the mod, so it can never be
- * read as the chart's own.
+ * Internal chart transformations with isolated cache keys. Invert rebuilds
+ * the played notes; vibro-adjusted rates only the retained material for player
+ * dan credit. Both use the existing variant table (dan_mod_estimates), so
+ * neither can overwrite or be read as an ordinary full-chart estimate.
  */
-export type DanModVariant = "IN";
-export const INVERSE_MOD_VARIANT: DanModVariant = "IN";
+export type DanChartVariant = "IN" | "vibro-adjusted";
+export const INVERSE_MOD_VARIANT = "IN" satisfies DanChartVariant;
+export const VIBRO_ADJUSTED_VARIANT = "vibro-adjusted" satisfies DanChartVariant;
+
+function isDanChartVariant(value: unknown): value is DanChartVariant {
+  return value === INVERSE_MOD_VARIANT || value === VIBRO_ADJUSTED_VARIANT;
+}
 
 export interface NormalizedDanEstimateRequest {
   beatmapId: number;
@@ -69,7 +77,7 @@ export interface NormalizedDanEstimateRequest {
   ratePercent: number;
   key: string;
   /** Set only by internal callers (the clear rules, their job); never off the wire. */
-  modVariant?: DanModVariant;
+  modVariant?: DanChartVariant;
 }
 
 export interface DanEstimateBatchResponse {
@@ -109,7 +117,7 @@ export function normalizeDanEstimateItems(
     const rawRate = raw.rate == null ? 1 : Number(raw.rate);
     const safeRate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
     const ratePercent = Math.max(MIN_RATE_PERCENT, Math.min(MAX_RATE_PERCENT, Math.round(safeRate * 100)));
-    const modVariant = options.modVariants && raw.mod === INVERSE_MOD_VARIANT ? INVERSE_MOD_VARIANT : undefined;
+    const modVariant = options.modVariants && isDanChartVariant(raw.mod) ? raw.mod : undefined;
     const key = modVariant ? rateDanVerdictKey(beatmapId, ratePercent, modVariant) : responseKey(beatmapId, ratePercent);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -129,7 +137,7 @@ export function normalizeDanEstimateItems(
 function normalizeRateDanRequest(
   beatmapId: number,
   ratePercent: number,
-  modVariant?: DanModVariant,
+  modVariant?: DanChartVariant,
 ): NormalizedDanEstimateRequest | null {
   const [request] = normalizeDanEstimateItems(
     [{ beatmapId, rate: ratePercent / 100, ...(modVariant ? { mod: modVariant } : {}) }],
@@ -351,8 +359,8 @@ async function computeAndStoreDanEstimate(
  * A request without a variant is the stored chart itself. Null when the
  * rewrite cannot be built or the result does not parse.
  */
-function applyModVariant(parsed: ParsedDanBeatmap, modVariant: DanModVariant | undefined): ParsedDanBeatmap | null {
-  if (!modVariant) return parsed;
+function applyModVariant(parsed: ParsedDanBeatmap, modVariant: DanChartVariant | undefined): ParsedDanBeatmap | null {
+  if (modVariant !== INVERSE_MOD_VARIANT) return parsed;
   const osuText = invertManiaOsuText(parsed.osuText);
   if (!osuText) return null;
   try {
@@ -374,10 +382,12 @@ async function classifyAndStoreDanEstimate(
   // want the dan verdict alone and must not pay a MinaCalc run for it. When it
   // is asked for it leads, so the Companella pass reuses it instead of running
   // the calc a second time.
+  const adjustVibro = request.modVariant === VIBRO_ADJUSTED_VARIANT;
   const msd = options.withMsd
-    ? await computeMsd(osuText, { keyCount: map.keyCount, rate: request.rate }).catch(msdChartErrorFallback)
+    ? await computeMsd(osuText, { keyCount: map.keyCount, rate: request.rate, adjustVibro }).catch(msdChartErrorFallback)
     : null;
   const classification = await classifyChartWithCompanella(map, osuText, {
+    adjustVibro,
     starRating,
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
     version: map.version,
@@ -419,7 +429,7 @@ async function classifyAndStoreDanEstimate(
  * rules read. A mod variant's key carries the mod, so an Invert play on a
  * chart and a plain play on it at the same rate read different verdicts.
  */
-export function rateDanVerdictKey(beatmapId: number, ratePercent: number, modVariant?: DanModVariant): string {
+export function rateDanVerdictKey(beatmapId: number, ratePercent: number, modVariant?: DanChartVariant): string {
   return `${beatmapId}:${ratePercent}${modVariant ? `:${modVariant}` : ""}`;
 }
 
@@ -427,7 +437,7 @@ export function rateDanVerdictKey(beatmapId: number, ratePercent: number, modVar
 export interface RateDanVerdictPair {
   beatmapId: number;
   ratePercent: number;
-  modVariant?: DanModVariant;
+  modVariant?: DanChartVariant;
 }
 
 export interface StoredRateDanVerdict {
@@ -482,15 +492,26 @@ async function collectStoredRateDanVerdicts(
   verdicts: Map<string, StoredRateDanVerdict | null>,
 ): Promise<void> {
   const modColumn = table === "dan_mod_estimates" ? ", mod_variant" : "";
+  // This reader serves player evidence. Existing v16 verdicts stay valid for
+  // clean plays too; public chart reads reject them in readCachedDanEstimate.
+  const servingVersions = VARIANT_SERVING_VERSIONS_SQL;
   for (let offset = 0; offset < ids.length; offset += RATE_VERDICT_QUERY_CHUNK) {
     const chunk = ids.slice(offset, offset + RATE_VERDICT_QUERY_CHUNK);
     const placeholders = chunk.map(() => "?").join(", ");
+    // v16's ordinary cache already contains the adjusted player verdict.
+    // Keep that evidence while its isolated current-version entry is queued.
+    const legacyAdjusted = table === "dan_mod_estimates"
+      ? `union all select estimator_version, beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name,
+           '${VIBRO_ADJUSTED_VARIANT}' as mod_variant from dan_estimates
+         where estimator_version = 16 and beatmap_id in (${placeholders})`
+      : "";
     const rows = (await exec(
       db,
       `select estimator_version, beatmap_id, rate_percent, status, raw_dan, family, star_rating, display_name${modColumn} from ${table}
-       where estimator_version in (${SERVING_VERSIONS_SQL}) and beatmap_id in (${placeholders})
+       where estimator_version in (${servingVersions}) and beatmap_id in (${placeholders})
+       ${legacyAdjusted}
        order by estimator_version desc`,
-      chunk,
+      table === "dan_mod_estimates" ? [...chunk, ...chunk] : chunk,
     )).rows;
     // Changed or poisoned star ratings still invalidate a row, even when its
     // estimator version is otherwise eligible for a serving fallback.
@@ -505,7 +526,8 @@ async function collectStoredRateDanVerdicts(
     }
     const seen = new Set<string>();
     for (const row of rows) {
-      const modVariant = row.mod_variant === INVERSE_MOD_VARIANT ? INVERSE_MOD_VARIANT : undefined;
+      if (table === "dan_mod_estimates" && !isDanChartVariant(row.mod_variant)) continue;
+      const modVariant = isDanChartVariant(row.mod_variant) ? row.mod_variant : undefined;
       const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent), modVariant);
       if (!wanted.has(key) || seen.has(key)) continue;
       // A newer terminal or invalid result must never resurrect an older clear.
@@ -547,7 +569,7 @@ export async function computeAndStoreRateDanVerdictFromText(
   beatmapId: number,
   ratePercent: number,
   osuText: string,
-  modVariant?: DanModVariant,
+  modVariant?: DanChartVariant,
 ): Promise<LeanDanEstimate | null> {
   const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
   if (!request) return null;
@@ -574,7 +596,7 @@ export async function enqueueRateDanEstimate(
   queue: JobQueue,
   beatmapId: number,
   ratePercent: number,
-  modVariant?: DanModVariant,
+  modVariant?: DanChartVariant,
 ): Promise<void> {
   const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
   if (!request) return;
@@ -621,7 +643,8 @@ async function readCachedDanEstimate(
   options: { allowPrevious?: boolean } = {},
 ): Promise<CachedDanEstimate> {
   const { table, keyColumns, keyValues } = danEstimateTable(request);
-  const versionFilter = options.allowPrevious ? `estimator_version in (${SERVING_VERSIONS_SQL})` : "estimator_version = ?";
+  const servingVersions = request.modVariant ? VARIANT_SERVING_VERSIONS_SQL : SERVING_VERSIONS_SQL;
+  const versionFilter = options.allowPrevious ? `estimator_version in (${servingVersions})` : "estimator_version = ?";
   const row = (await exec(
     db,
     `select *
@@ -816,7 +839,7 @@ async function readBeatmapStarRating(db: Db, beatmapId: number): Promise<number 
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-function danEstimateJobKey(beatmapId: number, ratePercent: number, modVariant?: DanModVariant): string {
+function danEstimateJobKey(beatmapId: number, ratePercent: number, modVariant?: DanChartVariant): string {
   return `dan:${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}:r${ratePercent}${modVariant ? `:${modVariant}` : ""}`;
 }
 

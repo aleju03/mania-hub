@@ -4,9 +4,44 @@ import { classifyChart, detectRateVibro, detectRiceVibro } from "../src/dan/char
 import { analyzeVibroSections, conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { buildVibroOsu, localizedVibroFixture, vibroCharts, vibroFixture } from "./vibro-fixtures.js";
 
-const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854];
+const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854, 1545540];
 
 describe("section-based vibro ratings", () => {
+  it("finds both accompanied single-column runs in the reported anonymous chart", () => {
+    const map = parseManiaBeatmap(vibroFixture(1545540));
+    const analysis = analyzeVibroSections(map);
+    expect(analysis.sections).toEqual(expect.arrayContaining([
+      { startTime: 21_257, endTime: 23_696, reasons: ["isolated_jack"] },
+      { startTime: 26_293, endTime: 28_811, reasons: ["isolated_jack"] },
+    ]));
+    expect(analysis.status).toBe("excluded");
+    expect(analysis.noteShare).toBeGreaterThan(0.25);
+    expect(analysis.timeShare).toBeGreaterThan(0.15);
+    expect(analyzeVibroSections({ ...map, title: "unrelated", creator: "unrelated", od: 3 })).toEqual(analysis);
+  });
+
+  it("distinguishes an accompanied sustained jack from short, slow and chord-dense patterns", () => {
+    const build = (hits: number, gap: number, dense = false) => {
+      const notes: [number, number, number][] = Array.from({ length: 800 }, (_, row) => [1000 + row * 100, row % 4, -1]);
+      for (let row = 0; row < hits; row++) {
+        const time = 90_000 + row * gap;
+        notes.push([time, 0, -1]);
+        if (dense || row % 2 === 0) notes.push([time, 1 + row % 3, -1]);
+        if (dense || row % 6 === 0) notes.push([time, 1 + (row + 1) % 3, -1]);
+      }
+      return parseManiaBeatmap(buildVibroOsu(notes));
+    };
+    const result = analyzeVibroSections(build(32, 79));
+    expect(result.status).toBe("adjusted");
+    expect(result.sections).toContainEqual({ startTime: 90_000, endTime: 92_449, reasons: ["isolated_jack"] });
+    expect(analyzeVibroSections(build(12, 79)).status).toBe("clean");
+    expect(analyzeVibroSections(build(32, 100)).status).toBe("clean");
+    expect(analyzeVibroSections(build(32, 79, true)).status).toBe("clean");
+    // The speed decision uses played time, including slowed and baked edits.
+    expect(analyzeVibroSections(build(32, 79), 0.75).status).toBe("clean");
+    expect(analyzeVibroSections(build(32, 100), 1.5).status).toBe("adjusted");
+  });
+
   it.each(vibroCharts.filter((chart) => !VIBRO_CONTROLS.includes(chart.id)))("restores $source", ({ id }) => {
     const map = parseManiaBeatmap(vibroFixture(id));
     const result = analyzeVibroSections(map, id === 1612787 ? 1.5 : 1);
@@ -263,7 +298,7 @@ describe("section-based vibro ratings", () => {
     expect(detectRiceVibro(baked)).toBe(detectRateVibro(map, rate));
   });
 
-  it("re-rates the remaining notes without stitching time or changing the source", () => {
+  it("adjusts only player verdicts while ordinary chart estimates retain every note", () => {
     const text = localizedVibroFixture();
     const map = parseManiaBeatmap(text);
     const prepared = prepareVibroChart(text);
@@ -271,8 +306,12 @@ describe("section-based vibro ratings", () => {
     const filtered = parseManiaBeatmap(prepared.osuText);
     expect(filtered.notes.length).toBe(prepared.analysis.remainingNotes);
     expect(filtered.notes.at(-1)?.time).toBe(map.notes.at(-1)?.time);
-    const verdict = classifyChart(map, text);
+    const ordinary = classifyChart(map, text);
+    const verdict = classifyChart(map, text, { adjustVibro: true });
     const remainingVerdict = classifyChart(filtered, prepared.osuText);
+    expect(ordinary.primary?.rawDan).toBeGreaterThan(verdict.primary!.rawDan);
+    expect(ordinary.vibroAnalysis).toEqual(verdict.vibroAnalysis);
+    expect(ordinary.warnings.some((warning) => warning.startsWith("Adjusted rating:"))).toBe(false);
     expect(verdict.vibro).toBe(false);
     expect(verdict.primary?.rawDan).toBe(remainingVerdict.primary?.rawDan);
     expect(verdict.warnings.some((warning) => warning.startsWith("Adjusted rating:"))).toBe(true);

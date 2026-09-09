@@ -1,6 +1,6 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 
-export const VIBRO_SECTION_VERSION = 1;
+export const VIBRO_SECTION_VERSION = 2;
 
 export type VibroReason =
   | "repeated_wall"
@@ -23,6 +23,7 @@ export interface VibroSection {
 
 export interface VibroAnalysis {
   version: number;
+  /** Player-rating eligibility; informational on ordinary full-chart estimates. */
   status: "clean" | "adjusted" | "excluded";
   sections: VibroSection[];
   excludedDurationMs: number;
@@ -234,8 +235,10 @@ function scanFixedFingerWindows(scan: VibroScan): void {
 
 function scanIsolatedJacks(scan: VibroScan): void {
   const { times, rows, prefixNotes, rate, intervals } = scan;
-  // A long single-finger run is only decisive when it dominates its local
-  // note content. A busy finger underneath changing chords is ordinary CJ.
+  // Sparse accompaniment must not hide a sustained single-finger run. Long
+  // runs may use a majority of heads when that finger also occupies nearly
+  // every row; short bursts still need the stronger 65% dominance/coverage
+  // policy. Dense changing chords around a busy finger do not meet this rule.
   const bursts: VibroSection[] = [];
   let isolatedBurstNotes = 0;
   for (let column = 0; column < 4; column++) {
@@ -248,11 +251,16 @@ function scanIsolatedJacks(scan: VibroScan): void {
         const first = indices[start];
         const last = indices[i - 1];
         const localNotes = prefixNotes[last + 1] - prefixNotes[first];
-        if (count / localNotes >= 0.65) {
+        const dominant = count / localNotes >= 0.65;
+        const longRun = count >= 25 && (times[last] - times[first]) / (count - 1) <= 92 * rate;
+        const accompaniedLongJack = longRun && count / localNotes > 0.5 && count / (last - first + 1) >= 0.9;
+        if (dominant || accompaniedLongJack) {
           const section: VibroSection = { startTime: times[first], endTime: times[last], reasons: ["isolated_jack"] };
-          bursts.push(section);
-          isolatedBurstNotes += count;
-          if (count >= 25 && (times[last] - times[first]) / (count - 1) <= 92 * rate) intervals.push(section);
+          if (dominant) {
+            bursts.push(section);
+            isolatedBurstNotes += count;
+          }
+          if (longRun) intervals.push(section);
         }
       }
       start = i;

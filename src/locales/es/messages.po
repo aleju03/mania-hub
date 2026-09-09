@@ -2397,8 +2397,8 @@ msgstr "Agregándote…"
 
 #. placeholder {0}: (vibroAnalysis.excludedDurationMs / 1000).toFixed(1)
 #: src/components/maps/MapDetailModal.tsx
-msgid "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
-msgstr ""
+#~ msgid "Adjusted rating: {0}s of vibro excluded. Remaining patterns rated."
+#~ msgstr ""
 
 #: src/components/packs/PackPulse.tsx
 msgid "Admin: flood the rail with fake pulls to preview the animation"
@@ -3441,8 +3441,17 @@ msgid "chart dan"
 msgstr "dan del chart"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "Chart Dan"
-msgstr "Dan del mapa"
+#~ msgid "Chart Dan"
+#~ msgstr "Dan del mapa"
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Chart estimate"
+msgstr "Estimación del mapa"
+
+#. placeholder {0}: chart.toFixed(2)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Chart estimate: {0}"
+msgstr "Estimación del mapa: {0}"
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -4155,6 +4164,10 @@ msgstr "No se pudieron cargar estas plays."
 msgid "Could not load this leaderboard."
 msgstr "No se pudo cargar este ranking."
 
+#: src/components/player/SharedSkillPlay.tsx
+msgid "Could not load this score."
+msgstr "No se pudo cargar esta puntuación."
+
 #: src/components/packs/CollectorJournal.tsx
 #~ msgid "Could not load your journal."
 #~ msgstr "No se pudo cargar tu diario."
@@ -4496,10 +4509,13 @@ msgstr "Crea un conjunto para organizar tus cartas."
 msgid "Created {0}"
 msgstr "Creado {0}"
 
-#: src/components/player/DanEvidenceModal.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
 msgstr "Acredita"
+
+#: src/components/maps/DanProgressRail.tsx
+#~ msgid "Credited"
+#~ msgstr "Acreditado"
 
 #: src/components/communities/field-options.tsx
 msgid "Croatian"
@@ -4626,7 +4642,7 @@ msgstr "Precisión para dan"
 msgid "Dan course"
 msgstr "Tipo de dan"
 
-#: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/DanProgressRail.tsx
 msgid "Dan credit"
 msgstr "Crédito de dan"
 
@@ -4650,6 +4666,10 @@ msgstr "Estimación de dan: {0} ({1}, confianza baja)"
 #: src/components/ui/DanBadge.tsx
 msgid "Dan estimate: {0} ({1})"
 msgstr "Estimación de dan: {0} ({1})"
+
+#: src/components/maps/DanProgressRail.tsx
+#~ msgid "Dan ladder"
+#~ msgstr "Escalera de dan"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
@@ -4889,6 +4909,7 @@ msgstr "URL del video de Discord copiada"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/me/TrackingToasts.tsx
+#: src/components/player/SharedSkillPlay.tsx
 msgid "Dismiss"
 msgstr "Descartar"
 
@@ -4988,6 +5009,10 @@ msgstr "Listo"
 #: src/routes/farm-helper.tsx
 msgid "done with it"
 msgstr "suficiente"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Download"
+msgstr ""
 
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
@@ -6373,8 +6398,8 @@ msgid "Hiding {label}"
 msgstr "Ocultando {label}"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
-msgstr "Una precisión alta nunca anula la exclusión de un mapa que ya es vibro a velocidad normal. Solo las jugadas más rápidas que cumplan los requisitos, en mapas limpios y con evidencia de PP, pueden recibir la excepción por acordes densos."
+#~ msgid "High accuracy never overrides a base-vibro exclusion. Only qualifying faster plays on clean charts with PP evidence may receive the dense-chord exception."
+#~ msgstr "Una precisión alta nunca anula la exclusión de un mapa que ya es vibro a velocidad normal. Solo las jugadas más rápidas que cumplan los requisitos, en mapas limpios y con evidencia de PP, pueden recibir la excepción por acordes densos."
 
 #: src/routes/packs.tsx
 msgid "Higher or lower"
@@ -6945,9 +6970,14 @@ msgstr "Tamaño de los juicios"
 msgid "Judgements"
 msgstr "Juicios"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Judgments"
 msgstr "Juicios"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Judgments unavailable"
+msgstr "Juicios no disponibles"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Jump to a page"
@@ -7570,6 +7600,10 @@ msgstr "Cargando scores..."
 #~ msgid "Loading sets…"
 #~ msgstr "Cargando sets…"
 
+#: src/components/player/SharedSkillPlay.tsx
+msgid "Loading shared score…"
+msgstr "Cargando puntuación compartida…"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Loading skin…"
 msgstr "Cargando skin…"
@@ -7932,6 +7966,10 @@ msgstr "Colecciones de mapas hechas por jugadores de osu!mania."
 msgid "Map completion percentage."
 msgstr "Porcentaje de completado del mapa."
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Map info"
+msgstr "Info del mapa"
+
 #: src/routes/maps.tsx
 msgid "Map search"
 msgstr "Búsqueda de mapas"
@@ -8033,6 +8071,10 @@ msgstr "Asociando el replay a su beatmap."
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "MAX"
 msgstr "MAX"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Max combo"
+msgstr "Combo máx."
 
 #: src/routes/maps.tsx
 msgid "Max PP"
@@ -8328,6 +8370,10 @@ msgstr "MSD a {0}"
 #: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "Jugadas de MSD"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "MSD skill rating"
+msgstr "Valoración de habilidad MSD"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -8658,6 +8704,10 @@ msgstr "No se encontró al coleccionista. Primero debe abrir un pack."
 msgid "No countries found"
 msgstr "No se encontraron países"
 
+#: src/components/maps/DanProgressRail.tsx
+msgid "No dan credit"
+msgstr "Sin crédito de dan"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "No Dans"
 msgstr "No Dans"
@@ -8780,8 +8830,8 @@ msgid "No mods in top plays"
 msgstr "Sin mods en top plays"
 
 #: src/components/maps/MapDetailModal.tsx
-msgid "No MSD rating"
-msgstr "Sin valoración MSD"
+#~ msgid "No MSD rating"
+#~ msgstr "Sin valoración MSD"
 
 #: src/components/farm-helper/FarmersList.tsx
 msgid "No nearby players have farmed this yet."
@@ -10718,7 +10768,6 @@ msgstr "Rankings"
 msgid "Rarity"
 msgstr "Rareza"
 
-#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rate"
 msgstr "Velocidad"
@@ -11412,6 +11461,7 @@ msgstr "Retención y controles"
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
+#: src/components/player/SharedSkillPlay.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
 #: src/routes/skins.tsx
@@ -11649,6 +11699,7 @@ msgstr "Escala el arte de hitbursts de la skin."
 msgid "score"
 msgstr "score"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/player/$username.tsx
@@ -12185,9 +12236,17 @@ msgstr "Código para compartir"
 msgid "Share code copied"
 msgstr "Código copiado"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Share map"
+msgstr "Compartir mapa"
+
 #: src/routes/dan-estimates.tsx
 msgid "Share of players at each dan level"
 msgstr "Porcentaje de jugadores en cada nivel de dan"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Share score"
+msgstr "Compartir puntuación"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Share this replay"
@@ -12534,6 +12593,14 @@ msgstr "Habilidad"
 #: src/routes/player/$username.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "El análisis de habilidad está en cola para los mapas jugados este día."
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Skill breakdown"
+msgstr "Desglose de habilidades"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Skill breakdown unavailable"
+msgstr "Desglose de habilidades no disponible"
 
 #: src/lib/signature-shared.ts
 msgid "Skill radar"
@@ -14485,6 +14552,10 @@ msgstr "Este score es recién sacado. osu! tarda un momento antes de permitir de
 msgid "This score is for {0}, not mania."
 msgstr "Este score es de {0}, no de mania."
 
+#: src/components/player/SharedSkillPlay.tsx
+msgid "This score is no longer in the player's rated history."
+msgstr "Esta puntuación ya no está en el historial de jugadas valoradas del jugador."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "this skin"
 msgstr "esta skin"
@@ -15985,6 +16056,15 @@ msgstr "Tu colección cambió. No se envió nada. Actualiza e inténtalo de nuev
 #: src/routes/player/$username.tsx
 msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
 msgstr "Tu país aún no está en el tracker, así que no hay nada contra lo que registrar tus plays."
+
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your credit"
+msgstr "Tu crédito"
+
+#. placeholder {0}: landedValue.toFixed(2)
+#: src/components/maps/DanProgressRail.tsx
+msgid "Your credit: {0}"
+msgstr "Tu crédito: {0}"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your description shows up here."
