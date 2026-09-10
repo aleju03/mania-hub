@@ -453,8 +453,11 @@ async function buildVersions(
   const topScoresStamp = String(userRow?.top_scores_refreshed_at ?? "");
   // The projected profile also covers users with stored top scores but no
   // baked snapshot, and folds in live top plays before hashing their content.
+  /* "m2" since the card front got its rounded corners: the salt is the only
+     way a change in how a type is drawn reaches renders whose data has not
+     moved since. Bump it again for the next one. */
   const maniacard = hashVersion([
-    "m", userRow?.username, profile,
+    "m2", userRow?.username, profile,
     styleStamp(styles, "maniacard"),
   ]);
   const skillsStamp = skillsRow?.computed_at ?? skillsRow?.updated_at;

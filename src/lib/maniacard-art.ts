@@ -352,6 +352,11 @@ export interface ManiaTierCardArt {
   motif?: CardMotif | null;
   motifUrl?: string | null;
   motifAspect?: number;
+  /* Rounds the card's own corners, leaving them transparent. Off by default:
+     an embed that sits on an unknown background wants the full rectangle, and
+     only the callers that know what is behind the card ask for it. The value
+     matches the 3D card's height * 0.055. */
+  rounded?: boolean;
 }
 
 export const MANIACARD_W = 720;
@@ -382,6 +387,7 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
       ? motifSpriteElements(art.motif, art.motifUrl, art.motifAspect ?? 1, CARD_W, CARD_H)
       : null;
   const textShadow = "0 2px 5px rgba(0,0,0,0.55)";
+  const cornerRadius = art.rounded ? Math.round(CARD_H * 0.055) : 0;
 
   return h(
       "div",
@@ -393,6 +399,7 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
           position: "relative",
           display: "flex",
           overflow: "hidden",
+          borderRadius: `${cornerRadius}px`,
           background: cosmic ? "#000000" : style.badgeGradient,
           fontFamily: '"Torus OG"',
           color: "#ffffff",

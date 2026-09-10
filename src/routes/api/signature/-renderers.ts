@@ -362,6 +362,10 @@ async function renderManiacardFront(
         tier,
         skills,
         laurelUrl,
+        // The profile page it is pasted into shows the card against its own
+        // background, so square corners read as a screenshot of the card
+        // rather than the card.
+        rounded: true,
       }),
       { width: MANIACARD_W, height: MANIACARD_H, fonts: ogFontList(regularFont, heavyFont) },
     );
