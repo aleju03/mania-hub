@@ -4,7 +4,7 @@ import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logInfo, logWarn, errorContext } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { getDisplayedTotalScore, getScoreTimestamp, nowIso } from "../shared/score.js";
+import { getDisplayedTotalScore, getScoreTimestamp, isLazerScore, nowIso } from "../shared/score.js";
 import { clearSupersededPlayDetails } from "./activity.js";
 
 // ── One-time archived-mods backfill ──────────────────────────────────────────
@@ -404,9 +404,10 @@ export const ACTIVITY_PLAY_DETAIL_SET_SQL = `best_max_combo = coalesce(best_max_
          best_has_replay = coalesce(best_has_replay, ?),
          best_solo_score_id = coalesce(best_solo_score_id, ?),
          best_total_score = coalesce(best_total_score, ?),
-         best_played_at = coalesce(best_played_at, ?)`;
+         best_played_at = coalesce(best_played_at, ?),
+         best_is_lazer = coalesce(best_is_lazer, ?)`;
 
-export type ActivityPlayDetailArgs = [number | null, number | null, number | null, number | null, string | null];
+export type ActivityPlayDetailArgs = [number | null, number | null, number | null, number | null, string | null, number];
 
 export function readPlayDetailArgs(score: Record<string, unknown>): ActivityPlayDetailArgs {
   const maxCombo = Number(score.max_combo);
@@ -421,6 +422,7 @@ export function readPlayDetailArgs(score: Record<string, unknown>): ActivityPlay
     // matches the one a window row shows.
     getDisplayedTotalScore(score as unknown as Parameters<typeof getDisplayedTotalScore>[0]),
     playedAt === "" ? null : playedAt,
+    isLazerScore(score as unknown as Parameters<typeof isLazerScore>[0]) ? 1 : 0,
   ];
 }
 

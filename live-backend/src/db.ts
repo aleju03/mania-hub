@@ -1357,6 +1357,11 @@ async function migrateActivityMapsBestPayload(db: Db): Promise<void> {
   if (!columns.includes("best_statistics_json")) {
     await db.execute("alter table player_activity_maps add column best_statistics_json text");
   }
+  // The solo id alone cannot distinguish stable graveyard scores from lazer.
+  // Keep the scoring provenance alongside the judgments after raw retention.
+  if (!columns.includes("best_is_lazer")) {
+    await db.execute("alter table player_activity_maps add column best_is_lazer integer");
+  }
   /* What a Best Performance row and its details card show beyond pp and
      accuracy. The osu! window carries these on its own scores, but a play
      below that window has nothing else holding them: score_events keeps the

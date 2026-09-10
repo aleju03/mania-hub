@@ -12,7 +12,7 @@ import { enqueueChartAnalysisIfNeeded, enqueueMissingChartAnalyses } from "./cha
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import { activityMapBestRowOrder } from "./keymode-pp.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
-import { getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreTimestamp, nowIso, scoreHasReplay } from "../shared/score.js";
+import { getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { errorContext, logWarn } from "../logger.js";
 
@@ -647,8 +647,8 @@ async function upsertActivityMap(
   await exec(
     db,
     `insert into player_activity_maps
-       (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, best_mods_json, best_statistics_json, best_max_combo, best_has_replay, best_solo_score_id, best_total_score, best_played_at, first_played_at, last_played_at, updated_at)
-     select ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${guard}
+       (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, best_mods_json, best_statistics_json, best_is_lazer, best_max_combo, best_has_replay, best_solo_score_id, best_total_score, best_played_at, first_played_at, last_played_at, updated_at)
+     select ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${guard}
      on conflict(country, user_id, day, beatmap_id) do update set
        play_count = player_activity_maps.play_count + 1,
        best_score_id = case when ${activityMapBetterSql()} then excluded.best_score_id else player_activity_maps.best_score_id end,
@@ -657,6 +657,7 @@ async function upsertActivityMap(
        best_rank = case when ${activityMapBetterSql()} then excluded.best_rank else player_activity_maps.best_rank end,
        best_mods_json = case when ${activityMapBetterSql()} then excluded.best_mods_json else player_activity_maps.best_mods_json end,
        best_statistics_json = case when ${activityMapBetterSql()} then excluded.best_statistics_json else player_activity_maps.best_statistics_json end,
+       best_is_lazer = case when ${activityMapBetterSql()} then excluded.best_is_lazer else player_activity_maps.best_is_lazer end,
        best_max_combo = case when ${activityMapBetterSql()} then excluded.best_max_combo else player_activity_maps.best_max_combo end,
        best_has_replay = case when ${activityMapBetterSql()} then excluded.best_has_replay else player_activity_maps.best_has_replay end,
        best_solo_score_id = case when ${activityMapBetterSql()} then excluded.best_solo_score_id else player_activity_maps.best_solo_score_id end,
@@ -686,6 +687,7 @@ async function upsertActivityMap(
       // pruned: mods carry the rate, judgement counts carry goal + miss share.
       JSON.stringify(score.mods ?? []),
       JSON.stringify(score.statistics ?? {}),
+      isLazerScore(score) ? 1 : 0,
       // What a listed play shows next to its pp once the raw payload is gone.
       Number.isFinite(maxCombo) && maxCombo >= 0 ? maxCombo : null,
       scoreHasReplay(score) ? 1 : 0,

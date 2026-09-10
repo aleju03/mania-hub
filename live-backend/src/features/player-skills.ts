@@ -2,7 +2,7 @@ import { detectRateVibro } from "../dan/vibro-detection.js";
 import type { Db } from "../db.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
 import { LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
-import { exec, json, parseJson } from "../db.js";
+import { exec, execBatch, json, parseJson } from "../db.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import type { MotionFeatures } from "../dan/motion-features.js";
@@ -67,6 +67,9 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
+// v33: preserve archived scoring provenance and resolve chart facts before
+// selecting a score goal. Corrected goals replace prior SSRs, including
+// stable graveyard plays that only appeared eligible through the lazer fade.
 // v32: recheck dense phrases of short repeated jacks, alternating jumps and
 // rolls. Localized adjustments and the score-quality policy are unchanged.
 // v31: sustained single-column jacks cannot hide behind sparse accompaniment.
@@ -111,7 +114,7 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 32;
+export const PLAYER_SKILLS_VERSION = 33;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -133,7 +136,7 @@ export const PLAYER_SKILLS_VERSION = 32;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -1135,7 +1138,9 @@ export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od
 function ssrGoalForScoreUnchecked(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number {
   const wife = estimateWifeAccuracy(score.statistics, { od, windowScale: ezWindowScale(score) });
   if (wife == null) return ssrGoalForAccuracy(score.accuracy);
-  const wifeGoal = Math.max(SSR_GOAL_MIN, Math.min(SSR_GOAL_CAP, wife));
+  // Apply the eligibility floor after the blend. Clamping an ineligible
+  // Wife estimate up to 80% first lets even one hold manufacture MSD credit.
+  const wifeGoal = Math.min(SSR_GOAL_CAP, wife);
   if (isLazerScore(score as OscScore)) {
     const accGoal = ssrGoalForAccuracy(score.accuracy);
     const fade = lnRatio == null ? 1 : Math.max(0, Math.min(1, lnRatio));
@@ -2653,6 +2658,7 @@ interface PlayCandidate {
   beatmapId: number;
   rate: number;
   goal: number;
+  lnRatio: number | null;
   identity: string;
   source: "top" | "tracked";
   /** The DA slider, when the play carries one; the widened-windows check
@@ -2723,7 +2729,13 @@ export async function computePlayerSkillRatings(
   // Score identities seen carrying a DA that widened the hit windows below
   // the chart's own OD: same treatment, and the same grounds for eviction.
   const widenedWindowIdentities = new Set<string>();
-  const consider = (score: OscScore, source: "top" | "tracked") => {
+  // A first-time chart may have its .osu before its analysis job finishes.
+  // Resolve the actual hold share (and missing OD) before comparing goals;
+  // otherwise a raw-accuracy fallback can win a slot and publish inflated SSRs.
+  const goalFactsByBeatmap = new Map<number, { lnRatio: number; od: number | null } | null>();
+  const pendingGoalIdentities = new Set<string>();
+  const resolvedGoalsByIdentity = new Map<string, number>();
+  const consider = async (score: OscScore, source: "top" | "tracked") => {
     const beatmapId = beatmapIdOf(score);
     if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
       if (source === "top") unsupportedPlays += 1;
@@ -2753,7 +2765,29 @@ export async function computePlayerSkillRatings(
     // DA's OD wins over the chart's: the windows the play was judged against
     // are the ones the wife estimate has to assume.
     const odOverride = difficultyAdjustOd(score.mods);
-    const chartOd = odByBeatmap.get(beatmapId) ?? info?.od ?? null;
+    let chartOd = odByBeatmap.get(beatmapId) ?? info?.od ?? null;
+    let lnRatio = inverse ? 1 : info?.lnRatio ?? null;
+    const hasJudgements = Object.values(getScoreHitCounts(score)).some((count) => count > 0);
+    if (hasJudgements && ((isLazerScore(score) && lnRatio == null) || (odOverride == null && chartOd == null))) {
+      if (!goalFactsByBeatmap.has(beatmapId) && goalFactsByBeatmap.size < MAX_CALC_RUNS_PER_COMPUTE) {
+        const osuText = await loadOsuText(db, osu, beatmapId);
+        const map = osuText == null ? null : parseManiaBeatmap(osuText);
+        goalFactsByBeatmap.set(beatmapId, map && map.notes.length > 0 ? {
+          lnRatio: map.notes.filter((note) => note.isHold).length / map.notes.length,
+          od: parseOsuOd(osuText!),
+        } : null);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      const facts = goalFactsByBeatmap.get(beatmapId);
+      if (!facts) {
+        pendingPlays += 1;
+        pendingGoalIdentities.add(getScoreIdentity(score));
+        return;
+      }
+      lnRatio ??= facts.lnRatio;
+      chartOd ??= facts.od;
+      if (chartOd != null) odByBeatmap.set(beatmapId, chartOd);
+    }
     // ...unless DA widened those windows below the chart's own OD, which is
     // not a play of this chart at all (daWidensHitWindows). With no OD on the
     // beatmaps row yet the decision waits for the calc loop, which reads the
@@ -2768,7 +2802,8 @@ export async function computePlayerSkillRatings(
     // fade regardless of what the stored chart's hold share was.
     // The MSD floor must not erase a passed score from Dan evidence. Carry
     // it through chart/mod validation, but never run MinaCalc at this floor.
-    const goal = ssrGoalForScore(score, inverse ? 1 : info?.lnRatio ?? null, odOverride ?? chartOd) ?? SSR_GOAL_MIN;
+    const goal = ssrGoalForScore(score, lnRatio, odOverride ?? chartOd) ?? SSR_GOAL_MIN;
+    resolvedGoalsByIdentity.set(getScoreIdentity(score), goal);
     const key = playSlotKey(beatmapId, rate, inverse);
     const existing = candidates.get(key);
     const accuracy = calculateStableAccuracy(score.statistics ?? {}) || getDisplayedAccuracy(score);
@@ -2781,13 +2816,13 @@ export async function computePlayerSkillRatings(
     if (!existing || goal > existing.goal || betterFloorAccuracy
       || (tiedQuality && source === "top" && existing.source === "tracked")) {
       candidates.set(key, {
-        score, beatmapId, rate, goal, identity: getScoreIdentity(score), source,
+        score, beatmapId, rate, goal, lnRatio, identity: getScoreIdentity(score), source,
         odOverride, chartOdPending: odOverride != null && chartOd == null, inverse,
       });
     }
   };
-  for (const score of topPlays) consider(score, "top");
-  for (const score of trackedScores) consider(score, "tracked");
+  for (const score of topPlays) await consider(score, "top");
+  for (const score of trackedScores) await consider(score, "tracked");
 
   // One score id has exactly one true rate; the retention pass uses this to
   // drop stored plays that contradict a live candidate's rate.
@@ -2993,7 +3028,7 @@ export async function computePlayerSkillRatings(
     }
     const ssr = await computePlaySsrValues(ratedText, {
       rate, keyCount, goal: ratingGoal,
-      lnRatio: candidate.inverse ? 1 : infoByBeatmap.get(beatmapId)?.lnRatio ?? null,
+      lnRatio: candidate.lnRatio,
     });
     if (!ssr) {
       if (source === "top") unsupportedPlays += 1;
@@ -3030,6 +3065,13 @@ export async function computePlayerSkillRatings(
     ratingExcluded: entry.play.ratingExcluded || entry.play.goal <= SSR_GOAL_MIN, rateVibroChecked: undefined }));
   for (let previous of [...previousPlays, ...reconsidered]) {
     if (!previous || !(previous.beatmapId > 0) || !(previous.rate > 0) || !previous.values) continue;
+    // Do not retain an old fallback while its real goal is still unresolved.
+    if (pendingGoalIdentities.has(previous.identity)) continue;
+    // A corrected attempt can lose the slot to another play. Its old higher
+    // goal must not win the slot back through retention, even when the new
+    // candidate is still waiting for its bounded calculation turn.
+    const resolvedGoal = resolvedGoalsByIdentity.get(previous.identity);
+    if (resolvedGoal != null && resolvedGoal !== previous.goal) continue;
     if (previous.vibroClearEvidence && scoresByIdentity.has(previous.identity)) {
       // The fresh candidate may just have failed. Do not resurrect its old
       // acceptance through retention without checking the corrected counts.
@@ -3285,7 +3327,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     const previousPlays = [...(previousStored.plays ?? []), ...(previousStored.danOnly ?? [])];
 
     const trackedScores = await loadTrackedScores(db, userId);
-    const archived = await loadArchivedTrackedEvidence(db, userId);
+    const archived = await loadArchivedTrackedEvidence(db, userId, [...trackedScores, ...snapshot.bestScores]);
     const result = await computePlayerSkillRatings(db, osu, snapshot.bestScores, previousPlays, {
       trackedScores: [...trackedScores, ...archived.scores],
       untrustedIdentities: archived.unknownModsIdentities,
@@ -3382,9 +3424,9 @@ async function loadTrackedScores(db: Db, userId: number): Promise<OscScore[]> {
 // HT/DC original's accuracy against the full-speed chart, inflating the
 // rating - so they contribute nothing; their derived identities come back
 // as untrusted so previously stored plays built from them purge instead of
-// retaining. Days still covered by live payloads just produce weaker
-// duplicate candidates that lose the per-(chart, rate) dedup to the real
-// score.
+// retaining. Known complete scores supply their own evidence rather than
+// competing with a reconstructed copy. Their stored scoring provenance is
+// repaired here, on the job lane, before the raw payload can expire.
 const ARCHIVED_EVIDENCE_SCAN_LIMIT = 4000;
 
 export interface ArchivedTrackedEvidence {
@@ -3394,10 +3436,10 @@ export interface ArchivedTrackedEvidence {
   unknownModsIdentities: Set<string>;
 }
 
-export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promise<ArchivedTrackedEvidence> {
+export async function loadArchivedTrackedEvidence(db: Db, userId: number, knownScores: OscScore[] = []): Promise<ArchivedTrackedEvidence> {
   const rows = (await exec(
     db,
-    `select m.day, m.beatmap_id, m.best_score_id, m.best_solo_score_id, m.best_accuracy, m.best_mods_json, m.best_statistics_json,
+    `select m.country, m.day, m.beatmap_id, m.best_score_id, m.best_solo_score_id, m.best_accuracy, m.best_mods_json, m.best_statistics_json, m.best_is_lazer,
        m.best_rank, m.best_max_combo, m.best_total_score
      from player_activity_maps m
      join beatmaps b on b.beatmap_id = m.beatmap_id and b.mode = 'mania'
@@ -3414,19 +3456,42 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promi
   )).rows;
   const scores: OscScore[] = [];
   const unknownModsIdentities = new Set<string>();
+  const knownByIdentity = new Map<string, OscScore>();
+  for (const score of knownScores) {
+    if (score.user_id !== userId) continue;
+    const identity = getScoreIdentity(score);
+    if (!knownByIdentity.has(identity)) knownByIdentity.set(identity, score);
+  }
+  const provenanceRepairs: Array<{ sql: string; args: (string | number)[] }> = [];
   for (const row of rows) {
     const accuracy = Number(row.best_accuracy);
     const beatmapId = Number(row.beatmap_id);
     if (!(accuracy > 0 && accuracy <= 1) || !(beatmapId > 0)) continue;
     const scoreId = Number(row.best_score_id);
+    const known = knownByIdentity.get(`official:${scoreId}`);
+    if (known && (known.beatmap_id ?? known.beatmap?.id) === beatmapId) {
+      // The full score is already an input. Never let a reconstructed copy
+      // compete with it on a different accuracy scale. Repair provenance in
+      // bounded per-player batches while that exact payload still survives.
+      if (row.best_is_lazer == null) provenanceRepairs.push({
+        sql: `update player_activity_maps set best_is_lazer = ?
+          where country = ? and user_id = ? and day = ? and beatmap_id = ?
+            and best_score_id = ? and best_is_lazer is null`,
+        args: [isLazerScore(known) ? 1 : 0, String(row.country), userId, String(row.day), beatmapId, scoreId],
+      });
+      continue;
+    }
     const mods = parseJson<OscScore["mods"] | null>(String(row.best_mods_json ?? ""), null);
     const statistics = parseJson<OscScore["statistics"] | null>(String(row.best_statistics_json ?? ""), null);
     const score = {
       id: Number(row.best_solo_score_id) > 0 ? Number(row.best_solo_score_id) : Number.isFinite(scoreId) && scoreId > 0 ? scoreId : 0,
       ...(Number(row.best_solo_score_id) > 0 ? {
         type: "solo_score",
-        legacy_score_id: scoreId !== Number(row.best_solo_score_id) ? scoreId : undefined,
+        // Stable graveyard plays can have only a solo id. Zero is the raw
+        // API's stable-without-legacy-id marker, not a fabricated score id.
+        legacy_score_id: scoreId !== Number(row.best_solo_score_id) ? scoreId : row.best_is_lazer === 0 ? 0 : undefined,
       } : {}),
+      ...(row.best_is_lazer === 0 && !(Number(row.best_solo_score_id) > 0) ? { legacy_score_id: 0 } : {}),
       user_id: userId,
       beatmap_id: beatmapId,
       accuracy,
@@ -3447,6 +3512,10 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promi
       continue;
     }
     scores.push(score);
+  }
+  for (let offset = 0; offset < provenanceRepairs.length; offset += 100) {
+    await execBatch(db, provenanceRepairs.slice(offset, offset + 100));
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   return { scores, unknownModsIdentities };
 }

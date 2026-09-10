@@ -33,6 +33,8 @@ import type { OscScore } from "../src/shared/types.js";
 import { buildVibroOsu, localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
 import { conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { computeMsd } from "../src/dan/msd.js";
+import { recordPlayerActivity } from "../src/features/activity.js";
+import { getScoreIdentity, isLazerScore } from "../src/shared/score.js";
 import { VIBRO_ADJUSTED_VARIANT, loadStoredRateDanVerdicts, rateDanVerdictKey } from "../src/features/dan-estimates.js";
 
 async function withDb(run: (db: Awaited<ReturnType<typeof createDb>>) => Promise<void>): Promise<void> {
@@ -636,6 +638,17 @@ describe("ssrGoalForScore", () => {
     expect(ssrGoalForScore(score, 1)).toBe(ssrGoalForScore(score, 0));
   });
 
+  it("does not lift a sub-floor Wife estimate into eligibility through a tiny LN share", () => {
+    const score = {
+      accuracy: 0.9098396185522324,
+      statistics: { perfect: 969, great: 879, good: 344, ok: 62, meh: 6, miss: 47 },
+    };
+    expect(estimateWifeAccuracy(score.statistics, { od: 8.5 })).toBeCloseTo(0.7792356);
+    expect(ssrGoalForScore(score, 14 / 2307, 8.5)).toBeNull();
+    // An actual LN-heavy lazer play still gets the intended weighted goal.
+    expect(ssrGoalForScore(score, 0.8, 8.5)).toBeCloseTo(0.8837);
+  });
+
   it("values a 300-heavy play far lower on a 0 OD chart than on OD8", () => {
     const score = {
       accuracy: 0.997,
@@ -720,6 +733,100 @@ describe("selectMsdRatingPlays", () => {
 });
 
 describe("computePlayerSkillRatings", () => {
+  it.each([0, 1])("uses the same goal and SSR before and after chart analysis arrives at LN share %s", async (lnRatio) => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, lnRatio ? buildLnBeatmapFile() : buildStreamBeatmapFile(), { source: "test" });
+      const score = play({ beatmap_id: 101, type: "solo_score", accuracy: 0.95,
+        statistics: { perfect: 400, great: 230, good: 50, ok: 10, miss: 10 } });
+      const first = await computePlayerSkillRatings(db, failingOsu, [score], []);
+      expect(first.plays).toHaveLength(1);
+      expect(first.plays[0].goal).toBe(ssrGoalForScore(score, lnRatio, 8));
+      if (lnRatio === 0) expect(first.plays[0].goal).toBeLessThan(ssrGoalForAccuracy(score.accuracy));
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+        values (101, 1, 'ready', 4, ?, ?)`, [JSON.stringify({ lnRatio, patterns: [] }), new Date().toISOString()]);
+      const second = await computePlayerSkillRatings(db, failingOsu, [score], first.plays);
+      expect(second.plays[0].goal).toBe(first.plays[0].goal);
+      expect(second.plays[0].values).toEqual(first.plays[0].values);
+      const fresh = await computePlayerSkillRatings(db, failingOsu, [score], []);
+      expect(fresh.plays[0].values).toEqual(first.plays[0].values);
+    });
+  });
+
+  it("keeps a judgment-backed play pending rather than retaining a raw-accuracy fallback without chart facts", async () => {
+    await withDb(async (db) => {
+      const score = play({ beatmap_id: 101, type: "solo_score", accuracy: 0.95,
+        statistics: { perfect: 400, great: 230, good: 50, ok: 10, miss: 10 } });
+      const stale = { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95,
+        pp: 100, values: { Overall: 30, Chordjack: 30 }, patterns: [] };
+      const result = await computePlayerSkillRatings(db, failingOsu, [score], [stale]);
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.summary.pendingPlays).toBe(1);
+    });
+  });
+
+  it("preserves stable graveyard and genuine lazer provenance through activity archiving", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, updated_at)
+        values (101, 10, 'mania', 'test', ?)`, [new Date().toISOString()]);
+      for (const [id, legacyTotal, expectedLazer] of [[5001, 750000, false], [5002, 0, true]] as const) {
+        const score = play({ id, beatmap_id: 101, ruleset_id: 3, type: "solo_score", pp: null,
+          accuracy: 0.95, legacy_total_score: legacyTotal, mods: [{ acronym: "CL" }],
+          ended_at: `2026-07-${id === 5001 ? "01" : "02"}T12:00:00Z`,
+          statistics: { perfect: 400, great: 230, good: 50, ok: 10, miss: 10 } });
+        await recordPlayerActivity(db, queue, "CR", score, getScoreIdentity(score));
+        const archived = await loadArchivedTrackedEvidence(db, 99);
+        const restored = archived.scores.find((entry) => entry.id === id)!;
+        expect(isLazerScore(restored)).toBe(expectedLazer);
+        expect(restored.type).toBe("solo_score");
+        expect(getScoreIdentity(restored)).toBe(getScoreIdentity(score));
+        for (const lnRatio of [0, 0.8]) {
+          expect(ssrGoalForScore(restored, lnRatio, 8)).toBe(ssrGoalForScore(score, lnRatio, 8));
+        }
+      }
+    });
+  });
+
+  it("repairs legacy archive provenance and replaces an inflated SSR with Dan-only evidence", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile().replace("OverallDifficulty:8", "OverallDifficulty:8.5"), { source: "test" });
+      await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at)
+        values (101, 10, 'mania', 'test', '{"accuracy":8.5}', ?)`, [new Date().toISOString()]);
+      const score = play({ id: 5001, beatmap_id: 101, ruleset_id: 3, type: "solo_score", pp: null,
+        legacy_score_id: 0, legacy_total_score: 751969, accuracy: 0, mods: [{ acronym: "CL" }],
+        statistics: { perfect: 969, great: 879, good: 344, ok: 62, meh: 6, miss: 47 } });
+      await recordPlayerActivity(db, queue, "CR", score, getScoreIdentity(score));
+      await exec(db, "update player_activity_maps set best_is_lazer = null where user_id = 99");
+      const repaired = await loadArchivedTrackedEvidence(db, 99, [score]);
+      expect(repaired.scores).toEqual([]); // the complete source already supplies this identity
+      const stored = (await exec(db, "select best_is_lazer from player_activity_maps where user_id = 99")).rows[0];
+      expect(stored.best_is_lazer).toBe(0);
+      const archived = await loadArchivedTrackedEvidence(db, 99);
+      expect(archived.scores).toHaveLength(1);
+      expect(isLazerScore(archived.scores[0])).toBe(false);
+      const stale = { identity: "official:5001", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.9098,
+        pp: 0, values: { Overall: 21.15, Chordjack: 21.15 }, patterns: [], source: "tracked" as const };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [stale], { trackedScores: archived.scores });
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toHaveLength(1);
+      expect(result.danOnly[0]).toMatchObject({ identity: "official:5001", ratingExcluded: true, values: {} });
+      // The correction can also lose its slot to a different, genuinely
+      // better attempt. Retention must not resurrect the old inflated goal.
+      const better = play({ id: 5002, beatmap_id: 101, type: "solo_score", pp: null,
+        legacy_score_id: 0, legacy_total_score: 850000, accuracy: 0.95,
+        statistics: { perfect: 1077, great: 976, good: 191, ok: 34, meh: 3, miss: 26 } });
+      const replaced = await computePlayerSkillRatings(db, failingOsu, [], [stale], {
+        trackedScores: [...archived.scores, better],
+      });
+      expect(replaced.plays).toHaveLength(1);
+      expect(replaced.plays[0].identity).toBe("official:5002");
+      expect(replaced.plays[0].goal).toBeLessThan(stale.goal);
+    });
+  });
+
   it("refreshes stored chart families before rating separate rate-edit uploads", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
@@ -2523,13 +2630,17 @@ describe("computePlayerSkillRatings", () => {
       expect(second.summary.pendingPlays).toBe(0);
       expect(second.plays[0].values).toEqual(first.plays[0].values);
 
-      // A different accuracy invalidates the cache entry for that play; with
-      // the .osu gone the new goal cannot compute (pending), but the retained
-      // better play keeps its chart slot rated meanwhile.
+      // A correction to this identity invalidates its old rating immediately;
+      // the .osu is needed to calculate the corrected goal, so it is pending.
       const changed = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 101, accuracy: 0.9 })], first.plays);
-      expect(changed.summary.analyzedPlays).toBe(1);
+      expect(changed.summary.analyzedPlays).toBe(0);
       expect(changed.summary.pendingPlays).toBe(1);
-      expect(changed.plays[0].goal).toBe(first.plays[0].goal);
+      expect(changed.plays).toEqual([]);
+      // A different attempt cannot invalidate the original's sound evidence.
+      const another = await computePlayerSkillRatings(db, failingOsu, [play({ id: 2, beatmap_id: 101, accuracy: 0.9 })], first.plays);
+      expect(another.summary.analyzedPlays).toBe(1);
+      expect(another.summary.pendingPlays).toBe(1);
+      expect(another.plays[0].goal).toBe(first.plays[0].goal);
     });
   });
 });
