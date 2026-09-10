@@ -312,7 +312,7 @@ vendored.
    also gained a null-guard for keymodes with no LN interval table (10K), and
    `pipeline/` picked up the on-demand pre-Ett reuse. All copied verbatim.
 
-   **Vendored but deliberately not enabled.** The estimators only correct when
+   **Initially vendored but deliberately not enabled (enabled 2026-09-09; see below).** The estimators only correct when
    a caller passes `options.marathonCorrection`, and `chart-classifier.ts`
    never does; the gate helpers (`isMarathonCorrectionCandidate`,
    `chartNoteSpanSeconds`, `MARATHON_CORRECTION_MIN_DURATION_S`) stay so the
@@ -498,3 +498,22 @@ ours-modified list at the top (overwriting `ett/index.js` in particular breaks t
 backend LN-tail SSR blend), and re-check the facade against upstream changes to
 `estDiff` label formats and the Mixed result shape. A cheap wholeness check: diff the
 tree against upstream and confirm the only differing files are the listed ones.
+
+## Enable marathon correction (2026-09-09)
+
+Enabled by explicit product decision after an off/on comparison of 5,712 cached
+4K rice marathons. The historical regression findings above still describe why
+we initially held it back; this rollout accepts the upstream correction rather
+than changing its constants or adding chart-identity exceptions.
+
+The shared classifier injects original note-start span and rate-specific raw MSD
+before Mixed runs. Both async adapters acquire marathon MSD before classification,
+then compute Companella from the corrected result's star. Reusing an uncorrected
+Companella prediction changes the measured effect and is not the shipped path.
+EXTRA-BETA moves from gamma-- (12.64) to beta (11.97). Routing/fallback transitions
+can increase final Mixed estimates despite each engine's downward correction.
+
+Cache v20 and `marathon_correction_done:v1` refresh only eligible cached charts
+and existing rate variants, preserving other chart analysis and reusing MSD.
+The full chart analysis version stays unchanged. See `docs/features.md` for the
+maintained rollout behavior and the marathon unit/sweep tests for its gates.

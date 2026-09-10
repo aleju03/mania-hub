@@ -375,17 +375,16 @@ async function classifyAndStoreDanEstimate(
   request: NormalizedDanEstimateRequest,
   parsed: ParsedDanBeatmap,
   starRating: number | undefined,
-  options: { withMsd?: boolean } = {},
+  options: { withMsd?: boolean; msd?: MsdResult | null; requireComplete?: boolean } = {},
 ): Promise<ComputedDanEstimate> {
   const { map, osuText } = parsed;
-  // Only the rate-analysis path asks for MSD; the batch endpoint and its job
-  // want the dan verdict alone and must not pay a MinaCalc run for it. When it
-  // is asked for it leads, so the Companella pass reuses it instead of running
-  // the calc a second time.
+  // Rate analysis and verdict-only repairs can supply MSD up front. Other
+  // requests obtain it lazily in the async adapter only when marathon
+  // correction or Companella needs it.
   const adjustVibro = request.modVariant === VIBRO_ADJUSTED_VARIANT;
-  const msd = options.withMsd
+  const msd = options.msd ?? (options.withMsd
     ? await computeMsd(osuText, { keyCount: map.keyCount, rate: request.rate, adjustVibro }).catch(msdChartErrorFallback)
-    : null;
+    : null);
   const classification = await classifyChartWithCompanella(map, osuText, {
     adjustVibro,
     starRating,
@@ -393,6 +392,9 @@ async function classifyAndStoreDanEstimate(
     version: map.version,
     rate: request.rate !== 1 ? request.rate : undefined,
   }, { msdValues: msd?.values ?? null });
+  if (options.requireComplete && classification.companellaPending) {
+    throw new Error(`Companella unavailable for marathon rate repair ${request.beatmapId}@${request.rate}`);
+  }
   const estimate = classification.estimate;
   if (!classification.supported || !estimate) {
     await storeUnsupportedDanEstimate(db, request, msd?.values ?? null);
@@ -570,6 +572,7 @@ export async function computeAndStoreRateDanVerdictFromText(
   ratePercent: number,
   osuText: string,
   modVariant?: DanChartVariant,
+  options: { msd?: MsdResult | null; requireComplete?: boolean } = {},
 ): Promise<LeanDanEstimate | null> {
   const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
   if (!request) return null;
@@ -587,7 +590,7 @@ export async function computeAndStoreRateDanVerdictFromText(
     return null;
   }
   const starRating = await readBeatmapStarRating(db, request.beatmapId);
-  const computed = await classifyAndStoreDanEstimate(db, request, variant, starRating);
+  const computed = await classifyAndStoreDanEstimate(db, request, variant, starRating, options);
   return computed.value;
 }
 

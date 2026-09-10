@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import {
   MARATHON_CORRECTION_MIN_DURATION_S,
@@ -8,12 +8,11 @@ import {
 } from "../src/dan/chart-classifier.js";
 import { computeMarathonCorrection } from "../vendor/leoblack/estimator/marathonCorrection.js";
 
-// The marathon duration correction (upstream 2026-08-30): Azusa and Roxy shave
-// numeric off long charts whose MinaCalc skillsets are evenly spread. We
-// vendor it but deliberately do not turn it on, because it lands almost
-// entirely on dan courses and pushes correctly-rated ones down (see
-// chart-classifier.ts and PORT_NOTES.md). These tests cover the module itself
-// and pin the decision, so a re-copy that quietly enables it fails here.
+import * as leo from "../src/dan/leoblack-estimator.js";
+import * as msd from "../src/dan/msd.js";
+import { classifyChartWithCompanella } from "../src/dan/companella.js";
+
+afterEach(() => vi.restoreAllMocks());
 
 function columnX(column: number): number {
   return Math.floor(((column + 0.5) * 512) / 4);
@@ -95,23 +94,51 @@ describe("marathon duration correction", () => {
     expect(at(36000)).toBe(0.5);
   });
 
-  it("is not wired into the classifier", () => {
-    // The estimators only correct when handed options.marathonCorrection, and
-    // classifyChart never passes it. A long, balanced 4K chart must therefore
-    // rate exactly as it would with the correction absent. Removing this
-    // guard is the intended way to turn the feature on, alongside the note in
-    // chart-classifier.ts, and it should be done only with the dan benchmark
-    // rerun (EXTRA-DELTA, EXTRA-GAMMA and INTRO-1st are the anchors it broke).
+  it("injects the correction before Mixed routing, without changing short charts", () => {
     const map = parseManiaBeatmap(MARATHON_TEXT);
-    expect(isMarathonCorrectionCandidate(map)).toBe(true);
-    const verdict = classifyChart(map, MARATHON_TEXT, { version: map.version });
-    const corrected = computeMarathonCorrection({
-      durationS: chartNoteSpanSeconds(map),
-      ettValues: BALANCED_MSD,
-      numeric: verdict.rc?.rawDan ?? null,
+    const mixed = vi.spyOn(leo, "runLeoBlackMixed");
+    const before = classifyChart(map, MARATHON_TEXT);
+    const after = classifyChart(map, MARATHON_TEXT, { marathonMsdValues: BALANCED_MSD });
+    expect(mixed).toHaveBeenLastCalledWith(MARATHON_TEXT, {
+      speedRate: 1,
+      marathonCorrection: { durationS: chartNoteSpanSeconds(map), ettValues: BALANCED_MSD },
     });
-    // The module would have moved this chart; the classifier still did not.
-    expect(corrected).toBeGreaterThan(0);
-    expect(verdict.rc?.raw).toBe(classifyChart(map, MARATHON_TEXT, { version: map.version }).rc?.raw);
+    expect(after.rc?.rawDan).not.toBe(before.rc?.rawDan);
+    const short = parseManiaBeatmap(SHORT_TEXT);
+    expect(classifyChart(short, SHORT_TEXT, { marathonMsdValues: BALANCED_MSD }).primary)
+      .toEqual(classifyChart(short, SHORT_TEXT).primary);
+    expect(classifyChart(map, MARATHON_TEXT, { marathonMsdValues: JACK_HEAVY_MSD }).primary)
+      .toEqual(before.primary);
+  });
+
+  it("keeps the duration gate strict and independent of playback rate", async () => {
+    const exact = parseManiaBeatmap(buildChart(3001, 100));
+    expect(chartNoteSpanSeconds(exact)).toBe(300);
+    expect(isMarathonCorrectionCandidate(exact)).toBe(false);
+    const map = parseManiaBeatmap(MARATHON_TEXT);
+    const mixed = vi.spyOn(leo, "runLeoBlackMixed");
+    const compute = vi.spyOn(msd, "computeMsd").mockResolvedValue({ etternaVersion: "test", values: BALANCED_MSD });
+    await classifyChartWithCompanella(map, MARATHON_TEXT, { rate: 2 });
+    expect(compute).toHaveBeenCalledTimes(1);
+    expect(compute).toHaveBeenCalledWith(MARATHON_TEXT, { rate: 2, keyCount: 4 });
+    expect(mixed.mock.calls.every(([, options]) => options?.marathonCorrection?.durationS === chartNoteSpanSeconds(map)))
+      .toBe(true);
+  });
+
+  it("reuses supplied MSD and applies Companella after the corrected star is available", async () => {
+    const map = parseManiaBeatmap(MARATHON_TEXT);
+    const compute = vi.spyOn(msd, "computeMsd");
+    const result = await classifyChartWithCompanella(map, MARATHON_TEXT, {}, { msdValues: BALANCED_MSD });
+    expect(compute).not.toHaveBeenCalled();
+    expect(result.companellaPending).toBe(false);
+    expect(result.primary).not.toBeNull();
+  });
+
+  it("does not retry a missing marathon MSD result for Companella", async () => {
+    const map = parseManiaBeatmap(MARATHON_TEXT);
+    const compute = vi.spyOn(msd, "computeMsd").mockResolvedValue(null);
+    const result = await classifyChartWithCompanella(map, MARATHON_TEXT);
+    expect(compute).toHaveBeenCalledTimes(1);
+    expect(result.primary).toEqual(classifyChart(map, MARATHON_TEXT).primary);
   });
 });

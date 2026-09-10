@@ -1,8 +1,8 @@
 // Ported from src/lib/companella.ts (frontend). Keep the two copies in sync;
 // the backend routes MSD through msd.ts so MinaCalc runs stay serialized
 // against the job lanes rather than stacking CPU bursts on the event loop.
-import type { ManiaBeatmap } from "./beatmap-parser.js";
-import { classifyChart, type ChartClassification, type ClassifyChartInput } from "./chart-classifier.js";
+import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
+import { classifyChart, isMarathonCorrectionCandidate, type ChartClassification, type ClassifyChartInput } from "./chart-classifier.js";
 import { getInputRate } from "./dan-estimator/labels.js";
 import { prepareVibroChart } from "./vibro-sections.js";
 import { computeMsd, msdChartErrorFallback } from "./msd.js";
@@ -73,27 +73,42 @@ export async function computeCompanellaEstimate(
 }
 
 /**
- * classifyChart, plus the Companella pass when the chart asks for one. The
- * second classify only runs on that narrow slice; every other chart pays a
- * single sync classify exactly as before.
+ * Obtain marathon MSD before classifying, then resolve any Companella plan
+ * using the resulting star value. Other charts obtain MSD only if they need
+ * Companella. skipCompanella keeps the benchmark's marathon correction active
+ * while isolating the optional fusion.
  */
 export async function classifyChartWithCompanella(
   map: ManiaBeatmap,
   osuText: string,
   input: ClassifyChartInput = {},
-  options: { msdValues?: Record<string, number> | null } = {},
+  options: { msdValues?: Record<string, number> | null; skipCompanella?: boolean } = {},
 ): Promise<ChartClassification> {
-  const first = classifyChart(map, osuText, input);
-  if (!first.companellaPending || first.sunnySr == null) return first;
+  const rate = getInputRate(input);
+  const prepared = input.adjustVibro ? prepareVibroChart(osuText, rate, map) : null;
+  const effectiveText = prepared?.osuText ?? osuText;
+  const effectiveMap = prepared?.analysis.status === "adjusted" ? parseManiaBeatmap(effectiveText) : map;
+  const marathon = isMarathonCorrectionCandidate(effectiveMap);
+  let msdValues = options.msdValues ?? input.marathonMsdValues;
+  if (marathon && !msdValues) {
+    msdValues = await computeMsd(effectiveText, { rate, keyCount: map.keyCount })
+        .then((msd) => msd?.values ?? null).catch(msdChartErrorFallback);
+  }
+  const classifyInput = { ...input, marathonMsdValues: msdValues };
+  const first = classifyChart(map, osuText, classifyInput);
+  if (options.skipCompanella || !first.companellaPending || first.sunnySr == null) return first;
+  // A failed marathon MSD pass cannot supply Companella either. Do not retry
+  // the same calculator a second time during this request.
+  if (marathon && !msdValues) return first;
 
   const companella = await computeCompanellaEstimate({
-    osuText: input.adjustVibro ? prepareVibroChart(osuText, getInputRate(input), map).osuText : osuText,
-    rate: getInputRate(input),
+    osuText: effectiveText,
+    rate,
     keyCount: map.keyCount,
     sunnyStar: first.sunnySr,
-    msdValues: options.msdValues,
+    msdValues,
   });
   if (!companella) return first;
 
-  return classifyChart(map, osuText, { ...input, companella });
+  return classifyChart(map, osuText, { ...classifyInput, companella });
 }

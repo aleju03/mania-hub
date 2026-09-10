@@ -14,7 +14,6 @@ import { estimateDan } from "#dan/dan-estimator";
 import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "#dan/dan-estimator/ln";
 import { estimateDanielDan } from "../src/lib/daniel-estimator.ts";
 import { estimateLeoBlackDan } from "#dan/leoblack-estimator";
-import { classifyChart } from "#dan/chart-classifier";
 import { classifyChartWithCompanella } from "../src/lib/companella.ts";
 import type { DanEstimate, DanFeatureMetrics } from "#dan/dan-estimator/types";
 import {
@@ -390,9 +389,7 @@ async function runClassifier(
     const classifyInput = { ...input, preferFamily: (family === "ln" ? "ln" : "rc") as "ln" | "rc" };
     // --no-companella reproduces the pre-Companella verdicts (the Sunny
     // fallback on the 4K LN-hybrid slice), so the two runs can be --compare'd.
-    const classification = noCompanella
-      ? classifyChart(map, text, classifyInput)
-      : await classifyChartWithCompanella(map, text, classifyInput);
+    const classification = await classifyChartWithCompanella(map, text, classifyInput, { skipCompanella: noCompanella });
     if (!classification.estimate) {
       throw new Error(`unified classifier produced no dan verdict (${classification.verdictText ?? "no verdict"})`);
     }

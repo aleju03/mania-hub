@@ -1,3 +1,4 @@
+import { MARATHON_CORRECTION_META_KEY } from "./marathon-correction.js";
 import { detectRateVibro } from "../dan/vibro-detection.js";
 import type { Db } from "../db.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
@@ -6078,7 +6079,7 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */
 async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
-  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY]) {
+  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY]) {
     const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
     if (!row) continue;
     const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;

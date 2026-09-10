@@ -97,26 +97,16 @@ export interface ClassifyChartInput extends DanEstimateInput {
    * an input rather than something this sync function computes.
    */
   companella?: CompanellaEstimate | null;
+  /** Raw MSD at the requested rate, before LN-tail blending. The async
+   * adapter obtains it for marathon candidates before running Mixed. */
+  marathonMsdValues?: Record<string, number> | null;
 }
 
-// Marathon duration correction (upstream 2026-08-30, vendored in
-// estimator/marathonCorrection.js): Azusa and Roxy shave numeric off long
-// charts whose MinaCalc skillsets are evenly spread, on the reading that
-// sustained even difficulty is endurance rather than skill.
-//
-// It is deliberately NOT wired in. The estimators only correct when a caller
-// passes `options.marathonCorrection`, and nothing here does. A dan course is
-// long and skill-balanced by construction, so the correction lands almost
-// entirely on courses, and on our labels it pushes correctly-rated ones down:
-// EXTRA-DELTA `delta+` -> `delta-`, EXTRA-GAMMA `gamma+` -> `gamma-`,
-// INTRO-1st `1` -> `1--`, against wins that only move already-wrong rows
-// closer. Softening the constants softens the damage without removing it
-// (measured at scale 0.20/cap 0.25 too), because a uniform downward push on
-// that chart shape cannot tell an over-rated course from a correct one. See
-// "Re-pin at 5a6144c" in vendor/leoblack/PORT_NOTES.md for the benchmark.
-//
-// The gate below stays so the decision is testable and so a future re-copy
-// that re-enables it has to delete this comment first.
+// Upstream marathon correction runs inside Azusa and Roxy, before Mixed's
+// routing and Companella fusion. Duration is the original note-start span,
+// including breaks and without rate scaling; MSD belongs to the played rate.
+// Missing MSD leaves the verdict uncorrected. Final Mixed output can increase
+// when the correction changes its route or releases the Sunny low-end guard.
 export const MARATHON_CORRECTION_MIN_DURATION_S = 300;
 
 /** First-to-last note span in seconds, as upstream measures a marathon. */
@@ -483,7 +473,12 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   let mixed: LeoBlackReworkResult | null = null;
   let companellaApplied = false;
   try {
-    const rawMixed = runLeoBlackMixed(osuText, { speedRate: rate });
+    const rawMixed = runLeoBlackMixed(osuText, {
+      speedRate: rate,
+      marathonCorrection: isMarathonCorrectionCandidate(map) && input.marathonMsdValues
+        ? { durationS: chartNoteSpanSeconds(map), ettValues: input.marathonMsdValues }
+        : undefined,
+    });
     // The fusion clears Azusa's numeric hint. Check its original verdict too,
     // or a trivial chart can escape the low-end guard after the blend.
     const validCompanella = input.companella != null

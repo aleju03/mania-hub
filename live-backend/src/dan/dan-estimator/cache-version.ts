@@ -20,4 +20,6 @@
 // v18: refresh rate metadata and player variants for accompanied longjacks.
 // Ordinary full-chart difficulty calculations themselves remain unchanged.
 // v19: refresh repeated-burst coverage and the remaining-material variants.
-export const DAN_ESTIMATE_CACHE_VERSION = 19;
+// v20: enable marathon correction before Mixed routing and Companella fusion.
+// Only 4K charts with original note spans over five minutes can move.
+export const DAN_ESTIMATE_CACHE_VERSION = 20;

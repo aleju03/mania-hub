@@ -92,7 +92,7 @@ function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
   };
 }
 
-function leanClassification(
+export function leanClassification(
   classification: ChartClassification,
   noteBpm: number | null = null,
   motion: MotionFeatures | null = null,

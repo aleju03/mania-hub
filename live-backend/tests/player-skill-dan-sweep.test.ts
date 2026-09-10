@@ -1,3 +1,4 @@
+import { MARATHON_CORRECTION_META_KEY } from "../src/features/marathon-correction.js";
 import { LEOBLACK_FUSION_META_KEY } from "../src/features/leoblack-fusion.js";
 import { CHART_FAMILY_META_KEY } from "../src/features/chart-families.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
@@ -597,6 +598,7 @@ describe("recomputePlayerSkillDanChunk", () => {
   it.each([
     ["Sunny DT", SUNNY_REPIN_DT_META_KEY],
     ["LeoBlack fusion", LEOBLACK_FUSION_META_KEY],
+    ["Marathon correction", MARATHON_CORRECTION_META_KEY],
   ])("automatically re-runs when the %s repair finished midway through a pass", async (_name, repairKey) => {
     const db = await makeDb();
     const queue = new JobQueue(db);

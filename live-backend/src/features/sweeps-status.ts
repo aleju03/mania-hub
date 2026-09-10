@@ -1,3 +1,4 @@
+import { MARATHON_CORRECTION_JOB, MARATHON_CORRECTION_META_KEY } from "./marathon-correction.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import {
@@ -534,6 +535,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     description: "Re-derives the 1.5x dan verdict from the stored DT MSD on every row carrying one, since the main re-pin sweep preserves the DT columns.",
     doneKey: "sunny_repin_dt_recompute_done:v1",
     jobType: "recompute_sunny_repin_dt_sweep",
+  }),
+  chartAnalysisSweep({
+    id: "marathon-correction",
+    label: "Marathon correction refresh",
+    description: "Refreshes cached 4K charts longer than five minutes and their existing rate estimates, reusing MSD, then recalculates player dans.",
+    doneKey: MARATHON_CORRECTION_META_KEY,
+    jobType: MARATHON_CORRECTION_JOB,
   }),
   chartAnalysisSweep({
     id: "leoblack-fusion",
