@@ -62,6 +62,7 @@ import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
+import { SortArrow } from "../../components/ui/SortArrow";
 import { OsuLogo } from "../../components/ui/OsuLogo";
 import { CountryFlag } from "../../components/ui/CountryFlag";
 import { StarRatingBadge } from "../../components/ui/StarRating";
@@ -5372,12 +5373,12 @@ function BestSortControl({
 }) {
   const { t } = useLingui();
   const ppActive = sort === "pp-desc" || sort === "pp-asc";
-  const ppArrow = ppSort === "pp-asc" ? "↑" : "↓";
+  const ppDirection = ppSort === "pp-asc" ? "asc" : "desc";
   const nextPpSort: BestPpSort = ppActive
     ? (ppSort === "pp-desc" ? "pp-asc" : "pp-desc")
     : ppSort;
   const ageActive = sort === "newest" || sort === "oldest";
-  const ageArrow = ageSort === "oldest" ? "↑" : "↓";
+  const ageDirection = ageSort === "oldest" ? "asc" : "desc";
   const nextAgeSort: BestAgeSort = ageActive
     ? (ageSort === "newest" ? "oldest" : "newest")
     : ageSort;
@@ -5390,24 +5391,25 @@ function BestSortControl({
           type="button"
           onClick={() => onChangeSort(nextPpSort)}
           title={ppSort === "pp-asc" ? t`Lowest PP first` : t`Highest PP first`}
-          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ppActive
+          className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ppActive
               ? "bg-osu-pink/15 text-osu-pink-light"
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
             }`}
         >
-          <span className="sm:hidden">PP {ppArrow}</span>
-          <span className="hidden sm:inline">PP {ppArrow}</span>
+          <span>PP</span>
+          <SortArrow direction={ppDirection} />
         </button>
         <button
           type="button"
           onClick={() => onChangeSort(nextAgeSort)}
           title={ageSort === "oldest" ? t`Oldest first` : t`Newest first`}
-          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ageActive
+          className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ageActive
               ? "bg-osu-pink/15 text-osu-pink-light"
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
             }`}
         >
-          <Trans>Age {ageArrow}</Trans>
+          <Trans>Age</Trans>
+          <SortArrow direction={ageDirection} />
         </button>
       </div>
     </div>

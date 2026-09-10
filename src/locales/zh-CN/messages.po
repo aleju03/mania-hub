@@ -2418,8 +2418,12 @@ msgid "Advanced"
 msgstr "高级"
 
 #: src/routes/player/$username.tsx
-msgid "Age {ageArrow}"
-msgstr "时间 {ageArrow}"
+msgid "Age"
+msgstr "时间"
+
+#: src/routes/player/$username.tsx
+#~ msgid "Age {ageArrow}"
+#~ msgstr "时间 {ageArrow}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "aim higher"

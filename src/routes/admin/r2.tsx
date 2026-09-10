@@ -30,6 +30,7 @@ import {
   type UploadedReplayDescription,
 } from "../../lib/uploaded-replay-describe";
 import { GradeImg } from "../../components/ui/GradeImg";
+import { SortArrow } from "../../components/ui/SortArrow";
 
 // An empty prefix means "the first root of this bucket"; the server resolves it
 // and the answer comes back on the listing, so the roots themselves live in one
@@ -1236,11 +1237,7 @@ function SortToggles({
             }`}
           >
             <span>{label}</span>
-            {active ? (
-              <span className="text-[10px] text-osu-pink-light font-mono">
-                {sort.direction === "asc" ? "↑" : "↓"}
-              </span>
-            ) : null}
+            {active ? <SortArrow direction={sort.direction} className="text-osu-pink-light" /> : null}
           </button>
         );
       })}

@@ -23,6 +23,7 @@ import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
+import { SortArrow } from "../components/ui/SortArrow";
 import { Pagination } from "../components/ui/Pagination";
 import { PpGainsRail } from "../components/top-plays/PpGainsRail";
 import type { CountryTopPlay } from "../lib/types";
@@ -890,11 +891,7 @@ function SortPill({
       title={active ? (dir === "desc" ? t`Click to sort ascending` : t`Click to sort descending`) : undefined}
     >
       <span>{children}</span>
-      {active && (
-        <span aria-hidden className="text-[10px] leading-none opacity-90">
-          {dir === "desc" ? "↓" : "↑"}
-        </span>
-      )}
+      {active && <SortArrow direction={dir} />}
     </button>
   );
 }

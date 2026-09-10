@@ -34,6 +34,7 @@ import { FilterField, SegmentedControl } from "../components/ui/SegmentedControl
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { StarRatingBadge } from "../components/ui/StarRating";
+import { SortArrow } from "../components/ui/SortArrow";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
@@ -1306,13 +1307,14 @@ function ScoresPage() {
                     cycleStarSort(-1);
                   }}
                   title={starSortTitle}
-                  className={`cursor-pointer rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tabular-nums transition-colors duration-150 ${
+                  className={`inline-flex cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tabular-nums transition-colors duration-150 ${
                     trackerSort === "stars"
                       ? "border-osu-pink/30 bg-osu-pink/15 text-osu-pink-light"
                       : "border-osu-b3/25 bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                   }`}
                 >
-                  <Trans>Stars</Trans>{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
+                  <Trans>Stars</Trans>
+                  {trackerSort === "stars" ? <SortArrow direction={trackerSortDirection} /> : null}
                 </button>
               </FilterField>
             </div>
@@ -1388,13 +1390,14 @@ function ScoresPage() {
                   cycleStarSort(-1);
                 }}
                 title={starSortTitle}
-                className={`flex-shrink-0 cursor-pointer rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors duration-[120ms] ${
+                className={`inline-flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors duration-[120ms] ${
                   trackerSort === "stars"
                     ? "border-osu-pink/30 bg-osu-pink/15 text-osu-pink-light"
                     : "border-osu-b3/25 bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                 }`}
               >
-                <Trans>Stars</Trans>{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
+                <Trans>Stars</Trans>
+                {trackerSort === "stars" ? <SortArrow direction={trackerSortDirection} /> : null}
               </button>
             </div>
           </div>

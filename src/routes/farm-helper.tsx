@@ -55,6 +55,7 @@ import { NeighborhoodGraph } from "../components/farm-helper/NeighborhoodGraph";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
+import { SortArrow } from "../components/ui/SortArrow";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { StarRangePill } from "../components/maps/StarRangePill";
@@ -1497,7 +1498,7 @@ function SortMenu({
       >
         <span className="text-osu-f1"><Trans>sort</Trans></span>
         {i18n._(active.label)}
-        <span aria-hidden className="text-osu-pink">{sortDir === "desc" ? "↓" : "↑"}</span>
+        <SortArrow direction={sortDir} className="text-osu-pink" />
         <ChevronDown className={`h-3 w-3 text-osu-f1 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
@@ -1528,9 +1529,7 @@ function SortMenu({
                   <span className="block text-[10px] leading-tight text-osu-f1">{i18n._(option.hint)}</span>
                 </span>
                 {isActive ? (
-                  <span aria-hidden className="shrink-0 text-[13px] leading-5 text-osu-pink">
-                    {sortDir === "desc" ? "↓" : "↑"}
-                  </span>
+                  <SortArrow direction={sortDir} className="mt-0.5 text-osu-pink" />
                 ) : null}
               </button>
             );
