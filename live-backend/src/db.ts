@@ -3014,8 +3014,9 @@ async function migrateBugReports(db: Db): Promise<void> {
 async function migrateAdminTodos(db: Db): Promise<void> {
   // Private owner todo list (admin-only) for reminders / bugs found / things left to do. Single
   // user, so no per-user scoping. category is bug|feature|idea|chore|task, priority is
-  // low|normal|high, status is open|done. Timestamps are epoch ms. Durable: retention never
-  // prunes this table.
+  // low|normal|high, status is open|hold|done ("hold" = parked off the board, added later and
+  // needing no migration since status is a plain text column). Timestamps are epoch ms. Durable:
+  // retention never prunes this table.
   await db.execute(`
     create table if not exists admin_todos (
       id text primary key,

@@ -8,7 +8,8 @@ import { getServerLiveBackendUrl } from "./live-backend";
 
 export type TodoCategory = "bug" | "feature" | "idea" | "chore" | "task";
 export type TodoPriority = "low" | "normal" | "high";
-export type TodoStatus = "open" | "done";
+// "hold" is a parked task: still on the list, off the board, never scored.
+export type TodoStatus = "open" | "hold" | "done";
 
 export interface AdminTodo {
   id: string;

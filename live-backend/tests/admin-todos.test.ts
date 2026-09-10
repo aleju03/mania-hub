@@ -67,6 +67,46 @@ describe("admin todos", () => {
     expect(reopened!.doneAt).toBeNull();
   });
 
+  it("parks a todo on hold and resumes it, keeping its position", async () => {
+    const todo = await createAdminTodo(db, { title: "someday" });
+    const held = await updateAdminTodo(db, { id: todo!.id, status: "hold" });
+    expect(held!.status).toBe("hold");
+    expect(held!.doneAt).toBeNull();
+    expect(held!.position).toBe(todo!.position);
+
+    const resumed = await updateAdminTodo(db, { id: todo!.id, status: "open" });
+    expect(resumed!.status).toBe("open");
+    expect(resumed!.position).toBe(todo!.position);
+  });
+
+  it("clears done_at when a completed todo is put on hold", async () => {
+    const todo = await createAdminTodo(db, { title: "half done" });
+    await updateAdminTodo(db, { id: todo!.id, status: "done" });
+    const held = await updateAdminTodo(db, { id: todo!.id, status: "hold" });
+    expect(held!.status).toBe("hold");
+    expect(held!.doneAt).toBeNull();
+  });
+
+  it("orders held todos between open and done, and leaves them out of clear-done", async () => {
+    const parked = await createAdminTodo(db, { title: "parked" });
+    const cleared = await createAdminTodo(db, { title: "cleared" });
+    await createAdminTodo(db, { title: "open" });
+    await updateAdminTodo(db, { id: parked!.id, status: "hold" });
+    await updateAdminTodo(db, { id: cleared!.id, status: "done" });
+
+    expect((await listAdminTodos(db)).map((t) => t.title)).toEqual(["open", "parked", "cleared"]);
+
+    expect(await clearDoneAdminTodos(db)).toBe(1);
+    expect((await listAdminTodos(db)).map((t) => t.title)).toEqual(["open", "parked"]);
+  });
+
+  it("never hands a new todo a position a held todo still owns", async () => {
+    const first = await createAdminTodo(db, { title: "first" });
+    await updateAdminTodo(db, { id: first!.id, status: "hold" });
+    const second = await createAdminTodo(db, { title: "second" });
+    expect(second!.position).toBeLessThan(first!.position);
+  });
+
   it("applies partial updates without clobbering untouched fields", async () => {
     const todo = await createAdminTodo(db, { title: "keep me", notes: "context", priority: "low" });
     const updated = await updateAdminTodo(db, { id: todo!.id, priority: "high" });

@@ -6,14 +6,19 @@ import { exec } from "../db.js";
 // reminders, bugs found, and things left to do so nothing gets lost. Every endpoint is admin-token
 // gated and there is no per-user scoping: there is exactly one owner. Timestamps are epoch ms
 // (matching user_goals / pack tables). The table is durable, retention never touches it.
+//
+// A task is open (on the board), hold (parked, off the board but not finished) or done.
 
 export type TodoCategory = "bug" | "feature" | "idea" | "chore" | "task";
 export type TodoPriority = "low" | "normal" | "high";
-export type TodoStatus = "open" | "done";
+// "hold" is a task the owner has parked: still on the list, deliberately not on the board. It is
+// not a completed task (nothing scores it, "Clear results" leaves it alone) and not an open one
+// (it does not sit in a lane or the queue).
+export type TodoStatus = "open" | "hold" | "done";
 
 export const TODO_CATEGORIES: readonly TodoCategory[] = ["bug", "feature", "idea", "chore", "task"];
 export const TODO_PRIORITIES: readonly TodoPriority[] = ["low", "normal", "high"];
-export const TODO_STATUSES: readonly TodoStatus[] = ["open", "done"];
+export const TODO_STATUSES: readonly TodoStatus[] = ["open", "hold", "done"];
 
 const TITLE_MAX = 500;
 const NOTES_MAX = 5000;
@@ -122,14 +127,17 @@ function rowToTodo(row: Record<string, unknown>): AdminTodo {
   };
 }
 
-// Board order: open before done; open items follow the owner's manual drag order (position asc,
-// newest first as a tiebreak); done items by most-recently-completed. Sorted in JS because a
-// personal list never grows past a few hundred rows and the mixed key is clearer here than a
-// CASE-heavy ORDER BY.
+// Board order: open, then held, then done; open items follow the owner's manual drag order
+// (position asc, newest first as a tiebreak); held items by most-recently-parked; done items by
+// most-recently-completed. Sorted in JS because a personal list never grows past a few hundred
+// rows and the mixed key is clearer here than a CASE-heavy ORDER BY.
+const STATUS_ORDER: Record<TodoStatus, number> = { open: 0, hold: 1, done: 2 };
+
 function sortTodos(todos: AdminTodo[]): AdminTodo[] {
   return todos.slice().sort((a, b) => {
-    if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+    if (a.status !== b.status) return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (a.status === "done") return (b.doneAt ?? 0) - (a.doneAt ?? 0);
+    if (a.status === "hold") return b.updatedAt - a.updatedAt;
     if (a.position !== b.position) return a.position - b.position;
     return b.createdAt - a.createdAt;
   });
@@ -153,7 +161,9 @@ export async function createAdminTodo(db: Db, input: CreateTodoInput): Promise<A
   const now = Date.now();
   // A freshly added task lands at the very top of the open list (one step above the current minimum)
   // so it's the first thing you see; drag it wherever it belongs afterwards.
-  const minRow = await exec(db, "select min(position) as min_pos from admin_todos where status = 'open'");
+  // Held rows count too: they keep their position while parked, so a new task must not be given
+  // one a resumed task would later reappear on.
+  const minRow = await exec(db, "select min(position) as min_pos from admin_todos where status != 'done'");
   const minPos = minRow.rows[0]?.min_pos;
   const position = minPos == null ? 0 : Number(minPos) - POSITION_STEP;
   const seq = await allocateTodoSeq(db);
@@ -193,9 +203,13 @@ export async function updateAdminTodo(db: Db, input: UpdateTodoInput): Promise<A
   const priority = input.priority === undefined ? existing.priority : normalizePriority(input.priority);
   const status = input.status === undefined ? existing.status : normalizeStatus(input.status);
   const position = input.position === undefined ? existing.position : normalizePosition(input.position, existing.position);
+  // A held task keeps its position, so resuming it drops it back where it was in the order.
   let doneAt = existing.doneAt;
-  if (status === "done" && existing.status !== "done") doneAt = now;
-  else if (status === "open") doneAt = null;
+  if (status === "done") {
+    if (existing.status !== "done") doneAt = now;
+  } else {
+    doneAt = null;
+  }
 
   await exec(
     db,

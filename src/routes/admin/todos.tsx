@@ -13,6 +13,8 @@ import {
   ListChecks,
   ListOrdered,
   Loader2,
+  Pause,
+  Play,
   Plus,
   RotateCcw,
   Search,
@@ -287,12 +289,15 @@ function gradeOf(acc: number): { label: string; text: string } {
 }
 
 // Mirrors the backend board order so optimistic local updates land where a refetch would put them:
-// open before done; open items follow the manual drag order (position asc), done items by most
-// recently completed.
+// open, then held, then done; open items follow the manual drag order (position asc), held items by
+// most recently parked, done items by most recently completed.
+const STATUS_ORDER: Record<TodoStatus, number> = { open: 0, hold: 1, done: 2 };
+
 function sortTodos(list: AdminTodo[]): AdminTodo[] {
   return list.slice().sort((a, b) => {
-    if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+    if (a.status !== b.status) return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (a.status === "done") return (b.doneAt ?? 0) - (a.doneAt ?? 0);
+    if (a.status === "hold") return b.updatedAt - a.updatedAt;
     if (a.position !== b.position) return a.position - b.position;
     return b.createdAt - a.createdAt;
   });
@@ -390,6 +395,7 @@ function TodosPage() {
   // Lane a note is currently hovering over mid-drag, so the drop target is obvious before release.
   const [hoveredLane, setHoveredLane] = useState<TodoCategory | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [showHold, setShowHold] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [editing, setEditing] = useState<AdminTodo | null>(null);
 
@@ -452,6 +458,7 @@ function TodosPage() {
 
   const openFiltered = useMemo(() => todos.filter((t) => t.status === "open" && matchesSearch(t)), [todos, matchesSearch]);
   const doneFiltered = useMemo(() => todos.filter((t) => t.status === "done" && matchesSearch(t)), [todos, matchesSearch]);
+  const holdFiltered = useMemo(() => todos.filter((t) => t.status === "hold" && matchesSearch(t)), [todos, matchesSearch]);
 
   // Lane contents: open todos split by category, position asc (first = next up, closest to the line).
   const lanes = useMemo(() => {
@@ -464,11 +471,13 @@ function TodosPage() {
   const queue = useMemo(() => openFiltered.slice().sort((a, b) => a.position - b.position), [openFiltered]);
 
   // Unfiltered, unlike `openFiltered`: drops need every occupied position, including rows the
-  // current search is hiding.
-  const openTodos = useMemo(() => todos.filter((t) => t.status === "open"), [todos]);
-  const openCount = openTodos.length;
+  // current search is hiding and held rows, which keep their position while parked so resuming one
+  // puts it back where it was.
+  const positionPeers = useMemo(() => todos.filter((t) => t.status !== "done"), [todos]);
+  const openCount = useMemo(() => todos.filter((t) => t.status === "open").length, [todos]);
   const doneAll = useMemo(() => todos.filter((t) => t.status === "done"), [todos]);
   const doneCount = doneAll.length;
+  const holdCount = useMemo(() => todos.filter((t) => t.status === "hold").length, [todos]);
   const acc = accuracyOf(doneAll);
   const grade = gradeOf(acc);
 
@@ -518,6 +527,31 @@ function TodosPage() {
     [punch, refetch],
   );
 
+  // Parking a task takes it off the field without scoring it, and resuming drops it back at the
+  // position it kept while parked.
+  const handleHold = useCallback(
+    async (todo: AdminTodo) => {
+      const nextStatus: TodoStatus = todo.status === "hold" ? "open" : "hold";
+      setTodos((prev) => upsertTodo(prev, { ...todo, status: nextStatus, doneAt: null, updatedAt: Date.now() }));
+      if (nextStatus === "hold") {
+        // Open the shelf so the task is visibly somewhere rather than just gone from the field.
+        setShowHold(true);
+        playTodoDropTick();
+      } else {
+        playTodoReturn();
+      }
+      setError(null);
+      try {
+        const result = await updateAdminTodo({ data: { id: todo.id, status: nextStatus } });
+        setTodos((prev) => upsertTodo(prev, result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [refetch],
+  );
+
   const handleSave = useCallback(async (id: string, patch: EditPatch) => {
     setError(null);
     try {
@@ -540,7 +574,7 @@ function TodosPage() {
   const handleDelete = useCallback(
     async (todo: AdminTodo) => {
       setTodos((prev) => prev.filter((t) => t.id !== todo.id));
-      // Dropping an open note off the field is a miss; deleting from results is just cleanup.
+      // Dropping an open note off the field is a miss; deleting a held or cleared row is cleanup.
       if (todo.status === "open") {
         punch(todo.category, "MISS");
         playTodoMiss();
@@ -622,7 +656,7 @@ function TodosPage() {
               <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Todo</h1>
             </div>
             <p className="mt-1 text-[11px] text-osu-f1">
-              {openCount} on the field{doneCount ? ` · ${doneCount} cleared` : ""}
+              {openCount} on the field{holdCount ? ` · ${holdCount} on hold` : ""}{doneCount ? ` · ${doneCount} cleared` : ""}
               <span className="hidden sm:inline"> · private notes for the project</span>
             </p>
           </div>
@@ -760,7 +794,7 @@ function TodosPage() {
                         onReorderEnd={handleReorderEnd}
                         laneRefs={laneRefs}
                         lanes={lanes}
-                        openTodos={openTodos}
+                        positionPeers={positionPeers}
                         onMoveToLane={handleMoveToLane}
                         onDragHoverLane={setHoveredLane}
                         hovered={hoveredLane === key}
@@ -795,7 +829,7 @@ function TodosPage() {
                 ) : (
                   <Queue
                     items={queue}
-                    openTodos={openTodos}
+                    positionPeers={positionPeers}
                     onHit={handleToggle}
                     onOpen={setEditing}
                     onReorderEnd={handleReorderEnd}
@@ -827,7 +861,20 @@ function TodosPage() {
                 </AnimatePresence>
                 <span className="hidden text-[10px] uppercase tracking-wider text-osu-f1/50 sm:inline">cleared</span>
               </div>
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-1">
+                {holdCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHold((open) => !open)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                      showHold ? "text-osu-l1" : "text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showHold ? "rotate-180" : ""}`} />
+                    Hold
+                    <span className="tabular-nums text-osu-f1/60">{holdCount}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowResults((open) => !open)}
@@ -840,6 +887,22 @@ function TodosPage() {
                   <span className="tabular-nums text-osu-f1/60">{doneCount}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Shelf: parked tasks, off the field and unscored until they are resumed */}
+        {!loading && showHold && holdCount > 0 && (
+          <div className="rounded-xl border border-osu-b3/40 bg-osu-b4/20 p-3">
+            <p className="text-[10px] text-osu-f1/60">On hold. These sit out of the board and out of the score until you resume them.</p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {holdFiltered.length === 0 ? (
+                <p className="py-4 text-center text-xs text-osu-f1">Nothing on hold matches this search.</p>
+              ) : (
+                holdFiltered.map((todo) => (
+                  <HoldRow key={todo.id} todo={todo} onResume={handleHold} onOpen={setEditing} onDelete={handleDelete} />
+                ))
+              )}
             </div>
           </div>
         )}
@@ -876,6 +939,7 @@ function TodosPage() {
             onClose={() => setEditing(null)}
             onSave={handleSave}
             onDelete={handleDelete}
+            onHold={handleHold}
           />
         )}
       </AnimatePresence>
@@ -899,15 +963,15 @@ interface LaneProps {
   // contents needed to work out where in the target lane the note landed.
   laneRefs: React.RefObject<LaneElements>;
   lanes: Record<TodoCategory, AdminTodo[]>;
-  // Every open todo, search filter included, since `position` is global: a drop has to dodge
-  // positions held by notes that aren't currently on screen.
-  openTodos: AdminTodo[];
+  // Every todo that still owns a position (open plus held), search filter included, since
+  // `position` is global: a drop has to dodge positions held by notes that aren't on screen.
+  positionPeers: AdminTodo[];
   onMoveToLane: (id: string, category: TodoCategory, position: number) => void;
   onDragHoverLane: (category: TodoCategory | null) => void;
   hovered: boolean;
 }
 
-function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, openTodos, onMoveToLane, onDragHoverLane, hovered }: LaneProps) {
+function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, positionPeers, onMoveToLane, onDragHoverLane, hovered }: LaneProps) {
   const meta = CATEGORY_META[category];
   const Icon = meta.Icon;
 
@@ -930,8 +994,8 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
 
   const lanesRef = useRef(lanes);
   lanesRef.current = lanes;
-  const openTodosRef = useRef(openTodos);
-  openTodosRef.current = openTodos;
+  const positionPeersRef = useRef(positionPeers);
+  positionPeersRef.current = positionPeers;
 
   const handleDragStart = useCallback(() => {
     dragging.current = true;
@@ -949,7 +1013,7 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
     (id: string, point: { x: number; y: number }) => {
       dragging.current = false;
       onDragHoverLane(null);
-      const occupied = openTodosRef.current.filter((t) => t.id !== id).map((t) => t.position);
+      const occupied = positionPeersRef.current.filter((t) => t.id !== id).map((t) => t.position);
       // Whatever happens next, the local order must stop diverging from the data.
       const resync = () => setOrder([...itemsRef.current].reverse());
 
@@ -1140,16 +1204,16 @@ function LaneNote({
 
 function Queue({
   items,
-  openTodos,
+  positionPeers,
   onHit,
   onOpen,
   onReorderEnd,
 }: {
   // Position asc: first row is the next thing to do.
   items: AdminTodo[];
-  // Every open todo, search filter included - `position` is global, so a drop has to dodge
-  // positions held by rows the current search is hiding.
-  openTodos: AdminTodo[];
+  // Every todo that still owns a position (open plus held) - `position` is global, so a drop has to
+  // dodge positions held by rows that aren't in this list.
+  positionPeers: AdminTodo[];
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onReorderEnd: (id: string, position: number) => void;
@@ -1166,8 +1230,8 @@ function Queue({
   orderRef.current = order;
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const openTodosRef = useRef(openTodos);
-  openTodosRef.current = openTodos;
+  const positionPeersRef = useRef(positionPeers);
+  positionPeersRef.current = positionPeers;
 
   const handleDragStart = useCallback(() => {
     dragging.current = true;
@@ -1188,7 +1252,7 @@ function Queue({
         resync();
         return;
       }
-      const occupied = openTodosRef.current.filter((t) => t.id !== id).map((t) => t.position);
+      const occupied = positionPeersRef.current.filter((t) => t.id !== id).map((t) => t.position);
       const position = queueDropPosition(current, index, occupied);
       // null = sole row with nothing to sit between; unchanged = dropped back where it started.
       if (position === null || position === current[index].position) {
@@ -1293,6 +1357,80 @@ function QueueRow({
 }
 
 // ---------------------------------------------------------------------------
+// Hold row (a parked todo, waiting to be resumed)
+// ---------------------------------------------------------------------------
+
+function HoldRow({
+  todo,
+  onResume,
+  onOpen,
+  onDelete,
+}: {
+  todo: AdminTodo;
+  onResume: (todo: AdminTodo) => void;
+  onOpen: (todo: AdminTodo) => void;
+  onDelete: (todo: AdminTodo) => void;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = window.setTimeout(() => setConfirmDelete(false), 4_000);
+    return () => window.clearTimeout(id);
+  }, [confirmDelete]);
+
+  const meta = CATEGORY_META[todo.category];
+  const CategoryIcon = meta.Icon;
+
+  return (
+    <div className="group flex items-center gap-2 rounded-lg border border-osu-b3/30 bg-osu-b4/20 px-2.5 py-1.5">
+      <Pause className="h-3 w-3 shrink-0 text-osu-f1/50" />
+      <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
+      <TodoSeq seq={todo.seq} className="text-[10px]" />
+      <button
+        type="button"
+        onClick={() => onOpen(todo)}
+        className="min-w-0 flex-1 truncate text-left text-xs text-osu-f1 hover:text-osu-l1 cursor-pointer"
+      >
+        {todo.title}
+      </button>
+      {todo.notes && <AlignLeft className="h-2.5 w-2.5 shrink-0 text-osu-f1/60" />}
+      <span className="hidden shrink-0 text-[10px] tabular-nums text-osu-f1/50 sm:inline">{formatShortDate(todo.updatedAt)}</span>
+      {/* Same reveal-on-hover caveat as the results rows: always shown on touch. */}
+      <button
+        type="button"
+        onClick={() => onResume(todo)}
+        aria-label="Put back on the field"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-100 transition hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
+      >
+        <Play className="h-3 w-3" />
+      </button>
+      {confirmDelete ? (
+        <button
+          type="button"
+          onClick={() => {
+            setConfirmDelete(false);
+            onDelete(todo);
+          }}
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer sm:h-6"
+        >
+          <Trash2 className="h-3 w-3" />
+          Sure?
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          aria-label="Delete"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-100 transition hover:bg-osu-red/15 hover:text-osu-red cursor-pointer sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Results row (cleared todo with its judgement)
 // ---------------------------------------------------------------------------
 
@@ -1372,11 +1510,13 @@ function NoteModal({
   onClose,
   onSave,
   onDelete,
+  onHold,
 }: {
   todo: AdminTodo;
   onClose: () => void;
   onSave: (id: string, patch: EditPatch) => Promise<void>;
   onDelete: (todo: AdminTodo) => void;
+  onHold: (todo: AdminTodo) => void;
 }) {
   const [draft, setDraft] = useState<EditPatch>({
     title: todo.title,
@@ -1497,6 +1637,19 @@ function NoteModal({
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
+            </button>
+          )}
+          {todo.status !== "done" && (
+            <button
+              type="button"
+              onClick={() => {
+                onHold(todo);
+                onClose();
+              }}
+              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
+            >
+              {todo.status === "hold" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+              {todo.status === "hold" ? "Resume" : "Hold"}
             </button>
           )}
           <div className="ml-auto flex items-center gap-1.5">

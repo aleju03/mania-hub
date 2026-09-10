@@ -48,6 +48,8 @@ Removing an Eternal has one extra effect: when it was the collector's last Etern
 
 `/admin/todos` is the owner's private todo list, backed by `features/admin-todos.ts` (durable `admin_todos` table, single user, no per-user scoping) over `GET /api/admin/todos` + `POST /api/admin/todos/{create,update,delete,clear-done}`. Frontend server fns in `src/lib/admin-todos.ts` proxy with the shared admin token; the nav entry and page are `canUseAdminFeatures`-gated.
 
+A task is `open`, `hold` or `done`. `hold` is the shelf for something kept on the list but not planned right now: it leaves the lanes and the queue, is not a completion (nothing scores it, `done_at` is cleared, "Clear results" leaves it alone), and it keeps its `position` while parked so resuming puts it back where it was - which is why both the new-task position and the drag collision set count held rows, not just open ones. Held rows sort between open and done, most recently parked first, and the board shows them in a collapsible shelf below the playfield; the hold/resume control lives in the note's edit modal. The status column is plain text, so the value needed no migration.
+
 ## Translation reports
 
 `/admin/translation-reports` is where reader feedback about the site's own translations lands. A visitor browsing in a non-English locale gets a "Report a translation" control under the language picker in the settings panel's Appearance tab (`src/components/settings/TranslationReportForm.tsx`, hidden in English since the source strings are written in it), and files what reads wrong, what it should say, and anything else.
