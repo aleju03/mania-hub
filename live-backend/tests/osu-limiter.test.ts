@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, logApiCall, migrate } from "../src/db.js";
-import { BACKGROUND_LANE_MAX_WAIT_MS, INTERACTIVE_PAUSE_CAP_MS, OsuApiError, TokenBucketLimiter, type LimiterCallLog } from "../src/osu/client.js";
+import { BACKGROUND_LANE_MAX_WAIT_MS, INTERACTIVE_PAUSE_CAP_MS, OsuApiClient, OsuApiError, TokenBucketLimiter, type LimiterCallLog } from "../src/osu/client.js";
 
 const dirs: string[] = [];
 
@@ -41,6 +41,48 @@ describe("token bucket limiter", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     await job;
     expect(jobDone).toBe(true);
+  });
+
+  it("serves an upstream-mandated cooldown in full, interactive lanes included", async () => {
+    // A Retry-After is osu! telling us how long to wait. The interactive cap
+    // is for a pause length we picked ourselves, and must not shorten this one.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const limiter = new TokenBucketLimiter(1000, 1000, undefined, { interactiveBurstCapacity: 4 });
+    limiter.pause(60_000, { mandated: true });
+
+    let interactiveDone = false;
+    const interactive = limiter.schedule("getUser", "/users/1/mania", async () => {
+      interactiveDone = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(interactiveDone).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await interactive;
+    expect(interactiveDone).toBe(true);
+  });
+
+  it("does not let a later self-chosen pause shorten a mandated cooldown", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const limiter = new TokenBucketLimiter(1000, 1000, undefined, { interactiveBurstCapacity: 4 });
+    limiter.pause(60_000, { mandated: true });
+    await vi.advanceTimersByTimeAsync(5_000);
+    limiter.pause(20_000);
+
+    let interactiveDone = false;
+    const interactive = limiter.schedule("getUser", "/users/1/mania", async () => {
+      interactiveDone = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(INTERACTIVE_PAUSE_CAP_MS + 100);
+    expect(interactiveDone).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await interactive;
+    expect(interactiveDone).toBe(true);
   });
 
   it("keeps sustained interactive demand near the target rate", async () => {
@@ -172,5 +214,37 @@ describe("api call log durations", () => {
     expect(Number(rows[0].status)).toBe(200);
     expect(rows[1].duration_ms).toBe(null);
     expect(rows[1].status).toBe(null);
+  });
+});
+
+describe("429 pause provenance", () => {
+  function clientWith429(headers: Record<string, string>): OsuApiClient {
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/oauth/token")) {
+        return new Response(JSON.stringify({ access_token: "t", expires_in: 3600 }), { status: 200 });
+      }
+      return new Response("rate limited", { status: 429, headers });
+    }) as unknown as typeof fetch;
+    return new OsuApiClient(
+      { osuClientId: "1", osuClientSecret: "s", osuApiTargetPerMinute: 1000, osuApiHardPerMinute: 1000 },
+      fetchImpl,
+    );
+  }
+
+  it("marks a Retry-After cooldown as mandated", async () => {
+    const client = clientWith429({ "retry-after": "60" });
+    await expect(client.getJson("/users/1/mania", "getUser")).rejects.toBeInstanceOf(OsuApiError);
+    const state = client.limiter.state();
+    expect(state.pausedMs).toBeGreaterThan(55_000);
+    expect(state.pausedMandatedMs).toBeGreaterThan(55_000);
+  });
+
+  it("leaves a 429 without Retry-After as our own fallback pause", async () => {
+    const client = clientWith429({});
+    await expect(client.getJson("/users/2/mania", "getUser")).rejects.toBeInstanceOf(OsuApiError);
+    const state = client.limiter.state();
+    expect(state.pausedMs).toBeGreaterThan(55_000);
+    expect(state.pausedMandatedMs).toBe(0);
   });
 });

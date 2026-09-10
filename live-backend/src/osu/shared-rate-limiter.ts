@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
-import type { LimiterLane, SharedLimiter } from "./client.js";
-import { INTERACTIVE_PAUSE_CAP_MS } from "./client.js";
+import type { LimiterLane, LimiterPauseOptions, SharedLimiter } from "./client.js";
+import { DEFAULT_429_PAUSE_MS, INTERACTIVE_PAUSE_CAP_MS } from "./client.js";
 
 const WINDOW_MS = 60_000;
 const PRUNE_AFTER_MS = 5 * 60_000;
@@ -15,6 +15,12 @@ const PRUNE_AFTER_MS = 5 * 60_000;
 // the moment the writer is busy) is all this ever needed to be.
 export const PRUNE_INTERVAL_MS = 60_000;
 const PAUSE_KEY = "control:osu_rate_limit_paused_until";
+/* The stored pause row, read defensively in SQL so the upsert can merge each
+   deadline by max. `cast(value_json as integer)` is the legacy bare-number
+   shape (see readPause), which recorded no start and no mandate. */
+const EXISTING_UNTIL = "coalesce(json_extract(journal_meta.value_json, '$.until'), cast(journal_meta.value_json as integer), 0)";
+const EXISTING_AT = `coalesce(json_extract(journal_meta.value_json, '$.at'), cast(journal_meta.value_json as integer) - ${DEFAULT_429_PAUSE_MS}, 0)`;
+const EXISTING_MANDATED = "coalesce(json_extract(journal_meta.value_json, '$.mandatedUntil'), 0)";
 // Reservation is a retry loop with no queue: every other caller (in this
 // process or the sibling server/worker process) that lands a reservation
 // pushes the next background slot further out, so under sustained API
@@ -81,26 +87,41 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     }
   }
 
-  async pause(ms: number): Promise<void> {
+  /* `mandated` marks a cooldown upstream asked for by Retry-After. It is kept
+     as its own deadline because no lane, interactive included, may cut that
+     one short (see TokenBucketLimiter.pause). Each field merges by max, so a
+     shorter pause landing after a longer one never shortens either deadline. */
+  async pause(ms: number, options: LimiterPauseOptions = {}): Promise<void> {
     if (!Number.isFinite(ms) || ms <= 0) return;
     const now = Date.now();
     const pausedUntil = now + Math.ceil(ms);
+    const mandatedUntil = options.mandated ? pausedUntil : 0;
     await exec(
       this.db,
       `insert into journal_meta (key, value_json, updated_at)
        values (?, ?, ?)
        on conflict(key) do update set
-         value_json = case
-           when coalesce(json_extract(journal_meta.value_json, '$.until'), cast(journal_meta.value_json as integer)) > ? then journal_meta.value_json
-           else excluded.value_json
-         end,
+         value_json = json_object(
+           'until', max(?, ${EXISTING_UNTIL}),
+           'at', case when ? > ${EXISTING_UNTIL} then ? else ${EXISTING_AT} end,
+           'mandatedUntil', max(?, ${EXISTING_MANDATED})
+         ),
          updated_at = excluded.updated_at`,
-      [PAUSE_KEY, json({ until: pausedUntil, at: now }), new Date().toISOString(), pausedUntil],
+      [
+        PAUSE_KEY,
+        json({ until: pausedUntil, at: now, mandatedUntil }),
+        new Date().toISOString(),
+        pausedUntil,
+        pausedUntil,
+        now,
+        mandatedUntil,
+      ],
     ).catch(() => undefined);
   }
 
-  async state(): Promise<{ usedLastMinute: number; pausedMs: number; targetPerMinute: number; hardPerMinute: number; backgroundReservedPerMinute: number }> {
+  async state(): Promise<{ usedLastMinute: number; pausedMs: number; pausedMandatedMs: number; targetPerMinute: number; hardPerMinute: number; backgroundReservedPerMinute: number }> {
     const now = Date.now();
+    const pauseState = await this.readPause();
     const row = (await exec(
       this.db,
       "select count(*) as count from api_rate_limit_reservations where provider = ? and started_at_ms > ?",
@@ -108,7 +129,8 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     )).rows[0];
     return {
       usedLastMinute: Number(row?.count ?? 0),
-      pausedMs: Math.max(0, (await this.readPause()).until - now),
+      pausedMs: Math.max(0, pauseState.until - now),
+      pausedMandatedMs: Math.max(0, pauseState.mandatedUntil - now),
       targetPerMinute: this.targetPerMinute,
       hardPerMinute: this.hardPerMinute,
       backgroundReservedPerMinute: this.backgroundReservedPerMinute,
@@ -120,10 +142,14 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     await this.pruneExpired(now);
 
     const pause = await this.readPause();
-    // Interactive calls resume after a short cooldown instead of sitting out
-    // the whole 429 pause (mirrors TokenBucketLimiter.nextWaitMs).
+    // Interactive calls resume early from a pause we chose ourselves, but they
+    // serve an upstream-mandated cooldown in full like every other lane
+    // (mirrors TokenBucketLimiter.nextWaitMs).
     const pausedUntil = lane === "interactive"
-      ? Math.min(pause.until, pause.at + INTERACTIVE_PAUSE_CAP_MS)
+      ? Math.max(
+        Math.min(pause.until, pause.at + INTERACTIVE_PAUSE_CAP_MS),
+        pause.mandatedUntil,
+      )
       : pause.until;
     let waitMs = pausedUntil > now ? pausedUntil - now : 0;
 
@@ -209,15 +235,20 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     }
   }
 
-  private async readPause(): Promise<{ until: number; at: number }> {
+  private async readPause(): Promise<{ until: number; at: number; mandatedUntil: number }> {
     const row = (await exec(this.db, "select value_json from journal_meta where key = ?", [PAUSE_KEY])).rows[0];
-    const value = parseJson<number | { until?: number; at?: number }>(row?.value_json, 0);
+    const value = parseJson<number | { until?: number; at?: number; mandatedUntil?: number }>(row?.value_json, 0);
     if (typeof value === "number") {
       // Legacy shape: a bare pausedUntil timestamp. The pause start is unknown,
-      // so assume the default 60s pause length.
-      return { until: value, at: value - 60_000 };
+      // so assume the default pause length, and nothing recorded whether
+      // upstream mandated it - treat it as ours (the capped, lenient read).
+      return { until: value, at: value - DEFAULT_429_PAUSE_MS, mandatedUntil: 0 };
     }
-    return { until: Number(value?.until ?? 0), at: Number(value?.at ?? 0) };
+    return {
+      until: Number(value?.until ?? 0),
+      at: Number(value?.at ?? 0),
+      mandatedUntil: Number(value?.mandatedUntil ?? 0),
+    };
   }
 }
 

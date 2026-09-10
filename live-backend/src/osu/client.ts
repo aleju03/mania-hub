@@ -10,9 +10,17 @@ const BEATMAP_FILE_FETCH_HEADERS = {
 
 export type LimiterLane = "interactive" | "job" | "bulk" | "default";
 
-// A 429 pause freezes background lanes for its full duration, but interactive
-// calls (a person waiting on a replay or profile) resume after this cap.
+/* A pause we chose ourselves (the fallback length for a 429 that named no
+   Retry-After) freezes background lanes for its full duration, but interactive
+   calls - a person waiting on a replay or profile - resume after this cap.
+   It does not apply to a cooldown upstream actually asked for: see pause()'s
+   `mandated` option, where the server's own duration is served in full by
+   every lane. */
 export const INTERACTIVE_PAUSE_CAP_MS = 10_000;
+
+// How long to sit out a 429 that carried no Retry-After. Our guess, not the
+// server's instruction, so the interactive cap applies to it.
+export const DEFAULT_429_PAUSE_MS = 60_000;
 
 export type LimiterCallLog = {
   caller: string;
@@ -24,9 +32,15 @@ export type LimiterCallLog = {
   status: number | null;
 };
 
+export type LimiterPauseOptions = {
+  /* True when the duration came from an upstream Retry-After rather than from
+     our own fallback. A mandated cooldown is not shortened for anybody. */
+  mandated?: boolean;
+};
+
 export interface SharedLimiter {
   reserve(caller: string, path: string, lane: LimiterLane): Promise<number>;
-  pause?(ms: number): void | Promise<void>;
+  pause?(ms: number, options?: LimiterPauseOptions): void | Promise<void>;
 }
 
 type PendingLimiterCall<T = unknown> = {
@@ -86,6 +100,8 @@ export class TokenBucketLimiter {
   private pending: PendingLimiterCall[] = [];
   private pausedUntil = 0;
   private pausedAt = 0;
+  // Deadline of the longest upstream-mandated cooldown seen. Never capped.
+  private mandatedUntil = 0;
   private nextStartAt = 0;
   private sequence = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -190,7 +206,10 @@ export class TokenBucketLimiter {
     if (this.pending.length === 0) return 0;
     const now = Date.now();
     const pausedUntil = next.lane === "interactive"
-      ? Math.min(this.pausedUntil, this.pausedAt + INTERACTIVE_PAUSE_CAP_MS)
+      ? Math.max(
+        Math.min(this.pausedUntil, this.pausedAt + INTERACTIVE_PAUSE_CAP_MS),
+        this.mandatedUntil,
+      )
       : this.pausedUntil;
     if (now < pausedUntil) {
       return pausedUntil - now;
@@ -210,7 +229,7 @@ export class TokenBucketLimiter {
     if (this.pending.length === 0) return -1;
     const now = Date.now();
     let oldestStarvedBackground = -1;
-    // A 429 pause deliberately lets interactive work resume early. Do not let
+    // A self-chosen 429 pause deliberately lets interactive work resume early. Do not let
     // an aged background call that is still paused become the selected call
     // and park the whole local scheduler until the longer pause expires.
     if (now >= this.pausedUntil) {
@@ -259,14 +278,20 @@ export class TokenBucketLimiter {
     }
   }
 
-  pause(ms: number): void {
+  /* Freeze the budget for `ms`. With `mandated`, the duration is one upstream
+     asked for (a Retry-After), so no lane may cut it short - interactive
+     priority decides who goes first when the cooldown ends, not who may ignore
+     it. Without it the length is our own conservative fallback, which
+     interactive calls still leave early at INTERACTIVE_PAUSE_CAP_MS. */
+  pause(ms: number, options: LimiterPauseOptions = {}): void {
     if (!Number.isFinite(ms) || ms <= 0) return;
     const now = Date.now();
     if (now + ms > this.pausedUntil) {
       this.pausedUntil = now + ms;
       this.pausedAt = now;
     }
-    void this.sharedLimiter?.pause?.(ms);
+    if (options.mandated) this.mandatedUntil = Math.max(this.mandatedUntil, now + ms);
+    void this.sharedLimiter?.pause?.(ms, options);
   }
 
   state() {
@@ -292,6 +317,7 @@ export class TokenBucketLimiter {
       interactiveBurstCapacity: this.interactiveBurstCapacity,
       interactiveBurstTokens: Math.floor(this.interactiveBurstTokens),
       pausedMs: Math.max(0, this.pausedUntil - now),
+      pausedMandatedMs: Math.max(0, this.mandatedUntil - now),
       pending: this.pending.length,
       pendingByLane: [...pendingByLane.entries()]
         .map(([lane, count]) => ({ lane, count }))
@@ -535,7 +561,7 @@ export class OsuApiClient {
       });
       if (!response.ok) {
         const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-        if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+        if (response.status === 429) this.pauseFor429(retryAfterMs);
         throw new OsuApiError(response.status, path, retryAfterMs);
       }
       return response.json() as Promise<T>;
@@ -563,7 +589,7 @@ export class OsuApiClient {
       });
       if (!response.ok) {
         const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-        if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+        if (response.status === 429) this.pauseFor429(retryAfterMs);
         throw new OsuApiError(response.status, path, retryAfterMs);
       }
       return response.json() as Promise<T>;
@@ -581,7 +607,7 @@ export class OsuApiClient {
       });
       if (!response.ok) {
         const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-        if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+        if (response.status === 429) this.pauseFor429(retryAfterMs);
         throw new OsuApiError(response.status, path, retryAfterMs);
       }
       return response.arrayBuffer();
@@ -596,7 +622,7 @@ export class OsuApiClient {
       });
       if (!response.ok) {
         const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-        if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+        if (response.status === 429) this.pauseFor429(retryAfterMs);
         throw new Error(`osu! web ${response.status} for ${path}`);
       }
       const body = await response.json() as unknown;
@@ -616,7 +642,7 @@ export class OsuApiClient {
         });
         if (!response.ok) {
           const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
-          if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+          if (response.status === 429) this.pauseFor429(retryAfterMs, url);
           throw new Error(`${response.status}`);
         }
         const text = await response.text();
@@ -625,6 +651,18 @@ export class OsuApiClient {
       } finally {
         clearTimeout(timeout);
       }
+    });
+  }
+
+  /* A 429 that named a Retry-After is an instruction from osu!, and the whole
+     budget serves it out; one without a header only gets our fallback length,
+     which interactive calls may still leave early. A mirror's own 429
+     (catboy) pauses us defensively but does not speak for osu!, so it is
+     never mandated. */
+  private pauseFor429(retryAfterMs: number | null, url?: string): void {
+    const fromOsu = !url || url.startsWith("https://osu.ppy.sh");
+    this.limiter.pause(retryAfterMs ?? DEFAULT_429_PAUSE_MS, {
+      mandated: retryAfterMs !== null && fromOsu,
     });
   }
 

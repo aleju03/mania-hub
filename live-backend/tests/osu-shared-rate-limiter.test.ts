@@ -155,6 +155,47 @@ describe("sqlite shared osu! rate limiter", () => {
     expect(jobResolved).toBe(true);
   });
 
+  it("serves a mandated cooldown in full across processes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const { first, second } = await setupLimiters({ targetPerMinute: 1000, hardPerMinute: 1000 });
+    await first.pause(60_000, { mandated: true });
+
+    let interactiveResolved = false;
+    const interactive = second.reserve("getUser", "/users/1/mania", "interactive").then(() => {
+      interactiveResolved = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(INTERACTIVE_PAUSE_CAP_MS + 5);
+    expect(interactiveResolved).toBe(false);
+    expect((await second.state()).pausedMandatedMs).toBeGreaterThan(0);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await interactive;
+    expect(interactiveResolved).toBe(true);
+  });
+
+  it("keeps a mandated deadline when a shorter self-chosen pause follows it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const { first, second } = await setupLimiters({ targetPerMinute: 1000, hardPerMinute: 1000 });
+    await first.pause(60_000, { mandated: true });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await second.pause(20_000);
+
+    let interactiveResolved = false;
+    const interactive = second.reserve("getUser", "/users/1/mania", "interactive").then(() => {
+      interactiveResolved = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(INTERACTIVE_PAUSE_CAP_MS + 100);
+    expect(interactiveResolved).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await interactive;
+    expect(interactiveResolved).toBe(true);
+  });
+
   it("honours a legacy bare-number pause value", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
