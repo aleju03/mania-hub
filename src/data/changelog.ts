@@ -33,7 +33,6 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-11", text: "MSD plays, Recent order: plays whose accuracy is below the skill rating range now show as not rated instead of being left out. Tap not rated for the reason; the Hide not counted toggle removes them" },
   { date: "2026-09-10", text: "New Unrated tab on rankings: the plays the skill ratings leave out, on vibro charts and charts that cannot be rated. Each row is a map and the player who set it, with pp (calculated here even when osu! gives none), MSD with every note counted, and the chart's dan. Sort by any of the three, all time or this week, one play per player per chart", to: "/rankings", search: { tab: "unrated" } },
   { date: "2026-09-10", text: "The Skills tab has an Unrated plays view next to MSD plays and Dan plays, listing your own plays the ratings leave out with the same three numbers, ranked by the one you pick" },
   { date: "2026-09-10", text: "My Stats has new cards: what you play (your most common patterns and how you rate on each), sessions (average length, plays per session, your longest) and judgements (MAX:300 ratio, misses per 1k notes, accuracy per keymode), plus a most played map tile", to: "/my-stats" },
