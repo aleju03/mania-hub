@@ -8,14 +8,20 @@ import { skillPlaySharePath } from "../../lib/skill-play-share";
 // so it is built around filtering and ordering a list, not around a headline.
 //
 // Two sources, deliberately filtered in two different places:
-//   MSD  - /skill-plays, one 200-play cohort for each ordering.
+//   MSD  - /skill-plays, one 200-play cohort for each ordering. Recent also
+//          carries the plays the accuracy floor left unrated, so a play set
+//          a minute ago is findable and says why it has no rating.
 //   Dan  - /dan-evidence, best credited clears or newest clears and rejected
 //          passes, capped at 200 plays for either ordering.
+//   Unrated - /unrated-plays, the plays the ratings leave out (vibro charts,
+//          charts a dan cannot be read off), priced on their own terms: a
+//          computed pp, the every-note MSD and the chart's dan. One cohort
+//          per number ranked by, plus one by date.
 //
 // The cohort is fetched once, cached briefly, filtered in memory, and revealed
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
 // round trip; changing the actual subject (keymode/skill/side) loads a new one.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ban, ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
@@ -26,8 +32,10 @@ import {
   prefetchLiveMapSearchEntry,
   type LiveMapSearchEntry,
   type LivePlayerDanEvidencePlay,
+  fetchLivePlayerUnratedPlaysDirect,
   type LivePlayerDanRejectedPlay,
   type LivePlayerSkillPlay,
+  type LivePlayerUnratedPlay,
 } from "#/lib/live-backend";
 import type { MyDataSkillMode } from "#/lib/my-data";
 import { formatAccuracy, formatAccuracyAgainst, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
@@ -37,7 +45,7 @@ import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
 import { MapDetailModal, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
-import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "#/lib/dan-images";
+import { DanMark } from "./DanMark";
 import {
   SKILL_PLAYS_RATE_CAPS,
   readSkillPlaysPrefs,
@@ -62,7 +70,9 @@ const COHORT_CACHE_MAX_ENTRIES = 64;
 // often. Clicks inside the window only replay the spin.
 const REFRESH_MIN_INTERVAL_MS = 3_000;
 
-export type SkillPlaysExplorerView = "msd" | "dan";
+export type SkillPlaysExplorerView = "msd" | "dan" | "unrated";
+/** Which of the unrated list's three numbers "Best" ranks by. */
+export type UnratedSortKey = "pp" | "msd" | "dan";
 
 /** A clear and a turned-away play share a row shape; only the tail differs. */
 type DanRow =
@@ -77,6 +87,7 @@ interface CohortCacheEntry<T> {
 
 const msdCohortCache = new Map<string, CohortCacheEntry<LivePlayerSkillPlay[]>>();
 const danCohortCache = new Map<string, CohortCacheEntry<DanRow[]>>();
+const unratedCohortCache = new Map<string, CohortCacheEntry<LivePlayerUnratedPlay[]>>();
 
 function loadCachedCohort<T>(
   cache: Map<string, CohortCacheEntry<T>>,
@@ -136,10 +147,27 @@ function loadMsdCohort(
       limit: PLAYS_COHORT_SIZE,
       offset: 0,
       sort,
+      ...(sort === "recent" ? { includeRejected: true } : {}),
       ...(options.fresh ? { fresh: true } : {}),
     });
-    return page.items.slice(0, PLAYS_COHORT_SIZE);
+    if (sort !== "recent") return page.items.slice(0, PLAYS_COHORT_SIZE);
+    // The unrated plays have no number to rank by, so only Recent has a place
+    // for them: merged by date with the rated ones, same as the dan list.
+    const rejected = (page.rejected ?? []).map((play) => ({ ...play, ratingExcluded: true as const }));
+    return [...page.items, ...rejected]
+      .sort((left, right) => compareByPlayedAt(left.playedAt, right.playedAt) || left.beatmapId - right.beatmapId)
+      .slice(0, PLAYS_COHORT_SIZE);
   });
+}
+
+/** Newest first; a play with no stored timestamp sorts last, never to the top. */
+function compareByPlayedAt(left: string | null, right: string | null): number {
+  const leftAt = left ?? "";
+  const rightAt = right ?? "";
+  if (leftAt === rightAt) return 0;
+  if (leftAt === "") return 1;
+  if (rightAt === "") return -1;
+  return rightAt.localeCompare(leftAt);
 }
 
 function compareDanRows(sort: "rating" | "recent", left: DanRow, right: DanRow): number {
@@ -193,6 +221,29 @@ function oppositeSort(sort: "rating" | "recent"): "rating" | "recent" {
   return sort === "rating" ? "recent" : "rating";
 }
 
+function unratedCohortKey(userId: number, keyCount: number, unratedSort: UnratedSortKey, sort: "rating" | "recent"): string {
+  return `${userId}:${keyCount}:${sort === "recent" ? "recent" : unratedSort}`;
+}
+
+function loadUnratedCohort(
+  userId: number,
+  keyCount: number,
+  unratedSort: UnratedSortKey,
+  sort: "rating" | "recent",
+  options: { fresh?: boolean } = {},
+): Promise<LivePlayerUnratedPlay[]> {
+  const key = unratedCohortKey(userId, keyCount, unratedSort, sort);
+  if (options.fresh) unratedCohortCache.delete(key);
+  return loadCachedCohort(unratedCohortCache, key, async () => {
+    const page = await fetchLivePlayerUnratedPlaysDirect(userId, keyCount, {
+      sort: sort === "recent" ? "recent" : unratedSort,
+      limit: PLAYS_COHORT_SIZE,
+      ...(options.fresh ? { fresh: true } : {}),
+    });
+    return page.items.slice(0, PLAYS_COHORT_SIZE);
+  });
+}
+
 /** Warm the view a pointer or keyboard focus is about to open. */
 export function prefetchSkillPlaysExplorerView(
   userId: number,
@@ -203,6 +254,12 @@ export function prefetchSkillPlaysExplorerView(
   const mode = modes.find((entry) => entry.keyCount === prefs.keyCount) ?? modes[0];
   if (!mode) return;
   const sort = prefs.sort;
+  if (view === "unrated") {
+    void loadUnratedCohort(userId, mode.keyCount, prefs.unratedSort, sort)
+      .then(() => loadUnratedCohort(userId, mode.keyCount, prefs.unratedSort, oppositeSort(sort)))
+      .catch(() => {});
+    return;
+  }
   if (view === "dan") {
     void loadDanCohort(userId, mode.keyCount, prefs.side, sort)
       .then(() => loadDanCohort(userId, mode.keyCount, prefs.side, oppositeSort(sort)))
@@ -243,6 +300,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   const [hideRanked, setHideRanked] = useState(storedPrefs.hideRanked);
   const [maxPerChart, setMaxPerChart] = useState<number>(storedPrefs.maxPerChart);
   const [showRejected, setShowRejected] = useState(storedPrefs.showRejected);
+  const [unratedSort, setUnratedSort] = useState<UnratedSortKey>(storedPrefs.unratedSort);
   // The mod filter is not stored with the rest: it is a question about one
   // list ("only my rate-up plays"), not a way the reader likes this panel set
   // up, and a chip left on from last visit would silently thin a new one.
@@ -325,7 +383,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   const activeFilterCount = (maxPerChart !== 0 ? 1 : 0)
     + Object.keys(modFilter).length
     + (hideRanked ? 1 : 0)
-    + (view === "dan" && sort === "recent" && !showRejected ? 1 : 0);
+    + (view !== "unrated" && sort === "recent" && !showRejected ? 1 : 0);
 
   const cycleMod = useCallback((mod: string, reverse: boolean) => {
     setModFilter((current) => {
@@ -339,8 +397,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   // effects above make: what is stored is the state the reader was last left
   // looking at, which is the only thing worth restoring.
   useEffect(() => {
-    writeSkillPlaysPrefs({ keyCount, axis, side, sort, hideRanked, maxPerChart, showRejected });
-  }, [axis, hideRanked, keyCount, maxPerChart, showRejected, side, sort]);
+    writeSkillPlaysPrefs({ keyCount, axis, side, sort, hideRanked, maxPerChart, showRejected, unratedSort });
+  }, [axis, hideRanked, keyCount, maxPerChart, showRejected, side, sort, unratedSort]);
 
   // Which axes this keymode actually rates, so the picker never offers a list
   // that would come back empty. Overall leads: it is the one axis every
@@ -366,7 +424,9 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
     if (!mode) return;
     const listKey = view === "msd"
       ? `msd:${mode.keyCount}:${activeAxisKey}:${sort}`
-      : `dan:${mode.keyCount}:${side}:${sort}`;
+      : view === "unrated"
+        ? `unrated:${mode.keyCount}:${unratedSort}:${sort}`
+        : `dan:${mode.keyCount}:${side}:${sort}`;
     if (trackedListRef.current === listKey) return;
     trackedListRef.current = listKey;
     track("skill_plays_view", {
@@ -375,9 +435,9 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
       // The toolbar's own two labels, so the feed reads the way the page does.
       skill_plays_order: sort === "rating" ? "best" : "recent",
       skill_plays_keys: String(mode.keyCount),
-      ...(view === "msd" ? { skill_plays_axis: activeAxisKey } : { skill_plays_side: side }),
+      ...(view === "msd" ? { skill_plays_axis: activeAxisKey } : view === "unrated" ? { skill_plays_axis: unratedSort } : { skill_plays_side: side }),
     });
-  }, [activeAxisKey, mode, side, sort, username, view]);
+  }, [activeAxisKey, mode, side, sort, unratedSort, username, view]);
 
   const openDetail = useCallback((play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => {
     const context = { ratingLabel: rating.label, ratingColor: rating.color, dan: rating.dan };
@@ -427,6 +487,10 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
                   void loadDanCohort(userId, entry.keyCount, side, sort).catch(() => {});
                   return;
                 }
+                if (view === "unrated") {
+                  void loadUnratedCohort(userId, entry.keyCount, unratedSort, sort).catch(() => {});
+                  return;
+                }
                 const targetAxes = [OVERALL_AXIS_META, ...skillModeEntries(entry)];
                 const targetAxis = targetAxes.some((option) => axisKeyOf(option) === axis) ? axis : OVERALL_AXIS_META.key;
                 void loadMsdCohort(userId, entry.keyCount, targetAxis, sort).catch(() => {});
@@ -446,6 +510,20 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
               onPrefetch: () => void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axisKeyOf(option), sort).catch(() => {}),
             }))}
             onChange={setAxis}
+          />
+        ) : view === "unrated" ? (
+          <PillGroup
+            ariaLabel={t`Rank by`}
+            value={unratedSort}
+            options={[
+              { value: "pp" as const, label: "PP", color: "#ff66aa" },
+              { value: "msd" as const, label: "MSD", color: OVERALL_AXIS_META.color },
+              { value: "dan" as const, label: t`Dan`, color: SIDE_COLOR.rc },
+            ].map((option) => ({
+              ...option,
+              onPrefetch: () => void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, option.value, sort).catch(() => {}),
+            }))}
+            onChange={setUnratedSort}
           />
         ) : (
           <PillGroup
@@ -476,6 +554,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
                 label: t`Best`,
                 onPrefetch: () => {
                   if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "rating").catch(() => {});
+                  else if (view === "unrated") void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, unratedSort, "rating").catch(() => {});
                   else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "rating").catch(() => {});
                 },
               },
@@ -484,6 +563,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
                 label: t`Recent`,
                 onPrefetch: () => {
                   if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "recent").catch(() => {});
+                  else if (view === "unrated") void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, unratedSort, "recent").catch(() => {});
                   else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "recent").catch(() => {});
                 },
               },
@@ -509,8 +589,9 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           <RateCapControl value={maxPerChart} onChange={setMaxPerChart} />
           {availableMods.length > 1 ? <ModsControl mods={availableMods} modFilter={modFilter} onCycle={cycleMod} /> : null}
           {/* Both of these are the same decision asked twice, and together they
-              are the common setting, so they share one label and one track. Only
-              the dan list has plays it turned away, so only it offers the second. */}
+              are the common setting, so they share one label and one track. The
+              MSD and dan lists have plays they turned away, and only their Recent
+              order lists them, so only there is the second on offer. */}
           <HideControl
             options={[
               {
@@ -520,11 +601,11 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
                 pressed: hideRanked,
                 onChange: () => setHideRanked((current) => !current),
               },
-              ...(view === "dan" && sort === "recent"
+              ...(view !== "unrated" && sort === "recent"
                 ? [{
                   key: "uncounted",
                   label: t`not counted`,
-                  title: t`Hide the plays the dan rules turned away`,
+                  title: view === "dan" ? t`Hide the plays the dan rules turned away` : t`Hide the plays with no skill rating`,
                   pressed: !showRejected,
                   onChange: () => setShowRejected((current) => !current),
                 }]
@@ -548,6 +629,21 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           keyCount={mode.keyCount}
           axis={axis}
           axisMeta={activeAxis}
+          sort={sort}
+          hideRanked={hideRanked}
+          maxPerChart={maxPerChart}
+          showRejected={showRejected}
+          modFilter={modFilter}
+          refreshNonce={refreshNonce}
+          onAvailableMods={handleAvailableMods}
+          onSettled={onListSettled}
+          onOpen={openDetail}
+        />
+      ) : view === "unrated" ? (
+        <UnratedPlaysList
+          userId={userId}
+          keyCount={mode.keyCount}
+          unratedSort={unratedSort}
           sort={sort}
           hideRanked={hideRanked}
           maxPerChart={maxPerChart}
@@ -589,7 +685,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             mods: playModAcronyms(detail.play),
             daOd: detail.play.daOd ?? null,
             scoreId: detail.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
+            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, view === "unrated" ? "Overall" : detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
             dan: detail.dan,
@@ -618,6 +714,7 @@ function MsdPlaysList({
   sort,
   hideRanked,
   maxPerChart,
+  showRejected,
   modFilter,
   refreshNonce,
   onAvailableMods,
@@ -632,6 +729,7 @@ function MsdPlaysList({
   sort: "rating" | "recent";
   hideRanked: boolean;
   maxPerChart: number;
+  showRejected: boolean;
   modFilter: ModFilterState;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
   refreshNonce: number;
@@ -644,6 +742,9 @@ function MsdPlaysList({
   const [cohort, setCohort] = useState<LivePlayerSkillPlay[]>(() =>
     peekCachedCohort(msdCohortCache, cacheKey) ?? []);
   const [visibleLimit, setVisibleLimit] = useState(PLAYS_REVEAL_STEP);
+  // Which unrated row has its reason open, if any. One at a time, like the
+  // dan list's.
+  const [openReason, setOpenReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => peekCachedCohort(msdCohortCache, cacheKey) == null);
   const [error, setError] = useState<string | null>(null);
 
@@ -669,6 +770,7 @@ function MsdPlaysList({
     if (fresh) msdCohortCache.delete(msdCohortKey(userId, keyCount, axis, oppositeSort(sort)));
     const cached = fresh ? undefined : peekCachedCohort(msdCohortCache, cacheKey);
     if (cached) setCohort(cached);
+    setOpenReason(null);
     setLoading(fresh || cached == null);
     setError(null);
     loadMsdCohort(userId, keyCount, axis, sort, { fresh })
@@ -691,7 +793,7 @@ function MsdPlaysList({
   }, [axis, cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, showRejected, modKey]);
 
   // The chips on offer come from the whole cohort, not from what the other
   // filters left, so narrowing by mod never removes the chip that would undo it.
@@ -707,6 +809,7 @@ function MsdPlaysList({
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     return cohort.filter((play) => {
+      if (!showRejected && play.ratingExcluded) return false;
       if (hideRanked && isRankedStatus(play.beatmapStatus ?? null)) return false;
       if (!matchesPlayModFilter(play, modFilter)) return false;
       if (maxPerChart > 0) {
@@ -716,7 +819,7 @@ function MsdPlaysList({
       }
       return true;
     });
-  }, [cohort, hideRanked, maxPerChart, modFilter]);
+  }, [cohort, hideRanked, maxPerChart, modFilter, showRejected]);
   const items = filtered.slice(0, visibleLimit);
 
   const axisLabel = i18n._(axisMeta.labelMsg);
@@ -737,7 +840,17 @@ function MsdPlaysList({
           : null}
         loadingMore={false}
       >
-        {items.map((play, index) => (
+        {items.map((play, index) => play.ratingExcluded ? (
+          <UnratedPlayRow
+            key={rowKey(play, index)}
+            play={play}
+            position={index + 1}
+            expanded={openReason === rowKey(play, index)}
+            onToggle={() => setOpenReason((current) => (current === rowKey(play, index) ? null : rowKey(play, index)))}
+            onOpen={() => onOpen(play, { label: axisLabel, color: axisMeta.color })}
+            onPrefetch={() => prefetchLiveMapSearchEntry(play.beatmapId)}
+          />
+        ) : (
           <PlayRow
             key={rowKey(play, index)}
             play={play}
@@ -756,6 +869,59 @@ function MsdPlaysList({
         ))}
       </ListShell>
     </div>
+  );
+}
+
+/**
+ * A play the accuracy floor left with no rating, in the MSD list's Recent
+ * order. Same shape as the dan list's turned-away row: dimmed, the block mark
+ * where the number would be, and the reason under the row on tap, since hover
+ * is not there on a phone and the row's own tap opens the map.
+ */
+function UnratedPlayRow({
+  play,
+  position,
+  expanded,
+  onToggle,
+  onOpen,
+  onPrefetch,
+}: {
+  play: LivePlayerSkillPlay;
+  position: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+  onPrefetch: () => void;
+}) {
+  const { t } = useLingui();
+  const reason = play.ratingExclusionReason === "msd_floor"
+    ? t`Accuracy below skill rating range, so this play has no MSD rating on any skillset.`
+    : t`Vibro detected. This play does not count toward skill or dan ratings.`;
+  return (
+    <PlayRow
+      play={play}
+      position={position}
+      dimmed
+      onOpen={onOpen}
+      onPrefetch={onPrefetch}
+      trailing={(
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          title={reason}
+          className="flex w-14 shrink-0 cursor-pointer flex-col items-end gap-1 sm:w-16"
+        >
+          <Ban className="h-5 w-5 text-osu-red-light" aria-hidden="true" />
+          <span className={`text-[8px] font-semibold uppercase tracking-wide ${expanded ? "text-osu-l2" : "text-osu-f1"}`}>
+            <Trans>not rated</Trans>
+          </span>
+        </button>
+      )}
+      footer={expanded ? (
+        <p className="border-t border-osu-b3/20 px-3 py-2 text-[11px] leading-relaxed text-osu-f1">{reason}</p>
+      ) : null}
+    />
   );
 }
 
@@ -969,37 +1135,6 @@ function DanSkillsetBadge({ skillsets }: { skillsets: string[] | undefined }) {
  * OF A PLAYER and says so with a "~", while this is one clear's exact credit
  * on one chart. Keymodes with no artwork fall back to the words.
  */
-function DanMark({
-  label,
-  keyCount,
-  side,
-  dimmed = false,
-}: {
-  label: string;
-  keyCount: number;
-  side: "rc" | "ln" | null;
-  dimmed?: boolean;
-}) {
-  const { t } = useLingui();
-  // A numeric label reads as "7 dan"; a named one already reads as itself.
-  const text = /^\d/.test(label) ? t`${label} dan` : label;
-  const image = getDanImageSrc(danBareLabel(label), side === "ln" ? "ln" : undefined, keyCount);
-  const suffix = danTierSuffix(label);
-  if (!image) {
-    return <span className={`text-sm font-black leading-none text-osu-l1 sm:text-base ${dimmed ? "opacity-50" : ""}`}>{text}</span>;
-  }
-  return (
-    <span className={`flex items-start gap-[2px] leading-none ${dimmed ? "opacity-40" : ""}`}>
-      <img src={image} alt={text} className="h-8 w-8 object-contain" />
-      {suffix ? (
-        <span className="mt-0.5 text-[12px] font-bold leading-none" style={{ color: danTierColor(suffix) ?? undefined }}>
-          {suffix}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
 function DanCreditCell({
   clear,
   keyCount,
@@ -1146,6 +1281,209 @@ function DanRejectedRow({
         <p className="border-t border-osu-b3/20 px-3 py-2 text-[11px] leading-relaxed text-osu-f1">{reason}</p>
       ) : null}
     />
+  );
+}
+
+// --- Unrated list ---------------------------------------------------------
+
+function UnratedPlaysList({
+  userId,
+  keyCount,
+  unratedSort,
+  sort,
+  hideRanked,
+  maxPerChart,
+  modFilter,
+  refreshNonce,
+  onAvailableMods,
+  onSettled,
+  onOpen,
+}: {
+  userId: number;
+  keyCount: number;
+  unratedSort: UnratedSortKey;
+  sort: "rating" | "recent";
+  hideRanked: boolean;
+  maxPerChart: number;
+  modFilter: ModFilterState;
+  /** Bumped by the toolbar's refresh; a change fetches past every cache. */
+  refreshNonce: number;
+  onAvailableMods: (mods: string[]) => void;
+  onSettled?: (() => void) | undefined;
+  onOpen: (play: LivePlayerSkillPlay, rating: { label: string; color: string; dan?: MapDetailPlayContext["dan"] }) => void;
+}) {
+  const { t, i18n } = useLingui();
+  const overallLabel = i18n._(OVERALL_AXIS_META.labelMsg);
+  const cacheKey = unratedCohortKey(userId, keyCount, unratedSort, sort);
+  const [cohort, setCohort] = useState<LivePlayerUnratedPlay[]>(() => peekCachedCohort(unratedCohortCache, cacheKey) ?? []);
+  const [visibleLimit, setVisibleLimit] = useState(PLAYS_REVEAL_STEP);
+  const [loading, setLoading] = useState(() => peekCachedCohort(unratedCohortCache, cacheKey) == null);
+  const [error, setError] = useState<string | null>(null);
+  // A keymode is a different list; the number ranked by is the same plays
+  // re-ordered, so the outgoing rows stay up while the new order lands.
+  const listIdentity = `${keyCount}`;
+  const shownIdentity = useRef(listIdentity);
+  const seenRefreshNonce = useRef(refreshNonce);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fresh = seenRefreshNonce.current !== refreshNonce;
+    seenRefreshNonce.current = refreshNonce;
+    if (shownIdentity.current !== listIdentity) {
+      shownIdentity.current = listIdentity;
+      setCohort([]);
+    }
+    if (fresh) unratedCohortCache.delete(unratedCohortKey(userId, keyCount, unratedSort, oppositeSort(sort)));
+    const cached = fresh ? undefined : peekCachedCohort(unratedCohortCache, cacheKey);
+    if (cached) setCohort(cached);
+    setLoading(fresh || cached == null);
+    setError(null);
+    loadUnratedCohort(userId, keyCount, unratedSort, sort, { fresh })
+      .then((items) => {
+        if (cancelled) return;
+        setCohort(items);
+      })
+      .catch((fetchError) => {
+        if (cancelled) return;
+        setError(fetchError instanceof Error ? fetchError.message : t`Could not load these plays.`);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+        onSettled?.();
+        void loadUnratedCohort(userId, keyCount, unratedSort, oppositeSort(sort), { fresh }).catch(() => {});
+      });
+    return () => { cancelled = true; };
+  }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, unratedSort, userId]);
+
+  const modKey = modFilterKey(modFilter);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideRanked, maxPerChart, modKey]);
+
+  const cohortMods = useMemo(
+    () => relevantModFilterKeys(cohort.flatMap((item) => {
+      const mods = playModAcronyms(item.play);
+      return mods ? [mods] : [];
+    })),
+    [cohort],
+  );
+  useEffect(() => { onAvailableMods(cohortMods); }, [cohortMods, onAvailableMods]);
+
+  const filtered = useMemo(() => {
+    const seenPerChart = new Map<number, number>();
+    return cohort.filter((item) => {
+      if (hideRanked && isRankedStatus(item.play.beatmapStatus ?? null)) return false;
+      if (!matchesPlayModFilter(item.play, modFilter)) return false;
+      if (maxPerChart > 0) {
+        const seen = seenPerChart.get(item.play.beatmapId) ?? 0;
+        if (seen >= maxPerChart) return false;
+        seenPerChart.set(item.play.beatmapId, seen + 1);
+      }
+      return true;
+    });
+  }, [cohort, hideRanked, maxPerChart, modFilter]);
+  const items = filtered.slice(0, visibleLimit);
+
+  return (
+    <div className="space-y-3">
+      <ListShell
+        loading={loading && items.length === 0}
+        busy={loading && items.length > 0}
+        error={error}
+        empty={items.length === 0}
+        emptyTitle={cohort.length === 0 ? t`No unrated plays on this keymode` : t`No plays match these filters`}
+        shown={items.length}
+        total={filtered.length}
+        hidden={cohort.length - filtered.length}
+        onShowMore={items.length < filtered.length
+          ? () => setVisibleLimit((current) => Math.min(filtered.length, current + PLAYS_REVEAL_STEP))
+          : null}
+        loadingMore={false}
+      >
+        {items.map((item, index) => (
+          <PlayRow
+            key={rowKey(item.play, index)}
+            play={item.play}
+            position={index + 1}
+            onOpen={() => onOpen(item.play, {
+              label: overallLabel,
+              color: OVERALL_AXIS_META.color,
+              dan: {
+                chartRating: item.dan?.rawDan ?? null,
+                chartLabel: item.dan?.label ?? null,
+                accuracy: item.play.accuracy,
+                family: item.dan?.side ?? null,
+                rejection: <DanRejectionExplanation rejected={unratedRejection(item)} />,
+              },
+            })}
+            onPrefetch={() => prefetchLiveMapSearchEntry(item.play.beatmapId)}
+            badge={<UnratedReasonBadge reason={item.reason} rate={item.play.rate} />}
+            trailing={<UnratedValueCell item={item} keyCount={keyCount} unratedSort={unratedSort} />}
+          />
+        ))}
+      </ListShell>
+    </div>
+  );
+}
+
+/** The dan list's own shape for a turned-away play, so the map card can
+ *  print the same sentence it does there. */
+function unratedRejection(item: LivePlayerUnratedPlay): LivePlayerDanRejectedPlay {
+  return {
+    play: item.play,
+    reason: item.reason,
+    side: item.dan?.side ?? null,
+    chartDan: item.dan?.rawDan ?? null,
+    chartDanLabel: item.dan?.label ?? null,
+    clearAccuracy: null,
+    bar: null,
+    od: null,
+  };
+}
+
+function UnratedReasonBadge({ reason, rate }: { reason: LivePlayerUnratedPlay["reason"]; rate: number }) {
+  const { t } = useLingui();
+  const label = reason === "rate_vibro"
+    ? t`vibro at ${rate.toFixed(2)}x`
+    : reason === "chart_vibro"
+      ? t`vibro`
+      : t`cannot be rated`;
+  return <span className="rounded bg-osu-red-light/15 px-1 py-0.5 font-bold text-osu-red-light">{label}</span>;
+}
+
+/**
+ * The tail of an unrated row: the number the list is ranked by, large, with
+ * the other two under it so a reader can compare without re-sorting.
+ */
+function UnratedValueCell({ item, keyCount, unratedSort }: { item: LivePlayerUnratedPlay; keyCount: number; unratedSort: UnratedSortKey }) {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const lead = unratedSort === "dan" ? (
+    item.dan?.label ? <DanMark label={item.dan.label} keyCount={keyCount} side={item.dan.side} /> : <span className="text-sm text-osu-f1">-</span>
+  ) : (
+    <div
+      className="text-base font-black leading-none tabular-nums sm:text-lg"
+      style={{ color: unratedSort === "pp" ? "#ff66aa" : OVERALL_AXIS_META.color }}
+    >
+      {unratedSort === "pp"
+        ? (item.pp != null ? formatPP(item.pp, locale) : "-")
+        : (item.msd != null ? item.msd.toFixed(2) : "-")}
+    </div>
+  );
+  const leadLabel = unratedSort === "pp" ? "pp" : unratedSort === "msd" ? "MSD" : t`chart dan`;
+  const rest = (["pp", "msd", "dan"] as const).filter((axis) => axis !== unratedSort).map((axis) => {
+    const value = axis === "pp"
+      ? (item.pp != null ? formatPP(item.pp, locale) : "-")
+      : axis === "msd"
+        ? (item.msd != null ? item.msd.toFixed(2) : "-")
+        : (item.dan?.label ?? "-");
+    return `${axis === "pp" ? "pp" : axis === "msd" ? "MSD" : t`dan`} ${value}`;
+  });
+  return (
+    <div className="flex w-20 shrink-0 flex-col items-end gap-1 text-right sm:w-24">
+      {lead}
+      <div className="text-[8px] font-semibold uppercase tracking-wide text-osu-f1">{leadLabel}</div>
+      <div className="hidden text-[9px] tabular-nums text-osu-f1 sm:block">{rest.join(" · ")}</div>
+    </div>
   );
 }
 
@@ -1364,38 +1702,61 @@ function PlayRowSkeleton() {
  * what groups them, which is why these can sit next to each other without a
  * caption between every pair.
  */
-function Segmented<T extends string | number>({
+export function Segmented<T extends string | number>({
   ariaLabel,
   value,
   options,
   onChange,
+  shape = "pill",
 }: {
   ariaLabel: string;
   value: T;
   options: Array<{ value: T; label: string; onPrefetch?: () => void }>;
   onChange: (next: T) => void;
+  /**
+   * `pill` is the filter track. `tabs` is the squarer, divided version for a
+   * switch that changes what the whole panel shows rather than filtering it.
+   */
+  shape?: "pill" | "tabs";
 }) {
+  const tabs = shape === "tabs";
+  const activeIndex = options.findIndex((option) => option.value === value);
   return (
     // A profile with a mode for every keymode MinaCalc rates makes this wider
     // than a phone row. It scrolls inside its own pill rather than running off
     // the screen, so the controls beside it stay put.
-    <div role="group" aria-label={ariaLabel} className={`inline-flex max-w-full items-center overflow-x-auto scrollbar-hide p-0.5 ${CONTROL_TRACK_CLASS}`}>
-      {options.map((option) => {
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className={`inline-flex max-w-full items-center overflow-x-auto scrollbar-hide p-0.5 ${tabs ? CONTROL_TABS_CLASS : CONTROL_TRACK_CLASS}`}
+    >
+      {options.map((option, index) => {
         const active = option.value === value;
         return (
-          <button
-            key={String(option.value)}
-            type="button"
-            onClick={() => onChange(option.value)}
-            onPointerEnter={option.onPrefetch}
-            onFocus={option.onPrefetch}
-            aria-pressed={active}
-            className={`shrink-0 cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${
-              active ? "bg-osu-b3 text-white" : "text-osu-f1 hover:text-osu-l1"
-            }`}
-          >
-            {option.label}
-          </button>
+          <Fragment key={String(option.value)}>
+            {tabs && index > 0 ? (
+              // The line between two segments, dropped where the active fill
+              // already draws the edge.
+              <span
+                aria-hidden
+                className={`h-3.5 w-px shrink-0 bg-osu-b3/45 transition-opacity ${
+                  index === activeIndex || index - 1 === activeIndex ? "opacity-0" : ""
+                }`}
+              />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onChange(option.value)}
+              onPointerEnter={option.onPrefetch}
+              onFocus={option.onPrefetch}
+              aria-pressed={active}
+              className={`shrink-0 cursor-pointer px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${tabs ? "rounded-md px-3" : "rounded-full"} ${
+                active ? "bg-osu-b3 text-white" : "text-osu-f1 hover:text-osu-l1"
+              }`}
+            >
+              {option.label}
+            </button>
+          </Fragment>
         );
       })}
     </div>
@@ -1617,6 +1978,7 @@ function HideControl({
    hairline the track sits too close to the panel behind it and the row reads
    as loose words with a highlighted one among them. */
 const CONTROL_TRACK_CLASS = "rounded-full bg-osu-b5 ring-1 ring-inset ring-osu-b3/45";
+const CONTROL_TABS_CLASS = "rounded-lg bg-osu-b5 ring-1 ring-inset ring-osu-b3/45";
 
 /* Every mod the score carried. A pre-full-mod retained play can still name its
    speed mod from the old projection; a 1.0x play with no `mods` field is

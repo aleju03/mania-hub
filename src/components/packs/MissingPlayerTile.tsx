@@ -35,7 +35,7 @@ export function MissingPlayerTile({ player, wishlist }: {
     return () => { window.removeEventListener("keydown", escape); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
   }, [menu]);
   const wish = () => {
-    if (wishlist && !wishFull) void wishlist.toggle(player.userId);
+    if (wishlist && !wishFull) void wishlist.toggle(player.userId, { userId: player.userId, username: player.username, avatarUrl: player.avatarUrl, countryCode: player.countryCode, pp: player.pp, globalRank: player.globalRank });
     if (menu) tileRef.current?.focus({ preventScroll: true });
     setMenu(null);
   };

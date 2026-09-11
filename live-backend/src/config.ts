@@ -72,6 +72,11 @@ export interface Config {
   oscBaseUrl: string;
   oscSocketPath: string;
   trackedCountries: string[];
+  // When every tracked country's score ingest has been continuous. A snipe
+  // board whose leaderboard opened after this moment holds nothing the feed
+  // did not see, so seed_snipe_board skips its roster scan (see workers.ts).
+  // Empty disables the skip.
+  snipesIngestSince: string | null;
   prewarmCountries: string[];
   mapsWarmCountries: string[];
   livePublicOrigin: string;
@@ -114,6 +119,10 @@ export interface Config {
   rosterRefreshIntervalMs: number;
   rosterRankingPages: number;
   rosterSize: number;
+  // osu! calls per minute the live recent-score polls may spend between
+  // them; the spacing between a session's polls grows with the number of
+  // open sessions divided by this. Closing polls are outside it.
+  recentReconcileLiveBudgetPerMinute: number;
   manualRosterMaxPerCountry: number;
   mapsRefreshIntervalMs: number;
   // How long a map-collections rotation lives before the next rebuild resamples
@@ -251,6 +260,15 @@ function readBoundedInt(name: string, fallback: number, min: number, max: number
   return Math.max(min, Math.min(max, readInt(name, fallback)));
 }
 
+// An ISO timestamp, or null when the variable is set to something that does
+// not parse (an explicit empty value turns the feature off).
+function readIsoTimestamp(name: string, fallback: string | null): string | null {
+  const raw = process.env[name];
+  if (raw == null) return fallback;
+  const parsed = Date.parse(raw.trim());
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
 function readOptionalInt(name: string): number | null {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
@@ -323,6 +341,7 @@ function readLiveBridgeToken(nodeEnv: string): string | undefined {
 
 export function readConfig(): Config {
   const trackedCountries = countryCsv("TRACKED_COUNTRIES", ["CR"]);
+  const snipesIngestSince = readIsoTimestamp("SNIPES_INGEST_SINCE", "2026-06-08T00:00:00.000Z");
   const prewarmCountries = countryCsv("PREWARM_COUNTRIES", TOP_50_MANIA_COUNTRIES);
   const mapsWarmCountries = countryCsv("MAPS_WARM_COUNTRIES", [
     ...TOP_50_MANIA_COUNTRIES.slice(0, 20),
@@ -359,6 +378,7 @@ export function readConfig(): Config {
     oscBaseUrl: process.env.OSC_BASE_URL ?? "https://osc.kaysting.dev",
     oscSocketPath: process.env.OSC_SOCKET_PATH ?? "/ws",
     trackedCountries,
+    snipesIngestSince,
     prewarmCountries,
     mapsWarmCountries,
     livePublicOrigin: process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
@@ -419,6 +439,7 @@ export function readConfig(): Config {
     rosterRefreshIntervalMs: readInt("ROSTER_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
     rosterRankingPages: readInt("ROSTER_RANKING_PAGES", 2),
     rosterSize: readInt("ROSTER_SIZE", 100),
+    recentReconcileLiveBudgetPerMinute: readBoundedInt("RECENT_RECONCILE_LIVE_BUDGET_PER_MINUTE", 15, 1, 600),
     // 0 disables the per-country opt-in cap. Tracked members cost API budget in proportion to
     // how much they play (the fallback poller is one global cursor, per-user jobs fire on their
     // scores), so the cap exists only as an emergency brake to set via env if opt-in growth ever

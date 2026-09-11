@@ -2,7 +2,7 @@ import { MARATHON_CORRECTION_JOB, runMarathonCorrectionJob } from "./features/ma
 import { LEOBLACK_FUSION_JOB, runLeoblackFusionJob } from "./features/leoblack-fusion.js";
 import { CHART_FAMILY_SWEEP_JOB, runChartFamilySweepJob } from "./features/chart-families.js";
 import type { Db } from "./db.js";
-import { readConfig } from "./config.js";
+import { readConfig, type Config } from "./config.js";
 import { canSeedSnipesForCountry, isCountryRosterConfirmedEmpty, retireCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
@@ -18,6 +18,7 @@ import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotRead
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
+import { UNRATED_PLAYS_SWEEP_JOB, refreshUnratedPlaysForUser, runUnratedPlaysSweepJob } from "./features/unrated-plays.js";
 import { PLAYER_SKILLS_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, computePlayerSkillsJob, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillPatternSweepSeeded, runPlayerSkillDanSweepJob, runPlayerSkillFloorSweepJob, runPlayerSkillMsdCapSweepJob, runPlayerSkillPatternSweepJob, runPlayerSkillPoisonRecoveryJob, runPlayerSkillVibroSweepJob, type PlayerSkillDanSweepPayload } from "./features/player-skills.js";
 import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
 import { SKILL_BASELINE_JOB, enqueueSkillBaselineIfDue, runSkillBaselineJob } from "./features/skill-baseline.js";
@@ -31,10 +32,10 @@ import { ACTIVITY_DETAIL_ON_DEMAND_JOB, runActivityDetailOnDemandJob } from "./f
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { JobLeaseLostError, maintainJobLease } from "./jobs/lease.js";
-import { hasPendingRecentReconcileJob, nextRecentReconcileCadence, RECENT_RECONCILE_JOB_TYPE, reserveRecentReconcileRequest, finishRecentReconcileRequest, type RecentReconcilePayload } from "./jobs/recent-reconcile.js";
+import { countOpenRecentSessions, hasPendingRecentReconcileJob, liveRecentIntervalMs, planNextRecentPoll, RECENT_RECONCILE_JOB_TYPE, RECENT_RECONCILE_REPAIR_PRIORITY, reserveRecentReconcileRequest, finishRecentReconcileRequest, type RecentReconcilePayload } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import { readWorkersPaused, writeJobMemoryMetric } from "./live/runtime-status.js";
-import { OsuApiError, type OsuApiClient } from "./osu/client.js";
+import { OsuApiError, USER_RECENT_SCORES_LIMIT, type OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
 import type { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { finishReplayVideoExport, markReplayVideoDoneFromRender, markReplayVideoFailed, markReplayVideoRunning } from "./replay-video/exports.js";
@@ -73,6 +74,20 @@ const DEFAULT_JOB_WATCHDOG_MS = 10 * 60_000;
 // Each invocation now seeds this many members then self-chains the next batch, so
 // a single invocation always finishes well under the watchdog ceiling.
 const SNIPE_SEED_ROSTER_BATCH = 15;
+
+// A map's leaderboard opens when it qualifies (scores set while qualified
+// survive ranking), and osu! re-stamps ranked_date at the ranking moment, so
+// the stored date can trail the opening by the qualified period: seven days
+// nominally, longer when the ranking queue is backed up. A board counts as
+// opened after ingest began only when that whole window sits past
+// SNIPES_INGEST_SINCE.
+const SNIPE_SEED_LEADERBOARD_LEAD_MS = 14 * 24 * 60 * 60_000;
+
+function parseTimestampMs(value: unknown): number | null {
+  if (value == null) return null;
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : null;
+}
 
 export class JobWatchdogTimeoutError extends Error {
   settled?: Promise<void>;
@@ -221,7 +236,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // Tunable via CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run
     // flat out.
     name: "chart-analysis",
-    jobTypes: [MARATHON_CORRECTION_JOB, LEOBLACK_FUSION_JOB, CHART_FAMILY_SWEEP_JOB, CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, JACK_DEMAND_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, NKEY_MSD_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB],
+    jobTypes: [MARATHON_CORRECTION_JOB, LEOBLACK_FUSION_JOB, CHART_FAMILY_SWEEP_JOB, CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, JACK_DEMAND_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, NKEY_MSD_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, UNRATED_PLAYS_SWEEP_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -731,7 +746,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "reconcile_user_recent_scores") {
-      await this.reconcileUserRecentScores(job.payload as RecentReconcilePayload, job.id, signal, job.dedupeKey);
+      await this.reconcileUserRecentScores(job.payload as RecentReconcilePayload, job.id, signal);
       return;
     }
     if (job.type === "refresh_country_roster") {
@@ -797,7 +812,14 @@ export class WorkerRunner {
       return;
     }
     if (job.type === PLAYER_SKILLS_JOB) {
-      await computePlayerSkillsJob(this.db, this.osu, this.queue, job.payload as { userId: number });
+      const payload = job.payload as { userId: number };
+      await computePlayerSkillsJob(this.db, this.osu, this.queue, payload);
+      // The unrated plays board follows the ratings: the rows it lists are
+      // read off the plays_json this compute just wrote. Best-effort, after
+      // the ratings write, so a board hiccup never fails or delays a rating.
+      await refreshUnratedPlaysForUser(this.db, Math.floor(Number(payload?.userId))).catch((error) => {
+        logWarn("unrated_plays_refresh_failed", { userId: payload?.userId, ...errorContext(error) });
+      });
       return;
     }
     if (job.type === SKILL_BASELINE_JOB) {
@@ -814,6 +836,10 @@ export class WorkerRunner {
     }
     if (job.type === VIBRO_RECOMPUTE_JOB) {
       await runVibroRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === UNRATED_PLAYS_SWEEP_JOB) {
+      await runUnratedPlaysSweepJob(this.db, this.queue, job.payload as { cursor?: number; revision?: string });
       return;
     }
     if (job.type === OSU_FILE_REPAIR_JOB) {
@@ -1230,15 +1256,12 @@ export class WorkerRunner {
     }
   }
 
-  private async reconcileUserRecentScores(payload: RecentReconcilePayload, currentJobId?: number, signal?: AbortSignal, dedupeKey?: string): Promise<void> {
+  // One poll of a user's recent list, then one continuation: a live poll while
+  // the session is on, a closing poll once it has gone quiet, or nothing once
+  // osu! reports no passes in 24 hours. Every job polls; nothing expires unrun.
+  private async reconcileUserRecentScores(payload: RecentReconcilePayload, currentJobId?: number, signal?: AbortSignal): Promise<void> {
     const userId = Number(payload.userId);
     if (!Number.isFinite(userId) || userId <= 0) return;
-    const followUp = payload.kind === "follow_up"
-      || (payload.kind == null && dedupeKey?.startsWith(`recent:user:${userId}:next:`));
-    if (followUp && !await this.getLatestActiveScoreAt(userId)) {
-      logInfo("recent_reconcile_expired", { user_id: userId, job_id: currentJobId });
-      return;
-    }
     throwIfAborted(signal);
     const retryDelayMs = await reserveRecentReconcileRequest(this.db, userId, currentJobId);
     if (retryDelayMs > 0) throw new DeferredJobError(retryDelayMs, "recent-score per-user cooldown");
@@ -1267,29 +1290,65 @@ export class WorkerRunner {
       processLeaderboardFeatures: payload.processLeaderboardFeatures === true,
     });
     throwIfAborted(signal);
-    const latestTrackedScoreAt = await this.getLatestActiveScoreAt(userId);
-    if (latestTrackedScoreAt) {
-      if (await hasPendingRecentReconcileJob(this.db, userId, {
-        excludeJobId: currentJobId,
-      })) return;
-      const latestScoreAt = scores.reduce<string>((latest, score) => {
-        const timestamp = score.ended_at ?? score.created_at;
-        return timestamp && (!latest || timestamp > latest) ? timestamp : latest;
-      }, latestTrackedScoreAt);
-      // A play may already have arrived through the live feed, so an unchanged
-      // insert count alone cannot tell us the player has stopped. Metadata
-      // corrections also count as changes and reset the short polling window.
-      const changed = ingested.inserted > 0 || latestScoreAt !== payload.latestScoreAt;
-      const cadence = nextRecentReconcileCadence(payload.unchangedPolls, changed);
-      const runAfter = new Date(Date.now() + cadence.delayMs);
-      const bucket = Math.floor(runAfter.getTime() / (2 * 60_000));
-      await this.queue.enqueue(
-        RECENT_RECONCILE_JOB_TYPE,
-        `recent:user:${userId}:next:${bucket}`,
-        { ...payload, kind: "follow_up", userId, latestScoreAt, unchangedPolls: cadence.unchangedPolls },
-        { priority: 25, runAfter },
-      );
-    }
+    // A wake-up enqueued while this ran (or a parked poll) owns the next turn.
+    if (await hasPendingRecentReconcileJob(this.db, userId, { excludeJobId: currentJobId })) return;
+    const trackedNewestAt = await this.getLatestActiveScoreAt(userId);
+    const responseTimes = scores
+      .map((score) => Date.parse(score.ended_at ?? score.created_at ?? ""))
+      .filter((ms) => Number.isFinite(ms));
+    const responseNewestAtMs = responseTimes.length ? Math.max(...responseTimes) : null;
+    const responseOldestAtMs = responseTimes.length ? Math.min(...responseTimes) : null;
+    const trackedNewestAtMs = trackedNewestAt ? Date.parse(trackedNewestAt) : NaN;
+    const newestAtMs = Math.max(responseNewestAtMs ?? -Infinity, Number.isFinite(trackedNewestAtMs) ? trackedNewestAtMs : -Infinity);
+    const latestScoreAt = Number.isFinite(newestAtMs) ? new Date(newestAtMs).toISOString() : undefined;
+    // A play may already have arrived through the live feed, so an unchanged
+    // insert count alone cannot tell us the player has stopped. Metadata
+    // corrections also count as changes and reset the short polling window.
+    const changed = ingested.inserted > 0 || latestScoreAt !== payload.latestScoreAt;
+    const now = Date.now();
+    const openSessions = await this.openRecentSessions(now);
+    const liveIntervalMs = liveRecentIntervalMs(openSessions, readConfig().recentReconcileLiveBudgetPerMinute);
+    const plan = planNextRecentPoll({
+      now,
+      responseCount: scores.length,
+      pageLimit: USER_RECENT_SCORES_LIMIT,
+      responseNewestAtMs,
+      responseOldestAtMs,
+      trackedNewestAtMs: Number.isFinite(trackedNewestAtMs) ? trackedNewestAtMs : null,
+      changed,
+      previousUnchangedPolls: payload.unchangedPolls,
+      liveIntervalMs,
+    });
+    logInfo("recent_reconcile_planned", {
+      user_id: userId,
+      kind: plan.kind,
+      reason: plan.reason,
+      delay_ms: plan.delayMs,
+      inserted: ingested.inserted,
+      response: scores.length,
+      open_sessions: openSessions,
+      live_interval_ms: liveIntervalMs,
+    });
+    if (!plan.kind) return;
+    const runAfter = new Date(now + plan.delayMs);
+    const bucket = Math.floor(runAfter.getTime() / (2 * 60_000));
+    await this.queue.enqueue(
+      RECENT_RECONCILE_JOB_TYPE,
+      `recent:user:${userId}:next:${bucket}`,
+      { ...payload, kind: plan.kind, userId, latestScoreAt, unchangedPolls: plan.unchangedPolls },
+      { priority: RECENT_RECONCILE_REPAIR_PRIORITY, runAfter },
+    );
+  }
+
+  // The open-session count paces every live poll, so it is read at most once
+  // per half minute rather than once per job.
+  private openSessionsMemo: { at: number; count: number } | null = null;
+
+  private async openRecentSessions(now: number): Promise<number> {
+    if (this.openSessionsMemo && now - this.openSessionsMemo.at < 30_000) return this.openSessionsMemo.count;
+    const count = await countOpenRecentSessions(this.db);
+    this.openSessionsMemo = { at: now, count };
+    return count;
   }
 
   private async getLatestActiveScoreAt(userId: number): Promise<string | null> {
@@ -1316,6 +1375,13 @@ export class WorkerRunner {
     // API page each), then self-chain the next batch. This keeps every single
     // invocation short enough to finish under the job watchdog even when the
     // osu! budget is contended, instead of doing all ~100 calls in one job.
+    if (cursor === 0 && await this.snipeBoardOpenedAfterIngest(payload, config)) {
+      // Every roster play on this map since its leaderboard opened came through
+      // the feed, so the scan would only re-fetch what the replay below stores.
+      logInfo("snipe_seed_skipped_new_leaderboard", { country: payload.country, beatmap_id: payload.beatmapId, lane_key: payload.laneKey });
+      await this.replaySeededSnipeScores(payload, signal);
+      return;
+    }
     const batchSize = Math.min(SNIPE_SEED_ROSTER_BATCH, Math.max(0, rosterSize - cursor));
     const replayScoreIdentities = batchSize > 0 ? await this.getSeedReplayScoreIdentities(payload) : new Set<string>();
     const roster = batchSize > 0
@@ -1399,6 +1465,50 @@ export class WorkerRunner {
     // Whole roster seeded (or nothing left to seed): replay recorded scores so
     // seeded boards emit any snipe events, then the board is done.
     await this.replaySeededSnipeScores(payload, signal);
+  }
+
+  // True when the map's leaderboard opened after the country's ingest became
+  // continuous (SNIPES_INGEST_SINCE): a ranked, loved or qualified map has no
+  // country score older than its leaderboard, and the feed saw every score
+  // since, so a seed would spend ~rosterSize calls re-fetching plays the board
+  // already holds. Only the pinned tracked countries have that continuity; an
+  // activated country's ingest starts at its activation. The stored set carries
+  // osu!'s ranked_date only after a full fetch (a score payload's compact set
+  // has none, and the status flip strips a stale one), so an unknown date costs
+  // one beatmap fetch, persisted the way enrich_beatmap would, rather than the
+  // roster scan.
+  private async snipeBoardOpenedAfterIngest(payload: { country: string; beatmapId: number }, config: Config): Promise<boolean> {
+    const sinceMs = parseTimestampMs(config.snipesIngestSince);
+    if (sinceMs == null) return false;
+    if (!config.trackedCountries.includes(payload.country)) return false;
+    let openedAtMs = await this.getStoredRankedDateMs(payload.beatmapId);
+    if (openedAtMs == null) {
+      let beatmap: Record<string, unknown>;
+      try {
+        beatmap = await this.osu.getBeatmap(payload.beatmapId, "job:seed_snipe_board");
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("osu! API 404")) return false;
+        throw error;
+      }
+      await this.upsertBeatmap(beatmap, payload.beatmapId);
+      await upsertMapSearchIndexRow(this.db, payload.beatmapId);
+      const beatmapset = beatmap.beatmapset as Record<string, unknown> | undefined;
+      openedAtMs = parseTimestampMs(beatmapset?.ranked_date);
+    }
+    if (openedAtMs == null) return false;
+    return openedAtMs - SNIPE_SEED_LEADERBOARD_LEAD_MS >= sinceMs;
+  }
+
+  private async getStoredRankedDateMs(beatmapId: number): Promise<number | null> {
+    const row = (await exec(
+      this.db,
+      `select json_extract(s.metadata_json, '$.ranked_date') as ranked_date
+       from beatmaps b
+       join beatmapsets s on s.beatmapset_id = b.beatmapset_id
+       where b.beatmap_id = ?`,
+      [beatmapId],
+    )).rows[0];
+    return parseTimestampMs(row?.ranked_date);
   }
 
   private async getSeedReplayScoreIdentities(payload: { country: string; beatmapId: number; laneKey: string }): Promise<Set<string>> {

@@ -20,14 +20,14 @@ it("opens Wish from right click without following the card link", () => {
   const toggle = show();
   expect(fireEvent.contextMenu(screen.getByRole("link"), { clientX: 200, clientY: 150 })).toBe(false);
   fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Wish" }));
-  expect(toggle).toHaveBeenCalledExactlyOnceWith(17);
+  expect(toggle).toHaveBeenCalledExactlyOnceWith(17, expect.objectContaining({ userId: 17 }));
   expect(screen.queryByRole("menu")).toBeNull();
 });
 it("lets an existing wish be removed even when the list is full", () => {
   const toggle = show(true, true);
   fireEvent.contextMenu(screen.getByRole("link"));
   fireEvent.click(screen.getByRole("menuitem", { name: "Remove wish" }));
-  expect(toggle).toHaveBeenCalledExactlyOnceWith(17);
+  expect(toggle).toHaveBeenCalledExactlyOnceWith(17, expect.objectContaining({ userId: 17 }));
 });
 it("disables adding when full while keeping the profile action available", () => {
   const toggle = show(false, true);

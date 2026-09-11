@@ -1,4 +1,4 @@
-import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams, useNavigate, type SearchMiddleware } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -25,6 +25,8 @@ import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "..
 import { PageTabs } from "../components/layout/PageTabs";
 import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBoard";
 import { DanLeaderboardBoard } from "../components/rankings/DanLeaderboardBoard";
+import { UnratedPlaysBoard } from "../components/rankings/UnratedPlaysBoard";
+import { DEFAULT_UNRATED_PLAYS_KEYS, DEFAULT_UNRATED_PLAYS_RANGE, DEFAULT_UNRATED_PLAYS_SORT, parseUnratedPlaysKeys, parseUnratedPlaysRange, parseUnratedPlaysSort, type UnratedPlaysKeys, type UnratedPlaysRange, type UnratedPlaysSort } from "../lib/unrated-plays";
 import {
   DEFAULT_DAN_SIDE,
   DEFAULT_DAN_SKILLSET,
@@ -38,7 +40,6 @@ import {
   parseLeaderboardKeys,
   parseLeaderboardTab,
   type DanSide,
-  type LeaderboardKeyCount,
   type LeaderboardTab,
 } from "../lib/skill-leaderboards";
 import { pageSeo } from "../lib/seo";
@@ -66,18 +67,35 @@ type RankingsSearch = {
   // The skill and dan leaderboards ride on this route as extra tabs. Their
   // defaults get stripped from the URL like `page`.
   tab?: LeaderboardTab;
-  keys?: LeaderboardKeyCount;
+  // A keymode on the skill and dan boards; the unrated plays board also takes
+  // "all", which is its default (it lists plays, and a plays list has no
+  // reason to start narrowed).
+  keys?: UnratedPlaysKeys;
   axis?: string;
   side?: DanSide;
   skillset?: string;
+  // The unrated plays board's own two controls.
+  sort?: UnratedPlaysSort;
+  range?: UnratedPlaysRange;
 };
-const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page" | "tab" | "keys" | "side" | "skillset"> = {
+const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page" | "tab" | "keys" | "side" | "skillset" | "sort" | "range"> = {
   page: 1,
   tab: DEFAULT_LEADERBOARD_TAB,
   keys: DEFAULT_LEADERBOARD_KEYS,
   side: DEFAULT_DAN_SIDE,
   skillset: DEFAULT_DAN_SKILLSET,
+  sort: DEFAULT_UNRATED_PLAYS_SORT,
+  range: DEFAULT_UNRATED_PLAYS_RANGE,
 };
+const UNRATED_SEARCH_DEFAULTS = { ...RANKINGS_SEARCH_DEFAULTS, keys: DEFAULT_UNRATED_PLAYS_KEYS };
+
+/* Which values are the defaults depends on the tab: the unrated board's
+   default keymode is "all", the others' is 4K. One static default map would
+   either write keys=all on every unrated URL or strip a chosen 4K off it. */
+const stripRankingsDefaults: SearchMiddleware<RankingsSearch> = (context) =>
+  stripSearchParams<RankingsSearch>(
+    parseLeaderboardTab(context.search?.tab) === "unrated" ? UNRATED_SEARCH_DEFAULTS : RANKINGS_SEARCH_DEFAULTS,
+  )(context);
 
 function parseRankingsPage(value: unknown): number {
   const page = Number(value ?? 1);
@@ -121,14 +139,20 @@ export const Route = createFileRoute("/rankings")({
       page: parseRankingsPage(search.page),
       country: parseCountrySearchParam(search.country),
       tab,
-      keys: tab === "dan" ? parseDanLeaderboardKeys(search.keys) : parseLeaderboardKeys(search.keys),
+      keys: tab === "dan"
+        ? parseDanLeaderboardKeys(search.keys)
+        : tab === "unrated"
+          ? parseUnratedPlaysKeys(search.keys)
+          : parseLeaderboardKeys(search.keys),
       axis: parseLeaderboardAxis(search.axis),
       side: parseDanSide(search.side),
       skillset: parseDanSkillset(search.skillset),
+      sort: parseUnratedPlaysSort(search.sort),
+      range: parseUnratedPlaysRange(search.range),
     };
   },
   search: {
-    middlewares: [stripSearchParams(RANKINGS_SEARCH_DEFAULTS)],
+    middlewares: [stripRankingsDefaults],
   },
   head: ({ match }) => {
     const country = match.search.country;
@@ -139,18 +163,23 @@ export const Route = createFileRoute("/rankings")({
     // Each tab's default board is worth one entry; every keymode, axis and dan
     // side after that is the same players re-sorted, so they canonicalize back
     // to that board rather than each getting one of their own.
+    const defaultKeys = tab === "unrated" ? DEFAULT_UNRATED_PLAYS_KEYS : DEFAULT_LEADERBOARD_KEYS;
     const isDefaultBoard =
       page === 1
-      && (match.search.keys ?? DEFAULT_LEADERBOARD_KEYS) === DEFAULT_LEADERBOARD_KEYS
+      && (match.search.keys ?? defaultKeys) === defaultKeys
       && (match.search.axis ?? DEFAULT_LEADERBOARD_AXIS) === DEFAULT_LEADERBOARD_AXIS
       && (match.search.side ?? DEFAULT_DAN_SIDE) === DEFAULT_DAN_SIDE
-      && (match.search.skillset ?? DEFAULT_DAN_SKILLSET) === DEFAULT_DAN_SKILLSET;
+      && (match.search.skillset ?? DEFAULT_DAN_SKILLSET) === DEFAULT_DAN_SKILLSET
+      && (match.search.sort ?? DEFAULT_UNRATED_PLAYS_SORT) === DEFAULT_UNRATED_PLAYS_SORT
+      && (match.search.range ?? DEFAULT_UNRATED_PLAYS_RANGE) === DEFAULT_UNRATED_PLAYS_RANGE;
     const title = countryName
       ? tab === "skills"
         ? i18n._(msg`${countryName} mania skill leaderboards`)
         : tab === "dan"
           ? i18n._(msg`${countryName} mania dan leaderboards`)
-          : i18n._(msg`${countryName} mania rankings`)
+          : tab === "unrated"
+            ? i18n._(msg`${countryName} mania unrated plays`)
+            : i18n._(msg`${countryName} mania rankings`)
       : i18n._(msg`Country mania rankings`);
     return pageSeo({
       title,
@@ -172,8 +201,8 @@ export const Route = createFileRoute("/rankings")({
   component: RankingsPage,
 });
 
-/* /rankings hosts three boards: the pp ranking it has always served, plus the
-   skill and dan leaderboards. */
+/* /rankings hosts four boards: the pp ranking it has always served, the skill
+   and dan leaderboards, and the unrated plays board. */
 function RankingsPage() {
   const { t } = useLingui();
   const search = Route.useSearch();
@@ -195,7 +224,7 @@ function RankingsPage() {
     });
   }, [navigate, noDans, requestedTab, search]);
 
-  /* One tab bar for all three boards, with the per-board status text riding in
+  /* One tab bar for all four boards, with the per-board status text riding in
      its right slot: PageHeader's own `right` wraps onto a second row on mobile,
      so a stat only the pp board has used to move the tab bar under the reader
      every time they switched tabs. */
@@ -205,6 +234,7 @@ function RankingsPage() {
         { id: "pp" as LeaderboardTab, label: t`Performance` },
         { id: "skills" as LeaderboardTab, label: t`MSD` },
         { id: "dan" as LeaderboardTab, label: t`Dan` },
+        { id: "unrated" as LeaderboardTab, label: t`Unrated` },
       ].filter((item) => !noDans || item.id !== "dan")}
       value={tab}
       onChange={(next) => navigate({ to: "/rankings", search: { ...search, tab: next, page: 1 }, replace: true })}
@@ -214,7 +244,9 @@ function RankingsPage() {
 
   if (tab === "pp") return <PpRankingsBoard renderTabs={renderTabs} />;
 
-  const keys = search.keys ?? DEFAULT_LEADERBOARD_KEYS;
+  // validateSearch only ever leaves "all" on the unrated tab; the other two
+  // boards read a keymode.
+  const keys = typeof search.keys === "number" ? search.keys : DEFAULT_LEADERBOARD_KEYS;
   const page = search.page ?? 1;
   const countryName = displayCountryName(selectedCountry, locale);
 
@@ -222,7 +254,11 @@ function RankingsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title={tab === "dan" ? t`${countryName} mania dan leaderboards` : t`${countryName} mania skill leaderboards`}
+        title={tab === "dan"
+          ? t`${countryName} mania dan leaderboards`
+          : tab === "unrated"
+            ? t`${countryName} mania unrated plays`
+            : t`${countryName} mania skill leaderboards`}
       />
       {renderTabs()}
       {/* A country nobody has visited yet has no roster, so it has no rated
@@ -231,7 +267,16 @@ function RankingsPage() {
       {!warming && (
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
-          {tab === "skills" ? (
+          {tab === "unrated" ? (
+            <UnratedPlaysBoard
+              country={selectedCountry}
+              keys={search.keys ?? DEFAULT_UNRATED_PLAYS_KEYS}
+              sort={search.sort ?? DEFAULT_UNRATED_PLAYS_SORT}
+              range={search.range ?? DEFAULT_UNRATED_PLAYS_RANGE}
+              page={page}
+              onNavigate={(next) => navigate({ to: "/rankings", search: { ...search, ...next, page: next.page ?? 1 }, replace: true })}
+            />
+          ) : tab === "skills" ? (
             <SkillLeaderboardBoard
               country={selectedCountry}
               keys={keys}

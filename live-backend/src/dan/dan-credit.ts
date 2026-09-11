@@ -308,7 +308,7 @@ export function danCreditOptionsFor(side: "rc" | "ln", keyCount: number): DanCre
  * clamped to the ladder's floor and ceiling. Null when the accuracy is below
  * the credit window. The ceiling keeps a maxed clear from crediting past the
  * ladder's "beyond the table" sentinel; the floor keeps a decayed scrape on a
- * bottom-rung chart from going below the scale (skill surfaces treat a
+ * bottom-rung chart from going below the scale (skill-leaderboards drops a
  * non-positive rawDan as unrated). At the literal bottom rung the floor can
  * eat some of the decay; nothing meaningful is measured down there.
  */

@@ -3522,4 +3522,51 @@ describe("Invert plays on 7K", () => {
       expect(plainClears.every((clear) => clear.side === "rc" && clear.chartDan === 9)).toBe(true);
     });
   });
+
+  it("credits a chart rated at or below the ladder floor at the floor instead of dropping it", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const seed = (beatmapId: number, keyCount: number, classification: unknown, dt?: unknown) => exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, dan_dt_json, updated_at)
+         values (?, ?, 'ready', ?, ?, ?, ?)`,
+        [beatmapId, CHART_ANALYSIS_VERSION, keyCount, JSON.stringify(classification), dt == null ? null : JSON.stringify(dt), new Date().toISOString()],
+      );
+      // The 7K kyu "0--" band: the regression runs below the table and the
+      // stored value goes negative while the label is a real first band.
+      await seed(751, 7, { lnRatio: 0, patterns: [], rc: { rawDan: -0.4, displayName: "0--" } });
+      // A 4K LN chart pinned at exactly 0 by the structural calibration.
+      await seed(752, 4, { lnRatio: 0.8, patterns: [], rc: { rawDan: 2 }, ln: { rawDan: 0, displayName: "1--" } }, { rawDan: 0, primaryFamily: "ln", primaryLabel: "1--" });
+      // A missing value is still unrated.
+      await seed(753, 7, { lnRatio: 0, patterns: [], rc: { rawDan: null, displayName: "0--" } });
+      const { collectDanClearsForTest } = await import("../src/features/player-skills.js");
+      const info = await loadChartSkillInfo(db, [751, 752, 753]);
+      expect(info.get(751)?.rcRawDan).toBe(-0.4);
+      expect(info.get(752)).toMatchObject({ lnRawDan: 0, dtRawDan: 0, dtFamily: "ln", dtDanLabel: "1--" });
+      expect(info.get(753)?.rcRawDan).toBeNull();
+      const playOf = (beatmapId: number, keyCount: number, rate = 1) => ({
+        identity: `official:${beatmapId}:${rate}`, beatmapId, keyCount, rate, goal: 0.95, pp: 100,
+        values: { Overall: 25 }, patterns: [], accuracy: 0.97, stableAccuracy: 0.97,
+      });
+
+      const rejects: Parameters<typeof collectDanClearsForTest>[4] = [];
+      const sevenK = collectDanClearsForTest(7, [playOf(751, 7), playOf(753, 7)], info, new Map(), rejects);
+      expect(sevenK).toHaveLength(1);
+      expect(sevenK[0]).toMatchObject({ side: "rc", chartDan: 0, chartDanLabel: "0--" });
+      expect(sevenK[0].creditedDan).toBeGreaterThanOrEqual(0);
+      expect(rejects.map((entry) => [entry.play.beatmapId, entry.reason])).toEqual([[753, "no_chart_dan"]]);
+
+      // The 1.0x play reads the classification's ln half, the 1.5x play the
+      // DT column, and both clamp to the 4K floor of 0.5.
+      const fourK = collectDanClearsForTest(4, [playOf(752, 4), playOf(752, 4, 1.5)], info, new Map());
+      expect(fourK).toHaveLength(2);
+      expect(fourK.every((clear) => clear.side === "ln" && clear.chartDan === 0.5 && clear.chartDanLabel === "1--")).toBe(true);
+
+      // A stored rate verdict at the floor credits on the same terms.
+      const verdicts = new Map([["751:125", { rawDan: -0.2, side: "rc" as const, displayName: "0-" }]]);
+      const rated = collectDanClearsForTest(7, [playOf(751, 7, 1.25)], info, verdicts);
+      expect(rated).toHaveLength(1);
+      expect(rated[0]).toMatchObject({ chartDan: 0, chartDanLabel: "0-" });
+    });
+  });
 });

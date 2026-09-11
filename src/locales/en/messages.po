@@ -325,6 +325,11 @@ msgstr "{0} against"
 msgid "{0} albums"
 msgstr "{0} albums"
 
+#. placeholder {0}: compact(diet.analyzed)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0} analyzed"
+msgstr "{0} analyzed"
+
 #. placeholder {0}: formatOrdinal(ranks.cards, locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "{0} biggest"
@@ -614,11 +619,12 @@ msgstr "{0} play"
 msgid "{0} players"
 msgstr "{0} players"
 
+#. placeholder {0}: compact(insights.grind.mostPlayed.plays)
+#. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
-#. placeholder {0}: formatNumber(entry.analyzedPlays)
-#. placeholder {0}: formatNumber(entry.playCount)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/me/MyStatsInsights.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
@@ -632,10 +638,21 @@ msgstr "{0} plays"
 #~ msgid "{0} plays added"
 #~ msgstr "{0} plays added"
 
+#. placeholder {0}: formatNumber(profile.standing.pendingPlays)
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "{0} plays are still being rated."
+#~ msgstr "{0} plays are still being rated."
+
 #. placeholder {0}: formatNumber(activity.totalScores)
 #: src/routes/player/$username.tsx
 msgid "{0} plays in {selectedYear}"
 msgstr "{0} plays in {selectedYear}"
+
+#. placeholder {0}: compact(judgement.plays)
+#. placeholder {1}: formatMonth(judgement.since)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0} plays since {1}"
+msgstr "{0} plays since {1}"
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
@@ -670,6 +687,11 @@ msgstr "{0} scores"
 #: src/routes/report.tsx
 #~ msgid "{0} screenshots"
 #~ msgstr "{0} screenshots"
+
+#. placeholder {0}: compact(sessions.sessions)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "{0} sessions"
+#~ msgstr "{0} sessions"
 
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
@@ -719,6 +741,11 @@ msgstr "{0} to {1}"
 #: src/components/packs/PackSummary.tsx
 msgid "{0} to pull this"
 msgstr "{0} to pull this"
+
+#. placeholder {0}: compact(sessions.sessions)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0} total"
+msgstr "{0} total"
 
 #. placeholder {0}: formatNumber(globalRankingsTotal)
 #: src/routes/rankings.tsx
@@ -812,6 +839,23 @@ msgstr "{0}'s play"
 msgid "{0}% GOAT slot, then 1 of {1} on the roster"
 msgstr "{0}% GOAT slot, then 1 of {1} on the roster"
 
+#. placeholder {0}: (judgement.maxShare * 100).toFixed(0)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0}% of notes"
+msgstr "{0}% of notes"
+
+#. placeholder {0}: (judgement.maxShare * 100).toFixed(0)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "{0}% of notes are MAX"
+#~ msgstr "{0}% of notes are MAX"
+
+#. placeholder {0}: top.pct
+#. placeholder {1}: mode.keyCount
+#. placeholder {2}: patternLabel(top.id)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0}% of your analyzed {1}K plays are {2}."
+msgstr "{0}% of your analyzed {1}K plays are {2}."
+
 #. placeholder {0}: Math.round(clear.averagingWeight * 100)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{0}% weight"
@@ -842,10 +886,23 @@ msgstr "{0}K only"
 msgid "{0}K skill rating"
 msgstr "{0}K skill rating"
 
+#. placeholder {0}: window.toFixed(0)
+#. placeholder {1}: play.weight.toFixed(2)
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "{0}ms hit window, worth {1}x"
+#~ msgstr "{0}ms hit window, worth {1}x"
+
 #. placeholder {0}: Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)
 #: src/routes/player/$username.tsx
 msgid "{0}pp spread"
 msgstr "{0}pp spread"
+
+#. placeholder {0}: Math.round(rank.next.ppGap).toLocaleString("en-US")
+#. placeholder {1}: rank.next.rank
+#. placeholder {2}: rank.next.username ?? ""
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "{0}pp to #{1} {2}"
+#~ msgstr "{0}pp to #{1} {2}"
 
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
@@ -942,6 +999,14 @@ msgstr "{countryName} mania top plays"
 msgid "{countryName} mania tracker"
 msgstr "{countryName} mania tracker"
 
+#: src/routes/rankings.tsx
+msgid "{countryName} mania unrated plays"
+msgstr "{countryName} mania unrated plays"
+
+#: src/routes/rankings.tsx
+#~ msgid "{countryName} mania vibro league"
+#~ msgstr "{countryName} mania vibro league"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgstr "{courseAccuracy} on {courseName}, under its {courseBar}."
@@ -1031,6 +1096,7 @@ msgstr "{hours} hours"
 msgid "{hours}h"
 msgstr "{hours}h"
 
+#: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
 msgid "{hours}h {mins}m"
 msgstr "{hours}h {mins}m"
@@ -1066,8 +1132,8 @@ msgid "{keys}K thumbnail"
 msgstr "{keys}K thumbnail"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
-#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
@@ -1105,6 +1171,7 @@ msgstr "{maps} osu!mania maps picked by {0}."
 msgid "{message} ({percent}%)"
 msgstr "{message} ({percent}%)"
 
+#: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
 #: src/lib/goal-format.ts
 msgid "{mins}m"
@@ -1507,6 +1574,12 @@ msgstr "#{0} country"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "#{0} global"
 msgstr "#{0} global"
+
+#. placeholder {0}: formatNumber(rank.rank)
+#. placeholder {1}: formatNumber(rank.total)
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "#{0} of {1}"
+#~ msgstr "#{0} of {1}"
 
 #: src/lib/format.ts
 msgid "#{grouped}"
@@ -2101,6 +2174,10 @@ msgstr "A shareable skill-tier card: control, speed and precision under a tier b
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "A standing needs {VIBRO_LEAGUE_MIN_PLAYS} rated plays on one keymode."
+#~ msgstr "A standing needs {VIBRO_LEAGUE_MIN_PLAYS} rated plays on one keymode."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
@@ -2155,6 +2232,7 @@ msgstr "accuracy"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/me/MyStatsInsights.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
@@ -2188,6 +2266,14 @@ msgstr "Accuracy And Availability"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Accuracy below skill rating range"
 msgstr "Accuracy below skill rating range"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+msgstr "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset. Dan credit is checked separately."
+#~ msgstr "Accuracy below skill rating range, so this play has no MSD rating on any skillset. Dan credit is checked separately."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
@@ -2442,6 +2528,7 @@ msgstr "all"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
@@ -2506,6 +2593,10 @@ msgstr "All rows"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
 #~ msgstr "All three forges are used. They return after 24 hours."
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "All time"
+msgstr "All time"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
@@ -2805,6 +2896,10 @@ msgstr "Automatic tracking only began on June 9, 2026. Older scores are included
 msgid "avatar"
 msgstr "avatar"
 
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Average length"
+#~ msgstr "Average length"
+
 #: src/components/player/DanLevelBadge.tsx
 #~ msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
 #~ msgstr "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
@@ -2817,9 +2912,17 @@ msgstr "Averaged over {windowHave} of {windowNeed} weighted clears, so the estim
 msgid "Avg active day"
 msgstr "Avg active day"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "Avg duration"
+msgstr "Avg duration"
+
 #: src/routes/player/$username.tsx
 msgid "avg intensity, 0-100"
 msgstr "avg intensity, 0-100"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Avg length"
+#~ msgstr "Avg length"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "avg nps"
@@ -3187,7 +3290,7 @@ msgstr "BPM"
 msgid "BPM Breakdown"
 msgstr "BPM Breakdown"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/player/$username.tsx
 msgid "Bracket"
@@ -3303,6 +3406,10 @@ msgstr "Cancel"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Cancel forge"
 #~ msgstr "Cancel forge"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "cannot be rated"
+msgstr "cannot be rated"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Canvas unavailable."
@@ -3441,6 +3548,7 @@ msgid "Chart"
 msgstr "Chart"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "chart dan"
 msgstr "chart dan"
 
@@ -3551,7 +3659,7 @@ msgstr "Choose another collector for your gift."
 #~ msgstr "Choose the card you want to craft a special edition of."
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -3559,7 +3667,7 @@ msgstr "Choose another collector for your gift."
 msgid "Chordjack"
 msgstr "Chordjack"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
 msgstr "Chordstream"
@@ -4153,6 +4261,10 @@ msgstr "Could not load the pack stats."
 msgid "Could not load the showcases."
 msgstr "Could not load the showcases."
 
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "Could not load the vibro pool. Try again in a bit."
+#~ msgstr "Could not load the vibro pool. Try again in a bit."
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays"
@@ -4165,6 +4277,7 @@ msgstr "Could not load these plays."
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 msgid "Could not load this leaderboard."
 msgstr "Could not load this leaderboard."
 
@@ -4629,7 +4742,13 @@ msgstr "Cyan"
 msgid "Czech"
 msgstr "Czech"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "dan"
+msgstr "dan"
+
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/rankings.tsx
 msgid "Dan"
 msgstr "Dan"
@@ -4758,7 +4877,7 @@ msgstr "default"
 msgid "Default volume"
 msgstr "Default volume"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Delay"
 msgstr "Delay"
@@ -5151,7 +5270,7 @@ msgstr "Drop your own .osr file"
 msgid "DT/NC"
 msgstr "DT/NC"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Dumpstream"
 msgstr "Dumpstream"
 
@@ -6279,12 +6398,12 @@ msgstr "Grid"
 msgid "Guess at random"
 msgstr "Guess at random"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Handjack"
 msgstr "Handjack"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/player/$username.tsx
@@ -6396,6 +6515,10 @@ msgstr "hide the note"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide the plays the dan rules turned away"
 msgstr "Hide the plays the dan rules turned away"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide the plays with no skill rating"
+msgstr "Hide the plays with no skill rating"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
@@ -6898,7 +7021,7 @@ msgstr "Italian"
 msgid "Italic"
 msgstr "Italic"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -6977,6 +7100,7 @@ msgstr "Judgement set"
 msgid "Judgement size"
 msgstr "Judgement size"
 
+#: src/components/me/MyStatsInsights.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/replay-overlays.ts
 msgid "Judgements"
@@ -6996,7 +7120,7 @@ msgid "Jump to a page"
 msgstr "Jump to a page"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -7045,6 +7169,7 @@ msgid "Key hitsounds"
 msgstr "Key hitsounds"
 
 #: src/components/rankings/LeaderboardControls.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/farm-helper.tsx
 msgid "Key mode"
 msgstr "Key mode"
@@ -7158,6 +7283,16 @@ msgstr "Large"
 #: src/routes/farm-helper.tsx
 msgid "large gap"
 msgstr "large gap"
+
+#. placeholder {0}: compact(judgement.plays)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "last {0} plays"
+#~ msgstr "last {0} plays"
+
+#. placeholder {0}: rank.windowDays
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "last {0}d"
+#~ msgstr "last {0}d"
 
 #: src/routes/tracker.tsx
 msgid "Last 24h"
@@ -7410,13 +7545,13 @@ msgid "Live updates on"
 msgstr "Live updates on"
 
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -7445,7 +7580,7 @@ msgstr "LN dan"
 msgid "LN dan est."
 msgstr "LN dan est."
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN General"
 msgstr "LN General"
@@ -7466,7 +7601,7 @@ msgstr "LN head color"
 msgid "LN Head color"
 msgstr "LN Head color"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN Inverse"
 msgstr "LN Inverse"
@@ -7475,7 +7610,7 @@ msgstr "LN Inverse"
 msgid "LN notes"
 msgstr "LN notes"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN Release"
 msgstr "LN Release"
@@ -7485,7 +7620,7 @@ msgstr "LN Release"
 msgid "LN tail"
 msgstr "LN tail"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN Tech"
 msgstr "LN Tech"
@@ -7740,6 +7875,10 @@ msgstr "Long-note and hold-heavy charts."
 msgid "Long, dense charts that test endurance."
 msgstr "Long, dense charts that test endurance."
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "Longest"
+msgstr "Longest"
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Longest blitz streaks"
 msgstr "Longest blitz streaks"
@@ -7957,6 +8096,7 @@ msgstr "Maniacard pull"
 msgid "map"
 msgstr "map"
 
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
 msgstr "Map"
@@ -8096,6 +8236,18 @@ msgstr "Max combo"
 msgid "Max PP"
 msgstr "Max PP"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "MAX share"
+#~ msgstr "MAX share"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "MAX to 300 ratio"
+#~ msgstr "MAX to 300 ratio"
+
+#: src/components/me/MyStatsInsights.tsx
+msgid "MAX:300 ratio"
+msgstr "MAX:300 ratio"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
 msgstr "Mean"
@@ -8177,6 +8329,18 @@ msgstr "Mirror (out and back)"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "MISS"
 msgstr "MISS"
+
+#: src/components/me/MyStatsInsights.tsx
+msgid "Misses"
+msgstr "Misses"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Misses / 1k notes"
+#~ msgstr "Misses / 1k notes"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Misses per 1k notes"
+#~ msgstr "Misses per 1k notes"
 
 #: src/routes/farm-helper.tsx
 msgid "missing"
@@ -8328,6 +8492,7 @@ msgid "most packs opened"
 msgstr "most packs opened"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/me/MyDataPanel.tsx
 msgid "Most played"
 msgstr "Most played"
 
@@ -8905,6 +9070,10 @@ msgstr "No qualifying clears yet"
 msgid "No rank data from 7 days ago yet"
 msgstr "No rank data from 7 days ago yet"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "No rank snapshot old enough to compare against yet."
+#~ msgstr "No rank snapshot old enough to compare against yet."
+
 #: src/routes/index.tsx
 #: src/routes/rankings.tsx
 msgid "No ranked players yet."
@@ -8958,6 +9127,10 @@ msgstr "No replays available for this player"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replays available from {countryCode} players on this difficulty"
 msgstr "No replays available from {countryCode} players on this difficulty"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "No roster member above you yet."
+#~ msgstr "No roster member above you yet."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."
@@ -9059,9 +9232,25 @@ msgstr "No tracked plays. Play some ranked maps and they show up here live, or c
 msgid "No tracked plays. Play some ranked maps and they show up here live."
 msgstr "No tracked plays. Play some ranked maps and they show up here live."
 
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "No unrated plays here yet."
+msgstr "No unrated plays here yet."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No unrated plays on this keymode"
+msgstr "No unrated plays on this keymode"
+
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "No vibro plays yet."
+#~ msgstr "No vibro plays yet."
+
 #: src/components/packs/WishlistLine.tsx
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "No wishes yet. Choose a missing player to get started."
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Nobody above you on the roster."
+#~ msgstr "Nobody above you on the roster."
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
@@ -9098,6 +9287,10 @@ msgstr "Nobody here by that name."
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "Nobody here has a rated {axisLabel} pool yet."
+
+#: src/components/rankings/VibroLeagueBoard.tsx
+#~ msgid "Nobody here has a vibro pool yet."
+#~ msgstr "Nobody here has a vibro pool yet."
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Nobody here has enough qualifying {skillsetLabel} clears yet."
@@ -9230,6 +9423,10 @@ msgstr "not passed yet"
 #: src/components/me/GoalsPanel.tsx
 msgid "not played yet"
 msgstr "not played yet"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "not rated"
+msgstr "not rated"
 
 #: src/components/communities/field-options.tsx
 msgid "not set"
@@ -10073,6 +10270,10 @@ msgstr "pending"
 msgid "Pending"
 msgstr "Pending"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "per 1k notes"
+msgstr "per 1k notes"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Per-column colors"
 msgstr "Per-column colors"
@@ -10241,6 +10442,7 @@ msgid "Played on: <0>{0}</0>"
 msgstr "Played on: <0>{0}</0>"
 
 #: src/components/rankings/LeaderboardTable.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/rankings.tsx
 msgid "Player"
@@ -10306,6 +10508,10 @@ msgstr "plays"
 msgid "Plays"
 msgstr "Plays"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "Plays / session"
+msgstr "Plays / session"
+
 #: src/routes/player/$username.tsx
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 msgstr "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
@@ -10313,6 +10519,34 @@ msgstr "Plays are only recorded for the top 100 players of each tracked country,
 #: src/components/me/RosterOptInCard.tsx
 msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Plays per session"
+#~ msgstr "Plays per session"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated."
+#~ msgstr "Plays the skill ratings leave out: vibro charts and charts that cannot be rated."
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart, and pp is calculated here even when osu! gives none."
+#~ msgstr "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart, and pp is calculated here even when osu! gives none."
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart, and pp is computed here even when osu! gives none."
+#~ msgstr "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart, and pp is computed here even when osu! gives none."
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart."
+msgstr "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is calculated here even when osu! gives none, and MSD counts every note."
+#~ msgstr "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is calculated here even when osu! gives none, and MSD counts every note."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is computed here even when osu! gives none, and MSD counts every note."
+#~ msgstr "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is computed here even when osu! gives none, and MSD counts every note."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Plays when a combo above 20 is lost."
@@ -10672,7 +10906,7 @@ msgstr "Purple"
 msgid "px"
 msgstr "px"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Quadstream"
 msgstr "Quadstream"
 
@@ -10739,10 +10973,18 @@ msgstr "Range"
 msgid "Rank"
 msgstr "Rank"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Rank by"
+msgstr "Rank by"
+
 #. placeholder {0}: isOwnProfile ? t`your` : t`the player's`
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Rank trajectory"
+#~ msgstr "Rank trajectory"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
@@ -12102,6 +12344,11 @@ msgstr "Servers are unavailable right now"
 msgid "Session {0}"
 msgstr "Session {0}"
 
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Session shape"
+#~ msgstr "Session shape"
+
+#: src/components/me/MyStatsInsights.tsx
 #: src/routes/player/$username.tsx
 msgid "Sessions"
 msgstr "Sessions"
@@ -12584,6 +12831,11 @@ msgstr "Similar skins"
 msgid "Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with {otherLabel} rules again."
 msgstr "Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with {otherLabel} rules again."
 
+#. placeholder {0}: formatMonth(judgement.since)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "since {0}"
+#~ msgstr "since {0}"
+
 #: src/lib/signature-shared.ts
 msgid "Single"
 msgstr "Single"
@@ -12885,7 +13137,7 @@ msgstr "Speed and tech are told apart by how the chart is played rather than by 
 #~ msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
 #~ msgstr "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Speedjack"
 msgstr "Speedjack"
 
@@ -12931,7 +13183,7 @@ msgid "STAM"
 msgstr "STAM"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -13107,7 +13359,7 @@ msgid "Streak"
 msgstr "Streak"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -13336,7 +13588,7 @@ msgstr "teal"
 msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 msgstr "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -14608,6 +14860,10 @@ msgstr "This special-edition Eternal stays with its collector."
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "This week"
+msgstr "This week"
+
 #: src/routes/report.tsx
 msgid "Those images are no longer available."
 msgstr "Those images are no longer available."
@@ -14880,6 +15136,10 @@ msgstr "Transparent background"
 msgid "Triangles"
 msgstr "Triangles"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Tries before a PB"
+#~ msgstr "Tries before a PB"
+
 #: src/routes/farm-helper.tsx
 msgid "Try a different title, artist, or difficulty name."
 msgstr "Try a different title, artist, or difficulty name."
@@ -15105,8 +15365,13 @@ msgstr "unranked"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
+#: src/routes/rankings.tsx
 msgid "Unrated"
 msgstr "Unrated"
+
+#: src/routes/player/$username.tsx
+msgid "Unrated plays"
+msgstr "Unrated plays"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"
@@ -15327,9 +15592,18 @@ msgstr "username..."
 msgid "Verified"
 msgstr "Verified"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "vibro"
+msgstr "vibro"
+
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro"
 msgstr "Vibro"
+
+#. placeholder {0}: rate.toFixed(2)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "vibro at {0}x"
+msgstr "vibro at {0}x"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "vibro chart, estimate unreliable"
@@ -15342,6 +15616,10 @@ msgstr "vibro chart, estimates unreliable"
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro chart: difficulty estimates are unreliable"
 msgstr "Vibro chart: difficulty estimates are unreliable"
+
+#: src/components/rankings/VibroLeagueBoard.tsx
+#~ msgid "Vibro counts here. Every note is rated, and a play is worth more the tighter its hit window was, so the same clear on OD 9 beats it on OD 0."
+#~ msgstr "Vibro counts here. Every note is rated, and a play is worth more the tighter its hit window was, so the same clear on OD 9 beats it on OD 0."
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro detected"
@@ -15372,6 +15650,7 @@ msgid "Vietnamese"
 msgstr "Vietnamese"
 
 #: src/components/player/SkillHistoryModal.tsx
+#: src/routes/player/$username.tsx
 msgid "View"
 msgstr "View"
 
@@ -15413,6 +15692,7 @@ msgstr "view map details"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 msgid "View map details"
 msgstr "View map details"
 
@@ -15655,6 +15935,10 @@ msgstr "What seems wrong?"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
 #~ msgstr "What the number is not"
+
+#: src/components/me/MyStatsInsights.tsx
+msgid "What you play"
+msgstr "What you play"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -16047,6 +16331,11 @@ msgstr "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a ba
 msgid "your best"
 msgstr "your best"
 
+#. placeholder {0}: compact(judgement.plays)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Your best play on each map, each day ({0})."
+#~ msgstr "Your best play on each map, each day ({0})."
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
@@ -16129,6 +16418,11 @@ msgstr "Your estimate for a side is the plain arithmetic average of the skill da
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
 #~ msgstr "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
+
+#. placeholder {0}: i18n._(weakest.labelMsg)
+#: src/components/me/MyStatsInsights.tsx
+msgid "Your lowest rating is {0}."
+msgstr "Your lowest rating is {0}."
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

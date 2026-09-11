@@ -12,7 +12,7 @@
  * Jumpstream or Handstream is within 0.5 of Stream, Jumpstream arbitrated by
  * LeoBlack's label and then by its runner-up skillset, Handstream near-tie on a
  * handstream-labelled chart, jack cluster share vetoing every stamina entry
- * path). Keep the two in step or the sweep measures a fiction, and note that
+ * path except on a chart LeoBlack headlines as handstream or plain jumpstream). Keep the two in step or the sweep measures a fiction, and note that
  * the corpus pass rates a CHART's own MSD vector while production buckets each
  * PLAY's accuracy-scaled one - the near-tie rules only show up in the
  * play-level block at the end, which reads stored plays_json. The other variants are the rules it
@@ -195,6 +195,10 @@ function dominant(values: Record<string, number>, keep: readonly string[]): stri
 }
 
 function jackContaminated(chart: ChartRow): boolean {
+  // Shipped 2026-09-10: a chart LeoBlack headlines as handstream, or as
+  // plain jumpstream (no tech, no trill), is spared.
+  if (chart.handstreamCluster) return false;
+  if (/jumpstream/i.test(chart.clusterRaw ?? "") && !/tech|trill/i.test(chart.clusterRaw ?? "")) return false;
   return chart.jackShare != null && chart.jackShare >= STAMINA_TILE_JACK_VETO_SHARE;
 }
 

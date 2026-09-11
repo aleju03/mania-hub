@@ -2,7 +2,7 @@ import type { Config } from "../config.js";
 import type { OscScore } from "../shared/types.js";
 
 const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
-const USER_RECENT_SCORES_LIMIT = 100;
+export const USER_RECENT_SCORES_LIMIT = 100;
 const BEATMAP_FILE_FETCH_HEADERS = {
   "user-agent": "mania-hub/1.0 (+https://mania-tracker.com)",
   accept: "text/plain,*/*;q=0.8",

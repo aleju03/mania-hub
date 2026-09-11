@@ -30,8 +30,8 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
       const evidence = side ? await fetchLivePlayerDanEvidenceDirect(userId, keys, side, { scoreId, includeRejected: true, signal: controller.signal }) : null;
       const clear = evidence?.clears.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map);
       const rejected = evidence?.rejected?.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map);
-      const play = side ? clear?.play ?? rejected?.play : (await fetchLivePlayerSkillPlaysDirect(userId, keys, rating, { scoreId, signal: controller.signal })).items
-        .find((item) => item.scoreId === scoreId && item.beatmapId === map);
+      const play = side ? clear?.play ?? rejected?.play : await fetchLivePlayerSkillPlaysDirect(userId, keys, rating, { scoreId, includeRejected: true, signal: controller.signal })
+        .then((page) => [...page.items, ...(page.rejected ?? [])].find((item) => item.scoreId === scoreId && item.beatmapId === map));
       if (!play) {
         if (!controller.signal.aborted) setState("missing");
         return;

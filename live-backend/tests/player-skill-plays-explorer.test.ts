@@ -280,6 +280,14 @@ describe("getPlayerSkillPlays filters", () => {
     { identity: "official:5", beatmapId: 403, keyCount: 4, rate: 1, goal: 0.95, pp: 160, values: { Overall: 22 }, patterns: [], source: "top", accuracy: 0.97, endedAt: "2026-05-01T00:00:00Z" },
   ];
 
+  // Passes whose accuracy sat under the calc's goal floor: kept beside the
+  // rated pool for dan credit, with no SSR vector to rank by.
+  const subFloorPlays = [
+    { identity: "official:6", beatmapId: 402, keyCount: 4, rate: 1.5, goal: 0.8, pp: 0, values: {}, patterns: ["jack"], source: "tracked", accuracy: 0.91, endedAt: "2026-06-01T00:00:00Z", ratingExcluded: true },
+    { identity: "official:7", beatmapId: 401, keyCount: 4, rate: 1.5, goal: 0.8, pp: 0, values: {}, patterns: [], source: "tracked", accuracy: 0.9, endedAt: "2026-07-01T00:00:00Z", ratingExcluded: true },
+    { identity: "official:8", beatmapId: 401, keyCount: 7, rate: 1, goal: 0.8, pp: 0, values: {}, patterns: [], source: "tracked", accuracy: 0.9, endedAt: "2026-07-02T00:00:00Z", ratingExcluded: true },
+  ];
+
   async function seed(db: Awaited<ReturnType<typeof createDb>>): Promise<void> {
     const { PLAYER_SKILLS_VERSION } = await import("../src/features/player-skills.js");
     const now = new Date().toISOString();
@@ -303,9 +311,32 @@ describe("getPlayerSkillPlays filters", () => {
       `insert into player_skill_ratings
        (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
        values (77, ?, 'ready', '{}', ?, ?, ?)`,
-      [PLAYER_SKILLS_VERSION, JSON.stringify({ version: PLAYER_SKILLS_VERSION, plays: storedPlays }), now, now],
+      [PLAYER_SKILLS_VERSION, JSON.stringify({ version: PLAYER_SKILLS_VERSION, plays: storedPlays, danOnly: subFloorPlays }), now, now],
     );
   }
+
+  it("lists the sub-floor plays only on request, newest first, with the exclusion named", async () => {
+    await withDb(async (db) => {
+      const { getPlayerSkillPlays } = await import("../src/features/player-skills.js");
+      await seed(db);
+      const plain = await getPlayerSkillPlays(db, 77, 4, "Overall", { sort: "recent" });
+      expect(plain.rejected).toBeUndefined();
+      expect(plain.items.some((item) => item.ratingExcluded)).toBe(false);
+      const page = await getPlayerSkillPlays(db, 77, 4, "Overall", { sort: "recent", includeRejected: true });
+      // The rated list is untouched: a sub-floor play never takes a slot in it.
+      expect(page.items.map((item) => item.playedAt)).toEqual(plain.items.map((item) => item.playedAt));
+      expect(page.rejected?.map((item) => item.scoreId)).toEqual([7, 6]);
+      expect(page.rejected?.every((item) => item.ratingExcluded && item.ratingExclusionReason === "msd_floor")).toBe(true);
+      expect(page.rejected?.[0]?.title).toBe("Explorer Song");
+      // A pattern axis keeps only the sub-floor plays on charts tagged with it.
+      const jack = await getPlayerSkillPlays(db, 77, 4, "pattern:jack", { sort: "recent", includeRejected: true });
+      expect(jack.rejected?.map((item) => item.scoreId)).toEqual([6]);
+      // A shared link to one of them resolves the same way the rated ones do.
+      const shared = await getPlayerSkillPlays(db, 77, 4, "Overall", { scoreId: 7, includeRejected: true });
+      expect(shared.items).toEqual([]);
+      expect(shared.rejected?.map((item) => item.scoreId)).toEqual([7]);
+    });
+  });
 
   it("orders by rating by default and by recency on request", async () => {
     await withDb(async (db) => {

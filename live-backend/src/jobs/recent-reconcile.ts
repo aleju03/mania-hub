@@ -4,12 +4,33 @@ import { nowIso } from "../shared/score.js";
 import type { JobStatus } from "./queue.js";
 
 export const RECENT_RECONCILE_JOB_TYPE = "reconcile_user_recent_scores";
+// One priority for the whole schedule. The old split (repairs at 150, live
+// follow-ups at 25) starved the follow-ups behind a permanent stream of
+// repairs: on prod they ran a median 37 minutes late and most expired unrun.
+// With a single job per user and a budget-paced cadence, oldest-due-first is
+// the fair order and nothing needs to outrank anything.
 export const RECENT_RECONCILE_REPAIR_PRIORITY = 150;
 
 export const RECENT_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
 
+// osu! serves a user's passed plays from the last 24 hours, at most 100 of
+// them. That window is what makes completeness cheap: one poll inside it sees
+// every play since the previous poll, so liveness (how soon a graveyard play
+// shows up) and completeness (whether it shows up at all) are separate
+// budgets. Live polls run while the session is on, spaced by how many
+// sessions share the live budget; the closing poll, well inside the window,
+// is the guarantee, and it repeats daily for as long as the user keeps
+// appearing in their own recent list.
+export const RECENT_LIVE_MIN_INTERVAL_MS = 3 * 60_000;
+export const RECENT_LIVE_MAX_INTERVAL_MS = 20 * 60_000;
+export const RECENT_SESSION_QUIET_MS = 30 * 60_000;
+export const RECENT_CLOSING_DELAY_MS = 18 * 60 * 60_000;
+const RECENT_UNCHANGED_POLL_CAP = 3;
+
+export type RecentReconcileKind = "gap_repair" | "follow_up" | "closing";
+
 export interface RecentReconcilePayload {
-  kind?: "gap_repair" | "follow_up";
+  kind?: RecentReconcileKind;
   userId: number;
   source?: string;
   processLeaderboardFeatures?: boolean;
@@ -17,11 +38,75 @@ export interface RecentReconcilePayload {
   latestScoreAt?: string;
 }
 
-export function nextRecentReconcileCadence(previous: number | undefined, changed: boolean): { unchangedPolls: number; delayMs: number } {
-  const unchangedPolls = changed ? 0 : Math.min(3, Math.max(0, Math.floor(previous ?? 0)) + 1);
-  // Keep the first unchanged follow-up at two minutes for delayed replay/id
-  // corrections, then check at four/eight minutes until the activity TTL ends.
-  return { unchangedPolls, delayMs: 2 * 60_000 * 2 ** Math.max(0, unchangedPolls - 1) };
+// Spread the live budget evenly over the sessions currently open, clamped so
+// a quiet site polls every three minutes and a busy one never falls below one
+// poll per twenty minutes (which cannot overflow the 100-play page either).
+export function liveRecentIntervalMs(openSessions: number, budgetPerMinute: number): number {
+  const sessions = Math.max(0, Math.floor(openSessions));
+  const budget = Math.max(0, budgetPerMinute);
+  const spread = budget > 0 ? (sessions / budget) * 60_000 : RECENT_LIVE_MAX_INTERVAL_MS;
+  return Math.min(RECENT_LIVE_MAX_INTERVAL_MS, Math.max(RECENT_LIVE_MIN_INTERVAL_MS, Math.round(spread)));
+}
+
+export interface RecentPollObservation {
+  now: number;
+  responseCount: number;
+  pageLimit: number;
+  responseNewestAtMs: number | null;
+  responseOldestAtMs: number | null;
+  // The newest play the feed itself saw in the last 30 minutes: a play can be
+  // on the feed before osu!'s recent list shows it.
+  trackedNewestAtMs: number | null;
+  changed: boolean;
+  previousUnchangedPolls: number | undefined;
+  liveIntervalMs: number;
+}
+
+export interface RecentPollPlan {
+  // null ends the schedule: nothing polls this user again until the feed
+  // sees a play of theirs.
+  kind: "follow_up" | "closing" | null;
+  unchangedPolls: number;
+  delayMs: number;
+  reason: "session_live" | "session_quiet" | "page_full" | "no_recent_plays";
+}
+
+export function planNextRecentPoll(o: RecentPollObservation): RecentPollPlan {
+  const newestAtMs = Math.max(o.responseNewestAtMs ?? -Infinity, o.trackedNewestAtMs ?? -Infinity);
+  const sinceNewestMs = Number.isFinite(newestAtMs) ? o.now - newestAtMs : Infinity;
+  let plan: RecentPollPlan;
+  if (sinceNewestMs <= RECENT_SESSION_QUIET_MS) {
+    // The first unchanged poll keeps the base spacing (delayed replay and id
+    // corrections land within it), then the spacing doubles up to the cap.
+    const unchangedPolls = o.changed ? 0 : Math.min(RECENT_UNCHANGED_POLL_CAP, Math.max(0, Math.floor(o.previousUnchangedPolls ?? 0)) + 1);
+    const delayMs = Math.min(RECENT_LIVE_MAX_INTERVAL_MS, o.liveIntervalMs * 2 ** Math.max(0, unchangedPolls - 1));
+    plan = { kind: "follow_up", unchangedPolls, delayMs, reason: "session_live" };
+  } else if (o.responseCount > 0) {
+    plan = { kind: "closing", unchangedPolls: 0, delayMs: RECENT_CLOSING_DELAY_MS, reason: "session_quiet" };
+  } else {
+    return { kind: null, unchangedPolls: 0, delayMs: 0, reason: "no_recent_plays" };
+  }
+  // A full page means plays may already be falling off the far end. Poll
+  // again within half the span the page covers, whatever the schedule said.
+  if (o.responseCount >= o.pageLimit && o.responseNewestAtMs != null && o.responseOldestAtMs != null) {
+    const tightMs = Math.max(RECENT_LIVE_MIN_INTERVAL_MS, Math.floor((o.responseNewestAtMs - o.responseOldestAtMs) / 2));
+    if (tightMs < plan.delayMs) return { kind: "follow_up", unchangedPolls: plan.unchangedPolls, delayMs: tightMs, reason: "page_full" };
+  }
+  return plan;
+}
+
+// Sessions currently open: every pending poll that is not a closing
+// appointment. Drives the live spacing above.
+export async function countOpenRecentSessions(db: Db): Promise<number> {
+  const row = (await exec(
+    db,
+    `select count(*) as count from jobs
+     where type = ?
+       and status in ('queued', 'failed', 'running', 'deferred_pressure')
+       and coalesce(json_extract(payload_json, '$.kind'), '') != 'closing'`,
+    [RECENT_RECONCILE_JOB_TYPE],
+  )).rows[0];
+  return Number(row?.count ?? 0);
 }
 
 // The durable gate survives restarts and dedupe-key changes. Reserve atomically
@@ -84,18 +169,16 @@ export async function promotePendingRecentReconcileJobs(db: Db, userId: number, 
   return Number(result.rowsAffected ?? 0);
 }
 
-// Upgrade existing repairs as well as new feed work, including leased jobs
-// inherited from the previous worker. Priority alone never preempts a lease.
-// Keep every job, deadline, cooldown and attempt; optional follow-ups retain
-// their cadence.
+// Lift every pending poll, including leased jobs inherited from the previous
+// worker, to the schedule's one priority. Rows written under the old
+// repair/follow-up split otherwise keep starving in priority-desc
+// reactivation. Priority alone never preempts a lease; every job, deadline,
+// cooldown and attempt is kept.
 export async function prioritizePendingRecentRepairs(db: Db): Promise<number> {
   const result = await exec(db,
     `update jobs set priority = ?
      where type = ? and status in ('queued', 'failed', 'deferred_pressure', 'running')
-       and priority < ?
-       and (json_extract(payload_json, '$.kind') = 'gap_repair'
-         or (json_extract(payload_json, '$.kind') is null
-           and dedupe_key not like 'recent:user:%:next:%'))`,
+       and priority < ?`,
     [RECENT_RECONCILE_REPAIR_PRIORITY, RECENT_RECONCILE_JOB_TYPE, RECENT_RECONCILE_REPAIR_PRIORITY]);
   return Number(result.rowsAffected ?? 0);
 }

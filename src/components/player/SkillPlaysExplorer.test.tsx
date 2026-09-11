@@ -8,6 +8,7 @@ import type { MyDataSkillMode } from "#/lib/my-data";
 
 const fetchSkillPlays = vi.fn();
 const fetchDanEvidence = vi.fn();
+const fetchUnratedPlays = vi.fn();
 
 vi.mock("#/lib/live-backend", async (importOriginal) => {
   const actual = await importOriginal<typeof import("#/lib/live-backend")>();
@@ -15,6 +16,7 @@ vi.mock("#/lib/live-backend", async (importOriginal) => {
     ...actual,
     fetchLivePlayerSkillPlaysDirect: fetchSkillPlays,
     fetchLivePlayerDanEvidenceDirect: fetchDanEvidence,
+    fetchLivePlayerUnratedPlaysDirect: fetchUnratedPlays,
     loadLiveMapSearchEntry: async () => null,
     peekLiveMapSearchEntry: () => null,
     prefetchLiveMapSearchEntry: async () => null,
@@ -115,6 +117,38 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     fireEvent.click(screen.getByText("Best 101"));
     expect(within(screen.getByTestId("map-rating-state")).getByText(text)).toBeTruthy();
     expect(screen.queryByText("No MSD rating")).toBeNull();
+  });
+
+  it("lists a sub-floor play in the MSD Recent order with its reason, and hides it behind the toggle", async () => {
+    fetchSkillPlays.mockImplementation(async (_userId: number, _keys: number, _axis: string, options: { sort?: string; includeRejected?: boolean }) => ({
+      items: [play(101, options.sort === "recent" ? "Recent" : "Best")],
+      total: 1,
+      limit: 200,
+      offset: 0,
+      ...(options.includeRejected ? {
+        rejected: [{ ...play(103, "Recent"), rating: 0, overallRating: 0, pp: null, accuracy: 0.9099,
+          playedAt: new Date(Date.UTC(2026, 0, 2)).toISOString(), source: "tracked",
+          ratingExcluded: true, ratingExclusionReason: "msd_floor" }],
+      } : {}),
+    }));
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41006} username="player" modes={[mode]} view="msd" />
+    </I18nProvider>);
+    await screen.findByText("Best 101");
+    // Best has no number to place it by, so it is not there.
+    expect(screen.queryByText("Recent 103")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    await screen.findByText("Recent 103");
+    // Newest first, ahead of the rated play set a day earlier.
+    const titles = screen.getAllByText(/^Recent 10\d$/).map((node) => node.textContent);
+    expect(titles).toEqual(["Recent 103", "Recent 101"]);
+    fireEvent.click(screen.getByText("not rated"));
+    expect(screen.getByText("Accuracy below skill rating range, so this play has no MSD rating on any skillset.")).toBeTruthy();
+    fireEvent.click(screen.getByText("Recent 103"));
+    expect(within(screen.getByTestId("map-rating-state")).getByText("Accuracy below skill rating range")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "not counted" }));
+    await waitFor(() => expect(screen.queryByText("Recent 103")).toBeNull());
+    expect(screen.getByText("Recent 101")).toBeTruthy();
   });
 
   it("keeps rejected low-accuracy passes in Recent and explains Dan rejection in the popup", async () => {
@@ -225,4 +259,33 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     await waitFor(() => expect(screen.queryAllByText("Recent 59").length).toBeGreaterThan(0));
     expect(fetchSkillPlays).toHaveBeenCalledTimes(warmedRequestCount);
   }, 30_000);
+
+  it("lists the unrated plays with their reason and the number the list is ranked by", async () => {
+    fetchUnratedPlays.mockImplementation((_: number, __: number, options: { sort?: string }) => Promise.resolve({
+      keyCount: 4,
+      sort: options.sort ?? "msd",
+      keyCounts: [4],
+      total: 2,
+      items: [
+        { play: { ...play(1, "Best"), title: "Wall 1", pp: 412.5, beatmapStatus: "graveyard" }, reason: "chart_vibro", pp: 412.5, msd: 31.2, dan: { rawDan: 8, side: "rc", label: "8" } },
+        { play: { ...play(2, "Best"), title: "Stacked 2", rate: 1.5, pp: null, beatmapStatus: "graveyard" }, reason: "chart_ineligible", pp: null, msd: 27.8, dan: null },
+      ],
+    }));
+
+    render(
+      <I18nProvider i18n={getI18n("en")}>
+        <SkillPlaysExplorer userId={555} username="player" modes={[mode]} view="unrated" />
+      </I18nProvider>,
+    );
+
+    await screen.findByText("Wall 1");
+    expect(screen.getByText("Stacked 2")).toBeTruthy();
+    expect(screen.getByText("vibro")).toBeTruthy();
+    expect(screen.getByText("cannot be rated")).toBeTruthy();
+    expect(screen.getByText("31.20")).toBeTruthy();
+    expect(fetchUnratedPlays.mock.calls[0][2]).toMatchObject({ sort: "msd" });
+
+    fireEvent.click(screen.getByRole("button", { name: "PP" }));
+    await waitFor(() => expect(fetchUnratedPlays.mock.calls.some((call) => call[2]?.sort === "pp")).toBe(true));
+  });
 });

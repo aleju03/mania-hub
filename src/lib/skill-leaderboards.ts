@@ -7,7 +7,7 @@
 // the pp board does (fetchLiveSkillLeaderboard / fetchLiveDanLeaderboard in
 // live-backend.ts).
 
-export type LeaderboardTab = "pp" | "skills" | "dan";
+export type LeaderboardTab = "pp" | "skills" | "dan" | "unrated";
 export type DanSide = "rc" | "ln";
 
 // Every keymode MinaCalc rates. Keep this in numeric order: unlike the three
@@ -35,7 +35,7 @@ export const DEFAULT_DAN_SIDE: DanSide = "rc";
 export const DEFAULT_DAN_SKILLSET = "overall";
 
 export function parseLeaderboardTab(value: unknown): LeaderboardTab {
-  return value === "skills" || value === "dan" ? value : DEFAULT_LEADERBOARD_TAB;
+  return value === "skills" || value === "dan" || value === "unrated" ? value : DEFAULT_LEADERBOARD_TAB;
 }
 
 export function parseLeaderboardKeys(value: unknown): LeaderboardKeyCount {

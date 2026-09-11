@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { danSkillsetBucketsForValues, danTagBucketsForTest } from "../src/features/player-skills.js";
+import { danSkillsetBucketsForPlayForTest, danSkillsetBucketsForValues, danTagBucketsForTest } from "../src/features/player-skills.js";
+import type { StoredPlaySsr } from "../src/features/player-skills.js";
 import type { MotionFeatures } from "../src/dan/motion-features.js";
 
 // Real MSD vectors, kept as data rather than as chart ids: the classifier must
@@ -51,6 +52,7 @@ const SPEEDJACK_CHART = {
   techCategory: null,
   clusterTrill: null,
   handstreamCluster: null,
+  jumpstreamCluster: null,
   chordjackScore: 0,
   techScore: 0,
   // No stored motion block, so these fixtures exercise the fallback arms.
@@ -262,7 +264,7 @@ describe("pattern tag thresholds", () => {
     const { danTagBucketsForTest: buckets, patternTagMinScoreForTest } = await import("../src/features/player-skills.js");
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
-      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
+      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
       lengthSeconds: null, od: null,
@@ -272,7 +274,7 @@ describe("pattern tag thresholds", () => {
 
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
-    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
+    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
     lengthSeconds: null, od: null,
@@ -565,6 +567,7 @@ describe("Stamina first with Handstream as the strongest base skillset", () => {
     clusterTrill: false,
     techCategory: false,
     handstreamCluster: false,
+    jumpstreamCluster: null,
     jackShare: 0.20,
     techScore: 0.8,
     motion: { sameHand: 0.1134, miniJack: 0.0001, oneHandTrill: 0.0153, crossHandTrill: 0.0613, roll4: 0.1022, rhythmBreak: 0.0074, chordSwing: 0.5928, densitySwing: 0.2359 },
@@ -685,7 +688,7 @@ describe("the Handstream near-tie", () => {
   };
   const handstreamChart = (over: Record<string, unknown> = {}) => ({
     ...SPEEDJACK_CHART, patterns: [], techScore: 0.71,
-    clusterTrill: false, techCategory: false, handstreamCluster: true,
+    clusterTrill: false, techCategory: false, handstreamCluster: true, jumpstreamCluster: null,
     lengthSeconds: 121, ...over,
   });
 
@@ -731,8 +734,14 @@ describe("the Handstream near-tie", () => {
     expect(danSkillsetBucketsForValues(4, "rc", downrated, 121, 0.75, handstreamChart())).toEqual(["tech"]);
   });
 
-  it("yields to the jack veto like every other stamina entry path", () => {
+  it("is not reached by the jack veto, which spares a handstream headline", () => {
+    // The near-tie already demands LeoBlack's handstream headline, and since
+    // 2026-09-10 that headline is exactly what stands the veto down (see
+    // "the stamina tile's jack veto"), so a jack share cannot pull one of
+    // these off the tile. Without the headline the veto still bites.
     expect(danSkillsetBucketsForValues(4, "rc", HOLD_ANGEL_PLAY, 121, 1, handstreamChart({ jackShare: 0.35 })))
+      .toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", HOLD_ANGEL_PLAY, 121, 1, handstreamChart({ jackShare: 0.35, handstreamCluster: false })))
       .toEqual(["tech"]);
   });
 });
@@ -804,6 +813,43 @@ describe("the stamina tile's jack veto", () => {
     // Handstream packs run p95 0.280, so 0.30 is past them.
     expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, jacky(0.30))).not.toEqual(["stamina"]);
     expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, jacky(0.29))).toEqual(["stamina"]);
+  });
+
+  it("spares a chart LeoBlack itself headlines as handstream", () => {
+    // AMEN KATAGIRI GENERATION [4K] THE BEGINNING OF A NEW ERA (4281260):
+    // 2:49 of 250BPM handstream that LeoBlack also reads as a "125BPM
+    // Chordjacks" cluster, share 0.327. Its headline cluster is Handstream,
+    // which AiAe never had, so the veto stands down and the Handstream base
+    // files it stamina rather than tech.
+    const amen = {
+      Stream: 24.82, Jumpstream: 24.10, Handstream: 29.93, Stamina: 30.06,
+      JackSpeed: 16.82, Chordjack: 21.70, Technical: 25.14,
+    };
+    const chart = { ...jacky(0.327), techScore: 0.985, lengthSeconds: 169 };
+    expect(danSkillsetBucketsForValues(4, "rc", amen, 169, 1, { ...chart, handstreamCluster: true })).toEqual(["stamina"]);
+    expect(danSkillsetBucketsForValues(4, "rc", amen, 169, 1, { ...chart, handstreamCluster: false })).toEqual(["tech"]);
+    // AiAe's shape stays vetoed: no handstream headline to spare it.
+    expect(danSkillsetBucketsForValues(4, "rc", AIAE_DT, 237, 1.5, { ...jacky(0.313), handstreamCluster: false })).not.toEqual(["stamina"]);
+  });
+
+  it("spares a plain jumpstream headline too, but not a tech or trill one", () => {
+    // THEY WONT ESCAPE [4K] Despair (5688610): 2:23 of 260-280BPM jumpstream
+    // that LeoBlack also reads as 130/140BPM chordjack clusters (share 0.42,
+    // the chordjack section at the end). Jumpstream 26.47 over Stamina 26.39
+    // and Handstream 26.30; the user reads it as jumpstream/handstream stamina.
+    // Its "Jumpstream" headline stands the veto down and the arbitration hands
+    // a plain-labelled Jumpstream argmax to stamina, as it does unvetoed.
+    const escape = {
+      Stream: 25.04, Jumpstream: 26.47, Handstream: 26.30, Stamina: 26.39,
+      JackSpeed: 17.70, Chordjack: 25.18, Technical: 25.88,
+    };
+    const chart = { ...jacky(0.42), techScore: 1, chordjackScore: 0.568, lengthSeconds: 143, jumpstreamCluster: true };
+    expect(danSkillsetBucketsForValues(4, "rc", escape, 143, 1, chart)).toEqual(["stamina"]);
+    // "Jumpstream Tech" or a trill headline is not spared: the runner-up rule
+    // still has to skip the endurance skillsets on a contaminated chart.
+    expect(danSkillsetBucketsForValues(4, "rc", escape, 143, 1, { ...chart, techCategory: true })).not.toContain("stamina");
+    expect(danSkillsetBucketsForValues(4, "rc", escape, 143, 1, { ...chart, clusterTrill: true })).not.toContain("stamina");
+    expect(danSkillsetBucketsForValues(4, "rc", escape, 143, 1, { ...chart, jumpstreamCluster: false })).not.toContain("stamina");
   });
 
   it("leaves a genuine handstream chart on the tile at any length", () => {
@@ -964,10 +1010,34 @@ const STRONG_280 = {
   }, 0.96, { clusterTrill: true, techCategory: true, chordjackScore: 0.79, jackShare: 0.45, lengthSeconds: 253 }),
 };
 
+// Skwid's Challenge 1.15x (1941077): a Korean dump the mapper tags speed,
+// stamina and technical, Technical 30.42 over Stream 29.96, which the model
+// reads at 0.81 off its cross-hand minitrills. Tech alone under the old 0.75
+// bar; the 2026-09-10 bar (0.85) files it under both.
+const SKWID = {
+  values: { Stream: 29.96, Jumpstream: 22.74, Handstream: 20.10, Stamina: 29.95, JackSpeed: 16.10, Chordjack: 19.70, Technical: 30.42 },
+  chart: withMotion({
+    sameHand: 0.1593, miniJack: 0.0086, oneHandTrill: 0.0279, crossHandTrill: 0.1423,
+    roll4: 0.0254, rhythmBreak: 0.0555, chordSwing: 0.2118, densitySwing: 0.2226,
+  }, 0.394, { clusterTrill: true, techCategory: true, chordjackScore: 0, jackShare: 0.03 }),
+};
+
 describe("the 4K speed/tech split read off the notes", () => {
   it("calls a jumptrill tech and a rolling speed chart speed", () => {
     expect(danSkillsetBucketsForValues(4, "rc", GRAVITY.values, 127, 1, GRAVITY.chart)).toEqual(["tech"]);
     expect(danSkillsetBucketsForValues(4, "rc", NAMED_SPEED.values, 100, 1, NAMED_SPEED.chart)).toEqual(["speed"]);
+  });
+
+  it("shares a speed-tagged dump the model is fairly sure is tech", () => {
+    expect(danSkillsetBucketsForValues(4, "rc", SKWID.values, 149, 1, SKWID.chart)).toEqual(["tech", "speed"]);
+  });
+
+  it("gives the model no say past the near-tie it was fitted on", () => {
+    // GRAVITY reads 0.82, inside the widened band, but Jumpstream leads
+    // Stream by 6.69: the MSD verdict stands and the jumptrill stays tech.
+    // Pull Stream up to within the gap and the same notes share.
+    const nearTie = { ...GRAVITY.values, Stream: 26.5 };
+    expect(danSkillsetBucketsForValues(4, "rc", nearTie, 127, 1, GRAVITY.chart)).toEqual(["tech", "speed"]);
   });
 
   it("keeps the MSD-lead arms on a chart whose motion block is not written yet", () => {
@@ -1070,5 +1140,28 @@ describe("4K jack endurance never supplies stamina dan evidence", () => {
         }
       }
     }
+  });
+});
+
+describe("sub-floor plays file by the chart's own vector", () => {
+  const play = (values: Record<string, number>, extra: Partial<StoredPlaySsr> = {}): StoredPlaySsr => ({
+    identity: "official:1", beatmapId: 1, keyCount: 4, rate: 1.5, goal: 0.8, pp: 0, values, patterns: [], source: "tracked", ...extra,
+  });
+  const chart = { ...SPEEDJACK_CHART, patterns: [], msdValues: REAL_SPEED[0] };
+
+  it("uses the chart's MSD when the play has no SSR vector", () => {
+    expect(danSkillsetBucketsForPlayForTest(4, "rc", play({}, { ratingExcluded: true }), chart)).toEqual(["speed"]);
+  });
+
+  it("keeps the play's own vector when it has one", () => {
+    expect(danSkillsetBucketsForPlayForTest(4, "rc", play(JUMPTRILL[0]), chart)).toEqual(["tech"]);
+  });
+
+  it("files nowhere when neither the play nor the chart has a vector", () => {
+    expect(danSkillsetBucketsForPlayForTest(4, "rc", play({}, { ratingExcluded: true }), { ...chart, msdValues: null })).toEqual([]);
+  });
+
+  it("does not read the stored chart vector for an Invert play", () => {
+    expect(danSkillsetBucketsForPlayForTest(7, "rc", play({}, { ratingExcluded: true, inverse: true }), { ...chart, keyCount: 7 })).not.toContain("speed");
   });
 });

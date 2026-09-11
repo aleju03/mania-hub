@@ -567,7 +567,7 @@ function KofiSupportButton() {
               <div className="text-left">
                 <div className="text-sm font-bold text-white">Support mania-tracker</div>
                 <div className="text-[11px] text-osu-f1">
-                  This site is a hobby project running on a single server. If it&apos;s been useful to you, you can help keep it up here.
+                  This site costs about €10 a month to keep running. If it&apos;s been useful to you, you can help keep it up here.
                 </div>
               </div>
               <button
@@ -667,15 +667,15 @@ function RootLayout() {
           <footer className="relative px-16 py-2 text-center text-[10px] text-osu-pink-light/30">
             <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
               <KofiSupportButton />
-              <span>·</span>
+              <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <Link to="/privacy" className="hover:text-osu-pink-light/60 transition-colors">
                 <Trans>privacy</Trans>
               </Link>
-              <span>·</span>
+              <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
                 <Trans>terms</Trans>
               </Link>
-              <span>·</span>
+              <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <Link
                 to="/report"
                 search={{ from: currentPath === "/report" ? undefined : currentPath }}
@@ -683,9 +683,9 @@ function RootLayout() {
               >
                 <Trans>report a bug</Trans>
               </Link>
-              <span>·</span>
+              <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <ChangelogFooterLink />
-              <span>·</span>
+              <span aria-hidden="true" className="h-2.5 w-px bg-current opacity-60" />
               <span>
                 <Trans>made by</Trans>{" "}
                 <a

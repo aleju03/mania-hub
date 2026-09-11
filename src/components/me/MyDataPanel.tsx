@@ -10,10 +10,12 @@ import { useAuth } from "../../lib/auth-context";
 import {
   fetchMyDataDashboard,
   fetchMyDataFeed,
+  fetchMyDataInsights,
   fetchMyDataSkills,
   fetchMyDataTopPlays,
   MY_DATA_PAGE_SIZE,
   type MyDataArchiveFilter,
+  type MyDataInsights,
   type MyDataModFilter,
   type MyDataSkillBreakdown,
   type MyDataSummary,
@@ -31,6 +33,15 @@ import { DanEvidenceModal } from "../player/DanEvidenceModal";
 import { qualifyingSkillModes, skillRatingAccent } from "../../lib/skill-axes";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
+import {
+  compact,
+  formatDay,
+  InsightCard,
+  JudgementCard,
+  KEY_LABEL,
+  PlayDietCard,
+  SessionShapeCard,
+} from "./MyStatsInsights";
 import { ModBadge } from "../ui/ModBadge";
 import { RosterOptInCard } from "./RosterOptInCard";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -46,7 +57,6 @@ const DAY_NAMES: MessageDescriptor[] = [
   msg`Fridays`,
   msg`Saturdays`,
 ];
-const KEY_LABEL: Record<number, string> = { 1: "1K", 2: "2K", 3: "3K", 4: "4K", 5: "5K", 6: "6K", 7: "7K", 8: "8K", 9: "9K", 10: "10K" };
 type FeedTabId = "tracked" | "top";
 
 const MOD_FILTER_OPTIONS: Array<{ value: MyDataModFilter; label: MessageDescriptor }> = [
@@ -90,32 +100,16 @@ function PageShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function InsightCard({ title, children, right, accent = "#e173a6" }: { title: string; children: React.ReactNode; right?: React.ReactNode; accent?: string }) {
-  return (
-    <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
-        <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-osu-l3">{title}</span>
-        {right ? <span className="ml-auto min-w-0 text-[10px] text-osu-f1">{right}</span> : null}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 function HighlightStat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-osu-b3/20 bg-osu-b4 px-2.5 py-2.5 sm:px-3">
       <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-osu-l3">{label}</div>
-      <div className="mt-0.5 truncate text-[15px] font-bold leading-none tabular-nums sm:text-[18px]" style={{ color: accent }} title={value}>{value}</div>
-      {sub ? <div className="mt-1 truncate text-[10px] text-osu-f1">{sub}</div> : null}
+      <div className="mt-0.5 truncate text-[15px] font-bold leading-tight tabular-nums sm:text-[18px]" style={{ color: accent }} title={value}>{value}</div>
+      {/* Two lines, not one truncated one: a map name is the whole point of
+          the tile it sits under and never fits on a quarter-width line. */}
+      {sub ? <div className="mt-1 line-clamp-2 text-[11px] leading-tight text-osu-f1" title={sub}>{sub}</div> : null}
     </div>
   );
-}
-
-function formatDay(day: string): string {
-  const date = new Date(`${day}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? day : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function formatDayRange(range: { startDay: string; endDay: string } | null | undefined): string | undefined {
@@ -123,10 +117,6 @@ function formatDayRange(range: { startDay: string; endDay: string } | null | und
   const start = formatDay(range.startDay);
   const end = formatDay(range.endDay);
   return start === end ? start : `${start} - ${end}`;
-}
-
-function compact(n: number): string {
-  return n >= 10_000 ? n.toLocaleString("en-US") : String(n);
 }
 
 function formatHour(h: number): string {
@@ -197,6 +187,7 @@ export function MyDataPanel() {
   const [topLimit, setTopLimit] = useState(MY_DATA_PAGE_SIZE);
   const [pageLoading, setPageLoading] = useState<"tracked" | "top" | null>(null);
   const [skills, setSkills] = useState<MyDataSkillBreakdown | null>(null);
+  const [insights, setInsights] = useState<MyDataInsights | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const newKeysRef = useRef<Set<string>>(new Set());
@@ -263,6 +254,9 @@ export function MyDataPanel() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Insights are a second read on purpose: they scan the player's whole ref
+    // history, and the feed shouldn't wait on them to paint.
+    void fetchMyDataInsights().then(setInsights).catch(() => setInsights(null));
     try {
       const dashboard = await fetchMyDataDashboard();
       const next = dashboard.summary;
@@ -424,9 +418,22 @@ export function MyDataPanel() {
         accent: "#e173a6",
       });
     }
+    if (insights?.grind.mostPlayed) {
+      stats.push({
+        key: "most-played",
+        label: t`Most played`,
+        value: t`${compact(insights.grind.mostPlayed.plays)} plays`,
+        sub: insights.grind.mostPlayed.beatmap?.shortLabel ?? insights.grind.mostPlayed.beatmap?.label ?? undefined,
+        accent: "#5ab2f2",
+      });
+    }
     return stats;
-  }, [summary]);
-  const highlightGridClass = highlightStats.length >= 3 ? "grid-cols-3" : highlightStats.length === 2 ? "grid-cols-2" : "grid-cols-1";
+  }, [summary, insights]);
+  const highlightGridClass = highlightStats.length >= 4
+    ? "grid-cols-2 lg:grid-cols-4"
+    : highlightStats.length === 3
+      ? "grid-cols-3"
+      : highlightStats.length === 2 ? "grid-cols-2" : "grid-cols-1";
 
   if (!viewer) {
     const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
@@ -590,6 +597,12 @@ export function MyDataPanel() {
                   />
                 </div>
               )}
+              {insights?.sessions || insights?.judgement ? (
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {insights.sessions ? <SessionShapeCard sessions={insights.sessions} /> : null}
+                  {insights.judgement ? <JudgementCard judgement={insights.judgement} /> : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-4">
@@ -615,6 +628,8 @@ export function MyDataPanel() {
                   onClose={() => setSelectedDan(null)}
                 />
               ) : null}
+
+              {insights ? <PlayDietCard insights={insights} mode={activeSkillMode} /> : null}
 
               {summary && summary.rhythm.sampleSize > 0 ? (
                 <InsightCard title={t`When you play`} accent="#57aeba" right={summary.rhythm.timezone}>

@@ -59,6 +59,28 @@ async function fixture<T>(name: string): Promise<T> {
   return JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8")) as T;
 }
 
+// Stores osu!'s ranked_date for a map the way a full beatmap fetch would, so a
+// seed_snipe_board test can say when the leaderboard opened. Rows an ingest
+// already wrote keep everything else.
+async function markMapLeaderboardOpenedAt(db: Parameters<typeof exec>[0], beatmapId: number, rankedDate: string, beatmapsetId = 50): Promise<void> {
+  const now = new Date().toISOString();
+  await exec(
+    db,
+    `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, version, updated_at)
+     values (?, ?, 'mania', 'ranked', 'Test', ?)
+     on conflict(beatmap_id) do nothing`,
+    [beatmapId, beatmapsetId, now],
+  );
+  const setId = Number((await exec(db, "select beatmapset_id from beatmaps where beatmap_id = ?", [beatmapId])).rows[0].beatmapset_id);
+  await exec(
+    db,
+    `insert into beatmapsets (beatmapset_id, title, artist, status, metadata_json, updated_at)
+     values (?, 'Test', 'Test', 'ranked', json_object('ranked_date', ?), ?)
+     on conflict(beatmapset_id) do update set metadata_json = json_set(coalesce(beatmapsets.metadata_json, '{}'), '$.ranked_date', ?)`,
+    [setId, rankedDate, now, rankedDate],
+  );
+}
+
 function mockReq(method: string, url: string, headers: IncomingMessage["headers"] = {}): IncomingMessage {
   const req = new EventEmitter() as IncomingMessage;
   req.method = method;
@@ -2397,7 +2419,7 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(1);
   });
 
-  it("stops recent polling when the latest osu recent row is stale", async () => {
+  it("books a closing poll instead of live polling when the latest osu recent row is stale", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T00:35:01.000Z"));
     const { db, queue, events, ingestor } = await setup(["CR"]);
@@ -2408,7 +2430,10 @@ describe("live backend", () => {
 
     await worker.runOnce();
 
-    expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(0);
+    const next = (await exec(db, "select run_after, payload_json from jobs where dedupe_key like 'recent:user:101:next:%'")).rows;
+    expect(next).toHaveLength(1);
+    expect(JSON.parse(String(next[0].payload_json)).kind).toBe("closing");
+    expect(next[0].run_after).toBe("2026-05-12T18:35:01.000Z");
   });
 
   it("keeps recent polling alive while raw oSC rows are active", async () => {
@@ -4727,6 +4752,7 @@ describe("live backend", () => {
     );
 
     await ingestor.ingestBatch([current], "osc_socket", { enqueueRecentReconcile: false });
+    await markMapLeaderboardOpenedAt(db, 501, "2026-01-01T00:00:00.000Z");
     const osu = {
       getBeatmapUserScoresAll: vi.fn(async (_beatmapId: number, userId: number) => {
         if (userId === 101) return [current, previousSelf];
@@ -4769,6 +4795,7 @@ describe("live backend", () => {
       rosterArgs,
     );
 
+    await markMapLeaderboardOpenedAt(db, 501, "2026-01-01T00:00:00.000Z");
     const osu = { getBeatmapUserScoresAll: vi.fn(async () => [] as OscScore[]) };
     const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
 
@@ -5035,6 +5062,72 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where type in ('refresh_user_top_scores', 'refresh_user_maps_farmed_scores')")).rows[0].count)).toBe(0);
   });
 
+  it("skips the roster scan for a map whose leaderboard opened after ingest began", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    const [current] = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'osu_rankings', 1, ?), ('CR', 303, 2, 'osu_rankings', 1, ?)`,
+      [now, now],
+    );
+    await ingestor.ingestBatch([current], "osc_socket", { enqueueRecentReconcile: false });
+    // Ranked past SNIPES_INGEST_SINCE (2026-06-08 by default) plus the 14-day
+    // qualified allowance: the feed saw every roster play on this board.
+    await markMapLeaderboardOpenedAt(db, 501, "2026-08-01T00:00:00.000Z");
+    const osu = {
+      getBeatmapUserScoresAll: vi.fn(async () => [] as OscScore[]),
+      getBeatmap: vi.fn(async () => { throw new Error("unexpected beatmap fetch"); }),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(osu.getBeatmapUserScoresAll).not.toHaveBeenCalled();
+    expect(osu.getBeatmap).not.toHaveBeenCalled();
+    // The ingested play still reaches the board through the replay step.
+    const board = (await exec(db, "select user_id from country_beatmap_scores where country = 'CR' and beatmap_id = 501")).rows;
+    expect(board.map((row) => Number(row.user_id))).toEqual([101]);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'seed_snipe_board' and status != 'done'")).rows[0].count)).toBe(0);
+  });
+
+  it("fetches a map once to learn when its leaderboard opened before scanning the roster", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    const [current] = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'osu_rankings', 1, ?), ('CR', 303, 2, 'osu_rankings', 1, ?)`,
+      [now, now],
+    );
+    // A score payload's compact set carries no ranked_date, so the job has to ask.
+    await ingestor.ingestBatch([current], "osc_socket", { enqueueRecentReconcile: false });
+    const osu = {
+      getBeatmapUserScoresAll: vi.fn(async () => [] as OscScore[]),
+      getBeatmap: vi.fn(async (_beatmapId: number, _caller?: string) => ({
+        id: 501,
+        beatmapset_id: 50,
+        mode: "mania",
+        status: "ranked",
+        version: "Test",
+        url: "https://osu.ppy.sh/beatmaps/501",
+        beatmapset: { id: 50, title: "Test", artist: "Test", creator: "Test", status: "ranked", ranked_date: "2026-08-01T00:00:00+00:00", covers: {} },
+      })),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(osu.getBeatmap.mock.calls.filter((call) => call[1] === "job:seed_snipe_board")).toHaveLength(1);
+    expect(osu.getBeatmapUserScoresAll).not.toHaveBeenCalled();
+    // The fetched date is kept, so the next lane on this map decides from the row.
+    const stored = (await exec(db, "select json_extract(metadata_json, '$.ranked_date') as ranked_date from beatmapsets where beatmapset_id = 50")).rows[0];
+    expect(stored.ranked_date).toBe("2026-08-01T00:00:00+00:00");
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'seed_snipe_board' and status != 'done'")).rows[0].count)).toBe(0);
+  });
+
   it("seeds snipe boards from ranked current roster rows only", async () => {
     const { db, queue, events, ingestor } = await setup();
     const now = new Date().toISOString();
@@ -5047,6 +5140,7 @@ describe("live backend", () => {
          ('CR', 303, 2, 'osu_rankings', 0, ?)`,
       [now, now, now],
     );
+    await markMapLeaderboardOpenedAt(db, 501, "2026-01-01T00:00:00.000Z");
     await queue.enqueue("seed_snipe_board", "test:snipe-seed", { country: "CR", beatmapId: 501, laneKey: "normal:lazer" }, { priority: 100 });
     const osu = { getBeatmapUserScoresAll: vi.fn(async () => []) };
     const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");

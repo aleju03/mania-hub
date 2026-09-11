@@ -1896,16 +1896,27 @@ function MapsPage() {
           <div className="hidden sm:flex flex-wrap items-start gap-x-10 gap-y-4">
             {browseFilterGroups}
             {tab === "random" && (
-              <span className="ml-auto self-center text-[11px] text-osu-f1 tabular-nums">
-                <Plural value={randomPickCount} one="# pick" other="# possible picks" />
-              </span>
+              <div className="ml-auto self-center flex flex-col items-end gap-1">
+                <span className="text-[11px] text-osu-f1 tabular-nums">
+                  <Plural value={randomPickCount} one="# pick" other="# possible picks" />
+                </span>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer"
+                  >
+                    <Trans>Clear all</Trans>
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
           {/* Sort + actions (desktop; phones sort from the toolbar above). Plain
               text links like the search tab: the active sort is white with a
               direction caret, and clicking it again flips the direction. */}
-          {(browseSortOptions.length > 0 || hasActiveFilters) && (
+          {(browseSortOptions.length > 0 || (hasActiveFilters && tab !== "random")) && (
             <div className="hidden sm:flex flex-wrap items-center justify-between gap-3 border-t border-osu-b3/15 pt-3.5">
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 {browseSortOptions.length > 0 && (

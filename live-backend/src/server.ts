@@ -28,6 +28,7 @@ import { registerPackCommunitySnapshots, startPackCommunitySnapshotRefresh } fro
 import { ensurePackCommunityRollupTriggers } from "./features/pack-community-rollups.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { warmSkillLeaderboardBoard } from "./features/skill-leaderboards.js";
+import { ensureUnratedPlaysSweepSeeded } from "./features/unrated-plays.js";
 import { enqueuePlayerSkills, ensurePlayerSkillDanSweepSeeded, ensurePlayerSkillFloorSweepSeeded, ensurePlayerSkillMsdCapSweepSeeded, ensurePlayerSkillPatternSweepSeeded, ensurePlayerSkillPoisonRecoverySeeded, ensurePlayerSkillVibroSweepSeeded, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
@@ -599,6 +600,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // DB work only.
       void ensurePlayerSkillMsdCapSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-msd-cap] seed failed", error));
       void ensurePlayerSkillVibroSweepSeeded(app.db, app.queue).catch((error) => console.warn("[player-skill-vibro] seed failed", error));
+      // The unrated plays board: prices the plays the skill ratings leave
+      // out (pp, every-note MSD, chart dan) from the stored pools. Reads
+      // cached .osu files only, writes nothing the ordinary ratings read.
+      void ensureUnratedPlaysSweepSeeded(app.db, app.queue).catch((error) => console.warn("[unrated-plays] seed failed", error));
       // Course-rule dan bars: the stored verdicts predate them, but the plays
       // behind them do not, so the dan block rewrites in place instead of
       // costing the corpus a full re-rate. Local DB work only.

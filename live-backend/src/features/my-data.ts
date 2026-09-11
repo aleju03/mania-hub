@@ -51,6 +51,8 @@ export interface MyDataBeatmapRef {
   beatmapId: number;
   beatmapsetId: number | null;
   label: string | null;
+  /** The same map without the artist, for tiles too narrow for the full line. */
+  shortLabel?: string | null;
 }
 
 export interface MyDataRecord {
@@ -142,7 +144,9 @@ function longestDayStreak(days: string[]): { count: number; startDay: string | n
   return best;
 }
 
-async function beatmapRef(db: Db, beatmapId: number | null | undefined): Promise<MyDataBeatmapRef | null> {
+/** Beatmap identity for a record tile: set id plus an "artist - title [diff]"
+ * label, and the "title [diff]" form for tiles with no room for the artist. */
+export async function loadMyDataBeatmapRef(db: Db, beatmapId: number | null | undefined): Promise<MyDataBeatmapRef | null> {
   if (!beatmapId || !Number.isFinite(beatmapId)) return null;
   const row = (await exec(
     db,
@@ -155,8 +159,9 @@ async function beatmapRef(db: Db, beatmapId: number | null | undefined): Promise
   const title = row.title ? String(row.title) : null;
   const artist = row.artist ? String(row.artist) : null;
   const version = row.version ? String(row.version) : null;
-  const label = title ? `${artist ? `${artist} - ` : ""}${title}${version ? ` [${version}]` : ""}` : null;
-  return { beatmapId, beatmapsetId: row.beatmapset_id == null ? null : Number(row.beatmapset_id), label };
+  const shortLabel = title ? `${title}${version ? ` [${version}]` : ""}` : null;
+  const label = shortLabel ? `${artist ? `${artist} - ` : ""}${shortLabel}` : null;
+  return { beatmapId, beatmapsetId: row.beatmapset_id == null ? null : Number(row.beatmapset_id), label, shortLabel };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -359,7 +364,7 @@ export async function getMyDataSummary(db: Db, userId: number): Promise<MyDataSu
   const [rhythm, mods, peakPlay] = await Promise.all([
     computeRhythm(db, userId, country),
     computeMods(db, userId),
-    peakPlayRow ? beatmapRef(db, topPlayBeatmapId(peakPlayRow.payload_json)) : Promise.resolve(null),
+    peakPlayRow ? loadMyDataBeatmapRef(db, topPlayBeatmapId(peakPlayRow.payload_json)) : Promise.resolve(null),
   ]);
 
   const summary: MyDataSummary = {

@@ -57,7 +57,7 @@ import {
   scoreHasReplay,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
-import { SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
+import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
@@ -3542,11 +3542,12 @@ let lastSkillsPanelHeight: number | null = null;
 // two bounded plays lists behind them.
 type PlayerSkillsView = "ratings" | SkillPlaysExplorerView;
 
-const PLAYER_SKILLS_VIEWS: PlayerSkillsView[] = ["ratings", "msd", "dan"];
+const PLAYER_SKILLS_VIEWS: PlayerSkillsView[] = ["ratings", "msd", "dan", "unrated"];
 
 function getPlayerSkillsViewLabelMsg(view: PlayerSkillsView): MessageDescriptor {
   if (view === "msd") return msg`MSD plays`;
   if (view === "dan") return msg`Dan plays`;
+  if (view === "unrated") return msg`Unrated plays`;
   return msg`Ratings`;
 }
 
@@ -3684,9 +3685,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const skillModeStrip = modes;
   const activeSkillMode = modes.find((mode) => mode.keyCount === skillModeKey) ?? modes[0] ?? null;
   const view = noDans && skillsView === "dan" ? "ratings" : skillsView;
-  const skillsViews = noDans
-    ? PLAYER_SKILLS_VIEWS.filter((option) => option !== "dan")
-    : PLAYER_SKILLS_VIEWS;
+  const skillsViews = PLAYER_SKILLS_VIEWS.filter((option) => !noDans || option !== "dan");
 
   const selectView = useCallback((next: PlayerSkillsView) => {
     if (next === skillsView) return;
@@ -3729,26 +3728,23 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       <SharedSkillPlay userId={user.id} username={user.username} />
       {untrackedNote}
       {rated ? (
-        <div className={`mb-3 flex flex-wrap items-center gap-1 ${view === "ratings" ? SKILLS_COLUMN_CLASS : ""}`}>
-          {skillsViews.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => selectView(option)}
-              onPointerEnter={() => {
-                if (option !== "ratings") prefetchSkillPlaysExplorerView(user.id, modes, option);
-              }}
-              onFocus={() => {
-                if (option !== "ratings") prefetchSkillPlaysExplorerView(user.id, modes, option);
-              }}
-              aria-pressed={view === option}
-              className={`rounded-full px-3 py-1 text-[11.5px] font-semibold transition-colors cursor-pointer ${
-                view === option ? "bg-osu-b3/70 text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
-              }`}
-            >
-              {i18n._(getPlayerSkillsViewLabelMsg(option))}
-            </button>
-          ))}
+        /* Pinned to the page edge on every view: the ratings column below is
+           centred and the plays views are full width, and a switch that
+           followed either would jump sideways on each click. */
+        <div className="mb-3 flex">
+          {/* One track, the same object as the keymode and order controls
+              below it, so the row reads as a switch and not four loose buttons. */}
+          <Segmented
+            ariaLabel={t`View`}
+            value={view}
+            options={skillsViews.map((option) => ({
+              value: option,
+              label: i18n._(getPlayerSkillsViewLabelMsg(option)),
+              onPrefetch: option === "ratings" ? undefined : () => prefetchSkillPlaysExplorerView(user.id, modes, option),
+            }))}
+            onChange={selectView}
+            shape="tabs"
+          />
         </div>
       ) : null}
       {skillsError ? (
@@ -3756,21 +3752,25 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       ) : !skills ? (
         /* Shaped like what lands: a keymode strip over one panel, not the
            two-panel grid the tab used to open with. */
-        <div className={SKILLS_COLUMN_CLASS}>
-          <div className="mb-4 flex flex-wrap gap-x-7 gap-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="space-y-1">
-                <Skeleton className="h-2.5 w-6" />
-                <Skeleton className="h-5 w-14" />
-              </div>
-            ))}
-          </div>
-          <div className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-7 w-24" />
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-3 w-full" />
-            ))}
+        <div>
+          {/* The view switch lands first, at the size of its four labels. */}
+          <Skeleton className="mb-3 h-[30px] w-[340px] max-w-full rounded-lg" />
+          <div className={SKILLS_COLUMN_CLASS}>
+            <div className="mb-4 flex flex-wrap gap-x-7 gap-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <Skeleton className="h-2.5 w-6" />
+                  <Skeleton className="h-5 w-14" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-7 w-24" />
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-3 w-full" />
+              ))}
+            </div>
           </div>
         </div>
       ) : rated && view !== "ratings" ? (

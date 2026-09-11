@@ -108,7 +108,7 @@ describe("worker lanes for reserved types", () => {
     });
   });
 
-  it("preserves parked jobs and retry deadlines while upgrading existing required repairs", async () => {
+  it("preserves parked jobs and retry deadlines while lifting every pending poll to the one priority", async () => {
     await withDb(async (db, queue) => {
       const future = new Date(Date.now() + 600_000);
       const entries = [
@@ -125,12 +125,10 @@ describe("worker lanes for reserved types", () => {
       await exec(db, `update jobs set status = 'running', locked_by = 'old-worker', locked_until = ?,
         run_after = '2026-01-01T00:00:00.000Z' where dedupe_key = 'recent:user:5'`, [future.toISOString()]);
       const before = (await exec(db, "select * from jobs order by id")).rows;
-      expect(await prioritizePendingRecentRepairs(db)).toBe(3);
+      expect(await prioritizePendingRecentRepairs(db)).toBe(5);
       expect(await prioritizePendingRecentRepairs(db)).toBe(0);
       const after = (await exec(db, "select * from jobs order by id")).rows;
-      expect(after).toEqual(before.map((row, i) => ({
-        ...row, priority: i < 2 || i === 4 ? RECENT_RECONCILE_REPAIR_PRIORITY : row.priority,
-      })));
+      expect(after).toEqual(before.map((row) => ({ ...row, priority: RECENT_RECONCILE_REPAIR_PRIORITY })));
       expect(await queue.claim("worker", 10, { types: ["reconcile_user_recent_scores"] })).toEqual([]);
       await exec(db, "update jobs set locked_until = '2026-01-01T00:00:00.000Z' where dedupe_key = 'recent:user:5'");
       const resumed = await queue.claim("worker", 1, { types: ["reconcile_user_recent_scores"] });

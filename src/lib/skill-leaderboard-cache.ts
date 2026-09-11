@@ -1,8 +1,9 @@
-import { fetchLiveDanLeaderboard, fetchLiveSkillLeaderboard } from "./live-backend";
+import { fetchLiveDanLeaderboard, fetchLiveSkillLeaderboard, fetchLiveUnratedPlays } from "./live-backend";
 import type { DanLeaderboardSnapshot, DanSide, SkillLeaderboardSnapshot } from "./skill-leaderboards";
+import type { UnratedPlaysKeys, UnratedPlaysRange, UnratedPlaysSnapshot, UnratedPlaysSort } from "./unrated-plays";
 
 /**
- * Module-level snapshot cache for the /rankings skill and dan boards.
+ * Module-level snapshot cache for the /rankings skill, dan and unrated plays boards.
  *
  * The endpoint carries an HTTP cache, but a browser cache hit still costs a
  * round trip and a repaint: without this, every axis chip and every tab flip
@@ -102,6 +103,18 @@ export interface DanBoardRequest {
   page: number;
 }
 
+export interface UnratedBoardRequest {
+  country: string;
+  keys: UnratedPlaysKeys;
+  sort: UnratedPlaysSort;
+  range: UnratedPlaysRange;
+  page: number;
+}
+
+function unratedKey(request: UnratedBoardRequest): string {
+  return `unrated ${request.country} ${request.keys} ${request.sort} ${request.range} ${request.page}`;
+}
+
 function skillKey(request: SkillBoardRequest): string {
   return `skill ${request.country} ${request.keys} ${request.axis} ${request.page}`;
 }
@@ -119,6 +132,10 @@ export function peekDanBoard(request: DanBoardRequest): DanLeaderboardSnapshot |
   return peek<DanLeaderboardSnapshot | null>(danKey(request));
 }
 
+export function peekUnratedBoard(request: UnratedBoardRequest): UnratedPlaysSnapshot | null {
+  return peek<UnratedPlaysSnapshot | null>(unratedKey(request));
+}
+
 /**
  * The board for this request, fetching only when nothing usable is cached.
  *
@@ -133,4 +150,8 @@ export function loadSkillBoard(request: SkillBoardRequest): Promise<SkillLeaderb
 
 export function loadDanBoard(request: DanBoardRequest): Promise<DanLeaderboardSnapshot> {
   return load(danKey(request), () => fetchLiveDanLeaderboard(request));
+}
+
+export function loadUnratedBoard(request: UnratedBoardRequest): Promise<UnratedPlaysSnapshot> {
+  return load(unratedKey(request), () => fetchLiveUnratedPlays(request));
 }

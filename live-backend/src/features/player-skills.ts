@@ -21,7 +21,7 @@ import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, per
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreHitCounts, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
-import { danLabelFor, danTableCeilingFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
+import { danLabelFor, danTableCeilingFor, danTableFloorFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { analyzeVibroSections, conservativeVibroAccuracy, usesSectionVibro, type VibroAnalysis } from "../dan/vibro-sections.js";
 import { assessVibroClear, hasOnlyClearEvidencePatterns, summarizeVibroClear, type VibroClearEvidence, type VibroClearEvidenceSummary, type VibroClearInput } from "../dan/vibro-clear-evidence.js";
@@ -68,6 +68,11 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
+// v34: a chart whose stored dan sits at or below the ladder floor (the 6K/7K
+// kyu "0" band, a 4K "1--") credits a clear at the floor instead of being
+// treated as unrated (danClearTargetFor, 2026-09-10). No SSR or goal moves,
+// only which stored clears count as dan evidence, so the fold is the same
+// plays_json re-derivation as every earlier bump.
 // v33: preserve archived scoring provenance and resolve chart facts before
 // selecting a score goal. Corrected goals replace prior SSRs, including
 // stable graveyard plays that only appeared eligible through the lazer fade.
@@ -115,7 +120,7 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 33;
+export const PLAYER_SKILLS_VERSION = 34;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -137,7 +142,7 @@ export const PLAYER_SKILLS_VERSION = 33;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -722,6 +727,13 @@ export interface PlayerSkillPlaysPage {
   unfilteredTotal: number;
   limit: number;
   offset: number;
+  /**
+   * The plays this keymode's ratings turned away for accuracy (the calc's
+   * goal floor), newest first; only when the read asked for them. They have
+   * no SSR on any axis, so they cannot rank, but a player who just set one
+   * has to be able to find it in the list and read why it is not rated.
+   */
+  rejected?: PlayerSkillPlay[];
 }
 
 // The explorer deliberately follows osu!'s top-play window: each ordering is
@@ -835,7 +847,7 @@ export interface StoredVibroExclusion {
   judgementSignature?: string;
 }
 
-interface StoredPlayerSkillPlays {
+export interface StoredPlayerSkillPlays {
   plays: StoredPlaySsr[];
   /** Passed plays below the MSD goal floor; still subject to ordinary Dan gates. */
   danOnly?: StoredPlaySsr[];
@@ -930,7 +942,7 @@ const INVERSE_MOD_PATTERNS = ["ln", "lninverse"];
  * The slot a rated play occupies: best play per (chart, rate), with an Invert
  * play in a slot of its own since it played a different chart.
  */
-function playSlotKey(beatmapId: number, rate: number, inverse: boolean | undefined): string {
+export function playSlotKey(beatmapId: number, rate: number, inverse: boolean | undefined): string {
   return inverse ? `${beatmapId}:${rate}:${INVERSE_MOD_VARIANT}` : `${beatmapId}:${rate}`;
 }
 
@@ -956,8 +968,11 @@ function inverseModChartInfo(chart: ChartSkillInfo | undefined): ChartSkillInfo 
     techCategory: null,
     clusterTrill: null,
     handstreamCluster: null,
+    jumpstreamCluster: null,
     techScore: 0,
     chordjackScore: 0,
+    handstreamEndurance: false,
+    msdValues: null,
   };
 }
 
@@ -1192,13 +1207,13 @@ export function aggregateSsrs(values: number[]): number {
  */
 async function runMsdAtGoal(
   osuText: string,
-  options: { rate: number; keyCount: number; goal: number; lnTailTaps?: boolean },
+  options: { rate: number; keyCount: number; goal: number; lnTailTaps?: boolean; adjustVibro?: boolean },
 ): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
-  const { rate, keyCount, goal, lnTailTaps = false } = options;
-  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps, adjustVibro: true }).catch(msdChartErrorFallback);
+  const { rate, keyCount, goal, lnTailTaps = false, adjustVibro = true } = options;
+  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps, adjustVibro }).catch(msdChartErrorFallback);
   if (!capped) return null;
   if (goal <= SSR_CALC_GOAL_CAP) return { values: capped.values, calcRuns: 1 };
-  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps, adjustVibro: true }).catch(msdChartErrorFallback);
+  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps, adjustVibro }).catch(msdChartErrorFallback);
   if (!base) return { values: capped.values, calcRuns: 1 };
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
   const values: Record<string, number> = {};
@@ -1216,16 +1231,16 @@ async function runMsdAtGoal(
 
 // SSRs on hold-bearing charts blend toward a tail-aware second calc pass;
 // weights and rationale live with the calc facade (dan/msd.ts).
-async function computePlaySsrValues(
+export async function computePlaySsrValues(
   osuText: string,
-  options: { rate: number; keyCount: number; goal: number; lnRatio?: number | null },
+  options: { rate: number; keyCount: number; goal: number; lnRatio?: number | null; adjustVibro?: boolean },
 ): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
-  const { rate, keyCount, goal, lnRatio } = options;
-  const base = await runMsdAtGoal(osuText, { rate, keyCount, goal });
+  const { rate, keyCount, goal, lnRatio, adjustVibro } = options;
+  const base = await runMsdAtGoal(osuText, { rate, keyCount, goal, adjustVibro });
   if (!base) return null;
   const blend = LN_TAIL_BLEND_BY_KEYMODE[keyCount] ?? 0;
   if (!(blend > 0) || !(Number(lnRatio) > LN_TAIL_MIN_RATIO)) return base;
-  const tails = await runMsdAtGoal(osuText, { rate, keyCount, goal, lnTailTaps: true });
+  const tails = await runMsdAtGoal(osuText, { rate, keyCount, goal, lnTailTaps: true, adjustVibro });
   if (!tails) return base;
   return { values: blendLnTailValues(base.values, tails.values, keyCount), calcRuns: base.calcRuns + tails.calcRuns };
 }
@@ -1311,8 +1326,17 @@ export interface ChartSkillInfo {
   // Whether that same label names handstream. Null when no label is stored.
   // Read by the Handstream near-tie (HANDSTREAM_NEAR_TIE_MSD).
   handstreamCluster: boolean | null;
+  // Whether that same label names jumpstream. Null when no label is stored.
+  // Read only by the jack veto (headlineSparesJackVeto).
+  jumpstreamCluster: boolean | null;
   /** Stamina leads the chart's MSD, with Handstream the strongest base skill. */
   handstreamEndurance?: boolean;
+  /**
+   * The chart's own MSD vector at 1.0x (4K rice only), the reading /maps
+   * shows. The tile fallback for a play with no SSR vector of its own: a
+   * sub-floor pass is a credited clear that still has to file somewhere.
+   */
+  msdValues?: Record<string, number> | null;
   // The analyzer's raw tech score at 1.0x, zeroed when the jack veto strips
   // the tech tag. Read by the 4K speed tile's tech tiebreak
   // (TECH_NEAR_TIE_MIN_SCORE), which needs the score rather than the 0.5 tag.
@@ -1474,6 +1498,7 @@ const TRILL_CLUSTER_CATEGORY = /trill/i;
 
 // The same label read for handstream, for the near-tie below.
 const HANDSTREAM_CLUSTER_CATEGORY = /handstream/i;
+const JUMPSTREAM_CLUSTER_CATEGORY = /jumpstream/i;
 
 // A trill label sends a Jumpstream argmax to tech, EXCEPT when the trill is
 // dense enough to be a jack demand. A trill is hit by oscillating the wrist,
@@ -1586,9 +1611,15 @@ function readMotionFeatures(value: unknown): MotionFeatures | null {
   return read as MotionFeatures;
 }
 
+// The stored value as is, including zero or negative: the estimator's
+// regression runs below the table on a bottom-rung chart and the label still
+// prints as the ladder's first band, so danClearTargetFor clamps it to the
+// ladder floor instead of treating it as unrated. Only a missing or malformed
+// value stays null.
 function readRawDan(half: LeanHalfJson | null | undefined): number | null {
-  const rawDan = Number(half?.rawDan);
-  return Number.isFinite(rawDan) && rawDan > 0 ? rawDan : null;
+  if (half?.rawDan == null) return null;
+  const rawDan = Number(half.rawDan);
+  return Number.isFinite(rawDan) ? rawDan : null;
 }
 
 function readDanLabel(value: unknown): string | null {
@@ -1697,8 +1728,14 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         handstreamCluster: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
           ? HANDSTREAM_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
+        jumpstreamCluster: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
+          ? JUMPSTREAM_CLUSTER_CATEGORY.test(parsed.clusterCategory)
+          : null,
         handstreamEndurance: keyCount === 4 && !chartIsLn
           && hasHandstreamEndurance(chartMsd?.values),
+        msdValues: keyCount === 4 && !chartIsLn && chartMsd?.values && typeof chartMsd.values === "object"
+          ? chartMsd.values
+          : null,
         techScore: vetoesTech ? 0 : (patternScores.get("tech") ?? 0),
         chordjackScore: chordjackScore,
         motion: readMotionFeatures(parsed?.motion),
@@ -1837,7 +1874,7 @@ export interface DanClearEvidence {
  * computed yet, which the skill compute fills in and the evidence read
  * enqueues.
  */
-type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null; stale?: boolean } | null>;
+export type RateVerdictMap = Map<string, { rawDan: number; side: "rc" | "ln"; displayName?: string | null; stale?: boolean } | null>;
 
 /**
  * The rate a clear at this play would be credited at, or null when the play is
@@ -1877,7 +1914,7 @@ function rateVerdictPairFor(play: StoredPlaySsr): RateDanVerdictPair | null {
 }
 
 /** The stored rate verdicts these plays' clears read, in clear-rule terms. */
-async function loadRateVerdictCredits(db: Db, plays: StoredPlaySsr[]): Promise<RateVerdictMap> {
+export async function loadRateVerdictCredits(db: Db, plays: StoredPlaySsr[]): Promise<RateVerdictMap> {
   const pairs: RateDanVerdictPair[] = [];
   for (const play of plays) {
     const pair = rateVerdictPairFor(play);
@@ -1980,7 +2017,7 @@ export interface DanClearReject {
 }
 
 /** The dan a play would testify for at its own rate, before any accuracy gate. */
-interface DanClearTarget {
+export interface DanClearTarget {
   rawDan: number;
   side: "rc" | "ln";
   label: string | null;
@@ -1993,14 +2030,17 @@ interface DanClearTarget {
  * aiming at: naming the chart's dan is most of what makes a "does not count"
  * row readable. Pure, and the branch order is the clear rule's own.
  */
-function danClearTargetFor(
+export function danClearTargetFor(
   play: StoredPlaySsr,
   info: ChartSkillInfo,
   keyCount: number,
   rateVerdicts: RateVerdictMap,
 ): DanClearTarget | null {
+  // A stored verdict at or below the ladder floor (the 6K/7K kyu "0" band,
+  // a 4K "1--") is a real rating, not an unrated chart: it is credited at the
+  // floor, which is where creditedDanFor would clamp it anyway.
   const target = (rawDan: number | null, side: "rc" | "ln", label: string | null): DanClearTarget | null =>
-    rawDan == null ? null : { rawDan, side, label };
+    rawDan == null ? null : { rawDan: Math.max(rawDan, danTableFloorFor(side, keyCount)), side, label };
   if (play.inverse || play.vibroAdjustment || play.vibroClearEvidence) {
     // Rated against the inverted chart, whose verdict is its own row at every
     // rate (the chart-analysis columns describe the chart before the mod).
@@ -3757,7 +3797,7 @@ export async function getPlayerSkillBreakdown(
  * it. A first compute has no payload and naturally falls through to an older
  * ready version (or null).
  */
-async function loadLatestStoredPlayerSkillPayload(db: Db, userId: number): Promise<StoredPlayerSkillPlays | null> {
+export async function loadLatestStoredPlayerSkillPayload(db: Db, userId: number): Promise<StoredPlayerSkillPlays | null> {
   const rows = (await exec(
     db,
     `select plays_json from player_skill_ratings
@@ -3774,10 +3814,6 @@ async function loadLatestStoredPlayerSkillPayload(db: Db, userId: number): Promi
     };
   }
   return null;
-}
-
-async function loadLatestStoredPlayerSkillPlays(db: Db, userId: number): Promise<StoredPlaySsr[] | null> {
-  return (await loadLatestStoredPlayerSkillPayload(db, userId))?.plays ?? null;
 }
 
 /**
@@ -3803,8 +3839,9 @@ export async function getPlayerSkillPlays(
     return empty;
   }
 
-  const storedPlays = await loadLatestStoredPlayerSkillPlays(db, userId);
-  if (!storedPlays) return empty;
+  const stored = await loadLatestStoredPlayerSkillPayload(db, userId);
+  if (!stored) return empty;
+  const storedPlays = stored.plays;
   const patternId = axis.startsWith("pattern:") ? axis.slice("pattern:".length) : null;
   const candidates = selectMsdRatingPlays(storedPlays)
     .flatMap((play) => {
@@ -3838,10 +3875,28 @@ export async function getPlayerSkillPlays(
   });
 
   const page = matches.slice(offset, offset + limit);
-  const metadata = await readPlayerSkillPlayMetadata(db, page.map(({ play }) => play.beatmapId));
-  const scoreDetails = await loadPlayerSkillScoreDetails(db, userId, page.map(({ play }) => play));
+  // The sub-floor plays live beside the rated pool (`danOnly`) with no SSR
+  // vector, so they take the recency order whatever the list's own order is,
+  // and a pattern axis keeps only the ones on charts tagged with it.
+  const rejected = options.includeRejected
+    ? (stored.danOnly ?? [])
+      .filter((play) => play?.ratingExcluded && play.keyCount === keyCount
+        && Number.isInteger(play.beatmapId) && play.beatmapId > 0
+        && (!patternId || (Array.isArray(play.patterns) && play.patterns.includes(patternId)))
+        && (options.scoreId == null || play.identity === `official:${options.scoreId}`))
+      .map((play) => ({ play, rating: 0 }))
+      .sort(comparePlayerSkillPlays("recent"))
+      .slice(0, PLAYER_SKILL_PLAYS_MAX)
+    : [];
+  const metadata = await readPlayerSkillPlayMetadata(db, [...page, ...rejected].map(({ play }) => play.beatmapId));
+  const scoreDetails = await loadPlayerSkillScoreDetails(db, userId, [...page, ...rejected].map(({ play }) => play));
   const items = page.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata, scoreDetails));
-  return { items, total: matches.length, unfilteredTotal: cohort.length, limit, offset };
+  return {
+    items, total: matches.length, unfilteredTotal: cohort.length, limit, offset,
+    ...(options.includeRejected
+      ? { rejected: rejected.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata, scoreDetails)) }
+      : {}),
+  };
 }
 
 export type PlayerSkillPlaysSort = "rating" | "recent";
@@ -3857,6 +3912,8 @@ export interface PlayerSkillPlaysOptions {
   hideRanked?: boolean;
   /** Keep at most this many plays per beatmap, in the active order. */
   maxPerChart?: number;
+  /** Also return the keymode's sub-floor plays (`rejected`), newest first. */
+  includeRejected?: boolean;
 }
 
 /**
@@ -3985,7 +4042,7 @@ function storedModAcronyms(mods: unknown): string[] | undefined {
   return acronyms;
 }
 
-function buildPlayerSkillPlay(
+export function buildPlayerSkillPlay(
   play: StoredPlaySsr,
   rating: number,
   keyCount: number,
@@ -4387,7 +4444,7 @@ function bucketsForClear(
   // Explicit tech/trill labels keep their arbitration, and every jack veto
   // still outranks this reading. Missing chart MSD keeps the per-play path.
   if (chart?.handstreamEndurance === true && chart.techCategory === false
-    && chart.clusterTrill === false && !jackContaminated(chart.jackShare)) {
+    && chart.clusterTrill === false && !jackContaminated(chart.jackShare, headlineSparesJackVeto(chart))) {
     const stamina = buckets.find((bucket) => bucket.id === "stamina" && bucket.skillsets != null);
     if (stamina) return [stamina];
   }
@@ -4400,7 +4457,7 @@ function bucketsForClear(
   // The jack veto applies to the endurance readings here too, or a chart it
   // pushed off Handstream would fall into Jumpstream and come back to stamina
   // through this rule.
-  const contaminated = jackContaminated(chart?.jackShare ?? null);
+  const contaminated = jackContaminated(chart?.jackShare ?? null, headlineSparesJackVeto(chart));
   const effectiveTop = topSkillset !== "Jumpstream" || chart?.clusterTrill == null
     ? topSkillset
     : chart.clusterTrill
@@ -4457,6 +4514,9 @@ function resolveTilesForClear(
     // reads the notes and both ratings, so it subsumes the two MSD-lead arms
     // in bucketingSkillset, which stay as the fallback for a chart whose
     // motion block the sweep has not written yet.
+    // Only where the ratings are a near-tie the model was fitted on. Past
+    // SPEED_TECH_MODEL_MAX_STREAM_GAP the MSD verdict stands alone.
+    if (streamGap(values) > SPEED_TECH_MODEL_MAX_STREAM_GAP) return filed;
     const modelled = speedTechTiles(values, chart?.motion ?? null, chart?.techScore ?? 0);
     if (!modelled) return filed;
     const decided = buckets.find((bucket) => bucket.id === modelled.primary && bucket.skillsets != null);
@@ -4530,15 +4590,30 @@ function danSkillsetBucketsForPlay(
   // An Invert play files by what the mod made of the chart, not by the stored
   // chart's tags (inverseModChartInfo).
   const chart = play.inverse ? inverseModChartInfo(storedChart) : storedChart;
+  const values = tileValuesForPlay(play, chart);
   const topSkillset = bucketingSkillset(
-    play.values,
+    values,
     chart?.lengthSeconds ?? null,
     play.rate,
     chart?.techScore ?? 0,
     chart?.jackShare ?? null,
     chart?.handstreamCluster === true,
+    headlineSparesJackVeto(chart),
   );
-  return bucketsForClear(buckets, topSkillset, chart, play.values, play.rate);
+  return bucketsForClear(buckets, topSkillset, chart, values, play.rate);
+}
+
+/**
+ * The MSD vector a play files its tile by: its own SSRs at its accuracy and
+ * rate, or, when the accuracy floor left it none (a sub-floor pass keeps
+ * `values: {}`), the chart's own 1.0x vector. Which skill a chart is does not
+ * depend on how well it was played, and a credited clear with no tile is a
+ * dan the per-skill breakdown cannot see. An Invert play has no stored chart
+ * vector (inverseModChartInfo drops it), so it keeps the per-play path.
+ */
+function tileValuesForPlay(play: StoredPlaySsr, chart: ChartSkillInfo | undefined): Record<string, number> | undefined {
+  if (dominantSkillset(play.values) != null) return play.values;
+  return chart?.msdValues ?? play.values;
 }
 
 function groupDanClearsBySkillset(
@@ -5015,8 +5090,46 @@ const SPEED_TECH_MODEL = {
 // speed corpus three points and stream three and a half, because the charts it
 // stops sharing it starts calling tech outright. Re-measure before moving
 // either bar.
+//
+// The high bar moved 0.75 -> 0.85 on 2026-09-10 (Skwid's Challenge 1.15x,
+// 1941077, p 0.81: a dump the mapper tags speed, stamina and technical, filed
+// tech alone). Measured over the same corpora, charts tech-only at 0.75-0.85
+// that now carry both tiles: 33 of 1,317 speed-pack charts (+2.5 points of
+// speed coverage), 25 of 772 stream-pack (+3.2), 54 of 490 tech-pack (11%,
+// which keep tech as primary), and 5.6% of the random library (10% -> 16%
+// two-tiled). The band is genuinely mixed: the speed-pack charts in it are
+// almost all LeoBlack "Minitrills Tech", and so are the tech-pack ones. The
+// wider band is what made SPEED_TECH_MODEL_MAX_STREAM_GAP necessary.
 const SPEED_TECH_DUAL_LOW = 0.35;
-const SPEED_TECH_DUAL_HIGH = 0.75;
+const SPEED_TECH_DUAL_HIGH = 0.85;
+
+// How far Stream may sit under the chart's best skillset for the model to
+// have a say at all. The model was fitted on near-ties (Stream beside the
+// argmax, the two ratings within a point and a half) and reads the notes
+// rather than the ratings, so on a chart where Technical or Jumpstream leads
+// Stream by five or six points it extrapolates: it put Blastix Riotz [GRAVITY]
+// (770127, gap 6.69, hand-labelled tech) and every jumptrill practice file on
+// the speed tile once the band widened. Measured 2026-09-10 over the corpora
+// at the 0.85 bar: any guard at or under 3.0 zeroes the jumptrill corpus's
+// sharing (56% -> 0) and keeps every hand-labelled chart. 3.0 costs 0.3
+// points of speed-pack coverage and 0.8 of stream-pack against no guard but
+// still shared charts the user reads as tech alone (FINAL FANTASY [FALLEN
+// HEAVEN] gap 2.99, Tada Koe Hitotsu [Hyper] 2.47); 2.0 drops those at 0.8
+// and 1.8 but still shared Envy Baby [Hard] (1.86) and The World Ends Now
+// [Aqua's Expert] (1.93), both read as tech alone; 1.75 drops those at 1.4
+// and 2.2, un-sharing about nine speed-training charts rating Technical
+// 1.75-2 over Stream (Better Off Alone and Nostos in 444 speed training,
+// Tengaku 1.2x); 1.5 gives back nearly the whole gain of the wider band
+// (speed 76.9 against 76.6 before it); 1.25 (the speed near-tie itself)
+// costs the speed corpus outright (Finixe [Another], 1624796, gap 1.50).
+const SPEED_TECH_MODEL_MAX_STREAM_GAP = 1.75;
+
+/** How far Stream sits under the chart's best MSD skillset. */
+function streamGap(values: Record<string, number> | undefined): number {
+  const top = dominantSkillset(values);
+  if (top == null) return 0;
+  return Number(values?.[top] ?? 0) - Number(values?.Stream ?? 0);
+}
 
 /**
  * How strongly the notes and the ratings read a chart as tech rather than
@@ -5149,9 +5262,33 @@ function staminaHoldRival(values: Record<string, number> | undefined): number {
 // 374 at 2.0 (which loses Matusa 1.05 as well).
 const HANDSTREAM_NEAR_TIE_MSD = 0.95;
 
-/** Whether LeoBlack's jack clusters carry too much of a chart to call it endurance. */
-function jackContaminated(jackShare: number | null): boolean {
+/**
+ * Whether LeoBlack's jack clusters carry too much of a chart to call it
+ * endurance. A chart LeoBlack itself headlines as handstream, or as plain
+ * jumpstream, is spared (headlineSparesJackVeto): the charts the veto wrongly
+ * caught are chordstream files whose chords also read as half-time chordjacks
+ * (AMEN KATAGIRI GENERATION 4281260: 250BPM handstream over a "125BPM
+ * Chordjacks" cluster, share 0.327; THEY WONT ESCAPE [Despair] 5688610:
+ * 260-280BPM jumpstream over 130/140BPM chordjack clusters, share 0.42, a
+ * chart the user reads as jumpstream/handstream stamina with a chordjack
+ * section). Measured 2026-09-10 over the mapper-named 4K corpora: the
+ * handstream arm takes the handstream corpus 88.5% -> 90.1% stamina-tiled
+ * with the jack corpus (3,615 charts) unmoved; the jumpstream arm adds 0.9
+ * points each to the handstream, jumpstream and stamina corpora and moves 3
+ * jack-pack charts, all from tech (already off Jack) to stamina. AiAe's own
+ * headline is Jumpstream, so the second arm leans on the jack-demand override
+ * to keep that chart on Jack, which it does.
+ */
+function jackContaminated(jackShare: number | null, headlineSpared = false): boolean {
+  if (headlineSpared) return false;
   return jackShare != null && jackShare >= STAMINA_TILE_JACK_VETO_SHARE;
+}
+
+/** A handstream headline, or a jumpstream one that names no tech or trill. */
+function headlineSparesJackVeto(chart: ChartSkillInfo | undefined): boolean {
+  if (!chart) return false;
+  if (chart.handstreamCluster === true) return true;
+  return chart.jumpstreamCluster === true && chart.techCategory !== true && chart.clusterTrill !== true;
 }
 
 // Everything that is not one of the two endurance readings, for a chart whose
@@ -5206,7 +5343,9 @@ function jumpstreamRunnerUp(values: Record<string, number> | undefined, contamin
  * actually lasted. An unknown length leaves the old behaviour rather than
  * guessing a chart short. `chartTechScore` is the chart's stored analyzer
  * tech score (ChartSkillInfo.techScore), 0 when no analysis is stored, and
- * `chartHandstreamCluster` whether LeoBlack's headline label names handstream.
+ * `chartHandstreamCluster` whether LeoBlack's headline label names handstream,
+ * and `jackVetoSpared` whether that headline stands the jack veto down
+ * (headlineSparesJackVeto).
  */
 function bucketingSkillset(
   values: Record<string, number> | undefined,
@@ -5215,6 +5354,7 @@ function bucketingSkillset(
   chartTechScore = 0,
   chartJackShare: number | null = null,
   chartHandstreamCluster = false,
+  jackVetoSpared = false,
 ): string | null {
   const top = dominantSkillset(values);
   if (top == null) return top;
@@ -5228,7 +5368,7 @@ function bucketingSkillset(
   // Audited over 8,635 pack-labelled 4K rice charts on 2026-09-06: nine
   // change tiles, with no Speed loss among 1,308 speed-pack charts and no
   // changes in the stream, tech, jack or jumptrill groups.
-  if (hasHandstreamEndurance(values) && !jackContaminated(chartJackShare)) return "Handstream";
+  if (hasHandstreamEndurance(values) && !jackContaminated(chartJackShare, jackVetoSpared)) return "Handstream";
   const stream = Number(values?.Stream ?? 0);
   // Whether the play demanded endurance, the same reading the length gate at
   // the bottom uses: the LONGER of the 1.0x drain and the played time.
@@ -5251,7 +5391,7 @@ function bucketingSkillset(
   // mostly pure-stream training marathons, so the band stays narrow.
   if (top === "Stamina" && demandsEndurance
     && staminaHoldRival(values) >= stream - STAMINA_HOLD_BASE_BAND
-    && !jackContaminated(chartJackShare)) return top;
+    && !jackContaminated(chartJackShare, jackVetoSpared)) return top;
   const best = Number(values?.[top] ?? 0);
   // Handstream wins a near-tie the same way Stream does, on a chart LeoBlack
   // itself reads as handstream. Handstream names a pattern rather than riding
@@ -5269,7 +5409,7 @@ function bucketingSkillset(
   // still means "argmax noise". A rate that changes what the calc reads is a
   // different problem from a rate that changes what it ranks, and this rule
   // only claims the second.
-  if (top !== "Handstream" && chartHandstreamCluster && !jackContaminated(chartJackShare)) {
+  if (top !== "Handstream" && chartHandstreamCluster && !jackContaminated(chartJackShare, jackVetoSpared)) {
     const handstream = Number(values?.Handstream ?? 0);
     if (handstream > 0 && handstream >= best - HANDSTREAM_NEAR_TIE_MSD) return "Handstream";
   }
@@ -5293,12 +5433,12 @@ function bucketingSkillset(
   // pattern rather than riding on one, but a jack-contaminated chart is not
   // the pattern it claims (STAMINA_TILE_JACK_VETO_SHARE), so it re-files
   // without either endurance skillset.
-  if (nearTie === "Handstream" && jackContaminated(chartJackShare)) {
-    return bucketingSkillset(pickSkillsets(values, RICE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare, chartHandstreamCluster);
+  if (nearTie === "Handstream" && jackContaminated(chartJackShare, jackVetoSpared)) {
+    return bucketingSkillset(pickSkillsets(values, RICE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare, chartHandstreamCluster, jackVetoSpared);
   }
   if (nearTie !== "Stamina" || lengthSeconds == null) return nearTie;
-  if (demandsEndurance && !jackContaminated(chartJackShare)) return nearTie;
-  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare, chartHandstreamCluster);
+  if (demandsEndurance && !jackContaminated(chartJackShare, jackVetoSpared)) return nearTie;
+  return bucketingSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS), null, 1, chartTechScore, chartJackShare, chartHandstreamCluster, jackVetoSpared);
 }
 
 /**
@@ -5330,6 +5470,11 @@ function pickSkillsets(values: Record<string, number> | undefined, keep: string[
  * seeding a whole ratings row. `chart` carries the stored analysis; omitted,
  * only the MSD path runs.
  */
+/** Test seam over the per-play filing, chart vector fallback included. */
+export function danSkillsetBucketsForPlayForTest(keyCount: number, side: "rc" | "ln", play: StoredPlaySsr, chart?: ChartSkillInfo): string[] {
+  return danSkillsetBucketsForPlay(danSkillsetBuckets(keyCount, side), play, chart).map((bucket) => bucket.id);
+}
+
 export function danSkillsetBucketsForValues(
   keyCount: number,
   side: "rc" | "ln",
@@ -5338,7 +5483,7 @@ export function danSkillsetBucketsForValues(
   rate = 1,
   chart?: ChartSkillInfo,
 ): string[] {
-  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0, chart?.jackShare ?? null, chart?.handstreamCluster === true);
+  const top = bucketingSkillset(values, lengthSeconds, rate, chart?.techScore ?? 0, chart?.jackShare ?? null, chart?.handstreamCluster === true, headlineSparesJackVeto(chart));
   return bucketsForClear(danSkillsetBuckets(keyCount, side), top, chart, values, rate).map((bucket) => bucket.id);
 }
 
@@ -5520,7 +5665,7 @@ function settledBeatmapStatusSql(alias: string): string {
   return `case when ${jsonStatus} in ('ranked', 'approved', 'loved') then ${jsonStatus} else ${alias}.status end`;
 }
 
-interface PlayerSkillPlayMetadata {
+export interface PlayerSkillPlayMetadata {
   beatmapsetId: number | null;
   title: string;
   artist: string;
@@ -5530,7 +5675,7 @@ interface PlayerSkillPlayMetadata {
   status: string | null;
 }
 
-async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promise<Map<number, PlayerSkillPlayMetadata>> {
+export async function readPlayerSkillPlayMetadata(db: Db, beatmapIds: number[]): Promise<Map<number, PlayerSkillPlayMetadata>> {
   const rows = await selectRowsByIntegerSet(
     db,
     `select b.beatmap_id, b.beatmapset_id, b.version, ${settledBeatmapStatusSql("b")} as status,
@@ -5880,7 +6025,12 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v29 (current): Rate variants share diminishing influence (100%, 90%, 81%,
+// v30 (current): the stamina tile's jack veto spares a chart LeoBlack
+// headlines as Handstream (jackContaminated), and the speed/tech sharing
+// band's high bar moves 0.75 -> 0.85 (SPEED_TECH_DUAL_HIGH) with the model
+// confined to near-ties (SPEED_TECH_MODEL_MAX_STREAM_GAP). Tiles only; no
+// rating moves.
+// v29: Rate variants share diminishing influence (100%, 90%, 81%,
 // ...), including structurally verified reuploads. Re-fold after the family
 // backfill; chart difficulty and each clear's accuracy credit are unchanged.
 // v28: Rice chart credit is continuous in the final accuracy point
@@ -5920,7 +6070,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v29";
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v30";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

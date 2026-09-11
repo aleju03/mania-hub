@@ -5,6 +5,7 @@ import { translationReportEmbed } from "../../discord/embeds.js";
 import { clearFarmHelperFeedback, listFarmHelperFeedback, normalizeFarmHelperFeedbackSpeedBucket, normalizeFarmHelperFeedbackVerdict, setFarmHelperFeedback } from "../../features/farm-helper-feedback.js";
 import { invalidateFarmHelperCacheForUser } from "../../features/farm-helper.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../../features/goals.js";
+import { getMyDataInsights } from "../../features/my-data-insights.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../../features/player-skills.js";
 import { createTranslationReport, type TranslationReport } from "../../features/translation-reports.js";
@@ -281,6 +282,23 @@ export async function handleUserDataRoutes(req: IncomingMessage, res: ServerResp
     }
     const breakdown = await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId);
     sendJson(req, res, ctx, 200, await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown));
+    return true;
+  }
+  if (url.pathname === "/api/my-data/insights") {
+    if (!isBridge(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getMyDataInsights(ctx.db, userId));
     return true;
   }
   if (url.pathname === "/api/my-data/feed") {

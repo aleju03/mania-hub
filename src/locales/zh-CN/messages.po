@@ -334,6 +334,11 @@ msgstr "{0} 票反对"
 msgid "{0} albums"
 msgstr "{0} 个卡册"
 
+#. placeholder {0}: compact(diet.analyzed)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0} analyzed"
+msgstr "已分析 {0} 次"
+
 #. placeholder {0}: formatOrdinal(ranks.cards, locale)
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "{0} biggest"
@@ -623,11 +628,12 @@ msgstr "{0} 次游玩"
 msgid "{0} players"
 msgstr "{0} 名玩家"
 
+#. placeholder {0}: compact(insights.grind.mostPlayed.plays)
+#. placeholder {0}: compact(judgement.plays)
 #. placeholder {0}: compact(summary.highlights.biggestDay.count)
-#. placeholder {0}: formatNumber(entry.analyzedPlays)
-#. placeholder {0}: formatNumber(entry.playCount)
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/me/MyStatsInsights.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
@@ -641,10 +647,21 @@ msgstr "{0} 次游玩"
 #~ msgid "{0} plays added"
 #~ msgstr "已添加 {0} 个成绩"
 
+#. placeholder {0}: formatNumber(profile.standing.pendingPlays)
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "{0} plays are still being rated."
+#~ msgstr ""
+
 #. placeholder {0}: formatNumber(activity.totalScores)
 #: src/routes/player/$username.tsx
 msgid "{0} plays in {selectedYear}"
 msgstr "{selectedYear} 年游玩 {0} 次"
+
+#. placeholder {0}: compact(judgement.plays)
+#. placeholder {1}: formatMonth(judgement.since)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0} plays since {1}"
+msgstr "自 {1} 起 {0} 次游玩"
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
@@ -679,6 +696,11 @@ msgstr "{0} 个成绩"
 #: src/routes/report.tsx
 #~ msgid "{0} screenshots"
 #~ msgstr "{0} 张截图"
+
+#. placeholder {0}: compact(sessions.sessions)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "{0} sessions"
+#~ msgstr "{0} 场游玩"
 
 #. placeholder {0}: skinSoundsInfo.keys.length
 #. placeholder {1}: skinSoundsInfo.name ?? t`an imported skin`
@@ -728,6 +750,11 @@ msgstr "{0} 到 {1}"
 #: src/components/packs/PackSummary.tsx
 msgid "{0} to pull this"
 msgstr "是{0} 个抽到这张的"
+
+#. placeholder {0}: compact(sessions.sessions)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0} total"
+msgstr "共 {0} 场"
 
 #. placeholder {0}: formatNumber(globalRankingsTotal)
 #: src/routes/rankings.tsx
@@ -821,6 +848,23 @@ msgstr "{0} 的成绩"
 msgid "{0}% GOAT slot, then 1 of {1} on the roster"
 msgstr "{0}% 的 GOAT 位，再从 {1} 人名单中抽 1 位"
 
+#. placeholder {0}: (judgement.maxShare * 100).toFixed(0)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0}% of notes"
+msgstr "{0}% 的物件"
+
+#. placeholder {0}: (judgement.maxShare * 100).toFixed(0)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "{0}% of notes are MAX"
+#~ msgstr "{0}% 的物件是 MAX"
+
+#. placeholder {0}: top.pct
+#. placeholder {1}: mode.keyCount
+#. placeholder {2}: patternLabel(top.id)
+#: src/components/me/MyStatsInsights.tsx
+msgid "{0}% of your analyzed {1}K plays are {2}."
+msgstr "你已分析的 {1}K 成绩中有 {0}% 是{2}。"
+
 #. placeholder {0}: Math.round(clear.averagingWeight * 100)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{0}% weight"
@@ -851,10 +895,23 @@ msgstr "只玩 {0}K"
 msgid "{0}K skill rating"
 msgstr "{0}K 技能评分"
 
+#. placeholder {0}: window.toFixed(0)
+#. placeholder {1}: play.weight.toFixed(2)
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "{0}ms hit window, worth {1}x"
+#~ msgstr ""
+
 #. placeholder {0}: Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)
 #: src/routes/player/$username.tsx
 msgid "{0}pp spread"
 msgstr "相差 {0}pp"
+
+#. placeholder {0}: Math.round(rank.next.ppGap).toLocaleString("en-US")
+#. placeholder {1}: rank.next.rank
+#. placeholder {2}: rank.next.username ?? ""
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "{0}pp to #{1} {2}"
+#~ msgstr "距离第 {1} 名 {2} 还差 {0}pp"
 
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
@@ -951,6 +1008,14 @@ msgstr "{countryName} mania 最佳成绩"
 msgid "{countryName} mania tracker"
 msgstr "{countryName} mania 追踪器"
 
+#: src/routes/rankings.tsx
+msgid "{countryName} mania unrated plays"
+msgstr "{countryName} mania 未评分成绩"
+
+#: src/routes/rankings.tsx
+#~ msgid "{countryName} mania vibro league"
+#~ msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgstr "{courseName} 上 {courseAccuracy}，低于其 {courseBar}。"
@@ -1040,6 +1105,7 @@ msgstr "{hours} 小时"
 msgid "{hours}h"
 msgstr "{hours} 小时"
 
+#: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
 msgid "{hours}h {mins}m"
 msgstr "{hours} 小时 {mins} 分"
@@ -1075,8 +1141,8 @@ msgid "{keys}K thumbnail"
 msgstr "{keys}K 缩略图"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
-#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "{label} dan"
 msgstr "{label} 段位"
@@ -1114,6 +1180,7 @@ msgstr "{0} 挑选的 {maps} 张 osu!mania 谱面。"
 msgid "{message} ({percent}%)"
 msgstr "{message}（{percent}%）"
 
+#: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
 #: src/lib/goal-format.ts
 msgid "{mins}m"
@@ -1516,6 +1583,12 @@ msgstr "国内 #{0}"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "#{0} global"
 msgstr "全球第 {0} 名"
+
+#. placeholder {0}: formatNumber(rank.rank)
+#. placeholder {1}: formatNumber(rank.total)
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "#{0} of {1}"
+#~ msgstr ""
 
 #: src/lib/format.ts
 msgid "#{grouped}"
@@ -2110,6 +2183,10 @@ msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
 
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "A standing needs {VIBRO_LEAGUE_MIN_PLAYS} rated plays on one keymode."
+#~ msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
@@ -2164,6 +2241,7 @@ msgstr "准确率"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/me/MyStatsInsights.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
@@ -2197,6 +2275,10 @@ msgstr "准确性与可用性"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Accuracy below skill rating range"
 msgstr "准确率低于技能评级范围"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Accuracy below skill rating range, so this play has no MSD rating on any skillset."
+msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别中都没有 MSD 评级。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 93.5% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
@@ -2451,6 +2533,7 @@ msgstr "全部"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
@@ -2515,6 +2598,10 @@ msgstr "全部记录"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All three forges are used. They return after 24 hours."
 #~ msgstr "三次锻造均已用完。每次使用后 24 小时恢复。"
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "All time"
+msgstr "全部时间"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "All uploads"
@@ -2814,6 +2901,10 @@ msgstr "自动追踪直到 2026 年 6 月 9 日才开始。更早的成绩如果
 msgid "avatar"
 msgstr "头像"
 
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Average length"
+#~ msgstr "平均时长"
+
 #: src/components/player/DanLevelBadge.tsx
 #~ msgid "Averaged over {windowHave} of {windowNeed} clears, so the estimate is still filling in."
 #~ msgstr "基于 {windowHave}/{windowNeed} 次通过取平均，估算仍在完善中。"
@@ -2826,9 +2917,17 @@ msgstr "目前按 {windowHave} 次加权通过取平均，目标是 {windowNeed}
 msgid "Avg active day"
 msgstr "活跃日均"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "Avg duration"
+msgstr "平均时长"
+
 #: src/routes/player/$username.tsx
 msgid "avg intensity, 0-100"
 msgstr "平均强度，0-100"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Avg length"
+#~ msgstr "平均时长"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "avg nps"
@@ -3196,7 +3295,7 @@ msgstr "BPM"
 msgid "BPM Breakdown"
 msgstr "BPM 分布"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/player/$username.tsx
 msgid "Bracket"
@@ -3312,6 +3411,10 @@ msgstr "取消"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Cancel forge"
 #~ msgstr "取消锻造"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "cannot be rated"
+msgstr "无法评分"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Canvas unavailable."
@@ -3450,6 +3553,7 @@ msgid "Chart"
 msgstr "谱面"
 
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "chart dan"
 msgstr "谱面段位"
 
@@ -3560,7 +3664,7 @@ msgstr "请选择另一位收藏者收礼。"
 #~ msgstr "选择要制作特别版的卡片。"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -3568,7 +3672,7 @@ msgstr "请选择另一位收藏者收礼。"
 msgid "Chordjack"
 msgstr "大叠"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Chordstream"
 msgstr "大切"
@@ -4162,6 +4266,10 @@ msgstr "无法加载卡包统计。"
 msgid "Could not load the showcases."
 msgstr "无法加载展示柜。"
 
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "Could not load the vibro pool. Try again in a bit."
+#~ msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load these plays"
@@ -4174,6 +4282,7 @@ msgstr "无法加载这些成绩。"
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 msgid "Could not load this leaderboard."
 msgstr "无法加载该排行榜。"
 
@@ -4638,7 +4747,13 @@ msgstr "青色"
 msgid "Czech"
 msgstr "捷克语"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "dan"
+msgstr "段位"
+
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/rankings.tsx
 msgid "Dan"
 msgstr "段位"
@@ -4767,7 +4882,7 @@ msgstr "默认"
 msgid "Default volume"
 msgstr "默认音量"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 msgid "Delay"
 msgstr "延迟"
@@ -5160,7 +5275,7 @@ msgstr "拖入你自己的 .osr 文件"
 msgid "DT/NC"
 msgstr "DT/NC"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Dumpstream"
 msgstr "乱切"
 
@@ -6284,12 +6399,12 @@ msgstr "网格"
 msgid "Guess at random"
 msgstr "随机猜一个"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Handjack"
 msgstr "三押叠"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/player/$username.tsx
@@ -6401,6 +6516,10 @@ msgstr "收起说明"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide the plays the dan rules turned away"
 msgstr "隐藏被段位规则排除的成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide the plays with no skill rating"
+msgstr "隐藏没有技能评级的成绩"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
@@ -6899,7 +7018,7 @@ msgstr "意大利语"
 msgid "Italic"
 msgstr "斜体"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -6978,6 +7097,7 @@ msgstr "判定图组"
 msgid "Judgement size"
 msgstr "判定图大小"
 
+#: src/components/me/MyStatsInsights.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/replay-overlays.ts
 msgid "Judgements"
@@ -6997,7 +7117,7 @@ msgid "Jump to a page"
 msgstr "跳转到某一页"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -7046,6 +7166,7 @@ msgid "Key hitsounds"
 msgstr "按键音效"
 
 #: src/components/rankings/LeaderboardControls.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/routes/farm-helper.tsx
 msgid "Key mode"
 msgstr "键数模式"
@@ -7159,6 +7280,16 @@ msgstr "大"
 #: src/routes/farm-helper.tsx
 msgid "large gap"
 msgstr "差距较大"
+
+#. placeholder {0}: compact(judgement.plays)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "last {0} plays"
+#~ msgstr "最近 {0} 次游玩"
+
+#. placeholder {0}: rank.windowDays
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "last {0}d"
+#~ msgstr "最近 {0} 天"
 
 #: src/routes/tracker.tsx
 msgid "Last 24h"
@@ -7411,13 +7542,13 @@ msgid "Live updates on"
 msgstr "实时更新已开启"
 
 #: src/components/maps/PatternRadar.tsx
-#: src/components/maps/SearchCard.tsx
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -7446,7 +7577,7 @@ msgstr "长条段位"
 msgid "LN dan est."
 msgstr "长条段位估计"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN General"
 msgstr "LN 综合"
@@ -7467,7 +7598,7 @@ msgstr "长条头颜色"
 msgid "LN Head color"
 msgstr "长条头颜色"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN Inverse"
 msgstr "LN 反键"
@@ -7476,7 +7607,7 @@ msgstr "LN 反键"
 msgid "LN notes"
 msgstr "长条数"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN Release"
 msgstr "LN 放手"
@@ -7486,7 +7617,7 @@ msgstr "LN 放手"
 msgid "LN tail"
 msgstr "长键尾部"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
 msgid "LN Tech"
 msgstr "LN 技"
@@ -7741,6 +7872,10 @@ msgstr "以长条和按住为主的谱面。"
 msgid "Long, dense charts that test endurance."
 msgstr "又长又密、考验耐力的谱面。"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "Longest"
+msgstr "最长"
+
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "Longest blitz streaks"
 msgstr "闪电战最长连胜"
@@ -7958,6 +8093,7 @@ msgstr "Maniacard 抽卡"
 msgid "map"
 msgstr "谱面"
 
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Map"
 msgstr "谱面"
@@ -8097,6 +8233,18 @@ msgstr "最大连击"
 msgid "Max PP"
 msgstr "最高 PP"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "MAX share"
+#~ msgstr "MAX 占比"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "MAX to 300 ratio"
+#~ msgstr "MAX 与 300 之比"
+
+#: src/components/me/MyStatsInsights.tsx
+msgid "MAX:300 ratio"
+msgstr "MAX:300 之比"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Mean"
 msgstr "平均偏差"
@@ -8178,6 +8326,18 @@ msgstr "镜像(往返)"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "MISS"
 msgstr "MISS"
+
+#: src/components/me/MyStatsInsights.tsx
+msgid "Misses"
+msgstr "Miss"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Misses / 1k notes"
+#~ msgstr "每千物件 Miss 数"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Misses per 1k notes"
+#~ msgstr "每千物件 Miss 数"
 
 #: src/routes/farm-helper.tsx
 msgid "missing"
@@ -8329,6 +8489,7 @@ msgid "most packs opened"
 msgstr "开包最多"
 
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/me/MyDataPanel.tsx
 msgid "Most played"
 msgstr "游玩最多"
 
@@ -8906,6 +9067,10 @@ msgstr "还没有达标通过"
 msgid "No rank data from 7 days ago yet"
 msgstr "还没有 7 天前的排名数据"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "No rank snapshot old enough to compare against yet."
+#~ msgstr "还没有足够久远的排名快照可供对比。"
+
 #: src/routes/index.tsx
 #: src/routes/rankings.tsx
 msgid "No ranked players yet."
@@ -8959,6 +9124,10 @@ msgstr "这名玩家没有可用的回放"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replays available from {countryCode} players on this difficulty"
 msgstr "这个难度上没有来自 {countryCode} 玩家的可用回放"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "No roster member above you yet."
+#~ msgstr "名单上你的上方还没有玩家。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No score found at that link."
@@ -9060,9 +9229,25 @@ msgstr "还没有追踪到的成绩。去打几张 ranked 谱面，成绩会实�
 msgid "No tracked plays. Play some ranked maps and they show up here live."
 msgstr "还没有追踪到的成绩。去打几张 ranked 谱面，成绩会实时出现在这里。"
 
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "No unrated plays here yet."
+msgstr "这里还没有未评分成绩。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "No unrated plays on this keymode"
+msgstr "该键数没有未评分成绩"
+
+#: src/components/player/VibroLeaguePanel.tsx
+#~ msgid "No vibro plays yet."
+#~ msgstr ""
+
 #: src/components/packs/WishlistLine.tsx
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "还没有心愿。选择一位尚未拥有的玩家开始吧。"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Nobody above you on the roster."
+#~ msgstr "名单上没有人在你之上。"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Nobody else can open it. Set it as your replay skin and it plays in your replays."
@@ -9099,6 +9284,10 @@ msgstr "这里没有叫这个名字的人。"
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Nobody here has a rated {axisLabel} pool yet."
 msgstr "这里还没有人拥有已评分的{axisLabel}谱面池。"
+
+#: src/components/rankings/VibroLeagueBoard.tsx
+#~ msgid "Nobody here has a vibro pool yet."
+#~ msgstr ""
 
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Nobody here has enough qualifying {skillsetLabel} clears yet."
@@ -9231,6 +9420,10 @@ msgstr "还没通过"
 #: src/components/me/GoalsPanel.tsx
 msgid "not played yet"
 msgstr "还没打过"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "not rated"
+msgstr "未评级"
 
 #: src/components/communities/field-options.tsx
 msgid "not set"
@@ -10074,6 +10267,10 @@ msgstr "待定"
 msgid "Pending"
 msgstr "待定"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "per 1k notes"
+msgstr "每千物件"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Per-column colors"
 msgstr "各列颜色"
@@ -10242,6 +10439,7 @@ msgid "Played on: <0>{0}</0>"
 msgstr "游玩客户端：<0>{0}</0>"
 
 #: src/components/rankings/LeaderboardTable.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/rankings.tsx
 msgid "Player"
@@ -10307,6 +10505,10 @@ msgstr "游玩次数"
 msgid "Plays"
 msgstr "游玩"
 
+#: src/components/me/MyStatsInsights.tsx
+msgid "Plays / session"
+msgstr "每场游玩次数"
+
 #: src/routes/player/$username.tsx
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 msgstr "成绩只记录每个已追踪国家/地区的前 100 名玩家，这名玩家目前不在其中。"
@@ -10314,6 +10516,34 @@ msgstr "成绩只记录每个已追踪国家/地区的前 100 名玩家，这名
 #: src/components/me/RosterOptInCard.tsx
 msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在其中，但可以把自己加入追踪器。"
+
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Plays per session"
+#~ msgstr "每场游玩次数"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated."
+#~ msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。"
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart, and pp is calculated here even when osu! gives none."
+#~ msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。每位玩家每张谱面一条成绩，即使 osu! 不给 pp，这里也会计算。"
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart, and pp is computed here even when osu! gives none."
+#~ msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。每位玩家每张谱面一条成绩，即使 osu! 不给 pp，这里也会计算。"
+
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. One play per player per chart."
+msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。每位玩家每张谱面一条成绩。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is calculated here even when osu! gives none, and MSD counts every note."
+#~ msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。即使 osu! 不给 pp，这里也会计算，MSD 则计入每一个音符。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated. pp is computed here even when osu! gives none, and MSD counts every note."
+#~ msgstr "技能评分未纳入的成绩：vibro 谱面和无法评分的谱面。即使 osu! 不给 pp，这里也会计算，MSD 则计入每一个音符。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Plays when a combo above 20 is lost."
@@ -10673,7 +10903,7 @@ msgstr "紫色"
 msgid "px"
 msgstr "px"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Quadstream"
 msgstr "四押切"
 
@@ -10740,10 +10970,18 @@ msgstr "范围"
 msgid "Rank"
 msgstr "排名"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Rank by"
+msgstr "排序依据"
+
 #. placeholder {0}: isOwnProfile ? t`your` : t`the player's`
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，同时结合控制、速度、精度和耐力特征。"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Rank trajectory"
+#~ msgstr "排名走势"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
@@ -12103,6 +12341,11 @@ msgstr "服务器列表暂时不可用"
 msgid "Session {0}"
 msgstr "第 {0} 场"
 
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Session shape"
+#~ msgstr "游玩场次"
+
+#: src/components/me/MyStatsInsights.tsx
 #: src/routes/player/$username.tsx
 msgid "Sessions"
 msgstr "游玩场次"
@@ -12585,6 +12828,11 @@ msgstr "相似皮肤"
 msgid "Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with {otherLabel} rules again."
 msgstr "根据回放的按键模拟得出；分数和连击仍然是真实成绩。点击可切回 {otherLabel} 规则判定。"
 
+#. placeholder {0}: formatMonth(judgement.since)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "since {0}"
+#~ msgstr "自 {0} 起"
+
 #: src/lib/signature-shared.ts
 msgid "Single"
 msgstr "单项"
@@ -12886,7 +13134,7 @@ msgstr "速度与技的区分靠的是谱面怎么打，而不是评分；当无
 #~ msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
 #~ msgstr "速度与技的区分靠的是音符本身，而不是评分。在高密度谱面上，Stream 和 Technical 的评分往往只差一点点，谁略微领先几乎是抛硬币的结果，所以谱面分析改为衡量动作：谱面中有多少是双键交互、小叠和不规则节奏（这些要靠转动手腕来打），又有多少是在两手之间铺开的楼梯。在来自 170 个速度与技练习包的 738 张谱面上验证过，且验证时会整包排除在外，这种判断与包名吻合的比例远高于只看评分。当它无法确定时，该谱面会同时计入两者。"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 msgid "Speedjack"
 msgstr "速叠"
 
@@ -12932,7 +13180,7 @@ msgid "STAM"
 msgstr "耐力"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -13108,7 +13356,7 @@ msgid "Streak"
 msgstr "连续天数"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -13337,7 +13585,7 @@ msgstr "蓝绿"
 msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 msgstr "撕开 maniacard 补充包：随机的 osu!mania 玩家被制成收藏卡，带有技能数据和稀有度等级。"
 
-#: src/components/maps/SearchCard.tsx
+#: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
@@ -14609,6 +14857,10 @@ msgstr "这张特别版 Eternal 由原收藏者保留。"
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "这个工具需要从服务器读取跨国家/地区的刷图数据，而当前环境没有配置服务器。"
 
+#: src/components/rankings/UnratedPlaysBoard.tsx
+msgid "This week"
+msgstr "本周"
+
 #: src/routes/report.tsx
 msgid "Those images are no longer available."
 msgstr "这些图片已无法查看。"
@@ -14881,6 +15133,10 @@ msgstr "透明背景"
 msgid "Triangles"
 msgstr "三角形"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Tries before a PB"
+#~ msgstr "刷出 PB 前的尝试次数"
+
 #: src/routes/farm-helper.tsx
 msgid "Try a different title, artist, or difficulty name."
 msgstr "换一个标题、艺术家或难度名试试。"
@@ -15106,8 +15362,13 @@ msgstr "未 ranked"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
+#: src/routes/rankings.tsx
 msgid "Unrated"
 msgstr "未评分"
+
+#: src/routes/player/$username.tsx
+msgid "Unrated plays"
+msgstr "未评分成绩"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"
@@ -15328,9 +15589,18 @@ msgstr "用户名…"
 msgid "Verified"
 msgstr "已认证"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "vibro"
+msgstr "vibro"
+
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro"
 msgstr "Vibro"
+
+#. placeholder {0}: rate.toFixed(2)
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "vibro at {0}x"
+msgstr "{0}x 下为 vibro"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "vibro chart, estimate unreliable"
@@ -15343,6 +15613,10 @@ msgstr "Vibro 谱面，估计值不可靠"
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro chart: difficulty estimates are unreliable"
 msgstr "Vibro 谱面：难度估算不可靠"
+
+#: src/components/rankings/VibroLeagueBoard.tsx
+#~ msgid "Vibro counts here. Every note is rated, and a play is worth more the tighter its hit window was, so the same clear on OD 9 beats it on OD 0."
+#~ msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro detected"
@@ -15373,6 +15647,7 @@ msgid "Vietnamese"
 msgstr "越南语"
 
 #: src/components/player/SkillHistoryModal.tsx
+#: src/routes/player/$username.tsx
 msgid "View"
 msgstr "视图"
 
@@ -15414,6 +15689,7 @@ msgstr "查看谱面详情"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
 msgid "View map details"
 msgstr "查看谱面详情"
 
@@ -15656,6 +15932,10 @@ msgstr "哪里看起来不对？"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
+
+#: src/components/me/MyStatsInsights.tsx
+msgid "What you play"
+msgstr "你在玩什么"
 
 #: src/routes/farm-helper.tsx
 msgid "what you're browsing"
@@ -16048,6 +16328,11 @@ msgstr "档次由你的准度决定。在课题要求 96% 的段位系统里，d
 msgid "your best"
 msgstr "你的最佳"
 
+#. placeholder {0}: compact(judgement.plays)
+#: src/components/me/MyStatsInsights.tsx
+#~ msgid "Your best play on each map, each day ({0})."
+#~ msgstr "每张图每天的最佳成绩（{0}）。"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
 msgstr "你在频道里最后展示过的那张谱面上的最好成绩(来自 /recent、/map 等)。也可以用 /c 和 /compare。带上用户名可以查别人。"
@@ -16130,6 +16415,11 @@ msgstr "你在某一侧的估算，就是你已有的那些技能段位的算术
 #: src/routes/dan-estimates.tsx
 #~ msgid "Your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
 #~ msgstr "你的叠段位是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
+
+#. placeholder {0}: i18n._(weakest.labelMsg)
+#: src/components/me/MyStatsInsights.tsx
+msgid "Your lowest rating is {0}."
+msgstr "你最低的评分是 {0}。"
 
 #: src/routes/farm-helper.tsx
 msgid "your marks"

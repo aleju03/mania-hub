@@ -7,6 +7,7 @@ import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../featu
 import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
 import { DAN_EVIDENCE_MAX_REJECTED, DAN_EVIDENCE_PAGE_MAX_CLEARS, PLAYER_SKILL_PLAYS_MAX, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { getPlayerSkillHistory } from "../../features/player-skill-history.js";
+import { PLAYER_UNRATED_PLAYS_MAX, getPlayerUnratedPlays, isUnratedPlaysSort } from "../../features/unrated-plays.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
 import { OsuApiError } from "../../osu/client.js";
@@ -199,6 +200,27 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
         sort: url.searchParams.get("sort") === "recent" ? "recent" : "rating",
         hideRanked: url.searchParams.get("hideRanked") === "1",
         ...(maxPerChart > 0 ? { maxPerChart } : {}),
+        // Opt-in like the dan list's: the plays the accuracy floor turned
+        // away, which only the explorer's Recent order has a place for.
+        ...(url.searchParams.get("rejected") === "1" ? { includeRejected: true } : {}),
+      });
+      res.setHeader("cache-control", "public, max-age=60");
+      sendJson(req, res, ctx, 200, page);
+      return true;
+    }
+    if (profileRoute.kind === "unrated-plays") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      const keyCount = clampInteger(url.searchParams.get("keys"), 1, 18, 0);
+      if (keyCount <= 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_key_count" });
+        return true;
+      }
+      // Sorted by pp, every-note MSD, chart dan or date; the explorer fetches
+      // the bounded cohort and narrows it locally like the other two lists.
+      const sort = url.searchParams.get("sort") ?? "msd";
+      const page = await getPlayerUnratedPlays(ctx.db, userId, keyCount, {
+        sort: sort === "recent" || isUnratedPlaysSort(sort) ? sort : "msd",
+        limit: clampInteger(url.searchParams.get("limit"), 1, PLAYER_UNRATED_PLAYS_MAX, PLAYER_UNRATED_PLAYS_MAX),
       });
       res.setHeader("cache-control", "public, max-age=60");
       sendJson(req, res, ctx, 200, page);
@@ -294,8 +316,8 @@ function isOsuNotFound(error: unknown): boolean {
   return error instanceof OsuApiError && error.status === 404;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "dan-evidence" | "keymode-pp"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-history|skill-plays|dan-evidence|keymode-pp)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "dan-evidence" | "unrated-plays" | "keymode-pp"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-history|skill-plays|dan-evidence|unrated-plays|keymode-pp)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -305,7 +327,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "keymode-pp",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "dan-evidence" | "unrated-plays" | "keymode-pp",
   };
 }
 

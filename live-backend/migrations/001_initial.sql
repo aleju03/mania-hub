@@ -1300,3 +1300,54 @@ create table if not exists pack_gifts (
 );
 create index if not exists idx_pack_gifts_sender_time on pack_gifts(sender_user_id, sent_at);
 create index if not exists idx_pack_gifts_inbox on pack_gifts(recipient_user_id, sent_at desc) where seen_at is null;
+
+
+-- Every-note (vibro-unadjusted) SSRs for the unrated plays board
+-- (features/unrated-plays.ts). Chart-scoped rather than per-play: the values
+-- depend only on the chart, the rate, the Invert variant and the score goal,
+-- so one row serves every player who set a play on the same slot at the same
+-- goal. The ordinary player pipeline never reads this table and its own SSRs
+-- are untouched.
+create table if not exists chart_raw_ssr (
+  slot text not null,
+  goal_bp integer not null,
+  version integer not null,
+  beatmap_id integer not null,
+  key_count integer not null,
+  values_json text not null,
+  updated_at text not null,
+  primary key(slot, goal_bp, version)
+);
+create index if not exists idx_chart_raw_ssr_beatmap on chart_raw_ssr(beatmap_id);
+
+-- The plays the skill ratings leave out (features/unrated-plays.ts): one row
+-- per player, chart, rate and Invert variant, rewritten from plays_json after
+-- every skill compute. pp is computed locally from the chart's star rating,
+-- msd is the every-note Overall SSR, dan is the chart's verdict at the played
+-- rate. Separate from player_skill_ratings on purpose - nothing that reads a
+-- player's real rating should be able to reach this by accident.
+create table if not exists unrated_plays (
+  user_id integer not null,
+  slot text not null,
+  version integer not null,
+  beatmap_id integer not null,
+  key_count integer not null,
+  rate real not null,
+  inverse integer not null default 0,
+  reason text not null,
+  identity text not null,
+  score_id integer,
+  played_at text,
+  accuracy real,
+  mods_json text,
+  pp real,
+  msd real,
+  msd_json text,
+  dan real,
+  dan_side text,
+  dan_label text,
+  play_json text not null,
+  computed_at text not null,
+  primary key(user_id, slot)
+);
+create index if not exists idx_unrated_plays_key_count on unrated_plays(key_count);

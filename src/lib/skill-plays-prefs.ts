@@ -31,6 +31,8 @@ export interface SkillPlaysPrefs {
    * is the list every other dan surface already shows.
    */
   showRejected: boolean;
+  /** Unrated plays list only: which of its three numbers "Best" ranks by. */
+  unratedSort: "pp" | "msd" | "dan";
 }
 
 export const DEFAULT_SKILL_PLAYS_PREFS: SkillPlaysPrefs = {
@@ -41,6 +43,7 @@ export const DEFAULT_SKILL_PLAYS_PREFS: SkillPlaysPrefs = {
   hideRanked: false,
   maxPerChart: 0,
   showRejected: true,
+  unratedSort: "msd",
 };
 
 /**
@@ -63,6 +66,7 @@ export function normalizeSkillPlaysPrefs(raw: unknown): SkillPlaysPrefs {
     // Defaults on, so an entry written before this existed keeps showing them.
     showRejected: value.showRejected !== false,
     maxPerChart: (SKILL_PLAYS_RATE_CAPS as readonly number[]).includes(maxPerChart) ? maxPerChart : 0,
+    unratedSort: value.unratedSort === "pp" || value.unratedSort === "dan" ? value.unratedSort : "msd",
   };
 }
 

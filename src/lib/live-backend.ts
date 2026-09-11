@@ -10,6 +10,7 @@ import type { MyDataSkillBreakdown } from "./my-data";
 import type { ServerPackCollectionCard } from "./pack-wallet-sync";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { LEADERBOARD_PAGE_SIZE, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
+import type { UnratedPlaysSnapshot } from "./unrated-plays";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
 
@@ -75,6 +76,11 @@ export interface LivePlayerSkillPlaysPage {
   unfilteredTotal?: number;
   limit: number;
   offset: number;
+  /**
+   * The keymode's plays the accuracy floor left unrated (`ratingExcluded`),
+   * newest first. Present only when the read asked for it (`includeRejected`).
+   */
+  rejected?: LivePlayerSkillPlay[];
 }
 
 /** The clear rules a rated play can fall to, as the backend names them. */
@@ -1590,6 +1596,8 @@ export async function fetchLivePlayerSkillPlaysDirect(
     hideRanked?: boolean;
     /** Keeps at most this many plays per chart, for maps with several rates. */
     maxPerChart?: number;
+    /** Also fetch the plays the accuracy floor left unrated (`rejected`). */
+    includeRejected?: boolean;
     /** Skips the browser's cached copy (the endpoint is served with a short max-age). */
     fresh?: boolean;
   } = {},
@@ -1610,6 +1618,7 @@ export async function fetchLivePlayerSkillPlaysDirect(
   if (Number.isFinite(options.maxPerChart) && Number(options.maxPerChart) > 0) {
     query.set("maxPerChart", String(Math.floor(Number(options.maxPerChart))));
   }
+  if (options.includeRejected) query.set("rejected", "1");
   return fetchLiveJson(`/api/profiles/${userId}/skill-plays?${query.toString()}`, {
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.fresh ? { cache: "reload" as const } : {}),
@@ -1697,6 +1706,48 @@ export async function fetchLivePlayerKeymodePpKeysDirect(userId: number): Promis
 
 // The clears behind one side of a player's dan estimate, plus per-skillset
 // dans re-run over the same clears. 404s while the skill compute is pending.
+/** One of a player's unrated plays: the play, why the ratings left it out,
+ *  and what it is worth on its own terms. */
+export interface LivePlayerUnratedPlay {
+  play: LivePlayerSkillPlay;
+  reason: "chart_vibro" | "rate_vibro" | "chart_ineligible";
+  pp: number | null;
+  msd: number | null;
+  dan: { rawDan: number; side: "rc" | "ln"; label: string | null } | null;
+}
+
+export interface LivePlayerUnratedPlaysPage {
+  keyCount: number;
+  sort: string;
+  items: LivePlayerUnratedPlay[];
+  total: number;
+  keyCounts: number[];
+}
+
+/* The profile's Unrated plays list. Same bounded-cohort shape as the skill
+   plays read: the explorer fetches it once per ordering and narrows locally. */
+export async function fetchLivePlayerUnratedPlaysDirect(
+  userId: number,
+  keyCount: number,
+  options: {
+    /** "pp" | "msd" | "dan" rank by that number; "recent" by when each play was set. */
+    sort?: "pp" | "msd" | "dan" | "recent";
+    limit?: number;
+    signal?: AbortSignal;
+    /** Skips the browser's cached copy (the endpoint is served with a short max-age). */
+    fresh?: boolean;
+  } = {},
+): Promise<LivePlayerUnratedPlaysPage> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (!Number.isInteger(keyCount) || keyCount <= 0) throw new Error("Invalid key count.");
+  const query = new URLSearchParams({ keys: String(keyCount), sort: options.sort ?? "msd" });
+  if (Number.isInteger(options.limit) && options.limit! > 0) query.set("limit", String(options.limit));
+  return fetchLiveJson(`/api/profiles/${userId}/unrated-plays?${query.toString()}`, {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.fresh ? { cache: "reload" as const } : {}),
+  });
+}
+
 export async function fetchLivePlayerDanEvidenceDirect(
   userId: number,
   keyCount: number,
@@ -2773,6 +2824,27 @@ export async function fetchLiveDanLeaderboard(params: {
     pageSize: String(LEADERBOARD_PAGE_SIZE),
   });
   return fetchLiveJson(`/api/snapshots/dan-leaderboard?${query.toString()}`);
+}
+
+/* The unrated plays board: the plays the skill ratings leave out, one row
+   per player and chart. Public read like the two boards above; the backend
+   caches the board for its own 5-minute rebuild. */
+export async function fetchLiveUnratedPlays(params: {
+  country: string;
+  keys: number | "all";
+  sort: string;
+  range: string;
+  page: number;
+}): Promise<UnratedPlaysSnapshot> {
+  const query = new URLSearchParams({
+    country: params.country,
+    keys: String(params.keys),
+    sort: params.sort,
+    range: params.range,
+    page: String(Math.max(1, Math.floor(params.page))),
+    pageSize: String(LEADERBOARD_PAGE_SIZE),
+  });
+  return fetchLiveJson(`/api/snapshots/unrated-plays?${query.toString()}`);
 }
 
 export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], estimatorVersion: number): Promise<LiveDanEstimateBatch> {

@@ -9,6 +9,7 @@ import { getMapCollection, getMapCollections, getMapCollectionsRotation } from "
 import { getMapSearchPage, getMapSearchSetEntry } from "../../features/map-search.js";
 import { getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersPageQuery } from "../../features/maps.js";
 import { getDanLeaderboard, getSkillLeaderboard, isDanLeaderboardKeyCount, isSkillLeaderboardKeyCount } from "../../features/skill-leaderboards.js";
+import { UNRATED_PLAYS_MAX_PAGE_SIZE, getUnratedPlaysBoard, isUnratedPlaysRange, isUnratedPlaysSort } from "../../features/unrated-plays.js";
 import { getRankDeltaSnapshot } from "../../features/rank-snapshots.js";
 import { getSnipeBoardSnapshot, getSnipesSnapshot } from "../../features/snipes.js";
 import { getTrackerSnapshot, TRACKER_MAX_OFFSET } from "../../features/tracker.js";
@@ -285,6 +286,31 @@ export async function handleSnapshotRoutes(req: IncomingMessage, res: ServerResp
       axis: query.axis,
       page: query.page,
       pageSize: query.pageSize,
+    });
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
+    await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
+    return true;
+  }
+  /* The unrated plays board. Same public-read shape as the boards above: one
+     global projection the scope filters, cached for its own 5-minute rebuild. */
+  if (url.pathname === "/api/snapshots/unrated-plays") {
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    // No keys, or "all", is the mixed board; the other boards default to 4K.
+    const keysParam = url.searchParams.get("keys");
+    const keyCount = keysParam == null || keysParam === "all" ? null : clampInteger(keysParam, 4, 18, 4);
+    const sort = url.searchParams.get("sort") ?? "pp";
+    const range = url.searchParams.get("range") ?? "all";
+    if (!isUnratedPlaysSort(sort) || !isUnratedPlaysRange(range)) {
+      sendJson(req, res, ctx, 400, { error: "unknown_sort" });
+      return true;
+    }
+    const snapshot = await getUnratedPlaysBoard(ctx.db, {
+      country,
+      keyCount,
+      sort,
+      range,
+      page: clampInteger(url.searchParams.get("page"), 1, 2_000, 1),
+      pageSize: clampInteger(url.searchParams.get("pageSize") ?? url.searchParams.get("limit"), 1, UNRATED_PLAYS_MAX_PAGE_SIZE, UNRATED_PLAYS_MAX_PAGE_SIZE),
     });
     res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);

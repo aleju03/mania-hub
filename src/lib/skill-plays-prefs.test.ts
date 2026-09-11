@@ -24,6 +24,7 @@ describe("normalizeSkillPlaysPrefs", () => {
       hideRanked: true,
       maxPerChart: 2,
       showRejected: false,
+      unratedSort: "pp",
     })).toEqual({
       keyCount: null,
       axis: "pattern:jack",
@@ -32,6 +33,7 @@ describe("normalizeSkillPlaysPrefs", () => {
       hideRanked: true,
       maxPerChart: 2,
       showRejected: false,
+      unratedSort: "pp",
     });
   });
 
@@ -47,6 +49,12 @@ describe("normalizeSkillPlaysPrefs", () => {
     // who never touched it should keep seeing the rows the feature is for.
     expect(normalizeSkillPlaysPrefs({}).showRejected).toBe(true);
     expect(normalizeSkillPlaysPrefs({ showRejected: false }).showRejected).toBe(false);
+  });
+
+  it("ranks the unrated list by MSD unless a stored entry picked another number", () => {
+    expect(normalizeSkillPlaysPrefs({}).unratedSort).toBe("msd");
+    expect(normalizeSkillPlaysPrefs({ unratedSort: "pp" }).unratedSort).toBe("pp");
+    expect(normalizeSkillPlaysPrefs({ unratedSort: "accuracy" }).unratedSort).toBe("msd");
   });
 
   it("keeps a keymode only when it could be one", () => {
@@ -73,6 +81,7 @@ describe("readSkillPlaysPrefs", () => {
       hideRanked: true,
       maxPerChart: 3,
       showRejected: false,
+      unratedSort: "dan",
     });
     expect(readSkillPlaysPrefs()).toEqual({
       keyCount: 7,
@@ -82,6 +91,7 @@ describe("readSkillPlaysPrefs", () => {
       hideRanked: true,
       maxPerChart: 3,
       showRejected: false,
+      unratedSort: "dan",
     });
 
     window.localStorage.setItem(SKILL_PLAYS_PREFS_STORAGE_KEY, "{not json");

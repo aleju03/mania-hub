@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { exec, migrate } from "../src/db.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
-import { nextRecentReconcileCadence, promotePendingRecentReconcileJobs, reserveRecentReconcileRequest, type RecentReconcilePayload } from "../src/jobs/recent-reconcile.js";
+import { countOpenRecentSessions, liveRecentIntervalMs, planNextRecentPoll, promotePendingRecentReconcileJobs, RECENT_CLOSING_DELAY_MS, reserveRecentReconcileRequest, type RecentReconcilePayload } from "../src/jobs/recent-reconcile.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import type { OscScore } from "../src/shared/types.js";
 import { WorkerRunner } from "../src/workers.js";
@@ -64,12 +64,73 @@ describe("ingest metadata efficiency", () => {
 });
 
 describe("recent-score adaptive polling", () => {
-  it("keeps an initial correction follow-up, backs off unchanged windows, and resets on changes", () => {
-    expect(nextRecentReconcileCadence(0, false)).toEqual({ unchangedPolls: 1, delayMs: 120_000 });
-    expect(nextRecentReconcileCadence(1, false)).toEqual({ unchangedPolls: 2, delayMs: 240_000 });
-    expect(nextRecentReconcileCadence(2, false)).toEqual({ unchangedPolls: 3, delayMs: 480_000 });
-    expect(nextRecentReconcileCadence(99, false)).toEqual({ unchangedPolls: 3, delayMs: 480_000 });
-    expect(nextRecentReconcileCadence(3, true)).toEqual({ unchangedPolls: 0, delayMs: 120_000 });
+  it("spreads the live budget over open sessions within the three-to-twenty-minute clamp", () => {
+    expect(liveRecentIntervalMs(0, 15)).toBe(180_000);
+    expect(liveRecentIntervalMs(45, 15)).toBe(180_000);
+    expect(liveRecentIntervalMs(100, 15)).toBe(400_000);
+    expect(liveRecentIntervalMs(1_000, 15)).toBe(1_200_000);
+    expect(liveRecentIntervalMs(10, 0)).toBe(1_200_000);
+  });
+
+  it("keeps the base spacing for the first unchanged live poll, then doubles it up to the cap", () => {
+    const now = Date.parse("2026-09-04T12:00:00.000Z");
+    const live = (changed: boolean, previousUnchangedPolls: number | undefined) => planNextRecentPoll({
+      now, responseCount: 1, pageLimit: 100, responseNewestAtMs: now - 60_000, responseOldestAtMs: now - 60_000,
+      trackedNewestAtMs: null, changed, previousUnchangedPolls, liveIntervalMs: 180_000,
+    });
+    expect(live(false, 0)).toEqual({ kind: "follow_up", unchangedPolls: 1, delayMs: 180_000, reason: "session_live" });
+    expect(live(false, 1)).toEqual({ kind: "follow_up", unchangedPolls: 2, delayMs: 360_000, reason: "session_live" });
+    expect(live(false, 2)).toEqual({ kind: "follow_up", unchangedPolls: 3, delayMs: 720_000, reason: "session_live" });
+    expect(live(false, 99)).toEqual({ kind: "follow_up", unchangedPolls: 3, delayMs: 720_000, reason: "session_live" });
+    expect(live(true, 3)).toEqual({ kind: "follow_up", unchangedPolls: 0, delayMs: 180_000, reason: "session_live" });
+    // The cap holds even when the spacing itself is at the top of the clamp.
+    expect(planNextRecentPoll({
+      now, responseCount: 1, pageLimit: 100, responseNewestAtMs: now - 60_000, responseOldestAtMs: now - 60_000,
+      trackedNewestAtMs: null, changed: false, previousUnchangedPolls: 2, liveIntervalMs: 1_200_000,
+    }).delayMs).toBe(1_200_000);
+  });
+
+  it("books the closing poll once a session goes quiet and ends the schedule once osu! shows nothing", () => {
+    const now = Date.parse("2026-09-04T12:00:00.000Z");
+    const quiet = planNextRecentPoll({
+      now, responseCount: 3, pageLimit: 100, responseNewestAtMs: now - 31 * 60_000, responseOldestAtMs: now - 3 * 3_600_000,
+      trackedNewestAtMs: null, changed: true, previousUnchangedPolls: 0, liveIntervalMs: 180_000,
+    });
+    expect(quiet).toEqual({ kind: "closing", unchangedPolls: 0, delayMs: RECENT_CLOSING_DELAY_MS, reason: "session_quiet" });
+    // A feed play the recent list has not shown yet keeps the session live.
+    expect(planNextRecentPoll({
+      now, responseCount: 0, pageLimit: 100, responseNewestAtMs: null, responseOldestAtMs: null,
+      trackedNewestAtMs: now - 5 * 60_000, changed: false, previousUnchangedPolls: 0, liveIntervalMs: 180_000,
+    }).kind).toBe("follow_up");
+    expect(planNextRecentPoll({
+      now, responseCount: 0, pageLimit: 100, responseNewestAtMs: null, responseOldestAtMs: null,
+      trackedNewestAtMs: null, changed: false, previousUnchangedPolls: 0, liveIntervalMs: 180_000,
+    })).toEqual({ kind: null, unchangedPolls: 0, delayMs: 0, reason: "no_recent_plays" });
+  });
+
+  it("tightens any plan to half the span of a full page", () => {
+    const now = Date.parse("2026-09-04T12:00:00.000Z");
+    const full = (newestAgoMs: number, spanMs: number) => planNextRecentPoll({
+      now, responseCount: 100, pageLimit: 100, responseNewestAtMs: now - newestAgoMs, responseOldestAtMs: now - newestAgoMs - spanMs,
+      trackedNewestAtMs: null, changed: false, previousUnchangedPolls: 3, liveIntervalMs: 1_200_000,
+    });
+    // Live, backed off to twenty minutes, but 100 plays in 16 minutes: poll in 8.
+    expect(full(60_000, 16 * 60_000)).toEqual({ kind: "follow_up", unchangedPolls: 3, delayMs: 8 * 60_000, reason: "page_full" });
+    // Quiet, but a full page over four hours cannot wait eighteen: poll in two.
+    expect(full(31 * 60_000, 4 * 3_600_000)).toEqual({ kind: "follow_up", unchangedPolls: 0, delayMs: 2 * 3_600_000, reason: "page_full" });
+    // Never below the live floor.
+    expect(full(60_000, 60_000).delayMs).toBe(180_000);
+  });
+
+  it("counts open sessions without the closing appointments", async () => {
+    const { db, queue } = await setup();
+    try {
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:1", { userId: 1, kind: "gap_repair" });
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:2:next:1", { userId: 2, kind: "follow_up" }, { runAfter: new Date(Date.now() + 180_000) });
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:3:next:1", { userId: 3 }, { runAfter: new Date(Date.now() + 180_000) });
+      await queue.enqueue("reconcile_user_recent_scores", "recent:user:4:next:1", { userId: 4, kind: "closing" }, { runAfter: new Date(Date.now() + RECENT_CLOSING_DELAY_MS) });
+      expect(await countOpenRecentSessions(db)).toBe(3);
+    } finally { db.close(); }
   });
 
   it("fresh feed promotion resets backoff without dropping source options", async () => {
@@ -85,7 +146,7 @@ describe("recent-score adaptive polling", () => {
     } finally { db.close(); }
   });
 
-  it.each([undefined, "follow_up"] as const)("expires stale follow-ups before the API call (kind=%s)", async (kind) => {
+  it.each([undefined, "follow_up", "closing"] as const)("polls a stale follow-up and ends the schedule when osu! shows no plays (kind=%s)", async (kind) => {
     const { db, queue, events, ingestor, score } = await setup();
     try {
       vi.useFakeTimers({ now: new Date("2026-09-04T12:00:00.000Z") });
@@ -93,8 +154,27 @@ describe("recent-score adaptive polling", () => {
       await queue.enqueue("reconcile_user_recent_scores", `recent:user:${score.user_id}:next:1`, { userId: score.user_id, kind });
       const osu = { getUserRecentScores: vi.fn().mockResolvedValue([]) };
       await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
-      expect(osu.getUserRecentScores).not.toHaveBeenCalled();
-      expect((await exec(db, "select status from jobs where type = 'reconcile_user_recent_scores'")).rows[0].status).toBe("done");
+      // The old chain expired here without a call and lost whatever the session
+      // played after its last poll. Every job polls now; only the empty answer ends it.
+      expect(osu.getUserRecentScores).toHaveBeenCalledTimes(1);
+      const rows = (await exec(db, "select status from jobs where type = 'reconcile_user_recent_scores'")).rows;
+      expect(rows.map(row => row.status)).toEqual(["done"]);
+    } finally { db.close(); }
+  });
+
+  it("books the closing poll eighteen hours out for a quiet session osu! still lists", async () => {
+    const { db, queue, events, ingestor, score } = await setup();
+    try {
+      vi.useFakeTimers({ now: new Date("2026-09-04T12:00:00.000Z") });
+      const played = { ...score, ended_at: "2026-09-04T11:15:00.000Z" };
+      await queue.enqueue("reconcile_user_recent_scores", `recent:user:${score.user_id}:next:1`, { userId: score.user_id, kind: "follow_up" });
+      const osu = { getUserRecentScores: vi.fn().mockResolvedValue([played]) };
+      await new WorkerRunner(db, queue, events, osu as never, ingestor).runOnce();
+      const next = (await exec(db, "select run_after, priority, payload_json from jobs where type = 'reconcile_user_recent_scores' and status != 'done'")).rows;
+      expect(next).toHaveLength(1);
+      expect(next[0].run_after).toBe(new Date(Date.now() + RECENT_CLOSING_DELAY_MS).toISOString());
+      expect(Number(next[0].priority)).toBe(150);
+      expect(JSON.parse(String(next[0].payload_json))).toMatchObject({ kind: "closing", unchangedPolls: 0, latestScoreAt: "2026-09-04T11:15:00.000Z" });
     } finally { db.close(); }
   });
 
@@ -232,20 +312,21 @@ describe("recent-score adaptive polling", () => {
       const payload = { userId: score.user_id, latestScoreAt: scoreAt, unchangedPolls: 2 };
       await reconcile(payload);
       let next = (await exec(db, "select run_after, payload_json from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
-      expect(next.run_after).toBe("2026-09-04T12:08:00.000Z");
+      // Third unchanged poll: the three-minute base spacing doubled twice.
+      expect(next.run_after).toBe("2026-09-04T12:12:00.000Z");
       await exec(db, "delete from jobs where type = 'reconcile_user_recent_scores'");
       vi.setSystemTime(new Date("2026-09-04T12:08:00.000Z"));
       osu.getUserRecentScores.mockResolvedValue([{ ...initial, has_replay: true }]);
       await reconcile(payload);
       next = (await exec(db, "select run_after, payload_json from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
-      expect(next.run_after).toBe("2026-09-04T12:10:00.000Z");
+      expect(next.run_after).toBe("2026-09-04T12:11:00.000Z");
       expect(JSON.parse(String(next.payload_json)).unchangedPolls).toBe(0);
       await exec(db, "delete from jobs where type = 'reconcile_user_recent_scores'");
       vi.setSystemTime(new Date("2026-09-04T12:10:00.000Z"));
       await ingestor.ingestBatch([{ ...initial, id: 9011, ended_at: "2026-09-04T11:59:00.000Z" }], "osu_scores_fallback", options);
       await reconcile(payload);
       next = (await exec(db, "select run_after, payload_json from jobs where type = 'reconcile_user_recent_scores'")).rows[0];
-      expect(next.run_after).toBe("2026-09-04T12:12:00.000Z");
+      expect(next.run_after).toBe("2026-09-04T12:13:00.000Z");
       expect(JSON.parse(String(next.payload_json)).latestScoreAt).toBe("2026-09-04T11:59:00.000Z");
     } finally { db.close(); }
   });

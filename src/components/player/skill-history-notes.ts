@@ -24,6 +24,11 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-09-10",
+    text: "Fixed some 4K handstream and jumpstream maps incorrectly counting toward tech dan.",
+    keyCounts: [4],
+  },
+  {
     date: "2026-09-06",
     text: "Reduced the rice dan penalty for scores just below the accuracy requirement. A 95.9% on a chart requiring 96% now gives almost full dan credit.",
   },

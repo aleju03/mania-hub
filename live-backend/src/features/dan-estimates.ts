@@ -541,10 +541,13 @@ async function collectStoredRateDanVerdicts(
         continue;
       }
       // A malformed ready row stays absent, matching
-      // readCachedDanEstimate: recomputable, not resolved.
-      const rawDan = Number(row.raw_dan);
+      // readCachedDanEstimate: recomputable, not resolved. A zero or negative
+      // raw_dan is not malformed: the regression runs below the table on a
+      // bottom-rung chart and the row still carries the ladder's first label,
+      // so it is served and the credit side clamps it to the ladder floor.
+      const rawDan = row.raw_dan == null ? Number.NaN : Number(row.raw_dan);
       const family = row.family == null ? "" : String(row.family);
-      if (status !== "ready" || !Number.isFinite(rawDan) || rawDan <= 0 || !family) continue;
+      if (status !== "ready" || !Number.isFinite(rawDan) || !family) continue;
       const storedStarRating = row.star_rating == null ? null : Number(row.star_rating);
       if (storedStarRatingInvalidatesRow(storedStarRating, currentStarRatings.get(Number(row.beatmap_id)))) continue;
       const displayName = typeof row.display_name === "string" && row.display_name.trim() ? row.display_name.trim() : null;

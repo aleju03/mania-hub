@@ -294,9 +294,10 @@ export function danTableCeilingFor(side: "rc" | "ln", keyCount: number): number 
  * The lowest rawDan a credited clear may clamp to. 0.5 on the 4K ladders,
  * whose labelers clamp the level to 1, so it prints as the first level's
  * minus band; the leoblack tables open at level 0 (the Normal Kyu band), so
- * theirs is 0. Never negative: skill surfaces treat a non-positive rawDan as
- * unrated (skill-leaderboards drops it), so a decayed scrape on a bottom-rung
- * chart pins here instead of dropping off the scale.
+ * theirs is 0. Never negative. The credit side clamps a chart's stored rawDan
+ * here on read too, since the regression runs below the table on a bottom-rung
+ * chart while its label still prints as the first band, so a clear on one
+ * credits the floor instead of being treated as unrated.
  */
 export function danTableFloorFor(side: "rc" | "ln", keyCount: number): number {
   if (keyCount === 4) return 0.5;

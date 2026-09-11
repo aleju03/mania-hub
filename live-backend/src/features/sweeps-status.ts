@@ -25,6 +25,7 @@ import { SKILL_BASELINE_CURVES_META_KEY, SKILL_BASELINE_JOB } from "./skill-base
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB } from "./chart-families.js";
 import { LEOBLACK_FUSION_JOB, LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { PLAYER_SKILL_DAN_SWEEP_META_KEY, PLAYER_SKILL_DAN_SWEEP_JOB } from "./player-skills.js";
+import { UNRATED_PLAYS_SWEEP_META_KEY, UNRATED_PLAYS_SWEEP_JOB } from "./unrated-plays.js";
 import {
   JACK_DEMAND_RECOMPUTE_JOB,
   JACK_DEMAND_RECOMPUTE_META_KEY,
@@ -422,6 +423,16 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
       // src/features/chart-analysis.ts DT_RATE_ANALYSIS_META_KEY / DT_RATE_ANALYSIS_JOB
       doneKey: "dt_rate_analysis_done:v2",
       jobType: "recompute_dt_rate_analysis_sweep",
+    }),
+  },
+  {
+    id: "unrated-plays",
+    label: "Unrated plays sweep",
+    description: "Prices the plays the skill ratings leave out (vibro rejections and plays on charts a dan cannot be read off): local pp, every-note MSD and the chart's dan, into unrated_plays. Cached .osu files only, and nothing an ordinary rating reads.",
+    kind: "one-time",
+    read: (db) => readChainSweep(db, {
+      doneKey: UNRATED_PLAYS_SWEEP_META_KEY,
+      jobType: UNRATED_PLAYS_SWEEP_JOB,
     }),
   },
   chartAnalysisSweep({

@@ -307,6 +307,7 @@ function asChartSkillInfo(chart: Chart, withMotion: boolean): ChartSkillInfo {
     techCategory: labelled ? /tech/i.test(category!) : null,
     clusterTrill: labelled ? /trill/i.test(category!) : null,
     handstreamCluster: labelled ? /handstream/i.test(category!) : null,
+    jumpstreamCluster: labelled ? /jumpstream/i.test(category!) : null,
     techScore: chart.chordjackScore >= 0.8 ? 0 : chart.techScore,
     chordjackScore: chart.chordjackScore,
     motion: withMotion ? chart.motion : null,

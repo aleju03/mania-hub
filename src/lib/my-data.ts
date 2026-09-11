@@ -128,6 +128,8 @@ export interface MyDataBeatmapRef {
   beatmapId: number;
   beatmapsetId: number | null;
   label: string | null;
+  /** The same map without the artist, for tiles too narrow for the full line. */
+  shortLabel?: string | null;
 }
 
 export interface MyDataRecord {
@@ -438,4 +440,80 @@ export const fetchMyDataSkills = createServerFn({ method: "GET" })
     const cfg = await myDataBackend();
     if (!cfg) return null;
     return fetchMyDataSkillsRaw(cfg);
+  });
+
+// "My Stats" insights: the aggregates the backend derives from its own
+// projections (play diet, session shape, grind records, judgement
+// fingerprint, rank trajectory). Fetched next to the dashboard rather than
+// inside it so the feed paints without waiting on them.
+
+export interface MyDataDietTag {
+  id: string;
+  plays: number;
+  pct: number;
+}
+
+export interface MyDataDietMode {
+  keyCount: number;
+  analyzed: number;
+  /** Analyzed plays whose chart carries no pattern tag. */
+  untagged: number;
+  tags: MyDataDietTag[];
+}
+
+export interface MyDataSessionShape {
+  sessions: number;
+  plays: number;
+  avgPlays: number;
+  avgMinutes: number;
+  longest: { minutes: number; plays: number; startedAt: string; endedAt: string } | null;
+  busiest: { plays: number; minutes: number; startedAt: string } | null;
+  firstPlayAt: string | null;
+}
+
+export interface MyDataGrindMap {
+  beatmap: MyDataBeatmapRef | null;
+  plays: number;
+}
+
+export interface MyDataJudgementKey {
+  keyCount: number;
+  plays: number;
+  accuracy: number;
+}
+
+export interface MyDataJudgement {
+  plays: number;
+  notes: number;
+  /** Share of judged notes that were MAX (300g), 0-1. */
+  maxShare: number;
+  /** MAX:300 ratio, the number mania players quote. Null with no 300s. */
+  maxRatio: number | null;
+  missPer1k: number;
+  accuracy: number;
+  byKey: MyDataJudgementKey[];
+  since: string | null;
+}
+
+export interface MyDataInsights {
+  diet: MyDataDietMode[];
+  sessions: MyDataSessionShape | null;
+  grind: { mostPlayed: MyDataGrindMap | null };
+  judgement: MyDataJudgement | null;
+  generatedAt: string;
+}
+
+export const fetchMyDataInsights = createServerFn({ method: "GET" })
+  .handler(async (): Promise<MyDataInsights | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await myDataBackend();
+    if (!cfg) return null;
+    try {
+      const response = await fetch(`${cfg.base}/api/my-data/insights?userId=${cfg.userId}`, { headers: cfg.headers });
+      if (!response.ok) return null;
+      return (await response.json()) as MyDataInsights;
+    } catch {
+      return null;
+    }
   });

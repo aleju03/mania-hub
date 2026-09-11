@@ -74,9 +74,20 @@ describe("normalizeDanEstimateItems", () => {
       await exec(db, `insert into dan_estimates
         (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, star_rating, computed_at, updated_at)
         values (?, 992, 130, 'ready', '7', 'new', 7, 'dan', 0.9, 4.2, ?, ?)`, [DAN_ESTIMATE_CACHE_VERSION, now, now]);
-      const fresh = await loadStoredRateDanVerdicts(db, pairs);
+      // A ready row at or below zero is the ladder's first band, not a
+      // malformed row: it is served and the credit side clamps it. Only a
+      // missing raw_dan stays absent.
+      await exec(db, `insert into dan_estimates
+        (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, star_rating, computed_at, updated_at)
+        values (?, 992, 150, 'ready', '0--', '0--', -0.4, 'dan', 0.9, 4.2, ?, ?)`, [DAN_ESTIMATE_CACHE_VERSION, now, now]);
+      await exec(db, `insert into dan_estimates
+        (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, star_rating, computed_at, updated_at)
+        values (?, 992, 160, 'ready', '0--', '0--', null, 'dan', 0.9, 4.2, ?, ?)`, [DAN_ESTIMATE_CACHE_VERSION, now, now]);
+      const fresh = await loadStoredRateDanVerdicts(db, [...pairs, { beatmapId: 992, ratePercent: 150 }, { beatmapId: 992, ratePercent: 160 }]);
       expect(fresh.get("992:120")).toBeNull();
       expect(fresh.get("992:130")).toEqual({ rawDan: 7, family: "dan", displayName: "new" });
+      expect(fresh.get("992:150")).toEqual({ rawDan: -0.4, family: "dan", displayName: "0--" });
+      expect(fresh.has("992:160")).toBe(false);
       expect(fresh.get(rateDanVerdictKey(992, 120, "IN"))).toMatchObject({ rawDan: 9, stale: true });
       const batch = await getDanEstimateBatch(db, new JobQueue(db), {} as never,
         [120, 130, 140].map((rate) => ({ beatmapId: 992, rate: rate / 100 })));
