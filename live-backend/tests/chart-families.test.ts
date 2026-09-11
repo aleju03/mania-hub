@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import {
-  chartTopologyKey, sameChartAtDifferentRate, storeChartFamily,
+  chartTopologyKey, chartEdgeKeys, paddingAllowance, sameChart, storeChartFamily,
   recomputeChartFamilyChunk, ensureChartFamilySweepSeeded, runChartFamilySweepJob,
   CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB,
 } from "../src/features/chart-families.js";
@@ -47,9 +47,34 @@ describe("structural chart families", () => {
     for (const rate of [0.7, 0.99, 1.01, 1.05, 1.37, 1.5, 2]) {
       const rated = parseManiaBeatmap(file(rate, -250));
       expect(chartTopologyKey(rated)).toBe(chartTopologyKey(base));
-      expect(sameChartAtDifferentRate(base, rated)).toBe(true);
-      expect(sameChartAtDifferentRate(rated, base)).toBe(true);
+      expect(sameChart(base, rated)).toBe(true);
+      expect(sameChart(rated, base)).toBe(true);
     }
+  });
+
+  it("groups a reupload with a few notes slipped into the intro or the outro, at any rate", () => {
+    const base = parseManiaBeatmap(file());
+    const intro = (count: number, rate = 1) => {
+      const map = parseManiaBeatmap(file(rate, -250));
+      // Interleaved with the original opening rows, the way padded reuploads do it.
+      for (let i = 0; i < count; i += 1) map.notes.push({ column: (i * 3) % 4, time: Math.round((-250 + 45 + i * 95) / rate), endTime: Math.round((-250 + 45 + i * 95) / rate), isHold: false });
+      return map;
+    };
+    const outro = (count: number) => {
+      const map = parseManiaBeatmap(file());
+      const end = Math.max(...map.notes.map((note) => note.endTime));
+      for (let i = 0; i < count; i += 1) map.notes.push({ column: i % 4, time: end + 90 * (i + 1), endTime: end + 90 * (i + 1), isHold: false });
+      return map;
+    };
+    for (const padded of [intro(1), intro(8), intro(8, 1.5), intro(paddingAllowance(base.notes.length)), outro(3)]) {
+      expect(chartTopologyKey(padded)).not.toBe(chartTopologyKey(base));
+      expect(sameChart(base, padded)).toBe(true);
+      expect(sameChart(padded, base)).toBe(true);
+    }
+    // One end still hashes the same, which is how the padded copy is found.
+    expect(chartEdgeKeys(intro(8))?.tail).toBe(chartEdgeKeys(base)?.tail);
+    expect(chartEdgeKeys(outro(3))?.head).toBe(chartEdgeKeys(base)?.head);
+    expect(sameChart(base, intro(paddingAllowance(base.notes.length) + 1))).toBe(false);
   });
 
   it("requires matching columns, keymode, note count, rhythm and hold endings", () => {
@@ -58,7 +83,7 @@ describe("structural chart families", () => {
       const changed = parseManiaBeatmap(file(1.05));
       if (edit === "column") changed.notes[50].column = (changed.notes[50].column + 1) % 4;
       if (edit === "keys") changed.keyCount = 7;
-      if (edit === "count") changed.notes.pop();
+      if (edit === "count") changed.notes.splice(40, paddingAllowance(changed.notes.length) + 1);
       if (edit === "rhythm") {
         changed.notes[50].time += 25;
         changed.notes[50].endTime += 25;
@@ -66,7 +91,7 @@ describe("structural chart families", () => {
         expect(chartTopologyKey(changed)).toBe(chartTopologyKey(base));
       }
       if (edit === "tail") changed.notes[45].endTime += 25;
-      expect(sameChartAtDifferentRate(base, changed), edit).toBe(false);
+      expect(sameChart(base, changed), edit).toBe(false);
     }
   });
 
@@ -75,7 +100,7 @@ describe("structural chart families", () => {
     const broken = parseManiaBeatmap(file());
     broken.notes[50].time = Number.NaN;
     expect(chartTopologyKey(broken)).toBeNull();
-    expect(sameChartAtDifferentRate(base, broken)).toBe(false);
+    expect(sameChart(base, broken)).toBe(false);
   });
 
   it("backfills reuploads into one durable family and exposes it in chart skill reads", async () => {
@@ -113,6 +138,19 @@ describe("structural chart families", () => {
     await storeCachedBeatmapFile(db, 3, file(1.1));
     await storeChartFamily(db, 3, file(1.1));
     expect((await exec(db, "select family_key from beatmap_chart_families where beatmap_id = 3")).rows[0].family_key).toBe(oldFamily);
+  });
+
+  it("merges the families of two padded copies once the chart they pad is stored", async () => {
+    const db = await database();
+    const base = file();
+    const pad = (row: string) => base.replace("[HitObjects]\n", `[HitObjects]\n${row}\n`);
+    const copies: Array<[number, string]> = [[1, pad("64,192,900,1,0,0:0:0:0:")], [2, pad("320,192,910,1,0,0:0:0:0:")], [3, base]];
+    for (const [id, text] of copies) {
+      await storeCachedBeatmapFile(db, id, text);
+      await storeChartFamily(db, id, text);
+      const keys = new Set((await exec(db, "select family_key from beatmap_chart_families")).rows.map((row) => row.family_key));
+      expect(keys.size).toBe(id === 3 ? 1 : id);
+    }
   });
 
   it("resumes once and seeds the dan refold after family backfill finishes", async () => {

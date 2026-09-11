@@ -7,6 +7,7 @@ import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { analyzeVibroSections } from "../src/dan/vibro-sections.js";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
+import { storeChartFamily } from "../src/features/chart-families.js";
 import { PLAYER_SKILLS_VERSION, computePlaySsrValues, type StoredPlaySsr } from "../src/features/player-skills.js";
 import {
   UNRATED_PLAYS_SWEEP_META_KEY,
@@ -48,7 +49,7 @@ async function makeDb(): Promise<Db> {
  * throwing the whole chart out, which is the only case where rating with and
  * without the adjustment can disagree.
  */
-function localizedVibroChart(): string {
+function localizedVibroChart(streamLength = 400): string {
   const rows: string[] = [];
   const x = (column: number) => Math.floor(((column + 0.5) * 512) / 4);
   let time = 1000;
@@ -58,13 +59,13 @@ function localizedVibroChart(): string {
       time += 125;
     }
   };
-  stream(400);
+  stream(streamLength);
   for (let index = 0; index < 120; index += 1) {
     rows.push(`${x(0)},192,${time},1,0,0:0:0:0:`);
     if (index % 8 === 0) rows.push(`${x(2)},192,${time},1,0,0:0:0:0:`);
     time += 60;
   }
-  stream(400);
+  stream(streamLength);
   return [
     "osu file format v14", "", "[General]", "AudioFilename: audio.mp3", "Mode: 3", "",
     "[Metadata]", "Title: slop", "Artist: t", "Creator: m", "Version: 4K", "",
@@ -232,12 +233,42 @@ describe("refreshing one player", () => {
 describe("the board", () => {
   it("keeps one row per player and chart, chosen by the number being sorted on", () => {
     const rows = [
-      { user: { id: 1 }, beatmapId: 5, accuracy: 0.99, playedAtMs: 1, pp: 100, msd: 20 },
-      { user: { id: 1 }, beatmapId: 5, accuracy: 0.95, playedAtMs: 2, pp: 80, msd: 25 },
-      { user: { id: 2 }, beatmapId: 5, accuracy: 0.97, playedAtMs: 3, pp: 90, msd: null },
+      { user: { id: 1 }, beatmapId: 5, chartKey: "4:fam:false", accuracy: 0.99, playedAtMs: 1, pp: 100, msd: 20 },
+      { user: { id: 1 }, beatmapId: 6, chartKey: "4:fam:false", accuracy: 0.95, playedAtMs: 2, pp: 80, msd: 25 },
+      { user: { id: 2 }, beatmapId: 5, chartKey: "4:fam:false", accuracy: 0.97, playedAtMs: 3, pp: 90, msd: null },
+      { user: { id: 2 }, beatmapId: 7, chartKey: "4:beatmap:7:false", accuracy: 0.97, playedAtMs: 3, pp: 60, msd: null },
     ];
-    expect(selectBoardRows(rows, (row) => row.pp).map((row) => [row.user.id, row.pp])).toEqual([[1, 100], [2, 90]]);
+    expect(selectBoardRows(rows, (row) => row.pp).map((row) => [row.user.id, row.pp])).toEqual([[1, 100], [2, 90], [2, 60]]);
     expect(selectBoardRows(rows, (row) => row.msd).map((row) => [row.user.id, row.msd])).toEqual([[1, 25]]);
+  });
+
+  it("files a player's reuploads of one chart under one row, keyed by the verified family", async () => {
+    const db = await makeDb();
+    const original = localizedVibroChart();
+    // The same notes with two extra notes slipped into the intro, and a 1.1x rate edit of the original.
+    const padded = original.replace("[HitObjects]\n", "[HitObjects]\n64,192,100,1,0,0:0:0:0:\n192,192,150,1,0,0:0:0:0:\n");
+    const rated = original.replace(/^(\d+),192,(\d+),1,0,0:0:0:0:$/gm, (_, x, time) => `${x},192,${Math.round(Number(time) / 1.1)},1,0,0:0:0:0:`);
+    expect(padded).not.toBe(original);
+    expect(rated).not.toBe(original);
+    const files: Array<[number, string]> = [[301, original], [302, padded], [303, rated], [304, localizedVibroChart(700)]];
+    for (const [beatmapId, text] of files) {
+      await seedChart(db, beatmapId, { vibro: false, lnRatio: 0, danEligibility: { eligible: false } });
+      await storeCachedBeatmapFile(db, beatmapId, text, { source: "test" });
+      await storeChartFamily(db, beatmapId, text);
+    }
+    const families = (await exec(db, "select beatmap_id, family_key from beatmap_chart_families order by beatmap_id")).rows;
+    expect(families.map((row) => row.family_key === families[0].family_key)).toEqual([true, true, true, false]);
+    await seedPlayer(db, 2, [
+      play({ identity: "official:1", beatmapId: 301, values: { Overall: 15 } }),
+      play({ identity: "official:2", beatmapId: 302, values: { Overall: 16 } }),
+      play({ identity: "official:3", beatmapId: 303, values: { Overall: 17 } }),
+      play({ identity: "official:4", beatmapId: 304, values: { Overall: 12 } }),
+    ]);
+    await refreshUnratedPlaysForUser(db, 2);
+    resetUnratedPlaysBoardCache(db);
+    const board = await getUnratedPlaysBoard(db, { country: "GLOBAL", keyCount: 4, sort: "msd" });
+    expect(board.ranking.map((entry) => [entry.beatmapId, entry.msd])).toEqual([[303, 17], [304, 12]]);
+    expect(board.total).toBe(2);
   });
 
   it("scopes by country, keymode and week, and pages the ranking", async () => {

@@ -12,6 +12,7 @@ import { calculateManiaStarRating } from "../dan/mania-star-rating.js";
 import { calculateManiaPp, getManiaPpModMultiplier, type ManiaPpCounts } from "../dan/mania-pp.js";
 import { readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
+import { CHART_FAMILY_VERSION } from "./chart-families.js";
 import { loadPlayerSkillScoreDetails } from "./player-skill-score-details.js";
 import {
   buildPlayerSkillPlay,
@@ -751,6 +752,8 @@ export interface UnratedPlaysSnapshot {
 interface BoardRow {
   user: UnratedPlaysUser;
   beatmapId: number;
+  /** The chart this play is evidence for: its verified family, else the beatmap itself. */
+  chartKey: string;
   keyCount: number;
   rate: number;
   rateMod: string | null;
@@ -779,6 +782,16 @@ function rateModOf(mods: string[] | null, rate: number): string | null {
   return rate > 1 ? "DT" : "HT";
 }
 
+/**
+ * Same grouping as the skill ratings' evidence rule: a chart's note-verified
+ * family stands in for its beatmap id, so a reupload (a rate edit, or the
+ * chart with a few notes slipped into the intro) is the same chart on the
+ * board. Invert plays stay apart from the original structure.
+ */
+export function chartKeyOf(keyCount: number, beatmapId: number, family: string | null, inverse: boolean): string {
+  return `${keyCount}:${family ?? `beatmap:${beatmapId}`}:${inverse}`;
+}
+
 const boardByDb = new WeakMap<Db, BoardMemory>();
 const boardBuildByDb = new WeakMap<Db, Promise<BoardMemory>>();
 
@@ -786,12 +799,14 @@ async function buildBoard(db: Db): Promise<BoardMemory> {
   const rows = (await exec(
     db,
     `select p.user_id as user_id, p.beatmap_id as beatmap_id, p.key_count as key_count, p.rate as rate,
-            p.mods_json as mods_json, p.accuracy as accuracy, p.played_at as played_at, p.score_id as score_id,
-            p.reason as reason, p.pp as pp, p.msd as msd, p.dan as dan, p.dan_side as dan_side, p.dan_label as dan_label,
+            p.inverse as inverse, p.mods_json as mods_json, p.accuracy as accuracy, p.played_at as played_at,
+            p.score_id as score_id, p.reason as reason, p.pp as pp, p.msd as msd, p.dan as dan,
+            p.dan_side as dan_side, p.dan_label as dan_label, f.family_key as family_key,
             u.username as username, u.avatar_url as avatar_url,
             u.country_code as country_code, u.global_rank as global_rank
      from unrated_plays p
-     join users u on u.user_id = p.user_id`,
+     join users u on u.user_id = p.user_id
+     left join beatmap_chart_families f on f.beatmap_id = p.beatmap_id and f.version = ${CHART_FAMILY_VERSION}`,
   )).rows;
   const board: BoardRow[] = [];
   const users = new Map<number, UnratedPlaysUser>();
@@ -815,10 +830,13 @@ async function buildBoard(db: Db): Promise<BoardMemory> {
     const playedAt = row.played_at == null ? null : String(row.played_at);
     const playedAtMs = playedAt ? Date.parse(playedAt) : Number.NaN;
     const dan = row.dan == null ? null : Number(row.dan);
+    const beatmapId = Number(row.beatmap_id);
+    const keyCount = Number(row.key_count);
     board.push({
       user,
-      beatmapId: Number(row.beatmap_id),
-      keyCount: Number(row.key_count),
+      beatmapId,
+      chartKey: chartKeyOf(keyCount, beatmapId, typeof row.family_key === "string" ? row.family_key : null, Boolean(Number(row.inverse))),
+      keyCount,
       rate,
       rateMod: rateModOf(mods, rate),
       mods,
@@ -882,9 +900,10 @@ function compareByValue<T extends { accuracy: number | null; playedAtMs?: number
  * The board's one-row-per-player-per-chart rule, decided by the number being
  * sorted on: the best pp play on a chart and its best MSD play are often two
  * different scores (a DT play usually wins MSD and loses pp), so each sort
- * picks its own. Rows with no value on that axis are not ranked by it.
+ * picks its own. A chart is its `chartKey`, so reuploads of one chart share a
+ * row. Rows with no value on that axis are not ranked by it.
  */
-export function selectBoardRows<T extends { user: { id: number }; beatmapId: number; accuracy: number | null; playedAtMs: number | null }>(
+export function selectBoardRows<T extends { user: { id: number }; beatmapId: number; chartKey: string; accuracy: number | null; playedAtMs: number | null }>(
   rows: T[],
   valueOf: (row: T) => number | null,
 ): T[] {
@@ -892,7 +911,7 @@ export function selectBoardRows<T extends { user: { id: number }; beatmapId: num
   const compare = compareByValue(valueOf);
   for (const row of rows) {
     if (valueOf(row) == null) continue;
-    const key = `${row.user.id}:${row.beatmapId}`;
+    const key = `${row.user.id}:${row.chartKey}`;
     const current = best.get(key);
     if (!current || compare(row, current) < 0) best.set(key, row);
   }

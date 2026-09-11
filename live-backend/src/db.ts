@@ -3240,12 +3240,25 @@ async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
       version integer not null,
       topology_key text not null,
       family_key text not null,
-      file_hash text not null
+      file_hash text not null,
+      head_key text,
+      tail_key text
     )
   `);
+  const familyColumns = (await db.execute("pragma table_info(beatmap_chart_families)")).rows.map((row) => String(row.name));
+  if (!familyColumns.includes("head_key")) await db.execute("alter table beatmap_chart_families add column head_key text");
+  if (!familyColumns.includes("tail_key")) await db.execute("alter table beatmap_chart_families add column tail_key text");
   await db.execute(`
     create index if not exists idx_beatmap_chart_families_topology
       on beatmap_chart_families(topology_key, version)
+  `);
+  await db.execute(`
+    create index if not exists idx_beatmap_chart_families_head
+      on beatmap_chart_families(head_key, version)
+  `);
+  await db.execute(`
+    create index if not exists idx_beatmap_chart_families_tail
+      on beatmap_chart_families(tail_key, version)
   `);
   await db.execute(`
     create table if not exists beatmap_osu_files (
