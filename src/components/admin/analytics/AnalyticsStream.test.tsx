@@ -52,6 +52,8 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     rankingsAxis: null,
     rankingsSide: null,
     rankingsSkillset: null,
+    rankingsSort: null,
+    rankingsRange: null,
     profileUsername: null,
     replayPlayer: null,
     replayScoreId: null,

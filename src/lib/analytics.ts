@@ -6,6 +6,11 @@ import {
 import { getMapsPageviewProperties } from "./analytics-maps";
 import { getSkinDetailPageviewProperties, getSkinsPageviewProperties } from "./analytics-skins";
 import {
+  parseUnratedPlaysKeys,
+  parseUnratedPlaysRange,
+  parseUnratedPlaysSort,
+} from "./unrated-plays";
+import {
   DEFAULT_DAN_SKILLSET,
   DEFAULT_LEADERBOARD_AXIS,
   parseDanSide,
@@ -230,16 +235,16 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     // the path alone cannot tell a shelf from the showcase wall.
     Object.assign(props, getCollectionsPageviewProperties(params));
   } else if (pathname === "/rankings") {
-    // Three boards share the path - the pp table, the MSD skill leaderboard
-    // and the dan one - so without the tab the feed cannot tell them apart.
-    // Every one of these params gets stripped from the URL at its default, so
-    // they are normalized rather than read raw: an absent tab is the
-    // Performance board, not an unknown one.
+    // Four boards share the path - the pp table, the MSD skill leaderboard,
+    // the dan one and the unrated plays list - so without the tab the feed
+    // cannot tell them apart. Every one of these params gets stripped from the
+    // URL at its default, so they are normalized rather than read raw: an
+    // absent tab is the Performance board, not an unknown one.
     const page = params.get("page");
     if (page) props.rankings_page = page;
     const tab = parseLeaderboardTab(params.get("tab"));
     props.rankings_tab = tab;
-    if (tab !== "pp") {
+    if (tab === "skills" || tab === "dan") {
       props.rankings_keys = String(parseLeaderboardKeys(params.get("keys")));
     }
     if (tab === "skills") {
@@ -247,6 +252,12 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     } else if (tab === "dan") {
       props.rankings_side = parseDanSide(params.get("side"));
       props.rankings_skillset = parseDanSkillset(params.get("skillset")) ?? DEFAULT_DAN_SKILLSET;
+    } else if (tab === "unrated") {
+      // The unrated board's keymode has its own default ("all", every
+      // keymode), so the leaderboard parser would read an unset one as 4K.
+      props.rankings_keys = String(parseUnratedPlaysKeys(params.get("keys")));
+      props.rankings_sort = parseUnratedPlaysSort(params.get("sort"));
+      props.rankings_range = parseUnratedPlaysRange(params.get("range"));
     }
   } else if (pathname === "/farm-helper") {
     const user = params.get("user");

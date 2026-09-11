@@ -35,6 +35,8 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     rankingsAxis: null,
     rankingsSide: null,
     rankingsSkillset: null,
+    rankingsSort: null,
+    rankingsRange: null,
     profileUsername: null,
     replayPlayer: null,
     replayScoreId: null,
@@ -247,7 +249,7 @@ describe("describeAnalyticsEvent", () => {
     });
   });
 
-  it("tells the three rankings boards apart", () => {
+  it("tells the four rankings boards apart", () => {
     expect(describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "pp", selectedCountry: "CR", rankingsPage: "3" }))).toMatchObject({
       kind: "ranking",
       verb: "browsed",
@@ -265,6 +267,14 @@ describe("describeAnalyticsEvent", () => {
     expect(
       describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "dan", rankingsKeys: "6", rankingsSide: "rc", rankingsSkillset: "overall" })),
     ).toMatchObject({ subject: "the dan leaderboard", detail: "6K Regular" });
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "unrated", rankingsKeys: "7", rankingsSort: "msd", rankingsRange: "week", selectedCountry: "CR" })),
+    ).toMatchObject({ kind: "ranking", subject: "the unrated plays", detail: "7K · MSD · this week · Costa Rica" });
+    // That board mixes keymodes and spans all time by default, so neither is
+    // named; the sort always is.
+    expect(
+      describeAnalyticsEvent(row({ path: "/rankings", rankingsTab: "unrated", rankingsKeys: "all", rankingsSort: "pp", rankingsRange: "all" })),
+    ).toMatchObject({ subject: "the unrated plays", detail: "PP" });
   });
 
   it("calls a typed maps query a search and keeps the facets as context", () => {

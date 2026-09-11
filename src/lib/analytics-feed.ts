@@ -35,6 +35,8 @@ export interface AnalyticsRecentEventRow {
   rankingsAxis: string | null;
   rankingsSide: string | null;
   rankingsSkillset: string | null;
+  rankingsSort: string | null;
+  rankingsRange: string | null;
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
@@ -268,16 +270,24 @@ function describeMaps(row: AnalyticsRecentEventRow): AnalyticsActivity {
   };
 }
 
+/* The unrated board sorts on three numbers, named the way its own control
+   names them. The default sort still rides the line: which number the board is
+   ranked on is the whole shape of it, not an incidental facet. */
+const RANKINGS_UNRATED_SORT_LABELS: Record<string, string> = { pp: "PP", msd: "MSD", dan: "Dan" };
+
 /* The dan board's two ladders, named the way its own control names them. */
 const RANKINGS_SIDE_LABELS: Record<string, string> = { rc: "Regular", ln: "LN" };
 
-/* Three boards sit behind /rankings - the pp table, the MSD skill leaderboard
-   and the dan one - so the path alone cannot say which one a visitor is on.
+/* Four boards sit behind /rankings - the pp table, the MSD skill leaderboard,
+   the dan one and the unrated plays list - so the path alone cannot say which
+   one a visitor is on.
    The tab and its facets ride in the pageview; a row captured before they were
    recorded has none of them, and keeps the old undifferentiated line. */
 function describeRankings(row: AnalyticsRecentEventRow, scope: string | null): AnalyticsActivity {
   const page = row.rankingsPage ? `page ${row.rankingsPage}` : null;
-  const keys = row.rankingsKeys ? `${row.rankingsKeys}K` : null;
+  // The unrated board's keymode can be "all", which is a board-wide default
+  // rather than a keymode, so it is left off the line like any other default.
+  const keys = row.rankingsKeys && row.rankingsKeys !== "all" ? `${row.rankingsKeys}K` : null;
   if (row.rankingsTab === "skills") {
     const axis = row.rankingsAxis ? skillAxisMeta(row.rankingsAxis)?.label ?? row.rankingsAxis : null;
     return {
@@ -297,6 +307,16 @@ function describeRankings(row: AnalyticsRecentEventRow, scope: string | null): A
       verb: "browsed",
       subject: "the dan leaderboard",
       detail: joinDetail([[keys, side].filter(Boolean).join(" "), skillset, scope, page]),
+    };
+  }
+  if (row.rankingsTab === "unrated") {
+    const sort = row.rankingsSort ? RANKINGS_UNRATED_SORT_LABELS[row.rankingsSort] ?? row.rankingsSort : null;
+    const range = row.rankingsRange === "week" ? "this week" : null;
+    return {
+      kind: "ranking",
+      verb: "browsed",
+      subject: "the unrated plays",
+      detail: joinDetail([keys, sort, range, scope, page]),
     };
   }
   return {

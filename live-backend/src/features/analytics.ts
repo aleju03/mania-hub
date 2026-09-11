@@ -159,6 +159,8 @@ export interface AnalyticsFeedEvent {
   rankingsAxis: string | null;
   rankingsSide: string | null;
   rankingsSkillset: string | null;
+  rankingsSort: string | null;
+  rankingsRange: string | null;
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
@@ -1351,6 +1353,8 @@ export function buildMonitorFeedEvent(displayTimeZone: string, record: Analytics
     rankingsAxis: str("rankings_axis"),
     rankingsSide: str("rankings_side"),
     rankingsSkillset: str("rankings_skillset"),
+    rankingsSort: str("rankings_sort"),
+    rankingsRange: str("rankings_range"),
     profileUsername: str("profile_username"),
     replayPlayer: str("replay_player"),
     replayScoreId: str("replay_score_id"),
