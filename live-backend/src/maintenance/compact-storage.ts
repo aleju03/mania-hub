@@ -13,6 +13,7 @@ import { packJson, unpackJson } from "../shared/compressed-json.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
 import { compactMapsFarmedOverlay } from "./maps-farmed-compaction.js";
 import { compressPlayerSkillPlays } from "./player-skill-compaction.js";
+import { formatBytes, vacuumIntoAndSwap } from "./vacuum-into.js";
 
 interface CompactOptions {
   batchSize: number;
@@ -83,12 +84,14 @@ console.log(`api_call_targets: pruned ${apiTargets.pruned} orphan targets`);
 await releaseMemory();
 
 if (options.vacuum) {
-  console.log("Running VACUUM. Keep the backend stopped until this finishes.");
-  await db.execute("vacuum");
-  console.log("VACUUM finished.");
+  console.log("Rebuilding the database with VACUUM INTO. Keep the backend stopped until this finishes.");
+  const rebuilt = await vacuumIntoAndSwap(db, config.databaseUrl);
+  console.log(`VACUUM finished: ${formatBytes(rebuilt.bytesBefore)} -> ${formatBytes(rebuilt.bytesAfter)}.`);
+  console.log(`The previous file was kept at ${rebuilt.retiredPath}; delete it once the backend is back up on the new one.`);
+} else {
+  db.close();
 }
-
-db.close();
+journalDb.close();
 
 async function compactProfileSnapshots(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
   const result = { scanned: 0, compacted: 0, failed: 0 };
@@ -439,12 +442,13 @@ function parseUnknownJson(value: unknown): unknown | null {
   return unpackJson<unknown | null>(value, null);
 }
 
-// VACUUM rebuilds the whole database into a second copy before swapping it in,
-// so it needs the file's size over again — once where SQLite puts its temp
-// database, and once in the data directory. SQLite picks the temp location from
-// SQLITE_TMPDIR, TMPDIR, /var/tmp, /usr/tmp, /tmp, then the cwd, and on hosts
-// where /tmp is a RAM-backed tmpfs that copy would land in memory, so the
-// recommended invocation pins SQLITE_TMPDIR at the data directory.
+// The rebuild (VACUUM INTO, see vacuum-into.ts) writes a second copy of the
+// database next to the original, at most the original's size, and the old file
+// stays beside it until someone deletes it, so the data directory needs the
+// file's size over again. The index sorts the rebuild runs spill to SQLite's
+// temp directory (SQLITE_TMPDIR, TMPDIR, /var/tmp, /usr/tmp, /tmp, then the
+// cwd), and on hosts where /tmp is a RAM-backed tmpfs that would be memory, so
+// the recommended invocation pins SQLITE_TMPDIR at the data directory.
 async function assertVacuumHeadroom(databaseUrl: string, force: boolean): Promise<void> {
   if (!databaseUrl.startsWith("file:")) return;
   const dbPath = resolve(databaseUrl.slice("file:".length));
@@ -463,7 +467,7 @@ async function assertVacuumHeadroom(databaseUrl: string, force: boolean): Promis
       problems.push(`  ${target}: ${formatBytes(free)} free, needs ${formatBytes(required)}`);
     }
     if (target === tempDir && Number(stats.type) === TMPFS_MAGIC) {
-      console.warn(`Warning: ${tempDir} is a RAM-backed tmpfs and SQLite would build the ${formatBytes(dbBytes)} temp database there.`);
+      console.warn(`Warning: ${tempDir} is a RAM-backed tmpfs and SQLite would spill the rebuild's sort files there.`);
     }
   }
 
@@ -475,18 +479,6 @@ async function assertVacuumHeadroom(databaseUrl: string, force: boolean): Promis
     process.exit(1);
   }
   console.warn("--force was passed, continuing anyway.");
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "unknown size";
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function readOptions(args: string[]): CompactOptions {
