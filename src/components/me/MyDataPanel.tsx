@@ -30,6 +30,8 @@ import {
 import { openLiveEventSource } from "../../lib/live-backend";
 import { SkillBreakdownBody } from "../player/SkillBreakdown";
 import { DanEvidenceModal } from "../player/DanEvidenceModal";
+import { SkillPlaysExplorer } from "../player/SkillPlaysExplorer";
+import { useNoDans } from "../../store";
 import { qualifyingSkillModes, skillRatingAccent } from "../../lib/skill-axes";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
@@ -167,6 +169,9 @@ export function MyDataPanel() {
   const auth = useAuth();
   const location = useLocation();
   const viewer = auth.viewer;
+  const noDans = useNoDans();
+  // Keep the feed tab and its pagination intact while exploring skill plays.
+  const [skillPlaysView, setSkillPlaysView] = useState<"msd" | "dan" | null>(null);
 
   const [summary, setSummary] = useState<MyDataSummary | null>(null);
   const [feed, setFeed] = useState<MyDataTrackedPlay[]>([]);
@@ -346,6 +351,17 @@ export function MyDataPanel() {
   }, [viewer, summary?.tracked, trackedLimit, trackedPageIndex]);
 
   const skillModes = useMemo(() => qualifyingSkillModes(skills), [skills]);
+  const canExploreSkills = skills?.status === "ready" && skillModes.length > 0;
+  const activeSkillPlaysView = canExploreSkills && !(noDans && skillPlaysView === "dan") ? skillPlaysView : null;
+  useEffect(() => {
+    setSkillPlaysView(null);
+  }, [viewer?.id]);
+  useEffect(() => {
+    if (!canExploreSkills || noDans) {
+      setSkillPlaysView((view) => !canExploreSkills || view === "dan" ? null : view);
+    }
+    if (noDans) setSelectedDan(null);
+  }, [canExploreSkills, noDans]);
   const [skillModeKey, setSkillModeKey] = useState<number | null>(null);
   const activeSkillMode = useMemo(
     () => (skillModes.length > 0 ? skillModes.find((mode) => mode.keyCount === skillModeKey) ?? skillModes[0] : null),
@@ -530,28 +546,44 @@ export function MyDataPanel() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="lg:col-span-2">
               <div className="mb-2 space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <FeedTab active={feedTab === "tracked"} onClick={() => setFeedTab("tracked")}>{t`Tracked`}</FeedTab>
-                  <FeedTab active={feedTab === "top"} onClick={() => setFeedTab("top")}>{t`Top plays`}</FeedTab>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <FeedTab active={!activeSkillPlaysView && feedTab === "tracked"} onClick={() => { setSkillPlaysView(null); setFeedTab("tracked"); }}>{t`Tracked`}</FeedTab>
+                  <FeedTab active={!activeSkillPlaysView && feedTab === "top"} onClick={() => { setSkillPlaysView(null); setFeedTab("top"); }}>{t`Top plays`}</FeedTab>
+                  {canExploreSkills ? (
+                    <>
+                      <FeedTab active={activeSkillPlaysView === "msd"} onClick={() => setSkillPlaysView("msd")}>{t`MSD plays`}</FeedTab>
+                      {!noDans ? <FeedTab active={activeSkillPlaysView === "dan"} onClick={() => setSkillPlaysView("dan")}>{t`Dan plays`}</FeedTab> : null}
+                    </>
+                  ) : null}
                 </div>
-                <FeedControls
-                  tab={feedTab}
-                  query={feedQuery}
-                  keyFilter={keyFilter}
-                  keyOptions={keyFilterOptions}
-                  modFilter={modFilter}
-                  archiveFilter={archiveFilter}
-                  trackedSort={trackedSort}
-                  topSort={topSort}
-                  onQueryChange={setFeedQuery}
-                  onKeyFilterChange={setKeyFilter}
-                  onModFilterChange={setModFilter}
-                  onArchiveFilterChange={setArchiveFilter}
-                  onTrackedSortChange={setTrackedSort}
-                  onTopSortChange={setTopSort}
-                />
+                {!activeSkillPlaysView ? (
+                  <FeedControls
+                    tab={feedTab}
+                    query={feedQuery}
+                    keyFilter={keyFilter}
+                    keyOptions={keyFilterOptions}
+                    modFilter={modFilter}
+                    archiveFilter={archiveFilter}
+                    trackedSort={trackedSort}
+                    topSort={topSort}
+                    onQueryChange={setFeedQuery}
+                    onKeyFilterChange={setKeyFilter}
+                    onModFilterChange={setModFilter}
+                    onArchiveFilterChange={setArchiveFilter}
+                    onTrackedSortChange={setTrackedSort}
+                    onTopSortChange={setTopSort}
+                  />
+                ) : null}
               </div>
-              {feedTab === "tracked" ? (
+              {activeSkillPlaysView ? (
+                <SkillPlaysExplorer
+                  key={viewer.id}
+                  userId={viewer.id}
+                  username={username}
+                  modes={skillModes}
+                  view={activeSkillPlaysView}
+                />
+              ) : feedTab === "tracked" ? (
                 feed.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-osu-b3/30 bg-osu-b4/40 p-8 text-center text-[13px] text-osu-f1">
                     {hasActiveFeedControls
@@ -619,7 +651,7 @@ export function MyDataPanel() {
                   onSelectDan={activeSkillMode ? (side) => setSelectedDan({ side, keyCount: activeSkillMode.keyCount }) : undefined}
                 />
               </InsightCard>
-              {selectedDan ? (
+              {selectedDan && !noDans ? (
                 <DanEvidenceModal
                   userId={viewer.id}
                   username={username}

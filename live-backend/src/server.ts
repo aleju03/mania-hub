@@ -392,6 +392,12 @@ export async function createApp() {
         })
         .catch((error) => logWarn("skin_view_count_backfill_failed", errorContext(error)));
     }
+    // Rows captured before the insert started stripping properties that are
+    // already stored in columns still carry both copies. One batched pass
+    // reclaims that, behind a marker so it only ever runs once per deploy of a
+    // new strip set, and on the analytics store's own connection.
+    void analytics.compactStoredProps()
+      .catch((error) => logWarn("analytics_props_compaction_failed", errorContext(error)));
   }
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db, journalDb, journalWriteDb);

@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import { calculateStableAccuracy, getManiaKeyModCount, getScoreHitCounts } from "../shared/score.js";
 import type { OsuMod, OsuScoreStatistics } from "../shared/types.js";
 import { loadMyDataBeatmapRef, type MyDataBeatmapRef } from "./my-data.js";
@@ -242,7 +243,7 @@ async function loadPlayDiet(db: Db, userId: number): Promise<MyDataDietMode[]> {
       order by analysis_version desc limit 1`,
     [userId],
   )).rows[0];
-  const stored = parseJson<{ plays?: StoredDietPlay[] } | null>(String(row?.plays_json ?? ""), null);
+  const stored = unpackJson<{ plays?: StoredDietPlay[] } | null>(row?.plays_json, null);
   return Array.isArray(stored?.plays) ? summarizePlayDiet(stored.plays) : [];
 }
 

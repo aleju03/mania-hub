@@ -4,6 +4,7 @@ import { Worker } from "node:worker_threads";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { deleteInBatches, exec } from "./db.js";
+import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./features/activity.js";
 import { pruneAvatarAccents } from "./features/avatar-accents.js";
 import { pruneOsuProxyCache } from "./features/osu-proxy-cache.js";
 import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "./features/player-profiles.js";
@@ -146,6 +147,33 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     avatarAccents: await prune(() => pruneAvatarAccents(db)),
     // osu! proxy response cache rows past their stale window.
     osuProxyCache: await prune(() => pruneOsuProxyCache(db)),
+    // A profile section (About, Recent) is a two-minute cache of an osu! API
+    // response that nothing ever deleted, so every profile anyone has opened
+    // since launch was still on disk. A row past the window is re-fetched on
+    // the next view exactly like a stale one, which is what happens to most of
+    // them anyway; keeping a week means a profile that gets looked at
+    // occasionally never pays the fetch twice in a row.
+    profileSections: await prune(() => deleteInBatches(db, "profile_section_cache", "fetched_at < ?", [daysAgo(PROFILE_SECTION_CACHE_RETENTION_DAYS)])),
+    // Skill vectors from a previous analysis version, once the same beatmap has
+    // a settled row at the current one. Nothing reads a superseded vector: the
+    // activity surfaces and the search index join on the current version, and
+    // the backfill sweep's candidate query already skips any beatmap whose
+    // current-version row is ready or unavailable, so these are exactly the
+    // rows it would never pick up. An old row whose replacement is still
+    // missing, failed or running stays, because that one is the sweep's
+    // candidate.
+    supersededSkillVectors: await prune(() => deleteInBatches(
+      db,
+      "beatmap_skill_vectors",
+      `analysis_version < ?
+         and exists (
+           select 1 from beatmap_skill_vectors current
+           where current.beatmap_id = beatmap_skill_vectors.beatmap_id
+             and current.analysis_version = ?
+             and current.status in ('ready', 'unavailable')
+         )`,
+      [ACTIVITY_SKILL_ANALYSIS_VERSION, ACTIVITY_SKILL_ANALYSIS_VERSION],
+    )),
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};
@@ -213,6 +241,11 @@ export const NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS = 365;
 // log of every game ever played does not become permanent. The board itself is
 // durable and unaffected.
 export const BLITZ_STREAK_RUN_LOG_RETENTION_DAYS = 45;
+
+// A cached profile section is worth nothing to anyone after this: the payload
+// is already stale by its own two-minute freshness window, and it is only kept
+// past that to spare a repeat viewer one osu! fetch.
+export const PROFILE_SECTION_CACHE_RETENTION_DAYS = 7;
 
 // Parked jobs whose only reason to exist was "someone is looking at this
 // profile right now". They are enqueued from the profile read path alone, and
@@ -721,7 +754,9 @@ function normalizeCell(value: unknown): TableCell {
       ? Number(value)
       : value.toString();
   }
-  if (value instanceof Uint8Array) return `<blob: ${value.byteLength} bytes>`;
+  // libsql surfaces a blob as an ArrayBuffer, so the Uint8Array check alone let
+  // the compressed JSON columns render as "[object ArrayBuffer]".
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer) return `<blob: ${value.byteLength} bytes>`;
   return String(value);
 }
 

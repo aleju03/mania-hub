@@ -12,6 +12,7 @@ import { compactScoreForStorage, compactScoresForStorage, persistScoresDisplayMe
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
 import { compactMapsFarmedOverlay } from "./maps-farmed-compaction.js";
+import { compressPlayerSkillPlays } from "./player-skill-compaction.js";
 
 interface CompactOptions {
   batchSize: number;
@@ -55,6 +56,10 @@ await releaseMemory();
 
 const compressedSnapshots = await compressProfileSnapshots(options.batchSize);
 console.log(`profile_snapshots (gzip): compressed ${compressedSnapshots.compressed}, failed ${compressedSnapshots.failed}, scanned ${compressedSnapshots.scanned}`);
+await releaseMemory();
+
+const skillPlays = await compressPlayerSkillPlays(db, options.batchSize, releaseMemory);
+console.log(`player_skill_ratings (gzip): compressed ${skillPlays.compressed}, failed ${skillPlays.failed}, scanned ${skillPlays.scanned}`);
 await releaseMemory();
 
 const topPlays = await compactTopPlayEvents(options.batchSize);
@@ -410,6 +415,7 @@ async function compressProfileSnapshots(batchSize: number): Promise<{ scanned: n
 
   return result;
 }
+
 
 function parseScores(value: unknown): OscScore[] | null {
   const parsed = parseUnknownJson(value);

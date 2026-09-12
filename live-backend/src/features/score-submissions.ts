@@ -56,6 +56,67 @@ export type ScoreSubmissionResult =
   | { ok: false; reason: ScoreSubmissionFailure; owner?: string | null }
   | { ok: false; reason: "rate_limited"; rate: Extract<RateLimitResult, { allowed: false }> };
 
+export const SCORE_IMPORT_JOB = "import_score";
+
+export type ScoreImportResult = Exclude<ScoreSubmissionResult, { reason: "rate_limited" }>
+  | { ok: false; reason: "osu_unavailable" | "failed" };
+
+export interface ScoreImportPayload {
+  userId: number;
+  link: string;
+  result?: ScoreImportResult;
+}
+
+export interface ScoreImportStatus {
+  jobId: number;
+  status: "queued" | "running" | "done";
+  result?: ScoreImportResult;
+}
+
+/** Only local reads and queue writes belong on the request path. */
+export async function enqueueScoreImport(
+  db: Db,
+  queue: JobQueue,
+  userId: number,
+  link: string,
+  beforeEnqueue: () => RateLimitResult,
+): Promise<ScoreSubmissionResult | { ok: true; queued: true; jobId: number }> {
+  const parsed = parseScoreLink(link);
+  if (!parsed) return { ok: false, reason: "invalid_link" };
+  if (parsed === "wrong_mode") return { ok: false, reason: "not_mania" };
+  if (await isUserKnownInactive(db, userId)) return { ok: false, reason: "player_not_found" };
+  const stored = await findTrackedScoreById(db, userId, parsed);
+  if (stored) return { ok: true, alreadyTracked: true, countries: stored.countries, play: stored.play };
+  const space = parsed.explicitSpace ? parsed.spaces[0] : "auto";
+  const dedupeKey = `score-import:${userId}:${space}:${parsed.scoreId}`;
+  return withWriteTurn(db, async () => {
+    const existing = (await exec(db, "select id, status from jobs where dedupe_key = ?", [dedupeKey])).rows[0];
+    // Repeated pastes must not spend another admission token or reset backoff.
+    if (!existing || existing.status === "done") {
+      const gate = beforeEnqueue();
+      if (!gate.allowed) return { ok: false, reason: "rate_limited", rate: gate };
+      await queue.enqueue(SCORE_IMPORT_JOB, dedupeKey, { userId, link: link.trim() } satisfies ScoreImportPayload, { priority: 120, replaceDone: true });
+    }
+    const row = existing ?? (await exec(db, "select id from jobs where dedupe_key = ?", [dedupeKey])).rows[0];
+    return { ok: true, queued: true, jobId: Number(row.id) };
+  });
+}
+
+export async function getScoreImportStatuses(db: Db, userId: number, jobIds: number[]): Promise<ScoreImportStatus[]> {
+  const ids = [...new Set(jobIds)].slice(0, 50);
+  if (ids.length === 0) return [];
+  const rows = (await exec(db, `select id, status, payload_json from jobs where type = ? and id in (${ids.map(() => "?").join(",")})`, [SCORE_IMPORT_JOB, ...ids])).rows;
+  return rows.flatMap((row): ScoreImportStatus[] => {
+    const payload = parseJson<ScoreImportPayload | null>(String(row.payload_json), null);
+    if (payload?.userId !== userId) return [];
+    if (row.status === "done") {
+      return [{ jobId: Number(row.id), status: "done", result: payload.result ?? { ok: false, reason: "failed" } }];
+    }
+    // The queue's failed state means a retry is booked, not a final refusal.
+    return [{ jobId: Number(row.id), status: row.status === "running" ? "running" : "queued" }];
+  });
+}
+
 interface ParsedScoreLink {
   scoreId: number;
   // Which id spaces to ask, in order. A pasted URL names its space; a bare
@@ -111,7 +172,7 @@ export async function submitMissingScore(
   // Charged immediately before the first osu! fetch, so a submission the
   // stored rows can answer (or that fails local validation) never spends the
   // shared osu!-budget buckets. A disallow aborts with its RateLimitResult.
-  options: { beforeOsuFetch?: () => RateLimitResult } = {},
+  options: { beforeOsuFetch?: () => RateLimitResult; signal?: AbortSignal } = {},
 ): Promise<ScoreSubmissionResult> {
   if (await isUserKnownInactive(db, targetUserId)) return { ok: false, reason: "player_not_found" };
   const parsed = parseScoreLink(link);
@@ -175,6 +236,9 @@ export async function submitMissingScore(
     return { ok: false, reason: "score_not_found" };
   }
 
+  options.signal?.throwIfAborted();
+  // A player can be removed while the upstream fetch is in flight.
+  if (await isUserKnownInactive(db, targetUserId)) return { ok: false, reason: "player_not_found" };
   const score: OscScore = { ...match, ruleset_id: 3 };
   const identity = getScoreIdentity(score);
   const existing = await trackedCountriesForIdentity(db, identity);

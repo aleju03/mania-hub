@@ -341,7 +341,8 @@ function classifyLimiterLane(caller: string, path: string): LimiterLane {
   if (caller === "osc_json_backfill") return "bulk";
   if (path.startsWith("/scores/") && path.endsWith("/download")) return "interactive";
   if (
-    caller.startsWith("api:")
+    caller === "score-submission"
+    || caller.startsWith("api:")
     || caller.startsWith("admin:")
     || caller.startsWith("get")
     || caller.startsWith("search")

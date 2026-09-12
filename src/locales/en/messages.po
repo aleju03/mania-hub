@@ -9018,6 +9018,10 @@ msgstr "No mods in top plays"
 msgid "No nearby players have farmed this yet."
 msgstr "No nearby players have farmed this yet."
 
+#: src/components/ui/SearchInput.tsx
+msgid "No osu! player named \"{trimmedQuery}\""
+msgstr "No osu! player named \"{trimmedQuery}\""
+
 #: src/routes/player/$username.tsx
 msgid "No pattern signal for this keymode yet."
 msgstr "No pattern signal for this keymode yet."
@@ -9406,6 +9410,10 @@ msgstr "Not enough room"
 #: src/routes/farm-helper.tsx
 msgid "not found"
 msgstr "not found"
+
+#: src/components/ui/SearchInput.tsx
+msgid "Not here? Search osu! for \"{trimmedQuery}\""
+msgstr "Not here? Search osu! for \"{trimmedQuery}\""
 
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -12297,6 +12305,7 @@ msgstr "Send to {0}"
 #~ msgid "Send update"
 #~ msgstr "Send update"
 
+#: src/components/player/AddScoreModal.tsx
 #: src/routes/report.tsx
 msgid "Sending..."
 msgstr "Sending..."

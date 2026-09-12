@@ -191,9 +191,6 @@ create table if not exists profile_snapshots (
   refresh_error text
 );
 
-create index if not exists idx_profile_snapshots_username_key
-  on profile_snapshots(username_key);
-
 create table if not exists profile_section_cache (
   cache_key text primary key,
   user_id integer not null,
@@ -623,7 +620,6 @@ create index if not exists idx_score_events_passed_time on score_events(ended_at
 create index if not exists idx_score_events_received_at on score_events(received_at);
 create index if not exists idx_country_beatmap_scores_rank on country_beatmap_scores(country, beatmap_id, lane_key, total_score desc);
 create index if not exists idx_country_beatmap_score_pbs_lookup on country_beatmap_score_pbs(country, beatmap_id, lane_key, user_id, ended_at desc, total_score desc);
-create index if not exists idx_country_beatmap_score_pb_state_lookup on country_beatmap_score_pb_state(country, beatmap_id, lane_key, user_id);
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_top_play_events_time on top_play_events(detected_at desc);
@@ -666,7 +662,6 @@ create index if not exists idx_beatmap_skill_vectors_status_updated on beatmap_s
 create index if not exists idx_player_activity_refs_user_day on player_activity_score_refs(country, user_id, day, ended_at);
 create index if not exists idx_player_activity_refs_user_time on player_activity_score_refs(user_id, ended_at desc);
 create index if not exists idx_player_activity_refs_day on player_activity_score_refs(day);
-create index if not exists idx_player_activity_days_user_day on player_activity_days(country, user_id, day);
 create index if not exists idx_player_activity_days_user_day_all on player_activity_days(user_id, day);
 create index if not exists idx_player_activity_days_user_year on player_activity_days(country, user_id, substr(day, 1, 4));
 create index if not exists idx_player_activity_days_day on player_activity_days(day);

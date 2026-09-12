@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
 import {
@@ -1038,8 +1039,8 @@ export async function decoratePlayerSkillBreakdown(
     "select plays_json from player_skill_ratings where user_id = ? and analysis_version = ?",
     [userId, PLAYER_SKILLS_VERSION],
   )).rows[0];
-  const storedPlays = parseJson<{ plays?: Array<{ beatmapId?: number; rate?: number; goal?: number; patterns?: string[]; source?: string }> }>(
-    String(playsRow?.plays_json ?? ""),
+  const storedPlays = unpackJson<{ plays?: Array<{ beatmapId?: number; rate?: number; goal?: number; patterns?: string[]; source?: string }> }>(
+    playsRow?.plays_json,
     {},
   ).plays ?? [];
   // The population curves are built from top plays only, so the subject's

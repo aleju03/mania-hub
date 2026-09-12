@@ -4,6 +4,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { logInfo, logWarn } from "../logger.js";
 import { nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import type { OsuScoreStatistics } from "../shared/types.js";
 import { isMsdSupportedKeyCount } from "../dan/msd.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
@@ -594,25 +595,25 @@ export async function runUnratedPlaysSweepChunk(
   const empty = { nextCursor, scanned: 0, players: 0, rows: 0, computed: 0, cached: 0, deferred: 0, unavailable: 0, calcRuns: 0, done };
   if (page.length === 0) return empty;
 
-  const ineligible = await loadIneligibleChartIds(db);
-  const ineligibleList = ineligible.map((id) => String(id)).join(",");
-  const poolArm = ineligibleList
-    ? `or exists (
-           select 1 from json_each(json_extract(plays_json, '$.plays')) as play
-           where json_extract(play.value, '$.beatmapId') in (${ineligibleList}))
-         or exists (
-           select 1 from json_each(coalesce(json_extract(plays_json, '$.danOnly'), '[]')) as play
-           where json_extract(play.value, '$.beatmapId') in (${ineligibleList}))`
-    : "";
+  const ineligible = new Set(await loadIneligibleChartIds(db));
+  // plays_json is a gzip blob, so the filter runs in JS over the page's rows
+  // rather than as a json_each predicate SQLite could evaluate.
   const matches = await selectRowsByIntegerSet(
     db,
-    `select distinct user_id from player_skill_ratings
+    `select user_id, plays_json from player_skill_ratings
      where status = 'ready' and plays_json is not null
-       and (json_array_length(coalesce(json_extract(plays_json, '$.vibroExcluded'), '[]')) > 0 ${poolArm})
        and user_id in`,
     page.map((row) => Number(row.user_id)),
   );
-  const userIds = [...new Set(matches.map((row) => Number(row.user_id)))].filter((id) => Number.isSafeInteger(id) && id > 0);
+  const userIds = [...new Set(matches
+    .filter((row) => {
+      const stored = unpackJson<{ plays?: Array<{ beatmapId?: unknown }>; danOnly?: Array<{ beatmapId?: unknown }>; vibroExcluded?: unknown[] } | null>(row.plays_json, null);
+      if (Array.isArray(stored?.vibroExcluded) && stored.vibroExcluded.length > 0) return true;
+      if (ineligible.size === 0) return false;
+      return [...(Array.isArray(stored?.plays) ? stored.plays : []), ...(Array.isArray(stored?.danOnly) ? stored.danOnly : [])]
+        .some((play) => ineligible.has(Number(play?.beatmapId)));
+    })
+    .map((row) => Number(row.user_id)))].filter((id) => Number.isSafeInteger(id) && id > 0);
 
   let budget = Math.max(0, Math.floor(options.maxCalcRuns ?? MAX_CALC_RUNS_PER_CHUNK));
   const totals = { ...empty, scanned: userIds.length };

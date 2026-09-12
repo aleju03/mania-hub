@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 import {
   PLAYER_SKILLS_SEED_VERSIONS,
   PLAYER_SKILLS_VERSION,
@@ -990,7 +991,7 @@ describe("computePlayerSkillRatings", () => {
         getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network in tests"); },
       }, new JobQueue(db), { userId: 99 });
       const persisted = (await exec(db, "select plays_json from player_skill_ratings where user_id = 99")).rows[0];
-      expect(JSON.parse(String(persisted.plays_json))).toMatchObject({ plays: [], danOnly: retained.danOnly });
+      expect(unpackJson<Record<string, unknown>>(persisted.plays_json, {})).toMatchObject({ plays: [], danOnly: retained.danOnly });
 
       // A later rated pass replaces the Dan-only slot, without duplicate evidence.
       const improved = await computePlayerSkillRatings(db, failingOsu,
@@ -2949,7 +2950,7 @@ describe("computePlayerSkillsJob", () => {
       await computePlayerSkillsJob(db, jobOsu, queue, payload);
       await queue.complete(Number(followUps[0].id));
       const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 99 and analysis_version = ?", [PLAYER_SKILLS_VERSION])).rows[0];
-      expect(JSON.parse(String(row.plays_json)).plays.every((entry: { rateVibroChecked?: number }) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
+      expect(unpackJson<{ plays: Array<{ rateVibroChecked?: number }> }>(row.plays_json, { plays: [] }).plays.every((entry: { rateVibroChecked?: number }) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
       expect((await exec(db, "select id from jobs where type = 'compute_player_skills' and status = 'queued'")).rows).toHaveLength(0);
     });
   });
@@ -2998,7 +2999,7 @@ describe("computePlayerSkillsJob", () => {
       expect(rows).toHaveLength(1);
       expect(Number(rows[0].analysis_version)).toBe(PLAYER_SKILLS_VERSION);
       expect(String(rows[0].status)).toBe("ready");
-      const plays = JSON.parse(String(rows[0].plays_json)).plays as Array<{ identity: string; values: Record<string, number> }>;
+      const plays = unpackJson<{ plays: Array<{ identity: string; values: Record<string, number> }> }>(rows[0].plays_json, { plays: [] }).plays;
       expect(plays.map((entry) => entry.identity)).toContain("official:31");
       expect(plays.find((entry) => entry.identity === "official:31")?.values.Overall).toBe(20);
       const summary = JSON.parse(String(rows[0].modes_json));

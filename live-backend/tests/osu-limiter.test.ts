@@ -14,6 +14,23 @@ afterEach(async () => {
 });
 
 describe("token bucket limiter", () => {
+  it("gives pasted scores interactive priority without bypassing upstream cooldowns", async () => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(60, 45, undefined, { interactiveBurstCapacity: 4 });
+    limiter.pause(1_000, { mandated: true });
+    const order: string[] = [];
+    const background = limiter.schedule("job:enrich_user", "/users/1/mania", async () => { order.push("background"); });
+    const score = limiter.schedule("score-submission", "/scores/9001", async () => { order.push("score"); });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(order).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    await score;
+    expect(order).toEqual(["score"]);
+    await vi.advanceTimersByTimeAsync(2_000);
+    await background;
+    expect(order).toEqual(["score", "background"]);
+  });
+
   it("caps the 429 pause for interactive calls while jobs wait it out", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));

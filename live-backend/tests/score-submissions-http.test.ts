@@ -7,11 +7,13 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import * as configModule from "../src/config.js";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { createUserGoal } from "../src/features/goals.js";
-import { parseScoreLink } from "../src/features/score-submissions.js";
+import { getScoreImportStatuses, SCORE_IMPORT_JOB, parseScoreLink } from "../src/features/score-submissions.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
+import { defaultWorkerLanes, WorkerRunner } from "../src/workers.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import { getLastIngestAtMs } from "../src/live/sse.js";
@@ -32,6 +34,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  db.close();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
@@ -106,17 +110,105 @@ function context(getScoreById: (scoreId: number, space: "solo" | "legacy") => Pr
   } as never;
 }
 
-async function call(ctx: never, body: unknown) {
+async function http(ctx: never, method: string, url: string, body?: unknown) {
   const output = response();
-  await routeHttp(request("POST", "/api/score-submissions", body), output.res, ctx);
+  await routeHttp(request(method, url, body), output.res, ctx);
   const raw = output.writes.join("");
-  return {
-    status: output.res.statusCode,
-    body: raw ? JSON.parse(raw) as Record<string, unknown> : null,
-  };
+  return { status: output.res.statusCode, body: raw ? JSON.parse(raw) as Record<string, unknown> : null };
+}
+
+async function runImports(ctx: never) {
+  vi.spyOn(configModule, "readConfig").mockReturnValue({ ...configModule.readConfig(), ...(ctx as { config: configModule.Config }).config, prewarmCountries: [], mapsWarmCountries: [] });
+  const runner = new WorkerRunner(db, queue, events, (ctx as { osu: never }).osu, {} as never);
+  const lane = defaultWorkerLanes().find((entry) => entry.name === "score-import")!;
+  await (runner as unknown as { runLaneOnce: (entry: typeof lane) => Promise<void> }).runLaneOnce(lane);
+}
+
+// Exercise admission, a fresh worker, and the persisted receipt for every
+// verification case, while keeping the score assertions readable.
+async function call(ctx: never, body: unknown) {
+  const admitted = await http(ctx, "POST", "/api/score-submissions", body);
+  if (admitted.status !== 202) return admitted;
+  await runImports(ctx);
+  const receipt = await http(ctx, "GET", `/api/score-submissions?userId=${(body as { userId: number }).userId}&ids=${admitted.body?.jobId}`);
+  expect(receipt.status).toBe(200);
+  const [status] = receipt.body?.statuses as Awaited<ReturnType<typeof getScoreImportStatuses>>;
+  expect(status.status).toBe("done");
+  const result = status.result!;
+  return result.ok
+    ? { status: 200, body: result as unknown as Record<string, unknown> }
+    : { status: result.reason === "score_not_found" || result.reason === "player_not_found" ? 404 : 400, body: { error: result.reason, ...("owner" in result ? { owner: result.owner } : {}) } as Record<string, unknown> };
 }
 
 describe("score submission HTTP route", () => {
+  it("acknowledges and deduplicates jobs without fetching, then a new worker finishes them", async () => {
+    const score = await fixtureScore();
+    const getScoreById = vi.fn(async () => score as unknown as Record<string, unknown>);
+    const ctx = context(getScoreById);
+    (ctx as { config: { scoreSubmitPerHour: number } }).config.scoreSubmitPerHour = 1;
+    const body = { userId: 101, link: "https://osu.ppy.sh/scores/9001" };
+    const accepted = await http(ctx, "POST", "/api/score-submissions", body);
+    expect(accepted.status).toBe(202);
+    expect(getScoreById).not.toHaveBeenCalled();
+    expect((await exec(db, "select count(*) as n from score_events")).rows[0].n).toBe(0);
+    const repeat = await http(ctx, "POST", "/api/score-submissions", { ...body, link: "osu.ppy.sh/scores/9001/" });
+    expect(repeat.body).toEqual(accepted.body);
+    const jobId = Number(accepted.body?.jobId);
+    expect(await getScoreImportStatuses(db, 101, [jobId])).toEqual([{ jobId, status: "queued" }]);
+    expect(await getScoreImportStatuses(db, 999, [jobId])).toEqual([]);
+    // Reopen the durable store as a restarted process would.
+    db.close();
+    db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    queue = new JobQueue(db);
+    events = new LiveEventLog(db);
+    await runImports(context(getScoreById));
+    expect(await getScoreImportStatuses(db, 101, [jobId])).toEqual([
+      { jobId, status: "done", result: expect.objectContaining({ ok: true, alreadyTracked: false }) },
+    ]);
+    expect(getScoreById).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps transient failures queued with backoff and finishes with an error after three attempts", async () => {
+    const ctx = context(async () => { throw new OsuApiError(503, "/scores/9001"); });
+    const body = { userId: 101, link: "https://osu.ppy.sh/scores/9001" };
+    const accepted = await http(ctx, "POST", "/api/score-submissions", body);
+    const jobId = Number(accepted.body?.jobId);
+    await runImports(ctx);
+    expect(await getScoreImportStatuses(db, 101, [jobId])).toEqual([{ jobId, status: "queued" }]);
+    const backoff = (await exec(db, "select run_after from jobs where id = ?", [jobId])).rows[0].run_after;
+    await http(ctx, "POST", "/api/score-submissions", body);
+    expect((await exec(db, "select run_after from jobs where id = ?", [jobId])).rows[0].run_after).toBe(backoff);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await exec(db, "update jobs set run_after = ? where id = ?", [new Date(0).toISOString(), jobId]);
+      await runImports(ctx);
+    }
+    expect(await getScoreImportStatuses(db, 101, [jobId])).toEqual([{ jobId, status: "done", result: { ok: false, reason: "osu_unavailable" } }]);
+    expect((await http(ctx, "POST", "/api/score-submissions", body)).status).toBe(202);
+    expect((await exec(db, "select attempts from jobs where id = ?", [jobId])).rows[0].attempts).toBe(0);
+  });
+
+  it("returns a refusal receipt if the player becomes inactive while queued", async () => {
+    const getScoreById = vi.fn(async () => { throw new Error("must not fetch"); });
+    const ctx = context(getScoreById);
+    const admitted = await http(ctx, "POST", "/api/score-submissions", { userId: 101, link: "9001" });
+    await exec(db, "insert into users (user_id, username, avatar_url, country_code, is_active, updated_at) values (101, 'Inactive', '', 'CR', 0, ?)", [new Date().toISOString()]);
+    await runImports(ctx);
+    const jobId = Number(admitted.body?.jobId);
+    expect(await getScoreImportStatuses(db, 101, [jobId])).toEqual([{ jobId, status: "done", result: { ok: false, reason: "player_not_found" } }]);
+    expect(getScoreById).not.toHaveBeenCalled();
+  });
+
+  it("does not let an expired worker overwrite a newer receipt", async () => {
+    await queue.enqueue(SCORE_IMPORT_JOB, "lease-test", { userId: 101, link: "9001" });
+    const [job] = await queue.claim("old", 1, { types: [SCORE_IMPORT_JOB] });
+    await exec(db, "update jobs set locked_until = ? where id = ?", [new Date(0).toISOString(), job.id]);
+    await queue.claim("new", 1, { types: [SCORE_IMPORT_JOB] });
+    expect(await queue.complete(job.id, { workerId: "old", attempt: 1 }, { result: "stale" })).toBe(false);
+    const payload = { userId: 101, link: "9001", result: { ok: false, reason: "not_passed" } };
+    expect(await queue.complete(job.id, { workerId: "new", attempt: 2 }, payload)).toBe(true);
+    expect(await getScoreImportStatuses(db, 101, [job.id])).toEqual([{ jobId: job.id, status: "done", result: payload.result }]);
+  });
+
   it("rejects a link that is not an osu! score URL", async () => {
     const ctx = context(async () => {
       throw new Error("should not fetch");
@@ -126,7 +218,7 @@ describe("score submission HTTP route", () => {
     expect(result.body?.error).toBe("invalid_link");
   });
 
-  it("404s when neither id space knows the score", async () => {
+  it("returns a not-found receipt when neither id space knows the score", async () => {
     const ctx = context(async () => {
       throw notFound();
     });
@@ -213,7 +305,7 @@ describe("score submission HTTP route", () => {
     expect(osu.getScoreById).toHaveBeenLastCalledWith(9001, "legacy", expect.any(String));
   });
 
-  it("charges the submission buckets only when the osu! API is about to be spent", async () => {
+  it("charges admission only for new work requiring an osu! call", async () => {
     const score = await fixtureScore();
     const ctx = context(async () => score as unknown as Record<string, unknown>);
     const cfg = (ctx as { config: Record<string, unknown> }).config;

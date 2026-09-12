@@ -23,6 +23,7 @@ import { recentReplayUploadKey, type RecentReplayEntry } from "#/lib/replay-rece
 import { useAuth } from "#/lib/auth-context";
 import { getRecentCommunityUploads, type CommunityUploadEntry } from "#/lib/uploaded-replay-community";
 import { getCommunityBeatmapAssetUrl } from "#/lib/community-beatmap-assets";
+import { searchPlayersOnOsu } from "#/lib/player-search";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
@@ -705,6 +706,7 @@ function PlayerReplayBrowser({
         <SearchInput
           placeholder={t`Search player... or score ID`}
           onSearch={onPlayerSearch}
+          onSearchOsu={searchPlayersOnOsu}
           onSelect={onSelectPlayer}
           onSubmit={onPlayerSearchSubmit}
           onQueryChange={onPlayerQueryChange}

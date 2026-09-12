@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, json, migrate, parseJson, type Db } from "../src/db.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_PATTERN_SWEEP_JOB,
@@ -85,7 +86,7 @@ describe("recomputePlayerSkillPatternChunk", () => {
     expect(summary.modes[0].ratings.Overall).toBe(22);
     expect(String(row.computed_at)).toBe("2026-08-20T00:00:00.000Z");
     // The per-play tags move with the summary: the explorer filters on them.
-    const stored = parseJson<{ plays: Array<{ patterns: string[] }> }>(String(row.plays_json ?? ""), { plays: [] });
+    const stored = unpackJson<{ plays: Array<{ patterns: string[] }> }>(row.plays_json, { plays: [] });
     expect(stored.plays.map((entry) => entry.patterns)).toEqual([["jack"], ["jack"], ["jack"]]);
     db.close();
   });
@@ -106,7 +107,7 @@ describe("recomputePlayerSkillPatternChunk", () => {
     const result = await recomputePlayerSkillPatternChunk(db, 0);
     expect(result).toMatchObject({ scanned: 1, rewritten: 1, done: true });
     const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 12", [])).rows[0];
-    const stored = parseJson<{ plays: Array<{ patterns: string[] }> }>(String(row.plays_json ?? ""), { plays: [] });
+    const stored = unpackJson<{ plays: Array<{ patterns: string[] }> }>(row.plays_json, { plays: [] });
     expect(stored.plays.map((entry) => entry.patterns)).toEqual([["jack"], ["jack"], ["jack"]]);
     db.close();
   });

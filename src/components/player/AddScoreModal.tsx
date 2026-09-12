@@ -6,6 +6,8 @@ import {
   fetchLiveMapSearch,
   loadLiveMapSearchEntry,
   submitLiveMissingScore,
+  fetchLiveScoreImportStatuses,
+  type LiveScoreSubmissionResult,
   type LiveMapSearchEntry,
   type LiveScoreSubmissionFailure,
   type LiveScoreSubmissionPlay,
@@ -65,7 +67,8 @@ function scoreMapLabel(play: LiveScoreSubmissionPlay): string | null {
 interface QueuedScore {
   key: number;
   link: string;
-  status: "queued" | "running" | "failed";
+  status: "queued" | "sending" | "running" | "failed";
+  jobId?: number;
   error?: string;
 }
 
@@ -97,6 +100,7 @@ export function AddScoreModal({
   const [submissions, setSubmissions] = useState<QueuedScore[]>([]);
   const queueRef = useRef<QueuedScore[]>([]);
   const processingRef = useRef(false);
+  const pendingLinksRef = useRef(new Set<string>());
   const nextKeyRef = useRef(0);
   const [accepted, setAccepted] = useState<AcceptedPlay[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -167,41 +171,48 @@ export function AddScoreModal({
     setSubmissions((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
   };
 
-  /* One request at a time, independent of the input and the dialog's lifetime.
-     A failed link keeps its own receipt and cannot strand the later pastes. */
+  const settleSubmission = (item: QueuedScore, result: LiveScoreSubmissionResult) => {
+    pendingLinksRef.current.delete(item.link);
+    if (result.ok) {
+      track("add_score_submitted", {
+        add_score_player: username,
+        add_score_map: scoreMapLabel(result.play),
+        add_score_repeat: result.alreadyTracked ? "1" : "0",
+      });
+      if (!result.alreadyTracked) onSubmitted?.();
+      if (mountedRef.current) {
+        const key = `${result.play.scoreId}:${item.key}`;
+        setAccepted((current) => [
+          { key, play: result.play, alreadyTracked: result.alreadyTracked, entry: null },
+          ...current.filter((accepted) => accepted.play.scoreId !== result.play.scoreId),
+        ]);
+        setSubmissions((current) => current.filter((queued) => queued.key !== item.key));
+        if (result.play.beatmapId != null) void fillEntry(key, result.play.beatmapId);
+      }
+    } else {
+      track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
+      updateSubmission(item.key, { status: "failed", jobId: undefined, error: failureMessage(result.reason, result.owner) });
+    }
+  };
+
+  // Serialize admission only. Each accepted job runs independently of this
+  // dialog, and the next paste can be sent before the first score finishes.
   const drainQueue = async () => {
     if (processingRef.current) return;
     processingRef.current = true;
     try {
       while (queueRef.current.length > 0) {
         const item = queueRef.current[0];
-        updateSubmission(item.key, { status: "running" });
+        updateSubmission(item.key, { status: "sending" });
         try {
           const result = await submitLiveMissingScore(userId, item.link);
-          if (result.ok) {
-            track("add_score_submitted", {
-              add_score_player: username,
-              add_score_map: scoreMapLabel(result.play),
-              add_score_repeat: result.alreadyTracked ? "1" : "0",
-            });
-            // Refresh the profile even when the dialog has since closed.
-            if (!result.alreadyTracked) onSubmitted?.();
-            if (mountedRef.current) {
-              const key = `${result.play.scoreId}:${item.key}`;
-              setAccepted((current) => [
-                { key, play: result.play, alreadyTracked: result.alreadyTracked, entry: null },
-                ...current.filter((accepted) => accepted.play.scoreId !== result.play.scoreId),
-              ]);
-              setSubmissions((current) => current.filter((queued) => queued.key !== item.key));
-              if (result.play.beatmapId != null) void fillEntry(key, result.play.beatmapId);
-            }
+          if (result.ok && "queued" in result) {
+            updateSubmission(item.key, { status: "queued", jobId: result.jobId });
           } else {
-            track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
-            updateSubmission(item.key, { status: "failed", error: failureMessage(result.reason, result.owner) });
+            settleSubmission(item, result);
           }
         } catch {
-          track("add_score_failed", { add_score_player: username, add_score_reason: "failed" });
-          updateSubmission(item.key, { status: "failed", error: t`Could not send that. Try again.` });
+          settleSubmission(item, { ok: false, reason: "failed" });
         } finally {
           queueRef.current.shift();
         }
@@ -211,11 +222,47 @@ export function AddScoreModal({
     }
   };
 
+  const pendingJobs = submissions.filter((item) => item.jobId != null);
+  const pendingJobKey = pendingJobs.map((item) => item.jobId).join(",");
+  useEffect(() => {
+    if (!pendingJobKey) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        // A single bounded request per batch, regardless of how many links
+        // were pasted. Transport failures retry the read, never the import.
+        for (let offset = 0; offset < pendingJobs.length; offset += 50) {
+          const batch = pendingJobs.slice(offset, offset + 50);
+          const statuses = await fetchLiveScoreImportStatuses(userId, batch.map((item) => item.jobId!), controller.signal);
+          if (controller.signal.aborted) return;
+          for (const item of batch) {
+            const status = statuses.find((entry) => entry.jobId === item.jobId);
+            if (!status || status.status === "done") {
+              settleSubmission(item, status?.result ?? { ok: false, reason: "failed" });
+            } else {
+              updateSubmission(item.key, { status: status.status });
+            }
+          }
+        }
+      } catch {
+        // Keep the acknowledged jobs visible while the backend reconnects.
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(poll, 1_000);
+      }
+    };
+    timer = setTimeout(poll, 1_000);
+    return () => { controller.abort(); clearTimeout(timer); };
+    // Status changes do not restart polling; only a changed set of jobs does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingJobKey, userId]);
+
   const send = (raw: string, retryKey?: number) => {
     const value = raw.trim();
     if (!value) return;
     // The ref also catches duplicate pastes before React renders the queue.
-    if (!queueRef.current.some((item) => item.link === value)) {
+    if (!pendingLinksRef.current.has(value)) {
+      pendingLinksRef.current.add(value);
       const item: QueuedScore = { key: ++nextKeyRef.current, link: value, status: "queued" };
       queueRef.current.push(item);
       setSubmissions((current) => [...current.filter((queued) => queued.key !== retryKey), item]);
@@ -312,7 +359,7 @@ export function AddScoreModal({
                   ) : (
                     <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
                       {item.status === "running" ? <Loader2 className="h-3 w-3 animate-spin text-osu-pink" aria-hidden="true" /> : null}
-                      {item.status === "running" ? t`importing` : t`queued`}
+                      {item.status === "sending" ? t`Sending...` : item.status === "running" ? t`importing` : t`queued`}
                     </span>
                   )}
                 </div>

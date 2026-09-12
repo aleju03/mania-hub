@@ -1183,10 +1183,9 @@ async function migrateProfileSnapshots(db: Db): Promise<void> {
     await db.execute("alter table profile_snapshots add column user_fetched_at text");
     await db.execute("update profile_snapshots set user_fetched_at = fetched_at where user_fetched_at is null");
   }
-  await db.execute(`
-    create index if not exists idx_profile_snapshots_username_key
-      on profile_snapshots(username_key)
-  `);
+  // username_key is declared unique, so its autoindex already covers this
+  // lookup; the explicit copy only doubled the index writes.
+  await db.execute("drop index if exists idx_profile_snapshots_username_key");
   await db.execute(`
     create table if not exists profile_section_cache (
       cache_key text primary key,
@@ -1815,10 +1814,9 @@ async function migratePlayerActivity(db: Db): Promise<void> {
     create index if not exists idx_player_activity_refs_day
       on player_activity_score_refs(day)
   `);
-  await db.execute(`
-    create index if not exists idx_player_activity_days_user_day
-      on player_activity_days(country, user_id, day)
-  `);
+  // (country, user_id, day) is the table's primary key; the explicit index
+  // duplicated the autoindex.
+  await db.execute("drop index if exists idx_player_activity_days_user_day");
   await db.execute(`
     create index if not exists idx_player_activity_days_user_day_all
       on player_activity_days(user_id, day)
@@ -2141,10 +2139,8 @@ async function migrateSnipePersonalBests(db: Db): Promise<void> {
       primary key (country, beatmap_id, lane_key, user_id)
     )
   `);
-  await db.execute(`
-    create index if not exists idx_country_beatmap_score_pb_state_lookup
-      on country_beatmap_score_pb_state(country, beatmap_id, lane_key, user_id)
-  `);
+  // Same columns as the primary key; the autoindex serves the lookup.
+  await db.execute("drop index if exists idx_country_beatmap_score_pb_state_lookup");
 }
 
 async function migrateUserGoals(db: Db): Promise<void> {

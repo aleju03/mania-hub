@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, exec, json, migrate, parseJson, type Db } from "../src/db.js";
+import { createDb, exec, json, migrate, type Db } from "../src/db.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_MSD_CAP_JOB,
@@ -61,7 +62,7 @@ async function seedRow(db: Db, userId: number, plays: unknown[], computedAt = "2
 
 async function readPlays(db: Db, userId: number): Promise<Array<{ beatmapId: number; values: Record<string, number> }>> {
   const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = ?", [userId])).rows[0];
-  return parseJson<{ plays?: Array<{ beatmapId: number; values: Record<string, number> }> }>(String(row?.plays_json ?? ""), {}).plays ?? [];
+  return unpackJson<{ plays?: Array<{ beatmapId: number; values: Record<string, number> }> }>(row?.plays_json, {}).plays ?? [];
 }
 
 describe("player skill MSD-cap sweep", () => {

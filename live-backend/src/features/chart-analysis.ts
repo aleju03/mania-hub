@@ -2,6 +2,7 @@ import { detectLnVibro, detectRiceVibro } from "../dan/vibro-detection.js";
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { storeChartFamily } from "./chart-families.js";
@@ -4520,25 +4521,33 @@ async function purgePlayerSkillPlaysForRepairedBeatmaps(
   const users = new Set<number>();
   let droppedPlays = 0;
   const staleComputedAt = new Date(Date.now() - 12 * 60 * 60_000 - 60_000).toISOString();
-  for (let offset = 0; offset < ids.length; offset += 400) {
-    const chunk = ids.slice(offset, offset + 400);
-    const placeholders = chunk.map(() => "?").join(", ");
+  // plays_json is a gzip blob, so SQLite cannot pick out the rows that hold a
+  // repaired chart; every row is paged out and checked here instead. Bounded
+  // user pages include all versions so the cursor never skips a replacement
+  // row at the boundary.
+  const pageSize = 200;
+  let cursor = 0;
+  for (;;) {
     const rows = (await exec(
       db,
       `select user_id, analysis_version, plays_json
        from player_skill_ratings
-       where exists (
-         select 1
-         from json_each(json_extract(plays_json, '$.plays')) as play
-         where cast(json_extract(play.value, '$.beatmapId') as integer) in (${placeholders})
-       )`,
-      chunk,
+       where user_id in (
+         select distinct user_id from player_skill_ratings
+         where user_id > ? and plays_json is not null
+         order by user_id
+         limit ?
+       ) and plays_json is not null
+       order by user_id, analysis_version`,
+      [cursor, pageSize],
     )).rows;
+    if (rows.length === 0) break;
 
     for (const row of rows) {
       const userId = Number(row.user_id);
       const analysisVersion = Number(row.analysis_version);
-      const stored = parseJson<{ plays?: RepairStoredPlayerSkillPlay[] } | null>(String(row.plays_json ?? ""), null);
+      cursor = Math.max(cursor, userId);
+      const stored = unpackJson<{ plays?: RepairStoredPlayerSkillPlay[] } | null>(row.plays_json, null);
       const plays = Array.isArray(stored?.plays) ? stored.plays : [];
       const kept = plays.filter((play) => !repairedIds.has(Number(play?.beatmapId)));
       const dropped = plays.length - kept.length;
@@ -4547,13 +4556,15 @@ async function purgePlayerSkillPlaysForRepairedBeatmaps(
       await exec(
         db,
         `update player_skill_ratings
-         set plays_json = json(?), computed_at = ?, updated_at = ?
+         set plays_json = ?, computed_at = ?, updated_at = ?
          where user_id = ? and analysis_version = ?`,
-        [json({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion],
+        [packJson({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion],
       );
       users.add(userId);
       droppedPlays += dropped;
     }
+    if (rows.length < pageSize) break;
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 
   if (options.enqueue !== false && users.size > 0) {

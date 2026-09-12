@@ -20,6 +20,7 @@ import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getModAcronyms, getScoreHitCounts, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
 import { selectRowsByIntegerSet } from "../shared/score-storage.js";
+import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danLabelFor, danTableCeilingFor, danTableFloorFor, danTableVerdictLabelFor } from "../dan/chart-classifier.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
@@ -852,6 +853,64 @@ export interface StoredPlayerSkillPlays {
   /** Passed plays below the MSD goal floor; still subject to ordinary Dan gates. */
   danOnly?: StoredPlaySsr[];
   vibroExcluded?: StoredVibroExclusion[];
+}
+
+// plays_json is the largest column in the database (3.3 GiB of the local
+// 15 GiB, ~150 KB per player) and gzips about 5x because every play repeats
+// the same key names and skillset labels. It is written as a gzip blob and
+// read through unpackJson, which still accepts the plain-text rows written
+// before this change (and the ones tests insert). The cost is that SQLite can
+// no longer look inside the column: anything that used json_each over
+// plays_json now pages rows out and filters in JS, which the dan and pattern
+// sweeps already did. Every plays_json write goes through packStoredPlays so
+// no site slips back to plain text.
+export function packStoredPlays(value: Partial<StoredPlayerSkillPlays> & Record<string, unknown>): Buffer {
+  return packJson(value);
+}
+
+export function readStoredPlays(cell: unknown): Partial<StoredPlayerSkillPlays> | null {
+  const stored = unpackJson<Partial<StoredPlayerSkillPlays> | null>(cell, null);
+  return stored && typeof stored === "object" ? stored : null;
+}
+
+/** Every stored play across both pools, for scans that key on chart identity. */
+export function storedPlaysOf(stored: Partial<StoredPlayerSkillPlays> | null | undefined): StoredPlaySsr[] {
+  return [
+    ...(Array.isArray(stored?.plays) ? stored.plays : []),
+    ...(Array.isArray(stored?.danOnly) ? stored.danOnly : []),
+  ];
+}
+
+/**
+ * Pages distinct users, including every matching version for those users.
+ * Previous/current versions can coexist during a recompute, so limiting rows
+ * before advancing a user_id cursor could skip a version at the boundary.
+ * A page can contain more than limit rows; a short row count still proves the
+ * user page is exhausted, otherwise callers may make one final empty read.
+ */
+export async function scanStoredPlayerSkillRows(
+  db: Db,
+  cursor: number,
+  limit: number,
+  where: { sql: string; args: Array<number | string> } = { sql: "", args: [] },
+): Promise<Array<{ userId: number; analysisVersion: number; stored: Partial<StoredPlayerSkillPlays> | null }>> {
+  const rows = (await exec(
+    db,
+    `select user_id, analysis_version, plays_json from player_skill_ratings
+     where user_id in (
+       select distinct user_id from player_skill_ratings
+       where user_id > ? ${where.sql}
+       order by user_id
+       limit ?
+     ) ${where.sql}
+     order by user_id, analysis_version`,
+    [Math.max(0, Math.floor(cursor)), ...where.args, Math.max(1, Math.floor(limit)), ...where.args],
+  )).rows;
+  return rows.map((row) => ({
+    userId: Number(row.user_id),
+    analysisVersion: Number(row.analysis_version),
+    stored: readStoredPlays(row.plays_json),
+  }));
 }
 
 /**
@@ -3363,9 +3422,9 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
        where user_id = ? and analysis_version in (${seedableVersions.map(() => "?").join(", ")})
        order by analysis_version desc`,
       [userId, ...seedableVersions],
-    )).rows.find((row) => typeof row.plays_json === "string" && row.plays_json.length > 0);
-    const previousStored = parseJson<Partial<StoredPlayerSkillPlays>>(String(previousRow?.plays_json ?? ""), {});
-    const previousPlays = [...(previousStored.plays ?? []), ...(previousStored.danOnly ?? [])];
+    )).rows.map((row) => readStoredPlays(row.plays_json)).find((stored) => Array.isArray(stored?.plays));
+    const previousStored: Partial<StoredPlayerSkillPlays> = previousRow ?? {};
+    const previousPlays = storedPlaysOf(previousStored);
 
     const trackedScores = await loadTrackedScores(db, userId);
     const archived = await loadArchivedTrackedEvidence(db, userId, [...trackedScores, ...snapshot.bestScores]);
@@ -3390,7 +3449,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
          where user_id = ? and analysis_version = ?`,
         args: [
           json(result.summary),
-          json({ version: PLAYER_SKILLS_VERSION, plays: result.plays, danOnly: result.danOnly, vibroExcluded: result.vibroExcluded }),
+          packStoredPlays({ version: PLAYER_SKILLS_VERSION, plays: result.plays, danOnly: result.danOnly, vibroExcluded: result.vibroExcluded }),
           accModel ? json(accModel) : null,
           snapshot.fetchedAt,
           computedAt,
@@ -3806,7 +3865,7 @@ export async function loadLatestStoredPlayerSkillPayload(db: Db, userId: number)
     [userId],
   )).rows;
   for (const row of rows) {
-    const stored = parseJson<Partial<StoredPlayerSkillPlays> | null>(String(row.plays_json ?? ""), null);
+    const stored = readStoredPlays(row.plays_json);
     if (Array.isArray(stored?.plays)) return {
       plays: stored.plays,
       danOnly: Array.isArray(stored.danOnly) ? stored.danOnly : [],
@@ -5770,14 +5829,8 @@ const PLAYER_SKILL_POISON_CHUNK = 200;
 // The same floor signature the chart sweep keys on (msdPoisonSignatureSql in
 // chart-analysis.ts): a frozen wasm instance hands back one value for every
 // skillset, so a positive Stream equal to both Technical and Chordjack is not
-// a rating any real chart produces.
-const PLAYER_SKILL_POISON_SIGNATURE_SQL = `exists (
-  select 1 from json_each(json_extract(plays_json, '$.plays')) as play
-  where json_extract(play.value, '$.values.Stream') > 0
-    and json_extract(play.value, '$.values.Stream') = json_extract(play.value, '$.values.Technical')
-    and json_extract(play.value, '$.values.Stream') = json_extract(play.value, '$.values.Chordjack')
-)`;
-
+// a rating any real chart produces. Checked in JS over paged rows: plays_json
+// is a gzip blob, so SQLite cannot run the predicate itself.
 export function isPoisonedPlayValues(values: Record<string, number> | undefined | null): boolean {
   const stream = Number(values?.Stream ?? 0);
   return stream > 0
@@ -5798,14 +5851,7 @@ export async function recomputePlayerSkillPoisonChunk(
   cursor: number,
   limit = PLAYER_SKILL_POISON_CHUNK,
 ): Promise<PlayerSkillPoisonChunkResult> {
-  const rows = (await exec(
-    db,
-    `select user_id, analysis_version, plays_json from player_skill_ratings
-     where user_id > ? and ${PLAYER_SKILL_POISON_SIGNATURE_SQL}
-     order by user_id
-     limit ?`,
-    [Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
-  )).rows;
+  const rows = await scanStoredPlayerSkillRows(db, cursor, limit);
 
   let nextCursor = cursor;
   const cleaned: number[] = [];
@@ -5815,25 +5861,20 @@ export async function recomputePlayerSkillPoisonChunk(
   // an epoch date would render as a decade-old rating until the refresh lands.
   const staleComputedAt = new Date(Date.now() - READY_RECOMPUTE_TTL_MS - 60_000).toISOString();
 
-  for (const row of rows) {
-    const userId = Number(row.user_id);
+  for (const { userId, analysisVersion, stored } of rows) {
     nextCursor = Math.max(nextCursor, userId);
-    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
     const plays = Array.isArray(stored?.plays) ? stored.plays : [];
     const kept = plays.filter((play) => !isPoisonedPlayValues(play?.values));
     const dropped = plays.length - kept.length;
-    // The SQL signature already selected this row, so a zero here means the
-    // JSON shape drifted from what the predicate matched; leave it alone
-    // rather than rewriting a row we did not understand.
     if (dropped <= 0) continue;
     droppedPlays += dropped;
     cleaned.push(userId);
     await exec(
       db,
       `update player_skill_ratings
-       set plays_json = json(?), computed_at = ?, updated_at = ?
+       set plays_json = ?, computed_at = ?, updated_at = ?
        where user_id = ? and analysis_version = ?`,
-      [json({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, Number(row.analysis_version)],
+      [packStoredPlays({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion],
     );
   }
 
@@ -5900,13 +5941,6 @@ const PLAYER_SKILL_MSD_CAP_CHUNK = 200;
 const SSR_CAP_PIN = 40;
 
 // Any of the eight stored skillset values sitting at exactly the old clamp.
-const PLAYER_SKILL_MSD_CAP_SIGNATURE_SQL = `exists (
-  select 1
-  from json_each(json_extract(plays_json, '$.plays')) as play,
-       json_each(json_extract(play.value, '$.values')) as skill
-  where skill.value = ${SSR_CAP_PIN}
-)`;
-
 export function isCapPinnedPlayValues(values: Record<string, number> | undefined | null): boolean {
   if (!values || typeof values !== "object") return false;
   return Object.values(values).some((value) => Number(value) === SSR_CAP_PIN);
@@ -5925,39 +5959,27 @@ export async function recomputePlayerSkillMsdCapChunk(
   cursor: number,
   limit = PLAYER_SKILL_MSD_CAP_CHUNK,
 ): Promise<PlayerSkillMsdCapChunkResult> {
-  const rows = (await exec(
-    db,
-    `select user_id, analysis_version, plays_json from player_skill_ratings
-     where user_id > ? and ${PLAYER_SKILL_MSD_CAP_SIGNATURE_SQL}
-     order by user_id
-     limit ?`,
-    [Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
-  )).rows;
+  const rows = await scanStoredPlayerSkillRows(db, cursor, limit);
 
   let nextCursor = cursor;
   const cleaned: number[] = [];
   let droppedPlays = 0;
   const staleComputedAt = new Date(Date.now() - READY_RECOMPUTE_TTL_MS - 60_000).toISOString();
 
-  for (const row of rows) {
-    const userId = Number(row.user_id);
+  for (const { userId, analysisVersion, stored } of rows) {
     nextCursor = Math.max(nextCursor, userId);
-    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
     const plays = Array.isArray(stored?.plays) ? stored.plays : [];
     const kept = plays.filter((play) => !isCapPinnedPlayValues(play?.values));
     const dropped = plays.length - kept.length;
-    // The SQL signature already selected this row, so a zero here means the
-    // JSON shape drifted from what the predicate matched; leave it alone
-    // rather than rewriting a row we did not understand.
     if (dropped <= 0) continue;
     droppedPlays += dropped;
     cleaned.push(userId);
     await exec(
       db,
       `update player_skill_ratings
-       set plays_json = json(?), computed_at = ?, updated_at = ?
+       set plays_json = ?, computed_at = ?, updated_at = ?
        where user_id = ? and analysis_version = ?`,
-      [json({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, Number(row.analysis_version)],
+      [packStoredPlays({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion],
     );
   }
 
@@ -6133,9 +6155,8 @@ export async function recomputePlayerSkillDanChunk(
     const userId = Number(row.user_id);
     nextCursor = Math.max(nextCursor, userId);
     const summary = parseJson<StoredModesSummary | null>(String(row.modes_json ?? ""), null);
-    const stored = parseJson<Partial<StoredPlayerSkillPlays> | null>(String(row.plays_json ?? ""), null);
-    const plays = [...(Array.isArray(stored?.plays) ? stored.plays : []),
-      ...(Array.isArray(stored?.danOnly) ? stored.danOnly : [])]
+    const stored = readStoredPlays(row.plays_json);
+    const plays = storedPlaysOf(stored)
       .filter((play) => play
         && Number.isInteger(play.beatmapId)
         && play.beatmapId > 0
@@ -6375,7 +6396,7 @@ export async function recomputePlayerSkillPatternChunk(
     const userId = Number(row.user_id);
     nextCursor = Math.max(nextCursor, userId);
     const summary = parseJson<StoredModesSummary | null>(String(row.modes_json ?? ""), null);
-    const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
+    const stored = readStoredPlays(row.plays_json);
     const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
       .filter((play) => play && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
     if (!summary || !Array.isArray(summary.modes) || summary.modes.length === 0 || plays.length === 0) continue;
@@ -6417,9 +6438,9 @@ export async function recomputePlayerSkillPatternChunk(
     const written = await writePlayerSkillRatingWithHistory(
       db, userId, PLAYER_SKILLS_VERSION, modes, recordedAt, {
         sql: `update player_skill_ratings
-         set modes_json = json(?), plays_json = json(?), updated_at = ?
+         set modes_json = json(?), plays_json = ?, updated_at = ?
          where user_id = ? and analysis_version = ? and updated_at = ?`,
-        args: [json({ ...summary, modes }), json({ ...stored, plays: refreshedPlays }), recordedAt, userId, PLAYER_SKILLS_VERSION, readAt],
+        args: [json({ ...summary, modes }), packStoredPlays({ ...stored, plays: refreshedPlays }), recordedAt, userId, PLAYER_SKILLS_VERSION, readAt],
       },
     );
     if (Number(written.rowsAffected ?? 0) > 0) rewritten += 1;
@@ -6491,10 +6512,12 @@ const PLAYER_SKILL_FLOOR_SWEEP_META_KEY = "player_skill_floor_sweep_done:v1";
 const PLAYER_SKILL_FLOOR_SWEEP_CHUNK = 200;
 const PLAYER_SKILL_FLOOR_SWEEP_RECOMPUTE_PRIORITY = 5;
 
-const PLAYER_SKILL_FLOOR_SIGNATURE_SQL = `exists (
-  select 1 from json_each(json_extract(plays_json, '$.plays')) as play
-  where json_extract(play.value, '$.goal') <= ${SSR_GOAL_MIN}
-)`;
+// A stored play sitting at or under the goal floor. Checked in JS over paged
+// rows because plays_json is a gzip blob.
+function hasFloorPinnedPlay(stored: Partial<StoredPlayerSkillPlays> | null): boolean {
+  return (Array.isArray(stored?.plays) ? stored.plays : [])
+    .some((play) => Number(play?.goal) <= SSR_GOAL_MIN);
+}
 
 export interface PlayerSkillFloorSweepChunkResult {
   nextCursor: number;
@@ -6509,21 +6532,16 @@ export async function runPlayerSkillFloorSweepChunk(
   cursor: number,
   limit = PLAYER_SKILL_FLOOR_SWEEP_CHUNK,
 ): Promise<PlayerSkillFloorSweepChunkResult> {
-  const rows = (await exec(
-    db,
-    `select user_id from player_skill_ratings
-     where user_id > ? and analysis_version = ? and ${PLAYER_SKILL_FLOOR_SIGNATURE_SQL}
-     order by user_id
-     limit ?`,
-    [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],
-  )).rows;
+  const rows = await scanStoredPlayerSkillRows(db, cursor, limit, {
+    sql: "and analysis_version = ?",
+    args: [PLAYER_SKILLS_VERSION],
+  });
 
   let nextCursor = cursor;
   const enqueued: number[] = [];
-  for (const row of rows) {
-    const userId = Number(row.user_id);
+  for (const { userId, stored } of rows) {
     nextCursor = Math.max(nextCursor, userId);
-    if (!Number.isInteger(userId) || userId <= 0) continue;
+    if (!Number.isInteger(userId) || userId <= 0 || !hasFloorPinnedPlay(stored)) continue;
     await enqueuePlayerSkills(queue, userId, { priority: PLAYER_SKILL_FLOOR_SWEEP_RECOMPUTE_PRIORITY });
     enqueued.push(userId);
   }
@@ -6594,15 +6612,20 @@ const PLAYER_SKILL_VIBRO_SWEEP_RECOMPUTE_PRIORITY = 5;
 // Mirrors the retention rule's droppable half: a flagged chart whose play did
 // not come from the top-200. Top-sourced plays keep their pp-backed trust, so
 // they are not evidence a row needs recomputing.
-const PLAYER_SKILL_VIBRO_SIGNATURE_SQL = `exists (
-  select 1
-  from json_each(json_extract(plays_json, '$.plays')) as play
-  join beatmap_chart_analysis analysis
-    on analysis.beatmap_id = json_extract(play.value, '$.beatmapId')
-   and analysis.analysis_version = ${CHART_ANALYSIS_VERSION}
-  where json_extract(play.value, '$.source') is not 'top'
-    and coalesce(json_extract(analysis.classification_json, '$.vibro'), 0) = 1
-)`;
+// Which of the given charts the current analysis flags as vibro.
+async function loadVibroFlaggedBeatmapIds(db: Db, beatmapIds: number[]): Promise<Set<number>> {
+  const ids = [...new Set(beatmapIds)].filter((id) => Number.isSafeInteger(id) && id > 0);
+  if (ids.length === 0) return new Set();
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select beatmap_id from beatmap_chart_analysis
+     where analysis_version = ${CHART_ANALYSIS_VERSION}
+       and coalesce(json_extract(classification_json, '$.vibro'), 0) = 1
+       and beatmap_id in`,
+    ids,
+  );
+  return new Set(rows.map((row) => Number(row.beatmap_id)));
+}
 
 export interface PlayerSkillVibroSweepChunkResult {
   nextCursor: number;
@@ -6617,21 +6640,27 @@ export async function runPlayerSkillVibroSweepChunk(
   cursor: number,
   limit = PLAYER_SKILL_VIBRO_SWEEP_CHUNK,
 ): Promise<PlayerSkillVibroSweepChunkResult> {
-  const rows = (await exec(
-    db,
-    `select user_id from player_skill_ratings
-     where user_id > ? and analysis_version = ? and ${PLAYER_SKILL_VIBRO_SIGNATURE_SQL}
-     order by user_id
-     limit ?`,
-    [Math.max(0, Math.floor(cursor)), PLAYER_SKILLS_VERSION, Math.max(1, Math.floor(limit))],
-  )).rows;
+  const rows = await scanStoredPlayerSkillRows(db, cursor, limit, {
+    sql: "and analysis_version = ?",
+    args: [PLAYER_SKILLS_VERSION],
+  });
+  // Mirrors the retention rule's droppable half: a flagged chart whose play
+  // did not come from the top-200. Top-sourced plays keep their pp-backed
+  // trust, so they are not evidence a row needs recomputing.
+  const candidates = rows.map(({ userId, stored }) => ({
+    userId,
+    beatmapIds: (Array.isArray(stored?.plays) ? stored.plays : [])
+      .filter((play) => play?.source !== "top")
+      .map((play) => Number(play.beatmapId)),
+  }));
+  const vibroFlagged = await loadVibroFlaggedBeatmapIds(db, candidates.flatMap((row) => row.beatmapIds));
 
   let nextCursor = cursor;
   const enqueued: number[] = [];
-  for (const row of rows) {
-    const userId = Number(row.user_id);
+  for (const { userId, beatmapIds } of candidates) {
     nextCursor = Math.max(nextCursor, userId);
     if (!Number.isInteger(userId) || userId <= 0) continue;
+    if (!beatmapIds.some((beatmapId) => vibroFlagged.has(beatmapId))) continue;
     await enqueuePlayerSkills(queue, userId, { priority: PLAYER_SKILL_VIBRO_SWEEP_RECOMPUTE_PRIORITY });
     enqueued.push(userId);
   }

@@ -915,7 +915,7 @@ async function getProfileSection(
     return {
       userId,
       section,
-      payload: parseJson(String(row.payload_json), null),
+      payload: unpackJson<unknown>(row.payload_json, null),
       fetchedAt: row.fetched_at,
       isStale: false,
     };
@@ -927,6 +927,10 @@ async function getProfileSection(
   return { userId, section, payload, fetchedAt, isStale: false };
 }
 
+// Gzipped like profile_snapshots: a `recent` payload is a list of osu! score
+// objects, the most repetitive JSON this service stores, and these rows were
+// the second-largest column in the database. unpackJson still reads the
+// plain-text rows written before this.
 async function storeProfileSection(
   db: Db,
   section: "about" | "recent",
@@ -942,7 +946,7 @@ async function storeProfileSection(
        payload_json = excluded.payload_json,
        fetched_at = excluded.fetched_at,
        updated_at = excluded.updated_at`,
-    [`${section}:${userId}`, userId, section, json(payload), fetchedAt, fetchedAt],
+    [`${section}:${userId}`, userId, section, packJson(payload), fetchedAt, fetchedAt],
   );
 }
 

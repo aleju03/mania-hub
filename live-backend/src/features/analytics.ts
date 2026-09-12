@@ -364,8 +364,137 @@ export function normalizeAnalyticsEvent(
   };
 }
 
+/* The columns the ingest lifts a property into, and the property each one came
+   from. Every pair used to be stored twice in a row, once in its column and
+   once again in the props JSON, which was 38% of the props blob on the live
+   store; the insert strips the duplicate and every reader puts it back. */
+export type PromotedPropColumns = Pick<
+  AnalyticsEventRecord,
+  "host" | "path" | "selectedCountry" | "viewerUsername" | "referringDomain" | "screenWidth" | "viewportWidth"
+>;
+
+const PROMOTED_PROPS: ReadonlyArray<{
+  key: string;
+  field: keyof PromotedPropColumns;
+  column: string;
+  kind: "text" | "number";
+}> = [
+  { key: "$host", field: "host", column: "host", kind: "text" },
+  { key: "$pathname", field: "path", column: "path", kind: "text" },
+  { key: "selected_country", field: "selectedCountry", column: "selected_country", kind: "text" },
+  { key: "viewer_username", field: "viewerUsername", column: "viewer_username", kind: "text" },
+  { key: "$referring_domain", field: "referringDomain", column: "referring_domain", kind: "text" },
+  { key: "$screen_width", field: "screenWidth", column: "screen_width", kind: "number" },
+  { key: "$viewport_width", field: "viewportWidth", column: "viewport_width", kind: "number" },
+];
+
+/* Properties the capture sends that nothing on this side ever reads back.
+   $insert_id is deliberately not here: the admin feed uses it as a row's
+   identity and as the dedupe key for live SSE rows against a snapshot. The
+   physical country is not here either, because it can come from the proxy's
+   geo header with no property behind it, so putting it back would invent a key
+   the capture never sent. */
+const DROPPED_PROP_KEYS = ["$lib"];
+
+/* Drops every property whose value the row already stores in a column. The
+   comparison is exact: a value the ingest changed on the way into its column
+   (lowercased, trimmed, truncated) is not the same value, so it stays in the
+   bag and nothing is lost. */
+export function stripPromotedProps(
+  properties: Record<string, unknown>,
+  columns: PromotedPropColumns,
+): Record<string, unknown> {
+  const stripped: Record<string, unknown> = { ...properties };
+  for (const key of DROPPED_PROP_KEYS) delete stripped[key];
+  for (const promoted of PROMOTED_PROPS) {
+    const value = columns[promoted.field];
+    if (value != null && stripped[promoted.key] === value) delete stripped[promoted.key];
+  }
+  return stripped;
+}
+
+/* The inverse, for every read that hands the property bag on: the column is
+   the only copy left, so put it back under the key it arrived as. A key still
+   present held a different value and keeps it. */
+export function rehydratePromotedProps(
+  properties: Record<string, unknown>,
+  columns: PromotedPropColumns,
+): Record<string, unknown> {
+  const full: Record<string, unknown> = { ...properties };
+  for (const promoted of PROMOTED_PROPS) {
+    const value = columns[promoted.field];
+    if (value != null && !(promoted.key in full)) full[promoted.key] = value;
+  }
+  return full;
+}
+
+/* The one-time pass that applies the same stripping to rows written before the
+   insert did it. Batched by id so a restart resumes where it stopped, one
+   autocommit statement per batch so a serving process never holds a write
+   transaction across the whole table, and version-stamped so it stops for good
+   once it has finished. Bump the version to make a changed strip set run again. */
+const PROPS_COMPACTION_BATCH_ROWS = 5_000;
+const PROPS_COMPACTION_PAUSE_MS = 50;
+const PROPS_COMPACTION_VERSION = 1;
+const PROPS_COMPACTION_VERSION_KEY = "props_compaction_version";
+const PROPS_COMPACTION_CURSOR_KEY = "props_compaction_cursor";
+/* A path no property bag holds, so json_remove skips it: json_remove takes a
+   fixed list of paths, and this is how a per-row condition picks "remove
+   nothing" for one of them. */
+const PROPS_COMPACTION_KEEP_PATH = '$."__props_keep"';
+
+/* A JSON path for one property name. Keys that start with $ have to be quoted
+   inside the path, or SQLite reads the $ as the document root. */
+function propsJsonPath(key: string): string {
+  return `$."${key}"`;
+}
+
+/* The SQL twin of stripPromotedProps, generated from the same table so the two
+   can never disagree about which keys are redundant. The typeof() guard keeps
+   SQLite's column affinity from calling a stored "2048" equal to the integer
+   2048, which would strip a string and put back a number. */
+function propsCompactionSql(): string {
+  const paths = [
+    ...DROPPED_PROP_KEYS.map((key) => `'${propsJsonPath(key)}'`),
+    ...PROMOTED_PROPS.map((promoted) => {
+      const extracted = `json_extract(props, '${propsJsonPath(promoted.key)}')`;
+      const typeGuard = promoted.kind === "number"
+        ? `typeof(${extracted}) in ('integer', 'real')`
+        : `typeof(${extracted}) = 'text'`;
+      return `case when ${typeGuard} and ${extracted} = ${promoted.column} then '${propsJsonPath(promoted.key)}' else '${PROPS_COMPACTION_KEEP_PATH}' end`;
+    }),
+  ];
+  // json_valid guards the pass rather than the data: json_remove raises on a
+  // malformed blob, and one bad legacy row would otherwise wedge every later
+  // batch behind the same failing id range.
+  return `update analytics_events set props = json_remove(props, ${paths.join(", ")}) where id > ? and id <= ? and json_valid(props)`;
+}
+
+/* One analytics_events row back into the record shape the feed builders take.
+   Every query that reads here filters bots out, hence the flat isBot: false. */
+function feedRecordFromRow(row: Record<string, unknown>): AnalyticsEventRecord {
+  const columns: PromotedPropColumns = {
+    host: row.host == null ? null : String(row.host),
+    path: row.path == null ? null : String(row.path),
+    selectedCountry: row.selected_country == null ? null : String(row.selected_country),
+    viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
+    referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
+    screenWidth: row.screen_width == null ? null : Number(row.screen_width),
+    viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
+  };
+  return {
+    ...columns,
+    ts: Number(row.ts),
+    event: String(row.event ?? ""),
+    distinctId: String(row.distinct_id ?? ""),
+    country: row.country == null ? null : String(row.country),
+    isBot: false,
+    properties: rehydratePromotedProps(parseJson<Record<string, unknown>>(row.props, {}), columns),
+  };
+}
+
 function propsJsonFor(record: AnalyticsEventRecord): string {
-  const serialized = json(record.properties);
+  const serialized = json(stripPromotedProps(record.properties, record));
   if (serialized.length <= MAX_PROPS_JSON_CHARS) return serialized;
   // Oversized property bags lose everything but the columns already extracted;
   // better a lean row than an unbounded blob in the events table.
@@ -396,6 +525,7 @@ export class AnalyticsStore {
   private rollupTimer: ReturnType<typeof setInterval> | null = null;
   private rollupKickTimer: ReturnType<typeof setTimeout> | null = null;
   private rollupAdvanceInFlight = false;
+  private propsCompactionInFlight = false;
   private flushing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(event: AnalyticsEventRecord) => void>();
   private readonly liveTickets = new Map<string, number>();
@@ -810,7 +940,7 @@ export class AnalyticsStore {
     await this.flush();
     const capped = Math.min(MAX_VIEWER_EVENT_ROWS, Math.max(1, Math.round(limit)));
     const rows = (await exec(this.db, `
-      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
+      select ts, event, host, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
       from analytics_events
       where json_extract(props, '$.viewer_id') is not null
         and cast(json_extract(props, '$.viewer_id') as integer) = ?
@@ -818,21 +948,7 @@ export class AnalyticsStore {
         and (path is null or path not like '/admin/%')
       order by ts desc limit ?
     `, [Math.round(viewerId), capped])).rows;
-    return rows.map((row) => this.buildFeedEvent({
-      ts: Number(row.ts),
-      event: String(row.event ?? ""),
-      distinctId: String(row.distinct_id ?? ""),
-      host: null,
-      path: row.path == null ? null : String(row.path),
-      country: row.country == null ? null : String(row.country),
-      selectedCountry: row.selected_country == null ? null : String(row.selected_country),
-      viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
-      referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
-      screenWidth: row.screen_width == null ? null : Number(row.screen_width),
-      viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
-      isBot: false,
-      properties: parseJson<Record<string, unknown>>(row.props, {}),
-    }));
+    return rows.map((row) => this.buildFeedEvent(feedRecordFromRow(row)));
   }
 
   /* Every event name the store has recorded, most frequent first, each with
@@ -916,27 +1032,13 @@ export class AnalyticsStore {
     await this.flush();
     const capped = Math.min(MAX_EVENT_LOOKUP_ROWS, Math.max(1, Math.round(options.limit ?? MAX_EVENT_LOOKUP_ROWS)));
     const rows = (await exec(this.db, `
-      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
+      select ts, event, host, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
       from analytics_events
       where event = ? and ts >= ? and is_bot = 0
         and (path is null or path not like '/admin/%')
       order by ts desc limit ?
     `, [name, Math.max(0, Math.round(options.sinceTs ?? 0)), capped])).rows;
-    return rows.map((row) => this.buildFeedEvent({
-      ts: Number(row.ts),
-      event: String(row.event ?? ""),
-      distinctId: String(row.distinct_id ?? ""),
-      host: null,
-      path: row.path == null ? null : String(row.path),
-      country: row.country == null ? null : String(row.country),
-      selectedCountry: row.selected_country == null ? null : String(row.selected_country),
-      viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
-      referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
-      screenWidth: row.screen_width == null ? null : Number(row.screen_width),
-      viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
-      isBot: false,
-      properties: parseJson<Record<string, unknown>>(row.props, {}),
-    }));
+    return rows.map((row) => this.buildFeedEvent(feedRecordFromRow(row)));
   }
 
   /* Usernames for a handful of osu! ids, for callers in the other database who
@@ -1067,6 +1169,56 @@ export class AnalyticsStore {
       });
     } finally {
       this.rollupAdvanceInFlight = false;
+    }
+  }
+
+  /* Strips the promoted properties out of rows written before the insert
+     started doing it (see stripPromotedProps). Walks the table once in id
+     batches, recording the cursor after each one so a restart picks up where it
+     left off, and stamps the version when it reaches the end so it never runs
+     again. Every batch is idempotent on its own: json_remove of a key that is
+     already gone is a no-op, so a rerun of a half-done batch changes nothing.
+     Rows above the starting max id are inserted stripped already. */
+  async compactStoredProps(): Promise<{ rows: number; batches: number }> {
+    if (this.propsCompactionInFlight) return { rows: 0, batches: 0 };
+    this.propsCompactionInFlight = true;
+    try {
+      const stamped = (await exec(this.db, "select value from analytics_rollup_state where key = ?", [PROPS_COMPACTION_VERSION_KEY])).rows[0];
+      if (Number(stamped?.value) === PROPS_COMPACTION_VERSION) return { rows: 0, batches: 0 };
+      await this.flush();
+      const maxId = Number((await exec(this.db, "select max(id) as id from analytics_events")).rows[0]?.id ?? 0);
+      const cursorRow = (await exec(this.db, "select value from analytics_rollup_state where key = ?", [PROPS_COMPACTION_CURSOR_KEY])).rows[0];
+      const resumed = Number(cursorRow?.value);
+      let cursor = Number.isFinite(resumed) && resumed > 0 ? resumed : 0;
+      const sql = propsCompactionSql();
+      const startedAt = Date.now();
+      const startedFrom = cursor;
+      let rows = 0;
+      let batches = 0;
+      while (cursor < maxId) {
+        const batchEnd = Math.min(cursor + PROPS_COMPACTION_BATCH_ROWS, maxId);
+        const result = await exec(this.db, sql, [cursor, batchEnd]);
+        rows += Number(result.rowsAffected ?? 0);
+        batches += 1;
+        await exec(this.db, "insert or replace into analytics_rollup_state (key, value) values (?, ?)", [PROPS_COMPACTION_CURSOR_KEY, String(batchEnd)]);
+        cursor = batchEnd;
+        // Back to the event loop between batches: this shares the serving
+        // process with every request and SSE write.
+        if (cursor < maxId) await pause(PROPS_COMPACTION_PAUSE_MS);
+      }
+      await exec(this.db, "insert or replace into analytics_rollup_state (key, value) values (?, ?)", [PROPS_COMPACTION_VERSION_KEY, String(PROPS_COMPACTION_VERSION)]);
+      if (batches > 0) {
+        logInfo("analytics_props_compacted", {
+          rows,
+          batches,
+          from_id: startedFrom,
+          to_id: maxId,
+          took_ms: Date.now() - startedAt,
+        });
+      }
+      return { rows, batches };
+    } finally {
+      this.propsCompactionInFlight = false;
     }
   }
 
@@ -1740,21 +1892,7 @@ export async function computeMonitorSnapshot(
       landers: Number(bounce?.landers ?? 0),
     },
     topRoutes: topRoutes.map((row) => ({ path: String(row.p ?? ""), count: Number(row.c ?? 0) })),
-    recentEvents: recent.map((row) => buildMonitorFeedEvent(options.displayTimeZone, {
-      ts: Number(row.ts),
-      event: String(row.event ?? ""),
-      distinctId: String(row.distinct_id ?? ""),
-      host: row.host == null ? null : String(row.host),
-      path: row.path == null ? null : String(row.path),
-      country: row.country == null ? null : String(row.country),
-      selectedCountry: row.selected_country == null ? null : String(row.selected_country),
-      viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
-      referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
-      screenWidth: row.screen_width == null ? null : Number(row.screen_width),
-      viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
-      isBot: false,
-      properties: parseJson<Record<string, unknown>>(row.props, {}),
-    })),
+    recentEvents: recent.map((row) => buildMonitorFeedEvent(options.displayTimeZone, feedRecordFromRow(row))),
     topPhysicalCountries: topCountries.map((row) => ({ country: String(row.c ?? ""), count: Number(row.n ?? 0) })),
     topProfiles: topProfiles.map((row) => ({
       username: String(row.u ?? ""),

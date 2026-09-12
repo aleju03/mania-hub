@@ -11,7 +11,14 @@ import { searchUsers } from "./osu";
    job is to reach any osu! account (the nav, the By Player tab) fall back to
    the API only when the stored search comes back with nothing. Boxes that can
    only act on players we hold data for (the side by side picker) pass
-   `fallbackToOsu: false` and stay entirely local. */
+   `fallbackToOsu: false` and stay entirely local.
+
+   A stored hit is not proof the player was found: the stored match is a
+   substring one, so an untracked "anchr" is hidden behind a tracked "danchree"
+   and the automatic fallback never fires. Firing it on every non-exact query
+   would put the typing cost back on the API, so instead the box offers an
+   explicit osu! search (`searchPlayersOnOsu`) whenever nothing in the list is
+   the name as typed (`hasExactPlayerMatch`). */
 
 export interface PlayerSearchResult {
   id: number;
@@ -46,6 +53,13 @@ export async function searchPlayers(
 
   if (options.fallbackToOsu === false) return [];
 
+  return searchPlayersOnOsu(trimmed, limit);
+}
+
+/** The osu! API search alone: one API call, any account. */
+export async function searchPlayersOnOsu(query: string, limit = 6): Promise<PlayerSearchResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
   const response = await searchUsers({ data: { query: trimmed } });
   return (response.user?.data ?? [])
     .slice(0, limit)
@@ -55,4 +69,11 @@ export async function searchPlayers(
       avatar_url: user.avatar_url,
       country_code: user.country_code,
     }));
+}
+
+/** Whether one of the results is the query itself, ignoring case, so the box
+    knows the typed name was found rather than merely contained in another. */
+export function hasExactPlayerMatch(results: readonly { username: string }[], query: string): boolean {
+  const wanted = query.trim().toLowerCase();
+  return results.some((user) => user.username.toLowerCase() === wanted);
 }

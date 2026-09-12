@@ -20,6 +20,7 @@ export function SearchInput({
   className = "",
   disabledIds,
   disabledNote,
+  onSearchOsu,
 }: {
   onSearch: (q: string) => Promise<SearchResult[]>;
   onSelect: (user: SearchResult) => void;
@@ -32,12 +33,21 @@ export function SearchInput({
      `disabledNote` is the reason, printed where the flag goes. */
   disabledIds?: ReadonlySet<number>;
   disabledNote?: string;
+  /* A second, explicit search offered under the list when it has results but
+     none is the name as typed. The stored search is a substring match, so a
+     player nobody tracks can hide behind a tracked namesake and the automatic
+     osu! fallback (which only fires on an empty list) never runs. This row is
+     the manual way through, one API call per click instead of per keystroke. */
+  onSearchOsu?: (q: string) => Promise<SearchResult[]>;
 }) {
   const { t } = useLingui();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  // "empty" keeps the row visible with a "nobody by that name" note after an
+  // osu! search that found nothing, so a click never appears to do nothing.
+  const [osuSearch, setOsuSearch] = useState<"idle" | "empty">("idle");
   const ref = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const onSearchRef = useRef(onSearch);
@@ -47,6 +57,7 @@ export function SearchInput({
   }, [onSearch]);
 
   useEffect(() => {
+    setOsuSearch("idle");
     if (query.length < 2) {
       setResults([]);
       setOpen(false);
@@ -83,6 +94,29 @@ export function SearchInput({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const trimmedQuery = query.trim();
+  const offerOsuSearch = Boolean(onSearchOsu)
+    && results.length > 0
+    && !results.some((u) => u.username.toLowerCase() === trimmedQuery.toLowerCase());
+
+  const runOsuSearch = async () => {
+    if (!onSearchOsu) return;
+    setLoading(true);
+    try {
+      const r = await onSearchOsu(trimmedQuery);
+      if (r.length > 0) {
+        setResults(r);
+        setOsuSearch("idle");
+      } else {
+        setOsuSearch("empty");
+      }
+    } catch {
+      setOsuSearch("empty");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div ref={ref} className={`relative ${className}`}>
@@ -149,6 +183,20 @@ export function SearchInput({
                 </button>
               );
             })}
+            {offerOsuSearch && (
+              <button
+                type="button"
+                disabled={loading || osuSearch === "empty"}
+                onClick={() => void runOsuSearch()}
+                className={`w-full border-t border-osu-b3/50 px-4 py-2.5 text-left text-xs transition-colors duration-[120ms] ${
+                  osuSearch === "empty" ? "cursor-default text-osu-f1" : "cursor-pointer text-osu-pink-light hover:bg-osu-b3 hover:text-white"
+                }`}
+              >
+                {osuSearch === "empty"
+                  ? t`No osu! player named "${trimmedQuery}"`
+                  : t`Not here? Search osu! for "${trimmedQuery}"`}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

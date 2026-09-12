@@ -40,7 +40,7 @@ import {
 } from "../../lib/maniacard";
 import { fetchPackPlayerScores } from "../../lib/packs";
 import { shardValueForTier } from "../../lib/pack-collection";
-import { searchPlayers } from "../../lib/player-search";
+import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
 import {
   COLLECTIONS_RECENT_KEY,
   readRecentPlayers,
@@ -275,6 +275,7 @@ function CollectionsAdminPage() {
                 className="sm:w-[300px]"
                 placeholder="Search a player..."
                 onSearch={(q) => searchPlayers(q)}
+          onSearchOsu={searchPlayersOnOsu}
                 onSelect={(user) => pick({
                   id: user.id,
                   username: user.username,
@@ -789,6 +790,7 @@ function GrantPanel({
           className="sm:w-[300px]"
           placeholder="Whose card is it..."
           onSearch={(q) => searchPlayers(q)}
+          onSearchOsu={searchPlayersOnOsu}
           // Picking somebody is enough to know what their card should say, so
           // the ordinary case is two clicks: pick them, grant it.
           onSelect={(user) => chooseCardPlayer(

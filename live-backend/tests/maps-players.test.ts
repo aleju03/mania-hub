@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { getMapsPlayersSnapshot } from "../src/features/maps.js";
+import { compactCountryMapsSnapshots, getMapsPlayersSnapshot } from "../src/features/maps.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 
 // The per-map player boards are served straight from the normalized tables
 // (country_maps_farmed_scores / country_maps_most_played /
@@ -270,5 +271,24 @@ describe("getMapsPlayersSnapshot", () => {
 
     const invalid = await getMapsPlayersSnapshot(db, "CR", "farmed", 0);
     expect(invalid).toMatchObject({ id: 0, total: 0, matched: 0, players: [] });
+  });
+
+  // The fixture's CR row is a compact schema v2 payload stored as plain text,
+  // which is exactly the backlog `npm run compact:storage` exists to convert.
+  it("rewrites a compact text snapshot as a gzip blob and skips it on a second pass", async () => {
+    const before = (await exec(db, "select payload_json, generated_at, refreshed_at from country_maps_snapshots where country = 'CR'")).rows[0];
+    expect(typeof before?.payload_json).toBe("string");
+
+    const first = await compactCountryMapsSnapshots(db);
+    expect(first).toMatchObject({ scanned: 1, compacted: 1, skipped: 0 });
+
+    const after = (await exec(db, "select payload_json, generated_at, refreshed_at from country_maps_snapshots where country = 'CR'")).rows[0];
+    expect(after?.payload_json).toBeInstanceOf(ArrayBuffer);
+    expect(unpackJson<unknown>(after?.payload_json, null)).toEqual(JSON.parse(String(before?.payload_json)));
+    // Repacking the same payload is not a refresh, so the stamps stand.
+    expect(after?.generated_at).toBe(before?.generated_at);
+    expect(after?.refreshed_at).toBe(before?.refreshed_at);
+
+    expect(await compactCountryMapsSnapshots(db)).toMatchObject({ scanned: 1, compacted: 0, skipped: 1 });
   });
 });

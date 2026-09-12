@@ -29,8 +29,10 @@ import { ACTIVITY_SKILL_ANALYSIS_VERSION, computeBeatmapActivitySkillVector } fr
 // activity-analysis lane's poll interval paces the chain and the deep negative
 // priority lets interactive analyze_activity_beatmap jobs jump every gap.
 //
-// Old-version rows are left in place when the new one lands: they are small,
-// and pruning historical versions is the compaction scripts' business.
+// Old-version rows are left in place when the new one lands; hourly retention
+// takes them, and only once the current-version row is ready or unavailable,
+// which is the same condition the eligibility query below already excludes on.
+// So a superseded row never leaves this sweep short of a candidate.
 //
 // The meta keys derive from ACTIVITY_SKILL_ANALYSIS_VERSION so a future
 // version bump re-arms the sweep automatically; the admin sweeps monitor

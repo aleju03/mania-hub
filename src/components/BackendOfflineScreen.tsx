@@ -6,7 +6,7 @@ export function BackendOfflineScreen() {
       <div className="flex items-center gap-3">
         <span className="mode-icon text-osu-pink text-4xl">{""}</span>
         <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>
-          mania <span className="text-osu-pink">hub</span>
+          mania <span className="text-osu-pink">tracker</span>
         </h1>
       </div>
       <div className="text-sm font-semibold text-white"><Trans>Temporarily offline</Trans></div>

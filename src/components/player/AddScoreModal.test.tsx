@@ -3,11 +3,12 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { I18nProvider } from "@lingui/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n, loadLocaleCatalog } from "../../lib/i18n";
-import { submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
+import { fetchLiveScoreImportStatuses, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
 import { AddScoreModal } from "./AddScoreModal";
 
 vi.mock("../../lib/live-backend", () => ({
   submitLiveMissingScore: vi.fn(),
+  fetchLiveScoreImportStatuses: vi.fn(),
   loadLiveMapSearchEntry: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("../../lib/analytics", () => ({ track: vi.fn() }));
@@ -52,9 +53,59 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("AddScoreModal queue", () => {
+  it("sends later pastes after admission and polls all jobs for their final receipts", async () => {
+    vi.useFakeTimers();
+    vi.mocked(submitLiveMissingScore)
+      .mockResolvedValueOnce({ ok: true, queued: true, jobId: 11 })
+      .mockResolvedValueOnce({ ok: true, queued: true, jobId: 12 });
+    vi.mocked(fetchLiveScoreImportStatuses)
+      .mockResolvedValueOnce([{ jobId: 11, status: "running" }, { jobId: 12, status: "queued" }])
+      .mockResolvedValueOnce([
+        { jobId: 11, status: "done", result: success(1) },
+        { jobId: 12, status: "done", result: { ok: false, reason: "not_owned", owner: "Someone" } },
+      ]);
+    const view = setup();
+    await act(async () => { view.paste(1); view.paste(2); });
+    expect(submitLiveMissingScore).toHaveBeenCalledTimes(2);
+    expect(view.getAllByText("queued")).toHaveLength(2);
+    view.paste(1);
+    expect(submitLiveMissingScore).toHaveBeenCalledTimes(2);
+    expect(view.onSubmitted).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(fetchLiveScoreImportStatuses).toHaveBeenLastCalledWith(123, [11, 12], expect.any(AbortSignal));
+    expect(view.getByText("importing")).toBeTruthy();
+    fireEvent.change(view.input, { target: { value: "draft" } });
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(view.getByText("Chart 1")).toBeTruthy();
+    expect(view.getByText("That score belongs to a different player (Someone).")).toBeTruthy();
+    expect(view.onSubmitted).toHaveBeenCalledTimes(1);
+    expect(view.input.value).toBe("draft");
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    expect(fetchLiveScoreImportStatuses).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries failed status reads without resubmitting and stops polling on close", async () => {
+    vi.useFakeTimers();
+    vi.mocked(submitLiveMissingScore).mockResolvedValueOnce({ ok: true, queued: true, jobId: 11 });
+    vi.mocked(fetchLiveScoreImportStatuses)
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce([{ jobId: 11, status: "running" }]);
+    const view = setup();
+    await act(async () => view.paste(1));
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(view.getByText("queued")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(view.getByText("importing")).toBeTruthy();
+    expect(submitLiveMissingScore).toHaveBeenCalledTimes(1);
+    view.unmount();
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(fetchLiveScoreImportStatuses).toHaveBeenCalledTimes(2);
+  });
+
   it("accepts successive pastes immediately, deduplicates pending links, and preserves the next draft", async () => {
     const first = deferred();
     const second = deferred();

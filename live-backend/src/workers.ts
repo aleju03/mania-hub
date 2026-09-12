@@ -13,6 +13,7 @@ import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileGoalsForUser, reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob, upsertMapSearchIndexRow } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
+import { SCORE_IMPORT_JOB, submitMissingScore, type ScoreImportPayload } from "./features/score-submissions.js";
 import { LEADERBOARD_IMPORT_JOB, getLeaderboardImportStatuses, importBeatmapLeaderboard } from "./features/leaderboard-import.js";
 import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, runGlobalFarmedBoardRepackJob } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
@@ -351,6 +352,12 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     claimLimit: 1,
     intervalMs: 2_000,
   },
+  {
+    name: "score-import",
+    jobTypes: [SCORE_IMPORT_JOB],
+    claimLimit: 1,
+    intervalMs: 1_000,
+  },
 ];
 
 const OSU_API_JOB_TYPES = new Set([
@@ -396,6 +403,7 @@ export function defaultWorkerLanes(): WorkerLane[] {
 // disabled (their handlers take the osu client but are gated elsewhere).
 export const OSU_API_BOUND_JOB_TYPES: ReadonlySet<string> = new Set([
   ...OSU_API_JOB_TYPES,
+  SCORE_IMPORT_JOB,
   REFRESH_QUALIFIED_MAPS_JOB,
   RECONCILE_SETTLED_SETS_JOB,
   "osc_backfill",
@@ -513,7 +521,7 @@ export class WorkerRunner {
     try {
       logInfo("job_start", { job_id: job.id, type: job.type, lane, worker_id: workerId, attempts: job.attempts + 1 });
       await this.handleWithWatchdog(job, lane, controller, leaseGuard.lost);
-      if (!await this.queue.complete(job.id, lease)) return;
+      if (!await this.queue.complete(job.id, lease, job.type === SCORE_IMPORT_JOB ? job.payload : undefined)) return;
       logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId, duration_ms: Date.now() - startedAtMs });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
     } catch (error) {
@@ -631,6 +639,27 @@ export class WorkerRunner {
   }
 
   private async handle(job: Job, signal?: AbortSignal): Promise<void> {
+    if (job.type === SCORE_IMPORT_JOB) {
+      // Run before the generic inactive-user skip so every accepted import
+      // gets a receipt, including a player removed while the job was queued.
+      // Like the former HTTP import, this user-requested work stays available
+      // when automatic osu! API jobs are disabled.
+      const payload = job.payload as ScoreImportPayload;
+      throwIfAborted(signal);
+      try {
+        const result = await submitMissingScore(this.db, this.queue, this.events, readConfig(), this.osu, payload.userId, payload.link, { signal });
+        payload.result = !result.ok && result.reason === "rate_limited"
+          ? { ok: false, reason: "failed" }
+          : result;
+      } catch (error) {
+        throwIfAborted(signal);
+        if (job.attempts < 2) throw error;
+        payload.result = { ok: false, reason: error instanceof OsuApiError ? "osu_unavailable" : "failed" };
+        logWarn("score_import_failed", { job_id: job.id, ...errorContext(error) });
+      }
+      throwIfAborted(signal);
+      return;
+    }
     const payloadUserId = Math.floor(Number((job.payload as { userId?: unknown } | null)?.userId));
     if (Number.isSafeInteger(payloadUserId) && payloadUserId > 0 && await isUserKnownInactive(this.db, payloadUserId)) {
       logInfo("job_skipped_inactive_user", { job_id: job.id, type: job.type, user_id: payloadUserId });
@@ -1603,7 +1632,9 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
     return Math.min(2 * 60_000 * 2 ** Math.min(4, nextAttempt - 1), 30 * 60_000);
   }
   if (isPoisonedMapsRefresh(type, nextAttempt, error)) return POISONED_MAPS_REFRESH_PARK_MS;
-  const base = type === "refresh_user_top_scores"
+  const base = type === SCORE_IMPORT_JOB
+    ? 10_000
+    : type === "refresh_user_top_scores"
     ? 15_000
     : type === "refresh_user_maps_farmed_scores"
       ? 60_000

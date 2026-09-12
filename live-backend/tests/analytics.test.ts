@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, type Db } from "../src/db.js";
-import { AnalyticsStore, computeMonitorSnapshot, deviceKindFor, monitorCacheTtlMs, normalizeAnalyticsEvent, type MonitorComputeOptions } from "../src/features/analytics.js";
+import { AnalyticsStore, computeMonitorSnapshot, deviceKindFor, monitorCacheTtlMs, normalizeAnalyticsEvent, rehydratePromotedProps, stripPromotedProps, type MonitorComputeOptions, type PromotedPropColumns } from "../src/features/analytics.js";
 
 let dir = "";
 let db: Db;
@@ -762,4 +762,168 @@ describe("AnalyticsStore realtime", () => {
     });
   });
 
+});
+
+describe("promoted property storage", () => {
+  const columns: PromotedPropColumns = {
+    host: "mania-tracker.com",
+    path: "/rankings",
+    selectedCountry: "GLOBAL",
+    viewerUsername: "someone",
+    referringDomain: "google.com",
+    screenWidth: 2048,
+    viewportWidth: 2038,
+  };
+
+  const realisticProps = (): Record<string, unknown> => ({
+    $current_url: "https://mania-tracker.com/rankings?tab=unrated&keys=4",
+    $host: "mania-tracker.com",
+    $pathname: "/rankings",
+    $referrer: "https://www.google.com/",
+    $referring_domain: "google.com",
+    $browser_language: "es-ES",
+    $screen_width: 2048,
+    $screen_height: 1152,
+    $viewport_width: 2038,
+    $viewport_height: 980,
+    $lib: "mania-hub",
+    selected_country: "GLOBAL",
+    $insert_id: "3f0a1d2c-0000-4000-8000-000000000001",
+    viewer_id: 7095193,
+    viewer_username: "someone",
+  });
+
+  it("strips every property the row stores in a column and round-trips it back", () => {
+    const props = realisticProps();
+    const stripped = stripPromotedProps(props, columns);
+    expect(stripped).not.toHaveProperty("$host");
+    expect(stripped).not.toHaveProperty("$pathname");
+    expect(stripped).not.toHaveProperty("$referring_domain");
+    expect(stripped).not.toHaveProperty("$screen_width");
+    expect(stripped).not.toHaveProperty("$viewport_width");
+    expect(stripped).not.toHaveProperty("selected_country");
+    expect(stripped).not.toHaveProperty("viewer_username");
+    // Never touched: the feed reads these, and the viewer index is built on
+    // viewer_id.
+    expect(stripped.$insert_id).toBe(props.$insert_id);
+    expect(stripped.viewer_id).toBe(7095193);
+    expect(stripped.$current_url).toBe(props.$current_url);
+    // Roughly what the live store measured: a little under half the bag.
+    expect(JSON.stringify(stripped).length).toBeLessThan(JSON.stringify(props).length * 0.65);
+
+    const rehydrated = rehydratePromotedProps(stripped, columns);
+    // $lib is dropped for good, so the round trip is measured without it.
+    const expected: Record<string, unknown> = { ...props };
+    delete expected.$lib;
+    expect(rehydrated).toEqual(expected);
+  });
+
+  it("keeps a property whose raw value differs from the column the ingest wrote", () => {
+    const props = { ...realisticProps(), $host: "Mania-Tracker.com", $pathname: "/rankings/" };
+    const stripped = stripPromotedProps(props, columns);
+    // The ingest lowercased the host and the path differs outright, so both
+    // raw values survive and rehydrating must not overwrite them.
+    expect(stripped.$host).toBe("Mania-Tracker.com");
+    expect(stripped.$pathname).toBe("/rankings/");
+    const rehydrated = rehydratePromotedProps(stripped, columns);
+    expect(rehydrated.$host).toBe("Mania-Tracker.com");
+    expect(rehydrated.$pathname).toBe("/rankings/");
+    const expected: Record<string, unknown> = { ...props };
+    delete expected.$lib;
+    expect(rehydrated).toEqual(expected);
+  });
+
+  it("leaves a bag alone when the columns are empty", () => {
+    const empty: PromotedPropColumns = {
+      host: null,
+      path: null,
+      selectedCountry: null,
+      viewerUsername: null,
+      referringDomain: null,
+      screenWidth: null,
+      viewportWidth: null,
+    };
+    const props = realisticProps();
+    const stripped = stripPromotedProps(props, empty);
+    const expected: Record<string, unknown> = { ...props };
+    delete expected.$lib;
+    expect(stripped).toEqual(expected);
+    expect(rehydratePromotedProps(stripped, empty)).toEqual(expected);
+  });
+
+  it("stores captured events without the duplicated properties and reads them back whole", async () => {
+    store.capture(pageview({
+      distinctId: "compact-1",
+      path: "/rankings",
+      properties: { viewer_id: 42, viewer_username: "someone", selected_country: "GLOBAL", $lib: "mania-hub", $viewport_width: 1900 },
+    }), {});
+    await store.flush();
+
+    const stored = (await exec(db, "select props from analytics_events")).rows[0];
+    const props = JSON.parse(String(stored.props)) as Record<string, unknown>;
+    expect(props).not.toHaveProperty("$host");
+    expect(props).not.toHaveProperty("$pathname");
+    expect(props).not.toHaveProperty("$screen_width");
+    expect(props).not.toHaveProperty("$viewport_width");
+    expect(props).not.toHaveProperty("viewer_username");
+    expect(props).not.toHaveProperty("$lib");
+    expect(props.viewer_id).toBe(42);
+
+    const events = await store.getViewerEvents(42);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.path).toBe("/rankings");
+    expect(events[0]!.eventId).toEqual(expect.any(String));
+  });
+
+  it("compacts rows written before the strip existed, once and resumably", async () => {
+    const legacy = {
+      $host: LIVE_HOST,
+      $pathname: "/maps",
+      $referring_domain: "google.com",
+      $screen_width: 2048,
+      $viewport_width: 2038,
+      $lib: "mania-hub",
+      selected_country: "CR",
+      viewer_username: "someone",
+      viewer_id: 99,
+      $insert_id: "legacy-1",
+      // Diverged from the column, so the compaction has to keep it.
+      $current_url: "https://mania-tracker.com/maps",
+    };
+    await exec(db, `
+      insert into analytics_events (ts, event, distinct_id, host, path, country, selected_country, viewer_username, referring_domain, screen_width, viewport_width, is_bot, props)
+      values (?, '$pageview', 'legacy', ?, '/maps', 'CR', 'CR', 'someone', 'google.com', 2048, 2038, 0, ?)
+    `, [NOW - 60_000, LIVE_HOST, JSON.stringify(legacy)]);
+    // Same row shape with a host the ingest would have lowercased: the stored
+    // value is not the column value, so it must survive the pass.
+    await exec(db, `
+      insert into analytics_events (ts, event, distinct_id, host, path, country, selected_country, viewer_username, referring_domain, screen_width, viewport_width, is_bot, props)
+      values (?, '$pageview', 'legacy-2', ?, '/maps', 'CR', 'CR', 'someone', 'google.com', 2048, 2038, 0, ?)
+    `, [NOW - 60_000, LIVE_HOST, JSON.stringify({ ...legacy, $host: "MANIA-TRACKER.COM", $insert_id: "legacy-2" })]);
+
+    const before = Number((await exec(db, "select sum(length(props)) as n from analytics_events")).rows[0]?.n ?? 0);
+    const first = await store.compactStoredProps();
+    expect(first.rows).toBe(2);
+    const after = Number((await exec(db, "select sum(length(props)) as n from analytics_events")).rows[0]?.n ?? 0);
+    expect(after).toBeLessThan(before);
+
+    const rows = (await exec(db, "select props from analytics_events order by id")).rows;
+    const compacted = JSON.parse(String(rows[0]!.props)) as Record<string, unknown>;
+    expect(compacted).not.toHaveProperty("$host");
+    expect(compacted).not.toHaveProperty("$screen_width");
+    expect(compacted).not.toHaveProperty("$lib");
+    expect(compacted.viewer_id).toBe(99);
+    expect(compacted.$current_url).toBe("https://mania-tracker.com/maps");
+    expect(JSON.parse(String(rows[1]!.props)).$host).toBe("MANIA-TRACKER.COM");
+
+    // The reader still sees the promoted keys, from the columns now.
+    const events = await store.getViewerEvents(99);
+    expect(events).toHaveLength(2);
+    expect(events[0]!.path).toBe("/maps");
+
+    // Marked done: a second call is a no-op and leaves the rows byte-identical.
+    const second = await store.compactStoredProps();
+    expect(second).toEqual({ rows: 0, batches: 0 });
+    expect(Number((await exec(db, "select sum(length(props)) as n from analytics_events")).rows[0]?.n ?? 0)).toBe(after);
+  });
 });

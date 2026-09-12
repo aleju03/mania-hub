@@ -32,6 +32,32 @@ describe("worker lanes for reserved types", () => {
 
   // Both guarantees at once: a dedicated lane so scheduled work always drains,
   // and a fast-lane seat so an admitted urgent job runs immediately.
+  it("drains score imports and refills their reserve under sustained shared pressure", async () => {
+    await withDb(async (db, queue) => {
+      const now = new Date().toISOString();
+      for (let i = 0; i < 110; i++) {
+        await exec(db, "insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at) values ('unrelated', ?, 'queued', 200, ?, 0, '{}', ?, ?)", [`busy:${i}`, now, now, now]);
+      }
+      for (let i = 0; i < 12; i++) {
+        await queue.enqueue("import_score", `score-import:${i}`, { userId: 101, link: String(i + 1) }, { priority: 120 });
+      }
+      const lane = lanes.find((entry) => entry.name === "score-import")!;
+      expect(lane.claimLimit).toBe(1);
+      expect(laneNames("import_score")).toEqual(["score-import"]);
+      expect(Number((await exec(db, "select count(*) as n from jobs where type = 'import_score' and status = 'deferred_pressure'")).rows[0].n)).toBe(2);
+      const finished = new Set<number>();
+      for (let i = 0; i < 15; i++) {
+        const [job] = await queue.claim("imports", lane.claimLimit, { types: lane.jobTypes });
+        if (!job) continue; // An empty claim refills the reserve for the next tick.
+        expect(job.type).toBe("import_score");
+        finished.add(job.id);
+        await queue.complete(job.id);
+      }
+      expect(finished.size).toBe(12);
+      expect(await queue.depth()).toBe(110);
+    });
+  });
+
   it("gives rosters and reconciles a dedicated lane while keeping them in fast", () => {
     expect(laneNames("refresh_country_roster")).toEqual(["fast", "country-rosters"]);
     expect(laneNames("reconcile_user_recent_scores")).toEqual(["fast", "recent-reconcile"]);

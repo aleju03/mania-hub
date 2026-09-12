@@ -58,6 +58,7 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // Admin leaderboard imports come in bursts; the worker lane drains them
   // one at a time, so the reserve only has to keep them out of the shedder.
   import_beatmap_leaderboard: 3,
+  import_score: 10,
   analyze_activity_beatmap: 10,
   backfill_player_activity: 2,
   analyze_beatmap_chart: 10,
@@ -276,9 +277,12 @@ export class JobQueue {
   // Unfenced calls are retained for administrative/test queue manipulation.
   // Workers always supply both their identity and attempt: the same lane can
   // reclaim a job after restart, so worker identity alone is insufficient.
-  async complete(id: number, lease?: JobLease): Promise<boolean> {
+  async complete(id: number, lease?: JobLease, payload?: unknown): Promise<boolean> {
     const fence = leaseFence(lease);
-    const result = await exec(this.db, `update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ? where id = ?${fence.sql}`, [nowIso(), id, ...fence.args]);
+    // Commit the receipt and completion together under the same lease fence.
+    const resultSql = payload === undefined ? "" : ", payload_json = ?";
+    const resultArgs = payload === undefined ? [] : [json(payload)];
+    const result = await exec(this.db, `update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ?${resultSql} where id = ?${fence.sql}`, [nowIso(), ...resultArgs, id, ...fence.args]);
     return result.rowsAffected > 0;
   }
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { searchPlayers } from "./player-search";
+import { hasExactPlayerMatch, searchPlayers, searchPlayersOnOsu } from "./player-search";
 import { fetchLiveUserSearch, isLiveBackendConfigured } from "./live-backend";
 import { searchUsers } from "./osu";
 
@@ -78,5 +78,34 @@ describe("searchPlayers", () => {
     expect(await searchPlayers(" a ")).toEqual([]);
     expect(storedSearch).not.toHaveBeenCalled();
     expect(osuSearch).not.toHaveBeenCalled();
+  });
+});
+
+// The stored match is a substring one, so a tracked namesake answers the query
+// and hides the automatic fallback; the box then needs a way to ask osu! on
+// purpose and a way to tell that the typed name is not on the list.
+describe("searchPlayersOnOsu / hasExactPlayerMatch", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("does not reach osu! on its own when a namesake is stored", async () => {
+    storedSearch.mockResolvedValue([stored("danchree", 11)]);
+
+    const results = await searchPlayers("anchr");
+    expect(results.map((user) => user.username)).toEqual(["danchree"]);
+    expect(osuSearch).not.toHaveBeenCalled();
+    expect(hasExactPlayerMatch(results, "anchr")).toBe(false);
+    expect(hasExactPlayerMatch(results, " DanChree ")).toBe(true);
+  });
+
+  it("asks osu! directly when told to", async () => {
+    osuSearch.mockResolvedValue({
+      user: { data: [{ id: 5, username: "anchr", avatar_url: "https://a.ppy.sh/5.png", country_code: "NZ" }] },
+    } as never);
+
+    expect(await searchPlayersOnOsu("anchr")).toEqual([
+      { id: 5, username: "anchr", avatar_url: "https://a.ppy.sh/5.png", country_code: "NZ" },
+    ]);
+    expect(storedSearch).not.toHaveBeenCalled();
+    expect(await searchPlayersOnOsu("a")).toEqual([]);
   });
 });

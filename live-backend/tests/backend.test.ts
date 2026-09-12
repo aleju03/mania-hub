@@ -34,6 +34,7 @@ import { OsuApiClient, OsuApiError, TokenBucketLimiter } from "../src/osu/client
 import { runRetention } from "../src/retention.js";
 import { defaultWorkerLanes, WorkerRunner } from "../src/workers.js";
 import { createServerReplayVideoExport, getReplayVideoExport } from "../src/replay-video/exports.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 import type { OscScore } from "../src/shared/types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
@@ -1183,6 +1184,81 @@ describe("live backend", () => {
     expect(deleted.parkedOnDemandJobs).toBe(2);
     const survivors = (await exec(db, "select dedupe_key from jobs order by dedupe_key")).rows.map((row) => String(row.dedupe_key));
     expect(survivors).toEqual(["snapshot:fresh", "top:stale"]);
+  });
+
+  it("prunes week-old profile section cache rows and superseded skill vectors", async () => {
+    vi.setSystemTime(new Date("2026-06-10T12:00:00.000Z"));
+    const { db } = await setup(["CR"]);
+    const daysBack = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const sections: Array<[string, string]> = [
+      ["about:101", daysBack(8)],
+      ["recent:101", daysBack(30)],
+      ["about:202", daysBack(6)],
+    ];
+    for (const [cacheKey, fetchedAt] of sections) {
+      await exec(
+        db,
+        `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
+         values (?, ?, ?, ?, ?, ?)`,
+        [cacheKey, Number(cacheKey.split(":")[1]), cacheKey.split(":")[0], "{}", fetchedAt, fetchedAt],
+      );
+    }
+
+    const current = ACTIVITY_SKILL_ANALYSIS_VERSION;
+    const vectors: Array<[number, number, string]> = [
+      // Superseded by a settled current-version row: both of these go.
+      [7001, current - 1, "ready"],
+      [7001, current, "ready"],
+      [7002, current - 2, "ready"],
+      [7002, current, "unavailable"],
+      // The current-version row is not settled, so the old one is still the
+      // backfill sweep's candidate and has to survive.
+      [7003, current - 1, "ready"],
+      [7003, current, "failed"],
+      // No current-version row at all.
+      [7004, current - 1, "ready"],
+      // Already current.
+      [7005, current, "ready"],
+    ];
+    for (const [beatmapId, version, status] of vectors) {
+      await exec(
+        db,
+        "insert into beatmap_skill_vectors (beatmap_id, analysis_version, status, updated_at) values (?, ?, ?, ?)",
+        [beatmapId, version, status, "2026-06-10T12:00:00.000Z"],
+      );
+    }
+
+    const deleted = await runRetention(db, {
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      scoreEventRetentionDays: 14,
+      liveEventRetentionDays: 7,
+      doneJobRetentionDays: 2,
+      apiCallLogRetentionDays: 7,
+      replayVideoJobRetentionDays: 2,
+      rankSnapshotRetentionDays: 14,
+      activityRetentionYears: 2,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+      maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
+    });
+
+    expect(deleted.profileSections).toBe(2);
+    expect((await exec(db, "select cache_key from profile_section_cache")).rows.map((row) => String(row.cache_key))).toEqual(["about:202"]);
+    expect(deleted.supersededSkillVectors).toBe(2);
+    const keptVectors = (await exec(
+      db,
+      "select beatmap_id, analysis_version from beatmap_skill_vectors order by beatmap_id, analysis_version",
+    )).rows.map((row) => `${row.beatmap_id}:${row.analysis_version}`);
+    expect(keptVectors).toEqual([
+      `7001:${current}`,
+      `7002:${current}`,
+      `7003:${current - 1}`,
+      `7003:${current}`,
+      `7004:${current - 1}`,
+      `7005:${current}`,
+    ]);
   });
 
   it("reports connected page users on country registry status rows", async () => {
@@ -6557,7 +6633,7 @@ describe("live backend", () => {
     await refreshGlobalMaps(db);
 
     const row = (await exec(db, "select payload_json from country_maps_snapshots where country = 'GLOBAL'")).rows[0];
-    const payload = JSON.parse(String(row.payload_json)) as {
+    const payload = unpackJson<unknown>(row.payload_json, null) as {
       farmed: Array<{ playerCount: number; players: unknown[] }>;
       mostPlayed: Array<{ playerCount: number; players: unknown[] }>;
       favourites: Array<{ playerCount: number; players: unknown[] }>;

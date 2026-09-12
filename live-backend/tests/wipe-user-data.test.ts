@@ -9,6 +9,8 @@ import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
 import { markUserMissing, previewUserWipe, wipeUserProjections } from "../src/users.js";
+import { purgeUserFromMapsSnapshots } from "../src/features/maps.js";
+import { packJson, unpackJson } from "../src/shared/compressed-json.js";
 import { nowIso } from "../src/shared/score.js";
 
 let dir = "";
@@ -432,11 +434,62 @@ describe("wipeUserProjections", () => {
     const result = await wipeUserProjections(db, TARGET);
 
     expect(result.updated.country_maps_snapshots).toBe(1);
-    const payload = String((await exec(db, "select payload_json from country_maps_snapshots where country = 'CR'")).rows[0]?.payload_json ?? "");
+    // The rewritten row is a gzip blob, so this reads it back the way the
+    // feature does rather than matching on the column text.
+    const payload = JSON.stringify(unpackJson<unknown>(
+      (await exec(db, "select payload_json from country_maps_snapshots where country = 'CR'")).rows[0]?.payload_json,
+      null,
+    ));
     expect(payload).not.toContain(`\"id\":${TARGET}`);
     expect(payload).toContain(`\"id\":${BYSTANDER}`);
     expect((await getTrackerSnapshot(db, "CR", 100)).scores).toEqual([]);
     expect((await getSnipesSnapshot(db, "CR", 100)).events).toEqual([]);
+  });
+
+  it("scrubs a gzip-stored map snapshot no text search could have matched", async () => {
+    await insertUser(TARGET, 5000, true, "Cheater");
+    await insertUser(BYSTANDER, 5000, true, "Safe");
+    const stamp = nowIso();
+    const stored = {
+      schemaVersion: 2,
+      farmed: [{ beatmapId: BM_A, playerCount: 2, avgPp: 550, maxPp: 600, dominantMod: null, players: [
+        { id: TARGET, mods: [], pp: 600, scoreUrl: null, playedAt: stamp },
+        { id: BYSTANDER, mods: [], pp: 500, scoreUrl: null, playedAt: stamp },
+      ] }],
+      mostPlayed: [{ beatmapId: BM_A, totalPlays: 30, playerCount: 3, players: [{ id: TARGET, count: 20 }, { id: BYSTANDER, count: 10 }] }],
+      favourites: [{ beatmapsetId: BM_A + 1000, playerCount: 3, players: [{ id: TARGET }, { id: BYSTANDER }] }],
+      favouritesByPlayer: [{ id: TARGET, beatmapsetIds: [BM_A + 1000] }, { id: BYSTANDER, beatmapsetIds: [BM_A + 1000] }],
+      beatmapsetsPool: [BM_A + 1000],
+      generatedAt: stamp,
+      farmedGeneratedAt: stamp,
+      favouritesGeneratedAt: stamp,
+    };
+    const insert = "insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values (?, ?, ?, ?)";
+    await exec(db, insert, ["CR", packJson(stored), stamp, stamp]);
+    // A country the player is not in. The sweep reads every row now instead of
+    // pre-filtering on the payload text, so it has to leave this one untouched.
+    await exec(db, insert, ["US", packJson({
+      ...stored,
+      farmed: [],
+      mostPlayed: [],
+      favourites: [],
+      favouritesByPlayer: [],
+      beatmapsetsPool: [],
+    }), stamp, stamp]);
+
+    expect(await purgeUserFromMapsSnapshots(db, TARGET)).toBe(1);
+
+    const row = (await exec(db, "select payload_json, refreshed_at from country_maps_snapshots where country = 'CR'")).rows[0];
+    // Rewritten, not decompressed on the way back out.
+    expect(row?.payload_json).toBeInstanceOf(ArrayBuffer);
+    const payload = unpackJson<typeof stored>(row?.payload_json, stored);
+    expect(payload.farmed[0].players.map((player) => player.id)).toEqual([BYSTANDER]);
+    expect(payload.farmed[0].playerCount).toBe(1);
+    expect(payload.mostPlayed[0].players.map((player) => player.id)).toEqual([BYSTANDER]);
+    expect(payload.favourites[0].players.map((player) => player.id)).toEqual([BYSTANDER]);
+    expect(payload.favouritesByPlayer.map((player) => player.id)).toEqual([BYSTANDER]);
+    expect(payload.beatmapsetsPool).toEqual([BM_A + 1000]);
+    expect(String((await exec(db, "select refreshed_at from country_maps_snapshots where country = 'US'")).rows[0]?.refreshed_at)).toBe(stamp);
   });
 
   it("blocks a cold profile mint for an inactive tombstone without calling osu!", async () => {

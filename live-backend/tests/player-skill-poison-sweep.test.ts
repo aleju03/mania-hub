@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, exec, json, migrate, parseJson, type Db } from "../src/db.js";
+import { createDb, exec, json, migrate, type Db } from "../src/db.js";
+import { packJson, unpackJson } from "../src/shared/compressed-json.js";
 import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_POISON_JOB,
@@ -60,10 +61,36 @@ async function seedRow(db: Db, userId: number, plays: unknown[], computedAt = "2
 
 async function readPlays(db: Db, userId: number): Promise<Array<{ beatmapId: number; values: Record<string, number> }>> {
   const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = ?", [userId])).rows[0];
-  return parseJson<{ plays?: Array<{ beatmapId: number; values: Record<string, number> }> }>(String(row?.plays_json ?? ""), {}).plays ?? [];
+  return unpackJson<{ plays?: Array<{ beatmapId: number; values: Record<string, number> }> }>(row?.plays_json, {}).plays ?? [];
 }
 
 describe("player skill poison sweep", () => {
+  it("reads a gzip-stored row, drops its poisoned plays and writes the row back as a blob", async () => {
+    const db = await makeDb();
+    const computedAt = "2026-08-17T00:00:00.000Z";
+    await exec(
+      db,
+      `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+       values (?, ?, 'ready', json(?), ?, ?, ?)`,
+      [5, PLAYER_SKILLS_VERSION, json({ modes: [] }), packJson({ plays: [play(1, poisonedValues()), play(2, healthyValues())], danOnly: [play(3, healthyValues())] }), computedAt, computedAt],
+    );
+    // A plain-text row from before the compression sits beside it and is
+    // still understood.
+    await seedRow(db, 6, [play(4, poisonedValues())]);
+
+    const result = await recomputePlayerSkillPoisonChunk(db, 0, 10);
+    expect(result.cleaned).toEqual([5, 6]);
+    expect(result.droppedPlays).toBe(2);
+    await expect(readPlays(db, 5)).resolves.toEqual([play(2, healthyValues())]);
+    const row = (await exec(db, "select plays_json, typeof(plays_json) as kind from player_skill_ratings where user_id = 5")).rows[0];
+    expect(String(row.kind)).toBe("blob");
+    const stored = unpackJson<{ danOnly?: unknown[] }>(row.plays_json, {});
+    expect(stored.danOnly).toEqual([play(3, healthyValues())]);
+    const legacy = (await exec(db, "select typeof(plays_json) as kind from player_skill_ratings where user_id = 6")).rows[0];
+    expect(String(legacy.kind)).toBe("blob");
+    db.close();
+  });
+
   it("recognises the floor signature and leaves real ratings alone", () => {
     expect(isPoisonedPlayValues(poisonedValues())).toBe(true);
     expect(isPoisonedPlayValues(healthyValues())).toBe(false);

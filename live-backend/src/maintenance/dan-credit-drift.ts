@@ -1,5 +1,6 @@
 import { readConfig } from "../config.js";
-import { createDb, exec, parseJson } from "../db.js";
+import { createDb, exec } from "../db.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import { loadStoredRateDanVerdicts } from "../features/dan-estimates.js";
 import {
   PLAYER_SKILLS_VERSION,
@@ -77,7 +78,7 @@ const rows = (await exec(
 
 let users = 0;
 for (const row of rows) {
-  const stored = parseJson<{ plays?: StoredPlaySsr[] } | null>(String(row.plays_json ?? ""), null);
+  const stored = unpackJson<{ plays?: StoredPlaySsr[] } | null>(row.plays_json, null);
   const plays = (Array.isArray(stored?.plays) ? stored.plays : [])
     .filter((play) => play && Number.isInteger(play.beatmapId) && play.beatmapId > 0);
   if (plays.length === 0) continue;

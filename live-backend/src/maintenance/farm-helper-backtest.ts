@@ -123,13 +123,13 @@ async function readStoredSkillPlays(
   )).rows[0];
   if (!row) return null;
   let modes: { modes?: Array<{ keyCount: number; ratings?: Record<string, number> }> };
-  let playsWrap: { plays?: AccModelPlay[] };
   try {
     modes = JSON.parse(String(row.modes_json ?? ""));
-    playsWrap = JSON.parse(String(row.plays_json ?? ""));
   } catch {
     return null;
   }
+  const playsWrap = unpackJson<{ plays?: AccModelPlay[] } | null>(row.plays_json, null);
+  if (!playsWrap) return null;
   const plays = playsWrap.plays ?? [];
   const ratingByKeys = new Map<number, number>();
   for (const mode of modes.modes ?? []) {

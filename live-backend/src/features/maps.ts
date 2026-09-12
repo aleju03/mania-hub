@@ -10,6 +10,7 @@ import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { isRankedRosterMember } from "../rosters/country-rosters.js";
 import { getModAcronyms, getScoreIdentity, getScoreJudgementCount, getScoreSpeedBucket, getScoreTimestamp, getStoredScoreAccuracy, normalizeStoredMods, nowIso } from "../shared/score.js";
 import { throwIfAborted } from "../shared/abort.js";
+import { packJson, unpackJson } from "../shared/compressed-json.js";
 import type { OscScore } from "../shared/types.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { markUserMissing } from "../users.js";
@@ -783,7 +784,7 @@ async function readMapsSnapshot(
   const row = (await exec(db, "select payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?", [normalized])).rows[0];
   const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
   const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
-  const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
+  const parsed = row ? unpackJson<unknown>(row.payload_json, null) : null;
   const value = parsed ? await hydrateStoredMapsSnapshot(db, parsed) : null;
   const isUsable = isUsableMapsData(value) || (
     value != null &&
@@ -816,7 +817,7 @@ async function readRawMapsSnapshot(
     [normalized],
   )).rows[0];
   const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
-  const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
+  const parsed = row ? unpackJson<unknown>(row.payload_json, null) : null;
   let usable = isStoredCountryMapsData(parsed)
     ? isUsableStoredMapsData(parsed)
     : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
@@ -3459,7 +3460,7 @@ async function readGlobalFarmedEntriesForFilteredPage(
       "select payload_json from country_maps_snapshots where country = ?",
       [String(countryRow.country)],
     )).rows[0];
-    const stored = row ? toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null)) : null;
+    const stored = row ? toStoredCountryMapsData(unpackJson<unknown>(row.payload_json, null)) : null;
     if (!stored) continue;
     for (const entry of stored.farmed) {
       mergeStoredFarmedEntryPlayers(byBeatmap, entry.beatmapId, entry.players);
@@ -4443,25 +4444,32 @@ export async function syncGlobalMapsFarmedUserBeatmaps(
  * refresh, so deleting only country_maps_* rows would leave the player visible
  * on Popular/Favourites (and on a legacy country farmed snapshot).
  *
- * Candidate selection looks for the exact compact player key and every match
- * is parsed and checked structurally before it is rewritten. This avoids both
- * loading every multi-megabyte country blob and mistaking a beatmap id for a
- * user id.
+ * Every row is unpacked and checked structurally before it is rewritten, so a
+ * beatmap id can never be mistaken for a user id. Candidate selection used to
+ * narrow that to rows whose text contained the compact player key, which a
+ * gzipped payload_json cannot answer, so the sweep now reads every country in
+ * turn (one row per tracked country, a few MB each) and yields between them: a
+ * wipe is rare and runs off the request path, and one country is resident at a
+ * time.
  */
 export async function purgeUserFromMapsSnapshots(db: Db, userId: number): Promise<number> {
   const safeUserId = Math.floor(Number(userId));
   if (!Number.isSafeInteger(safeUserId) || safeUserId <= 0) return 0;
-  const rows = (await exec(
+  const countries = (await exec(
     db,
-    `select country, payload_json
-       from country_maps_snapshots
-      where payload_json like ? or payload_json like ?`,
-    [`%"id":${safeUserId},%`, `%"id":${safeUserId}}%`],
-  )).rows;
+    "select country from country_maps_snapshots order by country",
+  )).rows.map((row) => String(row.country));
   const statements: DbStatement[] = [];
   const refreshedAt = nowIso();
-  for (const row of rows) {
-    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+  for (const country of countries) {
+    await yieldToEventLoop();
+    const row = (await exec(
+      db,
+      "select country, payload_json from country_maps_snapshots where country = ?",
+      [country],
+    )).rows[0];
+    if (!row) continue;
+    const stored = toStoredCountryMapsData(unpackJson<unknown>(row.payload_json, null));
     if (!stored) continue;
     let changed = false;
 
@@ -4518,7 +4526,7 @@ export async function purgeUserFromMapsSnapshots(db: Db, userId: number): Promis
 
     statements.push({
       sql: "update country_maps_snapshots set payload_json = ?, refreshed_at = ? where country = ?",
-      args: [json({ ...stored, farmed, mostPlayed, favourites, favouritesByPlayer, beatmapsetsPool }), refreshedAt, String(row.country)],
+      args: [packJson({ ...stored, farmed, mostPlayed, favourites, favouritesByPlayer, beatmapsetsPool }), refreshedAt, String(row.country)],
     });
   }
   await execBatch(db, statements);
@@ -4621,7 +4629,7 @@ async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal):
     throwIfAborted(signal);
     const country = String(countryRow.country);
     const row = (await exec(db, "select payload_json from country_maps_snapshots where country = ?", [country])).rows[0];
-    const stored = row ? toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null)) : null;
+    const stored = row ? toStoredCountryMapsData(unpackJson<unknown>(row.payload_json, null)) : null;
     if (!stored) continue;
     const sourceUpdatedAt = String(countryRow.refreshed_at ?? stored.farmedGeneratedAt);
     let statements: DbStatement[] = [];
@@ -4777,36 +4785,35 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     await yieldToEventLoop();
     const payloadRow = (await exec(
       db,
-      // The farmed section is ~90% of a country payload (190 MB across all
-      // countries) and this merge never reads it: the loop below folds only
-      // mostPlayed, favourites, favouritesByPlayer and beatmapsetsPool, and
-      // GLOBAL's farmed data lives in the row-granular projection instead.
-      // Dropping it in SQL keeps 190 MB of JSON out of V8 per rebuild.
-      //
-      // Replaced with an empty array rather than json_remove'd: both payload
-      // validators (isStoredCountryMapsData, isCountryMapsDataShape) require
-      // `farmed` to be an array, so removing the key would fail every country
-      // and silently produce an empty GLOBAL snapshot.
-      //
-      // The json_valid guard preserves this loop's tolerance for a malformed
-      // payload: json_replace raises on invalid JSON, which would fail the
-      // whole job, where today the row is skipped by parseJson's null default.
-      //
-      // Note this makes the validators' Array.isArray(farmed) check always
-      // pass *for this reader*, so a row whose farmed was some other type
-      // would now merge where it used to be skipped. No writer can produce
-      // that (every one serializes farmed through compactMapsSnapshotForStorage
-      // or writes []), and merging is the better outcome anyway: the section
-      // is not folded here, so skipping dropped a country's whole
-      // popular/favourites contribution over a field this job never reads.
-      `select case when json_valid(payload_json)
-                then json_replace(payload_json, '$.farmed', json('[]'))
-                else payload_json
-              end as payload_json
-       from country_maps_snapshots where country = ?`,
+      "select payload_json from country_maps_snapshots where country = ?",
       [String(countryRow.country)],
     )).rows[0];
-    const stored = payloadRow ? toStoredCountryMapsData(parseJson<unknown>(payloadRow.payload_json, null)) : null;
+    // The farmed section is ~90% of a country payload (~190 MB across all
+    // countries) and this merge never reads it: the loop below folds only
+    // mostPlayed, favourites, favouritesByPlayer and beatmapsetsPool, and
+    // GLOBAL's farmed data lives in the row-granular projection instead. It
+    // used to be dropped in SQL (json_replace to an empty array), which kept it
+    // out of V8 entirely. payload_json is a gzip blob now and SQLite cannot see
+    // inside one, so the whole payload is unpacked and parsed here and farmed
+    // is dropped right after. That costs one country's farmed entries as
+    // short-lived garbage per iteration, never the sum: everything this
+    // iteration parsed is unreachable before the next country loads, and only
+    // the folded sections are carried across iterations.
+    //
+    // Dropping it still earns its keep: toStoredCountryMapsData runs a legacy
+    // payload through compactMapsSnapshotForStorage, which would re-derive a
+    // farmed board this job discards.
+    //
+    // Replaced with an empty array rather than deleted: both payload validators
+    // (isStoredCountryMapsData, isCountryMapsDataShape) require `farmed` to be
+    // an array, so removing the key would fail every country and silently
+    // produce an empty GLOBAL snapshot. For the same reason a row whose farmed
+    // is some other type merges here instead of being skipped over a field this
+    // job never reads. A malformed payload is still tolerated: unpackJson falls
+    // back to null and the row is skipped.
+    const stored = toStoredCountryMapsData(withoutStoredFarmed(
+      payloadRow ? unpackJson<unknown>(payloadRow.payload_json, null) : null,
+    ));
     if (!stored) continue;
     for (const entry of stored.mostPlayed) {
       let players = mostPlayedByBeatmap.get(entry.beatmapId);
@@ -4899,7 +4906,7 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
      values (?, ?, ?, ?)
      on conflict(country) do update set payload_json = excluded.payload_json, generated_at = excluded.generated_at, refreshed_at = excluded.refreshed_at`,
-    [GLOBAL_COUNTRY_CODE, json(stored), generatedAt, refreshedAt],
+    [GLOBAL_COUNTRY_CODE, packJson(stored), generatedAt, refreshedAt],
   );
 
   // Intentionally does not hydrate `stored` back into display form: the only
@@ -4913,6 +4920,14 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     favourites: stored.favourites.length,
     beatmapsetPool: stored.beatmapsetsPool.length,
   };
+}
+
+// Blanks the farmed section of a raw payload for readers that never fold it.
+// Not a validator: a payload that is not a plain object is passed through so
+// toStoredCountryMapsData still rejects it.
+function withoutStoredFarmed(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
+  return { ...(parsed as Record<string, unknown>), farmed: [] };
 }
 
 // Normalises a stored maps payload (compact schema v2 or the legacy hydrated
@@ -4931,50 +4946,73 @@ async function persistMapsSnapshot(db: Db, country: string, value: CountryMapsDa
     `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
      values (?, ?, ?, ?)
      on conflict(country) do update set payload_json = excluded.payload_json, generated_at = excluded.generated_at, refreshed_at = excluded.refreshed_at`,
-    [country.toUpperCase(), json(compactMapsSnapshotForStorage(value)), value.generatedAt, refreshedAt],
+    [country.toUpperCase(), packJson(compactMapsSnapshotForStorage(value)), value.generatedAt, refreshedAt],
   );
 }
 
+/**
+ * Brings every country_maps_snapshots row up to how a fresh write stores one:
+ * compact schema v2, gzipped. Both halves are backlog work, so this is the
+ * script (`npm run compact:storage`) that converts rows the live writers have
+ * not replaced yet.
+ *
+ * The scan is unconditional. Candidate selection used to be a SQL prefix test
+ * on the payload text, which cannot see inside a gzip blob; at one row per
+ * tracked country the cheapest correct filter is to read each one and decide in
+ * JS, yielding between rows. Compact snapshots still stored as text are
+ * repacked; already-packed v2 rows are skipped. Guarded updates below preserve
+ * concurrent writes and leave persistently busy countries for a later pass.
+ */
 export async function compactCountryMapsSnapshots(db: Db): Promise<{ scanned: number; compacted: number; skipped: number }> {
   const countries = (await exec(
     db,
-    `select country
-     from country_maps_snapshots
-     where payload_json not like '{"schemaVersion":2,%'
-     order by country`,
+    "select country from country_maps_snapshots order by country",
   )).rows;
   let compacted = 0;
   let skipped = 0;
   for (const countryRow of countries) {
     const country = String(countryRow.country);
-    const row = (await exec(
-      db,
-      "select country, payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?",
-      [country],
-    )).rows[0];
-    if (!row) {
-      skipped++;
-      continue;
+    let written = false;
+    // Workers can refresh or scrub a snapshot while this maintenance pass is
+    // packing it. Retry from fresh data after a conflict, with a finite budget
+    // so a busy country cannot hold up the rest of the pass.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await yieldToEventLoop();
+      const row = (await exec(
+        db,
+        "select country, payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?",
+        [country],
+      )).rows[0];
+      if (!row) break;
+      const isPacked = typeof row.payload_json !== "string";
+      const parsed = unpackJson<unknown>(row.payload_json, null);
+      if (!parsed) break;
+
+      let stored: StoredCountryMapsData;
+      if (isStoredCountryMapsData(parsed)) {
+        if (isPacked) break;
+        stored = parsed;
+      } else {
+        if (!isCountryMapsDataShape(parsed) || !isUsableMapsData(parsed)) break;
+        await persistMapsSnapshotDisplayMetadata(db, parsed, String(row.refreshed_at));
+        stored = compactMapsSnapshotForStorage(parsed);
+      }
+
+      // Preserve both stamps, and only replace the exact snapshot we read.
+      // Timestamp checks also catch a freshness-only update with equal JSON.
+      const result = await exec(
+        db,
+        `update country_maps_snapshots set payload_json = ?
+         where country = ? and payload_json = ? and generated_at = ? and refreshed_at = ?`,
+        [packJson(stored), country, row.payload_json, row.generated_at, row.refreshed_at],
+      );
+      if (Number(result.rowsAffected) > 0) {
+        written = true;
+        break;
+      }
     }
-    const parsed = parseJson<unknown>(row.payload_json, null);
-    if (!parsed || isStoredCountryMapsData(parsed)) {
-      skipped++;
-      continue;
-    }
-    if (!isCountryMapsDataShape(parsed) || !isUsableMapsData(parsed)) {
-      skipped++;
-      continue;
-    }
-    const refreshedAt = String(row.refreshed_at ?? nowIso());
-    await persistMapsSnapshotDisplayMetadata(db, parsed, refreshedAt);
-    await exec(
-      db,
-      `update country_maps_snapshots
-       set payload_json = ?, generated_at = ?, refreshed_at = ?
-       where country = ?`,
-      [json(compactMapsSnapshotForStorage(parsed)), String(row.generated_at ?? parsed.generatedAt), refreshedAt, country],
-    );
-    compacted++;
+    if (written) compacted++;
+    else skipped++;
   }
   return { scanned: countries.length, compacted, skipped };
 }

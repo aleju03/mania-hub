@@ -2900,7 +2900,22 @@ export type LiveScoreSubmissionResult =
   /* owner: who the score actually belongs to, on a "not_owned" answer. */
   | { ok: false; reason: LiveScoreSubmissionFailure; owner?: string | null; retryAfterMs?: number | null };
 
-export async function submitLiveMissingScore(userId: number, link: string): Promise<LiveScoreSubmissionResult> {
+export type LiveScoreSubmissionResponse = LiveScoreSubmissionResult
+  | { ok: true; queued: true; jobId: number };
+
+export interface LiveScoreImportStatus {
+  jobId: number;
+  status: "queued" | "running" | "done";
+  result?: LiveScoreSubmissionResult;
+}
+
+export async function fetchLiveScoreImportStatuses(userId: number, jobIds: number[], signal?: AbortSignal): Promise<LiveScoreImportStatus[]> {
+  const query = new URLSearchParams({ userId: String(userId), ids: jobIds.slice(0, 50).join(",") });
+  const result = await fetchLiveJson<{ statuses: LiveScoreImportStatus[] }>(`/api/score-submissions?${query}`, { signal });
+  return result.statuses;
+}
+
+export async function submitLiveMissingScore(userId: number, link: string): Promise<LiveScoreSubmissionResponse> {
   const base = getLiveBackendUrl();
   if (!base) return { ok: false, reason: "failed" };
   let response: Response;
@@ -2931,7 +2946,7 @@ export async function submitLiveMissingScore(userId: number, link: string): Prom
       owner: typeof payload?.owner === "string" ? payload.owner : null,
     };
   }
-  return payload as unknown as LiveScoreSubmissionResult;
+  return payload as unknown as LiveScoreSubmissionResponse;
 }
 
 /* Tells the backend which players a freshly dealt pack drew, so cold

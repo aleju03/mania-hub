@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 import {
   CHART_ANALYSIS_VERSION,
   OSU_FILE_REPAIR_META_KEY,
@@ -243,7 +244,7 @@ describe("invalidateOsuFileRepairDerivatives", () => {
       await invalidateOsuFileRepairDerivatives(db, new JobQueue(db), [10], { includePlayerSkills: true });
 
       const row = (await exec(db, "select plays_json, computed_at from player_skill_ratings where user_id = 7")).rows[0];
-      const stored = JSON.parse(String(row.plays_json)) as { plays: Array<{ beatmapId: number }> };
+      const stored = unpackJson<{ plays: Array<{ beatmapId: number }> }>(row.plays_json, { plays: [] });
       expect(stored.plays.map((play) => play.beatmapId)).toEqual([11]);
       expect(Date.parse(String(row.computed_at))).toBeLessThan(Date.now() - 12 * 60 * 60_000);
       const jobs = (await exec(db, "select type from jobs order by type")).rows.map((job) => job.type);

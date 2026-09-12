@@ -24,7 +24,7 @@ import {
   type GoatPollNominee,
 } from "#/lib/live-backend";
 import { DEFAULT_COUNTRY_CODE } from "#/lib/country";
-import { searchPlayers } from "#/lib/player-search";
+import { searchPlayers, searchPlayersOnOsu } from "#/lib/player-search";
 import { useDocumentVisible } from "#/lib/window-activity";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
@@ -717,6 +717,7 @@ export function GoatPoll() {
                   <>
                     <SearchInput
                       onSearch={(q) => searchPlayers(q)}
+                      onSearchOsu={searchPlayersOnOsu}
                       onSelect={(user) =>
                         void handleNominate({
                           osuUserId: user.id,

@@ -1,9 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { checkWriteGateOverloaded, parseJson } from "../../db.js";
 import { enqueueLeaderboardImport, getLeaderboardImportStatuses } from "../../features/leaderboard-import.js";
-import { parseScoreLink, submitMissingScore } from "../../features/score-submissions.js";
-import { errorContext, logWarn } from "../../logger.js";
-import { OsuApiError } from "../../osu/client.js";
+import { enqueueScoreImport, getScoreImportStatuses, parseScoreLink } from "../../features/score-submissions.js";
 import type { HttpContext } from "../context.js";
 import { isAdmin, normalizeIdList, readBody } from "../request.js";
 import { checkRate, sendJson, sendRateLimited, sendWritePressureShed } from "../respond.js";
@@ -17,6 +15,17 @@ import { checkRate, sendJson, sendRateLimited, sendWritePressureShed } from "../
 export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, url: URL): Promise<boolean> {
   if (url.pathname === "/api/admin/leaderboard-imports") return handleLeaderboardImport(req, res, ctx, url);
   if (url.pathname !== "/api/score-submissions") return false;
+  res.setHeader("cache-control", "no-store");
+  if (req.method === "GET") {
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    const ids = normalizeIdList((url.searchParams.get("ids") ?? "").split(",")).slice(0, 50);
+    sendJson(req, res, ctx, 200, { statuses: await getScoreImportStatuses(ctx.db, userId, ids) });
+    return true;
+  }
   if (req.method !== "POST") {
     sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
     return true;
@@ -25,7 +34,7 @@ export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: Ser
   const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
   const userId = Number(body.userId);
   const link = typeof body.link === "string" ? body.link : "";
-  if (!Number.isInteger(userId) || userId <= 0) {
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
     sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
     return true;
   }
@@ -45,40 +54,21 @@ export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: Ser
     sendJson(req, res, ctx, 503, { error: "submissions_unavailable" });
     return true;
   }
-  // Under write pressure an import waits its turn instead of joining the
-  // pile-up that saturated the lock on 2026-08-29; the dialog already knows
-  // how to wait on a 429 and retry.
+  // Shed overloaded admission writes before accepting responsibility for a job.
   const shed = checkWriteGateOverloaded(ctx.serveWriteDb);
   if (shed) {
     sendWritePressureShed(req, res, ctx, "score-submissions", shed.retryAfterMs);
     return true;
   }
-  // The submission buckets exist to bound osu! API spend (a per-IP hourly cap
-  // plus a site-wide backstop, the layered country-activation treatment), so
-  // they are charged exactly when that spend is about to happen: after local
-  // validation, and not at all for a submission the stored rows can answer.
-  // Malformed spam and already-tracked repeats therefore cannot drain the
-  // shared window for everyone else. publicCostly above stays unconditional:
-  // it is per-IP, so a flood there only starves its own sender.
-  const beforeOsuFetch = () => {
+  // Reserve the submission budget at admission, before background API work.
+  // Cached scores and duplicate pending jobs skip these buckets.
+  const beforeEnqueue = () => {
     if (!ctx.abuse || isAdmin(req, ctx)) return { allowed: true } as const;
     const perIp = ctx.abuse.check(req, ctx.config, "scoreSubmit");
     if (!perIp.allowed) return perIp;
     return ctx.abuse.checkGlobal(ctx.config, "scoreSubmitGlobal");
   };
-  let result;
-  try {
-    result = await submitMissingScore(ctx.serveWriteDb, queue, ctx.events, ctx.config, ctx.osu, userId, link, { beforeOsuFetch });
-  } catch (error) {
-    // Non-404 osu! API trouble (outage, rate pressure) is transient and not
-    // the submitter's fault; anything else belongs to the catch-all.
-    if (error instanceof OsuApiError) {
-      logWarn("score_submission_osu_failed", { user_id: userId, ...errorContext(error) });
-      sendJson(req, res, ctx, 503, { error: "osu_unavailable" });
-      return true;
-    }
-    throw error;
-  }
+  const result = await enqueueScoreImport(ctx.serveWriteDb, queue, userId, link, beforeEnqueue);
   if (!result.ok) {
     if (result.reason === "rate_limited") {
       sendRateLimited(req, res, ctx, result.rate);
@@ -91,7 +81,7 @@ export async function handleScoreSubmissionRoutes(req: IncomingMessage, res: Ser
     });
     return true;
   }
-  sendJson(req, res, ctx, 200, result);
+  sendJson(req, res, ctx, "queued" in result ? 202 : 200, result);
   return true;
 }
 

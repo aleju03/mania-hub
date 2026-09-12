@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScoresFromOsu, getPlayerReplayScores, runProfileUserRefreshJob } from "../src/features/player-profiles.js";
+import { unpackJson } from "../src/shared/compressed-json.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -861,6 +862,36 @@ describe("profile recent osu! hand-off", () => {
     expect(getUserRecentScores).toHaveBeenCalledTimes(1);
     expect(handed).toHaveLength(1);
     expect(second.payload).toHaveLength(1);
+  });
+});
+
+// profile_section_cache.payload_json is gzipped: the `recent` sections were the
+// largest stored text in the database and an osu! score list compresses hard.
+// The column keeps its text declaration, so the reader has to handle both forms.
+describe("profile section cache storage", () => {
+  it("stores a recent section gzipped and still reads a legacy text row", async () => {
+    const fresh = score({ id: 1, beatmapId: 101, title: "Fresh", pp: 40, endedAt: new Date(Date.now() - 60_000).toISOString() });
+    const getUserRecentScores = vi.fn(async () => [fresh]);
+    const first = await getPlayerRecentScoresFromOsu(db, { getUserRecentScores }, USER_ID);
+    expect((first.payload as OscScore[]).map((entry) => entry.id)).toEqual([1]);
+
+    const cacheKey = `recent:${USER_ID}`;
+    const stored = (await exec(db, "select payload_json from profile_section_cache where cache_key = ?", [cacheKey])).rows[0]?.payload_json;
+    // libsql hands a blob back as an ArrayBuffer, so a string here would mean
+    // the row was written as plain text.
+    expect(stored).toBeInstanceOf(ArrayBuffer);
+    const bytes = new Uint8Array(stored as ArrayBuffer);
+    expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b]);
+    expect(bytes.byteLength).toBeLessThan(JSON.stringify([fresh]).length);
+    expect(unpackJson<OscScore[]>(stored, []).map((entry) => entry.id)).toEqual([1]);
+
+    // A row written before the column was compressed reads back unchanged, and
+    // still counts as a cache hit, so nothing re-fetches it from osu!.
+    const legacy = score({ id: 2, beatmapId: 102, title: "Legacy", pp: 30, endedAt: new Date(Date.now() - 60_000).toISOString() });
+    await exec(db, "update profile_section_cache set payload_json = ? where cache_key = ?", [JSON.stringify([legacy]), cacheKey]);
+    const second = await getPlayerRecentScoresFromOsu(db, { getUserRecentScores }, USER_ID);
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    expect((second.payload as OscScore[]).map((entry) => entry.id)).toEqual([2]);
   });
 });
 

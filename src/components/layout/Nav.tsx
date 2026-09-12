@@ -12,7 +12,7 @@ import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettings
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
-import { searchPlayers } from "../../lib/player-search";
+import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { displayCountryName, getCountryFlagGradient, getCountryFlagLargeUrl, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
@@ -984,6 +984,7 @@ export function Nav() {
             className="w-52"
             placeholder={t`find player...`}
             onSearch={handleSearch}
+            onSearchOsu={searchPlayersOnOsu}
             onSelect={(u) => navigate({
               to: "/player/$username",
               params: { username: u.username },
@@ -1107,6 +1108,7 @@ export function Nav() {
                   className="w-full"
                   placeholder={t`find player...`}
                   onSearch={handleSearch}
+                  onSearchOsu={searchPlayersOnOsu}
                   onSelect={(u) => {
                     setMenuOpen(false);
                     navigate({

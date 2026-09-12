@@ -9015,6 +9015,10 @@ msgstr "最佳成绩里没有 Mod"
 msgid "No nearby players have farmed this yet."
 msgstr "还没有水平相近的玩家刷过这张。"
 
+#: src/components/ui/SearchInput.tsx
+msgid "No osu! player named \"{trimmedQuery}\""
+msgstr "osu! 上没有名为“{trimmedQuery}”的玩家"
+
 #: src/routes/player/$username.tsx
 msgid "No pattern signal for this keymode yet."
 msgstr "这个键数还没有可用的谱型数据。"
@@ -9403,6 +9407,10 @@ msgstr "空间不足"
 #: src/routes/farm-helper.tsx
 msgid "not found"
 msgstr "未找到"
+
+#: src/components/ui/SearchInput.tsx
+msgid "Not here? Search osu! for \"{trimmedQuery}\""
+msgstr "不在列表里？在 osu! 上搜索“{trimmedQuery}”"
 
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -12294,6 +12302,7 @@ msgstr "送给 {0}"
 #~ msgid "Send update"
 #~ msgstr "发送更新"
 
+#: src/components/player/AddScoreModal.tsx
 #: src/routes/report.tsx
 msgid "Sending..."
 msgstr "正在发送..."
