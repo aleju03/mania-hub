@@ -106,6 +106,25 @@ describe("analyzeEffectiveLn", () => {
     expect(effectiveHoldMask(chain(57, -1), { od: 8.5 }).some(Boolean)).toBe(false);
   });
 
+  it.each([4, 400])("does not promote %s tap-covered repeated holds into LN identity", (count) => {
+    // Repeated half-duty holds: 67.5ms bodies become 45ms at DT. Unlike
+    // a four-column roll, these have short enough same-lane gaps to qualify
+    // for chain difficulty. Both short-chart fallback and windowed identity
+    // must still require long tails.
+    const notes = Array.from({ length: count }, (_, i) => ({
+      column: 0, time: i * 135, endTime: i * 135 + 67.5, isHold: true,
+    }));
+    const nomod = analyzeEffectiveLn(notes, { rate: 1, od: 7.5 });
+    expect(chartIsLn(4, { lnRatio: nomod.holdRatio, lnEffectiveRatio: nomod.effectiveLnRatio })).toBe(true);
+    const dt = analyzeEffectiveLn(notes, { rate: 1.5, od: 7.5 });
+    expect(dt).toMatchObject({ holdRatio: 1, longTails: 0, chainedShortHolds: count - 1, effectiveLnRatio: 0 });
+    expect(chartIsLn(4, { lnRatio: dt.holdRatio, lnEffectiveRatio: dt.effectiveLnRatio })).toBe(false);
+    const baked = notes.map(note => ({ ...note, time: note.time / 1.5, endTime: note.endTime / 1.5 }));
+    expect(analyzeEffectiveLn(baked, { od: 7.5 })).toEqual(dt);
+    const mirrored = notes.map(note => ({ ...note, column: 3, time: note.time - 3000, endTime: note.endTime - 3000 })).reverse();
+    expect(analyzeEffectiveLn(mirrored, { rate: 1.5, od: 7.5 })).toEqual(dt);
+  });
+
   it("keeps incidental short chains in rice behind both LN identity gates", () => {
     const chain = Array.from({ length: 100 }, (_, i) => ({ column: 0, time: i * 114, end: i * 114 + 57 }));
     const rice = Array.from({ length: 150 }, (_, i) => ({ column: 1 + i % 3, time: i * 76 }));
@@ -468,27 +487,34 @@ describe("recomputeLnEffectiveChunk", () => {
     db.close();
   });
 
-  it("refreshes v2 effective / v5 scalar chains across base, DT and HT without changing native MSD", async () => {
+  it("removes v3 chain-only LN identity across base and DT while preserving HT and native MSD", async () => {
     const db = await makeDb();
     const notes = Array.from({ length: 200 }, (_, i) => ({ column: i % 2, time: i * 57, end: i * 57 + 57 }));
     await storeCachedBeatmapFile(db, 735, osuText(notes, 8.5), { source: "test" });
-    await insertReady(db, 735, "rc", {
-      danDt: { primaryFamily: "dan", lnEffectiveRatio: 0, lnEffectiveVersion: 2 },
-      danHt: { primaryFamily: "ln", lnEffectiveRatio: 1, lnEffectiveVersion: 2 },
+    await insertReady(db, 735, "ln", {
+      danDt: { primaryFamily: "ln", lnEffectiveRatio: 1, lnEffectiveVersion: 3 },
+      danHt: { primaryFamily: "ln", lnEffectiveRatio: 1, lnEffectiveVersion: 3 },
     });
-    const stale = JSON.stringify({ values: { Overall: 20, LN: 0 }, lnSkill: { version: 5, eligible: false, rating: 0 } });
+    const stale = JSON.stringify({ values: { Overall: 20, LN: 25 }, lnSkill: { version: 6, eligible: true, rating: 25 } });
     await exec(db, `update beatmap_chart_analysis set
-      classification_json = json_set(classification_json, '$.lnRatio', 1, '$.lnEffectiveRatio', 0, '$.lnEffectiveVersion', 2),
+      classification_json = json_set(classification_json, '$.lnRatio', 1, '$.lnEffectiveRatio', 1, '$.lnEffectiveVersion', 3),
       msd_json = ?, msd_dt_json = ?, msd_ht_json = ? where beatmap_id = 735`, [stale, stale, stale]);
     expect((await recomputeLnEffectiveChunk(db, 0, 10)).patched).toBe(1);
     const row = (await exec(db, "select * from beatmap_chart_analysis where beatmap_id = 735")).rows[0];
-    expect(row.primary_family).toBe("ln");
+    expect(row.primary_family).toBe("dan");
     expect(JSON.parse(String(row.classification_json)).lnEffectiveVersion).toBe(LN_EFFECTIVE_MODEL_VERSION);
+    expect(JSON.parse(String(row.dan_dt_json))).toMatchObject({ primaryFamily: "dan", lnEffectiveRatio: 0,
+      lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION });
+    expect(JSON.parse(String(row.dan_ht_json))).toMatchObject({ primaryFamily: "ln", lnEffectiveRatio: 1,
+      lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION });
     for (const column of ["msd_json", "msd_dt_json", "msd_ht_json"]) {
       const artifact = JSON.parse(String(row[column]));
       expect(artifact.values.Overall).toBe(20);
-      expect(artifact.values.LN).toBeGreaterThan(0);
-      expect(artifact.lnSkill).toMatchObject({ version: LN_SKILL_VERSION, eligible: true });
+      expect(artifact.lnSkill.rating).toBeGreaterThan(0);
+      const eligible = column === "msd_ht_json";
+      expect(artifact.lnSkill).toMatchObject({ version: LN_SKILL_VERSION, eligible });
+      if (eligible) expect(artifact.values.LN).toBeGreaterThan(0);
+      else expect(artifact.values.LN).toBe(0);
       expect(artifact.lnSkill.structure.profiles.ln_release).not.toHaveProperty("rating");
       expect(artifact.lnSkill.structure).not.toHaveProperty("unsupported");
     }

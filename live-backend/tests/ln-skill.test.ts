@@ -10,12 +10,19 @@ describe("independent 4K LN skill", () => {
   it("prices near-window hold chains while retaining the rice publication gate", () => {
     const notes = Array.from({ length: 100 }, (_, i) => hold(0, i * 114, 57));
     const result = analyzeLnSkill(chart(notes, 8.5))!;
-    expect(result.eligible).toBe(true);
+    expect(result.eligible).toBe(false);
+    expect(result.effectiveRatio).toBe(0);
     expect(result.rating).toBeGreaterThan(0);
     expect(result).not.toHaveProperty("calibration");
     const rice = Array.from({ length: 150 }, (_, i) => hold(1 + i % 3, i * 76, 0));
     expect(analyzeLnSkill(chart([...notes, ...rice], 8.5))!.eligible).toBe(false);
     expect(analyzeLnSkill(chart(notes, 0))!.rating).toBe(0);
+    // Chain work can still raise difficulty on a chart whose long tails
+    // independently establish LN identity.
+    const long = Array.from({ length: 200 }, (_, i) => hold(2, i * 100, 80));
+    const mixed = analyzeLnSkill(chart([...notes, ...long], 8.5))!;
+    expect(mixed.eligible).toBe(true);
+    expect(mixed.rating).toBeGreaterThan(analyzeLnSkill(chart(long, 8.5))!.rating!);
   });
 
   it("rates rice and tap-covered holds at zero", () => {

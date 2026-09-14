@@ -55,7 +55,7 @@ half-inverse variants and mapper-coined labels; names never award bonuses.
 
 ## Scalar rating and performance target
 
-`ln-skill.ts` version 6 supplies the single independent LN rating and consumes
+`ln-skill.ts` version 7 supplies the single independent LN rating and consumes
 the same exact timeline. It uses
 `effectiveHoldMask` at the played rate/OD to remove free holds, then combines
 release impulses, same-hand held-finger coordination, hold starts and
@@ -63,7 +63,7 @@ release-to-repress recovery in two hand strains (700 ms half-life). Section
 peaks are weighted by LN work. A separate hard rice section cannot supply LN
 strain or endurance. Mirroring and a global time offset preserve the result.
 
-Effective-hold model v3 normally requires played duration to exceed the
+Effective-hold model v4 requires identity-bearing holds to exceed the
 OD-dependent release window, `1.5 * (64 - 3 * OD)` ms. It additionally prices
 near-window same-lane hold chains: at least two consecutive hold-to-hold
 links (three heads), each contributing body's duration at least the window
@@ -71,6 +71,11 @@ minus the existing 20 ms shared-motion tolerance, and a nonnegative
 tail-to-next-head gap no greater than that window. A chain's final hold needs
 its own qualifying outgoing link or a genuinely long body to count.
 `chainedShortHolds` reports these additions separately from `longTails`.
+These chain additions contribute difficulty only: the 40% identity gate uses
+the note-weighted median of per-section **long-tail** share, excluding every
+tap-covered chain addition. In v3 the same additions also established
+identity, incorrectly promoting high-hold DT charts. V4 restores the
+long-tail identity gate while retaining the course difficulty improvement.
 This is a rearticulation workload heuristic, not a proof that an early
 release cannot score. Cached top-course gaps are commonly 40–60 ms, not
 literal same-lane tail/head contact.
@@ -111,7 +116,9 @@ the fix makes these course-order results an in-sample check, not independent
 player-outcome validation. No scale transfers to other keycounts.
 
 To earn the independent 4K LN axis a play must pass both 45% hold share and
-40% effective share at its own rate/OD. Mixed charts can retain a diagnostic
+40% long-tail section share at its own rate/OD. The difficulty mask and
+`effectiveHolds` still include near-window chains; `effectiveLnRatio` is the
+separate identity statistic and excludes them. Mixed charts can retain a diagnostic
 scalar while publishing `values.LN = 0` if they fail identity. Other modes
 keep their existing hold-share gates and Overall-on-LN player axes (7K:
 37.5%; others: 45%). This is distinct from calibrating their score quality.
@@ -155,16 +162,16 @@ parsing/API work. DT/custom-rate views never relabel 1× evidence as
 accelerated evidence. A stale LN artifact can refresh without discarding
 the cached native vector if the chart file is unavailable.
 
-Player skills version 38 seeds from versions 37 through 16 and migrates
+Player skills version 40 seeds from versions 39 through 16 and migrates
 compatible retained evidence in bounded
 passes. It recomputes changed calibrated goals, removes stale 4K tail blending
-(tail pass version 4), and refreshes LN version 6 metadata. Historical scores
+(tail pass version 4), and refreshes LN version 7 metadata. Historical scores
 whose facts/calculation are pending remain durable with no credited stale
 SSR. Budget-deferred work queues continuation; missing files alone do not
 create a retry loop. Vibro, chart-family and Dan evidence policies remain in
 force. Chart sweeps refresh eligible base/DT/HT LN artifacts and clear obsolete
-4K tail artifacts. Effective-LN sweep v10 also fills full search evidence;
-rate-estimate cache v23 and player Dan/pattern sweeps v35/v11 propagate it.
+4K tail artifacts. Effective-LN sweep v11 also fills full search evidence;
+rate-estimate cache v24 and player Dan/pattern sweeps v37/v12 propagate it.
 The chart-table namespace remains version 1: the targeted chart sweep
 invalidates effective/model artifacts without hiding the entire cached map
 corpus. The native tail-pass version remains 4 because native MSD did not
@@ -198,6 +205,14 @@ the effective-share gate even when raw hold share exceeds 45%, and chain
 boundaries, rates, mirrors, offsets, isolated pairs and short overlapping rolls.
 Native Overall references are cached values, not newly fitted LN targets or
 a claim of cross-skill difficulty equivalence.
+
+V4 also checks the cached high-hold DT negatives FREEDOM DiVE
+[FULL DiMENSiONS] and Le Porteur d'Ombre [Lightless], which the sub-45%
+controls cannot cover. Their identity shares are 20.7% and 24.3%; both stay
+rice. Synthetic repeated half-duty holds exercise chain difficulty at 100%
+raw holds, short-chart fallback, rate baking, mirroring and time offsets.
+All 17 courses remain LN-eligible with exactly unchanged scalar ratings
+versus v3; the identity fix does not undo the course-order improvement.
 
 One-off corpus data/scripts/results stay in ignored `local-notes/`, not this
 reference directory. Structural correctness and replay quality calibration

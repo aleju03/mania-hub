@@ -11,7 +11,7 @@ import { beatLengthLookup } from "./ln-analysis/search-evidence.js";
 // separate release-aware performance goal. v3 scoped v2 artifacts to 4K.
 // v5: tap-covered geometric overlaps are not mandatory hold/release work.
 // v6: recurring near-window same-lane holds retain rearticulation work.
-export const LN_SKILL_VERSION = 6;
+export const LN_SKILL_VERSION = 7;
 export const LN_SKILL_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 export function isLnSkillSupported(keyCount: number): boolean {
   return LN_SKILL_KEY_COUNTS.has(keyCount);

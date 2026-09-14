@@ -4728,7 +4728,8 @@ export const LN_EFFECTIVE_RECOMPUTE_JOB = "recompute_ln_effective_sweep";
 // v8 removes the short-spanning exception and refreshes LN v5 artifacts.
 // v9 fills full-analysis search evidence on eligible LN charts.
 // v10 refreshes effective v3, scalar v6 and structure-only profile contracts.
-export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v10";
+// v11 separates long-tail identity from near-window chain difficulty.
+export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v11";
 const LN_EFFECTIVE_CHUNK = 60;
 
 export interface LnEffectiveChunkResult {

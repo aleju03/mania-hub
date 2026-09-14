@@ -29,4 +29,5 @@
 // Other keymodes retain their legacy LN calculation.
 // v22: tap-covered 4K holds do not become LN from geometric head overlap.
 // v23: near-window chained 4K holds retain LN rearticulation work.
-export const DAN_ESTIMATE_CACHE_VERSION = 23;
+// v24: tap-covered chains contribute difficulty but cannot establish LN identity.
+export const DAN_ESTIMATE_CACHE_VERSION = 24;

@@ -10,7 +10,9 @@
  * A lone pair, a tiny body, or another column's interior head is insufficient.
  * All durations and gaps are measured at the played rate, exactly once.
  *
- * The chart-level share is the note-weighted median of the effective share
+ * Chains contribute difficulty only: tap-covered rearticulation does not
+ * establish LN identity. The chart-level share is the note-weighted median
+ * of holds longer than the release window
  * across 10s windows, so a chart is LN when most of its playtime is, with
  * dense sections weighing more than sparse intros: short-LN filler between
  * real LN sections does not dilute them, and one LN wall in a rice chart does
@@ -46,7 +48,7 @@ export interface EffectiveLnAnalysis {
   holdRatio: number;
   /** Effective holds over all notes, chart-wide. Gates the tail-aware calc pass. */
   effectiveHoldRatio: number;
-  /** Note-weighted median of the per-window effective share. The second 4K LN identity gate. */
+  /** Note-weighted median of per-window long-tail share, excluding tap-covered chains. The second 4K LN identity gate. */
   effectiveLnRatio: number;
   /** Tap-covered holds without an interior head. Not effective. */
   shortTails: number;
@@ -80,7 +82,7 @@ export const LN_EFFECTIVE_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 
 /** Stored beside the derived share so a model change can rescan every row,
  * including rows whose final LN/rice side happens not to move. */
-export const LN_EFFECTIVE_MODEL_VERSION = 3;
+export const LN_EFFECTIVE_MODEL_VERSION = 4;
 
 /**
  * The effective share at which a 4K chart's identity is LN.
@@ -258,8 +260,11 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
   const holdRatio = total > 0 ? counts.holds / total : 0;
   const effectiveHoldRatio = total > 0 ? counts.effectiveHolds / total : 0;
 
-  // Per-window shares, then the note-weighted median.
-  let effectiveLnRatio = effectiveHoldRatio;
+  // Identity requires holds that exceed the release window. Near-window
+  // chains remain in the difficulty mask, but repeating tap-covered bodies
+  // cannot turn an otherwise rice chart into LN (including at faster rates).
+  // Per-window long-tail shares, then the note-weighted median.
+  let effectiveLnRatio = total > 0 ? counts.longTails / total : 0;
   if (total > 0) {
     const firstTime = notes.reduce((first, note) => Math.min(first, note.time / rate), Infinity);
     const windows = new Map<number, { notes: number; effective: number }>();
@@ -267,7 +272,7 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
       const slot = Math.floor((note.time / rate - firstTime) / WINDOW_MS);
       const window = windows.get(slot) ?? { notes: 0, effective: 0 };
       window.notes += 1;
-      if (verdicts[index]?.effective) window.effective += 1;
+      if (verdicts[index]?.reason === "long") window.effective += 1;
       windows.set(slot, window);
     });
     const shares = [...windows.values()]

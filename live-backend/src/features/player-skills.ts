@@ -136,7 +136,8 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // v37: effective LN v2 / independent LN v5 remove tap-covered overlap credit.
 // v38: effective LN v3 / independent LN v6 price near-window hold chains.
 // v39: native lazer 7K LN replay rescores refine Wife press/hold contexts.
-export const PLAYER_SKILLS_VERSION = 39;
+// v40: effective LN v4 restores long-tail identity while LN v7 retains chain difficulty.
+export const PLAYER_SKILLS_VERSION = 40;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -158,7 +159,7 @@ export const PLAYER_SKILLS_VERSION = 39;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -6719,7 +6720,8 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
 // v36: lower the 4K LN OD floor from 7.5 to 7 and re-fold stored evidence
 // so newly eligible clears contribute to existing player estimates.
-export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v36";
+// v37: re-fold long-tail-only LN identity after the effective-LN chart refresh.
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v37";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -6981,7 +6983,8 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // which empties the Delay tile of 1/4 chordstream and refills it.
 // v6: 4K effective LN became a demotion-only gate. The chart-side sweep can
 // move stored 4K LN tags, so those plays and their LN axis need the same refold.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v11";
+// v12: remove LN tags/axis credit supported only by tap-covered chains.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v12";
 // The keymodes whose stored per-play tags may still predate their summary.
 // Preserve the existing pattern-keymode sweep; the LN update adds only 4K.
 const PATTERN_SWEEP_KEY_COUNTS = [...new Set([...PATTERN_AXIS_KEY_COUNTS, ...LN_SKILL_KEY_COUNTS])];

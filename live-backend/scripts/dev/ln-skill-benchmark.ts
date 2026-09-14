@@ -98,6 +98,18 @@ const riceControls = [...new Set([...controlIds, ...incidental.map(row => Number
     return { id, rate, ...effective, eligible: chartIsLn(4, { lnRatio: effective.holdRatio, lnEffectiveRatio: effective.effectiveLnRatio }) };
   });
 });
+// High-hold DT negatives catch a different failure than the sub-45% controls:
+// tap-covered same-lane chains must not supply chart identity. Identities
+// select offline fixtures only and are never read by the runtime model.
+const highHoldDtControlIds = [3938191, 4148220];
+const highHoldDtControls = highHoldDtControlIds.flatMap(id => {
+  const text = chartText(id);
+  if (!text) return [];
+  const map = parseManiaBeatmap(text);
+  const effective = analyzeEffectiveLn(map.notes, { rate: 1.5, od: map.od });
+  return [{ id, rate: 1.5, ...effective,
+    eligible: chartIsLn(4, { lnRatio: effective.holdRatio, lnEffectiveRatio: effective.effectiveLnRatio }) }];
+});
 const baselinePath = args.find(arg => arg.startsWith("--baseline="))?.slice("--baseline=".length);
 const baseline: { courses: Array<{ id: number; sha256: string; rating: number | null; referenceMsd: number }> } | null
   = baselinePath ? JSON.parse(readFileSync(baselinePath, "utf8")) : null;
@@ -126,10 +138,12 @@ const acceptance = {
     && ratingSpaceComparison.every(row => Number.isFinite(row.absoluteDifference) && row.absoluteDifference < 1),
   riceControlsPresent: controlIds.every(id => riceControls.some(row => row.id === id)) && riceControls.length > controlIds.length * 3,
   riceControlsRemainRice: riceControls.length > 0 && riceControls.every(row => row.eligible === false),
+  highHoldDtControlsPresent: highHoldDtControls.length === highHoldDtControlIds.length,
+  highHoldDtControlsRemainRice: highHoldDtControls.every(row => row.holdRatio >= 0.45 && row.eligible === false),
   nativeReferencePresent: rows.every(row => row.referenceMsd > 0),
 };
 console.log(JSON.stringify({ modelVersion: LN_SKILL_VERSION, effectiveModelVersion: LN_EFFECTIVE_MODEL_VERSION,
-  acceptance, ratingSpaceComparison, maxRatingSpaceDifference, comparison, riceControls,
+  acceptance, ratingSpaceComparison, maxRatingSpaceDifference, comparison, riceControls, highHoldDtControls,
   byKeyCount, coverage,
   courseEligible: rows.filter(row => row.eligible).length, coursesAvailable: rows.length, coursesExpected: courses.length,
   courses: rows, examples }, null, 2));
