@@ -11,6 +11,7 @@ import {
   setAdminPackWalletEconomy,
   type AdminPackUser,
 } from "../src/features/pack-admin.js";
+import { getPackCardGiftSummary } from "../src/features/pack-gifts.js";
 import { getSharedPackCard } from "../src/features/pack-pulls.js";
 import {
   getPackCollectionCard,
@@ -316,6 +317,78 @@ describe("granted cards as their own collectible", () => {
       "select card_key from pack_showcase_cards where owner_user_id = ? and position = 0",
       [OWNER_ID],
     )).rows[0]?.card_key)).toBe(`${CARD_USER_ID}:v1`);
+  });
+
+  it("moves an accepted gift's receipts and its giver onto the variant key", async () => {
+    await seedCollectionCard(db, OWNER_ID, CARD_USER_ID, { tier: "rare", copies: 1 });
+    const plainKey = String(CARD_USER_ID);
+    await exec(
+      db,
+      `update pack_collection_cards set granted_at = 5000, gifted_by_user_id = 991, gifted_by_username = 'Giver'
+       where owner_user_id = ? and card_key = ?`,
+      [OWNER_ID, plainKey],
+    );
+    await exec(
+      db,
+      `insert into pack_gifts (sender_user_id, recipient_user_id, request_id, claim_token, sender_username,
+         recipient_username, card_key, recipient_card_key, card_user_id, status, sent_at, resolved_at)
+       values (991, ?, 'gift-request-move-0001', 'token', 'Giver', 'collector', ?, ?, ?, 'accepted', 5000, 5000)`,
+      [OWNER_ID, plainKey, plainKey, CARD_USER_ID],
+    );
+
+    const outcome = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: plainKey,
+      tier: "rare",
+      tierLabel: "Handmade",
+    });
+    expect(outcome.ok && outcome.result.cardKey).toBe(`${CARD_USER_ID}:v1`);
+    // The holding kept its giver, and the log it was read out of came with it.
+    expect((await getPackCollectionCard(db, OWNER_ID, `${CARD_USER_ID}:v1`))?.giftedBy)
+      .toEqual({ userId: 991, username: "Giver" });
+    expect(await getPackCardGiftSummary(db, OWNER_ID, `${CARD_USER_ID}:v1`)).toMatchObject({ copies: 1 });
+    expect(await getPackCardGiftSummary(db, OWNER_ID, plainKey)).toEqual({ copies: 0, senders: [] });
+    // The request the sender made is untouched, so their retry still matches.
+    expect(String((await exec(
+      db,
+      "select card_key from pack_gifts where request_id = 'gift-request-move-0001'",
+      [],
+    )).rows[0]?.card_key)).toBe(plainKey);
+  });
+
+  it("does not date a merged-in gift to the holding's own grant", async () => {
+    // A desk grant of its own, then a gifted plain holding merged onto it: the
+    // destination keeps its date, so it must not take the source's giver and
+    // read as that collector having gifted it on the grant's day.
+    const granted = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      tier: "rare",
+      tierLabel: "Handmade",
+    });
+    expect(granted.ok && granted.result.cardKey).toBe(`${CARD_USER_ID}:v1`);
+    await seedCollectionCard(db, OWNER_ID, CARD_USER_ID, { tier: "rare", copies: 1 });
+    const plainKey = String(CARD_USER_ID);
+    await exec(
+      db,
+      `update pack_collection_cards set granted_at = 5000, gifted_by_user_id = 991, gifted_by_username = 'Giver'
+       where owner_user_id = ? and card_key = ?`,
+      [OWNER_ID, plainKey],
+    );
+
+    const merged = await grantAdminPackCard(db, owner, {
+      cardUserId: CARD_USER_ID,
+      cardKey: plainKey,
+      tier: "rare",
+      tierLabel: "Handmade",
+    });
+    expect(merged.ok && merged.result.cardKey).toBe(`${CARD_USER_ID}:v1`);
+    const row = (await exec(
+      db,
+      "select granted_at, gifted_by_user_id from pack_collection_cards where owner_user_id = ? and card_key = ?",
+      [OWNER_ID, `${CARD_USER_ID}:v1`],
+    )).rows[0];
+    expect(Number(row?.granted_at)).not.toBe(5000);
+    expect(row?.gifted_by_user_id).toBeNull();
   });
 
   it("refuses a key belonging to another player", async () => {

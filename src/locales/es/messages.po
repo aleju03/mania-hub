@@ -960,6 +960,14 @@ msgstr "{collectedShown}/{0} obtenidas"
 #~ msgid "{collector}'s collection"
 #~ msgstr "Colección de {collector}"
 
+#: src/components/packs/CardSpotlight.tsx
+#~ msgid "{copiesText} of these copies were gifts, from {sendersText}"
+#~ msgstr "{copiesText} de estas copias fueron regalos, de {sendersText}"
+
+#: src/components/packs/CardSpotlight.tsx
+#~ msgid "{copiesText} of your copies were gifts, from {sendersText}"
+#~ msgstr "{copiesText} de tus copias fueron regalos, de {sendersText}"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "{count, plural, one {# card} other {# cards}}"
 msgstr "{count, plural, one {# carta} other {# cartas}}"
@@ -1296,6 +1304,14 @@ msgstr "{nameLink} la sacó"
 msgid "{nameLink} pulled this on {dateText}"
 msgstr "{nameLink} la sacó el {dateText}"
 
+#: src/components/packs/CardSpotlight.tsx
+msgid "{nameLink} was gifted this card by {giverLink}"
+msgstr "{giverLink} le regaló esta carta a {nameLink}"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "{nameLink} was gifted this card on {dateText} by {giverLink}"
+msgstr "{giverLink} le regaló esta carta a {nameLink} el {dateText}"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "{newCount} new this rotation"
 msgstr "{newCount} nuevos en esta rotación"
@@ -1389,6 +1405,10 @@ msgstr "{rangeStart}–{pageEnd} de {totalText} jugadores"
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{releases} release groups"
 #~ msgstr "{releases} grupos de soltadas"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "{rest} others"
+msgstr "otros {rest}"
 
 #: src/routes/farm-helper.tsx
 msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
@@ -1810,6 +1830,10 @@ msgstr "0h"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "1 clear"
 #~ msgstr "1 clear"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "1 other"
+msgstr "otro más"
 
 #: src/components/packs/PackPulse.tsx
 msgid "1 person has your card"
@@ -6263,6 +6287,14 @@ msgstr "Regalar una carta…"
 msgid "Gift sent"
 msgstr "Regalo enviado"
 
+#: src/components/packs/CardSpotlight.tsx
+msgid "Gifted by {giverLink}"
+msgstr "Regalada por {giverLink}"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Gifted on {dateText} by {giverLink}"
+msgstr "Regalada el {dateText} por {giverLink}"
+
 #. placeholder {0}: inbox.total
 #: src/components/packs/GiftInbox.tsx
 msgid "Gifts ({0})"
@@ -9836,9 +9868,17 @@ msgstr "Una copia para un amigo. Te quedas con {remaining}."
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 msgstr "Un nivel de dan es amplio, así que cada uno se divide en cinco escalones. Un chart puede ser 7--, 7-, 7, 7+ o 7++, del extremo más fácil del 7º dan al más difícil. Esos sufijos ordenan dentro de un nivel, nada más."
 
+#: src/components/packs/CardSpotlight.tsx
+#~ msgid "One of these copies was a gift from {sendersText}"
+#~ msgstr "Una de estas copias fue un regalo de {sendersText}"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "One of those cards is no longer in your collection."
 #~ msgstr "Una de esas cartas ya no está en tu colección."
+
+#: src/components/packs/CardSpotlight.tsx
+#~ msgid "One of your copies was a gift from {sendersText}"
+#~ msgstr "Una de tus copias fue un regalo de {sendersText}"
 
 #: src/routes/communities_.$id.tsx
 msgid "online"
@@ -11348,6 +11388,14 @@ msgstr "Reconstruir ahora"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Rebuilding..."
 msgstr "Reconstruyendo..."
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Received as a gift {timesText} times, from {sendersText}"
+msgstr "Recibida como regalo {timesText} veces, de {sendersText}"
+
+#: src/components/packs/CardSpotlight.tsx
+msgid "Received as a gift from {sendersText}"
+msgstr "Recibida como regalo de {sendersText}"
 
 #: src/routes/farm-helper.tsx
 msgid "recent"

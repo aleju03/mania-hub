@@ -98,12 +98,12 @@ export async function sendPackGift(db: Db, senderUserId: number, input: { recipi
   const pending = Number((await exec(db, "select count(*) as n from pack_gifts where sender_user_id = ? and card_key = ? and status = 'pending'", [senderUserId, key])).rows[0]?.n ?? 0);
   if (Number(source.copies) - pending < 1) return refuse("no_spare");
   const statements: DbStatement[] = [{
-    sql: `insert or ignore into pack_gifts (sender_user_id, recipient_user_id, request_id, claim_token, sender_username, recipient_username, card_key, card_user_id, message, status, sent_at)
-      select ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ? where
+    sql: `insert or ignore into pack_gifts (sender_user_id, recipient_user_id, request_id, claim_token, sender_username, recipient_username, card_key, recipient_card_key, card_user_id, message, status, sent_at)
+      select ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ? where
       exists (select 1 from pack_collection_cards c where c.owner_user_id = ? and c.card_key = ? and ${GIFTABLE_SQL}
         and c.copies - (select count(*) from pack_gifts g where g.sender_user_id = c.owner_user_id and g.card_key = c.card_key and g.status = 'pending') > 0)
       and exists (select 1 from pack_wallets where user_id = ?)`,
-    args: [senderUserId, recipientId, input.requestId, randomUUID(), sender.username, recipient.username, key, Number(source.card_user_id), message, now,
+    args: [senderUserId, recipientId, input.requestId, randomUUID(), sender.username, recipient.username, key, key, Number(source.card_user_id), message, now,
       senderUserId, key, recipientId],
   }];
   const applied = await execBatch(db, statements);
@@ -127,6 +127,7 @@ export async function acceptPackGift(db: Db, recipientUserId: number, giftId: un
   if ("error" in gift) return gift;
   if (gift.status !== "pending") return { ok: true, giftId: gift.id, status: gift.status };
   const senderUserId = gift.senderUserId, key = gift.cardKey;
+  const sender = await giftCollector(db, senderUserId);
   const source = (await exec(db, "select * from pack_collection_cards where owner_user_id = ? and card_key = ?", [senderUserId, key])).rows[0];
   if (!source || Number(source.copies) < 1) return { ok: false, error: "no_spare" };
   if (Number(source.completion_eligible) !== 1) return { ok: false, error: "unverified_card" };
@@ -143,15 +144,20 @@ export async function acceptPackGift(db: Db, recipientUserId: number, giftId: un
   }, {
     // New holdings inherit the sender's frozen appearance. Someone who already
     // holds this key keeps their own snapshot; a gift cannot repaint their card.
+    // The sender is written next to the stamp, so the holding can say who gave
+    // it rather than only that it was not pulled. A collector who already held
+    // the key keeps whatever their row already said about where it came from:
+    // their first copy is still the one they pulled.
     sql: `insert into pack_collection_cards (owner_user_id, card_user_id, card_key, tier, skills_id, pp, global_rank,
-      copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, tier_label, motif, granted_at, completion_eligible)
+      copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, tier_label, motif, granted_at,
+      gifted_by_user_id, gifted_by_username, completion_eligible)
       select ?, s.card_user_id, s.card_key, s.tier, s.skills_id, s.pp, s.global_rank,
-        1, 0, ?, ?, ?, s.tier_label, s.motif, ?, s.completion_eligible
+        1, 0, ?, ?, ?, s.tier_label, s.motif, ?, ?, ?, s.completion_eligible
       from pack_collection_cards s where s.owner_user_id = ? and s.card_key = ? and ${gate}
       on conflict(owner_user_id, card_key) do update set copies = pack_collection_cards.copies + 1,
         updated_at = excluded.updated_at,
         completion_eligible = max(pack_collection_cards.completion_eligible, excluded.completion_eligible)`,
-    args: [recipientUserId, now, now, now, now, senderUserId, key, ...gateArgs],
+    args: [recipientUserId, now, now, now, now, senderUserId, sender?.username ?? null, senderUserId, key, ...gateArgs],
   }, {
     // Down to zero when it was their only copy: a zero-copy row is the same
     // tombstone recycling every copy leaves, and reads as no longer held.
@@ -210,7 +216,9 @@ export async function listPackGiftInbox(db: Db, ownerUserId: number, requestedPa
   const total = Number((await exec(db, `select count(*) as n from pack_gifts where ${INBOX_WHERE}`, [ownerUserId])).rows[0]?.n ?? 0);
   const parsedPage = Number(requestedPage);
   const page = Math.min(Number.isSafeInteger(parsedPage) && parsedPage >= 0 ? parsedPage : 0, Math.max(0, Math.ceil(total / 20) - 1));
-  const rows = (await exec(db, `select id, sender_user_id, sender_username, card_key, message, status from pack_gifts where ${INBOX_WHERE} order by sent_at desc, id desc limit 20 offset ?`, [ownerUserId, page * 20])).rows;
+  const rows = (await exec(db, `select id, sender_user_id, sender_username, card_key,
+      coalesce(recipient_card_key, card_key) as recipient_card_key, message, status
+    from pack_gifts where ${INBOX_WHERE} order by sent_at desc, id desc limit 20 offset ?`, [ownerUserId, page * 20])).rows;
   const gifts: PackGiftReceipt[] = [];
   for (const row of rows) {
     const sender = await giftCollector(db, Number(row.sender_user_id));
@@ -219,7 +227,12 @@ export async function listPackGiftInbox(db: Db, ownerUserId: number, requestedPa
     gifts.push({
       id: Number(row.id),
       sender: sender ?? { userId: Number(row.sender_user_id), username: String(row.sender_username), avatarUrl: `https://a.ppy.sh/${row.sender_user_id}`, countryCode: null },
-      card: status === "pending" ? await offeredCard(db, Number(row.sender_user_id), ownerUserId, key) : await getPackCollectionCard(db, ownerUserId, key),
+      /* A pending offer is still the sender's card, under the key they offered
+         it from; a settled one is the recipient's own holding, wherever it has
+         since been moved to. */
+      card: status === "pending"
+        ? await offeredCard(db, Number(row.sender_user_id), ownerUserId, key)
+        : await getPackCollectionCard(db, ownerUserId, String(row.recipient_card_key)),
       message: row.message ? String(row.message) : null,
       status,
     });
@@ -230,8 +243,40 @@ async function offeredCard(db: Db, senderUserId: number, ownerUserId: number, ca
   const offered = await getPackCollectionCard(db, senderUserId, cardKey);
   if (!offered) return null;
   const own = Number((await exec(db, "select copies from pack_collection_cards where owner_user_id = ? and card_key = ?", [ownerUserId, cardKey])).rows[0]?.copies ?? 0);
-  return { ...offered, copies: own, recycledCopies: 0, serial: null, grantedAt: null };
+  return { ...offered, copies: own, recycledCopies: 0, serial: null, grantedAt: null, giftedBy: null };
 }
+/* Every accepted gift of one card to one collector, as a tally.
+
+   A holding is one row with a copy count, so a gifted copy that lands on a
+   card its owner already had leaves no trace on the row: it says what the
+   first copy was and that stays true. The gift log is where the rest of it
+   lives, and this is that log read the way the card wants it - how many of
+   these copies arrived as gifts and who sent them, newest sender first.
+
+   Senders are named live from `users`, with the name they gave it under as the
+   fallback, exactly like the holding's own giver line.
+
+   Asked by `recipient_card_key`, where the copy actually ended up, so a holding
+   the desk has since moved onto a variant still finds its gifts. Every send
+   writes that column and the boot migration filled it for older rows, so this
+   reads it straight and uses its index rather than coalescing past it. */
+export interface PackCardGiftSummary {
+  copies: number;
+  senders: { userId: number; username: string; copies: number }[];
+}
+export async function getPackCardGiftSummary(db: Db, ownerUserId: number, rawCardKey: unknown): Promise<PackCardGiftSummary> {
+  const cardKey = normalizePackCardKey(rawCardKey);
+  if (!Number.isSafeInteger(ownerUserId) || ownerUserId <= 0 || !cardKey) return { copies: 0, senders: [] };
+  const rows = (await exec(db, `select g.sender_user_id,
+      coalesce(nullif(u.username, ''), nullif(g.sender_username, ''), 'user ' || g.sender_user_id) as username,
+      count(*) as copies, max(coalesce(g.resolved_at, g.sent_at)) as last_at
+    from pack_gifts g left join users u on u.user_id = g.sender_user_id
+    where g.recipient_user_id = ? and g.recipient_card_key = ? and g.status = 'accepted'
+    group by g.sender_user_id order by last_at desc, g.sender_user_id`, [ownerUserId, cardKey])).rows;
+  const senders = rows.map((row) => ({ userId: Number(row.sender_user_id), username: String(row.username), copies: Number(row.copies) }));
+  return { copies: senders.reduce((total, sender) => total + sender.copies, 0), senders };
+}
+
 /* Closing a receipt, not answering an offer: a pending gift stays in the inbox
    until it is accepted or declined. */
 export async function acknowledgePackGifts(db: Db, ownerUserId: number, ids: unknown, now = Date.now()): Promise<void> {

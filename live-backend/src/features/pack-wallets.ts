@@ -54,6 +54,12 @@ export interface StoredPackCard {
      only thing that stops a surface saying its holder was the Nth person to
      pull it, which they were not. */
   grantedAt?: number | null;
+  /* The collector who gifted this holding, for the grants that came from a
+     person rather than from the desk. Only an accepted gift writes it, and
+     only onto a row the gift created: a collector who already held the card
+     keeps their own first copy's story. The name is resolved live where it
+     can be, with the sender's name at the time as the fallback. */
+  giftedBy?: { userId: number; username: string } | null;
   /* Mint order for this owner (#1 pulled the card first, anywhere), and how
      many serials the card has ever handed out. Modern signed-in holdings mint
      this transactionally with the card; null is only a legacy/directly seeded
@@ -488,6 +494,13 @@ export const CARD_SELECT_SQL = `select pack_collection_cards.*,
        pc.avatar_url as avatar_url,
        pc.country_code as country_code,
        pc.tier_label as catalog_tier_label,
+       /* A gifted holding names its sender, so the name has to be current
+          rather than the one they had the day they gave it. Guarded by the
+          case so the lookup runs only for the rare gifted row instead of on
+          every card of every collection page. */
+       case when pack_collection_cards.gifted_by_user_id is null then null else
+         (select nullif(u.username, '') from users u where u.user_id = pack_collection_cards.gifted_by_user_id)
+       end as gifted_by_live_username,
        sk.skills_json as skills_json`;
 
 export const CARD_CATALOG_JOIN_SQL = `left join pack_cards pc
@@ -617,6 +630,17 @@ export function movePackCardKeyReferencesStatements(
     },
     {
       sql: "update pack_showcase_cards set card_key = ? where owner_user_id = ? and card_key = ?",
+      args: [newKey, ownerUserId, oldKey],
+    },
+    {
+      /* The gifts this collector accepted of the card that moved. Their
+         receipts and the card's gift tally are read by where the copy ended up,
+         so leaving these behind loses both to a customization. Only settled
+         rows, and only the recipient's pointer: `card_key` is the request the
+         sender made, which a retry is still checked against, and a pending
+         offer still has to find the sender's own holding under it. */
+      sql: `update pack_gifts set recipient_card_key = ?
+            where recipient_user_id = ? and recipient_card_key = ? and status = 'accepted'`,
       args: [newKey, ownerUserId, oldKey],
     },
   ];
@@ -1282,6 +1306,12 @@ export function cardFromRow(row: Record<string, unknown>): StoredPackCard {
     firstPulledAt: Number(row.first_pulled_at) || 0,
     lastPulledAt: Number(row.last_pulled_at) || 0,
     grantedAt: Number(row.granted_at) > 0 ? Number(row.granted_at) : null,
+    giftedBy: Number(row.gifted_by_user_id) > 0
+      ? {
+          userId: Number(row.gifted_by_user_id),
+          username: nonEmptyString(row.gifted_by_live_username) ?? nonEmptyString(row.gifted_by_username) ?? `user ${Number(row.gifted_by_user_id)}`,
+        }
+      : null,
     serial: Number(row.serial) > 0 ? Number(row.serial) : null,
     mintedTotal: Number(row.minted_total) || 0,
   };
@@ -2610,6 +2640,8 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
        country_code text not null,
        tier text,
        tier_label text,
+       gifted_by_user_id integer,
+       gifted_by_username text,
        skills_json text,
        pp real not null,
        global_rank integer not null,
@@ -2705,13 +2737,20 @@ export async function ensurePackCardCatalog(db: Db): Promise<boolean> {
        has just taken it; the column on this side exists only for the per-owner
        override /admin/collections writes. Declaring it matters because this
        rebuild renames its table over pack_collection_cards, and the boot
-       migration that adds the column has already run by then. */
+       migration that adds the column has already run by then.
+
+       The gift columns are here for that second reason alone: reads name them
+       outright rather than taking them off `*`, so a table rebuilt without
+       them would fail every collection query until the next boot. A database
+       old enough to need this rebuild has no gifts to carry over. */
     `create table pack_collection_cards_slim (
        owner_user_id integer not null,
        card_user_id integer not null,
        card_key text not null,
        tier text,
        tier_label text,
+       gifted_by_user_id integer,
+       gifted_by_username text,
        skills_id integer,
        pp real not null,
        global_rank integer not null,

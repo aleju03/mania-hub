@@ -49,6 +49,9 @@ export interface ServerPackCollectionCard {
   mintedTotal?: number;
   /* When this holding was granted or gifted, null for a pulled one. */
   grantedAt?: number | null;
+  /* Who gave it, for a holding that arrived as an accepted gift. Null for a
+     pull and for a grant-desk card, which has no person behind it. */
+  giftedBy?: { userId: number; username: string } | null;
 }
 
 /* Progress against the ordinary-drawable pool: owned players still pullable

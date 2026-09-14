@@ -3023,6 +3023,15 @@ export async function fetchLivePackCardStats(cardKeys: string[]): Promise<LivePa
   return Array.isArray(body.cards) ? body.cards : [];
 }
 
+/* How many of one collector's copies of a card arrived as gifts, and from
+   whom. A holding is one row with a copy count, so a gifted copy that lands on
+   a card its owner already held leaves nothing on the row: this is the only
+   place it can be read. Public, like the ownership count above. */
+export interface LivePackCardGifts { copies: number; senders: { userId: number; username: string; copies: number }[] }
+export async function fetchLivePackCardGifts(ownerUserId: number, cardKey: string): Promise<LivePackCardGifts> {
+  return fetchLiveJson(`/api/packs/card-gifts?owner=${ownerUserId}&card=${encodeURIComponent(cardKey)}`);
+}
+
 /* How the community holds one player's own card ("your card got pulled"). */
 export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);

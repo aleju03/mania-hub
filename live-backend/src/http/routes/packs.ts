@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { checkWriteGateOverloaded, getWriteGateStats, parseJson } from "../../db.js";
+import { getPackCardGiftSummary } from "../../features/pack-gifts.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
@@ -466,6 +467,24 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       }
     }
     sendJson(req, res, ctx, 202, { recorded: pullResult.recorded, mints: pullResult.mints });
+    return true;
+  }
+  if (url.pathname === "/api/packs/card-gifts") {
+    // How many of one collector's copies of one card arrived as gifts, and
+    // from whom. Public like the ownership count above and read the same way,
+    // on a card open: the holding is one row with a copy count, so a gifted
+    // copy folded into a card its owner already had is only visible here.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const owner = Math.floor(Number(url.searchParams.get("owner")) || 0);
+    if (owner <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getPackCardGiftSummary(ctx.db, owner, url.searchParams.get("card")));
     return true;
   }
   if (url.pathname === "/api/packs/card-stats") {

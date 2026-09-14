@@ -235,7 +235,7 @@ async function readGrantHolding(db: Db, ownerUserId: number, cardKey: string) {
   return (await exec(
     db,
     `select tier, tier_label, motif, skills_id, pp, global_rank, copies, recycled_copies,
-       first_pulled_at, last_pulled_at, granted_at
+       first_pulled_at, last_pulled_at, granted_at, gifted_by_user_id, gifted_by_username
      from pack_collection_cards where owner_user_id = ? and card_key = ?`,
     [ownerUserId, cardKey],
   )).rows[0];
@@ -377,7 +377,18 @@ export async function grantAdminPackCard(
        last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
        updated_at = excluded.updated_at,
        completion_eligible = 1,
-       granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`
+       granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at),
+       /* The giver rides with the stamp it belongs to. A merge onto a holding
+          that already has its own granted_at keeps that date, so taking the
+          source's giver here would date somebody's gift to the desk grant that
+          was already sitting there. Both sides read the pre-update row, so the
+          two clauses agree on which acquisition won. */
+       gifted_by_user_id = case when pack_collection_cards.granted_at is null
+         then coalesce(pack_collection_cards.gifted_by_user_id, excluded.gifted_by_user_id)
+         else pack_collection_cards.gifted_by_user_id end,
+       gifted_by_username = case when pack_collection_cards.granted_at is null
+         then coalesce(pack_collection_cards.gifted_by_username, excluded.gifted_by_username)
+         else pack_collection_cards.gifted_by_username end`
     : `card_user_id = excluded.card_user_id,
        tier = excluded.tier,
        tier_label = excluded.tier_label,
@@ -394,7 +405,12 @@ export async function grantAdminPackCard(
        /* Only ever set, never cleared: editing a card the desk granted leaves
           it granted, and editing one somebody pulled leaves the column null
           rather than claiming it was handed to them. */
-       granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at)`;
+       granted_at = coalesce(pack_collection_cards.granted_at, excluded.granted_at),
+       /* Same one-way rule: an edit cannot invent a giver, and cannot erase
+          the one a gift recorded. An edit carries no giver of its own, so this
+          only ever re-states what the row already said. */
+       gifted_by_user_id = pack_collection_cards.gifted_by_user_id,
+       gifted_by_username = pack_collection_cards.gifted_by_username`;
 
   const statements: DbStatement[] = [
     ...(await cardIdentityStatements(db, {
@@ -415,8 +431,9 @@ export async function grantAdminPackCard(
          entire job is to say what the row should read. */
       sql: `insert into pack_collection_cards (
          owner_user_id, card_user_id, card_key, tier, tier_label, motif, skills_id, pp, global_rank,
-         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, granted_at, completion_eligible
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+         copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at, granted_at,
+         gifted_by_user_id, gifted_by_username, completion_eligible
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
        on conflict(owner_user_id, card_key) do update set
          ${ownershipConflictSql}`,
       args: [
@@ -445,6 +462,11 @@ export async function grantAdminPackCard(
           // only stamps SQL null and therefore cannot misclassify this move.
           ? (Number(existing?.granted_at) > 0 ? Number(existing?.granted_at) : 0)
           : created ? firstPulledAt : null,
+        /* A holding the desk moves onto another key is the same holding, so a
+           gift it came from moves with it. Nothing else here can set a giver:
+           the desk hands cards out in its own name. */
+        movingHolding && Number(existing?.gifted_by_user_id) > 0 ? Number(existing?.gifted_by_user_id) : null,
+        movingHolding ? (nonEmptyString(existing?.gifted_by_username) ?? null) : null,
       ],
     },
     ...(moveFromKey ? movePackCardKeyReferencesStatements(owner.userId, moveFromKey, cardKey) : []),

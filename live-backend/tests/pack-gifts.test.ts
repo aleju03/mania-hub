@@ -2,9 +2,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { acceptPackGift, acknowledgePackGifts, declinePackGift, listPackGiftInbox, normalizePackGiftMessage, searchGiftCollectors, sendPackGift } from "../src/features/pack-gifts.js";
-import { getPackCollectionCard, isPackWalletEternalPending } from "../src/features/pack-wallets.js";
+import { createDb, exec, execBatch, migrate, type Db } from "../src/db.js";
+import { acceptPackGift, acknowledgePackGifts, declinePackGift, getPackCardGiftSummary, listPackGiftInbox, normalizePackGiftMessage, searchGiftCollectors, sendPackGift } from "../src/features/pack-gifts.js";
+import { getPackCollectionCard, isPackWalletEternalPending, movePackCardKeyReferencesStatements } from "../src/features/pack-wallets.js";
 let dir: string;
 let db: Db;
 const SENDER = 101, RECIPIENT = 102, NOW = 1_780_000_000_000;
@@ -39,7 +39,7 @@ it("transfers one frozen copy with distinct serials and no shard or public pull 
   const wallets = (await exec(db, "select payload from pack_wallets order by user_id")).rows;
   expect(await deliver()).toMatchObject({ ok: true, remainingCopies: 3, replayed: false });
   expect(await copies(SENDER)).toBe(2); expect(await copies(RECIPIENT)).toBe(1);
-  expect(await getPackCollectionCard(db, RECIPIENT, "77")).toMatchObject({ username: "Friend", tier: "rare", pp: 1234, globalRank: 50, skills: { cardPower: 200 }, motif: JSON.parse(motif), grantedAt: NOW, serial: 2 });
+  expect(await getPackCollectionCard(db, RECIPIENT, "77")).toMatchObject({ username: "Friend", tier: "rare", pp: 1234, globalRank: 50, skills: { cardPower: 200 }, motif: JSON.parse(motif), grantedAt: NOW, serial: 2, giftedBy: { userId: SENDER, username: "Sender" } });
   expect((await getPackCollectionCard(db, SENDER, "77"))?.serial).toBe(1);
   expect((await exec(db, "select * from pack_pull_events")).rows).toHaveLength(0);
   expect((await exec(db, "select payload from pack_wallets order by user_id")).rows).toEqual(wallets);
@@ -54,6 +54,80 @@ it("keeps the recipient's existing snapshot, label, serial and dates", async () 
   await deliver();
   expect((await exec(db, "select * from pack_collection_cards where owner_user_id=?", [RECIPIENT])).rows[0]).toEqual({ ...before, copies: 2, updated_at: NOW });
   expect((await getPackCollectionCard(db, RECIPIENT, "77"))?.serial).toBe(5);
+});
+it("names the giver by whatever they are called now, and never on a pull", async () => {
+  await deliver();
+  await exec(db, "insert into users (user_id,username,avatar_url,updated_at) values (?, 'Renamed', 'https://a.ppy.sh/101', '')", [SENDER]);
+  expect((await getPackCollectionCard(db, RECIPIENT, "77"))?.giftedBy).toEqual({ userId: SENDER, username: "Renamed" });
+  expect((await getPackCollectionCard(db, SENDER, "77"))?.giftedBy).toBeNull();
+});
+it("tallies gifted copies the holding itself cannot account for, newest sender first", async () => {
+  await seedCard(RECIPIENT, "77", "rare", 1);
+  await wallet(103, "Other"); await seedCard(103, "77", "rare", 2);
+  await deliver();
+  const second = await sendPackGift(db, 103, gift("gift-request-00000002"), NOW);
+  expect(second.ok && (await acceptPackGift(db, RECIPIENT, second.giftId, NOW + 1)).ok).toBe(true);
+  // Folded into the copy they already had, so the row still says where their
+  // first copy came from and the log is the only record of the other two.
+  expect((await getPackCollectionCard(db, RECIPIENT, "77"))?.giftedBy).toBeNull();
+  expect(await copies(RECIPIENT)).toBe(3);
+  expect(await getPackCardGiftSummary(db, RECIPIENT, "77")).toEqual({
+    copies: 2,
+    senders: [{ userId: 103, username: "Other", copies: 1 }, { userId: SENDER, username: "Sender", copies: 1 }],
+  });
+  // Nobody else's tally, and nothing counted for a card that was never gifted.
+  expect(await getPackCardGiftSummary(db, SENDER, "77")).toEqual({ copies: 0, senders: [] });
+  expect(await getPackCardGiftSummary(db, RECIPIENT, "78")).toEqual({ copies: 0, senders: [] });
+});
+it("recovers the giver of a gift accepted before the holding could name one", async () => {
+  // A holding a gift created, stamped the way accepting used to stamp it, and
+  // one the desk granted on its own the same day.
+  await seedCard(RECIPIENT, "77", "rare", 1);
+  await exec(db, "update pack_collection_cards set granted_at = ? where owner_user_id = ? and card_key = ?", [NOW, RECIPIENT, "77"]);
+  await seedCard(RECIPIENT, "78", "rare", 1);
+  await exec(db, "update pack_collection_cards set granted_at = ? where owner_user_id = ? and card_key = ?", [NOW - 1, RECIPIENT, "78"]);
+  await exec(db, `insert into pack_gifts (sender_user_id,recipient_user_id,request_id,claim_token,sender_username,recipient_username,card_key,card_user_id,status,sent_at,resolved_at)
+    values (?,?,'legacy-request-0001','token','Sender','Recipient','77',77,'accepted',?,?)`, [SENDER, RECIPIENT, NOW, NOW]);
+  await exec(db, "delete from live_meta where key = 'pack_collection_gifted_by_backfill:v1'");
+  await migrate(db);
+  expect((await getPackCollectionCard(db, RECIPIENT, "77"))?.giftedBy).toEqual({ userId: SENDER, username: "Sender" });
+  expect((await getPackCollectionCard(db, RECIPIENT, "78"))?.giftedBy).toBeNull();
+});
+it("resumes an interrupted recipient-key backfill without resetting moved gifts", async () => {
+  expect((await deliver()).ok).toBe(true);
+  const secondRequest = "gift-request-00000002";
+  expect((await deliver(secondRequest)).ok).toBe(true);
+  await execBatch(db, movePackCardKeyReferencesStatements(RECIPIENT, "77", "77:v1"));
+  // Model a partially completed backfill: the column exists, one legacy row
+  // is still null, and another receipt already follows a customized holding.
+  await exec(db, "update pack_gifts set recipient_card_key = null where request_id = ?", [gift().requestId]);
+  db.close();
+  db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+  await migrate(db);
+  await migrate(db);
+
+  expect((await exec(db, "select card_key, recipient_card_key from pack_gifts order by id")).rows)
+    .toEqual([
+      { card_key: "77", recipient_card_key: "77" },
+      { card_key: "77", recipient_card_key: "77:v1" },
+    ]);
+  expect(await getPackCardGiftSummary(db, RECIPIENT, "77")).toMatchObject({ copies: 1 });
+  expect(await getPackCardGiftSummary(db, RECIPIENT, "77:v1")).toMatchObject({ copies: 1 });
+  expect(await sendPackGift(db, SENDER, gift(secondRequest), NOW)).toMatchObject({ ok: true, replayed: true });
+});
+it("still replays a retry after the recipient's copy is moved onto a variant", async () => {
+  const sent = await sendPackGift(db, SENDER, gift(), NOW);
+  expect(sent.ok && (await acceptPackGift(db, RECIPIENT, sent.giftId, NOW)).ok).toBe(true);
+  // The desk customizes the recipient's copy: their receipts and the card's
+  // tally follow the holding, the request the sender made does not move.
+  await execBatch(db, movePackCardKeyReferencesStatements(RECIPIENT, "77", "77:v1"));
+  await exec(db, "update pack_collection_cards set card_key = '77:v1' where owner_user_id = ? and card_key = '77'", [RECIPIENT]);
+  expect(await getPackCardGiftSummary(db, RECIPIENT, "77:v1")).toMatchObject({ copies: 1 });
+  expect(await getPackCardGiftSummary(db, RECIPIENT, "77")).toEqual({ copies: 0, senders: [] });
+  // The sender never heard back and sends the same request again.
+  expect(await sendPackGift(db, SENDER, gift(), NOW)).toMatchObject({ ok: true, replayed: true });
+  expect(await copies(SENDER)).toBe(2);
+  expect(Number((await exec(db, "select count(*) as n from pack_gifts where sender_user_id = ?", [SENDER])).rows[0].n)).toBe(1);
 });
 it("refuses self-gifts and unknown recipients", async () => {
   expect(await sendPackGift(db, SENDER, gift("gift-request-00000002", SENDER), NOW)).toEqual({ ok:false, error:"self_gift" });

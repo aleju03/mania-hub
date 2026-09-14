@@ -421,6 +421,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateBugReports(target);
   await migratePlayerSkillHistory(target);
   await migratePackGiftMessage(target);
+  await backfillPackGiftGivers(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
@@ -1965,6 +1966,16 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   if (!columns.includes("granted_at")) {
     await db.execute("alter table pack_collection_cards add column granted_at integer");
   }
+  // Who handed this holding over, for the one kind of grant that has a person
+  // behind it: a collector's accepted gift. Null on a pull and on a grant-desk
+  // card, which is why "obtained" stays the wording for the latter. The name is
+  // the sender's at the time, a fallback for reads that cannot resolve the id.
+  if (!columns.includes("gifted_by_user_id")) {
+    await db.execute("alter table pack_collection_cards add column gifted_by_user_id integer");
+  }
+  if (!columns.includes("gifted_by_username")) {
+    await db.execute("alter table pack_collection_cards add column gifted_by_username text");
+  }
   // Browser-local first-login imports remain real holdings, but cannot count
   // as proof for the Eternal completion reward. A constant default keeps this
   // metadata-only for the existing multi-million-row table; only new import
@@ -2005,6 +2016,53 @@ async function migratePackGiftMessage(db: Db): Promise<void> {
   if (!columns.includes("resolved_at")) {
     await db.execute("alter table pack_gifts add column resolved_at integer");
   }
+  /* Where the gifted copy ended up on the recipient's side, which is not
+     always the key it was sent under: the desk can move a holding onto a
+     variant afterwards. `card_key` stays exactly as the request made it, since
+     that tuple is what makes a retry idempotent, so the two are separate
+     columns rather than one rewritten in place. Rows that predate the split
+     were never moved and point at themselves. */
+  if (!columns.includes("recipient_card_key")) {
+    await db.execute("alter table pack_gifts add column recipient_card_key text");
+  }
+  // Resume even if a previous boot stopped after adding the column. Only
+  // fill missing keys; a receipt that followed a moved holding keeps its key.
+  await db.execute("update pack_gifts set recipient_card_key = card_key where recipient_card_key is null");
+  /* The card spotlight asks what a collector was gifted of one card, which the
+     sender and unread-inbox indexes cannot answer. Small table, but the read
+     runs on a card open, so it gets its own. */
+  await db.execute("drop index if exists idx_pack_gifts_recipient_card");
+  await db.execute("create index if not exists idx_pack_gifts_recipient_holding on pack_gifts(recipient_user_id, recipient_card_key)");
+}
+
+/* Gifts accepted before a holding could say who gave it. The log kept the
+   sender, and accepting stamped `granted_at` off the same clock the gift row
+   resolved on, so the two match exactly and a card the grant desk handed over
+   on its own cannot be mistaken for one. A gift that folded into a card its
+   recipient already held stamps nothing, which is right: that row is still
+   about the copy they pulled, and the gift tally is what accounts for the rest.
+   Driven from pack_gifts because that table is small and the holdings are not. */
+async function backfillPackGiftGivers(db: Db): Promise<void> {
+  const backfillKey = "pack_collection_gifted_by_backfill:v1";
+  if (await hasMigrationSentinel(db, backfillKey)) return;
+  const rows = (await db.execute(
+    `select recipient_user_id, card_key, sender_user_id, sender_username,
+       coalesce(resolved_at, sent_at) as granted_at
+     from pack_gifts where status = 'accepted' order by id`,
+  )).rows;
+  const updates: DbStatement[] = rows.map((row) => ({
+    sql: `update pack_collection_cards set gifted_by_user_id = ?, gifted_by_username = ?
+      where owner_user_id = ? and card_key = ? and gifted_by_user_id is null and granted_at = ?`,
+    args: [
+      Number(row.sender_user_id),
+      String(row.sender_username ?? "") || null,
+      Number(row.recipient_user_id),
+      String(row.card_key),
+      Number(row.granted_at),
+    ],
+  }));
+  if (updates.length > 0) await execBatch(db, updates);
+  await setMigrationSentinel(db, backfillKey);
 }
 
 // The last username a wallet's pulls were recorded under. Durable, unlike the

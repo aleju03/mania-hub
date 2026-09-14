@@ -8,7 +8,7 @@ import { useAuth } from "#/lib/auth-context";
 import { formatDate, formatOrdinal } from "#/lib/format";
 import { useLocale } from "#/lib/locale-context";
 import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
-import { fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam } from "#/lib/live-backend";
+import { fetchLivePackCardGifts, fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam, type LivePackCardGifts } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
@@ -82,6 +82,7 @@ export function CardSpotlight({
   const [canvasReady, setCanvasReady] = useState(false);
   const [hiResFallback, setHiResFallback] = useState<string | null>(null);
   const [ownerCount, setOwnerCount] = useState<number | null>(null);
+  const [giftTally, setGiftTally] = useState<LivePackCardGifts | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const reducedMotion = prefersReducedMotion();
   const viewerId = useAuth().viewer?.id ?? null;
@@ -112,6 +113,25 @@ export function CardSpotlight({
       cancelled = true;
     };
   }, [spotlightCardKey]);
+
+  /* The gift log for whoever holds the card in front of the reader. A gifted
+     copy that lands on a card its owner already held is folded into the copy
+     count and leaves nothing on the holding, so the row cannot say it
+     happened; this is the one place that can. Said of the holder rather than
+     of the reader, since the same card is opened on other people's shelves. */
+  useEffect(() => {
+    setGiftTally(null);
+    if (!spotlightCardKey || !cardOwnerId || !isLiveBackendConfigured()) return;
+    let cancelled = false;
+    void fetchLivePackCardGifts(cardOwnerId, spotlightCardKey)
+      .then((summary) => {
+        if (!cancelled && summary.copies > 0) setGiftTally(summary);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [spotlightCardKey, cardOwnerId]);
 
   useEffect(() => {
     setShareCopied(false);
@@ -404,7 +424,10 @@ export function CardSpotlight({
                     ) : null}
                     {/* "Obtained" rather than "was given": how a card that
                         never came out of a pack came to be somebody's is not
-                        the card's business to announce. */}
+                        the card's business to announce. The exception is the
+                        one grant with a person behind it: a gift from another
+                        collector names them, because that is the whole of what
+                        happened and both sides want it on the card. */}
                     {(() => {
                       const nameLink = showcasedBy ? (
                         <Link
@@ -417,6 +440,31 @@ export function CardSpotlight({
                         </Link>
                       ) : null;
                       const dateText = gotAt > 0 ? formatDate(new Date(gotAt).toISOString(), viewerTimeZone, locale) : null;
+                      const giftedBy = card.giftedBy ?? null;
+                      if (giftedBy) {
+                        const giverLink = (
+                          <Link
+                            to="/packs/collections"
+                            search={{ collector: packCollectorParam(giftedBy) }}
+                            preload="intent"
+                            className="font-semibold text-white transition-colors hover:text-osu-pink-light"
+                          >
+                            {giftedBy.username}
+                          </Link>
+                        );
+                        if (nameLink) {
+                          return dateText ? (
+                            <Trans>{nameLink} was gifted this card on {dateText} by {giverLink}</Trans>
+                          ) : (
+                            <Trans>{nameLink} was gifted this card by {giverLink}</Trans>
+                          );
+                        }
+                        return dateText ? (
+                          <Trans>Gifted on {dateText} by {giverLink}</Trans>
+                        ) : (
+                          <Trans>Gifted by {giverLink}</Trans>
+                        );
+                      }
                       if (card.grantedAt) {
                         if (nameLink) {
                           return dateText ? (
@@ -450,6 +498,27 @@ export function CardSpotlight({
                       </span>
                     ) : null}
                   </span>
+                </div>
+              ) : null}
+              {/* The gifts the holding itself cannot account for. One line
+                  however many there were: a card given ten times is a tally,
+                  not ten receipts. Said as history rather than as a count of
+                  what is held, because a gifted copy can be recycled like any
+                  other and the giving still happened. Skipped when the line
+                  above already named that one gift, so it is said once. */}
+              {giftTally && !(giftTally.copies === 1 && card.giftedBy?.userId === giftTally.senders[0]?.userId) ? (
+                <div className="max-w-[min(30rem,88vw)] text-[12px] text-osu-f1">
+                  {(() => {
+                    const names = giftTally.senders.map((sender) => sender.username);
+                    const shown = names.slice(0, 2);
+                    const rest = names.length - shown.length;
+                    const sendersText = new Intl.ListFormat(locale, { style: "short", type: "conjunction" }).format(
+                      rest > 0 ? [...shown, rest === 1 ? t`1 other` : t`${rest} others`] : shown,
+                    );
+                    if (giftTally.copies === 1) return <Trans>Received as a gift from {sendersText}</Trans>;
+                    const timesText = giftTally.copies.toLocaleString("en-US");
+                    return <Trans>Received as a gift {timesText} times, from {sendersText}</Trans>;
+                  })()}
                 </div>
               ) : null}
               <div className="mt-1.5 flex items-center gap-2">

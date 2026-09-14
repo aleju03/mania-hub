@@ -61,6 +61,9 @@ export interface CollectedCard {
      this is the only thing stopping a surface calling its holder the Nth
      person to pull it. Server-only, like the two above. */
   grantedAt?: number | null;
+  /* The collector who gave it, when the card arrived as an accepted gift
+     rather than from the grant desk. Server-only like grantedAt. */
+  giftedBy?: { userId: number; username: string } | null;
 }
 
 export interface PackWallet {
