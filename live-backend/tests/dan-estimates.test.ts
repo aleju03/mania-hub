@@ -7,8 +7,33 @@ import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-versi
 import { computeDanEstimateJob, getDanEstimateBatch, getRateAdjustedChartAnalysis, loadStoredRateDanVerdicts, normalizeDanEstimateItems, rateDanVerdictKey } from "../src/features/dan-estimates.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
+import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 
 describe("normalizeDanEstimateItems", () => {
+  it("reloads its parsed chart after another process replaces the cached file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-rate-file-change-"));
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    try {
+      await migrate(db);
+      const original = buildFourKeyBeatmapFile();
+      const changed = original.replace(/^(\d+),192,(\d+),1,0,0:0:0:0:$/gm,
+        (_, x, time) => `${x},192,${time},128,0,${Number(time) + 300}:0:0:0:0:`);
+      const osu = { getBeatmapFile: vi.fn(async () => { throw new Error("must use cached file"); }) };
+      await storeCachedBeatmapFile(db, 99901, original);
+      const before = await getRateAdjustedChartAnalysis(db, osu as never, 99901, 1);
+      await storeCachedBeatmapFile(db, 99901, changed);
+      await exec(db, "update beatmap_osu_files set fetched_at = '2099-01-01' where beatmap_id = 99901");
+      await exec(db, "delete from dan_estimates where beatmap_id = 99901");
+      const after = await getRateAdjustedChartAnalysis(db, osu as never, 99901, 1);
+      expect(before?.msd?.LN ?? 0).toBe(0);
+      expect(after?.msd?.LN).toBeGreaterThan(0);
+      expect(osu.getBeatmapFile).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("refreshes stale LN metadata at each rate and keeps the native cache when the file is unavailable", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mania-ln-rate-refresh-"));
     const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });

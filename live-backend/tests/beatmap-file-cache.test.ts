@@ -139,6 +139,39 @@ describe("beatmap .osu file cache", () => {
       expect(served).toBe(currentFile);
       expect(osu.getBeatmapFile).toHaveBeenCalledOnce();
       await expect(readCachedBeatmapFile(db, 901)).resolves.toBe(currentFile);
+      const jobs = (await exec(db, "select type, payload_json from jobs")).rows;
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].type).toBe("repair_changed_beatmap_file");
+      expect(JSON.parse(String(jobs[0].payload_json)).beatmapIds).toEqual([901]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("does not commit a changed file without its durable repair job", async () => {
+    const { db, cleanup } = await setupDb();
+    try {
+      const original = buildBeatmapFile();
+      await storeCachedBeatmapFile(db, 990, original);
+      await exec(db, `create trigger reject_repair before insert on jobs begin
+        select raise(abort, 'repair queue unavailable'); end`);
+      await expect(storeCachedBeatmapFile(db, 990, `${original}changed`, { repairDerivatives: true }))
+        .rejects.toThrow(/repair queue unavailable/);
+      await expect(readCachedBeatmapFile(db, 990)).resolves.toBe(original);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("does not invalidate ratings when a checksum refresh returns unchanged content", async () => {
+    const { db, cleanup } = await setupDb();
+    try {
+      const original = buildBeatmapFile();
+      await storeCachedBeatmapFile(db, 991, original);
+      await exec(db, "update beatmap_osu_files set fetched_at = '2024-01-01' where beatmap_id = 991");
+      await getCachedBeatmapFile(db, { getBeatmapFile: async () => original }, 991, "test:unchanged",
+        { expectedChecksum: "0123456789abcdef0123456789abcdef" });
+      expect((await exec(db, "select type from jobs")).rows).toEqual([]);
     } finally {
       await cleanup();
     }

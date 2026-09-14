@@ -31,6 +31,7 @@ const VARIANT_SERVING_VERSIONS_SQL = SERVING_VERSIONS.join(", ");
 interface ParsedDanBeatmap {
   map: ManiaBeatmap;
   osuText: string;
+  fileVersion?: string;
 }
 
 const parsedDanBeatmapCache = new Map<number, ParsedDanBeatmap>();
@@ -611,8 +612,12 @@ export async function enqueueRateDanEstimate(
 }
 
 async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ParsedDanBeatmap> {
+  // The serving and worker processes have separate LRUs. A durable file
+  // replacement must evict both, even when this process did not fetch it.
+  const fileVersion = String((await exec(db,
+    "select fetched_at from beatmap_osu_files where beatmap_id = ?", [beatmapId])).rows[0]?.fetched_at ?? "");
   const cached = parsedDanBeatmapCache.get(beatmapId);
-  if (cached) {
+  if (cached && cached.fileVersion === fileVersion) {
     parsedDanBeatmapCache.delete(beatmapId);
     parsedDanBeatmapCache.set(beatmapId, cached);
     return cached;
@@ -623,7 +628,7 @@ async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number,
 
   const promise = (async () => {
     const osuFile = await getCachedBeatmapFile(db, osu, beatmapId, caller);
-    const map: ParsedDanBeatmap = { map: parseManiaBeatmap(osuFile), osuText: osuFile };
+    const map: ParsedDanBeatmap = { map: parseManiaBeatmap(osuFile), osuText: osuFile, fileVersion };
     parsedDanBeatmapCache.set(beatmapId, map);
 
     while (parsedDanBeatmapCache.size > MAX_PARSED_DAN_BEATMAPS) {

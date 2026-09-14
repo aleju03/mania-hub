@@ -18,7 +18,7 @@ import { LN_TAIL_MIN_RATIO, computeMsd, msdChartErrorFallback } from "../dan/msd
 import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
-import { getCachedBeatmapFile, markCachedBeatmapFileUnavailable, readCachedBeatmapFile, storeCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { BEATMAP_FILE_CHANGE_JOB, getCachedBeatmapFile, markCachedBeatmapFileUnavailable, readCachedBeatmapFile, storeCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
@@ -4488,11 +4488,14 @@ export async function invalidateOsuFileRepairDerivatives(
       const dt = Number(stored?.has_dt) > 0 || source.includes("_queued_dt_");
       const ht = Number(stored?.has_ht) > 0 || source.includes("_ht_v1");
       rateFlags.set(beatmapId, { dt, ht });
-      if (source.startsWith("osu_api_repair_")) {
+      // Preserve rate flags before deleting derivatives, including files
+      // corrected by checksum refresh: a retried repair must restore them.
+      if (source.startsWith("osu_api")) {
         await exec(db, "update beatmap_osu_files set source = ? where beatmap_id = ?", [osuFileRepairQueuedSource(dt, ht), beatmapId]);
       }
     }
     await exec(db, `delete from dan_estimates where beatmap_id in (${placeholders})`, chunk);
+    await exec(db, `delete from dan_mod_estimates where beatmap_id in (${placeholders})`, chunk);
     await exec(db, `delete from beatmap_chart_analysis where beatmap_id in (${placeholders})`, chunk);
     await exec(db, `delete from beatmap_skill_vectors where beatmap_id in (${placeholders})`, chunk);
 
@@ -4550,15 +4553,15 @@ interface RepairStoredPlayerSkillPlay {
 // cache entry or every later player recompute would copy the wrong values
 // forward. This lives with the repair instead of player-skills.ts so the
 // one-shot incident code does not become part of that feature's permanent API.
-async function purgePlayerSkillPlaysForRepairedBeatmaps(
+export async function purgePlayerSkillPlaysForRepairedBeatmaps(
   db: Db,
   queue: JobQueue,
   beatmapIds: number[],
-  options: { enqueue?: boolean } = {},
-): Promise<{ users: number[]; droppedPlays: number }> {
+  options: { enqueue?: boolean; cursor?: number; pageSize?: number; maxPages?: number } = {},
+): Promise<{ users: number[]; droppedPlays: number; nextCursor: number; done: boolean }> {
   const ids = [...new Set(beatmapIds)]
     .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
-  if (ids.length === 0) return { users: [], droppedPlays: 0 };
+  if (ids.length === 0) return { users: [], droppedPlays: 0, nextCursor: options.cursor ?? 0, done: true };
 
   const repairedIds = new Set(ids);
   const users = new Set<number>();
@@ -4568,8 +4571,10 @@ async function purgePlayerSkillPlaysForRepairedBeatmaps(
   // repaired chart; every row is paged out and checked here instead. Bounded
   // user pages include all versions so the cursor never skips a replacement
   // row at the boundary.
-  const pageSize = 200;
-  let cursor = 0;
+  const pageSize = Math.max(1, Math.min(200, options.pageSize ?? 20));
+  let cursor = options.cursor ?? 0;
+  let pages = 0;
+  let done = false;
   for (;;) {
     const rows = (await exec(
       db,
@@ -4584,7 +4589,7 @@ async function purgePlayerSkillPlaysForRepairedBeatmaps(
        order by user_id, analysis_version`,
       [cursor, pageSize],
     )).rows;
-    if (rows.length === 0) break;
+    if (rows.length === 0) { done = true; break; }
 
     for (const row of rows) {
       const userId = Number(row.user_id);
@@ -4596,35 +4601,62 @@ async function purgePlayerSkillPlaysForRepairedBeatmaps(
       const dropped = plays.length - kept.length;
       if (!Number.isSafeInteger(userId) || userId <= 0 || dropped <= 0) continue;
 
-      await exec(
+      // Queue before changing the reusable evidence: a crash must not leave a
+      // stale aggregate with no remaining play that can trigger its refresh.
+      if (options.enqueue !== false && !users.has(userId)) {
+        const { PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } = await import("./player-skills.js");
+        await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:${PLAYER_SKILLS_VERSION}:${userId}`,
+          { userId }, { priority: -5, runAfter: new Date(Date.now() + 5 * 60_000), replaceDone: true });
+      }
+      const updated = await exec(
         db,
         `update player_skill_ratings
          set plays_json = ?, computed_at = ?, updated_at = ?
-         where user_id = ? and analysis_version = ?`,
-        [packJson({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion],
+         where user_id = ? and analysis_version = ? and plays_json = ?`,
+        [packJson({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion, row.plays_json],
       );
+      if (Number(updated.rowsAffected) !== 1) throw new Error(`Player ${userId} changed during chart repair; retry this page`);
       users.add(userId);
       droppedPlays += dropped;
     }
-    if (rows.length < pageSize) break;
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    pages += 1;
+    if (new Set(rows.map((row) => Number(row.user_id))).size < pageSize) { done = true; break; }
+    if (pages >= (options.maxPages ?? Infinity)) break;
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
   }
 
-  if (options.enqueue !== false && users.size > 0) {
-    const { PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } = await import("./player-skills.js");
-    // Let the chart/activity jobs land before player jobs reload pattern tags;
-    // a real profile view uses the same dedupe key and pulls it forward.
-    const runAfter = new Date(Date.now() + 5 * 60_000);
-    for (const userId of users) {
-      await queue.enqueue(
-        PLAYER_SKILLS_JOB,
-        `player-skills:${PLAYER_SKILLS_VERSION}:${userId}`,
-        { userId },
-        { priority: -5, runAfter, replaceDone: true },
-      );
-    }
+  return { users: [...users], droppedPlays, nextCursor: cursor, done };
+}
+
+export interface ChangedBeatmapFileRepairPayload {
+  beatmapIds: number[];
+  revision: string;
+  playerCursor?: number;
+}
+
+// A checksum refresh can fix the file while leaving every derived rating
+// wrong. Keep that repair separate from the historical archive-source audit.
+// Player payloads are compressed: inspect only twenty users per queued step.
+export async function runChangedBeatmapFileRepairJob(
+  db: Db,
+  queue: JobQueue,
+  payload: ChangedBeatmapFileRepairPayload,
+): Promise<void> {
+  const beatmapIds = [...new Set(payload.beatmapIds)].filter((id) => Number.isSafeInteger(id) && id > 0);
+  if (!beatmapIds.length) return;
+  if (payload.playerCursor == null) {
+    await invalidateOsuFileRepairDerivatives(db, queue, beatmapIds);
   }
-  return { users: [...users], droppedPlays };
+  const result = payload.playerCursor == null
+    ? { nextCursor: 0, done: false }
+    : await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, beatmapIds,
+      { cursor: payload.playerCursor, pageSize: 20, maxPages: 1 });
+  if (!result.done) {
+    await queue.enqueue(BEATMAP_FILE_CHANGE_JOB,
+      `changed-osu-file:players:${payload.revision}:${result.nextCursor}`,
+      { ...payload, beatmapIds, playerCursor: result.nextCursor },
+      { priority: -5, runAfter: new Date(Date.now() + 1_000), replaceDone: true });
+  }
 }
 
 // Boot watchdog: seed the sweep once per meta-key version, resume if a chain

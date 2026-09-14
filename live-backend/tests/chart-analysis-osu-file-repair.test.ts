@@ -11,6 +11,8 @@ import {
   readOsuFileRepairProgress,
   repairMismatchedOsuFilesChunk,
   runOsuFileRepairJob,
+  runChangedBeatmapFileRepairJob,
+  purgePlayerSkillPlaysForRepairedBeatmaps,
 } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { readCachedBeatmapFile, storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
@@ -227,6 +229,46 @@ describe("repairMismatchedOsuFilesChunk", () => {
 });
 
 describe("invalidateOsuFileRepairDerivatives", () => {
+  it("repairs derivatives of an already-correct checksum-refreshed file and schedules bounded player pages", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 10, osuFile("Chart", 10), { source: "osu_api_checksum_refresh" });
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, msd_dt_json, updated_at)
+        values (10, 1, 'ready', '{}', ?)`, [nowIso()]);
+      await exec(db, `insert into dan_mod_estimates
+        (estimator_version, beatmap_id, rate_percent, mod_variant, status, computed_at, updated_at)
+        values (24, 10, 100, 'IN', 'ready', ?, ?)`, [nowIso(), nowIso()]);
+      await runChangedBeatmapFileRepairJob(db, new JobQueue(db), { beatmapIds: [10], revision: "test" });
+      // Replay the first phase after its old derivative row is already gone.
+      await runChangedBeatmapFileRepairJob(db, new JobQueue(db), { beatmapIds: [10], revision: "test" });
+      expect((await exec(db, "select * from beatmap_chart_analysis where beatmap_id = 10")).rows).toHaveLength(0);
+      expect((await exec(db, "select * from dan_mod_estimates where beatmap_id = 10")).rows).toHaveLength(0);
+      const jobs = (await exec(db, "select type, payload_json from jobs order by type")).rows;
+      expect(jobs.map((job) => job.type)).toEqual([
+        "analyze_activity_beatmap", "analyze_beatmap_chart", "repair_changed_beatmap_file",
+      ]);
+      expect(JSON.parse(String(jobs[1].payload_json)).recomputeDtRate).toBe(true);
+      expect(JSON.parse(String(jobs[2].payload_json)).playerCursor).toBe(0);
+    });
+  });
+
+  it("pages distinct users without losing another version at the boundary", async () => {
+    await withDb(async (db) => {
+      for (const [userId, version] of [[7, 18], [7, 19], [8, 19]]) {
+        await exec(db, `insert into player_skill_ratings
+          (user_id, analysis_version, status, modes_json, plays_json, updated_at)
+          values (?, ?, 'ready', '{}', ?, ?)`,
+        [userId, version, JSON.stringify({ plays: [{ beatmapId: 10 }] }), nowIso()]);
+      }
+      const queue = new JobQueue(db);
+      const first = await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, [10], { maxPages: 1, pageSize: 1 });
+      expect(first).toMatchObject({ droppedPlays: 2, nextCursor: 7, done: false });
+      const second = await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, [10],
+        { cursor: first.nextCursor, maxPages: 1, pageSize: 1 });
+      expect(second).toMatchObject({ droppedPlays: 1, nextCursor: 8 });
+    });
+  });
+
   it("purges reusable player SSRs for repaired charts and queues a recompute", async () => {
     await withDb(async (db) => {
       const plays = [

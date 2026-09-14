@@ -1,9 +1,9 @@
 import type { Db } from "../db.js";
-import { exec } from "../db.js";
+import { exec, execBatch, type DbStatement } from "../db.js";
 import { extractBeatmapOsuFileFromArchive } from "../audio/beatmap-archive.js";
 import { isLikelyBeatmapFile, OsuApiClient } from "./client.js";
 import { nowIso } from "../shared/score.js";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { gzip, gunzip } from "node:zlib";
 import { promisify } from "node:util";
 
@@ -24,6 +24,7 @@ const gunzipAsync = promisify(gunzip);
 const COMPRESSION = "gzip";
 const TOUCH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 const CHECKSUM_REFRESH_MIN_INTERVAL_MS = 15 * 60 * 1000;
+export const BEATMAP_FILE_CHANGE_JOB = "repair_changed_beatmap_file";
 
 // Failed refresh attempts don't touch fetched_at (the stored content did not
 // change), so an osu! outage would otherwise burn one API attempt per request
@@ -35,6 +36,8 @@ const CHECKSUM_REFRESH_FAILURE_MAX_ENTRIES = 2000;
 export interface StoreCachedBeatmapFileOptions {
   beatmapsetId?: number | null;
   source?: string;
+  /** Commit a repair job with a changed file, so old derived ratings cannot survive it. */
+  repairDerivatives?: boolean;
 }
 
 export interface MarkCachedBeatmapFileUnavailableOptions {
@@ -191,7 +194,11 @@ async function refreshStaleCachedBeatmapFile(
     const content = await osu.getBeatmapFile(beatmapId, caller);
     checksumRefreshFailureAt.delete(beatmapId);
     const beatmapsetId = await readKnownBeatmapsetId(db, beatmapId).catch(() => null);
-    await storeCachedBeatmapFile(db, beatmapId, content, { beatmapsetId, source: "osu_api_checksum_refresh" }).catch(() => {});
+    await storeCachedBeatmapFile(db, beatmapId, content, {
+      beatmapsetId,
+      source: "osu_api_checksum_refresh",
+      repairDerivatives: beatmapFileMd5(content) !== beatmapFileMd5(cached.content),
+    });
     return content;
   } catch {
     if (checksumRefreshFailureAt.size >= CHECKSUM_REFRESH_FAILURE_MAX_ENTRIES) {
@@ -255,9 +262,8 @@ export async function storeCachedBeatmapFile(
   const raw = Buffer.from(content, "utf8");
   const compressed = await gzipAsync(raw);
   const now = nowIso();
-  await exec(
-    db,
-    `insert into beatmap_osu_files (
+  const statement: DbStatement = {
+    sql: `insert into beatmap_osu_files (
        beatmap_id, beatmapset_id, compression, content_blob, content,
        raw_bytes, compressed_bytes, source, fetched_at, last_used_at
      )
@@ -273,7 +279,7 @@ export async function storeCachedBeatmapFile(
        error = null,
        fetched_at = excluded.fetched_at,
        last_used_at = excluded.last_used_at`,
-    [
+    args: [
       safeId,
       normalizeBeatmapsetId(options.beatmapsetId),
       COMPRESSION,
@@ -284,7 +290,21 @@ export async function storeCachedBeatmapFile(
       now,
       now,
     ],
-  );
+  };
+  if (options.repairDerivatives) {
+    // The file and its repair obligation must commit together. This small,
+    // non-sheddable job joins the existing serialized chart-analysis lane.
+    const revision = `${safeId}:${randomUUID()}`;
+    await execBatch(db, [statement, {
+      sql: `insert into jobs
+        (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+        values (?, ?, 'queued', 4, ?, 0, ?, ?, ?)`,
+      args: [BEATMAP_FILE_CHANGE_JOB, `changed-osu-file:${revision}`, now,
+        JSON.stringify({ beatmapIds: [safeId], revision }), now, now],
+    }]);
+  } else {
+    await exec(db, statement.sql, statement.args);
+  }
 }
 
 export async function markCachedBeatmapFileUnavailable(
