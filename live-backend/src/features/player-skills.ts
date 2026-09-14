@@ -3926,12 +3926,12 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     const seedableVersions = [PLAYER_SKILLS_VERSION, ...PLAYER_SKILLS_SEED_VERSIONS];
     const previousRow = (await exec(
       db,
-      `select plays_json from player_skill_ratings
+      `select analysis_version, plays_json from player_skill_ratings
        where user_id = ? and analysis_version in (${seedableVersions.map(() => "?").join(", ")})
        order by analysis_version desc`,
       [userId, ...seedableVersions],
-    )).rows.map((row) => readStoredPlays(row.plays_json)).find((stored) => Array.isArray(stored?.plays));
-    const previousStored: Partial<StoredPlayerSkillPlays> = previousRow ?? {};
+    )).rows.find((row) => Array.isArray(readStoredPlays(row.plays_json)?.plays));
+    const previousStored: Partial<StoredPlayerSkillPlays> = readStoredPlays(previousRow?.plays_json) ?? {};
     const previousPlays = storedPlaysOf(previousStored);
 
     const trackedScores = await loadTrackedScores(db, userId);
@@ -3950,11 +3950,13 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       return null;
     });
     const computedAt = nowIso();
-    await writePlayerSkillRatingWithHistory(
+    const written = await writePlayerSkillRatingWithHistory(
       db, userId, PLAYER_SKILLS_VERSION, result.summary.modes, computedAt, {
         sql: `update player_skill_ratings
          set status = 'ready', modes_json = ?, plays_json = ?, acc_model_json = ?, source_fetched_at = ?, error = null, computed_at = ?, updated_at = ?
-         where user_id = ? and analysis_version = ?`,
+         where user_id = ? and analysis_version = ?
+           and exists (select 1 from player_skill_ratings seed
+             where seed.user_id = ? and seed.analysis_version = ? and seed.plays_json is ?)`,
         args: [
           json(result.summary),
           packStoredPlays({ version: PLAYER_SKILLS_VERSION, plays: result.plays, danOnly: result.danOnly, vibroExcluded: result.vibroExcluded }),
@@ -3964,9 +3966,16 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
           computedAt,
           userId,
           PLAYER_SKILLS_VERSION,
+          userId,
+          Number(previousRow?.analysis_version ?? PLAYER_SKILLS_VERSION),
+          previousRow?.plays_json ?? null,
         ],
       },
     );
+    // A repair may invalidate the seed while the calculator is running. Do
+    // not restore that stale evidence or append history from it; retry from
+    // the repaired cache, including when the seed was a superseded version.
+    if (Number(written.rowsAffected) !== 1) throw new Error("Cached player ratings changed during computation; retry");
     // Superseded-version rows are dead weight once the new one is ready.
     await exec(db, "delete from player_skill_ratings where user_id = ? and analysis_version != ?", [userId, PLAYER_SKILLS_VERSION]);
     // Charts with no analysis row yet contribute no pattern tags; queue them so

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, execBatch, migrate, type Db } from "../src/db.js";
 import { compactCountryMapsSnapshots } from "../src/features/maps.js";
 import { invalidateOsuFileRepairDerivatives } from "../src/features/chart-analysis.js";
-import { PLAYER_SKILLS_VERSION, recomputePlayerSkillPoisonChunk, scanStoredPlayerSkillRows } from "../src/features/player-skills.js";
+import { PLAYER_SKILLS_VERSION, computePlayerSkillsJob, recomputePlayerSkillPoisonChunk, scanStoredPlayerSkillRows } from "../src/features/player-skills.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { compressPlayerSkillPlays } from "../src/maintenance/player-skill-compaction.js";
 import { packJson, unpackJson } from "../src/shared/compressed-json.js";
@@ -27,6 +27,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   writer?.close();
   db?.close();
   await rm(dir, { recursive: true, force: true });
@@ -66,6 +67,34 @@ async function seedSkills(userId: number, version: number, plays: unknown[], pac
   await exec(db, `insert into player_skill_ratings (user_id, analysis_version, status, plays_json, updated_at)
     values (?, ?, 'ready', ?, ?)`, [userId, version, packed ? packJson(payload) : JSON.stringify(payload), stamp]);
 }
+
+describe("profile computation during chart repair", () => {
+  it.each([PLAYER_SKILLS_VERSION, PLAYER_SKILLS_VERSION - 1])("does not restore a concurrently repaired seed at version %s", async (version) => {
+    vi.stubEnv("ENABLE_OSU_API_JOBS", "false");
+    await seedSkills(99, version, [], true);
+    await exec(db, `insert into profile_snapshots
+      (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+      values (99, '99', '{"id":99,"username":"test"}', '[]', 200, ?, ?, ?)`, [stamp, stamp, stamp]);
+    const repaired = { version, plays: [], repaired: true };
+    const interleaved = afterReadOnce("select analysis_version, plays_json from player_skill_ratings", async () => {
+      await exec(writer, "update player_skill_ratings set plays_json = ? where user_id = 99 and analysis_version = ?",
+        [packJson(repaired), version]);
+    });
+    const offline = {
+      getBeatmapFile: async (): Promise<never> => { throw new Error("no network"); },
+      getUserByKey: async (): Promise<never> => { throw new Error("no network"); },
+      getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network"); },
+    };
+    await expect(computePlayerSkillsJob(db, offline, new JobQueue(db), { userId: 99 }))
+      .rejects.toThrow("Cached player ratings changed during computation");
+    interleaved();
+    const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 99 and analysis_version = ?", [version])).rows[0];
+    expect(unpackJson(row.plays_json, null)).toEqual(repaired);
+    expect((await exec(db, "select * from player_skill_history where user_id = 99")).rows).toHaveLength(0);
+    await computePlayerSkillsJob(db, offline, new JobQueue(db), { userId: 99 });
+    expect((await exec(db, "select status from player_skill_ratings where user_id = 99")).rows).toEqual([{ status: "ready" }]);
+  });
+});
 
 describe("maps snapshot compaction under concurrent writes", () => {
   it.each([false, true])("preserves a concurrent wipe stored as gzip=%s, even with unchanged stamps", async (packed) => {
