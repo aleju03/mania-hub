@@ -125,42 +125,30 @@ keep their existing hold-share gates and Overall-on-LN player axes (7K:
 
 ## Caching, API and migration
 
-Timeline version 1 / structural analysis version 2 fingerprints hold **endpoints**, rate, scoring
-profile, hands and model versions. The fingerprint is a cache identity, not
-a security hash. Full analysis retains lossless rows and complete evidence.
-Chart artifacts expose bounded previews: at most 128 representative
-detections, 64 object IDs per detection and 128 diagnostics, alongside full
-counts and truncation flags. Per-play caches store only `structureKey` and
-compact LN results, not repeated chart interval previews.
+Production chart/rate and player caches retain only the LN scalar, eligibility,
+model version and small calculation metadata. Structural profiles, interval
+previews, object IDs and diagnostics are generated only when offline callers
+explicitly pass `includeStructure: true`; they do not affect the scalar and
+are not returned by the rating API. The map search projection also strips
+previews from legacy artifacts when copying them.
 
-The four coverage profiles and the interval preview stay in the stored
-artifact for the sweeps and the search evidence, but the map panel does not
-show them and the analysis responses no longer carry `lnStructure`.
-The index tags two structural facets, Shields and Reverse Shields, with
-stable `lnshield`/`lnreverseshield` IDs from `ln-analysis/search-patterns.ts`
-(4K nomod only). The LN dropdown does not offer them as of 2026-09-14; they
-require current LN eligibility and do not change player axes or ratings.
-Search evidence v2 reads the whole chart: a hold is shielded when the
-previous object in its column is a tap at most 0.3 beats earlier (a quarter
-beat with room for 1/6 and drift), reverse-shielded when a tap follows its
-release within the same gap, with the beat length taken from the chart's
-uninherited timing points at that time (nominal BPM, then 180 BPM, as
-fallbacks). Shields need at least 3% of the chart's holds, reverse shields
-12% (median 7% across LN charts: a tap after a release is ordinary LN
-texture), and at least 20 holds either way. On the 300 most played 4K LN charts the half-beat pairs are the
-ordinary tap/hold alternation of any LN chart (one 5-minute chart had 147
-of them and 17 quarter-beat pairs, and no shield section), while a chart
-known for its shields had 5.4% and a shield-heavy one 14.5%.
+The experimental shield/reverse-shield search tags have been removed from
+both the backend and frontend query vocabularies. The LN share slider remains:
+it filters `ln_share`, the share of the chart's objects that are holds, using
+osu!'s counts. The bounded cleanup drops the existing experimental tags
+without a full index rebuild.
+The effective-LN sweep checks rating/identity versions only, so removing a
+preview does not enqueue a recomputation or regenerate it.
 
-Search index revision 17 reads this aggregate from the **full** analysis,
-never the bounded preview, and also stores `ln_share`, the hold share of the
-chart's objects from osu!'s counts, behind the LN share slider. Missing/old
-evidence stays untagged until the effective-LN cached-file sweep fills it.
-Invalid, non-1× or non-4K structures do not invent hits. Index rebuilds
-remove obsolete tags; chart refreshes fill the new ones. Queries perform no
-parsing/API work. DT/custom-rate views never relabel 1× evidence as
-accelerated evidence. A stale LN artifact can refresh without discarding
-the cached native vector if the chart file is unavailable.
+`npm run compact:ln-artifacts` in `live-backend/` removes existing
+`lnSkill.structure` fields from chart analyses (base, DT, HT and legacy tail
+artifacts), rate/mod estimates and map search, and removes the retired search
+tags. It pages row IDs, transforms the current JSON in SQLite in small writes,
+preserves scalar/native/vibro fields and timestamps, and is safe to interrupt
+and rerun while the backend serves. It does not delete rows or invalidate
+ratings. The general `compact:storage` command includes the same pass. Pages
+become reusable inside the database; the offline `VACUUM INTO` procedure in
+[backend storage](backend.md#retention-and-storage) returns space to disk.
 
 Player skills version 40 seeds from versions 39 through 16 and migrates
 compatible retained evidence in bounded
@@ -170,7 +158,7 @@ whose facts/calculation are pending remain durable with no credited stale
 SSR. Budget-deferred work queues continuation; missing files alone do not
 create a retry loop. Vibro, chart-family and Dan evidence policies remain in
 force. Chart sweeps refresh eligible base/DT/HT LN artifacts and clear obsolete
-4K tail artifacts. Effective-LN sweep v11 also fills full search evidence;
+4K tail artifacts. Effective-LN sweep v11 refreshes model/identity metadata;
 rate-estimate cache v24 and player Dan/pattern sweeps v37/v12 propagate it.
 The chart-table namespace remains version 1: the targeted chart sweep
 invalidates effective/model artifacts without hiding the entire cached map

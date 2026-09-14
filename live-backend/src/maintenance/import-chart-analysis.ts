@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { readConfig } from "../config.js";
 import { createDb, exec, migrate } from "../db.js";
 import { forceMapSearchIndexRebuild } from "../features/map-search.js";
+import { compactMsdForStorage } from "../shared/msd-storage.js";
 import { JobQueue } from "../jobs/queue.js";
 
 // Imports beatmap_chart_analysis rows from an export file produced by
@@ -70,7 +71,8 @@ for (;;) {
   if (rows.length === 0) break;
 
   const placeholders = rows.map(() => `(${COLUMNS.map(() => "?").join(", ")})`).join(", ");
-  const args = rows.flatMap((row) => COLUMNS.map((column) => row[column] ?? null));
+  const args = rows.flatMap((row) => COLUMNS.map((column) => column.startsWith("msd_") && column.endsWith("_json")
+    ? compactMsdForStorage(row[column]) : row[column] ?? null));
   const result = await exec(
     db,
     `insert into beatmap_chart_analysis (${COLUMNS.join(", ")}) values ${placeholders}

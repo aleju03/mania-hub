@@ -12,6 +12,7 @@ import { compactScoreForStorage, compactScoresForStorage, persistScoresDisplayMe
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
 import { compactMapsFarmedOverlay } from "./maps-farmed-compaction.js";
+import { compactLnArtifacts } from "./ln-artifact-compaction.js";
 import { compressPlayerSkillPlays } from "./player-skill-compaction.js";
 import { formatBytes, vacuumIntoAndSwap } from "./vacuum-into.js";
 
@@ -42,6 +43,10 @@ await ensureJournalSchema(journalDb);
 if (options.vacuum) {
   await assertVacuumHeadroom(config.databaseUrl, options.force);
 }
+
+const lnArtifacts = await compactLnArtifacts(db, { batchSize: options.batchSize, betweenBatches: releaseMemory });
+console.log(`LN artifact cleanup: ${JSON.stringify(lnArtifacts)}`);
+await releaseMemory();
 
 const farmed = await compactMapsFarmedOverlay(db, options.batchSize);
 console.log(`country_maps_farmed_scores: compacted ${farmed.compacted}, failed ${farmed.failed}, scanned ${farmed.scanned}`);

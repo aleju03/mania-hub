@@ -2,7 +2,6 @@ import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 import { analyzeEffectiveLn, chartIsLn, effectiveHoldMask, LN_SAME_MOTION_TOLERANCE_MS } from "./dan-estimator/ln-effective.js";
 import { analyzeLnTimeline4K, lnAnalysisCacheKey, summarizeLnStructure4K, type LnStructureSummary4K } from "./ln-analysis/index.js";
 import { buildLnTimeline4K } from "./ln-analysis/timeline.js";
-import { beatLengthLookup } from "./ln-analysis/search-evidence.js";
 
 /** Mania Hub's LN strain model, independent of MinaCalc and dan verdicts.
  * Version the chart artifacts, retained plays and percentile population together.
@@ -37,7 +36,7 @@ export interface LnSkillResult {
   keyCount: number;
   rating: number | null;
   structureKey?: string;
-  /** Interval evidence is stored per chart/rate, not duplicated per player play. */
+  /** Opt-in diagnostics for offline inspection; never needed by the scalar. */
   structure?: LnStructureSummary4K;
   /** Unscaled LN strain; exposed for reproducible calibration diagnostics. */
   strain: number;
@@ -89,8 +88,9 @@ export function analyzeLnSkill(
     ? Math.max(0, Math.min(0.999, Number(options.scoreGoal))) : LN_SKILL_SCORE_GOAL;
   const timeline = buildLnTimeline4K(map.notes, { rate, scoring: { client: "stable-scorev2", od, accuracyGoal: scoreGoal } });
   const structureKey = lnAnalysisCacheKey(timeline);
-  const structure = options.includeStructure === false ? undefined
-    : summarizeLnStructure4K(analyzeLnTimeline4K(timeline), 128, beatLengthLookup(map, rate, timeline.originMs));
+  // Production caches keep the scalar only. Detailed previews are opt-in.
+  const structure = options.includeStructure === true
+    ? summarizeLnStructure4K(analyzeLnTimeline4K(timeline)) : undefined;
   if (!timeline.valid) return {
     version: LN_SKILL_VERSION, keyCount, rating: null, strain: 0, eligible: false,
     effectiveRatio: 0, effectiveHolds: 0, rate, od, scoreGoal, structureKey, ...(structure ? { structure } : {}),

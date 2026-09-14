@@ -27,11 +27,12 @@ describe("normalizeDanEstimateItems", () => {
         const unavailable = { getBeatmapFile: vi.fn(async () => { throw new Error("offline"); }) };
         const pending = await getRateAdjustedChartAnalysis(db, unavailable as never, id, rate);
         expect(pending?.msd).toEqual({ Overall: 20 });
-        expect(pending?.lnStructure).toBeUndefined();
+        expect(pending).not.toHaveProperty("lnStructure");
 
         const fresh = await getRateAdjustedChartAnalysis(db, osu as never, id, rate);
-        expect(fresh?.lnStructure).toMatchObject({ valid: true, playbackRate: rate });
-        expect(fresh?.lnStructure?.profiles.ln_release).not.toHaveProperty("rating");
+        expect(fresh).not.toHaveProperty("lnStructure");
+        const artifact = (await exec(db, "select msd_json from dan_estimates where beatmap_id = ?", [id])).rows[0];
+        expect(JSON.parse(String(artifact.msd_json)).lnSkill).not.toHaveProperty("structure");
         expect(fresh?.msd?.Overall).toBeGreaterThan(0);
         const reads = osu.getBeatmapFile.mock.calls.length;
         const cached = await getRateAdjustedChartAnalysis(db, osu as never, id, rate);

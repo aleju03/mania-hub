@@ -22,7 +22,6 @@ import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { upsertMapSearchIndexRow } from "../src/features/map-search.js";
 import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
-import { LN_SEARCH_EVIDENCE_VERSION } from "../src/dan/ln-analysis/search-evidence.js";
 
 interface ChartNote { column: number; time: number; end?: number }
 
@@ -515,14 +514,13 @@ describe("recomputeLnEffectiveChunk", () => {
       expect(artifact.lnSkill).toMatchObject({ version: LN_SKILL_VERSION, eligible });
       if (eligible) expect(artifact.values.LN).toBeGreaterThan(0);
       else expect(artifact.values.LN).toBe(0);
-      expect(artifact.lnSkill.structure.profiles.ln_release).not.toHaveProperty("rating");
-      expect(artifact.lnSkill.structure).not.toHaveProperty("unsupported");
+      expect(artifact.lnSkill).not.toHaveProperty("structure");
     }
     expect((await recomputeLnEffectiveChunk(db, 0, 10)).scanned).toBe(0);
     db.close();
   });
 
-  it("backfills missing search evidence even when LN rating and identity versions are already current", async () => {
+  it("does not regenerate removed search evidence when rating and identity versions are current", async () => {
     const db = await makeDb();
     const id = 853;
     await storeCachedBeatmapFile(db, id, osuText(fullLnStream(600, 135), 7.5), { source: "test" });
@@ -531,9 +529,9 @@ describe("recomputeLnEffectiveChunk", () => {
       classification_json = json_set(classification_json, '$.lnEffectiveVersion', ?, '$.lnEffectiveRatio', 0.875)
       where beatmap_id = ?`, [JSON.stringify({ values: { Overall: 20, LN: 14 },
       lnSkill: { version: LN_SKILL_VERSION, eligible: true } }), LN_EFFECTIVE_MODEL_VERSION, id]);
-    expect((await recomputeLnEffectiveChunk(db, id - 1, 1)).scanned).toBe(1);
+    expect((await recomputeLnEffectiveChunk(db, id - 1, 1)).scanned).toBe(0);
     const row = (await exec(db, "select msd_json from beatmap_chart_analysis where beatmap_id = ?", [id])).rows[0];
-    expect(JSON.parse(String(row.msd_json)).lnSkill.structure.searchEvidence).toMatchObject({ version: LN_SEARCH_EVIDENCE_VERSION });
+    expect(JSON.parse(String(row.msd_json)).lnSkill).not.toHaveProperty("structure");
     expect((await recomputeLnEffectiveChunk(db, id - 1, 1)).scanned).toBe(0);
     db.close();
   });

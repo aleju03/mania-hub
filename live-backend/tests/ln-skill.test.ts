@@ -7,6 +7,19 @@ const chart = (notes: ManiaNote[], od = 8) => ({ notes, keyCount: 4, od });
 const stream = (gap = 200, duration = 140, count = 600) => Array.from({ length: count }, (_, i) => hold(i % 4, i * gap, duration));
 
 describe("independent 4K LN skill", () => {
+  it.each([0.75, 1, 1.5])("omits diagnostics without changing any scalar at %sx", (rate) => {
+    for (const notes of [stream(350, 250), stream(100, 0), stream(100, 40)]) {
+      const map = chart(notes);
+      const diagnostic = analyzeLnSkill(map, { rate, includeStructure: true })!;
+      const { structure, ...scalar } = diagnostic;
+      expect(structure).toBeDefined();
+      const cached = analyzeLnSkill(map, { rate })!;
+      expect(cached).toEqual(scalar);
+      expect(cached).not.toHaveProperty("structure");
+      expect(JSON.stringify(cached).length).toBeLessThan(1000);
+    }
+  });
+
   it("prices near-window hold chains while retaining the rice publication gate", () => {
     const notes = Array.from({ length: 100 }, (_, i) => hold(0, i * 114, 57));
     const result = analyzeLnSkill(chart(notes, 8.5))!;
@@ -85,7 +98,7 @@ describe("independent 4K LN skill", () => {
     expect(analyzeLnSkill(chart(notes.map(n => ({ ...n, time: n.time - 3000, endTime: n.endTime - 3000 }))))!.rating).toBeCloseTo(rating, 8);
     expect(analyzeLnSkill(chart(notes.map(n => ({ ...n, time: n.time + 137, endTime: n.endTime + 137 }))))!.rating).toBeCloseTo(rating, 8);
     expect(analyzeLnSkill(chart(notes.map(n => ({ ...n, column: 3 - n.column })).reverse()))!.rating).toBeCloseTo(rating, 8);
-    const duplicate = analyzeLnSkill(chart([...notes, ...notes]))!;
+    const duplicate = analyzeLnSkill(chart([...notes, ...notes]), { includeStructure: true })!;
     expect(duplicate.rating).toBeNull();
     expect(duplicate.structure!.diagnostics.some((item) => item.code === "duplicate_object")).toBe(true);
     for (const keyCount of [1, 2, 3, ...Array.from({ length: 14 }, (_, i) => i + 5), 19, 7.5, NaN]) expect(analyzeLnSkill({ ...chart(notes), keyCount })).toBeNull();

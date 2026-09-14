@@ -7,15 +7,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createDb, exec, execBatch, json, migrate, type Db, type DbStatement } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, MAP_SEARCH_COUNT_CAP, reconcileBeatmapStatusColumns, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, runMapSearchIndexBuildJob, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, MAP_SEARCH_COUNT_CAP, reconcileBeatmapStatusColumns, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
-import { analyzeLnStructure4K, summarizeLnStructure4K } from "../src/dan/ln-analysis/index.js";
 import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
 import { parseMapSearchQuery } from "../src/http/snapshot-queries.js";
-import { LN_SEARCH_EVIDENCE_VERSION } from "../src/dan/ln-analysis/search-evidence.js";
 
 let dir = "";
 
@@ -119,41 +117,35 @@ async function buildAll(db: Db): Promise<void> {
 }
 
 describe("map search index", () => {
-  it("indexes recurring shields only on eligible 4K LN charts, for filters and detail chips", async () => {
+  it("does not restart a completed index for an old queued retry", async () => {
     const db = await makeDb();
-    const structure = summarizeLnStructure4K(analyzeLnStructure4K(Array.from({ length: 24 }, (_, i) => [
-      { column: 0, time: 1000 + i * 600, endTime: 1000 + i * 600, isHold: false },
-      { column: 0, time: 1080 + i * 600, endTime: 1500 + i * 600, isHold: true },
-    ]).flat(), { scoring: { od: 8 } }));
-    expect(structure.detections.some(d => d.tag === "shield")).toBe(true);
-    for (const id of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      await seedMap(db, { beatmapId: id, beatmapsetId: id * 10, cs: id === 3 ? 7 : 4,
-        title: "Shields", primary: "stream", patterns: { stream: 1 } });
-      await seedAnalysis(db, id, { lnRatio: 0.5, msdValues: { Overall: 10, Stream: 10 } });
-      const value = id === 2 ? undefined : id === 4 ? { ...structure, valid: false }
-        : id === 5 ? { ...structure, playbackRate: 1.5 } : id === 6 ? { ...structure, version: 0 } : structure;
-      await exec(db, "update beatmap_chart_analysis set msd_json = ? where beatmap_id = ?",
-        [json({ values: { Overall: 10, Stream: 10 }, lnSkill: { structure: value,
-          eligible: id !== 7, version: id === 8 ? LN_SKILL_VERSION - 1 : LN_SKILL_VERSION } }), id]);
-    }
+    await exec(db, "insert into live_meta (key, value_json, updated_at) values (?, '{}', 'unchanged')",
+      [`map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r17`]);
+    const complete = vi.fn();
+    const queue = new JobQueue(db);
+    const enqueue = vi.spyOn(queue, "enqueue");
+    await runMapSearchIndexBuildJob(db, queue, { cursor: 0 }, complete);
+    expect(complete).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+    db.close();
+  });
+
+  it("drops experimental LN tags and previews while retaining all rating values", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, title: "LN", primary: "ln", patterns: { ln: 1 } });
+    await seedAnalysis(db, 1, { lnRatio: 0.5, msdValues: { Overall: 10, LN: 14 } });
+    const scalar = { version: LN_SKILL_VERSION, eligible: true, rating: 14 };
+    await exec(db, "update beatmap_chart_analysis set msd_json = ? where beatmap_id = 1",
+      [json({ values: { Overall: 10, LN: 14 }, lnSkill: { ...scalar,
+        structure: { searchEvidence: { tags: { shield: {} } }, detections: Array(128).fill({ tag: "shield" }) } } })]);
     await buildAll(db);
     const query = parseMapSearchQuery(new URLSearchParams("patterns=lnshield&patternsExclude=lnreverseshield"));
-    expect(query.patterns).toEqual(["lnshield"]);
-    expect(query.patternsExclude).toEqual(["lnreverseshield"]);
-    const included = await getMapSearchPage(db, query);
-    expect(included.items.map(item => item.beatmapId)).toEqual([1]);
-    expect(included.items[0].primaryPattern).toBe("ln");
-    expect(included.items[0].patternTags).toContain("lnshield");
-    expect(included.items[0].diffs[0].patternTags).toContain("lnshield");
-    expect((await getMapSearchSetEntry(db, 1))?.patternTags).toContain("lnshield");
-    const excluded = await getMapSearchPage(db, { ...baseQuery(), patternsExclude: ["lnshield"] });
-    expect(excluded.items.map(item => item.beatmapId).sort()).toEqual([2, 3, 4, 5, 6, 7, 8]);
-    // Changing endpoints/detections must remove the old indexed tag.
-    await exec(db, "update beatmap_chart_analysis set msd_json = ? where beatmap_id = 1",
-      [json({ values: { Overall: 10 }, lnSkill: { version: LN_SKILL_VERSION, eligible: true,
-        structure: { ...structure, searchEvidence: { version: LN_SEARCH_EVIDENCE_VERSION, tags: {} } } } })]);
-    await buildAll(db);
-    expect((await getMapSearchPage(db, { ...baseQuery(), patterns: ["lnshield"] })).items).toEqual([]);
+    expect(query.patterns).toEqual([]);
+    expect(query.patternsExclude).toEqual([]);
+    const row = (await exec(db, "select msd_json, pattern_tags from map_search_index where beatmap_id = 1")).rows[0];
+    expect(JSON.parse(String(row.msd_json))).toEqual({ values: { Overall: 10, LN: 14 }, lnSkill: scalar });
+    expect(String(row.pattern_tags)).not.toContain("shield");
+    expect((await getMapSearchSetEntry(db, 1))?.msd).toEqual({ Overall: 10, LN: 14 });
   });
 
   it("filters by the hold share of the chart's objects", async () => {

@@ -2,7 +2,6 @@ import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react
 import { Trans, Plural, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
-import { LN_SEARCH_PATTERN_IDS } from "#dan/ln-analysis/search-patterns";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -303,7 +302,6 @@ const SEARCH_PATTERN_VALUES = [
   // subfamilies (matched against detected-pattern tags, not dominance)
   "speedjack", "handjack", "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
-  ...LN_SEARCH_PATTERN_IDS,
 ];
 // SEARCH_SORT_VALUES lives in components/maps/searchSortPreference.ts.
 

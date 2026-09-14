@@ -20,24 +20,12 @@ Snapshot reads select the requested page's rowids before loading score payloads.
 
 ## Maps
 
-The LN filter dropdown carries an LN share slider. The index also tags two
-4K structural facets, Shields and Reverse Shields, that the dropdown does
-not offer yet (a tap after a release is ordinary LN texture, so the owner
-pulled the buttons on 2026-09-14; `lnshield`/`lnreverseshield` still work
-as URL pattern ids). A shield is a tap a quarter beat or less
-before a hold in the same column, a reverse shield a tap that soon after the
-hold's release; the chart gets the tag when at least 3% of its holds are
-shielded, or 12% reverse-shielded (a tap after a release is common LN
-texture), with at least 20 either way, measured over the whole chart against
-its timing points (`dan/ln-analysis/search-evidence.ts`, evidence v2). Half-beat
-tap/hold alternation is the ordinary LN texture and does not count. The tags
-require LN eligibility and a nomod 4K structure, sit in `pattern_tags`
-through `dan/ln-analysis/search-patterns.ts`, and are available for 4K and
-mixed-key searches. The LN share slider filters on `ln_share`, the hold
-share of the chart's objects from osu!'s own counts (index revision 17,
-`lnMin`/`lnMax` in percent). Index rebuilds and the effective-LN sweep
-refresh both without API or MinaCalc work.
-See [LN analysis](ln-skill.md) for scope and evidence limitations.
+The LN filter dropdown carries an LN share slider (`lnMin`/`lnMax` in percent).
+It filters `map_search_index.ln_share`, the share of chart objects that are holds
+from osu!'s counts. The experimental shield/reverse-shield tags and URL filter
+IDs have been removed; the bounded storage cleanup strips existing tags. LN ratings
+and eligibility remain intact, while stored artifacts omit diagnostic interval
+previews. See [LN analysis](ln-skill.md) for the scalar and storage contract.
 
 `refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts scores that entered their top plays; `refresh_country_maps` aggregates these into `country_maps_snapshots`, and `refresh_global_maps` rolls countries up into a global snapshot. Refresh progress is tracked in `live_meta` and surfaced via `/api/snapshots/maps-progress`.
 

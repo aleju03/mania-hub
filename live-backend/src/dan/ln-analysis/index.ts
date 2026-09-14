@@ -1,5 +1,4 @@
 import type { ManiaNote } from "../beatmap-parser.js";
-import { buildLnSearchEvidence, type BeatLengthAt, type LnSearchEvidence } from "./search-evidence.js";
 import { buildLnTimeline4K, lnFingerprint, type HandMapping4K, type LnChartObject, type LnScoringProfile, type LnTimeline4K } from "./timeline.js";
 
 export const LN_ANALYSIS_VERSION = 2;
@@ -41,7 +40,7 @@ export interface LnAnalysis4K {
   sections: Array<{ startMs: number; endMs: number; heldAtStart: number; heldAtEnd: number; workload: Record<LnProfileId, number> }>;
 }
 
-/** Compact cache/API form; full paired objects and rows remain in the analyzer. */
+/** Bounded diagnostic preview for offline inspection; not a persisted cache. */
 export type LnStructureSummary4K = Omit<LnAnalysis4K, "timeline" | "sections" | "detections"> & {
   originMs: number;
   playbackRate: number;
@@ -52,11 +51,9 @@ export type LnStructureSummary4K = Omit<LnAnalysis4K, "timeline" | "sections" | 
   detections: LnDetection[];
   detectionCount: number;
   detailsTruncated: boolean;
-  /** Shield and reverse shield counts over the whole chart; never inferred from the bounded preview. */
-  searchEvidence?: LnSearchEvidence;
 };
 
-export function summarizeLnStructure4K(analysis: LnAnalysis4K, limit = 128, beatLengthAt?: BeatLengthAt): LnStructureSummary4K {
+export function summarizeLnStructure4K(analysis: LnAnalysis4K, limit = 128): LnStructureSummary4K {
   const { timeline, sections: _sections, detections, ...summary } = analysis;
   // Interleave tags so a long stream cannot hide every coordination/release
   // example. The full count and truncation flag keep this preview honest.
@@ -75,7 +72,6 @@ export function summarizeLnStructure4K(analysis: LnAnalysis4K, limit = 128, beat
     if (!added) break;
   }
   return { ...summary, originMs: timeline.originMs, playbackRate: timeline.playbackRate, scoring: timeline.scoring, hands: timeline.hands,
-    searchEvidence: buildLnSearchEvidence(timeline, beatLengthAt),
     diagnostics: timeline.diagnostics.slice(0, 128), diagnosticCount: timeline.diagnostics.length,
     detections: preview.sort((a, b) => a.startMs - b.startMs || a.tag.localeCompare(b.tag, "en-US")).map((detection) => ({ ...detection,
       objectIds: detection.objectIds.slice(0, 64), objectCount: detection.objectIds.length, objectIdsTruncated: detection.objectIds.length > 64 })),

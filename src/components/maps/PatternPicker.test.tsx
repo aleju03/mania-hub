@@ -3,7 +3,6 @@ import { I18nProvider } from "@lingui/react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { getI18n } from "#/lib/i18n";
-import { LN_SEARCH_PATTERN_IDS } from "#dan/ln-analysis/search-patterns";
 import { PATTERN_LABEL } from "#/lib/pattern-labels";
 import { PatternPicker, validPatternIds } from "./PatternPicker";
 
@@ -19,7 +18,7 @@ vi.mock("./SearchCard", async () => import("../../lib/pattern-labels"));
 afterEach(cleanup);
 
 it("keeps the shield facets out of every keymode's LN dropdown", () => {
-  for (const id of LN_SEARCH_PATTERN_IDS) {
+  for (const id of ["lnshield", "lnreverseshield"]) {
     for (const keys of [[], ["4k"], ["7k"], ["other"]]) expect(validPatternIds(keys).has(id)).toBe(false);
     expect(PATTERN_LABEL[id]).toBeUndefined();
   }

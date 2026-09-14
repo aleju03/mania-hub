@@ -7,7 +7,6 @@ import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { storeChartFamily } from "./chart-families.js";
 import { analyzeLnSkill, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION } from "../dan/ln-skill.js";
-import { LN_SEARCH_EVIDENCE_VERSION } from "../dan/ln-analysis/search-evidence.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { LN_EFFECTIVE_KEY_COUNTS, LN_EFFECTIVE_MIN_RATIO, LN_EFFECTIVE_MODEL_VERSION, analyzeEffectiveLn, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
@@ -4870,7 +4869,6 @@ export async function recomputeLnEffectiveChunk(
        and beatmap_id > ?
        and (
          (msd_json is not null and coalesce(json_extract(msd_json, '$.lnSkill.version'), 0) != ${LN_SKILL_VERSION})
-         or (json_extract(msd_json, '$.lnSkill.eligible') = 1 and coalesce(json_extract(msd_json, '$.lnSkill.structure.searchEvidence.version'), 0) != ${LN_SEARCH_EVIDENCE_VERSION})
          or (msd_dt_json is not null and coalesce(json_extract(msd_dt_json, '$.lnSkill.version'), 0) != ${LN_SKILL_VERSION})
          or (msd_ht_json is not null and coalesce(json_extract(msd_ht_json, '$.lnSkill.version'), 0) != ${LN_SKILL_VERSION})
          or (key_count = 4 and (

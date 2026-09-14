@@ -6,11 +6,9 @@ import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
 import { PATTERN_AXIS_KEY_COUNTS } from "./player-skills.js";
 import { chartIsLn, chartLnShareFor } from "../dan/dan-estimator/ln-effective.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
-import { LN_SKILL_VERSION } from "../dan/ln-skill.js";
-import type { LnStructureSummary4K } from "../dan/ln-analysis/index.js";
-import { readLnSearchPatternIds, LN_SEARCH_PATTERN_IDS } from "../dan/ln-analysis/search-patterns.js";
 import { VIBRO_SECTION_VERSION, type VibroAnalysis } from "../dan/vibro-sections.js";
 import type { JobQueue } from "../jobs/queue.js";
+import { compactMsdForStorage } from "../shared/msd-storage.js";
 import { nowIso } from "../shared/score.js";
 
 // Global, denormalized search projection over every chart-analyzed mania map.
@@ -45,6 +43,8 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // r15 requires LN eligibility and full-analysis recurring-section evidence.
 // r17: ln_share column, the hold share from osu!'s object counts, for the
 // LN share filter; the shield tags now come from search evidence v2.
+// Preview/tag cleanup runs in bounded maintenance writes, without forcing
+// a full index rebuild on the serving VPS. Keep the existing index revision.
 const BUILD_REVISION = 17;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
@@ -74,7 +74,6 @@ export const MAP_SEARCH_SUB_PATTERNS = [
   "speedjack", "handjack",
   "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
-  ...LN_SEARCH_PATTERN_IDS,
 ];
 const SUB_PATTERN_SET = new Set(MAP_SEARCH_SUB_PATTERNS);
 
@@ -555,7 +554,7 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
 // spaces so subfamily filters can match with like '% id %'. Zero-score entries
 // are skipped: they are not detections (pre-fix classifications carry a
 // force-appended score-0 ln candidate even on charts with zero long notes).
-function readPatternTags(classificationJson: unknown, msdJson: unknown, keyCount: number): string {
+function readPatternTags(classificationJson: unknown): string {
   const parsed = parseJson<{ patterns?: Array<{ id?: unknown; score?: unknown }> } | null>(classificationJson, null);
   const ids = [...new Set(
     (Array.isArray(parsed?.patterns) ? parsed.patterns : [])
@@ -563,12 +562,6 @@ function readPatternTags(classificationJson: unknown, msdJson: unknown, keyCount
       .map((hit) => String(hit?.id ?? ""))
       .filter(Boolean),
   )];
-  // Search needs recurring sections on an eligible LN chart, not an isolated
-  // candidate in the diagnostic preview. Full-analysis evidence is versioned;
-  // missing evidence stays untagged until the cached-file sweep fills it.
-  const artifact = keyCount === 4 ? parseJson<{ lnSkill?: { version?: number; eligible?: boolean; structure?: LnStructureSummary4K } } | null>(msdJson, null) : null;
-  ids.push(...readLnSearchPatternIds(artifact?.lnSkill?.structure, keyCount,
-    artifact?.lnSkill?.version === LN_SKILL_VERSION && artifact.lnSkill.eligible === true));
   return ids.length > 0 ? ` ${[...new Set(ids)].join(" ")} ` : "";
 }
 
@@ -695,10 +688,10 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     row.ca_dan_label == null ? null : String(row.ca_dan_label),
     row.ca_dan_family == null ? null : String(row.ca_dan_family),
     row.ca_raw_dan == null ? null : realOr(row.ca_raw_dan),
-    row.ca_msd_json == null ? null : String(row.ca_msd_json),
+    compactMsdForStorage(row.ca_msd_json),
     row.ca_msd_overall == null ? null : realOr(row.ca_msd_overall),
-    row.ca_msd_ln_json == null ? null : String(row.ca_msd_ln_json),
-    readPatternTags(row.ca_classification_json, row.ca_msd_json, intOr(row.cs)),
+    compactMsdForStorage(row.ca_msd_ln_json),
+    readPatternTags(row.ca_classification_json),
     intOr(row.ca_vibro) === 1 ? 1 : 0,
     row.ca_note_bpm == null || !(realOr(row.ca_note_bpm) > 0) ? null : realOr(row.ca_note_bpm),
     lnShareOf(row),
@@ -1101,6 +1094,8 @@ export async function runMapSearchIndexBuildJob(
   payload: { cursor?: number } | undefined,
   onComplete: () => Promise<void>,
 ): Promise<void> {
+  // A queued retry can outlive its rebuild. Manual rebuilds remove this marker.
+  if (await isMapSearchIndexBuilt(db)) return;
   let cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
   for (let batch = 0; batch < BUILD_BATCHES_PER_RUN; batch++) {
     const result = await buildMapSearchIndexBatch(db, cursor, BUILD_BATCH_SIZE);
