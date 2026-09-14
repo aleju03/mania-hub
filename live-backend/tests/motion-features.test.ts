@@ -8,7 +8,7 @@ import type { ManiaNote } from "../src/dan/beatmap-parser.js";
 const STEP_MS = 125;
 const note = (column: number, time: number): ManiaNote => ({ column, time, endTime: time, isHold: false });
 const fromColumns = (columns: number[]): ManiaNote[] => columns.map((column, index) => note(column, index * STEP_MS));
-const repeat = (pattern: number[], times: number): number[] => Array.from({ length: times }, () => pattern).flat();
+const repeat = <T,>(pattern: T[], times: number): T[] => Array.from({ length: times }, () => pattern).flat();
 
 describe("motionFeatures", () => {
   it("reads a one-hand trill as one-hand oscillation, not as a roll", () => {
