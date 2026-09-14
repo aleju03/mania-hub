@@ -23,7 +23,8 @@ vi.mock("#/lib/live-backend", async (importOriginal) => {
   };
 });
 
-vi.mock("./SkillPlaysModal", () => ({
+vi.mock("./SkillPlaysModal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./SkillPlaysModal")>()),
   rateModFor: () => null,
   stubEntry: (play: LivePlayerSkillPlay) => ({
     beatmapId: play.beatmapId,

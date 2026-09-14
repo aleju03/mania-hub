@@ -20,6 +20,10 @@
  *   npx tsx scripts/dev/speed-tech-model.ts            # fit + diagnostics
  *   npx tsx scripts/dev/speed-tech-model.ts --impact   # also run the shipped
  *                                                      # code over the corpora
+ *   npx tsx scripts/dev/speed-tech-model.ts --chart=ID[,ID]
+ *                                                      # also print a chart's
+ *                                                      # features, probability
+ *                                                      # and shipped tiles
  */
 import { createClient } from "@libsql/client";
 import { gunzipSync } from "node:zlib";
@@ -29,6 +33,12 @@ import { danSkillsetBucketsForValues, type ChartSkillInfo } from "../../src/feat
 
 const DB_URL = process.env.SWEEP_DB_URL ?? "file:data/mania-hub-live.db";
 const WITH_IMPACT = process.argv.includes("--impact");
+// Charts to read out at the end, whatever corpus they fall in.
+const SPOT_IDS = new Set(process.argv
+  .filter((arg) => arg.startsWith("--chart="))
+  .flatMap((arg) => arg.slice("--chart=".length).split(","))
+  .map((value) => Number(value))
+  .filter((value) => Number.isInteger(value) && value > 0));
 const RANDOM_SAMPLE = 6000;
 
 const PACKISH = /pack|practice|training|collection/i;
@@ -48,13 +58,25 @@ const CORPUS_TILE: Record<string, string> = {
   stream: "speed", jumpstream: "stamina", handstream: "stamina", jumptrill: "jack",
 };
 
-// Charts a 4K dan player labelled by hand on 2026-08-30. Held out of every fit
-// and never used to choose a threshold: they are the external check.
+// Charts a 4K dan player labelled by hand (2026-08-30, then 2026-09-12 from
+// the speed-pack and stream-pack charts the shipped model had filed under
+// tech). Held out of every fit and never used to choose a threshold: they are
+// the external check. "both" means the player reads the chart as tech and
+// speed at once, so either tile alone or the pair is right for it.
 const HAND: Array<[number, string]> = [
   [3084903, "tech"], [3084904, "tech"], [3084905, "tech"], [3084906, "tech"],
   [4189254, "tech"], [4189255, "tech"], [4189256, "tech"],
   [1624796, "speed"], [3468306, "tech"],
   [770127, "tech"], [789784, "tech"], [2117613, "tech"],
+  [2771239, "speed"], [2771237, "speed"], [2771525, "speed"], [2834433, "speed"],
+  [5238352, "speed"], [5016401, "speed"], [5638031, "speed"], [5638124, "speed"],
+  [3952032, "speed"], [3674945, "speed"], [972511, "speed"],
+  [3540932, "tech"], [5299516, "tech"], [1215026, "tech"], [4966672, "tech"],
+  [4861187, "tech"], [5529967, "tech"], [4529060, "tech"],
+  [2772499, "both"], [5638159, "both"], [4464059, "both"], [1605605, "both"], [1941077, "both"],
+  // 2026-09-13: the six 4K dan tech maps from 10th to epsilon, by definition tech
+  [4961234, "tech"], [4961226, "tech"], [4961231, "tech"], [4961229, "tech"], [4961232, "tech"],
+  [4961236, "both"],
 ];
 
 interface Chart {
@@ -75,12 +97,27 @@ interface Chart {
   motion: MotionFeatures;
 }
 
-const FEATURES = ["rhythmBreak", "crossHandTrill", "miniJack", "sameHand", "techLead", "techScore"] as const;
+// rhythmBreak is not an input. It separates the pack corpora (single-input
+// AUC 0.82) but what it reads there is unsnapped dump charts sitting in tech
+// packs, and on a stream it reads swing and rate-edit jitter (a 41 ms stream
+// written as 31/51 ms pairs scores 0.86 against a corpus median of 0.01):
+// ten of eleven speed-pack and stream-pack charts a 4K player labelled speed
+// on 2026-09-12 were filed tech by it alone. Dropping it costs 0.013 of
+// out-of-fold AUC on the packs and fixes nine of the ten.
+// anchor (a column carried into or out of a chord) joined 2026-09-13: the
+// dan tech maps are jumpstream tech, whose jacks are all chord-involved and
+// invisible to miniJack, and one of them read p 0.26 with a minijack share of
+// exactly zero. It lifts the pack AUC 0.858 -> 0.884.
+const FEATURES = ["crossHandTrill", "miniJack", "anchor", "sameHand", "techLead", "techScore"] as const;
 type FeatureName = (typeof FEATURES)[number];
+// Standardised inputs are clipped to this many standard deviations, in the fit
+// and at prediction. The shares are heavy-tailed (one chart can sit ten sd
+// out on one input) and an unclipped logistic lets that one input decide.
+const INPUT_CLIP = 3;
 const FEATURE_OF: Record<FeatureName, (chart: Chart) => number> = {
-  rhythmBreak: (chart) => chart.motion.rhythmBreak,
   crossHandTrill: (chart) => chart.motion.crossHandTrill,
   miniJack: (chart) => chart.motion.miniJack,
+  anchor: (chart) => chart.motion.anchor,
   sameHand: (chart) => chart.motion.sameHand,
   techLead: (chart) => Number(chart.values.Technical ?? 0) - Number(chart.values.Stream ?? 0),
   // The same reading ChartSkillInfo carries: the jack veto zeroes it.
@@ -110,7 +147,7 @@ async function loadCorpus(db: ReturnType<typeof createClient>): Promise<{ pack: 
     const rawLength = Number(row.len_seconds);
     const length = Number.isFinite(rawLength) && rawLength > 0 ? rawLength : null;
     const label = PACKISH.test(title) ? labelFrom(version) ?? labelFrom(title) : null;
-    const named = HAND.some(([handId]) => handId === id);
+    const named = HAND.some(([handId]) => handId === id) || SPOT_IDS.has(id);
     if (label != null && label !== "ln" && label !== "skip") meta.set(id, { corpus: label, title, version, length });
     else if (named) meta.set(id, { corpus: "spot", title, version, length });
     else others.push(id);
@@ -223,7 +260,7 @@ function fit(charts: Chart[], labels: number[], l2 = 1, iterations = 4000, step 
   const sd = FEATURES.map((key, index) => Math.sqrt(
     charts.reduce((sum, chart) => sum + (FEATURE_OF[key](chart) - mean[index]) ** 2, 0) / charts.length,
   ) || 1);
-  const rows = charts.map((chart) => FEATURES.map((key, index) => (FEATURE_OF[key](chart) - mean[index]) / sd[index]));
+  const rows = charts.map((chart) => FEATURES.map((key, index) => standardise(FEATURE_OF[key](chart), mean[index], sd[index])));
   const weights = new Array(FEATURES.length).fill(0);
   let bias = 0;
   const positives = labels.reduce((sum, label) => sum + label, 0);
@@ -248,9 +285,13 @@ function fit(charts: Chart[], labels: number[], l2 = 1, iterations = 4000, step 
   return { weights, bias, mean, sd };
 }
 
+function standardise(value: number, mean: number, sd: number): number {
+  return Math.max(-INPUT_CLIP, Math.min(INPUT_CLIP, (value - mean) / sd));
+}
+
 function score(model: Fit, chart: Chart): number {
   let z = model.bias;
-  FEATURES.forEach((key, index) => { z += model.weights[index] * ((FEATURE_OF[key](chart) - model.mean[index]) / model.sd[index]); });
+  FEATURES.forEach((key, index) => { z += model.weights[index] * standardise(FEATURE_OF[key](chart), model.mean[index], model.sd[index]); });
   return 1 / (1 + Math.exp(-z));
 }
 
@@ -312,6 +353,9 @@ function asChartSkillInfo(chart: Chart, withMotion: boolean): ChartSkillInfo {
     chordjackScore: chart.chordjackScore,
     motion: withMotion ? chart.motion : null,
     lnRatio: 0,
+    lnEffectiveRatio: null,
+    dtLnEffectiveRatio: null,
+    htLnEffectiveRatio: null,
     vibro: false,
     danEligible: true,
     rcRawDan: 10,
@@ -392,7 +436,7 @@ async function main() {
   console.log(`  bias ${full.bias.toFixed(4)}`);
 
   console.log("\ndual-file bars, out-of-fold: low / high -> share filed under both, accuracy of the rest");
-  for (const [low, high] of [[0.35, 0.65], [0.35, 0.75], [0.30, 0.75], [0.25, 0.75], [0.25, 0.80]]) {
+  for (const [low, high] of [[0.35, 0.65], [0.35, 0.75], [0.35, 0.85], [0.35, 0.90], [0.35, 0.95], [0.30, 0.75], [0.25, 0.75], [0.25, 0.80]]) {
     let shared = 0, right = 0, decided = 0;
     predictions.forEach((probability, index) => {
       if (probability > low && probability < high) { shared++; return; }
@@ -405,8 +449,21 @@ async function main() {
   console.log("\nhand-labelled charts, never in any fit:");
   for (const chart of pack.filter((entry) => entry.hand)) {
     const probability = score(full, chart);
-    const verdict = probability >= 0.75 ? "tech" : probability <= 0.35 ? "speed" : "both";
+    const verdict = probability >= 0.90 ? "tech" : probability <= 0.35 ? "speed" : "both";
     console.log(`  ${String(chart.id).padEnd(8)} p ${probability.toFixed(2)} -> ${verdict.padEnd(5)} want ${chart.hand!.padEnd(5)} ${verdict === chart.hand || verdict === "both" ? "ok" : "MISS"}  ${chart.title.slice(0, 34)}`);
+  }
+
+  if (SPOT_IDS.size > 0) {
+    console.log("\nspot charts (--chart): the fitted model and the shipped tiles");
+    for (const id of SPOT_IDS) {
+      const chart = pack.find((entry) => entry.id === id);
+      if (!chart) { console.log(`  ${id}: not in the local corpus (needs a ready 4K analysis and a cached .osu)`); continue; }
+      const gap = Math.max(...MSD_SKILLSETS.map((key) => Number(chart.values[key] ?? 0))) - Number(chart.values.Stream ?? 0);
+      console.log(`  ${id} ${chart.title.slice(0, 40)} [${chart.version.slice(0, 24)}]  corpus ${chart.corpus}`);
+      console.log(`    motion ${JSON.stringify(chart.motion)}`);
+      console.log(`    techLead ${FEATURE_OF.techLead(chart).toFixed(2)}  techScore ${FEATURE_OF.techScore(chart).toFixed(3)}  stream gap ${gap.toFixed(2)}`);
+      console.log(`    p(tech) ${score(full, chart).toFixed(3)} (this fit)  shipped tiles ${shippedTiles(chart).join("+")}  (motion off: ${shippedTiles(chart, false).join("+")})`);
+    }
   }
 
   if (!WITH_IMPACT) {

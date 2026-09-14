@@ -10,10 +10,9 @@ interface PageTabsProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   /**
-   * Page-level status text pinned to the end of the tab row. It lives here
-   * rather than in PageHeader's `right` because that slot takes a whole row of
-   * its own on mobile, so a stat only one tab has (the rankings player count)
-   * moved the tab bar every time you switched tabs.
+   * Page-level status text pinned to the end of the tab row. Desktop only:
+   * on mobile it would cover the last tab, so pages hand the same node to
+   * PageHeader's `rightInline` slot instead.
    */
   right?: ReactNode;
 }
@@ -45,7 +44,7 @@ export function PageTabs<T extends string>({ items, value, onChange, right }: Pa
           </button>
         ))}
         </div>
-        {right ? <div className="ml-auto shrink-0">{right}</div> : null}
+        {right ? <div className="ml-auto shrink-0 hidden sm:block">{right}</div> : null}
       </div>
     </div>
   );

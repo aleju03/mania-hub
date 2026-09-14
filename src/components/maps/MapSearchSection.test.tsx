@@ -45,6 +45,8 @@ const DEFAULT_STATE: MapSearchUiState = {
   bpmMax: 0,
   lenMin: 0,
   lenMax: 0,
+  lnMin: 0,
+  lnMax: 0,
   danMin: null,
   danMax: null,
   sort: "playcount",

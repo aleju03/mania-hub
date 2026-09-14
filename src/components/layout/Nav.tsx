@@ -12,6 +12,7 @@ import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettings
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
+import { useReplyAlert } from "../../lib/reply-alert";
 import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
@@ -22,7 +23,7 @@ import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation"
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { msg } from "@lingui/core/macro";
+import { msg, plural } from "@lingui/core/macro";
 import { useLocale } from "../../lib/locale-context";
 
 // Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
@@ -220,6 +221,9 @@ export function Nav() {
   // Reporters answering a thread are the one admin surface that goes stale
   // silently, so the button says so before it is opened.
   const bugReportAlert = useBugReportAlert(adminMode);
+  // The other direction: an answer the owner chose to notify the viewer about.
+  // It rides their own avatar, and /report is what clears it.
+  const replyAlert = useReplyAlert(Boolean(auth.viewer));
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
@@ -859,7 +863,11 @@ export function Nav() {
                 type="button"
                 onClick={() => setUserMenuOpen((open) => !open)}
                 className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 text-osu-pink-light transition hover:ring-osu-pink/60 cursor-pointer"
-                title={auth.viewer ? t`Signed in as ${auth.viewer.username}` : t`Account`}
+                title={
+                  replyAlert.count
+                    ? t`${plural(replyAlert.count, { one: "# new reply", other: "# new replies" })} on your bug reports`
+                    : auth.viewer ? t`Signed in as ${auth.viewer.username}` : t`Account`
+                }
                 aria-haspopup="menu"
                 aria-expanded={userMenuOpen}
               >
@@ -869,6 +877,9 @@ export function Nav() {
                   <UserRound className="h-4 w-4" strokeWidth={2.1} />
                 )}
               </button>
+              {replyAlert.count ? (
+                <UnreadBadge count={replyAlert.count} className="-right-1 -top-1 z-[1]" />
+              ) : null}
               {userMenuOpen && (
                 <div
                   className="absolute right-0 top-full mt-2 w-44 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
@@ -974,6 +985,11 @@ export function Nav() {
                   >
                     <Bug className="h-3.5 w-3.5" />
                     <Trans>Report a bug</Trans>
+                    {replyAlert.count ? (
+                      <span className="relative ml-auto inline-flex">
+                        <UnreadBadge count={replyAlert.count} className="static" />
+                      </span>
+                    ) : null}
                   </Link>
                 </div>
               )}
@@ -1146,8 +1162,13 @@ export function Nav() {
                         aria-label={t`Account menu`}
                         aria-expanded={mobileAccountOpen}
                       >
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
-                          <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={24} />
+                        <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-1 ring-osu-b3/60">
+                          <span className="h-full w-full overflow-hidden rounded-full">
+                            <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={24} />
+                          </span>
+                          {replyAlert.count ? (
+                            <UnreadBadge count={replyAlert.count} className="-right-1.5 -top-1.5" />
+                          ) : null}
                         </span>
                         <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
                           {auth.viewer.username}
@@ -1269,6 +1290,11 @@ export function Nav() {
                 >
                   <Bug className="h-5 w-5" strokeWidth={2.1} />
                   {t`Report a bug`}
+                  {replyAlert.count ? (
+                    <span className="relative ml-auto inline-flex">
+                      <UnreadBadge count={replyAlert.count} className="static" />
+                    </span>
+                  ) : null}
                 </Link>
               </div>
 

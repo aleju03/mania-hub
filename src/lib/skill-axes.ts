@@ -141,18 +141,17 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
     // The generic n-key calc engine returns ~0 for skillsets it does not
     // rate; a 0.15 sliver next to 20+ bars is noise, not signal.
     .filter((entry) => entry.value >= 1);
-  // Etterna's taxonomy has no LN skillset, so the MSD card grafts in the LN
-  // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
+  // 4K LN uses Mania Hub's independent strain/SSR model; other keymodes
+  // preserve their Overall-on-LN pattern ratings.
+  // The wire axis stays pattern:ln
+  // so the radar, explorer and population board open the same evidence.
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
   if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474", value: ln.rating, axis: "pattern:ln" });
   return entries.sort((a, b) => b.value - a.value);
 }
 
-// 4K only: the LN validation run (scripts/ln-axis/results-2026-08-24.md) found
-// the 4K LN percentile tracks how much LN a player plays, not a separable
-// skill, so the bar gets its honest companion number: the share of the rated
-// pool that is LN charts (the backend tags ln only where the analyzer's
-// verdict does). The 7K axis passed the same test and stays unannotated.
+// Evidence context alongside the independent LN model: how much
+// of the rated pool passed LN identity at its actual rate and OD.
 export function lnPlayShare(mode: MyDataSkillMode): number | null {
   if (mode.keyCount !== 4) return null;
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");

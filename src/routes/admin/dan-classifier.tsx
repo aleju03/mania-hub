@@ -541,6 +541,8 @@ function DanClassifierPage() {
             lenMax: null,
             danMin: null,
             danMax: null,
+            lnMin: null,
+            lnMax: null,
             country: null,
             sort: "relevance",
             dir: "desc",
@@ -1069,6 +1071,7 @@ function AnalysisPanel({ selected, onFetchFromOsu }: AnalysisPanelProps) {
       <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
         <Metric label="Sunny SR" value={classification.sunnySr != null ? classification.sunnySr.toFixed(2) : "--"} />
         <Metric label="LN ratio" value={`${Math.round(classification.lnRatio * 100)}%`} />
+        {classification.keyCount === 4 && classification.lnEffectiveRatio != null && <Metric label="Effective LN" value={`${Math.round(classification.lnEffectiveRatio * 100)}%`} />}
         {report ? <Metric label="Category" value={report.Category} /> : null}
         {report ? <Metric label="Mode" value={report.ModeTag} /> : null}
         {report && report.SVAmount > 0 ? <Metric label="SVs" value={String(report.SVAmount)} /> : null}

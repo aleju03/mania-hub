@@ -6,7 +6,7 @@ import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { getDanImageSrc } from "../lib/dan-images";
 import { DanLevelBadge } from "../components/player/DanLevelBadge";
-import { creditedDanFor, danCreditOptionsFor, danCreditOffset } from "#dan/dan-credit";
+import { creditedDanFor, danCreditOptionsFor, danCreditOffset, type DanCreditClearContext } from "#dan/dan-credit";
 import { danLabelFor } from "#dan/chart-classifier";
 import { formatNumber } from "../lib/format";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -364,11 +364,12 @@ function DanEstimatesPage() {
         <Section title={t`Step 2: what makes a chart LN`}>
           <P>
             <Trans>
-              A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular
-              chart below that. On 7K the line is 37.5% instead, because its mapping culture ships
-              hybrid charts the community reads as LN. This is the same line the maps pages use to
-              label a chart, so a chart cannot feed your LN rating and wear a regular badge at the
-              same time.
+              In 4K, hold notes must first make up at least 45% of the chart. The site then checks
+              whether those holds still demand releases at the played rate; short tails that can be
+              played like ordinary taps can make the chart regular, but this check can never promote
+              a chart below the 45% hold line to LN. On 7K the hold line is 37.5% instead, because its
+              mapping culture ships hybrid charts the community reads as LN. The maps pages and your
+              skill rating use the same verdict.
             </Trans>
           </P>
         </Section>
@@ -406,13 +407,15 @@ function DanEstimatesPage() {
             <Trans>
               Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the
               bar still gives full credit. After that, bonus credit starts. It stays small until 99%,
-              then rises faster. Scores below the bar can still count at a lower level. On regular
+              then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is
+              normal there. Scores below the bar can still count at a lower level. On regular
               charts, the penalty rises smoothly from zero at 96% to about half a level at 95%.
               A near miss can keep the same dan label while contributing less to the estimate;
               it still falls short of a full clear. Regular charts count down to 5 percentage points
               below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75
-              levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops
-              rising at 99.7%:
+              levels less. 4K LN counts down to 91%, with the same penalty as regular charts at
+              each point below the bar and 1.75 levels less at 91%, and its bonus stops rising
+              at 99.7%:
             </Trans>
           </P>
           <CreditCurveTabs />
@@ -1199,27 +1202,35 @@ function CreditCurveTabs() {
      ways, the recalculated accuracy runs a few hundredths of a point above
      stable's below 35% LN and about 0.3 points above it beyond that. */
   const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference.`;
-  const tabs = [
+  const tabs: Array<{
+    label: string;
+    ladder: { key: string; bar: number; side: "rc" | "ln"; keyCount: number; example: number; jackCurve?: boolean };
+    head: string[];
+    note: string;
+    rows: string[][];
+  }> = [
     {
       label: t`Regular 4K/6K/7K`,
-      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620 },
-      head: [t`Stable-formula acc (96%)`, t`Credit`],
-      note: stableFormulaNote,
+      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620, jackCurve: true },
+      /* The third column is the 4K jack tile's bonus (DAN_CREDIT_JACK_BONUS_SCALE):
+         half of the shared one above the bar, the same below it. */
+      head: [t`Stable-formula acc (96%)`, t`Credit`, t`4K jack`],
       rows: [
-        ["100%", t`the chart's level +1.5`],
-        ["99.5%", t`the chart's level +1.1`],
-        ["99%", t`the chart's level +0.7`],
-        ["98.7%", t`the chart's level +0.2`],
-        ["98%", t`the chart's level +0.12`],
-        ["97.5%", t`the chart's level +0.06`],
-        ["96-97%", t`the chart's full level`],
-        ["95.5%", t`the chart's level -0.25`],
-        ["95%", t`the chart's level -0.51`],
-        ["94%", t`the chart's level -0.76`],
-        ["92%", t`the chart's level -1.25`],
-        ["91%", t`the chart's level -1.5`],
-        [t`below 91%`, t`nothing`],
+        ["100%", t`the chart's level +1.5`, t`the chart's level +0.75`],
+        ["99.5%", t`the chart's level +1.1`, t`the chart's level +0.55`],
+        ["99%", t`the chart's level +0.7`, t`the chart's level +0.35`],
+        ["98.7%", t`the chart's level +0.2`, t`the chart's level +0.1`],
+        ["98%", t`the chart's level +0.12`, t`the chart's level +0.06`],
+        ["97.5%", t`the chart's level +0.06`, t`the chart's level +0.03`],
+        ["96-97%", t`the chart's full level`, t`the chart's full level`],
+        ["95.5%", t`the chart's level -0.25`, t`the chart's level -0.25`],
+        ["95%", t`the chart's level -0.51`, t`the chart's level -0.51`],
+        ["94%", t`the chart's level -0.76`, t`the chart's level -0.76`],
+        ["92%", t`the chart's level -1.25`, t`the chart's level -1.25`],
+        ["91%", t`the chart's level -1.5`, t`the chart's level -1.5`],
+        [t`below 91%`, t`nothing`, t`nothing`],
       ],
+      note: stableFormulaNote,
     },
     {
       label: t`4K LN`,
@@ -1232,12 +1243,14 @@ function CreditCurveTabs() {
         ["99%", t`the chart's level +0.3`],
         ["98.5%", t`the chart's level +0.15`],
         ["97-98%", t`the chart's full level`],
-        ["96.9%", t`the chart's level -0.42`],
-        ["96.5%", t`the chart's level -0.9`],
-        ["96%", t`the chart's level -1.06`],
-        ["95%", t`the chart's level -1.39`],
-        ["94.5%", t`the chart's level -1.55`],
-        [t`below 94.5%`, t`nothing`],
+        ["96.5%", t`the chart's level -0.25`],
+        ["96%", t`the chart's level -0.51`],
+        ["95%", t`the chart's level -0.76`],
+        ["94%", t`the chart's level -1`],
+        ["93%", t`the chart's level -1.25`],
+        ["92%", t`the chart's level -1.5`],
+        ["91%", t`the chart's level -1.75`],
+        [t`below 91%`, t`nothing`],
       ],
     },
     {
@@ -1252,8 +1265,8 @@ function CreditCurveTabs() {
         ["98%", t`the chart's level +0.16`],
         ["97%", t`the chart's level +0.07`],
         ["95-96.25%", t`the chart's full level`],
-        ["94.9%", t`the chart's level -0.36`],
-        ["94.5%", t`the chart's level -0.76`],
+        ["94.9%", t`the chart's level -0.13`],
+        ["94.5%", t`the chart's level -0.63`],
         ["94%", t`the chart's level -1.25`],
         ["93%", t`the chart's level -1.5`],
         ["92%", t`the chart's level -1.75`],
@@ -1286,6 +1299,7 @@ function CreditCurveTabs() {
         bar={active.ladder.bar}
         side={active.ladder.side}
         keyCount={active.ladder.keyCount}
+        jackCurve={active.ladder.jackCurve}
         example={CHART_EXAMPLES.find((chart) => chart.id === active.ladder.example)}
       />
       <Table head={active.head} rows={active.rows} />
@@ -1324,11 +1338,13 @@ function formatCreditOffset(offset: number): string {
   return `${offset < 0 ? "-" : "+"}${body}`;
 }
 
-function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
+function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
   ladder: string;
   bar: number;
   side: "rc" | "ln";
   keyCount: number;
+  /** Also draw the 4K jack tile's damped bonus above the bar, dashed. */
+  jackCurve?: boolean;
   example?: (typeof CHART_EXAMPLES)[number];
 }) {
   const { t } = useLingui();
@@ -1377,16 +1393,23 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
 
   // Split at the bar: LN's near-bar cap makes the credit jump there, and one
   // polyline would draw that cliff as a slope through values nothing scores.
-  const sample = (from: number, to: number) => {
+  const sample = (from: number, to: number, at = offsetAt) => {
     const points: string[] = [];
     for (let i = 0; i <= CURVE_SAMPLES; i += 1) {
-      const at = from + ((to - from) * i) / CURVE_SAMPLES;
-      const offset = offsetAt(at);
+      const value = from + ((to - from) * i) / CURVE_SAMPLES;
+      const offset = at(value);
       if (offset == null) continue;
-      points.push(`${x(at).toFixed(2)},${y(offset).toFixed(2)}`);
+      points.push(`${x(value).toFixed(2)},${y(offset).toFixed(2)}`);
     }
     return points.join(" ");
   };
+  // The jack tile's bonus, drawn under the shared line so the gap between the
+  // two is the halving itself; below the bar the two coincide and it is not
+  // drawn twice.
+  const jackOptions: DanCreditClearContext = { primaryTile: "jack" };
+  const jackOffsetAt = (value: number) => danCreditOffset(value, bar, danCreditOptionsFor(side, keyCount, jackOptions));
+  const jackAboveBarPoints = jackCurve ? sample(bar, 1, jackOffsetAt) : null;
+  const jackTop = jackCurve ? jackOffsetAt(1) : null;
   const hasBarCliff = (options.nearBarCap ?? 0) > 0;
   const belowBarPoints = sample(lo, hasBarCliff ? bar - 1e-6 : bar);
   const aboveBarPoints = sample(bar, 1);
@@ -1489,6 +1512,12 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
         <text x={x(1)} y={CURVE_HEIGHT - 8} textAnchor="end" className="fill-osu-f1 text-[11px] tabular-nums">100%</text>
         <polyline points={belowBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
         <polyline points={aboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
+        {jackAboveBarPoints && jackTop != null && (
+          <>
+            <polyline points={jackAboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" strokeDasharray="4 4" className="stroke-osu-blue/50" />
+            <text x={x(1)} y={y(jackTop) + 24} textAnchor="end" className="fill-osu-f2 text-[11px]">{t`4K jack`}</text>
+          </>
+        )}
         {hasBarCliff && barEdgeOffset != null && (
           <>
             <line

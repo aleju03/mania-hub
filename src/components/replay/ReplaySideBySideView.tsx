@@ -50,6 +50,7 @@ import {
   resolveSideBySideLayout,
   type SideBySideViewport,
 } from "../../lib/replay-side-by-side";
+import { isReplayFileMissingError, replayFileMissingMessage } from "../../lib/replay-score-availability";
 import { readReplaySkinPresets, readReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplaySkinPreset, ReplaySkinSettings } from "../../lib/replay-skin";
 import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../../lib/replay-storyboard";
@@ -421,7 +422,9 @@ export function ReplaySideBySideView({
       setSides([sideLeft, sideRight]);
     })()
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : t`Failed to load the replays.`);
+        if (cancelled) return;
+        if (isReplayFileMissingError(e)) setError(i18n._(replayFileMissingMessage));
+        else setError(e instanceof Error ? e.message : t`Failed to load the replays.`);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

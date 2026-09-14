@@ -14,6 +14,7 @@ import {
   attachBugReportScreenshot,
   authorizeBugReportScreenshot,
   clearClosedBugReports,
+  countUnreadReporterReplies,
   countUnseenBugReports,
   createBugReport,
   deleteBugReport,
@@ -23,6 +24,7 @@ import {
   listBugReports,
   listBugReportsForUser,
   markBugReportsSeen,
+  markReporterRepliesRead,
   promoteBugReportToTodo,
   updateBugReport,
 } from "../src/features/bug-reports.js";
@@ -953,5 +955,60 @@ describe("bug reports", () => {
     expect(await deleteBugReport(db, second.report.id)).toEqual({ deleted: false, screenshotKeys: [] });
     expect((await listBugReports(db)).reports.map((report) => report.id)).toEqual([third.report.id]);
     expect(Number((await exec(db, "select count(*) as n from bug_report_messages")).rows[0]?.n)).toBe(0);
+  });
+
+  it("raises the reporter's badge only for an answer sent with notify on", async () => {
+    const { report } = (await submit()) as { report: { id: string } };
+    const other = (await submit({ userId: 9, reporterKey: "user:9" })) as { report: { id: string } };
+
+    // The default is quiet: answering a thread is not an interruption.
+    await addAdminBugReportMessage(db, { id: report.id, body: "Looking at it now." });
+    expect(await countUnreadReporterReplies(db, 7)).toEqual({ count: 0, reports: 0, latestAt: null });
+    expect((await listBugReportsForUser(db, 7))[0]?.unreadReplies).toBe(0);
+
+    await addAdminBugReportMessage(db, { id: report.id, body: "Fixed, please try again.", notify: true });
+    const alert = await countUnreadReporterReplies(db, 7);
+    expect(alert.count).toBe(1);
+    expect(alert.reports).toBe(1);
+    expect(alert.latestAt).toBeGreaterThan(0);
+    expect((await listBugReportsForUser(db, 7))[0]?.unreadReplies).toBe(1);
+    // Only the message that asked for it is marked, so the board can tell them
+    // apart after the fact.
+    const messages = (await getBugReport(db, report.id))?.messages ?? [];
+    expect(messages.map((message) => message.notify)).toEqual([false, true]);
+
+    // One reporter's badge is their own.
+    await addAdminBugReportMessage(db, { id: other.report.id, body: "Different person.", notify: true });
+    expect((await countUnreadReporterReplies(db, 9)).count).toBe(1);
+    expect((await countUnreadReporterReplies(db, 7)).count).toBe(1);
+
+    // A reporter's own follow-up is not something to notify them about.
+    await addReporterBugReportMessage(db, { id: report.id, userId: 7, body: "Still broken for me." });
+    expect((await countUnreadReporterReplies(db, 7)).count).toBe(1);
+  });
+
+  it("clears the reporter's badge when they open the thread, and nobody else's", async () => {
+    const first = (await submit()) as { report: { id: string } };
+    const second = (await submit({ body: "A second, unrelated thing is broken too." })) as { report: { id: string } };
+    await addAdminBugReportMessage(db, { id: first.report.id, body: "Answer one.", notify: true });
+    await addAdminBugReportMessage(db, { id: second.report.id, body: "Answer two.", notify: true });
+    expect((await countUnreadReporterReplies(db, 7)).count).toBe(2);
+
+    const before = (await getBugReport(db, first.report.id))?.updatedAt;
+    const opened = await markReporterRepliesRead(db, { userId: 7, id: first.report.id });
+    expect(opened.marked).toBe(1);
+    expect(opened.alert.count).toBe(1);
+    // Reading is not activity: it must not reorder either side's queue.
+    expect((await getBugReport(db, first.report.id))?.updatedAt).toBe(before);
+
+    // Somebody else's id cannot clear it.
+    expect((await markReporterRepliesRead(db, { userId: 9, id: second.report.id })).marked).toBe(0);
+    expect((await countUnreadReporterReplies(db, 7)).count).toBe(1);
+
+    expect((await markReporterRepliesRead(db, { userId: 7 })).alert.count).toBe(0);
+
+    // An answer written after the thread was read raises it again.
+    await addAdminBugReportMessage(db, { id: first.report.id, body: "One more thing.", notify: true });
+    expect((await countUnreadReporterReplies(db, 7)).count).toBe(1);
   });
 });

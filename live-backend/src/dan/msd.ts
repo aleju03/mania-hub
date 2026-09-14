@@ -1,6 +1,7 @@
 import { computeMsdOnThread, MsdThreadUnavailableError } from "./msd-thread.js";
 import { analyzeVibroSections, prepareVibroChart, usesSectionVibro, VIBRO_SECTION_VERSION, type VibroAnalysis } from "./vibro-sections.js";
 import { parseManiaBeatmap } from "./beatmap-parser.js";
+import { analyzeLnSkillFromText, isLnSkillSupported, type LnSkillResult } from "./ln-skill.js";
 
 // Thin backend facade over the vendored MinaCalc wasm harness
 // (vendor/leoblack/ett). calc.js handles the Node specifics itself (wasmBinary
@@ -10,6 +11,7 @@ import { parseManiaBeatmap } from "./beatmap-parser.js";
 export interface MsdResult {
   etternaVersion: string;
   values: Record<string, number>;
+  lnSkill?: LnSkillResult;
   vibroAnalysis?: VibroAnalysis;
   vibroVersion?: number;
   /** False on full-chart estimates; true when applying player-rating policy. */
@@ -23,6 +25,7 @@ export interface MsdOptions {
   keyCount?: number;
   scoreGoal?: number;
   lnTailTaps?: boolean;
+  includeLnSkill?: boolean;
 }
 
 // A chart the calculator rejects can keep the existing no-MSD fallback.
@@ -39,16 +42,11 @@ export function msdChartErrorFallback(error: unknown): null {
 // 4K has no calc at all.
 const MSD_SUPPORTED_KEYS = new Set(Array.from({ length: 15 }, (_, i) => i + 4));
 
-// MinaCalc rates the rice skeleton: LN tails never reach it, so hold-heavy
-// charts underrate. The tail-aware pass (lnTailTaps) is a strict upper bound
-// on the release work - a release is easier than a tap - so consumers blend
-// toward it by a keymode-calibrated weight. Weights were fit on player
-// cohorts (2026-07-19, ~140 players, LN-share cohorts vs pp-anchored
-// residuals): 4K flattens the hybrid cohort at 0.1 (osu pp overpays 4K LN,
-// so zeroing the ln-main residual against pp would overcorrect); the 0.74
-// multi-key calc underrates 7K LN far harder and wants 0.3. Charts without
-// holds produce identical rows either way, so rice values are untouched.
-export const LN_TAIL_BLEND_BY_KEYMODE: Record<number, number> = { 4: 0.1, 6: 0.3, 7: 0.3 };
+// Legacy 6K/7K tail-aware difficulty adjustment, retained independently of
+// score calibration. This is a heuristic, not a proven release-work bound.
+// 4K never inserts tail taps: native MinaCalc is the press/head baseline,
+// with a separate lossless LN analysis and experimental LN skill model.
+export const LN_TAIL_BLEND_BY_KEYMODE: Record<number, number> = { 6: 0.3, 7: 0.3 };
 export const LN_TAIL_MIN_RATIO = 0.02;
 
 /** Blend base MSD values toward the tail-aware pass by the keymode weight. */
@@ -60,6 +58,10 @@ export function blendLnTailValues(
   const blend = LN_TAIL_BLEND_BY_KEYMODE[keyCount] ?? 0;
   const values: Record<string, number> = {};
   for (const [name, atBase] of Object.entries(base)) {
+    if (name === "LN") {
+      values.LN = atBase;
+      continue;
+    }
     const atTails = Number(tails[name] ?? atBase);
     values[name] = blend > 0 && atBase > 0 && atTails > atBase
       ? atBase + blend * (atTails - atBase)
@@ -80,7 +82,10 @@ export function lnAdjustedMsd(
 ): Record<string, number> | null {
   if (!base || !tails) return null;
   const blended = blendLnTailValues(base, tails, keyCount);
-  return Number(blended.Overall ?? 0) - Number(base.Overall ?? 0) >= 0.005 ? blended : null;
+  if (Number(blended.Overall ?? 0) - Number(base.Overall ?? 0) < 0.005) return null;
+  // LN, when present, comes from the independent strain model in the base
+  // artifact. Never synthesize it from Overall or blend it with tail-as-taps.
+  return blended;
 }
 
 export function isMsdSupportedKeyCount(keyCount: number): boolean {
@@ -104,7 +109,13 @@ export async function computeMsd(
   const map = parseManiaBeatmap(osuText);
   const prepared = options.adjustVibro ? prepareVibroChart(osuText, options.rate ?? 1, map) : null;
   const analysis = usesSectionVibro(map) ? prepared?.analysis ?? analyzeVibroSections(map, options.rate ?? 1) : undefined;
-  const msd = await computeMsdOnThread(prepared?.osuText ?? osuText, options);
+  // 4K tails belong to the lossless LN sidecar. Even legacy callers asking
+  // for a tail pass must not manufacture extra presses in native MinaCalc.
+  const msd = await computeMsdOnThread(prepared?.osuText ?? osuText,
+    { ...options, lnTailTaps: map.keyCount === 4 ? false : options.lnTailTaps });
+  const lnSkill = msd && (keyCount == null || isLnSkillSupported(keyCount)) && !options.lnTailTaps && options.includeLnSkill !== false
+    ? analyzeLnSkillFromText(osuText, { rate: options.rate, scoreGoal: options.scoreGoal }) : null;
   return msd ? { ...msd, vibroVersion: VIBRO_SECTION_VERSION, vibroAdjusted: options.adjustVibro === true,
+    ...(lnSkill ? { lnSkill, values: { ...msd.values, LN: lnSkill.eligible ? lnSkill.rating ?? 0 : 0 } } : {}),
     ...(analysis ? { vibroAnalysis: analysis } : {}) } : null;
 }

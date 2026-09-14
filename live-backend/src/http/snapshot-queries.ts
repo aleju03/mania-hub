@@ -91,6 +91,7 @@ export function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
   const bpm = parseSearchRange(params, "bpmMin", "bpmMax", 0, 2000);
   const length = parseSearchRange(params, "lenMin", "lenMax", 0, 100_000);
   const dan = parseSearchRange(params, "danMin", "danMax", -2, 21);
+  const lnShare = parseSearchRange(params, "lnMin", "lnMax", 0, 100);
   const rawCountry = (params.get("country") ?? "").trim().toUpperCase();
   const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : null;
   return {
@@ -109,6 +110,8 @@ export function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
     lenMax: length.max,
     danMin: dan.min,
     danMax: dan.max,
+    lnMin: lnShare.min,
+    lnMax: lnShare.max,
     country,
     sort,
     dir: params.get("dir") === "asc" ? "asc" : "desc",

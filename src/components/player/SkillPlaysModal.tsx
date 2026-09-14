@@ -41,6 +41,41 @@ export function rateModFor(
   };
 }
 
+/* Every mod the score carried. A pre-full-mod retained play can still name its
+   speed mod from the old projection; a 1.0x play with no `mods` field is
+   unknown, not NoMod, because it may have carried MR/DA/etc. before the raw
+   score aged out. */
+export function playModAcronyms(play: LivePlayerSkillPlay): string[] | null {
+  if (Array.isArray(play.mods)) {
+    return [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))];
+  }
+  const rateMod = rateModFor(play.rate, play.rateMod);
+  return rateMod ? [rateMod.acronym] : null;
+}
+
+function formatDaOd(od: number): string {
+  return Number.isInteger(od) ? String(od) : od.toFixed(1);
+}
+
+export function PlayModBadges({ play, size = 0.8 }: { play: LivePlayerSkillPlay; size?: number }) {
+  const acronyms = playModAcronyms(play);
+  if (!acronyms || acronyms.length === 0) return null;
+  const rateMod = rateModFor(play.rate, play.rateMod);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-0.5">
+      {acronyms.map((mod) => (
+        <ModBadge
+          key={mod}
+          mod={mod}
+          rate={rateMod?.acronym === mod ? rateMod.rate : undefined}
+          detail={mod === "DA" && typeof play.daOd === "number" ? `OD ${formatDaOd(play.daOd)}` : undefined}
+          size={size}
+        />
+      ))}
+    </span>
+  );
+}
+
 // What the play row already knows, shaped as a map entry so the detail modal
 // can mount on the click instead of after the catalog round trip. Everything
 // the row does not carry (stars, bpm, the set's other diffs, MSD) stays at its
@@ -357,7 +392,6 @@ function SkillPlayRow({
 }) {
   const { t, i18n } = useLingui();
   const locale = useLocale();
-  const rateMod = rateModFor(play.rate, play.rateMod);
   // The list ranks by one skillset component of every play, so a dense LN
   // chart can lead "top Chordjack plays" purely by riding a big overall. When
   // a different skillset actually drove the play, its chip says so; only on
@@ -406,7 +440,7 @@ function SkillPlayRow({
               {i18n._(topSkillsetMeta.labelMsg)}
             </span>
           ) : null}
-          {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.8} /> : null}
+          <PlayModBadges play={play} />
           <span>{play.source === "top" ? t`profile top play` : t`tracked history`}</span>
           {play.playedAt ? (
             <span className="hidden sm:inline" title={formatTimeAgoTooltip(play.playedAt, locale)}>{formatTimeAgo(play.playedAt, locale)}</span>

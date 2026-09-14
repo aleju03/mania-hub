@@ -150,6 +150,40 @@ describe("isPlayerSkillAxis", () => {
 
 // --- Dan rejections: the block-icon rows ----------------------------------
 
+describe("collectDanClears jack damping", () => {
+  it("halves the bonus for a clear whose primary tile is jack and nothing else", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      const now = new Date().toISOString();
+      const insertBeatmap = "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)";
+      const analyze = (beatmapId: number, classification: Record<string, unknown>) => exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+         values (?, ?, 'ready', 4, ?, ?)`,
+        [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify(classification), now],
+      );
+      // Same dan, same accuracy; one chart the analyzer tags speedjack (files
+      // under jack outright), the other a plain stream chart.
+      await exec(db, insertBeatmap, [311, 1, JSON.stringify({ accuracy: 8 }), now]);
+      await analyze(311, { lnRatio: 0, patterns: [{ id: "speedjack", score: 1 }], rc: { rawDan: 10 } });
+      await exec(db, insertBeatmap, [312, 1, JSON.stringify({ accuracy: 8 }), now]);
+      await analyze(312, { lnRatio: 0, patterns: [], rc: { rawDan: 10 } });
+      const info = await loadChartSkillInfo(db, [311, 312]);
+      const stream = { Stream: 30, Jumpstream: 24, Handstream: 20, Stamina: 26, JackSpeed: 15, Chordjack: 20, Technical: 27 };
+      const plays = [
+        play({ beatmapId: 311, accuracy: 0.9931, stableAccuracy: 0.9931, values: stream }),
+        play({ beatmapId: 312, accuracy: 0.9931, stableAccuracy: 0.9931, values: stream }),
+      ];
+      const clears = collectDanClearsForTest(4, plays, info);
+      expect(clears).toHaveLength(2);
+      const byId = new Map(clears.map((clear) => [clear.play.beatmapId, clear.creditedDan - clear.chartDan]));
+      expect(byId.get(312)!).toBeCloseTo(0.948, 3);
+      expect(byId.get(311)!).toBeCloseTo(0.474, 3);
+    });
+  });
+});
+
 describe("collectDanClears rejections", () => {
   it("names the rule that turned each rated play away, and stays silent without a sink", async () => {
     await withDb(async (db) => {
@@ -259,7 +293,7 @@ describe("collectDanClears rejections", () => {
         [313, "low_od"],
       ]);
 
-      // 4K LN keeps the 5.5 floor: only the 7K ladder has OD 5 courses.
+      // 4K LN has an OD 7 floor: only the 7K ladder has OD 5 courses.
       const fourKey = collectDanClearsForTest(4, [play({ beatmapId: 311, accuracy: 0.98, stableAccuracy: 0.98, scoreV2Accuracy: 0.98 })], info);
       expect(fourKey).toHaveLength(0);
     });

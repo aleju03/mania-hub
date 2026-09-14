@@ -10,6 +10,7 @@ import {
   SKILL_RATING_SKILLSETS,
   danSkillsetBucketIds,
   usesPatternSkillAxes,
+  patternRatingCurrent,
   type PlayerSkillModeBreakdown,
 } from "./player-skills.js";
 import {
@@ -419,6 +420,7 @@ export async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
         for (const entry of mode?.patterns ?? []) {
           const id = String(entry?.id ?? "");
           if (!id) continue;
+          if (!patternRatingCurrent(mode, id)) continue;
           patternRatings.set(id, { rating: Number(entry?.rating) || 0, plays: Math.max(0, Math.floor(Number(entry?.plays) || 0)) });
         }
 

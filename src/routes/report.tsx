@@ -14,6 +14,7 @@ import {
   bugReportThreadMessages,
   getBugReportScreenshotUrls,
   listMyBugReports,
+  markMyReplyRead,
   replyToMyBugReport,
   submitBugReport,
   type BugReportContext,
@@ -33,6 +34,7 @@ import {
   type BugReportUploadStatus,
 } from "../lib/bug-report-screenshots";
 import { track } from "../lib/analytics";
+import { publishReplyAlert, refreshReplyAlert } from "../lib/reply-alert";
 import { formatTimeAgo } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
 import { pageSeo } from "../lib/seo";
@@ -120,6 +122,9 @@ function ReportPage() {
       return;
     }
     void listMyBugReports().then(setMine).catch(() => setMine([]));
+    // The page and the nav badge count the same thing, so reading the list is
+    // also the moment to correct a bubble left over from an older poll.
+    void refreshReplyAlert(true);
   }, [signedIn]);
 
   const updateMine = useCallback((report: MyBugReport) => {
@@ -955,6 +960,24 @@ function ReportRow({
   const [open, setOpen] = useState(false);
   const messages = bugReportThreadMessages(report);
   const waitingOnYou = messages[messages.length - 1]?.author === "admin";
+  /* Opening the thread is the read: that is the moment the answer is in front
+     of the person it was written for. The nav is told the new count straight
+     away rather than waiting out its poll. The row drops its own bubble from
+     local state rather than through onReportUpdated, which would move the row
+     to the front of the list under the hand that just opened it. */
+  const [read, setRead] = useState(false);
+  const unread = read ? 0 : report.unreadReplies;
+
+  useEffect(() => {
+    if (!open || !unread) return;
+    let cancelled = false;
+    void markMyReplyRead({ data: { id: report.id } }).then((alert) => {
+      if (cancelled) return;
+      setRead(true);
+      publishReplyAlert(alert);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, unread, report.id]);
 
   return (
     <li className="overflow-hidden rounded-2xl bg-osu-b6/45 ring-1 ring-osu-b3/20">
@@ -970,6 +993,11 @@ function ReportRow({
         <span className={`min-w-0 flex-1 truncate text-[13.5px] ${open ? "text-osu-f1" : "text-osu-l1"}`}>
           {open ? report.pagePath ?? "" : report.body}
         </span>
+        {unread ? (
+          <span className="inline-flex h-[15px] min-w-[15px] flex-shrink-0 items-center justify-center rounded-full bg-osu-red px-1 text-[9.5px] font-bold tabular-nums leading-none text-white">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        ) : null}
         {messages.length ? (
           <span className={`inline-flex flex-shrink-0 items-center gap-1 text-[11.5px] tabular-nums ${
             waitingOnYou ? "text-osu-pink-light" : "text-osu-f1"

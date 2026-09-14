@@ -57,6 +57,8 @@ interface BugReportMessageBase {
   createdAt: number;
   /** Set when the owner corrected the message after sending it. */
   editedAt: number | null;
+  /** Owner messages only: sent with the reporter's avatar badge raised. */
+  notify: boolean;
 }
 
 /** As the admin board reads a message: the keys, so a row can ask for signed URLs. */
@@ -84,6 +86,10 @@ export interface BugReport {
   messages: BugReportMessage[];
   /** Read acknowledgement for current reporter activity; reset on follow-up. */
   adminSeenAt: number | null;
+  /** When the reporter last opened the thread. */
+  reporterSeenAt: number | null;
+  /** Notifying replies the reporter has not opened yet. */
+  unreadReplies: number;
   todoId: string | null;
   todoSeq: number | null;
   createdAt: number;
@@ -101,6 +107,8 @@ export interface MyBugReport {
   reply: string | null;
   repliedAt: number | null;
   messages: MyBugReportMessage[];
+  /** Notifying replies still unopened; what the avatar badge counts. */
+  unreadReplies: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -147,6 +155,7 @@ export function bugReportThreadMessages<T extends BugReportMessageBase>(
     body: report.reply,
     createdAt: report.repliedAt ?? 0,
     editedAt: null,
+    notify: false,
     screenshotKeys: [],
     screenshotCount: 0,
   } as unknown as T];
@@ -352,11 +361,18 @@ export const updateBugReport = createServerFn({ method: "POST" })
   });
 
 export const replyToBugReportAsAdmin = createServerFn({ method: "POST" })
-  .validator((data: { id: string; body: string; screenshotCount?: number; reporterMessageCount?: number }) => ({
+  .validator((data: {
+    id: string;
+    body: string;
+    screenshotCount?: number;
+    reporterMessageCount?: number;
+    notify?: boolean;
+  }) => ({
     id: String(data?.id ?? ""),
     reporterMessageCount: data?.reporterMessageCount,
     body: String(data?.body ?? "").trim().slice(0, BUG_REPORT_MESSAGE_MAX),
     screenshotCount: Math.min(Math.max(0, Math.floor(Number(data?.screenshotCount ?? 0))), BUG_REPORT_MAX_SCREENSHOTS),
+    notify: data?.notify === true,
   }))
   .handler(async ({ data }): Promise<{
     report: BugReport;
@@ -457,6 +473,72 @@ export const markBugReportsSeen = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error(`Bug reports seen failed (${response.status}).`);
     const payload = await response.json() as { alert?: Partial<BugReportAlert> };
     return toAlert(payload.alert);
+  });
+
+/** What the reporter's own badge counts: replies the owner chose to notify them
+ *  about and they have not opened yet. Empty for a signed-out visitor. */
+export interface ReporterReplyAlert {
+  count: number;
+  reports: number;
+  latestAt: number | null;
+}
+
+const NO_REPLY_ALERT: ReporterReplyAlert = { count: 0, reports: 0, latestAt: null };
+
+function toReplyAlert(payload: Partial<ReporterReplyAlert> | undefined): ReporterReplyAlert {
+  return {
+    count: Number(payload?.count ?? 0),
+    reports: Number(payload?.reports ?? 0),
+    latestAt: payload?.latestAt ?? null,
+  };
+}
+
+/** Backs the badge on the viewer's avatar in the nav. Polled from every page a
+ *  signed-in visitor is on, so it answers zero rather than throwing when the
+ *  backend is unreachable, the same way the admin dot does. */
+export const getMyReplyAlert = createServerFn({ method: "GET" }).handler(async (): Promise<ReporterReplyAlert> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const base = getServerLiveBackendUrl();
+  if (!base) return NO_REPLY_ALERT;
+  const { readCurrentAuth } = await import("./auth-server");
+  const viewer = (await readCurrentAuth()).viewer;
+  if (!viewer) return NO_REPLY_ALERT;
+  try {
+    const response = await fetch(`${base}/api/bug-reports/unread?userId=${viewer.id}`, {
+      headers: { ...bridgeAuthHeaders(), connection: "close" },
+    });
+    if (!response.ok) return NO_REPLY_ALERT;
+    return toReplyAlert(await response.json() as Partial<ReporterReplyAlert>);
+  } catch {
+    return NO_REPLY_ALERT;
+  }
+});
+
+/** Opening a thread on /report is the read. Without an id it clears every
+ *  thread the viewer owns, which is what "mark all read" means. */
+export const markMyReplyRead = createServerFn({ method: "POST" })
+  .validator((data: { id?: string } | undefined) => ({ id: String(data?.id ?? "") }))
+  .handler(async ({ data }): Promise<ReporterReplyAlert> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const base = getServerLiveBackendUrl();
+    if (!base) return NO_REPLY_ALERT;
+    const { readCurrentAuth } = await import("./auth-server");
+    const viewer = (await readCurrentAuth()).viewer;
+    if (!viewer) return NO_REPLY_ALERT;
+    try {
+      const response = await fetch(`${base}/api/bug-reports/read`, {
+        method: "POST",
+        headers: bridgeAuthHeaders(true),
+        body: JSON.stringify({ userId: viewer.id, id: data.id || undefined }),
+      });
+      if (!response.ok) return NO_REPLY_ALERT;
+      const payload = await response.json() as { alert?: Partial<ReporterReplyAlert> };
+      return toReplyAlert(payload.alert);
+    } catch {
+      return NO_REPLY_ALERT;
+    }
   });
 
 /* Deleting takes the row first and the images after: an orphaned object nobody

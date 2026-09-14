@@ -4,6 +4,9 @@
 // one cache silently missed the other. The higher number won: keeping 13 leaves
 // the backend's stored estimates valid and costs the frontend one recompute.
 //
+// v19 (current): 4K-only independent LN artifacts and effective-hold identity.
+// Other keymodes retain their legacy LN calculation.
+//
 // v15: 4K LN routing handed to leoblack's LN interval table
 // (chart-classifier), with the in-house kNN kept only below that table's LN 5
 // floor, and the LN ladder opened up to its real top of 17 (16 Yokaze, 17
@@ -22,4 +25,8 @@
 // v19: refresh repeated-burst coverage and the remaining-material variants.
 // v20: enable marathon correction before Mixed routing and Companella fusion.
 // Only 4K charts with original note spans over five minutes can move.
-export const DAN_ESTIMATE_CACHE_VERSION = 20;
+// v21: 4K-only independent LN artifacts and effective-hold identity.
+// Other keymodes retain their legacy LN calculation.
+// v22: tap-covered 4K holds do not become LN from geometric head overlap.
+// v23: near-window chained 4K holds retain LN rearticulation work.
+export const DAN_ESTIMATE_CACHE_VERSION = 23;

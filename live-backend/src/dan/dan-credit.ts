@@ -23,8 +23,9 @@ import { danTableCeilingFor, danTableFloorFor } from "./chart-classifier.js";
  * (danCreditOptionsFor): its bar is written in ScoreV2, where a 100% is not
  * reachable on most charts with long notes, so a curve whose top anchor sits
  * on 100% prices the accuracies people actually set at nearly nothing. Its
- * bonus is keyed in absolute points over the bar and tops out at 99.7%, and
- * its window runs 2.5 points under the bar rather than three.
+ * bonus is keyed in absolute points over the bar and tops out at 99.7%. Its
+ * decay reads the rice line point for point under its own 97% bar and runs
+ * one point further, six in all, so it reaches 91% like the rice ladders do.
  */
 export type DanCreditAnchors = ReadonlyArray<readonly [at: number, offset: number]>;
 
@@ -49,9 +50,23 @@ export const DAN_CREDIT_BELOW_BAR_WINDOW = 0.05;
 export const DAN_CREDIT_BONUS_MIN_SPAN = 0.04;
 
 /**
+ * How much of the above-bar bonus a 4K rice clear filed primarily under the
+ * jack tile keeps (2026-09-13). On jack, 99%+ is what a pass looks like rather
+ * than evidence of the next level: measured over every 4K rice clear in the
+ * live snapshot, a third of jack clears at 1.0x sit at 99%+ and the tile
+ * holds near 30% at every chart length past a minute, where speed, tech and
+ * stamina settle at 17-22%. Under the shared curve that priced a 99.3% on an
+ * alpha- chart at beta. Halving the bonus brings the jack tile's mean bonus
+ * per averaged clear from 0.32 to about 0.16, level with tech and stamina.
+ * The decay half is untouched: a jack scrape is still a miss. The same
+ * argument already gives 4K LN its own damped table (danCreditOptionsFor).
+ */
+export const DAN_CREDIT_JACK_BONUS_SCALE = 0.5;
+
+/**
  * The 6K/7K LN ladders' own decay window, still much narrower than rice's five
  * points. Accuracy is cheap to hold on long notes (the same argument behind
- * the bonus damping and the 4K near-bar cap), so four points under an LN bar
+ * the bonus damping), so four points under an LN bar
  * is a routine accuracy nowhere near the course requirement, and those credits
  * dominated 4K LN even after the v7 bonus cool-off (measured 2026-08-28: 96.3%
  * of its best-5 windows carried a sub-bar credit, mean drift +0.89 vs +0.63 on
@@ -66,13 +81,16 @@ export const DAN_CREDIT_BONUS_MIN_SPAN = 0.04;
 export const DAN_CREDIT_LN_BELOW_BAR_WINDOW = 0.03;
 
 /**
- * 4K LN's own window, wider than the other LN ladders' (2026-08-29). Its bar
- * is written in ScoreV2, where a hold's release is judged separately and a
- * 100% is not on the table on most charts, so a ScoreV2 point there is not
- * the cheap point the stable ladders price: 94.5% is the near-miss band
- * against the 97% bar, the same way 96% is against a stable 97%.
+ * 4K LN's own window: six points under its 97% ScoreV2 bar, so it reaches 91%
+ * like the rice ladders (2026-09-13). It ran 2.5 points, to 94.5%, from
+ * 2026-08-29, on the argument that a ScoreV2 point, with every release judged
+ * on its own, is dearer than a stable point. That was priced against 4K LN
+ * chart ratings that ran hot; with those rebalanced, the narrow window turned
+ * away every 91-94.5% pass and the steep line above it took a full level off
+ * a 96%. The decay now reads the rice line point for point
+ * (DAN_CREDIT_4K_LN_BELOW_BAR_ANCHORS) and the ladder has no step at the bar.
  */
-export const DAN_CREDIT_4K_LN_BELOW_BAR_WINDOW = 0.025;
+export const DAN_CREDIT_4K_LN_BELOW_BAR_WINDOW = 0.06;
 
 /** The ladder-aware decay window, mirroring danCreditNearBarCapFor's shape. */
 export function danCreditBelowBarWindowFor(side: "rc" | "ln", keyCount: number): number {
@@ -130,19 +148,22 @@ export const DAN_CREDIT_BELOW_BAR_ANCHORS: DanCreditAnchors = [
 
 /**
  * The 6K/7K LN decay half, over its own three point window (2026-08-31). The
- * knee at a third of the window is what makes this an extension rather than a
- * re-pricing: the first point under the bar runs the exact line it ran when
- * the window WAS one point (-0.26 at the bar to -1.25 at 94%), so no clear
- * that already credited moves by a hair, and the two points below it are new
- * ground carrying the 92-94% runs the old window turned away. Those extend at
- * a quarter level per point rather than at the first point's slope, which
- * would price a 92% below the bottom of any table: the accuracy is cheap on
- * long notes, but a pass is still a pass. Against the 95% bar: 94.9% -> -0.36,
- * 94.5% -> -0.76, 94% -> -1.25, 93% -> -1.5, 92% -> -1.75, and below 92% no
- * credit at all.
+ * knee at a third of the window is where the window ended when it was one
+ * point, so the two points below it are the new ground carrying the 92-94%
+ * runs the old window turned away. Those extend at a quarter level per point
+ * rather than at the first point's slope, which would price a 92% below the
+ * bottom of any table: the accuracy is cheap on long notes, but a pass is
+ * still a pass. Against the 95% bar: 94.9% -> -0.13, 94.5% -> -0.63,
+ * 94% -> -1.25, 93% -> -1.5, 92% -> -1.75, and below 92% no credit at all.
+ *
+ * The first point is continuous with the bar (2026-09-13): it used to start
+ * at -0.26 (the near-bar cap, the one place a curve still jumped) and now
+ * runs a straight line from zero at 95% to the same -1.25 at 94%, so nothing
+ * from 94% down moves and only the last point under the bar is re-priced,
+ * the way rice's was on 2026-09-06.
  */
 export const DAN_CREDIT_LN_BELOW_BAR_ANCHORS: DanCreditAnchors = [
-  [0, -0.26],
+  [0, 0],
   [1 / 3, -1.25],
   [2 / 3, -1.5],
   [1, -1.75],
@@ -171,26 +192,27 @@ export const DAN_CREDIT_4K_LN_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
 ];
 
 /**
- * 4K LN's decay half, over its own 2.5 point window: 97% -> -0.3,
- * 96.5% -> -0.9, 96% -> -1.06, 95% -> -1.39, 94.5% -> -1.55, and nothing under
- * that. The bottom is deeper than the other ladders' -1.25 (2026-08-29): the
- * window itself is 2.5 points wide here, so a scrape at its edge is much
- * further off the bar than a rice scrape at the edge of four. -1.55 rather
- * than a round -1.5 is priced off one run: a 94.74% on a 14 dan chart, which
- * the owner reads as 13-- and which -1.5 credited a band too high.
+ * 4K LN's decay half over its six point window (2026-09-13): the rice table's
+ * own numbers, point for point under the bar, plus one more point at the
+ * same quarter-level slope. Against the 97% bar: 96.5% -> -0.25, 96% -> -0.51,
+ * 95% -> -0.76, 94% -> -1.0, 93% -> -1.25, 92% -> -1.5, 91% -> -1.75, and
+ * nothing under that. The anchors sit at whole points under the bar (one,
+ * four, five, six), so the first five points are the rice line exactly and
+ * the knee rice carries at four points under is the same knee here, at 93%.
  *
- * The knee at 96.5% is what keeps the step at the bar small. Every ladder's
- * credit jumps where the bar is (the near-bar cap: a near miss must never be
- * credited the chart's own dan), but on 4K LN that jump was the 0.75 cap, so
- * 96.99% credited a level less than 97% did - a cliff people read as a bug on
- * the curve. The cap is 0.3 here now, and the first half point under the bar
- * carries the drop the cap used to make in one step, so nothing from 96.5%
- * down moved.
+ * Until 2026-09-13 this ran from a 0.3 step at the bar through -0.9 half a
+ * point under to -1.55 at 94.5%. That priced a 96.5% a whole level down and
+ * a 96% at -1.06, twice what the same miss costs on rice, and the step made
+ * 96.99% read a third of a level under 97%. There is no step now
+ * (danCreditNearBarCapFor returns 0 here, as on rice since 2026-09-06): the
+ * credit meets the bar from below.
  */
 export const DAN_CREDIT_4K_LN_BELOW_BAR_ANCHORS: DanCreditAnchors = [
-  [0, -0.3],
-  [0.2, -0.9],
-  [1, -1.55],
+  [0, 0],
+  [1 / 6, -0.5075],
+  [4 / 6, -1.25],
+  [5 / 6, -1.5],
+  [1, -1.75],
 ];
 
 // Both sides of the comparison are decimals, so a pass sitting exactly ON an
@@ -217,6 +239,12 @@ export interface DanCreditOptions {
    * bar, which is how the course registry's historical tables are written.
    */
   aboveBarScale?: "headroom" | "delta";
+  /**
+   * Multiplier on the above-bar offset alone; 1 when absent. The jack tile's
+   * damping (DAN_CREDIT_JACK_BONUS_SCALE) rides here so the decay half and
+   * the bar itself stay exactly where every other clear has them.
+   */
+  bonusScale?: number;
 }
 
 function interpolateAnchors(anchors: DanCreditAnchors, at: number): number {
@@ -251,8 +279,9 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
     return Math.min(offset, -(options.nearBarCap ?? 0));
   }
   const aboveBar = options.aboveBar ?? DAN_CREDIT_ABOVE_BAR_ANCHORS;
+  const bonusScale = options.bonusScale ?? 1;
   if ((options.aboveBarScale ?? "headroom") === "delta") {
-    return interpolateAnchors(aboveBar, Math.max(0, delta));
+    return interpolateAnchors(aboveBar, Math.max(0, delta)) * bonusScale;
   }
   // The bonus always scores against at least the standard 4-point span, not
   // the caller's decay window: narrowing a ladder's window (4K LN) tightens
@@ -260,25 +289,36 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
   // widening one (rice, 6K/7K LN) does not cool the bonus either.
   const headroom = Math.max(1 - bar, DAN_CREDIT_BONUS_MIN_SPAN);
   const t = headroom > 0 ? Math.min(1, Math.max(0, delta) / headroom) : 1;
-  return interpolateAnchors(aboveBar, t);
+  return interpolateAnchors(aboveBar, t) * bonusScale;
 }
 
 /**
- * The ladder-aware near-bar cap. Rice has no cliff. LN's 0.26 is inside the "-" tier of
- * parseDan and danTableLabelFor (their "-" band opens at -0.25), so a sub-bar
- * credit on those ladders prints as at least the chart's level with a minus.
- * The 4K LN cap is 0.3, a hair deeper for the same reason and no deeper than
- * that: it used to be 0.75, which made the credit fall a full level between
- * 97% and 96.99% (2026-08-29). The pricing that cap carried lives in that
- * ladder's own decay anchors instead, which reach the same -0.9 half a point
- * under the bar rather than at it.
- *
- * These are numerical deductions, not label guarantees: a reduced credit
- * can still fall in the same display tier as the chart.
+ * The ladder-aware near-bar cap: zero on every chart ladder now, so each
+ * decay meets the bar from below with no step. Rice dropped its 0.26 on
+ * 2026-09-06, 4K LN its 0.3 (0.75 before 2026-08-29) on 2026-09-13, and
+ * 6K/7K LN its 0.26 the same day, once it was the only curve left with the
+ * two halves apart at the bar. The 0.26 was chosen to sit inside the "-"
+ * tier of parseDan and danTableLabelFor (their "-" band opens at -0.25) so
+ * a sub-bar credit always printed with a minus; a near miss can now keep the
+ * chart's display tier while contributing a smaller number. The course
+ * curves keep a cap of their own (dan-courses.ts). Kept as a function so the
+ * curve page and the estimator read one answer per ladder.
  */
-export function danCreditNearBarCapFor(side: "rc" | "ln", keyCount: number): number {
-  if (side === "rc") return 0;
-  return keyCount === 4 ? 0.3 : 0.26;
+export function danCreditNearBarCapFor(_side: "rc" | "ln", _keyCount: number): number {
+  return 0;
+}
+
+export interface DanCreditClearContext {
+  /**
+   * The skillset tile the clear files under first (its primary bucket), when
+   * the caller knows it. Only "jack" on 4K rice changes anything.
+   */
+  primaryTile?: string | null;
+}
+
+/** Whether a clear's primary tile takes the damped jack bonus. */
+export function danCreditTakesJackDamping(side: "rc" | "ln", keyCount: number, context?: DanCreditClearContext): boolean {
+  return side === "rc" && keyCount === 4 && context?.primaryTile === "jack";
 }
 
 /**
@@ -286,13 +326,15 @@ export function danCreditNearBarCapFor(side: "rc" | "ln", keyCount: number): num
  * that draws the curve and the estimator that credits against it can never
  * drift apart. 4K LN is the one ladder with tables of its own on both halves;
  * 6K/7K LN shares the bonus table and carries its own decay, and rice reads
- * the shared anchors throughout.
+ * the shared anchors throughout. A 4K rice clear whose primary tile is jack
+ * takes the damped bonus (DAN_CREDIT_JACK_BONUS_SCALE) through `context`.
  */
-export function danCreditOptionsFor(side: "rc" | "ln", keyCount: number): DanCreditOptions {
+export function danCreditOptionsFor(side: "rc" | "ln", keyCount: number, context?: DanCreditClearContext): DanCreditOptions {
   const options: DanCreditOptions = {
     nearBarCap: danCreditNearBarCapFor(side, keyCount),
     belowBarWindow: danCreditBelowBarWindowFor(side, keyCount),
   };
+  if (danCreditTakesJackDamping(side, keyCount, context)) options.bonusScale = DAN_CREDIT_JACK_BONUS_SCALE;
   if (side === "ln" && keyCount === 4) {
     options.aboveBar = DAN_CREDIT_4K_LN_ABOVE_BAR_ANCHORS;
     options.aboveBarScale = "delta";
@@ -318,8 +360,9 @@ export function creditedDanFor(
   bar: number,
   side: "rc" | "ln",
   keyCount: number,
+  context?: DanCreditClearContext,
 ): number | null {
-  const offset = danCreditOffset(accuracy, bar, danCreditOptionsFor(side, keyCount));
+  const offset = danCreditOffset(accuracy, bar, danCreditOptionsFor(side, keyCount, context));
   if (offset == null) return null;
   let credited = chartDan + offset;
   const ceiling = danTableCeilingFor(side, keyCount);

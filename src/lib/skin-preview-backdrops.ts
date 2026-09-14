@@ -98,6 +98,8 @@ const CATALOG_QUERY: LiveMapSearchParams = {
   lenMax: null,
   danMin: null,
   danMax: null,
+  lnMin: null,
+  lnMax: null,
   country: null,
   sort: "playcount",
   dir: "desc",

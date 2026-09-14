@@ -588,18 +588,20 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     }
   };
 
+  const trackedPlayersLabel = globalRankingsTotal > 0 ? (
+    <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
+  ) : null;
+
   if (boardScope) {
     return (
       <div className="flex-1">
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
           title={selectedIsGlobal ? t`Global mania rankings` : t`${countryName} mania rankings`}
+          rightInline
+          right={trackedPlayersLabel}
         />
-        {renderTabs(
-          globalRankingsTotal > 0 ? (
-            <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
-          ) : null,
-        )}
+        {renderTabs(trackedPlayersLabel)}
         <div className="bg-osu-b5">
           <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
             <div className="sm:hidden">
@@ -843,20 +845,24 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     );
   }
 
+  const loadingStatus = (
+    <>
+      {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1"><Trans>Loading rankings...</Trans></span>}
+      {pageData && deltasLoading && (
+        <span className="text-[10px] text-osu-f1"><Trans>Checking 7d changes...</Trans></span>
+      )}
+    </>
+  );
+
   return (
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
         title={t`${countryName} mania rankings`}
+        rightInline
+        right={loadingStatus}
       />
-      {renderTabs(
-        <>
-          {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1"><Trans>Loading rankings...</Trans></span>}
-          {pageData && deltasLoading && (
-            <span className="text-[10px] text-osu-f1"><Trans>Checking 7d changes...</Trans></span>
-          )}
-        </>,
-      )}
+      {renderTabs(loadingStatus)}
 
       {warming && <CountryWarming country={selectedCountry} />}
 

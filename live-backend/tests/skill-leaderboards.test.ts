@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
-import { decoratePlayerSkillBreakdown, runSkillBaselineJob } from "../src/features/skill-baseline.js";
+import { buildExactSkillCurves, decoratePlayerSkillBreakdown, runSkillBaselineJob } from "../src/features/skill-baseline.js";
+import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
 import {
   expireSkillLeaderboardBoard,
   getDanLeaderboard,
@@ -38,6 +39,7 @@ interface SeedPlayer {
   analyzedPlays: number;
   ratings?: Record<string, number>;
   patterns?: Array<{ id: string; rating: number; plays: number }>;
+  lnSkillVersion?: number;
   dan?: {
     rc?: { rawDan: number; label: string; clears: number; beyondTable?: boolean; skillsets?: Record<string, { rawDan: number; label: string; clears: number }> };
     ln?: { rawDan: number; label: string; clears: number };
@@ -74,6 +76,7 @@ async function seed(db: TestDb, players: SeedPlayer[]): Promise<void> {
         analyzedPlays: mode.analyzedPlays,
         ratings: mode.ratings ?? {},
         patterns: mode.patterns ?? [],
+        ...(mode.lnSkillVersion != null ? { lnSkillVersion: mode.lnSkillVersion } : {}),
         ...(mode.dan ? { dan: { rc: mode.dan.rc ?? null, ln: mode.dan.ln ?? null } } : {}),
       })),
     };
@@ -197,6 +200,25 @@ describe("skill leaderboard", () => {
       // R-EASIA covers JP and KR but not US.
       const region = await getSkillLeaderboard(db, { country: "R-EASIA", keyCount: 7, axis: "pattern:jack" });
       expect(region.ranking.map((entry) => entry.user.username)).toEqual(["deep", "mid", "thin"]);
+    });
+  });
+
+  it.each([4, 5, 7, 8, 18])("requires an independent LN stamp only on the 4K board and preserves %iK legacy curves", async keyCount => {
+    await withDb(async db => {
+      const players = Array.from({ length: 24 }, (_, i): SeedPlayer => ({
+        userId: 100 + i, username: `native-${i}`, country: "CR", keyCount, analyzedPlays: 100,
+        ratings: { Overall: 25 }, patterns: [{ id: "ln", rating: 20 + i / 10, plays: 40 }], lnSkillVersion: LN_SKILL_VERSION,
+      }));
+      players.push({ userId: 999, username: "legacy", country: "CR", keyCount, analyzedPlays: 100,
+        ratings: { Overall: 99 }, patterns: [{ id: "ln", rating: 99, plays: 40 }] });
+      await seed(db, players);
+      await exec(db, "update player_skill_ratings set analysis_version = ? where user_id = 999", [PLAYER_SKILLS_VERSION - 1]);
+      const curves = await buildExactSkillCurves(db);
+      expect(curves.curves[String(keyCount)]["pattern:ln"].count).toBe(keyCount === 4 ? 24 : 25);
+      expect(curves.curves[String(keyCount)].Overall.count).toBe(25);
+      const board = await getSkillLeaderboard(db, { country: "GLOBAL", keyCount, axis: "pattern:ln" });
+      expect(board.total).toBe(keyCount === 4 ? 24 : 25);
+      expect(board.ranking.some(entry => entry.user.username === "legacy")).toBe(keyCount !== 4);
     });
   });
 

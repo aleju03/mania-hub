@@ -6,8 +6,44 @@ import { createDb, exec, migrate } from "../src/db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
 import { computeDanEstimateJob, getDanEstimateBatch, getRateAdjustedChartAnalysis, loadStoredRateDanVerdicts, normalizeDanEstimateItems, rateDanVerdictKey } from "../src/features/dan-estimates.js";
 import { JobQueue } from "../src/jobs/queue.js";
+import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
 
 describe("normalizeDanEstimateItems", () => {
+  it("refreshes stale LN metadata at each rate and keeps the native cache when the file is unavailable", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-ln-rate-refresh-"));
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    try {
+      await migrate(db);
+      const now = new Date().toISOString();
+      const holdFile = buildFourKeyBeatmapFile().replace(/^(\d+),192,(\d+),1,0,0:0:0:0:$/gm,
+        (_, x, time) => `${x},192,${time},128,0,${Number(time) + 300}:0:0:0:0:`);
+      const osu = { getBeatmapFile: vi.fn(async () => holdFile) };
+      for (const rate of [0.75, 1, 1.25, 1.5]) {
+        const id = 8000 + Math.round(rate * 100);
+        await exec(db, `insert into dan_estimates
+          (estimator_version, beatmap_id, rate_percent, status, label, display_name, raw_dan, family, confidence, msd_json, computed_at, updated_at)
+          values (?, ?, ?, 'ready', '8', '8', 8, 'ln', 0.9, ?, ?, ?)`,
+        [DAN_ESTIMATE_CACHE_VERSION, id, Math.round(rate * 100), JSON.stringify({ values: { Overall: 20, LN: 99 }, lnSkill: { keyCount: 4, version: LN_SKILL_VERSION - 1 } }), now, now]);
+        const unavailable = { getBeatmapFile: vi.fn(async () => { throw new Error("offline"); }) };
+        const pending = await getRateAdjustedChartAnalysis(db, unavailable as never, id, rate);
+        expect(pending?.msd).toEqual({ Overall: 20 });
+        expect(pending?.lnStructure).toBeUndefined();
+
+        const fresh = await getRateAdjustedChartAnalysis(db, osu as never, id, rate);
+        expect(fresh?.lnStructure).toMatchObject({ valid: true, playbackRate: rate });
+        expect(fresh?.lnStructure?.profiles.ln_release).not.toHaveProperty("rating");
+        expect(fresh?.msd?.Overall).toBeGreaterThan(0);
+        const reads = osu.getBeatmapFile.mock.calls.length;
+        const cached = await getRateAdjustedChartAnalysis(db, osu as never, id, rate);
+        expect(cached).toEqual(fresh);
+        expect(osu.getBeatmapFile).toHaveBeenCalledTimes(reads);
+      }
+    } finally {
+      db.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("serves the previous estimate and MSD while queued, then replaces them with the job's current result", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mania-dan-refresh-"));
     const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });

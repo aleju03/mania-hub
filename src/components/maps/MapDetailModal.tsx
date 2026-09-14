@@ -21,6 +21,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import type { VibroClearEvidenceSummary } from "#dan/vibro-clear-evidence";
+import { msdHeadline } from "#dan/msd-headline";
 import { useNoDans } from "../../store";
 import {
   FamilyPatternChip,
@@ -81,6 +82,8 @@ export interface MapDetailPlayContext {
     creditedRating?: number;
     creditedLabel?: string;
     accuracy: number | null;
+    /** The formula `accuracy` is written in, when it is not the one the score screen shows. */
+    currency?: "stable" | "v2" | null;
     rejection?: ReactNode;
     /** The ladder side the clear testifies for, which picks the rail's courses. */
     family?: "rc" | "ln" | null;
@@ -99,7 +102,7 @@ export interface MapDetailPlayContext {
   source: "top" | "tracked";
   rating: number;
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration";
   ratingLabel: string;
   ratingColor: string;
   // Dan evidence has two distinct values: the chart's base rating and the
@@ -216,7 +219,9 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
                 <span className="mt-1.5 text-[9px] uppercase tracking-wide text-osu-f1/70">{t`Accuracy`}</span>
               </div>
             </div>
-            {danAccuracy != null && danAccuracy !== scoreAccuracy && <Stat label={t`Dan accuracy`} value={danAccuracy} />}
+            {danAccuracy != null && danAccuracy !== scoreAccuracy && (
+              <Stat label={t`Dan accuracy`} value={danAccuracy} badge={play.dan?.currency ? accuracyCurrencyLabel(play.dan.currency) : undefined} />
+            )}
           </div>
           <JudgementStrip statistics={score?.statistics ?? null} locale={locale} />
           <div className={`grid gap-x-3 gap-y-4 ${play.pp != null ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
@@ -272,7 +277,8 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
         {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: play.ratingColor }}>{play.rating.toFixed(2)}</span>}
       </div>
       {play.ratingExcluded ? (
-        <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : t`Vibro detected`}</p>
+        <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "pending_calibration" ? t`Skill rating recalculation pending`
+          : play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : t`Vibro detected`}</p>
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
           {skills.map(({ name, value }) => (
@@ -291,10 +297,19 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+// The formula an accuracy is written in, as the badge next to it. Both are
+// client/formula names, untranslated like the mod acronyms.
+export function accuracyCurrencyLabel(currency: "stable" | "v2"): string {
+  return currency === "v2" ? "ScoreV2" : "stable";
+}
+
+function Stat({ label, value, badge }: { label: string; value: string; badge?: string }) {
   return (
     <div className="flex min-w-0 flex-col">
-      <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{value}</span>
+      <span className="flex items-center gap-1.5 text-[16px] font-bold text-osu-l1 tabular-nums leading-none">
+        {value}
+        {badge && <span className="rounded bg-osu-b3 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-osu-l2">{badge}</span>}
+      </span>
       <span className="text-[9px] uppercase tracking-wide text-osu-f1/70 mt-1">{label}</span>
     </div>
   );
@@ -349,7 +364,7 @@ function PendingMsdBlock({ label }: { label?: string }) {
 // by value, Overall stays the headline.
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-// Display names for the strip; the keys above stay MinaCalc's own.
+// The standard keys are MinaCalc's; LN is Mania Hub's independent model.
 const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Stream: msg`Stream`,
   Jumpstream: msg`Jumpstream`,
@@ -358,6 +373,7 @@ const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   JackSpeed: msg`Jackspeed`,
   Chordjack: msg`Chordjack`,
   Technical: msg`Technical`,
+  LN: msg`LN`,
 };
 
 const BEATMAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
@@ -433,19 +449,32 @@ export function MsdBlock({
   // never landed the whole block falls back to 1.0x and says so.
   const rateAdjusted = rate !== 1 && rateMsd != null;
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
-  // chart has holds, using the release-weighting policy shared with player
-  // ratings. Bulk search rows carry them, so the final number shows from first
+  // chart has an eligible tail pass, using the release-weighting policy shared
+  // with player ratings. Bulk search rows carry them, so the number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
   const msd = rateAdjusted ? rateMsd : msdLn ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
-  const skillsets = MSD_SKILLSETS
+  // Independent LN is 4K-only, including when an older cached artifact
+  // still contains obsolete LN values for another keymode.
+  // Keep the identity guard for legacy nomod artifacts: v1 could carry a
+  // diagnostic LN value even on rice charts while v2's sweep is still running.
+  const hasLnIdentity = rateAdjusted
+    ? rateDan == null || rateDan.family === "ln"
+    : entry.primaryPattern === "ln" || entry.dan?.family === "ln";
+  const skillsetNames = entry.keyCount === 4 && hasLnIdentity && Number(msd.LN ?? 0) > 0
+    ? [...MSD_SKILLSETS, "LN"]
+    : MSD_SKILLSETS;
+  const skillsets = skillsetNames
     .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
     // The 6K/7K calc engine returns ~0 for skillsets it does not rate
     // (Technical); a 0.18 next to real values reads as data, so drop it.
     .filter(({ value }) => value >= 1)
     .sort((a, b) => b.value - a.value);
-  const overall = Number(msd.Overall ?? 0);
+  // On a 4K LN chart the headline is the higher of Overall and LN: native
+  // Overall never sees a tail, so on its own it prices the rice that is left
+  // once the holds are cut off.
+  const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
   const topName = skillsets[0]?.name;
 
   const dan = noDans ? null : rateAdjusted ? rateDan : entry.dan ?? null;
@@ -511,7 +540,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col">
+            <div key={name} className="flex flex-col" title={name === "LN" ? t`Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
@@ -734,7 +763,7 @@ export function MapDetailModal({
   // switching diffs mid-modal cannot show one diff's numbers under another's.
   const [rateAnalysisByKey, setRateAnalysisByKey] = useState<Record<string, LiveRateChartAnalysis | null>>({});
   const rateKey = playRate !== 1 && active ? `${active.beatmapId}:${ratePercent}` : null;
-  const needsRateFetch = rateKey != null && entryDt == null;
+  const needsRateFetch = rateKey != null && (entryDt == null || (active?.keyCount === 4 && (activeAnalysis?.lnRatio ?? 0) > 0));
   useEffect(() => {
     if (!needsRateFetch || rateKey == null) return;
     if (rateAnalysisByKey[rateKey] !== undefined) return;
@@ -749,8 +778,8 @@ export function MapDetailModal({
     };
   }, [needsRateFetch, rateAnalysisByKey, rateKey]);
   const rateAnalysis = rateKey != null ? rateAnalysisByKey[rateKey] : undefined;
-  const rateMsd = entryDt ? entryDt.msd : rateAnalysis?.msd ?? null;
-  const rateDan = entryDt ? entryDt.dan : rateAnalysis?.dan ?? null;
+  const rateMsd = rateAnalysis?.msd ?? entryDt?.msd ?? null;
+  const rateDan = rateAnalysis?.dan ?? entryDt?.dan ?? null;
   const ratePending = needsRateFetch && rateAnalysis === undefined;
 
   if (typeof document === "undefined") return null;

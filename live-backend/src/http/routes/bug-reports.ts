@@ -5,9 +5,11 @@ import {
   addReporterBugReportMessage,
   attachBugReportScreenshot,
   authorizeBugReportScreenshot,
+  countUnreadReporterReplies,
   createBugReport,
   getBugReport,
   listBugReportsForUser,
+  markReporterRepliesRead,
   toBugReportForReporter,
   type BugReport,
 } from "../../features/bug-reports.js";
@@ -151,6 +153,37 @@ export async function handleBugReportRoutes(
       ? report.messages.find((message) => message.id === messageId)?.screenshotKeys ?? []
       : report.screenshotKeys;
     sendJson(req, res, ctx, 200, { screenshotKeys });
+    return true;
+  }
+
+  if (url.pathname === "/api/bug-reports/unread") {
+    // Backs the badge on the reporter's own avatar. Polled from every page a
+    // signed-in visitor is on, so it stays one indexed count and answers zero
+    // rather than erroring: a badge is not worth a failed page.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await countUnreadReporterReplies(ctx.db, userId));
+    return true;
+  }
+
+  if (url.pathname === "/api/bug-reports/read") {
+    // Opening the thread is the read. Scoped to the caller's own reports by
+    // the same verified id the rest of this file trusts, so nobody can clear
+    // anyone else's badge.
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; id?: unknown }>((await readBody(req)) || "{}", {});
+    const result = await markReporterRepliesRead(ctx.serveWriteDb ?? ctx.db, body);
+    sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
   }
 

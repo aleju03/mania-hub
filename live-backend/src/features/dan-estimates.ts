@@ -4,6 +4,8 @@ import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.j
 import { classifyChartWithCompanella } from "../dan/companella.js";
 import { computeMsd, msdChartErrorFallback, type MsdResult } from "../dan/msd.js";
 import type { VibroAnalysis } from "../dan/vibro-sections.js";
+import type { LnStructureSummary4K } from "../dan/ln-analysis/index.js";
+import { LN_SKILL_VERSION } from "../dan/ln-skill.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -93,10 +95,11 @@ interface ComputedDanEstimate {
   value: LeanDanEstimate | null;
   msd: Record<string, number> | null;
   vibroAnalysis?: VibroAnalysis;
+  lnStructure?: LnStructureSummary4K;
 }
 
 type CachedDanEstimate =
-  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null; vibroAnalysis?: VibroAnalysis; stale?: boolean }
+  | { found: true; status: DanEstimateStatus; value: LeanDanEstimate | null; msd: Record<string, number> | null; vibroAnalysis?: VibroAnalysis; lnStructure?: LnStructureSummary4K; lnStructureStale?: boolean; stale?: boolean }
   | { found: false };
 
 export function normalizeDanEstimateItems(
@@ -225,6 +228,7 @@ export interface RateAdjustedChartAnalysis {
   dan: { label: string; family: string; rawDan: number } | null;
   msd: Record<string, number> | null;
   vibroAnalysis?: VibroAnalysis;
+  lnStructure?: LnStructureSummary4K;
 }
 
 export async function getRateAdjustedChartAnalysis(
@@ -242,21 +246,21 @@ export async function getRateAdjustedChartAnalysis(
     await enqueueDanEstimate(queue, request).catch((error) => logWarn("dan_estimate_refresh_enqueue_failed", {
       beatmap_id: request.beatmapId, error: String(error),
     }));
-    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis);
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis, cached.lnStructure);
   }
-  if (cached.found && (cached.msd != null || cached.status === "unavailable")) {
-    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis);
+  if (cached.found && ((cached.msd != null && !cached.lnStructureStale) || cached.status === "unavailable")) {
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, cached.msd, cached.vibroAnalysis, cached.lnStructure);
   }
   if (cached.found) {
     // The verdict was cached before MSD was stored beside it (the batch
     // endpoint and its job still store the dan alone). Fill in the MSD rather
     // than re-running the estimator for a verdict already in hand.
     const msd = await fillCachedRateMsd(db, osu, request);
-    return toRateAdjustedAnalysis(request, cached.status, cached.value, msd?.values ?? null, msd?.vibroAnalysis);
+    return toRateAdjustedAnalysis(request, cached.status, cached.value, msd?.values ?? cached.msd, msd?.vibroAnalysis ?? cached.vibroAnalysis, msd?.lnSkill?.structure);
   }
 
   const computed = await computeAndStoreDanEstimate(db, osu, request, "api:chart_analysis_rate", { withMsd: true });
-  return toRateAdjustedAnalysis(request, computed.status, computed.value, computed.msd, computed.vibroAnalysis);
+  return toRateAdjustedAnalysis(request, computed.status, computed.value, computed.msd, computed.vibroAnalysis, computed.lnStructure);
 }
 
 function toRateAdjustedAnalysis(
@@ -265,6 +269,7 @@ function toRateAdjustedAnalysis(
   estimate: LeanDanEstimate | null,
   msd: Record<string, number> | null,
   vibroAnalysis?: VibroAnalysis,
+  lnStructure?: LnStructureSummary4K,
 ): RateAdjustedChartAnalysis {
   return {
     beatmapId: request.beatmapId,
@@ -274,6 +279,7 @@ function toRateAdjustedAnalysis(
     dan: estimate ? { label: estimate.displayName, family: estimate.family, rawDan: estimate.rawDan } : null,
     msd,
     ...(vibroAnalysis ? { vibroAnalysis } : {}),
+    ...(lnStructure ? { lnStructure } : {}),
   };
 }
 
@@ -327,7 +333,7 @@ async function computeAndStoreDanEstimate(
   options: { withMsd?: boolean } = {},
 ): Promise<ComputedDanEstimate> {
   const cached = await readCachedDanEstimate(db, request);
-  if (cached.found) return { status: cached.status, value: cached.value, msd: cached.msd, vibroAnalysis: cached.vibroAnalysis };
+  if (cached.found) return { status: cached.status, value: cached.value, msd: cached.msd, vibroAnalysis: cached.vibroAnalysis, lnStructure: cached.lnStructure };
 
   const starRating = await readBeatmapStarRating(db, request.beatmapId);
   let parsed: ParsedDanBeatmap;
@@ -398,7 +404,7 @@ async function classifyAndStoreDanEstimate(
   const estimate = classification.estimate;
   if (!classification.supported || !estimate) {
     await storeUnsupportedDanEstimate(db, request, msd?.values ?? null);
-    return { status: "unsupported", value: null, msd: msd?.values ?? null };
+    return { status: "unsupported", value: null, msd: msd?.values ?? null, lnStructure: msd?.lnSkill?.structure };
   }
   const lean: LeanDanEstimate = {
     label: estimate.label,
@@ -423,7 +429,7 @@ async function classifyAndStoreDanEstimate(
     msdJson: msd ? JSON.stringify(msd) : null,
   });
 
-  return { status: "ready", value: lean, msd: msd?.values ?? null, vibroAnalysis: classification.vibroAnalysis };
+  return { status: "ready", value: lean, msd: msd?.values ?? null, vibroAnalysis: classification.vibroAnalysis, lnStructure: msd?.lnSkill?.structure };
 }
 
 /**
@@ -663,11 +669,17 @@ async function readCachedDanEstimate(
   if (!row) return { found: false };
   const stale = Number(row.estimator_version) !== DAN_ESTIMATE_CACHE_VERSION;
   const status = String(row.status ?? "");
+  const artifact = parseJson<MsdResult | null>(row.msd_json, null);
+  const keyCount = artifact?.lnSkill?.keyCount ?? (artifact?.values
+    ? Number((await exec(db, "select cs from beatmaps where beatmap_id = ?", [request.beatmapId])).rows[0]?.cs) : null);
+  const currentLn = keyCount !== 4 || artifact?.lnSkill?.version === LN_SKILL_VERSION;
   const msd = readStoredMsd(row.msd_json);
-  const vibroAnalysis = parseJson<MsdResult | null>(row.msd_json, null)?.vibroAnalysis;
+  if (!currentLn && msd) delete msd.LN;
+  const vibroAnalysis = artifact?.vibroAnalysis;
+  const lnStructure = currentLn ? artifact?.lnSkill?.structure : undefined;
   if (status === "unsupported" || status === "unavailable") {
     if (stale) return { found: false };
-    return { found: true, status, value: null, msd };
+    return { found: true, status, value: null, msd, lnStructure, lnStructureStale: !currentLn };
   }
   if (status !== "ready") return { found: false };
   const storedStarRating = row.star_rating == null ? null : Number(row.star_rating);
@@ -689,6 +701,8 @@ async function readCachedDanEstimate(
     status: "ready",
     msd,
     vibroAnalysis,
+    lnStructure,
+    lnStructureStale: !currentLn,
     ...(stale ? { stale: true } : {}),
     value: {
       label,

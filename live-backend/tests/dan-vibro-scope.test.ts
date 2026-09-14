@@ -40,8 +40,8 @@ describe("ordinary chart and player vibro rating separation", () => {
     const player = await computeMsd(text, { rate, keyCount: 4, adjustVibro: true });
     const expectedFull = await computeMsdOnThread(text, { rate, keyCount: 4 });
     const expectedPlayer = await computeMsdOnThread(prepareVibroChart(text, rate).osuText, { rate, keyCount: 4 });
-    expect(full?.values).toEqual(expectedFull.values);
-    expect(player?.values).toEqual(expectedPlayer.values);
+    expect(full?.values).toEqual({ ...expectedFull.values, LN: 0 });
+    expect(player?.values).toEqual({ ...expectedPlayer.values, LN: 0 });
     expect(full?.values.Overall).not.toBe(player?.values.Overall);
     expect(full?.vibroAnalysis).toEqual(player?.vibroAnalysis);
     expect(full?.vibroAdjusted).toBe(false);
@@ -68,7 +68,7 @@ describe("ordinary chart and player vibro rating separation", () => {
       expect(stored.get(rateDanVerdictKey(id, ratePercent, VIBRO_ADJUSTED_VARIANT))?.rawDan).toBe(player!.rawDan);
       const publicRate = await getRateAdjustedChartAnalysis(db, noNetwork as never, id, ratePercent / 100);
       expect(publicRate?.dan?.rawDan).toBe(full!.rawDan);
-      expect(publicRate?.msd).toEqual((await computeMsdOnThread(text, { keyCount: 4, rate: ratePercent / 100 })).values);
+      expect(publicRate?.msd).toEqual({ ...(await computeMsdOnThread(text, { keyCount: 4, rate: ratePercent / 100 })).values, LN: 0 });
       expect(publicRate?.vibroAnalysis?.status).toBe("adjusted");
       expect(await getRateAdjustedChartAnalysis(db, noNetwork as never, id, ratePercent / 100)).toEqual(publicRate);
 

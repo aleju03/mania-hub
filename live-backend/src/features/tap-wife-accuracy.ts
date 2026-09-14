@@ -1,4 +1,6 @@
-// Count-to-Wife3 calibration for native 4K taps at 1.0x. The caller owns the
+// Historical tap-fit reference; production uses wife-calibration.ts, which
+// shares the Wife3 curve and timing-window primitives defined here.
+// Count-to-Wife3 calibration for native mania taps. The caller owns the
 // chart/mod/provenance gate; this module has no IO or chart identity inputs.
 // A fixed generalized-normal shape, exp(-(t / spread)^1.25), models the
 // concentration toward the favorable edge of each judgment interval. Fit
@@ -75,13 +77,28 @@ function evaluate(bands: Band[], logSpread: number): Template {
   return { points, logProbabilities: masses.map((mass) => Math.log(Math.max(1e-250, mass / total))) };
 }
 
-function modelFor(od: number, classicWindows: boolean): WindowModel {
-  // Same native 1.0x windows as the replay simulator. Stable/CL keep a fixed
-  // MAX window; lazer MAX ranges from 22.4 to 19.4 to 13.9 at OD 0/5/10.
+export interface TimingWindowOptions {
+  /** Constant music rate; judgment windows are converted to real milliseconds. */
+  rate?: number;
+  /** EZ = 1.4, HR = 1/1.4; applies before the client's window rounding. */
+  windowScale?: number;
+}
+
+export function maniaTimingEdges(od: number, classicWindows: boolean, options: TimingWindowOptions = {}): number[] | null {
+  const rate = options.rate ?? 1;
+  const scale = options.windowScale ?? 1;
+  if (!Number.isFinite(od) || od < 0 || od > 10 || !Number.isFinite(rate) || rate <= 0
+    || !Number.isFinite(scale) || scale <= 0) return null;
   const maxWindow = classicWindows ? 16 : od > 5 ? 19.4 + (13.9 - 19.4) * (od - 5) / 5
     : 19.4 + (19.4 - 22.4) * (od - 5) / 5;
   const edges = [maxWindow, 64 - 3 * od, 97 - 3 * od, 127 - 3 * od, 151 - 3 * od]
-    .map((edge) => Math.floor(edge) + 0.5);
+    .map((edge) => (Math.floor(edge * rate * scale) + 0.5) / rate);
+  return edges.every((edge, i) => Number.isFinite(edge) && edge > (i ? edges[i - 1] : 0)) ? edges : null;
+}
+
+function modelFor(edges: number[]): WindowModel {
+  // Same native 1.0x windows as the replay simulator. Stable/CL keep a fixed
+  // MAX window; lazer MAX ranges from 22.4 to 19.4 to 13.9 at OD 0/5/10.
   const key = edges.join("|");
   const cached = windowModels.get(key);
   if (cached) {
@@ -108,14 +125,16 @@ function modelFor(od: number, classicWindows: boolean): WindowModel {
 }
 
 /** Counts ordered MAX, 300, 200, 100, 50, miss. Unknown facts return null. */
-export function estimateTapWifeAccuracy(counts: readonly number[], od: number, classicWindows: boolean): number | null {
+export function estimateTapWifeAccuracy(counts: readonly number[], od: number, classicWindows: boolean, options: TimingWindowOptions = {}): number | null {
   if (!Number.isFinite(od) || od < 0 || od > 10 || counts.length !== 6
     || counts.some((count) => !Number.isSafeInteger(count) || count < 0)) return null;
   const total = counts.reduce((sum, count) => sum + count, 0);
   if (!Number.isSafeInteger(total) || total === 0) return null;
+  const edges = maniaTimingEdges(od, classicWindows, options);
+  if (!edges) return null;
   const hits = total - counts[5];
   if (hits === 0) return WIFE3_MISS_POINTS;
-  const model = modelFor(od, classicWindows);
+  const model = modelFor(edges);
   const loss = (template: Template) => counts.slice(0, 5)
     .reduce((sum, count, i) => sum - (count / hits) * template.logProbabilities[i], 0);
   let bestIndex = 0;

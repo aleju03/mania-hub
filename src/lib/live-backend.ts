@@ -46,7 +46,7 @@ export interface LivePlayerSkillPlay {
   overallRating: number;
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration";
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -107,6 +107,8 @@ export interface LivePlayerDanRejectedPlay {
   bar: number | null;
   /** The lowest accuracy that still credits a decayed dan, below the pass bar. */
   minAccuracy?: number | null;
+  /** Only for below_bar: the formula clearAccuracy, bar and minAccuracy are written in. Absent on older payloads. */
+  currency?: "stable" | "v2" | null;
   od: number | null;
   /** The tiles it would have been filed under, had it counted. */
   skillsets?: string[];
@@ -128,6 +130,8 @@ export interface LivePlayerDanEvidencePlay {
   creditedDan: number;
   creditedDanLabel: string;
   clearAccuracy: number;
+  /** The formula clearAccuracy is written in. Absent on older payloads. */
+  currency?: "stable" | "v2";
   /** The skillset tiles this clear is filed under ("jack", "speed", ...); two
    *  when the rules deliberately share the chart. Absent on older payloads. */
   skillsets?: string[];
@@ -2214,6 +2218,8 @@ export interface LiveMapSearchEntry {
   // ISO ranked/loved date; null while pending, absent on older cached payloads.
   rankedDate?: string | null;
   lnCount: number;
+  // Hold share of the chart's objects; null without counts, absent on older cached payloads.
+  lnShare?: number | null;
   primaryPattern: string;
   patterns: Record<string, number>;
   // Detected subfamily tags from the chart analysis (bracket, speedjack,
@@ -2270,6 +2276,9 @@ export interface LiveMapSearchParams {
   lenMax: number | null;
   danMin: number | null;
   danMax: number | null;
+  // Hold share of the chart's objects, in percent.
+  lnMin: number | null;
+  lnMax: number | null;
   country: string | null;
   sort: string;
   dir: string;
@@ -2334,6 +2343,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
   if (params.danMin != null) query.set("danMin", String(params.danMin));
   if (params.danMax != null) query.set("danMax", String(params.danMax));
+  if (params.lnMin != null) query.set("lnMin", String(params.lnMin));
+  if (params.lnMax != null) query.set("lnMax", String(params.lnMax));
   if (params.country) query.set("country", params.country);
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
@@ -2463,8 +2474,11 @@ export interface LiveChartAnalysisDetail {
   modeTag: string | null;
   verdictText: string | null;
   lnRatio: number | null;
-  // LN-adjusted (tail-aware, keymode-blended) MSD; null for rice charts or
-  // until the LN MSD sweep covers this chart.
+  // Share of the chart that demands a release at 1.0x (4K identity input);
+  // null until the effective-LN sweep patches the row.
+  lnEffectiveRatio?: number | null;
+  // LN-adjusted (tail-aware, keymode-blended) MSD; null when the chart has no
+  // eligible tail pass or until the LN MSD sweep covers it.
   msdLn?: Record<string, number> | null;
 }
 

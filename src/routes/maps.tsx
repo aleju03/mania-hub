@@ -2,6 +2,7 @@ import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react
 import { Trans, Plural, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
+import { LN_SEARCH_PATTERN_IDS } from "#dan/ln-analysis/search-patterns";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -180,6 +181,8 @@ type MapsSearch = {
   sBpmMax: number;
   sLenMin: number;
   sLenMax: number;
+  sLnMin: number;
+  sLnMax: number;
   sDanMin: number | null;
   sDanMax: number | null;
   sPatterns: string;
@@ -277,6 +280,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sBpmMax: 0,
   sLenMin: 0,
   sLenMax: 0,
+  sLnMin: 0,
+  sLnMax: 0,
   sDanMin: null,
   sDanMax: null,
   sPatterns: "",
@@ -298,6 +303,7 @@ const SEARCH_PATTERN_VALUES = [
   // subfamilies (matched against detected-pattern tags, not dominance)
   "speedjack", "handjack", "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
+  ...LN_SEARCH_PATTERN_IDS,
 ];
 // SEARCH_SORT_VALUES lives in components/maps/searchSortPreference.ts.
 
@@ -703,6 +709,8 @@ export const Route = createFileRoute("/maps")({
     sBpmMax: clampSearchNumber(search.sBpmMax, 0, 2000),
     sLenMin: clampSearchNumber(search.sLenMin, 0, 100000),
     sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
+    sLnMin: clampSearchNumber(search.sLnMin, 0, 100),
+    sLnMax: clampSearchNumber(search.sLnMax, 0, 100),
     sDanMin: clampDanLevel(search.sDanMin),
     sDanMax: clampDanLevel(search.sDanMax),
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
@@ -1106,6 +1114,8 @@ function MapsPage() {
       bpmMax: mapsSearch.sBpmMax,
       lenMin: mapsSearch.sLenMin,
       lenMax: mapsSearch.sLenMax,
+      lnMin: mapsSearch.sLnMin,
+      lnMax: mapsSearch.sLnMax,
       danMin: mapsSearch.sDanMin,
       danMax: mapsSearch.sDanMax,
       sort: mapsSearch.sSort,
@@ -1134,6 +1144,8 @@ function MapsPage() {
     if (patch.bpmMax !== undefined) next.sBpmMax = patch.bpmMax;
     if (patch.lenMin !== undefined) next.sLenMin = patch.lenMin;
     if (patch.lenMax !== undefined) next.sLenMax = patch.lenMax;
+    if (patch.lnMin !== undefined) next.sLnMin = patch.lnMin;
+    if (patch.lnMax !== undefined) next.sLnMax = patch.lnMax;
     if (patch.danMin !== undefined) next.sDanMin = patch.danMin;
     if (patch.danMax !== undefined) next.sDanMax = patch.danMax;
     if (patch.sort !== undefined) next.sSort = patch.sort;

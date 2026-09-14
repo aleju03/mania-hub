@@ -42,16 +42,15 @@ import { formatAccuracy, formatAccuracyAgainst, formatPP, formatTimeAgo, formatT
 import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisMeta } from "#/lib/skill-axes";
 import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
-import { ModBadge } from "#/components/ui/ModBadge";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
-import { MapDetailModal, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
+import { MapDetailModal, accuracyCurrencyLabel, type MapDetailPlayContext } from "#/components/maps/MapDetailModal";
 import { DanMark } from "./DanMark";
 import {
   SKILL_PLAYS_RATE_CAPS,
   readSkillPlaysPrefs,
   writeSkillPlaysPrefs,
 } from "#/lib/skill-plays-prefs";
-import { rateModFor, stubEntry } from "./SkillPlaysModal";
+import { playModAcronyms, PlayModBadges, rateModFor, stubEntry } from "./SkillPlaysModal";
 import { track } from "#/lib/analytics";
 import { useLocale } from "#/lib/locale-context";
 import {
@@ -1060,11 +1059,13 @@ function DanPlaysList({
               creditedRating: row.clear.creditedDan,
               creditedLabel: row.clear.creditedDanLabel,
               accuracy: row.clear.clearAccuracy,
+              currency: row.clear.currency,
               family: side,
             } : {
               chartRating: row.rejected.chartDan,
               chartLabel: row.rejected.chartDanLabel,
               accuracy: row.rejected.clearAccuracy,
+              currency: row.rejected.currency,
               rejection: <DanRejectionExplanation rejected={row.rejected} />,
               family: row.rejected.side ?? side,
             },
@@ -1196,15 +1197,32 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
   // rows below it are breaking.
   const minAccuracy = rejected.minAccuracy;
   const od = rejected.od;
+  // When the ladder is judged on a different formula than the score screen
+  // shows (a stable play on the 4K LN ladder is read as ScoreV2, a lazer play
+  // on a rice ladder as stable), a bare "this play got 94.20%" under a screen
+  // that says 94.94% reads as a bug. Name the formula on both numbers and say
+  // which number the screen shows instead.
+  const currency = rejected.currency ? accuracyCurrencyLabel(rejected.currency) : null;
+  const displayed = rejected.play.accuracy;
+  const belowBar = (floor: number, acc: number): string => {
+    const floorText = formatAccuracy(floor);
+    const accText = formatAccuracyAgainst(acc, floor);
+    if (currency == null) return t`Minimum required for dan credit is ${floorText}. This play got ${accText}.`;
+    if (displayed == null || formatAccuracy(displayed) === formatAccuracy(acc)) {
+      return t`Minimum required for dan credit is ${floorText} ${currency}. This play got ${accText} ${currency}.`;
+    }
+    const displayedText = formatAccuracy(displayed);
+    return t`Minimum required for dan credit is ${floorText} ${currency}. This play got ${accText} ${currency}, not the ${displayedText} the score screen shows.`;
+  };
   const reason = rejected.reason === "rate_vibro"
     ? t`Vibro detected. This play does not count toward skill or dan ratings.`
     : rejected.reason === "chart_vibro"
       ? t`Vibro detected in this chart. This play does not count toward skill or dan ratings.`
       : rejected.reason === "below_bar"
         ? (minAccuracy != null && bar != null && accuracy != null
-          ? t`Minimum required for dan credit is ${formatAccuracy(minAccuracy)}. This play got ${formatAccuracyAgainst(accuracy, minAccuracy)}.`
+          ? belowBar(minAccuracy, accuracy)
           : bar != null && accuracy != null
-            ? t`Minimum required for dan credit is ${formatAccuracy(bar)}. This play got ${formatAccuracyAgainst(accuracy, bar)}.`
+            ? belowBar(bar, accuracy)
             : t`This play is under the minimum accuracy required for dan credit.`)
         : rejected.reason === "low_od"
           ? (od != null
@@ -1980,47 +1998,12 @@ function HideControl({
 const CONTROL_TRACK_CLASS = "rounded-full bg-osu-b5 ring-1 ring-inset ring-osu-b3/45";
 const CONTROL_TABS_CLASS = "rounded-lg bg-osu-b5 ring-1 ring-inset ring-osu-b3/45";
 
-/* Every mod the score carried. A pre-full-mod retained play can still name its
-   speed mod from the old projection; a 1.0x play with no `mods` field is
-   unknown, not NoMod, because it may have carried MR/DA/etc. before the raw
-   score aged out. */
-function playModAcronyms(play: LivePlayerSkillPlay): string[] | null {
-  if (Array.isArray(play.mods)) {
-    return [...new Set(play.mods.filter((mod) => typeof mod === "string" && mod.length > 0))];
-  }
-  const rateMod = rateModFor(play.rate, play.rateMod);
-  return rateMod ? [rateMod.acronym] : null;
-}
-
 function matchesPlayModFilter(play: LivePlayerSkillPlay, modFilter: ModFilterState): boolean {
   const acronyms = playModAcronyms(play);
   if (acronyms) return matchesModAcronymFilter(acronyms, modFilter);
   // Unknown historical mods cannot satisfy a required chip. They remain when
   // a chip is only being excluded because there is no evidence they used it.
   return !Object.values(modFilter).includes("include");
-}
-
-function formatDaOd(od: number): string {
-  return Number.isInteger(od) ? String(od) : od.toFixed(1);
-}
-
-function PlayModBadges({ play, size = 0.8 }: { play: LivePlayerSkillPlay; size?: number }) {
-  const acronyms = playModAcronyms(play);
-  if (!acronyms || acronyms.length === 0) return null;
-  const rateMod = rateModFor(play.rate, play.rateMod);
-  return (
-    <span className="inline-flex flex-wrap items-center gap-0.5">
-      {acronyms.map((mod) => (
-        <ModBadge
-          key={mod}
-          mod={mod}
-          rate={rateMod?.acronym === mod ? rateMod.rate : undefined}
-          detail={mod === "DA" && typeof play.daOd === "number" ? `OD ${formatDaOd(play.daOd)}` : undefined}
-          size={size}
-        />
-      ))}
-    </span>
-  );
 }
 
 /** The filter state as a value the reset effects can depend on. */

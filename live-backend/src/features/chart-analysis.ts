@@ -6,8 +6,11 @@ import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { storeChartFamily } from "./chart-families.js";
+import { analyzeLnSkill, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION } from "../dan/ln-skill.js";
+import { LN_SEARCH_EVIDENCE_VERSION } from "../dan/ln-analysis/search-evidence.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
+import { LN_EFFECTIVE_KEY_COUNTS, LN_EFFECTIVE_MIN_RATIO, LN_EFFECTIVE_MODEL_VERSION, analyzeEffectiveLn, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
@@ -55,6 +58,12 @@ interface LeanChartClassification {
   keyCount: number;
   supported: boolean;
   lnRatio: number;
+  /** Rate-aware share of the chart that demands a release (ln-effective.ts);
+   * the second LN identity gate on 4K. Absent on rows stored before it existed
+   * until the effective-LN sweep patches them. */
+  lnEffectiveRatio?: number;
+  /** Version of the effective-LN model that produced lnEffectiveRatio. */
+  lnEffectiveVersion?: number;
   sunnySr: number | null;
   vibro: boolean;
   vibroAnalysis?: VibroAnalysis;
@@ -112,6 +121,9 @@ export function leanClassification(
     keyCount: classification.keyCount,
     supported: classification.supported,
     lnRatio: classification.lnRatio,
+    ...(classification.lnEffectiveRatio != null ? {
+      lnEffectiveRatio: classification.lnEffectiveRatio, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION,
+    } : {}),
     sunnySr: classification.sunnySr,
     vibro: classification.vibro,
     ...(classification.vibroAnalysis ? { vibroAnalysis: classification.vibroAnalysis } : {}),
@@ -332,11 +344,16 @@ export async function computeBeatmapChartAnalysis(
     }, { msdValues: msd?.values });
 
     // Tail-aware MSD for hold-bearing charts (stored raw; readers blend by
-    // the keymode weight). Same shape as msd_json.
+    // the keymode weight). Same shape as msd_json. On 4K the pass rates the
+    // chart with its free holds demoted to notes (lnTailPassText), so a
+    // short-tail chart earns no LN credit for tails a tap covers.
     let msdLn: Awaited<ReturnType<typeof computeMsd>> = null;
-    if (msd && classification.lnRatio > LN_TAIL_MIN_RATIO) {
+    const tailPassText = !msd || map.keyCount === 4 ? null : LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
+      ? lnTailPassText(osuText, map.keyCount, { od: map.od, minHoldRatio: LN_TAIL_MIN_RATIO })
+      : classification.lnRatio > LN_TAIL_MIN_RATIO ? osuText : null;
+    if (tailPassText != null) {
       await new Promise<void>((resolve) => setImmediate(resolve));
-      msdLn = await computeMsd(osuText, { keyCount: map.keyCount, lnTailTaps: true }).catch(msdChartErrorFallback);
+      msdLn = await computeMsd(tailPassText, { keyCount: map.keyCount, lnTailTaps: true }).catch(msdChartErrorFallback);
     }
 
     const lean = leanClassification(classification, computeNoteBpm(osuText), motionFeatures(map.notes, map.keyCount));
@@ -1879,8 +1896,16 @@ async function enqueueJackDemandRecompute(queue: JobQueue, cursor: number): Prom
 // A chart with no stored block reads as "unknown" on the player side, which
 // keeps the pre-existing MSD-lead behaviour rather than guessing, so the
 // corpus degrades gracefully while this runs.
+//
+// v2 (2026-09-12, extended 2026-09-13): the features read only the sections
+// at the chart's own pace (dan/motion-features.ts, PACE_CONTEXT) and the
+// block gains the anchor share, so every stored block changes and the pass
+// runs again over the whole 4K corpus. Rows it has not reached yet keep their
+// v1 block, which lacks the anchor share, so the speed/tech model treats them
+// as unread and the older MSD-lead arms stand until the rewrite lands; the
+// same chunked, zero-API walk as v1.
 export const MOTION_FEATURES_RECOMPUTE_JOB = "recompute_motion_features_sweep";
-export const MOTION_FEATURES_RECOMPUTE_META_KEY = "motion_features_recompute_done:v1";
+export const MOTION_FEATURES_RECOMPUTE_META_KEY = "motion_features_recompute_done:v2";
 const MOTION_FEATURES_RECOMPUTE_CHUNK = 50;
 
 export interface MotionFeaturesRecomputeChunkResult {
@@ -2299,6 +2324,8 @@ export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boo
       primaryLabel: lean.primary?.displayName ?? null,
       primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
       rawDan: lean.primary?.rawDan ?? null,
+      lnEffectiveRatio: lean.lnEffectiveRatio,
+      lnEffectiveVersion: lean.lnEffectiveVersion,
     };
     await exec(
       db,
@@ -2455,6 +2482,8 @@ export async function storeHtRateVerdict(db: Db, beatmapId: number): Promise<boo
       primaryLabel: lean.primary?.displayName ?? null,
       primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
       rawDan: lean.primary?.rawDan ?? null,
+      lnEffectiveRatio: lean.lnEffectiveRatio,
+      lnEffectiveVersion: lean.lnEffectiveVersion,
     };
     await exec(
       db,
@@ -2788,7 +2817,11 @@ export async function recomputeLnMsdChunk(
     const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
     if (!osuText) continue;
     try {
-      const msdLn = await computeMsd(osuText, { keyCount: Number(row.key_count), lnTailTaps: true }).catch(msdChartErrorFallback);
+      const tailPassText = LN_EFFECTIVE_KEY_COUNTS.has(Number(row.key_count))
+        ? lnTailPassText(osuText, Number(row.key_count), { minHoldRatio: LN_TAIL_MIN_RATIO })
+        : osuText;
+      if (tailPassText == null) continue;
+      const msdLn = await computeMsd(tailPassText, { keyCount: Number(row.key_count), lnTailTaps: true }).catch(msdChartErrorFallback);
       if (!msdLn) continue;
       await exec(
         db,
@@ -2947,6 +2980,9 @@ export async function recomputeLnSourceChunk(
           primaryLabel: classification.primary?.displayName ?? null,
           primaryFamily: classification.primary ? (classification.primary.kind === "ln" ? "ln" : "dan") : null,
           rawDan: classification.primary?.rawDan ?? null,
+          ...(classification.lnEffectiveRatio != null ? {
+            lnEffectiveRatio: classification.lnEffectiveRatio, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION,
+          } : {}),
         };
         await exec(
           db,
@@ -3104,6 +3140,8 @@ export async function recomputeLnLeoblackChunk(
           primaryLabel: lean.primary?.displayName ?? null,
           primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
           rawDan: lean.primary?.rawDan ?? null,
+          lnEffectiveRatio: lean.lnEffectiveRatio,
+          lnEffectiveVersion: lean.lnEffectiveVersion,
         };
         await exec(
           db,
@@ -3339,6 +3377,8 @@ export async function recomputeSunnyRepinDtChunk(
         primaryLabel: lean.primary?.displayName ?? null,
         primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
         rawDan: lean.primary?.rawDan ?? null,
+        lnEffectiveRatio: lean.lnEffectiveRatio,
+        lnEffectiveVersion: lean.lnEffectiveVersion,
       };
       await exec(
         db,
@@ -3641,6 +3681,8 @@ export async function recomputeLeoblackRepinDtChunk(
         primaryLabel: lean.primary?.displayName ?? null,
         primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
         rawDan: lean.primary?.rawDan ?? null,
+        lnEffectiveRatio: lean.lnEffectiveRatio,
+        lnEffectiveVersion: lean.lnEffectiveVersion,
       };
       await exec(
         db,
@@ -3905,6 +3947,8 @@ async function recomputePoisonedDtColumns(db: Db, beatmapId: number): Promise<vo
       primaryLabel: lean.primary?.displayName ?? null,
       primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
       rawDan: lean.primary?.rawDan ?? null,
+      lnEffectiveRatio: lean.lnEffectiveRatio,
+      lnEffectiveVersion: lean.lnEffectiveVersion,
     };
     await exec(
       db,
@@ -4650,6 +4694,437 @@ async function enqueueOsuFileRepair(queue: JobQueue, cursor: number): Promise<vo
     OSU_FILE_REPAIR_JOB,
     `${OSU_FILE_REPAIR_JOB}:${cursor}`,
     { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// ── One-shot effective-LN sweep ──────────────────────────────────────────────
+// The 4K LN identity gained an effective-share gate after the hold-share gate
+// (dan/dan-estimator/ln-effective.ts): a hold whose tail a tap covers is a
+// note, so a chart of 45ms tails no longer wears an LN badge, feeds an LN
+// rating or credits an LN dan. Stored rows predate the field. This sweep
+// patches every ready 4K row from the cached .osu corpus: the 1.0x share into
+// classification_json, the 1.5x/0.75x shares into the stored rate verdicts,
+// the primary verdict re-routed inline where the identity flipped (both
+// halves are already stored, so no classifier run), the rate verdicts
+// re-derived off their stored MSD where theirs flipped, and msd_ln_json
+// re-rated with the free holds demoted where any were. Same playbook as the
+// note-BPM sweep: chunked, self-chaining, boot-seeded, done key in live_meta.
+// Purely local work, no osu! API. Measured on the 2026-09 snapshot
+// (scripts/dev/ln-effective-impact.ts): 1192 of 8920 cached hold-share LN charts
+// read rice at 1.0x, no low-hold chart can be promoted, and all 17 official
+// 4K LN dan courses stay LN.
+// Bump history: `git log -S LN_EFFECTIVE_META_KEY`.
+
+export const LN_EFFECTIVE_RECOMPUTE_JOB = "recompute_ln_effective_sweep";
+// Bump alongside LN_EFFECTIVE_MODEL_VERSION when the model or either identity
+// gate moves. v3 restored the established 45% hold-share identity gate. v4
+// applies that first gate to the tail-aware MSD pass too, clearing the stored
+// upper-bound pass from low-hold regular charts.
+// v5 refreshes every copied search artifact and adds independent LN values
+// to the nomod/DT/HT MSD records without rerunning MinaCalc.
+// v7 restricts the experimental v6 expansion back to 4K. Other keymodes
+// are excluded from this sweep and keep their existing dan and MSD.
+// v8 removes the short-spanning exception and refreshes LN v5 artifacts.
+// v9 fills full-analysis search evidence on eligible LN charts.
+// v10 refreshes effective v3, scalar v6 and structure-only profile contracts.
+export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v10";
+const LN_EFFECTIVE_CHUNK = 60;
+
+export interface LnEffectiveChunkResult {
+  nextCursor: number;
+  scanned: number;
+  patched: number;
+  repinned: number[];
+  rateRewritten: number;
+  done: boolean;
+}
+
+interface StoredRateDan {
+  primaryLabel?: unknown;
+  primaryFamily?: unknown;
+  rawDan?: unknown;
+  lnEffectiveRatio?: unknown;
+  lnEffectiveVersion?: unknown;
+}
+
+/**
+ * Re-derive one stored rate verdict from its stored MSD, the way the Sunny
+ * DT re-pin sweep does: one classifier pass, no MinaCalc. Returns false when
+ * the row cannot be served (no stored MSD, parser/estimator failure), so the
+ * caller can fall back to the ordinary full local rate computation.
+ */
+async function rederiveRateVerdictFromStoredMsd(
+  db: Db,
+  beatmapId: number,
+  map: ReturnType<typeof parseManiaBeatmap>,
+  osuText: string,
+  rate: number,
+  storedMsdJson: unknown,
+  column: "dan_dt_json" | "dan_ht_json",
+): Promise<boolean> {
+  const storedMsd = parseJson<{ values?: Record<string, number> } | null>(String(storedMsdJson ?? ""), null);
+  const msdValues = storedMsd?.values;
+  if (!msdValues || typeof msdValues !== "object") return false;
+  try {
+    const starRating = Number((await exec(
+      db,
+      "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+      [beatmapId],
+    )).rows[0]?.difficulty_rating ?? 0);
+    const classification = await classifyChartWithCompanella(map, osuText, {
+      rate,
+      starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+      version: map.version,
+    }, { msdValues });
+    const lean = leanClassification(classification);
+    const verdict = {
+      primaryLabel: lean.primary?.displayName ?? null,
+      primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+      rawDan: lean.primary?.rawDan ?? null,
+      lnEffectiveRatio: lean.lnEffectiveRatio,
+      lnEffectiveVersion: lean.lnEffectiveVersion,
+    };
+    await exec(
+      db,
+      `update beatmap_chart_analysis set ${column} = json(?) where beatmap_id = ? and analysis_version = ?`,
+      [json(verdict), beatmapId, CHART_ANALYSIS_VERSION],
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function refreshLnSkillArtifacts(
+  db: Db,
+  beatmapId: number,
+  map: ReturnType<typeof parseManiaBeatmap>,
+  row: Record<string, unknown>,
+): Promise<void> {
+  for (const [column, rate] of [["msd_json", 1], ["msd_dt_json", DT_RATE], ["msd_ht_json", HT_RATE]] as const) {
+    const artifact = parseJson<{ values?: Record<string, number>; lnSkill?: unknown } | null>(String(row[column] ?? ""), null);
+    if (!artifact?.values) continue;
+    const lnSkill = analyzeLnSkill(map, { rate });
+    if (!lnSkill) continue;
+    await exec(db,
+      `update beatmap_chart_analysis set ${column} = json(?) where beatmap_id = ? and analysis_version = ?`,
+      [json({ ...artifact, values: { ...artifact.values, LN: lnSkill.eligible ? lnSkill.rating ?? 0 : 0 }, lnSkill }), beatmapId, CHART_ANALYSIS_VERSION]);
+  }
+  // The index copies these artifacts even when no identity change occurred.
+  await exec(db, "update beatmap_chart_analysis set updated_at = ? where beatmap_id = ? and analysis_version = ?",
+    [nowIso(), beatmapId, CHART_ANALYSIS_VERSION]);
+  await import("./map-search.js").then(module => module.upsertMapSearchIndexRow(db, beatmapId));
+}
+
+export async function recomputeLnEffectiveChunk(
+  db: Db,
+  cursor: number,
+  limit = LN_EFFECTIVE_CHUNK,
+): Promise<LnEffectiveChunkResult> {
+  const keyCounts = [...LN_SKILL_KEY_COUNTS];
+  // v4's low-hold tail cleanup needs no .osu parse: the stored hold share is
+  // the first gate and both tables carry the same raw upper-bound pass. Do it
+  // once at cursor zero so tens of thousands of regular charts do not occupy
+  // one worker slot apiece. Updating timestamps also makes exports propagate
+  // the cleared artifact to another database.
+  if (cursor === 0) {
+    const clearedAt = nowIso();
+    await exec(
+      db,
+      `update map_search_index
+       set msd_ln_json = null, updated_at = ?
+       where msd_ln_json is not null and beatmap_id in (
+         select beatmap_id from beatmap_chart_analysis
+         where analysis_version = ? and status = 'ready' and key_count = 4
+           and json_extract(classification_json, '$.lnRatio') < ?
+       )`,
+      [clearedAt, CHART_ANALYSIS_VERSION, LN_PRIMARY_MIN_RATIO],
+    );
+    await exec(
+      db,
+      `update beatmap_chart_analysis
+       set msd_ln_json = null, updated_at = ?
+       where analysis_version = ? and status = 'ready' and key_count = 4
+         and msd_ln_json is not null
+         and json_extract(classification_json, '$.lnRatio') < ?`,
+      [clearedAt, CHART_ANALYSIS_VERSION, LN_PRIMARY_MIN_RATIO],
+    );
+  }
+  // Each new effective share carries its model version. Unversioned shares are
+  // the same v1 calculation written by the pre-version sweep, so they count as
+  // v1 here; a missing share is stale. Identity mismatch arms still revisit a
+  // threshold-only change, including charts whose nomod side stays put while
+  // only DT/HT flips. A future model-version bump revisits every legacy/current
+  // row because both then compare as v1 against the new version.
+  const rows = (await exec(
+    db,
+    `select beatmap_id, key_count, primary_family, classification_json,
+            msd_json, msd_json is not null as has_msd, msd_ln_json is not null as has_msd_ln,
+            msd_dt_json, dan_dt_json, msd_ht_json, dan_ht_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count in (${keyCounts.map(() => "?").join(",")})
+       and beatmap_id > ?
+       and (
+         (msd_json is not null and coalesce(json_extract(msd_json, '$.lnSkill.version'), 0) != ${LN_SKILL_VERSION})
+         or (json_extract(msd_json, '$.lnSkill.eligible') = 1 and coalesce(json_extract(msd_json, '$.lnSkill.structure.searchEvidence.version'), 0) != ${LN_SEARCH_EVIDENCE_VERSION})
+         or (msd_dt_json is not null and coalesce(json_extract(msd_dt_json, '$.lnSkill.version'), 0) != ${LN_SKILL_VERSION})
+         or (msd_ht_json is not null and coalesce(json_extract(msd_ht_json, '$.lnSkill.version'), 0) != ${LN_SKILL_VERSION})
+         or (key_count = 4 and (
+         coalesce(
+           json_extract(classification_json, '$.lnEffectiveVersion'),
+           case when json_extract(classification_json, '$.lnEffectiveRatio') is null then -1 else 1 end
+         ) != ?
+         or (
+           json_extract(classification_json, '$.lnEffectiveRatio') is not null
+           and (
+             (json_extract(classification_json, '$.lnRatio') >= ?
+              and json_extract(classification_json, '$.lnEffectiveRatio') >= ?
+              and primary_family = 'dan'
+              and json_extract(classification_json, '$.ln.displayName') is not null)
+             or ((json_extract(classification_json, '$.lnRatio') < ?
+                  or json_extract(classification_json, '$.lnEffectiveRatio') < ?)
+                 and primary_family = 'ln'
+                 and json_extract(classification_json, '$.rc.displayName') is not null)
+           )
+         )
+         or (dan_dt_json is not null and (
+           coalesce(
+             json_extract(dan_dt_json, '$.lnEffectiveVersion'),
+             case when json_extract(dan_dt_json, '$.lnEffectiveRatio') is null then -1 else 1 end
+           ) != ?
+           or (json_extract(dan_dt_json, '$.lnEffectiveRatio') is not null and (
+             (json_extract(classification_json, '$.lnRatio') >= ?
+              and json_extract(dan_dt_json, '$.lnEffectiveRatio') >= ?
+              and json_extract(dan_dt_json, '$.primaryFamily') = 'dan'
+              and json_extract(classification_json, '$.ln.displayName') is not null)
+             or ((json_extract(classification_json, '$.lnRatio') < ?
+                  or json_extract(dan_dt_json, '$.lnEffectiveRatio') < ?)
+                 and json_extract(dan_dt_json, '$.primaryFamily') = 'ln'
+                 and json_extract(classification_json, '$.rc.displayName') is not null)
+           ))
+         ))
+         or (dan_ht_json is not null and (
+           coalesce(
+             json_extract(dan_ht_json, '$.lnEffectiveVersion'),
+             case when json_extract(dan_ht_json, '$.lnEffectiveRatio') is null then -1 else 1 end
+           ) != ?
+           or (json_extract(dan_ht_json, '$.lnEffectiveRatio') is not null and (
+             (json_extract(classification_json, '$.lnRatio') >= ?
+              and json_extract(dan_ht_json, '$.lnEffectiveRatio') >= ?
+              and json_extract(dan_ht_json, '$.primaryFamily') = 'dan'
+              and json_extract(classification_json, '$.ln.displayName') is not null)
+             or ((json_extract(classification_json, '$.lnRatio') < ?
+                  or json_extract(dan_ht_json, '$.lnEffectiveRatio') < ?)
+                 and json_extract(dan_ht_json, '$.primaryFamily') = 'ln'
+                 and json_extract(classification_json, '$.rc.displayName') is not null)
+           ))
+         ))
+         ))
+       )
+     order by beatmap_id
+     limit ?`,
+    [
+      CHART_ANALYSIS_VERSION,
+      ...keyCounts,
+      Math.max(0, Math.floor(cursor)),
+      LN_EFFECTIVE_MODEL_VERSION,
+      LN_PRIMARY_MIN_RATIO,
+      LN_EFFECTIVE_MIN_RATIO,
+      LN_PRIMARY_MIN_RATIO,
+      LN_EFFECTIVE_MIN_RATIO,
+      LN_EFFECTIVE_MODEL_VERSION,
+      LN_PRIMARY_MIN_RATIO,
+      LN_EFFECTIVE_MIN_RATIO,
+      LN_PRIMARY_MIN_RATIO,
+      LN_EFFECTIVE_MIN_RATIO,
+      LN_EFFECTIVE_MODEL_VERSION,
+      LN_PRIMARY_MIN_RATIO,
+      LN_EFFECTIVE_MIN_RATIO,
+      LN_PRIMARY_MIN_RATIO,
+      LN_EFFECTIVE_MIN_RATIO,
+      Math.max(1, Math.floor(limit)),
+    ],
+  )).rows;
+
+  let nextCursor = cursor;
+  let patched = 0;
+  let rateRewritten = 0;
+  const repinned: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const keyCount = Number(row.key_count);
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    let map: ReturnType<typeof parseManiaBeatmap>;
+    try {
+      map = parseManiaBeatmap(osuText);
+    } catch {
+      continue;
+    }
+    if (map.keyCount !== keyCount) continue;
+    const stored = parseJson<Record<string, unknown> | null>(String(row.classification_json ?? ""), null);
+    if (!stored) continue;
+    const analysis = analyzeEffectiveLn(map.notes, { rate: 1, od: map.od });
+    const lnRatio = Number(stored.lnRatio);
+    const readsLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: analysis.effectiveLnRatio }) === true;
+
+    // The 1.0x identity. Both halves are stored, so a flip is a re-route of
+    // the stored primary, not a classifier run: the same choice classifyChart
+    // makes (LN at the line when an LN half exists, else RC, else LN).
+    const lnHalf = stored.ln && typeof stored.ln === "object" ? stored.ln as Record<string, unknown> : null;
+    const rcHalf = stored.rc && typeof stored.rc === "object" ? stored.rc as Record<string, unknown> : null;
+    const wantLn = readsLn && lnHalf != null;
+    const isLn = String(row.primary_family ?? "") === "ln";
+    const nextPrimary = wantLn ? lnHalf : rcHalf ?? lnHalf;
+    if (wantLn !== isLn && nextPrimary) {
+      const family = nextPrimary.kind === "ln" ? "ln" : "dan";
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?, '$.primary', json(?)),
+             primary_label = ?, primary_family = ?, raw_dan = ?
+         where beatmap_id = ? and analysis_version = ?`,
+        [
+          JSON.stringify(analysis.effectiveLnRatio),
+          LN_EFFECTIVE_MODEL_VERSION,
+          json(nextPrimary),
+          typeof nextPrimary.displayName === "string" ? nextPrimary.displayName : null,
+          family,
+          Number.isFinite(Number(nextPrimary.rawDan)) ? Number(nextPrimary.rawDan) : null,
+          beatmapId,
+          CHART_ANALYSIS_VERSION,
+        ],
+      );
+      repinned.push(beatmapId);
+    } else {
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?)
+         where beatmap_id = ? and analysis_version = ?`,
+        [JSON.stringify(analysis.effectiveLnRatio), LN_EFFECTIVE_MODEL_VERSION, beatmapId, CHART_ANALYSIS_VERSION],
+      );
+    }
+    patched += 1;
+
+    // The stored rate verdicts: patch the share in, or re-derive where the
+    // identity at that rate flipped.
+    for (const [rate, column, msdColumn] of [
+      [DT_RATE, "dan_dt_json", "msd_dt_json"],
+      [HT_RATE, "dan_ht_json", "msd_ht_json"],
+    ] as const) {
+      const storedRate = parseJson<StoredRateDan | null>(String(row[column] ?? ""), null);
+      if (!storedRate) continue;
+      const rateEffective = analyzeEffectiveLn(map.notes, { rate, od: map.od }).effectiveLnRatio;
+      const rateWantLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: rateEffective }) === true && lnHalf != null;
+      const rateIsLn = storedRate.primaryFamily === "ln";
+      if (rateWantLn !== rateIsLn) {
+        let rewritten = await rederiveRateVerdictFromStoredMsd(db, beatmapId, map, osuText, rate, row[msdColumn], column);
+        // Legacy or partially imported rows can carry a verdict without its
+        // matching MSD. Fall back to the ordinary local rate computation so a
+        // migration never knowingly leaves the wrong family in place.
+        if (!rewritten) {
+          rewritten = rate === DT_RATE
+            ? await storeDtRateVerdict(db, beatmapId)
+            : await storeHtRateVerdict(db, beatmapId);
+        }
+        if (rewritten) rateRewritten += 1;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        continue;
+      }
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set ${column} = json_set(${column}, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?)
+         where beatmap_id = ? and analysis_version = ?`,
+        [JSON.stringify(rateEffective), LN_EFFECTIVE_MODEL_VERSION, beatmapId, CHART_ANALYSIS_VERSION],
+      );
+    }
+
+    // The LN-adjusted MSD: rated over the demoted chart wherever a hold was
+    // demoted, dropped where nothing effective remains.
+    if (Number(row.has_msd) === 1 && (keyCount === 4 || lnRatio < LN_PRIMARY_MIN_RATIO)) {
+      if (Number(row.has_msd_ln) === 1) {
+        await exec(
+          db,
+          "update beatmap_chart_analysis set msd_ln_json = null where beatmap_id = ? and analysis_version = ?",
+          [beatmapId, CHART_ANALYSIS_VERSION],
+        );
+      }
+    } else if (Number(row.has_msd) === 1 && analysis.effectiveHolds < analysis.holds) {
+      const tailPassText = lnTailPassText(osuText, keyCount, { od: map.od, minHoldRatio: LN_TAIL_MIN_RATIO });
+      const msdLn = tailPassText == null
+        ? null
+        : await computeMsd(tailPassText, { keyCount, lnTailTaps: true }).catch(() => null);
+      if (tailPassText == null || msdLn) {
+        await exec(
+          db,
+          `update beatmap_chart_analysis set msd_ln_json = ? where beatmap_id = ? and analysis_version = ?`,
+          [msdLn ? json(msdLn) : null, beatmapId, CHART_ANALYSIS_VERSION],
+        );
+      }
+    }
+
+    // The independent axis can be backfilled from notes alone. Preserve all
+    // MinaCalc values and refresh each already-stored rate at its own timing.
+    await refreshLnSkillArtifacts(db, beatmapId, map, row);
+    // The calc and classifier runs are CPU bursts; yield between charts so
+    // ingest/SSE keep moving.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, patched, repinned, rateRewritten, done: rows.length < limit };
+}
+
+// Boot watchdog: seed the sweep once per meta-key version, resume if a chain
+// died mid-way (each chunk's job carries its own cursor dedupe key).
+export async function ensureLnEffectiveRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN_EFFECTIVE_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN_EFFECTIVE_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLnEffectiveRecompute(queue, 0);
+}
+
+/** Returns true on the finishing chunk so the worker can refresh player-side
+ * pattern and dan folds only after every chart/rate verdict is settled. */
+export async function runLnEffectiveRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number; modelVersion?: number } | undefined): Promise<boolean> {
+  // An older 4K-only chain may resume partway through the ID space after a
+  // deploy. Rewind it once, so newly supported keymodes below that cursor fill.
+  const cursor = payload?.modelVersion === LN_SKILL_VERSION ? Math.max(0, Math.floor(Number(payload.cursor ?? 0))) : 0;
+  const result = await recomputeLnEffectiveChunk(db, cursor);
+  if (result.repinned.length > 0 || result.rateRewritten > 0) {
+    logInfo("ln_effective_sweep_chunk", { cursor, patched: result.patched, repinned: result.repinned.length, rateRewritten: result.rateRewritten });
+  }
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_EFFECTIVE_META_KEY, json({ finishedAt: now }), now],
+    );
+    // Charts that just left the LN side belong out of the LN dan collections
+    // now, not on the next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return true;
+  }
+  await enqueueLnEffectiveRecompute(queue, result.nextCursor);
+  return false;
+}
+
+async function enqueueLnEffectiveRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN_EFFECTIVE_RECOMPUTE_JOB,
+    `${LN_EFFECTIVE_RECOMPUTE_JOB}:v${LN_SKILL_VERSION}:${cursor}`,
+    { cursor, modelVersion: LN_SKILL_VERSION },
     { priority: -10, replaceDone: true },
   );
 }

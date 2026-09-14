@@ -16,6 +16,7 @@ import { fetchLiveMapSearchEntry, type LiveFarmHelperKeyMode, type LiveFarmHelpe
 import { danBareLabel, getDanImageSrc } from "../../../lib/dan-images";
 import { pageSeo } from "../../../lib/seo";
 import { useNoDans } from "../../../store";
+import { msdHeadline } from "#dan/msd-headline";
 
 type FarmMapContext = {
   beatmapsetId?: number;
@@ -545,16 +546,22 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
   // Under a DT farm context (1.5x), show the rate-adjusted dan/MSD once the DT
   // sweep has covered this chart; otherwise fall back to the stored 1.0x values.
   const preferDt = normalizedRate >= 1.5;
-  // At 1.0x the LN-adjusted (tail-aware) MSD simply IS the msd shown: it is
+  // At 1.0x an eligible LN-adjusted (tail-aware) MSD simply IS the msd shown: it is
   // what the skill-rating engine credits a play here. No LN x DT cross-sweep
   // exists, so the DT context stays on the DT values.
   const msd = (preferDt && entry?.msdDt ? entry.msdDt : entry?.msdLn ?? entry?.msd) ?? null;
   const dan = (preferDt && entry?.danDt ? entry.danDt : entry?.dan) ?? null;
-  const msdOverall = Number(msd?.Overall ?? NaN);
+  // Same LN identity guard as the /maps modal: the DT pair answers for itself,
+  // the 1.0x pair follows the stored chart verdict.
+  const lnIdentity = preferDt && entry?.msdDt
+    ? dan == null || dan.family === "ln"
+    : entry?.primaryPattern === "ln" || entry?.dan?.family === "ln";
+  const msdOverall = msd ? msdHeadline(msd, entry?.keyCount ?? 0, lnIdentity) : NaN;
   // Same readout as the /maps modal: the sub-1 values the 6K/7K calc engine
-  // emits for skillsets it does not rate are noise, not data.
+  // emits for skillsets it does not rate are noise, not data. LN joins the
+  // candidates on a 4K LN chart, where it can be the headline.
   const msdTopSkillset = msd
-    ? MSD_SKILLSETS
+    ? (entry?.keyCount === 4 && lnIdentity && Number(msd.LN ?? 0) > 0 ? [...MSD_SKILLSETS, "LN"] : MSD_SKILLSETS)
         .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
         .filter(({ value }) => value >= 1)
         .sort((a, b) => b.value - a.value)

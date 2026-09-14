@@ -1,3 +1,4 @@
+import { LN_SKILL_VERSION } from "../dan/ln-skill.js";
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
@@ -12,8 +13,11 @@ import {
   SSR_CALC_GOAL_CAP,
   SSR_EXTRAPOLATION_BASE_GOAL,
   aggregateSsrs,
+  patternRatingCurrent,
+  daRatingOdFloorFor,
   daWidensHitWindows,
   difficultyAdjustOd,
+  scoreInvertsChart,
   getPlayRate,
   ssrGoalForScore,
   type PlayerSkillBreakdown,
@@ -139,6 +143,8 @@ export interface BaselineCurves {
 // has a stored exact rating, so the fold is a plain table scan, no wasm. The
 // approximate baseline stays for the farm helper's cohort vectors and as the
 // serving fallback until the first finalize writes this blob.
+// Keep the existing blob so other keymodes retain their curves during the
+// 4K-only migration. The LN stamp below invalidates only the changed axes.
 export const EXACT_SKILL_CURVES_META_KEY = "skill_exact_curves:v1";
 /* Shape of the stored blob, separate from the meta key on purpose: bumping the
    KEY would make the old curves unreadable and leave every profile percentile
@@ -149,7 +155,8 @@ export const EXACT_SKILL_CURVES_META_KEY = "skill_exact_curves:v1";
    (`tail`), so the top of the population gets a rank-true percentile instead
    of the 200-point curve's 0.5% floor. 4: 5K and 8K-18K publish the MSD
    skillset axes (percentileAxes), which the v3 fold never sampled for them. */
-export const EXACT_SKILL_CURVES_FORMAT = 4;
+// 5: independent 4K LN curves carry their own model stamp.
+export const EXACT_SKILL_CURVES_FORMAT = 5;
 
 // Per-(keymode, axis) curve entry. `median` is the raw population median the
 // display shrink uses; curve values are already shrunk with it, so subject
@@ -178,6 +185,7 @@ interface ExactAxisCurveEntry extends AxisCurveEntry {
 }
 
 export interface ExactSkillCurves {
+  lnSkillVersion?: number;
   computedAt: string;
   playerSkillsVersion: number;
   // Absent on blobs written before the field existed, which is exactly how a
@@ -270,6 +278,9 @@ export function computeApproxRatings(
     }
     if (overall > 0) {
       for (const pattern of play.patterns) {
+        // The approximate pipeline has no LN strain/SSR input. Do not turn
+        // Overall into an apparent fallback for the independent LN axis.
+        if (!patternRatingCurrent({ keyCount: entry.keyCount }, pattern)) continue;
         const list = bucket.patternOveralls.get(pattern);
         if (list) list.push(overall);
         else bucket.patternOveralls.set(pattern, [overall]);
@@ -456,12 +467,13 @@ function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEnt
   const rate = getPlayRate(score.mods);
   if (rate == null) return null;
   // Same DA exclusion as the exact pipeline: a play whose hit windows were
-  // widened below the chart's own OD is not a play of this chart, and must
-  // not set the bar the rest of the population is measured against. The
-  // baseline never opens the .osu, so a chart with no OD on its row falls to
-  // the dan-floor rule alone; leaving such a play out of a population
-  // statistic is the safe side of that ambiguity.
-  if (daWidensHitWindows(difficultyAdjustOd(score.mods), entry.od)) return null;
+  // widened below the chart's own OD and under its ladder's floor is not a
+  // play of this chart, and must not set the bar the rest of the population
+  // is measured against. The baseline never opens the .osu, so a chart with
+  // no OD on its row falls to the dan-floor rule alone; leaving such a play
+  // out of a population statistic is the safe side of that ambiguity.
+  const daFloor = daRatingOdFloorFor(entry.keyCount, scoreInvertsChart(score.mods), { lnRatio: entry.lnRatio });
+  if (daWidensHitWindows(difficultyAdjustOd(score.mods), entry.od, daFloor)) return null;
   // Same sub-floor exclusion as the exact pipeline: a play the calc would
   // rate at its 0.8 goal floor does not count toward the baseline either.
   const goal = ssrGoalForScore(score, entry.lnRatio, entry.od);
@@ -611,6 +623,7 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
           push(axis, Number(mode.ratings?.[axis]), analyzedPlays);
         }
         for (const entry of mode.patterns ?? []) {
+          if (!patternRatingCurrent(mode, entry.id)) continue;
           const plays = Number(entry?.plays);
           if (!(plays >= BASELINE_PATTERN_MIN_PLAYS)) continue;
           push(`pattern:${entry.id}`, Number(entry?.rating), plays);
@@ -645,6 +658,7 @@ export async function buildExactSkillCurves(db: Db): Promise<ExactSkillCurves> {
   return {
     computedAt: nowIso(),
     playerSkillsVersion: PLAYER_SKILLS_VERSION,
+    lnSkillVersion: LN_SKILL_VERSION,
     format: EXACT_SKILL_CURVES_FORMAT,
     minPlays: BASELINE_MIN_PLAYS,
     curves,
@@ -872,8 +886,21 @@ export async function readBaselineCurves(db: Db): Promise<BaselineCurves | null>
   if (cached && Date.now() - cached.readAt < CURVES_CACHE_TTL_MS) return cached.curves;
   const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [SKILL_BASELINE_CURVES_META_KEY])).rows[0];
   const curves = parseJson<BaselineCurves | null>(String(row?.value_json ?? ""), null);
+  omitLegacyLnCurves(curves);
   curvesCacheByDb.set(db, { readAt: Date.now(), curves });
   return curves;
+}
+
+// Legacy curves remain valid for every native MSD and non-4K pattern axis.
+// Only the independent 4K LN axes need a fresh, model-matched population.
+function omitLegacyLnCurves(curves: { curves: Record<string, AxisCurveMap> } | null, lnSkillVersion?: number): void {
+  const axes = curves?.curves["4"];
+  if (!axes) return;
+  for (const axis of Object.keys(axes)) {
+    if (axis.startsWith("pattern:") && !patternRatingCurrent({ keyCount: 4, lnSkillVersion }, axis.slice(8))) {
+      delete axes[axis];
+    }
+  }
 }
 
 const exactCurvesCacheByDb = new WeakMap<Db, { readAt: number; curves: ExactSkillCurves | null }>();
@@ -883,6 +910,7 @@ export async function readExactSkillCurves(db: Db): Promise<ExactSkillCurves | n
   if (cached && Date.now() - cached.readAt < CURVES_CACHE_TTL_MS) return cached.curves;
   const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [EXACT_SKILL_CURVES_META_KEY])).rows[0];
   const curves = parseJson<ExactSkillCurves | null>(String(row?.value_json ?? ""), null);
+  omitLegacyLnCurves(curves, curves?.lnSkillVersion);
   exactCurvesCacheByDb.set(db, { readAt: Date.now(), curves });
   return curves;
 }
@@ -967,6 +995,7 @@ export function shrinkMode(mode: PublicPlayerSkillMode, axisCurves: AxisCurveMap
     ratings[axis] = shrinkRating(Number(value), mode.analyzedPlays, curveMedian(axisCurves, axis));
   }
   const patterns = (mode.patterns ?? [])
+    .filter(entry => patternRatingCurrent(mode, entry.id))
     .map((entry) => ({ ...entry, rating: shrinkRating(entry.rating, entry.plays, curveMedian(axisCurves, `pattern:${entry.id}`)) }))
     .sort((a, b) => b.rating - a.rating);
   return { ...mode, ratings, patterns };

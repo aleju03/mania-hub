@@ -2,6 +2,8 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
+  Bell,
+  BellOff,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -374,6 +376,9 @@ function AdminThreadMessage({
             {message.editedAt ? (
               <span className="text-[9.5px] text-osu-f1" title={`Edited ${formatWhen(message.editedAt)}`}>edited</span>
             ) : null}
+            {message.notify ? (
+              <Bell className="h-2.5 w-2.5 text-osu-f1" aria-label="Sent with a notification" />
+            ) : null}
             {editable && !editing ? (
               <button
                 type="button"
@@ -495,6 +500,7 @@ function Editor({
   tone,
   busy,
   attachments = false,
+  canNotify = false,
   onSave,
   onCancel,
 }: {
@@ -504,17 +510,23 @@ function Editor({
   tone: "note" | "reply";
   busy: boolean;
   attachments?: boolean;
-  onSave: (next: string, files: File[]) => void;
+  canNotify?: boolean;
+  onSave: (next: string, files: File[], notify: boolean) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(value);
+  /* Off by default. Most answers are read the next time the reporter opens
+     their own thread, and a badge on someone's avatar is an interruption worth
+     choosing. An anonymous report has nobody to tell, so the switch is not
+     offered there at all. */
+  const [notify, setNotify] = useState(false);
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const images = useBugReportScreenshots();
   useEffect(() => { ref.current?.focus(); }, []);
 
   const files = attachments ? images.files : [];
-  const save = () => onSave(draft, files);
+  const save = () => onSave(draft, files, canNotify && notify);
 
   return (
     <div className="space-y-2">
@@ -602,6 +614,19 @@ function Editor({
             />
           </>
         ) : null}
+        {canNotify ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setNotify((value) => !value)}
+            aria-pressed={notify}
+            title={notify ? "The reporter gets a badge on their avatar" : "Send this quietly"}
+            className={`${ACTION_CLASS} ${notify ? "bg-osu-pink/15 text-osu-pink-light hover:bg-osu-pink/20" : ""}`}
+          >
+            {notify ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+            {notify ? "Notify" : "Quiet"}
+          </button>
+        ) : null}
         <button type="button" onClick={onCancel} className={ACTION_CLASS}>Cancel</button>
         {images.error ? <span className="text-[11px] text-osu-pink-light">{images.error}</span> : null}
       </div>
@@ -627,7 +652,7 @@ function ReportCard({
   busy: boolean;
   onStatus: (status: BugReportStatus) => void;
   onNote: (note: string) => void;
-  onReply: (reply: string, files: File[]) => void;
+  onReply: (reply: string, files: File[], notify: boolean) => void;
   onEditMessage: (messageId: string, body: string) => void;
   onPromote: () => void;
   onDelete: () => void;
@@ -735,7 +760,8 @@ function ReportCard({
             tone={editing}
             busy={busy}
             attachments={editing === "reply"}
-            onSave={(next, files) => (editing === "reply" ? onReply(next, files) : onNote(next))}
+            canNotify={editing === "reply" && report.userId != null}
+            onSave={(next, files, notify) => (editing === "reply" ? onReply(next, files, notify) : onNote(next))}
             onCancel={() => setEditing(null)}
           />
         </div>
@@ -905,12 +931,12 @@ function BugReportsAdminPage() {
   /* The reply is stored before its images are, so a failed upload is a line on
      the board rather than a lost answer. The warning is set after the reload
      act() runs, which is what clears the error line. */
-  const sendReply = useCallback(async (id: string, body: string, files: File[]) => {
+  const sendReply = useCallback(async (id: string, body: string, files: File[], notify: boolean) => {
     let warning: string | null = null;
     await act(id, async () => {
       const displayed = reports?.find((report) => report.id === id);
       const result = await replyToBugReportAsAdmin({ data: {
-        id, body, screenshotCount: files.length,
+        id, body, screenshotCount: files.length, notify,
         reporterMessageCount: displayed ? bugReportSeenReceipt(displayed).reporterMessageCount : undefined,
       } });
       if (!files.length) return;
@@ -1040,7 +1066,7 @@ function BugReportsAdminPage() {
                 unreadFading={chipsFading}
                 onStatus={(next) => void act(report.id, () => updateBugReport({ data: { id: report.id, status: next } }))}
                 onNote={(note) => void act(report.id, () => updateBugReport({ data: { id: report.id, adminNote: note } }))}
-                onReply={(body, files) => void sendReply(report.id, body, files)}
+                onReply={(body, files, notify) => void sendReply(report.id, body, files, notify)}
                 onEditMessage={(messageId, body) => void act(report.id, () => (
                   editBugReportMessageAsAdmin({ data: { id: report.id, messageId, body } })
                 ))}

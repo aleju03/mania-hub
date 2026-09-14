@@ -12,6 +12,10 @@ import { getMapCollection, getMapCollections, rebuildMapCollections } from "../s
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
+import { analyzeLnStructure4K, summarizeLnStructure4K } from "../src/dan/ln-analysis/index.js";
+import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
+import { parseMapSearchQuery } from "../src/http/snapshot-queries.js";
+import { LN_SEARCH_EVIDENCE_VERSION } from "../src/dan/ln-analysis/search-evidence.js";
 
 let dir = "";
 
@@ -41,6 +45,8 @@ interface SeedMap {
   version?: string;
   playcount?: number;
   lnCount?: number;
+  /** Total objects (taps plus holds); count_circles is derived from it. */
+  noteCount?: number;
   totalLength?: number;
   rankedDate?: string;
   mode?: string;
@@ -86,6 +92,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
         playcount: map.playcount ?? 1000,
         passcount: 100,
         count_sliders: map.lnCount ?? 50,
+        count_circles: Math.max(0, (map.noteCount ?? 500) - (map.lnCount ?? 50)),
         total_length: map.totalLength ?? 120,
         ...(map.od != null ? { accuracy: map.od } : {}),
         status: map.status ?? "ranked",
@@ -112,6 +119,59 @@ async function buildAll(db: Db): Promise<void> {
 }
 
 describe("map search index", () => {
+  it("indexes recurring shields only on eligible 4K LN charts, for filters and detail chips", async () => {
+    const db = await makeDb();
+    const structure = summarizeLnStructure4K(analyzeLnStructure4K(Array.from({ length: 24 }, (_, i) => [
+      { column: 0, time: 1000 + i * 600, endTime: 1000 + i * 600, isHold: false },
+      { column: 0, time: 1080 + i * 600, endTime: 1500 + i * 600, isHold: true },
+    ]).flat(), { scoring: { od: 8 } }));
+    expect(structure.detections.some(d => d.tag === "shield")).toBe(true);
+    for (const id of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      await seedMap(db, { beatmapId: id, beatmapsetId: id * 10, cs: id === 3 ? 7 : 4,
+        title: "Shields", primary: "stream", patterns: { stream: 1 } });
+      await seedAnalysis(db, id, { lnRatio: 0.5, msdValues: { Overall: 10, Stream: 10 } });
+      const value = id === 2 ? undefined : id === 4 ? { ...structure, valid: false }
+        : id === 5 ? { ...structure, playbackRate: 1.5 } : id === 6 ? { ...structure, version: 0 } : structure;
+      await exec(db, "update beatmap_chart_analysis set msd_json = ? where beatmap_id = ?",
+        [json({ values: { Overall: 10, Stream: 10 }, lnSkill: { structure: value,
+          eligible: id !== 7, version: id === 8 ? LN_SKILL_VERSION - 1 : LN_SKILL_VERSION } }), id]);
+    }
+    await buildAll(db);
+    const query = parseMapSearchQuery(new URLSearchParams("patterns=lnshield&patternsExclude=lnreverseshield"));
+    expect(query.patterns).toEqual(["lnshield"]);
+    expect(query.patternsExclude).toEqual(["lnreverseshield"]);
+    const included = await getMapSearchPage(db, query);
+    expect(included.items.map(item => item.beatmapId)).toEqual([1]);
+    expect(included.items[0].primaryPattern).toBe("ln");
+    expect(included.items[0].patternTags).toContain("lnshield");
+    expect(included.items[0].diffs[0].patternTags).toContain("lnshield");
+    expect((await getMapSearchSetEntry(db, 1))?.patternTags).toContain("lnshield");
+    const excluded = await getMapSearchPage(db, { ...baseQuery(), patternsExclude: ["lnshield"] });
+    expect(excluded.items.map(item => item.beatmapId).sort()).toEqual([2, 3, 4, 5, 6, 7, 8]);
+    // Changing endpoints/detections must remove the old indexed tag.
+    await exec(db, "update beatmap_chart_analysis set msd_json = ? where beatmap_id = 1",
+      [json({ values: { Overall: 10 }, lnSkill: { version: LN_SKILL_VERSION, eligible: true,
+        structure: { ...structure, searchEvidence: { version: LN_SEARCH_EVIDENCE_VERSION, tags: {} } } } })]);
+    await buildAll(db);
+    expect((await getMapSearchPage(db, { ...baseQuery(), patterns: ["lnshield"] })).items).toEqual([]);
+  });
+
+  it("filters by the hold share of the chart's objects", async () => {
+    const db = await makeDb();
+    for (const [id, lnCount] of [[1, 10], [2, 50], [3, 90]] as const) {
+      await seedMap(db, { beatmapId: id, beatmapsetId: id * 10, lnCount, noteCount: 100, title: "Share", primary: "ln", patterns: { ln: 1 } });
+    }
+    await buildAll(db);
+    const query = parseMapSearchQuery(new URLSearchParams("lnMin=40&lnMax=60"));
+    expect([query.lnMin, query.lnMax]).toEqual([40, 60]);
+    expect((await getMapSearchPage(db, query)).items.map((item) => item.beatmapId)).toEqual([2]);
+    expect((await getMapSearchPage(db, { ...baseQuery(), lnMin: 40 })).items.map((item) => item.beatmapId).sort()).toEqual([2, 3]);
+    expect((await getMapSearchPage(db, { ...baseQuery(), lnMax: 40 })).items.map((item) => item.beatmapId)).toEqual([1]);
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items.find((item) => item.beatmapId === 3)?.lnShare).toBeCloseTo(0.9);
+    db.close();
+  });
+
   it("exposes OD from enriched metadata on bulk and detail entries", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, od: 7.3, primary: "stream", patterns: { stream: 1 } });
@@ -804,6 +864,8 @@ function baseQuery(): MapSearchQuery {
     lenMax: null,
     danMin: null,
     danMax: null,
+    lnMin: null,
+    lnMax: null,
     country: null,
     sort: "playcount",
     dir: "desc",
@@ -1229,9 +1291,9 @@ describe("map search primary derivation", () => {
 describe("map search LN-adjusted MSD", () => {
   it("carries the blended msdLn on bulk rows and diffs, so detail surfaces never flicker", async () => {
     const db = await makeDb();
-    // Hold-bearing 4K chart: the sweep stored the raw tail-aware calc, the
-    // entry must carry the keymode-blended (0.1 for 4K) display values.
-    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    // Hold-bearing 7K chart: the sweep stored the raw tail-aware calc, the
+    // entry must carry the keymode-blended (0.3 for 7K) display values.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "stream", patterns: { stream: 1 } });
     await seedAnalysis(db, 1, {
       lnRatio: 0.3,
       msdValues: { Overall: 20, Stream: 18 },
@@ -1248,24 +1310,30 @@ describe("map search LN-adjusted MSD", () => {
       msdValues: { Overall: 17, Technical: 17 },
       msdLnValues: { Overall: 17, Technical: 17 },
     });
+    // A stale 4K tail artifact never changes the native baseline.
+    await seedMap(db, { beatmapId: 4, beatmapsetId: 40, primary: "ln", patterns: { ln: 1 } });
+    await seedAnalysis(db, 4, { lnRatio: 0.8, msdValues: { Overall: 20, LN: 14 }, msdLnValues: { Overall: 40, LN: 100 } });
     await buildAll(db);
 
     const all = await getMapSearchPage(db, baseQuery());
     const byId = new Map(all.items.map((item) => [item.beatmapId, item]));
-    expect(byId.get(1)?.msdLn?.Overall).toBeCloseTo(20.4, 5);
-    expect(byId.get(1)?.msdLn?.Stream).toBeCloseTo(18.4, 5);
-    expect(byId.get(1)?.diffs[0]?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+    expect(byId.get(1)?.msdLn?.Overall).toBeCloseTo(21.2, 5);
+    expect(byId.get(1)?.msdLn?.Stream).toBeCloseTo(19.2, 5);
+    expect(byId.get(1)?.diffs[0]?.msdLn?.Overall).toBeCloseTo(21.2, 5);
     expect(byId.get(2)?.msdLn).toBeNull();
     expect(byId.get(3)?.msdLn).toBeNull();
+    expect(byId.get(4)?.msdLn).toBeNull();
+    expect(byId.get(4)?.msd?.Overall).toBe(20);
+    expect(byId.get(4)?.msd?.LN).toBe(14);
 
     // The single-map detail entry agrees with the bulk row.
     const detail = await getMapSearchSetEntry(db, 1);
-    expect(detail?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+    expect(detail?.msdLn?.Overall).toBeCloseTo(21.2, 5);
   });
 
   it("serves a sweep-updated tail calc on the detail entry before the index copy refreshes", async () => {
     const db = await makeDb();
-    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "stream", patterns: { stream: 1 } });
     await seedAnalysis(db, 1, { lnRatio: 0.3, msdValues: { Overall: 20, Stream: 18 } });
     await buildAll(db);
     expect((await getMapSearchSetEntry(db, 1))?.msdLn).toBeNull();
@@ -1276,7 +1344,7 @@ describe("map search LN-adjusted MSD", () => {
       "update beatmap_chart_analysis set msd_ln_json = json(?) where beatmap_id = 1",
       [json({ etternaVersion: "0.72.3", values: { Overall: 24, Stream: 22 } })],
     );
-    expect((await getMapSearchSetEntry(db, 1))?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+    expect((await getMapSearchSetEntry(db, 1))?.msdLn?.Overall).toBeCloseTo(21.2, 5);
   });
 });
 

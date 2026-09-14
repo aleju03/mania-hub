@@ -53,10 +53,10 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
           dan: side && clear ? {
             chartRating: clear.chartDan, chartLabel: clear.chartDanLabel,
             creditedRating: clear.creditedDan, creditedLabel: clear.creditedDanLabel,
-            accuracy: clear.clearAccuracy, family: side,
+            accuracy: clear.clearAccuracy, currency: clear.currency, family: side,
           } : side && rejected ? {
             chartRating: rejected.chartDan, chartLabel: rejected.chartDanLabel,
-            accuracy: rejected.clearAccuracy, family: rejected.side ?? side,
+            accuracy: rejected.clearAccuracy, currency: rejected.currency, family: rejected.side ?? side,
             rejection: <DanRejectionExplanation rejected={rejected} />,
           } : undefined,
         },

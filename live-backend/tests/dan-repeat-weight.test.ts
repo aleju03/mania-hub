@@ -10,7 +10,7 @@ function clear(id: number, creditedDan: number, rate = 1): DanClearEvidence {
   return {
     play: { identity: `${id}:${rate}`, beatmapId: id, rate, keyCount: 4, goal: 0.93, pp: 0,
       values: { Overall: 20, Chordjack: 20 }, patterns: [] },
-    side: "rc", chartDan: creditedDan, chartDanLabel: null, creditedDan, accuracy: 0.96, bar: 0.96,
+    side: "rc", chartDan: creditedDan, chartDanLabel: null, creditedDan, accuracy: 0.96, bar: 0.96, currency: "stable",
   };
 }
 

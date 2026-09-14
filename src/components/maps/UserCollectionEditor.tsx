@@ -76,6 +76,8 @@ function emptySearchParams(query: string): LiveMapSearchParams {
     lenMax: null,
     danMin: null,
     danMax: null,
+    lnMin: null,
+    lnMax: null,
     country: null,
     sort: "playcount",
     dir: "desc",

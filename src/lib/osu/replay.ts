@@ -16,6 +16,7 @@ import {
   type CommunityBeatmapSubmitResult,
 } from "../community-beatmap-store";
 import type { ReplayEndpointKind } from "../r2-cache";
+import { REPLAY_FILE_MISSING_ERROR } from "../replay-score-availability";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../types";
 import {
   edgeCache,
@@ -102,6 +103,7 @@ async function downloadReplay(
     ? [preferredEndpointKind, preferredEndpointKind === "legacy" ? "modern" : "legacy"]
     : getScoreEndpointOrder(data.scoreId);
   let firstError: unknown = null;
+  let allNotFound = true;
 
   for (const endpointKind of endpointKinds) {
     try {
@@ -114,8 +116,14 @@ async function downloadReplay(
       };
     } catch (error) {
       firstError ??= error;
+      if (!(error instanceof Error && error.message.includes("] 404 "))) allNotFound = false;
     }
   }
+
+  // A 404 from both endpoints means osu! has no file for this score even when
+  // the score payload says has_replay; that is a known osu!-side state, not
+  // an outage, so it gets its own error for the viewer to name.
+  if (allNotFound && firstError) throw new Error(REPLAY_FILE_MISSING_ERROR);
 
   // The first endpoint tried is the one expected to match the score id, so
   // its error is the informative one; the fallback usually just 404s.

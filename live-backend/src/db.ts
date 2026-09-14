@@ -2955,6 +2955,16 @@ async function migrateBugReports(db: Db): Promise<void> {
     await db.execute("alter table bug_report_messages add column upload_token text");
     await db.execute("alter table bug_report_messages add column token_expires_at integer");
   }
+  // The mirror of admin_seen_at, pointing the other way: `notify` marks the
+  // owner messages worth interrupting the reporter for, and reporter_seen_at
+  // is their acknowledgement of them. Both default to the quiet value, so
+  // every message written before this shipped raises nothing.
+  if (!messageColumns.includes("notify")) {
+    await db.execute("alter table bug_report_messages add column notify integer not null default 0");
+  }
+  if (!reportColumns.includes("reporter_seen_at")) {
+    await db.execute("alter table bug_reports add column reporter_seen_at integer");
+  }
   await db.execute(`
     create unique index if not exists idx_bug_report_messages_legacy
       on bug_report_messages(report_id) where legacy_reply = 1
@@ -3393,6 +3403,11 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
     // the map modal can show the real tempo next to a gimmick nominal bpm.
     // Backfilled by the r11 BUILD_REVISION re-upsert.
     await db.execute("alter table map_search_index add column note_bpm real");
+  }
+  if (!mapSearchColumns.has("ln_share")) {
+    // Hold share of the chart's objects from the osu! object counts, for the
+    // LN share range filter. Backfilled by the r17 BUILD_REVISION re-upsert.
+    await db.execute("alter table map_search_index add column ln_share real");
   }
   if (!mapSearchColumns.has("msd_ln_json")) {
     // Raw tail-aware MSD calc run (same semantics as

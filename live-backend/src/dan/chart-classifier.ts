@@ -8,7 +8,8 @@ import { analyzeManiaPatterns } from "./dan-estimator/patterns.js";
 import type { ManiaPatternAnalysis } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
 import { getInputRate, parseDan } from "./dan-estimator/labels.js";
-import { LN_LADDER_TOP, estimateLnDan, lnPrimaryMinRatioFor, parseLnDan } from "./dan-estimator/ln.js";
+import { LN_LADDER_TOP, estimateLnDan, parseLnDan } from "./dan-estimator/ln.js";
+import { LN_EFFECTIVE_KEY_COUNTS, analyzeEffectiveLn, chartIsLn } from "./dan-estimator/ln-effective.js";
 import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
@@ -60,7 +61,11 @@ export interface ChartClassification {
   keyCount: number;
   /** True when at least one dan verdict exists (4/6/7K charts). */
   supported: boolean;
+  /** Hold share of the chart (LeoBlack's reading when it ran, else the parser's). */
   lnRatio: number;
+  /** Share of the chart that demands a release at this rate (dan-estimator/ln-effective.ts).
+   * The LN identity input for the keymodes in LN_EFFECTIVE_KEY_COUNTS. */
+  lnEffectiveRatio?: number;
   sunnySr: number | null;
   /** Raw LeoBlack Mixed verdict text ("RC || LN" for hybrids), if it ran. */
   verdictText: string | null;
@@ -89,7 +94,7 @@ export interface ChartClassification {
 export interface ClassifyChartInput extends DanEstimateInput {
   /** Player-rating policy only. Ordinary chart estimates always rate all notes. */
   adjustVibro?: boolean;
-  /** Which half becomes the primary verdict; "auto" picks LN at the keymode's identity line (lnPrimaryMinRatioFor). */
+  /** Which half becomes the primary verdict; "auto" uses chartIsLn's keymode-aware identity gates. */
   preferFamily?: "rc" | "ln" | "auto";
   /**
    * Companella verdict for the RC half, when the caller has already run the
@@ -518,6 +523,11 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   const verdictUsable = verdictText != null && verdictText.length > 0
     && !/^Invalid\b/i.test(verdictText) && !/^Unknown\b/i.test(verdictText);
   const lnRatio = mixed && Number.isFinite(Number(mixed.lnRatio)) ? Number(mixed.lnRatio) : features.metrics.holdRatio;
+  const lnEffectiveRatio = LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
+    ? analyzeEffectiveLn(map.notes, { rate, od: map.od }).effectiveLnRatio : undefined;
+  // What "this chart is LN" reads: hold share plus the effective gate on 4K,
+  // hold share alone elsewhere (chartIsLn).
+  const chartReadsLn = chartIsLn(map.keyCount, { lnRatio, lnEffectiveRatio }) === true;
   const sunnySr = mixed && Number.isFinite(mixed.star) ? mixed.star : null;
 
   const rcConfidence = vibro ? 0.35 : 0.72;
@@ -601,7 +611,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     ? ln ?? rc
     : prefer === "rc"
       ? rc ?? ln
-      : (lnRatio >= lnPrimaryMinRatioFor(map.keyCount) && ln ? ln : rc ?? ln);
+      : (chartReadsLn && ln ? ln : rc ?? ln);
 
   const estimate: DanEstimate | null = primary
     ? {
@@ -622,6 +632,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     keyCount: map.keyCount,
     supported: primary != null,
     lnRatio,
+    ...(lnEffectiveRatio != null ? { lnEffectiveRatio } : {}),
     sunnySr,
     verdictText,
     rc,

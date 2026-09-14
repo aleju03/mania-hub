@@ -174,6 +174,11 @@ msgstr "{0, plural, other {# 名成员}}"
 msgid "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
 msgstr "{0, plural, other {还有 # 张图被隐藏，因为它们对你来说加不到 1pp}}"
 
+#. placeholder {0}: replyAlert.count
+#: src/components/layout/Nav.tsx
+msgid "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
+msgstr "{0, plural, other {你的问题反馈有 # 条新回复}}"
+
 #. placeholder {0}: playerScores.length - replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# other score found, but no replay is available} other {# other scores found, but no replay is available}}"
@@ -917,21 +922,25 @@ msgstr "相差 {0}pp"
 msgid "{acc}% {speed} on {map}"
 msgstr "在 {map} 上以 {speed} 打出 {acc}%"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{actions} same-hand actions"
+#~ msgstr "{actions} 次同手操作"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "{ALBUM_SEASON} series"
 msgstr "{ALBUM_SEASON} 系列"
 
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
-#: src/components/maps/StarRangePill.tsx
 msgid "{ariaLabel} maximum"
 msgstr "{ariaLabel} 最大值"
 
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
-#: src/components/maps/StarRangePill.tsx
 msgid "{ariaLabel} minimum"
 msgstr "{ariaLabel} 最小值"
 
-#: src/components/maps/StarRangePill.tsx
+#: src/components/maps/RangePill.tsx
 msgid "{ariaLabel} range"
 msgstr "{ariaLabel}区间"
 
@@ -1020,6 +1029,10 @@ msgstr "{countryName} mania 未评分成绩"
 msgid "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgstr "{courseName} 上 {courseAccuracy}，低于其 {courseBar}。"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{coverage}% of objects"
+#~ msgstr "覆盖 {coverage}% 的物件"
+
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, other {# 天}}"
@@ -1084,6 +1097,10 @@ msgstr "还差 {gap}pp"
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
 msgstr "{have} / {want} 个成绩"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{headRate}/s · {duration}ms median hold"
+#~ msgstr "{headRate}/秒 · 长键时长中位数 {duration}ms"
 
 #: src/routes/farm-helper.tsx
 msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
@@ -1158,6 +1175,10 @@ msgstr "{label}：已追踪的 {population} 名 {keyCount}K 主玩家中占 {sha
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "{label}'s history"
 #~ msgstr "{label} 的历程"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{lanes} lanes · {gap}ms gaps"
+#~ msgstr "{lanes} 列 · 间隔 {gap}ms"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{left} to go at {at}pp+"
@@ -1373,6 +1394,10 @@ msgstr "第 {rangeStart}–{pageEnd} 张 / 共 {totalText} 张卡片"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "第 {rangeStart}–{pageEnd} 名 / 共 {totalText} 名玩家"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{releases} release groups"
+#~ msgstr "{releases} 组松键"
 
 #: src/routes/farm-helper.tsx
 msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
@@ -1864,6 +1889,10 @@ msgid "4K"
 msgstr "4K"
 
 #: src/routes/dan-estimates.tsx
+msgid "4K jack"
+msgstr "4K 叠键"
+
+#: src/routes/dan-estimates.tsx
 msgid "4K LN"
 msgstr "4K LN"
 
@@ -2017,8 +2046,8 @@ msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, s
 msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低于 {0}pp 的成绩拿不到，该键数只统计到能看到的部分。"
 
 #: src/routes/dan-estimates.tsx
-msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
-msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。7K 的线改为 37.5%，因为它的作图文化会产出社区当作 LN 来看的混合谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
+#~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+#~ msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。7K 的线改为 37.5%，因为它的作图文化会产出社区当作 LN 来看的混合谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -3141,8 +3170,8 @@ msgstr "低于 92%"
 #~ msgstr "低于 93%"
 
 #: src/routes/dan-estimates.tsx
-msgid "below 94.5%"
-msgstr "低于 94.5%"
+#~ msgid "below 94.5%"
+#~ msgstr "低于 94.5%"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "below 94%"
@@ -3697,8 +3726,8 @@ msgstr "CJ"
 msgid "clear"
 msgstr "清除"
 
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
-#: src/components/maps/StarRangePill.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/maps.tsx
@@ -3815,10 +3844,9 @@ msgstr "再点一次以放弃修改"
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的区域。"
 
-#: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
-msgid "Click here to read how dans are estimated"
-msgstr "点击这里了解段位是如何估算的"
+#~ msgid "Click here to read how dans are estimated"
+#~ msgstr "点击这里了解段位是如何估算的"
 
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
@@ -4803,6 +4831,7 @@ msgstr "段位估计：{0}（{1}）"
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 #~ msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的段位通过记录。请当作大致排序看待，而不是正式排名。"
 
+#: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "Dan plays"
 msgstr "段位成绩"
@@ -5617,9 +5646,21 @@ msgstr "专属"
 msgid "Exit fullscreen"
 msgstr "退出全屏"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Experimental"
+#~ msgstr "实验性"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+#~ msgstr "Mania Hub 实验性 LN 估算：松键时机、保持按键时的手指协调，以及松键后再次按键的衔接。与 MinaCalc 并行的独立模型。"
+
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
 msgstr "浏览全球谱面"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Exposed Releases"
+#~ msgstr "独立松键"
 
 #: src/routes/dan-estimates.tsx
 msgid "Extra: clearing a real course overrides all of it"
@@ -6452,6 +6493,10 @@ msgstr "希伯来语"
 msgid "Height of the exported image, in pixels"
 msgstr "导出图片的高度，单位像素"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "Held-chord Coordination"
+#~ msgstr "多键长按协调"
+
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
@@ -6607,8 +6652,16 @@ msgid "hitsounds and interface samples"
 msgstr "打击音效与界面音效"
 
 #: src/routes/dan-estimates.tsx
-msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
-msgstr "达到准确率通过线，就按谱面段位满额计入。通过线以上的第一个百分点同样满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。低于通过线的成绩仍然可以按更低的段位计入。普通谱面的扣减从 96% 时的零平滑增加到 95% 时的约半级。差一点通过的成绩可能保留相同的段位标签，但对估算的贡献更低，仍不算完整通过。普通谱面计入到通过线以下 5 个百分点，此时扣减 1.5 级。6K/7K LN 谱面计入到 92%，扣减 1.75 级。4K LN 计入到 94.5%，扣减 1.55 级，其加成在 99.7% 停止上升："
+msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is normal there. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 91%, with the same penalty as regular charts at each point below the bar and 1.75 levels less at 91%, and its bonus stops rising at 99.7%:"
+msgstr "达到准确率通过线，就按谱面段位满额计入。通过线以上的第一个百分点同样满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。4K 叠键谱面的加成减半，因为在那里极高的准确率很常见。低于通过线的成绩仍然可以按更低的段位计入。普通谱面的扣减从 96% 时的零平滑增加到 95% 时的约半级。差一点通过的成绩可能保留相同的段位标签，但对估算的贡献更低，仍不算完整通过。普通谱面计入到通过线以下 5 个百分点，此时扣减 1.5 级。6K/7K LN 谱面计入到 92%，扣减 1.75 级。4K LN 计入到 91%，通过线以下每个百分点的扣减与普通谱面相同，91% 时扣减 1.75 级，其加成在 99.7% 停止上升："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is normal there. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+#~ msgstr "达到准确率通过线，就按谱面段位满额计入。通过线以上的第一个百分点同样满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。4K 叠键谱面的加成减半，因为在那里极高的准确率很常见。低于通过线的成绩仍然可以按更低的段位计入。普通谱面的扣减从 96% 时的零平滑增加到 95% 时的约半级。差一点通过的成绩可能保留相同的段位标签，但对估算的贡献更低，仍不算完整通过。普通谱面计入到通过线以下 5 个百分点，此时扣减 1.5 级。6K/7K LN 谱面计入到 92%，扣减 1.75 级。4K LN 计入到 94.5%，扣减 1.55 级，其加成在 99.7% 停止上升："
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+#~ msgstr "达到准确率通过线，就按谱面段位满额计入。通过线以上的第一个百分点同样满额计入。再往上才开始有加成，加成到 99% 之前都很小，之后上升更快。低于通过线的成绩仍然可以按更低的段位计入。普通谱面的扣减从 96% 时的零平滑增加到 95% 时的约半级。差一点通过的成绩可能保留相同的段位标签，但对估算的贡献更低，仍不算完整通过。普通谱面计入到通过线以下 5 个百分点，此时扣减 1.5 级。6K/7K LN 谱面计入到 92%，扣减 1.75 级。4K LN 计入到 94.5%，扣减 1.55 级，其加成在 99.7% 停止上升："
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
@@ -6659,6 +6712,11 @@ msgstr "卡片评分是怎么算的"
 #: src/routes/dan-estimates.tsx
 msgid "How dan levels are estimated"
 msgstr "段位等级是如何估算的"
+
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "How dans are estimated"
+msgstr "段位是如何估算的"
 
 #: src/routes/dan-estimates.tsx
 msgid "How every osu!mania chart gets a dan level, and how a player's dan is read from the charts they have passed."
@@ -6843,6 +6901,10 @@ msgstr "{hours} 小时后"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {minutes}m"
 msgstr "{minutes} 分钟后"
+
+#: src/routes/dan-estimates.tsx
+msgid "In 4K, hold notes must first make up at least 45% of the chart. The site then checks whether those holds still demand releases at the played rate; short tails that can be played like ordinary taps can make the chart regular, but this check can never promote a chart below the 45% hold line to LN. On 7K the hold line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. The maps pages and your skill rating use the same verdict."
+msgstr "在 4K 中，长条首先必须占谱面的至少 45%。然后本站会按实际游玩倍率检查这些长条是否仍需要控制松键；能像普通单点一样处理的短尾可能让谱面归为单点，但这项检查绝不会把长条占比低于 45% 的谱面提升为 LN。7K 的长条占比线则是 37.5%，因为其作图文化会产出社区视为 LN 的混合谱面。谱面页面和你的技术评分使用相同的判定结果。"
 
 #: src/routes/player/$username.tsx
 msgid "in 90d"
@@ -7263,6 +7325,10 @@ msgstr "打出一个价值 <0/> 的成绩"
 msgid "lane cover"
 msgstr "轨道遮罩"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Lanes"
+#~ msgstr "列"
+
 #: src/routes/communities.tsx
 msgid "language"
 msgstr "语言"
@@ -7541,6 +7607,7 @@ msgstr "实时更新延迟"
 msgid "Live updates on"
 msgstr "实时更新已开启"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
@@ -7556,6 +7623,10 @@ msgstr "实时更新已开启"
 msgid "LN"
 msgstr "LN"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Anchors"
+#~ msgstr "LN 锚定"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "LN body"
 msgstr "长条主体"
@@ -7568,6 +7639,18 @@ msgstr "长条主体颜色"
 msgid "LN Body color"
 msgstr "长条主体颜色"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Chordjacks"
+#~ msgstr "LN 和弦纵连"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Chordtrills"
+#~ msgstr "LN 和弦交互"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "LN Coordination"
+#~ msgstr "LN 协调"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "LN dan"
 msgstr "长条段位"
@@ -7576,6 +7659,10 @@ msgstr "长条段位"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "LN dan est."
 msgstr "长条段位估计"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "LN Density"
+#~ msgstr "LN 密度"
 
 #: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
@@ -7603,6 +7690,10 @@ msgstr "长条头颜色"
 msgid "LN Inverse"
 msgstr "LN 反键"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Jacks"
+#~ msgstr "LN 纵连"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "LN notes"
 msgstr "长条数"
@@ -7611,6 +7702,22 @@ msgstr "长条数"
 #: src/routes/player/$username.tsx
 msgid "LN Release"
 msgstr "LN 放手"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Rolls"
+#~ msgstr "LN 轮指"
+
+#: src/components/maps/PatternPicker.tsx
+msgid "LN share"
+msgstr "LN 占比"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Stairs"
+#~ msgstr "LN 楼梯"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "LN structure"
+#~ msgstr "LN 结构"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -7621,6 +7728,10 @@ msgstr "长键尾部"
 #: src/routes/player/$username.tsx
 msgid "LN Tech"
 msgstr "LN 技"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Trills"
+#~ msgstr "LN 交互"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -7998,6 +8109,11 @@ msgstr "管理员"
 #~ msgid "Mania Hub just updated"
 #~ msgstr "Mania Hub 刚刚更新了"
 
+#: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+msgstr "Mania Hub LN 估算：松键时机、保持按键时的手指协调，以及松键后再次按键的衔接。与 MinaCalc 并行的独立模型。"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -8315,8 +8431,20 @@ msgstr "单个成绩最低 pp"
 #. placeholder {1}: formatAccuracyAgainst(accuracy, bar)
 #. placeholder {1}: formatAccuracyAgainst(accuracy, minAccuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Minimum required for dan credit is {0}. This play got {1}."
-msgstr "计入段位所需的最低准确率为 {0}。这次成绩为 {1}。"
+#~ msgid "Minimum required for dan credit is {0}. This play got {1}."
+#~ msgstr "计入段位所需的最低准确率为 {0}。这次成绩为 {1}。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {floorText} {currency}. This play got {accText} {currency}, not the {displayedText} the score screen shows."
+msgstr "计入段位所需的最低准确率为 {floorText} {currency}。这次成绩为 {accText} {currency}，而不是成绩页显示的 {displayedText}。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {floorText} {currency}. This play got {accText} {currency}."
+msgstr "计入段位所需的最低准确率为 {floorText} {currency}。这次成绩为 {accText} {currency}。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {floorText}. This play got {accText}."
+msgstr "计入段位所需的最低准确率为 {floorText}。这次成绩为 {accText}。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
@@ -8545,6 +8673,7 @@ msgstr "MSD"
 msgid "MSD at {0}"
 msgstr "{0} 下的 MSD"
 
+#: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "MSD 成绩"
@@ -9953,6 +10082,10 @@ msgstr "osu! 没有响应，请一分钟后再试。"
 msgid "osu! Login"
 msgstr "osu! 登录"
 
+#: src/lib/replay-score-availability.ts
+msgid "osu! no longer has the replay file for this score."
+msgstr "osu! 已经没有这个成绩的回放文件了。"
+
 #: src/routes/player/$username.tsx
 msgid "osu! profile"
 msgstr "osu! 主页"
@@ -10216,6 +10349,10 @@ msgstr "谱型"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Pattern"
 msgstr "谱型"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Pattern evidence"
+#~ msgstr "键型证据"
 
 #: src/routes/player/$username.tsx
 msgid "Pattern mix"
@@ -10827,6 +10964,10 @@ msgstr "个人资料"
 msgid "Profile banner"
 msgstr "个人资料横幅"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Profile difficulty is not yet calibrated. Overlapping coverage is not additive."
+#~ msgstr "各维度的难度尚未校准。重叠的覆盖率不能相加。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Profile link"
@@ -11404,6 +11545,10 @@ msgstr "常规段位"
 msgid "Release"
 msgstr "放手"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "Release Chords"
+#~ msgstr "同时松键"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "立即刷新"
@@ -11650,6 +11795,10 @@ msgstr "再反馈一个问题"
 msgid "report this server"
 msgstr "举报这个服务器"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Representative intervals are shown for each detected pattern."
+#~ msgstr "这里展示每种已检测键型的代表性片段。"
+
 #: src/routes/maps.tsx
 msgid "Reroll"
 msgstr "重抽"
@@ -11738,6 +11887,10 @@ msgstr "全部揭晓"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "正在揭晓剩下的…"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Reverse Shields"
+#~ msgstr "反盾"
 
 #. placeholder {0}: status.cost
 #: src/components/packs/ForgePanel.tsx
@@ -12533,6 +12686,14 @@ msgstr "分享的回放"
 msgid "Sharing"
 msgstr "数据共享"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "Shield Streams"
+#~ msgstr "盾流"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Shields"
+#~ msgstr "正盾"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Shift = lock ratio"
 msgstr "Shift = 锁定比例"
@@ -12885,6 +13046,10 @@ msgstr "技能雷达图"
 msgid "Skill rating"
 msgstr "技能评分"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Skill rating recalculation pending"
+msgstr "技能评分等待重新计算"
+
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Skill ratings and dan update in a few minutes, if the play qualifies."
 #~ msgstr "如果该成绩符合条件，技能评分和段位会在几分钟内更新。"
@@ -13050,6 +13215,10 @@ msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能
 #~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
 #~ msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能。当速度与技之间的判断确实难分伯仲，或者一张叠谱长到耐力已占了一半的要求（这会同时归入叠和耐力）时，谱面就会落在两个技能里。大约每九张 4K 谱面就有一张是这种情况。这类通过会同时计入两个技能的等级，但只计入其中较强一方的四次通过门槛，因此它能拉高你已有的技能，却无法凭一己之力开启一个新技能。"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Some LN objects have invalid or overlapping timing. LN difficulty is unavailable."
+#~ msgstr "部分长键的时间无效或存在重叠，无法提供 LN 难度。"
+
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
@@ -13183,6 +13352,10 @@ msgstr "面板"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
 msgstr "面板左边缘，对应 skin.ini 的 ColumnStart。"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Staggered Releases"
+#~ msgstr "错位松键"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "STAM"
@@ -13931,6 +14104,10 @@ msgid "the chart's full level"
 msgstr "谱面的完整段位"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.13"
+msgstr "谱面段位 -0.13"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.25"
 msgstr "谱面段位 -0.25"
 
@@ -13959,16 +14136,16 @@ msgstr "谱面段位 -0.25"
 #~ msgstr "谱面段位 -0.33"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.36"
-msgstr "谱面段位 -0.36"
+#~ msgid "the chart's level -0.36"
+#~ msgstr "谱面段位 -0.36"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.38"
 #~ msgstr "谱面段位 -0.38"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.42"
-msgstr "谱面段位 -0.42"
+#~ msgid "the chart's level -0.42"
+#~ msgstr "谱面段位 -0.42"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.45"
@@ -13991,8 +14168,8 @@ msgstr "谱面段位 -0.51"
 #~ msgstr "谱面段位 -0.61"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level -0.63"
-#~ msgstr "谱面段位 -0.63"
+msgid "the chart's level -0.63"
+msgstr "谱面段位 -0.63"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.75"
@@ -14023,24 +14200,24 @@ msgstr "谱面段位 -0.76"
 #~ msgstr "谱面段位 -0.88"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.9"
-msgstr "谱面段位 -0.9"
+#~ msgid "the chart's level -0.9"
+#~ msgstr "谱面段位 -0.9"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.95"
 #~ msgstr "谱面段位 -0.95"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level -1"
-#~ msgstr "谱面段位 -1"
+msgid "the chart's level -1"
+msgstr "谱面段位 -1"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -1.05"
 #~ msgstr "谱面段位 -1.05"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.06"
-msgstr "谱面段位 -1.06"
+#~ msgid "the chart's level -1.06"
+#~ msgstr "谱面段位 -1.06"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -1.15"
@@ -14055,16 +14232,16 @@ msgstr "谱面段位 -1.25"
 #~ msgstr "谱面段位 -1.35"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.39"
-msgstr "谱面段位 -1.39"
+#~ msgid "the chart's level -1.39"
+#~ msgstr "谱面段位 -1.39"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.5"
 msgstr "谱面段位 -1.5"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.55"
-msgstr "谱面段位 -1.55"
+#~ msgid "the chart's level -1.55"
+#~ msgstr "谱面段位 -1.55"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.75"
@@ -14076,12 +14253,20 @@ msgid "the chart's level {0}"
 msgstr "谱面段位 {0}"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.03"
+msgstr "谱面段位 +0.03"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.06"
 msgstr "谱面段位 +0.06"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "谱面段位 +0.07"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.1"
+msgstr "谱面段位 +0.1"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.12"
@@ -14116,8 +14301,8 @@ msgid "the chart's level +0.3"
 msgstr "谱面段位 +0.3"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.35"
-#~ msgstr "谱面段位 +0.35"
+msgid "the chart's level +0.35"
+msgstr "谱面段位 +0.35"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.49"
@@ -14132,8 +14317,16 @@ msgstr "谱面段位 +0.5"
 #~ msgstr "谱面段位 +0.53"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.55"
+msgstr "谱面段位 +0.55"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
 msgstr "谱面段位 +0.7"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.75"
+msgstr "谱面段位 +0.75"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.86"
@@ -15238,6 +15431,10 @@ msgstr "输入 <0>/help</0> 看引导教程，或输入 <1>/</1> 查看所有命
 #: src/components/maps/StarRangePill.tsx
 msgid "Type a range: 3.6-6.7, 5+, <4"
 msgstr "输入区间：3.6-6.7、5+、<4"
+
+#: src/components/maps/LnSharePill.tsx
+msgid "Type a range: 40-60, 50+, <30"
+msgstr "输入区间：40-60、50+、<30"
 
 #. placeholder {0}: activity.typicalSession
 #: src/routes/player/$username.tsx

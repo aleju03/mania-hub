@@ -1,17 +1,20 @@
 import { MARATHON_CORRECTION_META_KEY } from "./marathon-correction.js";
+import { erf, wife3PointsAt, WIFE3_MISS_POINTS } from "./tap-wife-accuracy.js";
+import { estimateManiaWifeAccuracy, estimateManiaWifeAccuracyFromAccuracy, WIFE_CALIBRATION_VERSION, type WifeCalibrationOptions } from "./wife-calibration.js";
 import { detectRateVibro } from "../dan/vibro-detection.js";
 import type { Db } from "../db.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
 import { LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { exec, execBatch, json, parseJson } from "../db.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
+import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import type { MotionFeatures } from "../dan/motion-features.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, msdChartErrorFallback, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LN_EFFECTIVE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { INVERSE_MOD_VARIANT, VIBRO_ADJUSTED_VARIANT, MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, rateDanVerdictKey } from "./dan-estimates.js";
 import type { RateDanVerdictPair } from "./dan-estimates.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
@@ -27,6 +30,7 @@ import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { analyzeVibroSections, conservativeVibroAccuracy, usesSectionVibro, type VibroAnalysis } from "../dan/vibro-sections.js";
 import { assessVibroClear, hasOnlyClearEvidencePatterns, summarizeVibroClear, type VibroClearEvidence, type VibroClearEvidenceSummary, type VibroClearInput } from "../dan/vibro-clear-evidence.js";
 import { inspectChartDanEligibility } from "../dan/dan-eligibility.js";
+import { analyzeLnSkillFromText, isLnSkillSupported, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION, type LnSkillResult } from "../dan/ln-skill.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
@@ -69,6 +73,14 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // OD8's +-40ms), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
+// v36: one monotone press/hold Wife calibration for every keycount and rate;
+// replaces the uniform fallback and lazer raw-accuracy LN fade. 4K native
+// MinaCalc stays a press baseline; LN structure is a separate sidecar.
+// v35: 4K-only independent LN SSR and effective-hold identity.
+// Compatible MinaCalc values stay reusable; only stale 4K LN passes migrate.
+// Also fits the timing spread for verified native 4K, zero-hold, 1.0x plays.
+// Goal-keyed SSR reuse refreshes changed scores and preserves other evidence.
+//
 // v34: a chart whose stored dan sits at or below the ladder floor (the 6K/7K
 // kyu "0" band, a 4K "1--") credits a clear at the floor instead of being
 // treated as unrated (danClearTargetFor, 2026-09-10). No SSR or goal moves,
@@ -121,7 +133,10 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // users with no row at the current version, so 3,544 of 17,838 ready rows would
 // have kept an incomplete keymode set until a profile view or a new session
 // touched them. Earlier bumps: `git log -S PLAYER_SKILLS_VERSION`.
-export const PLAYER_SKILLS_VERSION = 34;
+// v37: effective LN v2 / independent LN v5 remove tap-covered overlap credit.
+// v38: effective LN v3 / independent LN v6 price near-window hold chains.
+// v39: native lazer 7K LN replay rescores refine Wife press/hold contexts.
+export const PLAYER_SKILLS_VERSION = 39;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -143,7 +158,7 @@ export const PLAYER_SKILLS_VERSION = 34;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -334,8 +349,15 @@ function jackVetoesTech(keyCount: number | null, chordjackScore: number, jackSco
 // pattern score cannot do this job instead: it averages 0.78-0.88 in every
 // lnRatio band.
 // Keymode-aware since the 7K line moved to 0.375 (its hybrid mapping culture;
-// lnPrimaryMinRatioFor). Still the same line the chart identity uses.
-const lnPatternRatioMinFor = lnPrimaryMinRatioFor;
+// lnPrimaryMinRatioFor). Still the same read the chart identity uses.
+//
+// On 4K the effective share is a second gate after the hold line: a hold
+// whose tail a tap covers at the played rate is a note, so FREEDOM DiVE
+// [FULL DiMENSiONS] at 1.5x (84% holds, every tail 45ms) is rice and cannot
+// feed an LN rating. The tag is per chart at 1.0x; a play at another rate
+// re-reads the share at its own rate (playPatternsFor). chartIsLn picks the
+// line to match the share it gets, so a row the effective sweep has not
+// reached keeps the historical hold-share reading until the sweep lands.
 // The LN axes the gate covers: the whole-LN tag plus the analyzer's four LN
 // subtypes (patterns.ts LN_SUBTYPE_IDS).
 const LN_PATTERN_IDS = new Set(["ln", "lngeneral", "lnrelease", "lninverse", "lntech"]);
@@ -373,13 +395,8 @@ const SSR_EXTRAPOLATION_MAX_SLOPE = 1.2;
 // so true precision keeps its full value, while a 300 earned inside OD0's
 // +-64ms band averages ~0.75 instead of OD8's ~0.97. Unknown OD falls back
 // to the OD8 assumption these constants historically hardcoded. Lazer plays
-// share the stable window model (same assumption the fixed table made), and
-// their LN-side leniency is handled by the lnRatio goal fade below.
-const WIFE3_FULL_POINTS_MS = 5;
-const WIFE3_ZERO_MS = 65;
-const WIFE3_ERF_DEV_MS = 22.7;
-const WIFE3_MISS_MS = 180;
-const WIFE3_MISS_POINTS = -2.75;
+// historically shared this stable window model. This uniform estimator is
+// retained only for audit comparisons; production uses wife-calibration.ts.
 const STABLE_MAX_WINDOW_MS = 16.5;
 const STABLE_WINDOW_BASES_MS = { great: 64, good: 97, ok: 127, meh: 151 } as const;
 const OD_WINDOW_STEP_MS = 3;
@@ -388,13 +405,6 @@ const OD_WINDOW_STEP_MS = 3;
 const ASSUMED_OD = 8;
 
 type WifeJudgement = "perfect" | keyof typeof STABLE_WINDOW_BASES_MS | "miss";
-
-function wife3PointsAt(ms: number): number {
-  if (ms <= WIFE3_FULL_POINTS_MS) return 1;
-  if (ms <= WIFE3_ZERO_MS) return erf((WIFE3_ZERO_MS - ms) / WIFE3_ERF_DEV_MS);
-  if (ms >= WIFE3_MISS_MS) return WIFE3_MISS_POINTS;
-  return (WIFE3_MISS_POINTS * (ms - WIFE3_ZERO_MS)) / (WIFE3_MISS_MS - WIFE3_ZERO_MS);
-}
 
 function wife3BandAverage(fromMs: number, toMs: number): number {
   if (!(toMs > fromMs)) return wife3PointsAt(toMs);
@@ -446,10 +456,10 @@ const AGGREGATE_RATING_SCALER = 1.04;
 // zero point of the accuracy credit curve (dan-credit.ts). Away from the bar
 // the credit moves with the accuracy in both directions: a pass up to the
 // ladder's decay window under the bar (danCreditBelowBarWindowFor: five
-// points on rice, three on 6K/7K LN, 2.5 on 4K LN) still credits the chart minus a
-// decay (capped so it can never equal the chart's own dan, and reaching a level
-// and a half down at the rice window's edge, a level and three quarters at the
-// 6K/7K LN one), and accuracy above the bar credits a
+// points on rice, three on 6K/7K LN, six on 4K LN) still credits the chart minus a
+// decay (continuous with the bar on every ladder, reaching a level and a half
+// down at the rice window's edge, a level and three quarters at the LN
+// ones), and accuracy above the bar credits a
 // bonus that reaches +1.5 levels at 100% in the ladder's own currency. This
 // is not the danCreditFor fade an earlier revision had and 75373b2b removed:
 // that one discounted the at-bar clear itself, which taxed thin evidence
@@ -630,6 +640,8 @@ export interface PlayerSkillModeBreakdown {
   analyzedPlays: number;
   ratings: Record<string, number>;
   patterns: PlayerSkillPatternRating[];
+  /** Prevent old Overall-on-LN values entering the independent LN population. */
+  lnSkillVersion?: number;
   dan?: PlayerSkillModeDan;
 }
 
@@ -695,7 +707,7 @@ export interface PlayerSkillPlay {
   overallRating: number;
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration";
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -756,6 +768,18 @@ export function isPlayerSkillAxis(axis: string): boolean {
 
 export interface StoredPlaySsr {
   score?: PlayerSkillScoreDetails | null;
+  /** Explicit provenance survives raw-score retention; absence stays unknown. */
+  wifeScoring?: "stable" | "lazer" | "unknown";
+  /** OD of a file verified as native 4K with zero holds for the tap model. */
+  tapWifeOd?: number | null;
+  /** Invalidate verified zero-hold facts when the cached .osu is replaced. */
+  tapWifeFileVersion?: string | null;
+  /** Preserve whether the full mod payload (including settings) was audited. */
+  tapWifeMods?: boolean;
+  /** Verified source-file facts, independent of play rate / Difficulty Adjust. */
+  wifeCalibration?: StoredWifeCalibration | null;
+  /** Release-aware quality for the independent LN axis; native MSD uses goal. */
+  lnGoal?: number;
   identity: string;
   beatmapId: number;
   /** Note-verified rate-edit family, refreshed during compute; never a difficulty input. */
@@ -809,8 +833,8 @@ export interface StoredPlaySsr {
   // The OD the play was judged at, set only when Difficulty Adjust moved the
   // slider off the chart's own value. The dan OD floor reads this ahead of the
   // chart's stored OD, so a DA play that raised OD to the floor counts and one
-  // that lowered it does not. Unset on every other play, which is judged at
-  // whatever OD the chart currently stores.
+  // that lowered it under the floor does not. Unset on every other play, which
+  // is judged at whatever OD the chart currently stores.
   odOverride?: number | null;
   // The rate-vibro detector version this play's chart was checked at, at the
   // play's own rate (RATE_VIBRO_CHECK_VERSION). Ranked 4K uprates carry it
@@ -821,6 +845,13 @@ export interface StoredPlaySsr {
   /** Rating-only adjustment; original score accuracy and goal stay intact. */
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
   vibroClearEvidence?: VibroClearEvidence;
+  // The tail-pass model this play's SSR was blended under
+  // (LN_TAIL_PASS_VERSION). Absent on plays rated before free holds were
+  // demoted; a 4K play on a hold-bearing chart without the current stamp is
+  // not reused and goes back through the calc.
+  lnTailPass?: number;
+  /** Independent LN rating and identity at this play's keycount/rate/OD/goal. */
+  lnSkill?: LnSkillResult;
   // True when the play was set under lazer's Invert mod and so was rated (SSR
   // and dan alike) against the inverted chart (dan/invert-mod.ts) rather than
   // the stored one. Its slot key carries it, so it never displaces a plain
@@ -830,6 +861,8 @@ export interface StoredPlaySsr {
   inverse?: boolean;
   /** No valid SSR exists; retained only for Dan credit and rejection explanations. */
   ratingExcluded?: boolean;
+  /** Evidence retained while a changed goal awaits its bounded MinaCalc turn. */
+  calibrationPending?: boolean;
 }
 
 interface StoredModesSummary {
@@ -1047,7 +1080,9 @@ function inverseModChartInfo(chart: ChartSkillInfo | undefined): ChartSkillInfo 
  * OD 0 chart would read as no change at all.
  *
  * Raising OD this way is a real, harder play, so it earns dan credit like any
- * other clear; lowering it below the chart's own OD refuses the play a rating.
+ * other clear; lowering it under the ladder's OD floor refuses the play a
+ * rating, and lowering it to anywhere at or above the floor rates against the
+ * wider windows and answers to the dan floor like any other play.
  */
 export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): number | null {
   for (const mod of mods ?? []) {
@@ -1061,17 +1096,24 @@ export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): numbe
 }
 
 /**
- * Whether Difficulty Adjust made the play easier to hit than the chart the
- * SSR would be computed from: DA below the chart's own OD widens every hit
- * window, so the judgements were earned against windows the stored .osu never
- * had. That is the same kind of lie as Hold Off's - the notes are intact but
- * what the play proves is not what the chart asks - and at high rates it is
- * the whole trick: OD -15 with Extended Limits makes a 2.0x run hittable, and
- * the SSR then reads as a 2.0x clear of a chart nobody cleared. The wife goal
- * does derate such a play (it estimates against the wide windows), but not
- * nearly enough to offset the rate, so the play is refused a rating outright.
+ * Whether Difficulty Adjust made the play easier to hit than a dan clear may
+ * be: DA below the chart's own OD widens every hit window, so the judgements
+ * were earned against windows the stored .osu never had. Down to the ladder's
+ * OD floor that is a play of the chart at a looser OD, which the wife goal
+ * prices in (it estimates against the wide windows) and the dan floor holds
+ * to the same line as a chart that ships at that OD: an OD 7 chart played
+ * under Invert at DA OD 5 is a 7K LN clear at the OD the official 7K LN
+ * courses are set at, and refusing it would turn away the ladder's own
+ * charts. Under the floor it is the same kind of lie as Hold Off's - the
+ * notes are intact but what the play proves is not what the chart asks -
+ * and at high rates it is the whole trick: OD -15 with Extended Limits makes
+ * a 2.0x run hittable, and the SSR then reads as a 2.0x clear of a chart
+ * nobody cleared. The wife goal does derate such a play, but not nearly
+ * enough to offset the rate, so the play is refused a rating outright.
  *
- * Raising OD is the opposite and stays rated: harder windows, an honest play.
+ * Raising OD is the opposite and stays rated: harder windows, an honest play,
+ * even when the raise stops short of the floor (the dan floor then turns it
+ * away as `low_od`, but the skill rating stands).
  *
  * `odOverride` is the raw slider (difficultyAdjustOd), so a -15 on an OD 0
  * chart still reads as widened. Stored plays rated before the slider was
@@ -1082,11 +1124,37 @@ export function difficultyAdjustOd(mods: OsuMod[] | string[] | undefined): numbe
  * runs). There is then no value to compare against, and a DA that put the
  * slider under the dan OD floor is the abuse shape regardless, so that alone
  * disqualifies.
+ *
+ * `floor` is the OD floor of the ladder the play would testify for
+ * (daRatingOdFloorFor); the general 5.5 when the caller knows nothing about
+ * the chart.
  */
-export function daWidensHitWindows(odOverride: number | null | undefined, chartOd: number | null): boolean {
+export function daWidensHitWindows(odOverride: number | null | undefined, chartOd: number | null, floor: number = DAN_MIN_OD): boolean {
   if (odOverride == null) return false;
-  if (chartOd == null) return odOverride < DAN_MIN_OD;
+  if (odOverride >= floor) return false;
+  if (chartOd == null) return true;
   return odOverride < chartOd;
+}
+
+/**
+ * The OD floor a DA play is held to at rating time, before any dan verdict
+ * names its ladder: an Invert play is LN by construction (every object it
+ * played is a hold), otherwise the chart's own hold share decides. When the
+ * keymode or the hold share is still unknown the lowest floor the keymode
+ * could carry applies, so an honest play is never refused a rating on a
+ * guess; the dan floor (collectDanClears) re-reads the exact ladder once the
+ * chart is analyzed.
+ */
+export function daRatingOdFloorFor(
+  keyCount: number | null | undefined,
+  inverse: boolean | undefined,
+  shares: { lnRatio: number | null | undefined; lnEffectiveRatio?: number | null | undefined },
+): number {
+  if (keyCount == null) return Math.min(DAN_MIN_OD, DAN_MIN_OD_7K_LN);
+  if (inverse) return danMinOdFor(keyCount, "ln");
+  const isLn = chartIsLn(keyCount, shares);
+  if (isLn == null) return Math.min(danMinOdFor(keyCount, "ln"), danMinOdFor(keyCount, "rc"));
+  return danMinOdFor(keyCount, isLn ? "ln" : "rc");
 }
 
 /** The chart's own OD as the .osu states it, or null when the file has no
@@ -1143,14 +1211,7 @@ export function estimateWifeAccuracy(
   const rawScale = Number(options?.windowScale);
   const windowScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
   const expected = expectedWife3Points(od, windowScale);
-  const counts: Record<WifeJudgement, number> = {
-    perfect: readCount(statistics.perfect ?? statistics.count_geki),
-    great: readCount(statistics.great ?? statistics.count_300),
-    good: readCount(statistics.good ?? statistics.count_katu),
-    ok: readCount(statistics.ok ?? statistics.count_100),
-    meh: readCount(statistics.meh ?? statistics.count_50),
-    miss: readCount(statistics.miss ?? statistics.count_miss),
-  };
+  const counts = readWifeCounts(statistics);
   let total = 0;
   let points = 0;
   for (const [name, count] of Object.entries(counts) as Array<[WifeJudgement, number]>) {
@@ -1165,9 +1226,44 @@ function readCount(value: number | undefined): number {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 }
 
+function readWifeCounts(statistics: OsuScoreStatistics): Record<WifeJudgement, number> {
+  return {
+    perfect: readCount(statistics.perfect ?? statistics.count_geki),
+    great: readCount(statistics.great ?? statistics.count_300),
+    good: readCount(statistics.good ?? statistics.count_katu),
+    ok: readCount(statistics.ok ?? statistics.count_100),
+    meh: readCount(statistics.meh ?? statistics.count_50),
+    miss: readCount(statistics.miss ?? statistics.count_miss),
+  };
+}
+
 type SsrGoalScore = Pick<OscScore, "accuracy" | "statistics" | "type" | "legacy_score_id" | "legacy_total_score"> & {
   mods?: OscScore["mods"] | string[];
+  retainedRate?: number;
+  /** Retained evidence explicitly marks unknown provenance; never infer it. */
+  wifeScoring?: "stable" | "lazer" | "unknown";
 };
+
+export interface StoredWifeCalibration {
+  version: number;
+  chartOd: number;
+  chartHoldRatio: number;
+  keyCount: number;
+  fileVersion: string | null;
+  basis?: "judgments" | "accuracy-only";
+}
+
+export interface SsrChartFacts {
+  keyCount: number;
+  nativeMania: boolean;
+  rate: number;
+}
+
+function wifeScoringFor(score: SsrGoalScore): "stable" | "lazer" | "unknown" {
+  if (score.wifeScoring != null) return score.wifeScoring;
+  if (score.type == null && score.legacy_score_id == null && !(Number(score.legacy_total_score) > 0)) return "unknown";
+  return isLazerScore(score as OscScore) ? "lazer" : "stable";
+}
 
 // Both clients scale every mania hit window by 1.4 under EZ and by 1/1.4
 // under HR. Stable always did; lazer matched it exactly in July 2025
@@ -1188,49 +1284,50 @@ function ezWindowScale(score: SsrGoalScore): number {
 }
 
 /**
- * The SSR goal for a play: the Wife3 estimate when judgement counts exist,
- * raw accuracy otherwise. Only the judgement path may exceed the calc's
- * 0.965 cap; without a MAX:300 breakdown there is no evidence to
- * differentiate high-accuracy plays on. `od` is the chart's overall
- * difficulty; unknown (null) assumes OD8.
- *
- * Lazer judges LN head and tail separately, which sags the MAX:300 ratio on
- * LN-heavy charts (stable rolls the hold into one judgement), so for
- * lazer-judged plays the Wife estimate fades toward the plain-accuracy goal
- * by the chart's LN share. `lnRatio` comes from chart analysis; when it is
- * unknown (null) a lazer play falls back to the plain-accuracy goal entirely,
- * since there is no way to tell how much of its ratio sag is LN artifact.
+ * The shared calibrated press/hold-failure goal at the played rate and OD.
+ * Counts are preferred; accuracy-only history uses its calibrated adapter
+ * and cannot exceed 0.965. Unknown client provenance takes the lower of the
+ * two client estimates. The production caller verifies original chart facts
+ * before using this helper; optional defaults serve standalone callers only.
+ * The independent 4K LN axis uses calibrateScoreForMsd's release-aware lnGoal.
  *
  * Returns null when the goal lands on the calc's 0.8 floor: the play's real
  * accuracy sits at or below what the calc can rate, so any SSR would be the
  * floor's, not the play's, and the play must not count.
  */
-export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number | null {
-  const goal = ssrGoalForScoreUnchecked(score, lnRatio, od);
-  return goal > SSR_GOAL_MIN ? goal : null;
+export function ssrGoalForScore(score: SsrGoalScore, lnRatio?: number | null, od?: number | null, facts?: SsrChartFacts): number | null {
+  return calibrateScoreForMsd(score, lnRatio, od, facts).goal;
 }
 
-function ssrGoalForScoreUnchecked(score: SsrGoalScore, lnRatio?: number | null, od?: number | null): number {
-  const wife = estimateWifeAccuracy(score.statistics, { od, windowScale: ezWindowScale(score) });
-  if (wife == null) return ssrGoalForAccuracy(score.accuracy);
-  // Apply the eligibility floor after the blend. Clamping an ineligible
-  // Wife estimate up to 80% first lets even one hold manufacture MSD credit.
-  const wifeGoal = Math.min(SSR_GOAL_CAP, wife);
-  if (isLazerScore(score as OscScore)) {
-    const accGoal = ssrGoalForAccuracy(score.accuracy);
-    const fade = lnRatio == null ? 1 : Math.max(0, Math.min(1, lnRatio));
-    return Math.round((wifeGoal * (1 - fade) + accGoal * fade) * 10_000) / 10_000;
-  }
-  return Math.round(wifeGoal * 10_000) / 10_000;
-}
-
-// Abramowitz & Stegun 7.1.26 (|error| < 1.5e-7, plenty for the aggregation)
-function erf(x: number): number {
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x);
-  const t = 1 / (1 + 0.3275911 * ax);
-  const poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
-  return sign * (1 - poly * Math.exp(-ax * ax));
+export function calibrateScoreForMsd(score: SsrGoalScore, lnRatio?: number | null, od?: number | null, facts?: SsrChartFacts): { goal: number | null; lnGoal: number | null } {
+  const unavailable = { goal: null, lnGoal: null };
+  if (facts?.nativeMania === false) return unavailable;
+  const rate = facts?.rate ?? score.retainedRate ?? getPlayRate(score.mods);
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) return unavailable;
+  const counts = Object.values(readWifeCounts(score.statistics ?? {}));
+  const hasJudgments = counts.some((count) => count > 0);
+  const mods = (score.mods ?? []).map((mod) => typeof mod === "string" ? mod : mod.acronym);
+  const scoreV2 = mods.some((mod) => mod === "SV2" || mod === "V2");
+  const scoring = wifeScoringFor(score);
+  const profiles: WifeCalibrationOptions["scoring"][] = scoreV2 ? ["stable-scorev2"]
+    : scoring === "unknown" ? ["stable", "lazer"] : [scoring];
+  const predictions = profiles.map((client) => {
+    const options: WifeCalibrationOptions = {
+      od: od != null && Number.isFinite(od) ? Math.max(0, Math.min(10, od)) : ASSUMED_OD,
+      rate, windowScale: ezWindowScale(score), scoring: client, classicWindows: mods.includes("CL"),
+      holdRatio: lnRatio != null && Number.isFinite(lnRatio) ? Math.max(0, Math.min(1, lnRatio)) : 0,
+    };
+    const predict = (target: "press" | "ln") => hasJudgments ? estimateManiaWifeAccuracy(counts, { ...options, target })
+      : estimateManiaWifeAccuracyFromAccuracy(score.accuracy, { ...options, target });
+    return { press: predict("press"), ln: predict("ln") };
+  });
+  if (predictions.some((value) => value.press == null || value.ln == null)) return unavailable;
+  // Unknown archived provenance uses the lower calibrated estimate, not an
+  // invented client or the former uniform/accuracy-blend path.
+  const cap = hasJudgments ? SSR_GOAL_CAP : SSR_CALC_GOAL_CAP;
+  const goal = Math.round(Math.min(cap, ...predictions.map((value) => value.press!)) * 10_000) / 10_000;
+  const lnGoal = Math.max(0, Math.round(Math.min(cap, ...predictions.map((value) => value.ln!)) * 10_000) / 10_000);
+  return { goal: goal > SSR_GOAL_MIN ? goal : null, lnGoal };
 }
 
 /**
@@ -1269,10 +1366,10 @@ async function runMsdAtGoal(
   options: { rate: number; keyCount: number; goal: number; lnTailTaps?: boolean; adjustVibro?: boolean },
 ): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
   const { rate, keyCount, goal, lnTailTaps = false, adjustVibro = true } = options;
-  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps, adjustVibro }).catch(msdChartErrorFallback);
+  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps, adjustVibro, includeLnSkill: false }).catch(msdChartErrorFallback);
   if (!capped) return null;
   if (goal <= SSR_CALC_GOAL_CAP) return { values: capped.values, calcRuns: 1 };
-  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps, adjustVibro }).catch(msdChartErrorFallback);
+  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps, adjustVibro, includeLnSkill: false }).catch(msdChartErrorFallback);
   if (!base) return { values: capped.values, calcRuns: 1 };
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
   const values: Record<string, number> = {};
@@ -1288,20 +1385,86 @@ async function runMsdAtGoal(
   return { values, calcRuns: 2 };
 }
 
+/** The goal the LN solver actually runs at for a play. Same cap as the
+ * MinaCalc SSR: the solver never sees a goal above SSR_CALC_GOAL_CAP. */
+export function lnSsrSolverGoal(goal: number): number {
+  return Math.min(SSR_CALC_GOAL_CAP, Math.max(0, Math.min(0.999, goal)));
+}
+
+/**
+ * LN SSR for a play, on the same terms as the press SSR from runMsdAtGoal:
+ * solve at most at SSR_CALC_GOAL_CAP and extrapolate the cap-to-base slope
+ * above it. The LN solver's own response runs away toward 100% (a perfect
+ * play on a 24.8 chart solved to 38.7, above the hardest 4K LN course),
+ * which is not how the press axis prices an SS. The stored scoreGoal is the
+ * solver goal, so playLnSkillCurrent can tell a capped result from an old
+ * uncapped one without a model version bump.
+ */
+export function analyzeLnSsr(
+  osuText: string,
+  options: { rate: number; od?: number | null; scoreGoal: number },
+): LnSkillResult | null {
+  const goal = Math.max(0, Math.min(0.999, options.scoreGoal));
+  const solverGoal = lnSsrSolverGoal(goal);
+  const capped = analyzeLnSkillFromText(osuText, { rate: options.rate, od: options.od, scoreGoal: solverGoal, includeStructure: false });
+  if (!capped || goal <= SSR_CALC_GOAL_CAP || !(capped.rating != null && capped.rating > 0)) return capped;
+  const base = analyzeLnSkillFromText(osuText, { rate: options.rate, od: options.od, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, includeStructure: false });
+  const atCap = capped.rating, atBase = base?.rating ?? 0;
+  if (!(atBase > 0) || atCap <= atBase) return capped;
+  const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
+  return { ...capped, rating: atCap * Math.pow(Math.min(atCap / atBase, SSR_EXTRAPOLATION_MAX_SLOPE), exponent) };
+}
+
+// The tail-pass model plays are stamped with (StoredPlaySsr.lnTailPass).
+// v3: 4K charts below the 45% hold-share identity gate skip the pass entirely.
+// v2: 4K free holds demoted before the pass (ln-effective.ts). v1 is the
+// implicit version of every play stored before the stamp existed.
+export const LN_TAIL_PASS_VERSION = 4;
+
 // SSRs on hold-bearing charts blend toward a tail-aware second calc pass;
-// weights and rationale live with the calc facade (dan/msd.ts).
+// weights and rationale live with the calc facade (dan/msd.ts). The pass
+// rates the chart as it plays at this rate and OD (lnTailPassText): on 4K a
+// hold whose tail a tap covers is demoted to a note first, so a 45ms-tail
+// chart at 1.5x earns no LN credit for releases that cost nothing.
 export async function computePlaySsrValues(
   osuText: string,
-  options: { rate: number; keyCount: number; goal: number; lnRatio?: number | null; adjustVibro?: boolean },
-): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
-  const { rate, keyCount, goal, lnRatio, adjustVibro } = options;
+  options: { rate: number; keyCount: number; goal: number; lnGoal?: number; od?: number | null; lnRatio?: number | null; adjustVibro?: boolean },
+): Promise<{ values: Record<string, number>; calcRuns: number; lnSkill?: LnSkillResult } | null> {
+  const { rate, keyCount, goal, od, lnRatio, adjustVibro } = options;
   const base = await runMsdAtGoal(osuText, { rate, keyCount, goal, adjustVibro });
   if (!base) return null;
+  const lnSkill = isLnSkillSupported(keyCount) ? analyzeLnSsr(osuText, { rate, od, scoreGoal: options.lnGoal ?? goal }) : null;
+  const finish = (rated: { values: Record<string, number>; calcRuns: number }) => lnSkill
+    ? { ...rated, values: { ...rated.values, LN: lnSkill.eligible ? lnSkill.rating ?? 0 : 0 }, lnSkill }
+    : rated;
   const blend = LN_TAIL_BLEND_BY_KEYMODE[keyCount] ?? 0;
-  if (!(blend > 0) || !(Number(lnRatio) > LN_TAIL_MIN_RATIO)) return base;
-  const tails = await runMsdAtGoal(osuText, { rate, keyCount, goal, lnTailTaps: true, adjustVibro });
-  if (!tails) return base;
-  return { values: blendLnTailValues(base.values, tails.values, keyCount), calcRuns: base.calcRuns + tails.calcRuns };
+  if (!(blend > 0)) return finish(base);
+  // Outside 4K, preserve the established metadata gate and full tail pass.
+  const tailPassText = LN_EFFECTIVE_KEY_COUNTS.has(keyCount)
+    ? lnTailPassText(osuText, keyCount, { rate, od, minHoldRatio: LN_TAIL_MIN_RATIO })
+    : Number(lnRatio) > LN_TAIL_MIN_RATIO ? osuText : null;
+  if (tailPassText == null) return finish(base);
+  const tails = await runMsdAtGoal(tailPassText, { rate, keyCount, goal, lnTailTaps: true, adjustVibro });
+  if (!tails) return finish(base);
+  return finish({ values: blendLnTailValues(base.values, tails.values, keyCount), calcRuns: base.calcRuns + tails.calcRuns });
+}
+
+/**
+ * Whether a stored play's SSR was blended under the current tail-pass model.
+ * Only a 4K play on a chart with holds can differ: rice charts build the
+ * same rows either way, and other keymodes keep their full tail pass.
+ */
+function playTailPassCurrent(play: StoredPlaySsr, info: ChartSkillInfo | undefined): boolean {
+  if (play.lnTailPass === LN_TAIL_PASS_VERSION) return true;
+  if (!LN_EFFECTIVE_KEY_COUNTS.has(play.keyCount)) return true;
+  if (play.inverse) return false;
+  if (info?.lnRatio == null) return false;
+  // v2 already demoted free holds correctly. Only the newly gated low-hold
+  // band can change under v3; high-hold v2 values remain sound seeds.
+  if (play.lnTailPass === 2) {
+    return !(info.lnRatio > LN_TAIL_MIN_RATIO && info.lnRatio < lnPrimaryMinRatioFor(play.keyCount));
+  }
+  return !(info.lnRatio > LN_TAIL_MIN_RATIO);
 }
 
 /** Etterna selects rate PBs by Overall once, before any skill-axis filtering.
@@ -1344,6 +1507,7 @@ function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPattern
   const playsByPattern = new Map<string, StoredPlaySsr[]>();
   for (const play of selectMsdRatingPlays(plays)) {
     for (const pattern of play.patterns) {
+      if (LN_PATTERN_IDS.has(pattern) && !(patternPlayRating(play, pattern) > 0)) continue;
       const list = playsByPattern.get(pattern);
       if (list) list.push(play);
       else playsByPattern.set(pattern, [play]);
@@ -1353,15 +1517,26 @@ function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPattern
     .filter(([, list]) => list.length >= PATTERN_RATING_MIN_PLAYS)
     .map(([id, list]) => ({
       id,
-      rating: aggregateSsrs(list.map((play) => Number(play.values.Overall ?? 0))),
+      rating: aggregateSsrs(list.map((play) => patternPlayRating(play, id))),
       plays: list.length,
     }))
     .filter((entry) => entry.rating > 0)
     .sort((a, b) => b.rating - a.rating);
 }
 
+function patternPlayRating(play: StoredPlaySsr, pattern: string): number {
+  if (isLnSkillSupported(play.keyCount) && LN_PATTERN_IDS.has(pattern)) {
+    return play.lnSkill?.version === LN_SKILL_VERSION && play.lnSkill.eligible ? Number(play.values.LN ?? 0) : 0;
+  }
+  return Number(play.values.Overall ?? 0);
+}
+
+export function patternRatingCurrent(mode: Pick<PlayerSkillModeBreakdown, "keyCount" | "lnSkillVersion">, pattern: string): boolean {
+  return !isLnSkillSupported(mode.keyCount) || !LN_PATTERN_IDS.has(pattern) || mode.lnSkillVersion === LN_SKILL_VERSION;
+}
+
 // Per-chart analysis facts the skill pipeline consumes: pattern tags for the
-// pattern axes, lnRatio for the lazer goal fade, and the dan verdict halves
+// pattern axes, lnRatio for the calibrated score goal, and the dan verdict halves
 // (1.0x from the lean classification, DT from the primary-only DT sweep) for
 // player-dan positioning. One row set on the same indexed query the tag
 // lookup always ran.
@@ -1369,6 +1544,8 @@ export interface ChartSkillInfo {
   /** Verified note layout shared by uniformly rated reuploads. */
   chartFamily?: string | null;
   patterns: string[];
+  /** LN tags before the nomod identity gate, for HT/custom-rate promotion. */
+  lnPatterns?: string[];
   /** Structurally detected 4K quadstream/minijack/jack-marathon demand. */
   jackDemand?: boolean;
   // Share of LeoBlack cluster importance (amount x difficulty) on jack and on
@@ -1409,6 +1586,12 @@ export interface ChartSkillInfo {
   // how the speed/tech model spells "no reading" (speedTechProbability).
   motion?: MotionFeatures | null;
   lnRatio: number | null;
+  /** Effective LN share at 1.0x (ln-effective.ts); null until the sweep
+   * patches the row. chartLnShareFor falls back to lnRatio without it. */
+  lnEffectiveRatio: number | null;
+  /** The same share at the stored 1.5x / 0.75x verdicts' rates. */
+  dtLnEffectiveRatio: number | null;
+  htLnEffectiveRatio: number | null;
   vibro: boolean;
   /** False when the chart's raw object structure makes its dan verdict unsafe
    * as player evidence. The chart may still display that verdict on /maps. */
@@ -1446,6 +1629,7 @@ interface LeanHalfJson {
 
 interface LeanClassificationJson {
   lnRatio?: unknown;
+  lnEffectiveRatio?: unknown;
   vibro?: unknown;
   danEligibility?: { eligible?: unknown } | null;
   rc?: LeanHalfJson | null;
@@ -1455,6 +1639,63 @@ interface LeanClassificationJson {
   clusters?: Array<{ pattern?: unknown; importance?: unknown }>;
   clusterCategory?: unknown;
   motion?: Record<string, unknown> | null;
+}
+
+function readShare(value: unknown): number | null {
+  if (value == null) return null;
+  const share = Number(value);
+  return Number.isFinite(share) ? Math.max(0, Math.min(1, share)) : null;
+}
+
+/**
+ * LN tags follow the played chart, including arbitrary rates and OD changes.
+ * The independent LN result is authoritative. Stored nomod/DT/HT shares are
+ * a fallback for a pending file; unknown custom-rate identity grants no LN
+ * tag. Raw LN tags stay available to restore a nomod-free chart under HT.
+ */
+function playPatternsFor(info: ChartSkillInfo, rate: number, keyCount: number | null, lnSkill?: LnSkillResult): string[] {
+  if (keyCount == null || !isLnSkillSupported(keyCount)) return info.patterns;
+  const lnEffectiveRatio = rate === 1 ? info.lnEffectiveRatio
+    : rate === 1.5 ? info.dtLnEffectiveRatio : rate === 0.75 ? info.htLnEffectiveRatio : null;
+  const eligible = lnSkill?.version === LN_SKILL_VERSION ? lnSkill.eligible
+    : (!LN_EFFECTIVE_KEY_COUNTS.has(keyCount) || lnEffectiveRatio != null)
+      && chartIsLn(keyCount, { lnRatio: info.lnRatio, lnEffectiveRatio }) === true;
+  const rice = info.patterns.filter((id) => !LN_PATTERN_IDS.has(id));
+  return eligible ? [...new Set([...rice, "ln", ...(info.lnPatterns ?? info.patterns.filter(id => LN_PATTERN_IDS.has(id)))])] : rice;
+}
+
+function playLnSkillCurrent(play: StoredPlaySsr, info: ChartSkillInfo | undefined): boolean {
+  if (!isLnSkillSupported(play.keyCount)) return true;
+  const skill = play.lnSkill;
+  const od = play.odOverride ?? info?.od;
+  const quality = play.lnGoal ?? play.goal;
+  const goal = play.vibroAdjustment ? conservativeVibroAccuracy(quality, play.vibroAdjustment.judgementShare) : quality;
+  return skill?.version === LN_SKILL_VERSION && skill.keyCount === play.keyCount && skill.rate === play.rate
+    && skill.scoreGoal === lnSsrSolverGoal(goal)
+    && (od == null || skill.od === Math.max(0, Math.min(10, od)))
+    && Number.isFinite(play.values.LN);
+}
+
+async function refreshPlayLnSkill(
+  play: StoredPlaySsr,
+  info: ChartSkillInfo | undefined,
+  readText: (beatmapId: number) => Promise<string | null>,
+): Promise<StoredPlaySsr> {
+  if (playLnSkillCurrent(play, info)) return play;
+  const text = await readText(play.beatmapId);
+  let lnSkill: LnSkillResult | null = null;
+  try {
+    const ratedText = text == null ? null : ratedOsuTextFor(text, play.inverse);
+    if (ratedText != null) lnSkill = analyzeLnSsr(ratedText, {
+      rate: play.rate, od: play.odOverride ?? info?.od,
+      scoreGoal: play.vibroAdjustment ? conservativeVibroAccuracy(play.lnGoal ?? play.goal, play.vibroAdjustment.judgementShare) : play.lnGoal ?? play.goal,
+    });
+    if (lnSkill?.keyCount !== play.keyCount) lnSkill = null;
+  } catch { /* A bad cached chart remains pending until its file is repaired. */ }
+  if (!lnSkill && play.lnSkill == null && play.values.LN === 0) return play;
+  // Keep the expensive MinaCalc cache, but never publish a stale LN model as
+  // a current value if a missing file prevents the cheap independent pass.
+  return { ...play, values: { ...play.values, LN: lnSkill?.eligible ? lnSkill.rating ?? 0 : 0 }, lnSkill: lnSkill ?? undefined };
 }
 
 // How much of a chart's difficulty is jack, from LeoBlack's pattern clusters.
@@ -1660,7 +1901,10 @@ const STAMINA_TILE_JACK_VETO_SHARE = 0.30;
 function readMotionFeatures(value: unknown): MotionFeatures | null {
   if (value == null || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  const keys = ["sameHand", "miniJack", "oneHandTrill", "crossHandTrill", "roll4", "rhythmBreak", "chordSwing", "densitySwing"] as const;
+  // A block written before the anchor share existed (2026-09-13) fails this
+  // read whole, so the chart counts as unread until the motion sweep rewrites
+  // it rather than being half-read.
+  const keys = ["sameHand", "miniJack", "anchor", "oneHandTrill", "crossHandTrill", "roll4", "rhythmBreak", "chordSwing", "densitySwing"] as const;
   const read: Partial<Record<(typeof keys)[number], number>> = {};
   for (const key of keys) {
     const share = Number(raw[key]);
@@ -1752,22 +1996,23 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       const vetoesTech = jackVetoesTech(keyCount, chordjackScore, jackScore, jackShare);
       const rawLnRatio = Number(parsed?.lnRatio);
       const lnRatio = Number.isFinite(rawLnRatio) ? Math.max(0, Math.min(1, rawLnRatio)) : null;
+      const lnEffectiveRatio = readShare(parsed?.lnEffectiveRatio);
       // A chart whose analysis carries no lnRatio cannot be verified as LN, so
       // it keeps no LN tag rather than being trusted.
-      const chartIsLn = lnRatio != null && lnRatio >= lnPatternRatioMinFor(keyCount);
+      const chartReadsLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio }) === true;
       const patternIds = [...patternScores.entries()]
         .filter(([id, score]) =>
           score >= patternTagMinScore(id)
           && !(id === "tech" && vetoesTech)
-          && !(LN_PATTERN_IDS.has(id) && !chartIsLn))
+          && !(LN_PATTERN_IDS.has(id) && !chartReadsLn))
         .map(([id]) => id);
       // The derived whole-jack tag (see chartIsJack). The chordjack tag stays
       // beside it for the consumers that mean chord jack specifically; 4K
       // keeps its native analyzer tags untouched.
       if (keyCount != null && usesPatternSkillAxes(keyCount) && isJack && !patternIds.includes("jack")) patternIds.push("jack");
-      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
+      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown; lnEffectiveRatio?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
       const dtRawDan = readRawDan(danDt ?? undefined);
-      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
+      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown; lnEffectiveRatio?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
       const htRawDan = readRawDan(danHt ?? undefined);
       const chartMsd = keyCount === 4
         ? parseJson<{ values?: Record<string, number> } | null>(String(row.msd_json ?? ""), null)
@@ -1775,6 +2020,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       info.set(Number(row.beatmap_id), {
         chartFamily: typeof row.family_key === "string" ? row.family_key : null,
         patterns: patternIds,
+        lnPatterns: [...patternScores.entries()].filter(([id, score]) => LN_PATTERN_IDS.has(id) && score >= patternTagMinScore(id)).map(([id]) => id),
         jackDemand: parsed?.jackDemand?.detected === true,
         jackShare,
         streamShare: clusterShare(parsed, STREAM_CLUSTERS),
@@ -1790,7 +2036,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         jumpstreamCluster: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
           ? JUMPSTREAM_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
-        handstreamEndurance: keyCount === 4 && !chartIsLn
+        handstreamEndurance: keyCount === 4 && !chartReadsLn
           && hasHandstreamEndurance(chartMsd?.values),
         msdValues: keyCount === 4 && !chartIsLn && chartMsd?.values && typeof chartMsd.values === "object"
           ? chartMsd.values
@@ -1799,6 +2045,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         chordjackScore: chordjackScore,
         motion: readMotionFeatures(parsed?.motion),
         lnRatio,
+        lnEffectiveRatio,
+        dtLnEffectiveRatio: readShare(danDt?.lnEffectiveRatio),
+        htLnEffectiveRatio: readShare(danHt?.lnEffectiveRatio),
         vibro: parsed?.vibro === true,
         // Legacy rows have no field and stay eligible until the targeted
         // cached-.osu sweep inspects them. Fresh analyses always store it.
@@ -1871,8 +2120,8 @@ function getMissShare(statistics: OsuScoreStatistics | undefined): number | null
 // "You are ~8th dan on 4K rice": per keymode and per verdict side (RC vs LN,
 // matching the classifier's halves), the highest continuous dan level backed
 // by a quorum of qualifying clears. A clear testifies only for the chart's
-// PRIMARY family (LN iff the hold share clears the keymode's identity line,
-// lnPrimaryMinRatioFor, the same rule as /maps): accuracy
+// PRIMARY family (LN iff chartIsLn clears the keymode's identity gates, the
+// same rule as /maps): accuracy
 // on an LN chart is earned on the holds, so it proves nothing about the rice
 // half's rating, and vice versa. Rate mods count on the same terms: any pass
 // in the estimator's 0.5x-2.0x band credits the chart's stored verdict AT that
@@ -1924,6 +2173,10 @@ export interface DanClearEvidence {
   accuracy: number;
   // The bar it was judged against, after any stable->v2 conversion.
   bar: number;
+  // Which formula `accuracy` and `bar` are written in. Usually the ladder's
+  // own (danClearBarFor); "stable" against a v2 ladder when the counts are
+  // gone and the bar was converted instead.
+  currency: "stable" | "v2";
 }
 
 /**
@@ -2026,10 +2279,17 @@ const DAN_MIN_OD = 5.5;
 // courses are OD 5, so a 5.5 floor would turn away the very charts the ladder
 // is measured against.
 const DAN_MIN_OD_7K_LN = 5;
+// 4K LN holds a higher one. Release windows are 1.5x the head's, so a low OD
+// loosens an LN chart far more than a rice one, and the official 4K LN dan
+// courses sit at OD 8 (1st-13th) and 8.5 (14th-17th), so the floor turns
+// away no course.
+const DAN_MIN_OD_4K_LN = 7;
 
 /** The floor the play's own ladder holds it to. */
 function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
-  return keyCount === 7 && side === "ln" ? DAN_MIN_OD_7K_LN : DAN_MIN_OD;
+  if (side === "ln" && keyCount === 7) return DAN_MIN_OD_7K_LN;
+  if (side === "ln" && keyCount === 4) return DAN_MIN_OD_4K_LN;
+  return DAN_MIN_OD;
 }
 
 /**
@@ -2041,10 +2301,13 @@ function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
  * `chart_rewritten` is the one class that never reaches here: HO/NR plays
  * (and Invert plays outside INVERSE_MOD_KEY_COUNTS) are refused a rating at
  * all (scoreRewritesChart), so no stored play carries them and nothing
- * downstream can name them. A DA that widened the hit
- * windows is refused on the same terms (daWidensHitWindows), so `low_od` now
- * only names plays judged at an OD the chart itself sets too low, or a DA that
- * raised the slider but not past the floor.
+ * downstream can name them. A DA that widened the hit windows under the
+ * ladder's floor is refused on the same terms (daWidensHitWindows), so
+ * `low_od` names plays judged at an OD the chart itself sets too low, a DA
+ * that raised the slider but not past the floor, and a DA lowered to the
+ * floor of one ladder on a chart that turned out to belong to a stricter one
+ * (the rating stage guesses the ladder from the chart's hold share; this is
+ * where the verdict's own side decides).
  */
 export type DanClearRejectReason =
   | "chart_unanalyzed"
@@ -2071,6 +2334,8 @@ export interface DanClearReject {
   bar: number | null;
   /** Only for below_bar: the lowest accuracy that would still have credited. */
   minAccuracy: number | null;
+  /** Only for below_bar: the formula `accuracy` and `bar` are written in. */
+  currency: "stable" | "v2" | null;
   /** Only for low_od: the OD the play was judged at, which failed the floor. */
   od: number | null;
 }
@@ -2108,7 +2373,7 @@ export function danClearTargetFor(
     return verdict ? target(verdict.rawDan, verdict.side, verdict.displayName ?? null) : null;
   }
   if (play.rate === 1 && info.lnRatio != null) {
-    const side = info.lnRatio >= lnPrimaryMinRatioFor(keyCount) ? "ln" : "rc";
+    const side = chartIsLn(keyCount, { lnRatio: info.lnRatio, lnEffectiveRatio: info.lnEffectiveRatio }) === true ? "ln" : "rc";
     return target(side === "ln" ? info.lnRawDan : info.rcRawDan, side, side === "ln" ? info.lnDanLabel : info.rcDanLabel);
   }
   if (play.rate === 1.5 && info.dtFamily != null) {
@@ -2146,7 +2411,7 @@ function collectDanClears(
     extra: Partial<Omit<DanClearReject, "play" | "reason">> = {},
   ) => {
     if (!rejects) return;
-    rejects.push({ play, reason, side: null, chartDan: null, chartDanLabel: null, accuracy: null, bar: null, minAccuracy: null, od: null, ...extra });
+    rejects.push({ play, reason, side: null, chartDan: null, chartDanLabel: null, accuracy: null, bar: null, minAccuracy: null, currency: null, od: null, ...extra });
   };
   for (const play of plays) {
     const info = infoByBeatmap.get(play.beatmapId);
@@ -2167,9 +2432,18 @@ function collectDanClears(
     }
     // A Difficulty Adjust play was judged at the OD it set, not the chart's,
     // so that is the OD the floor holds it to: raising OD to the floor makes
-    // the clear count, lowering it below stops counting.
+    // the clear count, lowering it below stops counting. The ladder is the
+    // verdict's side when there is one; an Invert play is LN by construction
+    // (every object it played is a hold), so it is held to the LN floor even
+    // before the inverted chart's own verdict is stored - otherwise an OD 5
+    // 7K inverse clear read as `low_od` against the 5.5 general floor instead
+    // of waiting on its verdict as `no_chart_dan`. Any other play without a
+    // verdict yet answers to whatever side its hold share says.
     const playOd = play.odOverride ?? info.od;
-    if (playOd != null && playOd < danMinOdFor(keyCount, target?.side ?? null)) {
+    const floorSide: "rc" | "ln" | null = play.inverse
+      ? "ln"
+      : target?.side ?? (chartIsLn(keyCount, { lnRatio: info.lnRatio, lnEffectiveRatio: info.lnEffectiveRatio }) === true ? "ln" : null);
+    if (playOd != null && playOd < danMinOdFor(keyCount, floorSide)) {
       reject(play, "low_od", { ...aimed, od: playOd });
       continue;
     }
@@ -2207,6 +2481,7 @@ function collectDanClears(
       const bar = danClearBarFor(side, keyCount, rawDan);
       let threshold = bar.accuracy;
       let accuracy: number;
+      let currency = bar.currency;
       if (bar.currency !== "v2") {
         accuracy = stable ?? displayed;
       } else if (scoreV2 != null) {
@@ -2216,21 +2491,28 @@ function collectDanClears(
       } else {
         accuracy = stable ?? displayed;
         threshold += STABLE_EQUIVALENT_V2_BAR_OFFSET;
+        currency = "stable";
       }
       // For a stable-only row judged against a v2 bar, threshold is already
       // the converted 97.5%, so the credit window and the bonus headroom both
       // shift with it: the whole scale rides the converted bar, deliberately.
       if (play.vibroAdjustment) accuracy = conservativeVibroAccuracy(accuracy, play.vibroAdjustment.judgementShare);
-      const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount);
+      // The jack tile's bonus is damped (DAN_CREDIT_JACK_BONUS_SCALE), so the
+      // credit needs to know the clear's primary tile. Same filing the
+      // aggregation does (groupDanClearsBySkillset), read once per clear.
+      const primaryTile = side === "rc" && keyCount === 4
+        ? danSkillsetBucketsForPlay(danSkillsetBuckets(keyCount, side), play, info)[0]?.id ?? null
+        : null;
+      const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount, { primaryTile });
       if (creditedDan == null) {
         // The bar is where a clear credits the chart's full dan, but a pass
         // under it still credits a decayed dan down to the ladder's window
         // edge, so the number this play actually missed is that floor.
         const floor = Math.round((threshold - danCreditBelowBarWindowFor(side, keyCount)) * 1000) / 1000;
-        reject(play, "below_bar", { side, chartDan: rawDan, chartDanLabel, accuracy, bar: threshold, minAccuracy: floor });
+        reject(play, "below_bar", { side, chartDan: rawDan, chartDanLabel, accuracy, bar: threshold, minAccuracy: floor, currency });
         return;
       }
-      clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold });
+      clears.push({ play, side, chartDan: rawDan, chartDanLabel, creditedDan, accuracy, bar: threshold, currency });
     };
     // The dan the play is measured against is the target resolved above
     // (danClearTargetFor owns the branch order); a play with none credits
@@ -2758,6 +3040,7 @@ interface PlayCandidate {
   beatmapId: number;
   rate: number;
   goal: number;
+  lnGoal?: number;
   lnRatio: number | null;
   identity: string;
   source: "top" | "tracked";
@@ -2768,6 +3051,9 @@ interface PlayCandidate {
   chartOdPending: boolean;
   /** Set under Invert: rated against the inverted chart, in its own slot. */
   inverse: boolean;
+  tapWifeOd?: number;
+  tapWifeFileVersion?: string;
+  wifeCalibration?: StoredWifeCalibration;
 }
 
 /**
@@ -2785,7 +3071,7 @@ export async function computePlayerSkillRatings(
   scores: OscScore[],
   previousPlays: StoredPlaySsr[],
   options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[]; previousVibroExcluded?: StoredVibroExclusion[] } = {},
-): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; danOnly: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number }> {
+): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; danOnly: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number; deferredLnMigrations: number; deferredCalibration: number }> {
   const topPlays = scores.filter((score) => typeof score.pp === "number" && score.pp > 0);
   const trackedScores = options.trackedScores ?? [];
   const untrustedIdentities = options.untrustedIdentities ?? new Set<string>();
@@ -2794,8 +3080,8 @@ export async function computePlayerSkillRatings(
   let pendingPlays = 0;
   let unsupportedPlays = 0;
 
-  // Chart analysis facts load before the SSR loop because the lazer LN goal
-  // fade needs each chart's lnRatio, and the goal is part of the SSR reuse
+  // Chart analysis facts load before the SSR loop because calibration
+  // needs each chart's lnRatio, and the goal is part of the SSR reuse
   // key: when an analysis row lands later, the goal shifts and the play
   // recomputes on the next pass. Previous plays' charts load too so retained
   // plays keep their tags fresh and newly vibro-flagged tracked charts drop.
@@ -2810,11 +3096,16 @@ export async function computePlayerSkillRatings(
   // for every enriched chart, analyzed or not; the goal is part of the SSR
   // reuse key, so an OD landing later shifts the goal and the play recomputes.
   const odByBeatmap = await loadBeatmapOds(db, [...topPlays.map(beatmapIdOf), ...trackedScores.map(beatmapIdOf)]);
+  const cachedFileVersions = new Map((await exec(db,
+    "select beatmap_id, fetched_at from beatmap_osu_files where beatmap_id in (select value from json_each(?))",
+    [json([...new Set([...topPlays.map(beatmapIdOf), ...trackedScores.map(beatmapIdOf), ...previousPlays.map((play) => play.beatmapId)])])],
+  )).rows.map((row) => [Number(row.beatmap_id), String(row.fetched_at)]));
 
   // PP-backed trust remains the legacy policy for hold-heavy/wider charts.
   // 4K rice uses the actual note structure for every source and speed.
   const ppBackedChartIds = new Set(
-    topPlays.map(beatmapIdOf).filter((id) => Number.isInteger(id) && id > 0),
+    [...topPlays.map(beatmapIdOf), ...previousPlays.filter((play) => play.source === "top").map((play) => play.beatmapId)]
+      .filter((id) => Number.isInteger(id) && id > 0),
   );
 
   // Best candidate per (chart, rate): tracked retries collapse onto the
@@ -2832,10 +3123,12 @@ export async function computePlayerSkillRatings(
   // A first-time chart may have its .osu before its analysis job finishes.
   // Resolve the actual hold share (and missing OD) before comparing goals;
   // otherwise a raw-accuracy fallback can win a slot and publish inflated SSRs.
-  const goalFactsByBeatmap = new Map<number, { lnRatio: number; od: number | null } | null>();
+  const goalFactsByBeatmap = new Map<number, { lnRatio: number; od: number | null; keyCount: number; nativeMania: boolean } | null>();
+  let goalFactReads = 0;
   const pendingGoalIdentities = new Set<string>();
+  const pendingCalibrationEvidence = new Map<string, StoredPlaySsr>();
   const resolvedGoalsByIdentity = new Map<string, number>();
-  const consider = async (score: OscScore, source: "top" | "tracked") => {
+  const consider = async (score: OscScore & { retainedRate?: number }, source: "top" | "tracked") => {
     const beatmapId = beatmapIdOf(score);
     if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
       if (source === "top") unsupportedPlays += 1;
@@ -2857,8 +3150,8 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    const rate = getPlayRate(score.mods);
-    if (rate == null) {
+    const rate = score.retainedRate ?? getPlayRate(score.mods);
+    if (rate == null || !Number.isFinite(rate) || rate <= 0) {
       if (source === "top") unsupportedPlays += 1;
       return;
     }
@@ -2867,42 +3160,114 @@ export async function computePlayerSkillRatings(
     const odOverride = difficultyAdjustOd(score.mods);
     let chartOd = odByBeatmap.get(beatmapId) ?? info?.od ?? null;
     let lnRatio = inverse ? 1 : info?.lnRatio ?? null;
-    const hasJudgements = Object.values(getScoreHitCounts(score)).some((count) => count > 0);
-    if (hasJudgements && ((isLazerScore(score) && lnRatio == null) || (odOverride == null && chartOd == null))) {
-      if (!goalFactsByBeatmap.has(beatmapId) && goalFactsByBeatmap.size < MAX_CALC_RUNS_PER_COMPUTE) {
+    const hasJudgements = Object.values(readWifeCounts(score.statistics ?? {})).some((count) => count > 0);
+    const needsWifeFacts = hasJudgements || (Number.isFinite(score.accuracy) && score.accuracy > 0);
+    const needsOriginalFacts = needsWifeFacts && (lnRatio == null || (odOverride == null && chartOd == null));
+    let wifeCalibration: StoredWifeCalibration | undefined;
+    let ssrFacts: SsrChartFacts | undefined;
+    if (needsWifeFacts) {
+      const previous = previousByIdentity.get(getScoreIdentity(score));
+      const verified = previous?.wifeCalibration ?? (previous?.tapWifeOd != null ? {
+        chartOd: previous.tapWifeOd, chartHoldRatio: 0, keyCount: 4, fileVersion: previous.tapWifeFileVersion,
+      } : null);
+      // Verified file facts let a large retained pool make bounded progress:
+      // earlier plays do not consume every fact-read slot on each retry.
+      if (previous?.beatmapId === beatmapId && verified
+        && verified.fileVersion != null && verified.fileVersion === cachedFileVersions.get(beatmapId)
+        && (chartOd == null || chartOd === verified.chartOd)) {
+        goalFactsByBeatmap.set(beatmapId, { lnRatio: verified.chartHoldRatio, od: verified.chartOd,
+          keyCount: verified.keyCount, nativeMania: true });
+      }
+    }
+    if (needsOriginalFacts || needsWifeFacts) {
+      if (!goalFactsByBeatmap.has(beatmapId) && goalFactReads < MAX_CALC_RUNS_PER_COMPUTE) {
+        goalFactReads += 1;
         const osuText = await loadOsuText(db, osu, beatmapId);
         const map = osuText == null ? null : parseManiaBeatmap(osuText);
         goalFactsByBeatmap.set(beatmapId, map && map.notes.length > 0 ? {
           lnRatio: map.notes.filter((note) => note.isHold).length / map.notes.length,
           od: parseOsuOd(osuText!),
+          keyCount: parseOsuKeyCount(osuText!) ?? 0,
+          nativeMania: /^Mode\s*:\s*3\s*$/m.test(osuText!),
         } : null);
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
       const facts = goalFactsByBeatmap.get(beatmapId);
       if (!facts) {
         pendingPlays += 1;
-        pendingGoalIdentities.add(getScoreIdentity(score));
-        return;
+        const previous = previousByIdentity.get(getScoreIdentity(score));
+        const retainPendingEvidence = () => {
+          if (!previous || previous.beatmapId !== beatmapId) return;
+          pendingCalibrationEvidence.set(previous.identity, { ...previous, rate, source,
+            score: playerSkillScoreDetails(score, previous.score), accuracy: getDisplayedAccuracy(score),
+            stableAccuracy: hasJudgements ? calculateStableAccuracy(score.statistics ?? {}) || null
+              : previous.accuracy === getDisplayedAccuracy(score) ? previous.stableAccuracy : null,
+            mods: score.mods == null ? previous.mods : getModAcronyms(score.mods, false),
+            values: {}, ratingExcluded: true, calibrationPending: true,
+          });
+        };
+        if (!goalFactsByBeatmap.has(beatmapId) && goalFactReads >= MAX_CALC_RUNS_PER_COMPUTE) {
+          // A budget-deferred immutable score keeps its prior evidence until
+          // the next bounded pass. Proven corrections cannot inherit it.
+          if (previous && (previous.rate !== rate || (previous.inverse === true) !== inverse
+            || (previous.odOverride ?? null) !== (odOverride ?? null))) pendingGoalIdentities.add(getScoreIdentity(score));
+          return;
+        }
+        const verifiedOd = previous?.wifeCalibration?.chartOd ?? previous?.tapWifeOd;
+        if (needsWifeFacts && previous && verifiedOd != null) {
+          // File eviction must not downgrade a verified score to the old
+          // model. Keep its last result while retrying, but a corrected
+          // histogram/client/OD cannot inherit that old goal.
+          const sameEvidence = previous.wifeScoring === wifeScoringFor(score)
+            && (chartOd == null || verifiedOd === chartOd)
+            && previous.rate === rate && (previous.odOverride ?? null) === (odOverride ?? null)
+            && previous.mods?.includes("CL") === getModAcronyms(score.mods, false).includes("CL")
+            && (hasJudgements || previous.accuracy === getDisplayedAccuracy(score))
+            && JSON.stringify(readWifeCounts(previous.score?.statistics ?? {})) === JSON.stringify(readWifeCounts(score.statistics ?? {}));
+          if (!sameEvidence || previous.wifeCalibration?.version !== WIFE_CALIBRATION_VERSION || previous.lnGoal == null) {
+            pendingGoalIdentities.add(getScoreIdentity(score));
+            retainPendingEvidence();
+          }
+          return;
+        }
+        if (needsOriginalFacts) {
+          pendingGoalIdentities.add(getScoreIdentity(score));
+          retainPendingEvidence();
+          return;
+        }
+      } else {
+        lnRatio = inverse ? 1 : facts.lnRatio;
+        chartOd = facts.od ?? chartOd;
+        if (chartOd != null) odByBeatmap.set(beatmapId, chartOd);
+        if (facts.nativeMania && isMsdSupportedKeyCount(facts.keyCount) && chartOd != null) {
+          wifeCalibration = { version: WIFE_CALIBRATION_VERSION, chartOd, chartHoldRatio: facts.lnRatio,
+            keyCount: facts.keyCount, fileVersion: cachedFileVersions.get(beatmapId) ?? null, basis: hasJudgements ? "judgments" : "accuracy-only" };
+          ssrFacts = { keyCount: facts.keyCount, nativeMania: true, rate };
+        }
       }
-      lnRatio ??= facts.lnRatio;
-      chartOd ??= facts.od;
-      if (chartOd != null) odByBeatmap.set(beatmapId, chartOd);
     }
-    // ...unless DA widened those windows below the chart's own OD, which is
-    // not a play of this chart at all (daWidensHitWindows). With no OD on the
-    // beatmaps row yet the decision waits for the calc loop, which reads the
-    // chart's OD off the .osu it loads anyway: refusing here on the floor
-    // alone would throw out an honest raise (OD 3 set to 5) with the abuse.
-    if (chartOd != null && daWidensHitWindows(odOverride, chartOd)) {
+    // ...unless DA widened those windows below the chart's own OD and under
+    // the ladder's floor, which is not a play of this chart at all
+    // (daWidensHitWindows). With no OD on the beatmaps row yet the decision
+    // waits for the calc loop, which reads the chart's OD off the .osu it
+    // loads anyway: refusing here on the floor alone would throw out an
+    // honest raise (OD 3 set to 5) with the abuse.
+    // The ladder's floor reads the analysis row, or the .osu facts the wife
+    // goal just loaded when the row is not there yet.
+    const factsForFloor = goalFactsByBeatmap.get(beatmapId);
+    const daFloor = daRatingOdFloorFor(info?.keyCount ?? factsForFloor?.keyCount, inverse,
+      { lnRatio: info?.lnRatio ?? factsForFloor?.lnRatio, lnEffectiveRatio: info?.lnEffectiveRatio });
+    if (chartOd != null && daWidensHitWindows(odOverride, chartOd, daFloor)) {
       widenedWindowIdentities.add(getScoreIdentity(score));
       if (source === "top") unsupportedPlays += 1;
       return;
     }
-    // Under Invert every object is a hold, so the LN goal fade is the whole
-    // fade regardless of what the stored chart's hold share was.
+    // Under Invert every played object is a hold; calibration uses that
+    // transformed hold share rather than the original chart's share.
     // The MSD floor must not erase a passed score from Dan evidence. Carry
     // it through chart/mod validation, but never run MinaCalc at this floor.
-    const goal = ssrGoalForScore(score, lnRatio, odOverride ?? chartOd) ?? SSR_GOAL_MIN;
+    const calibrated = calibrateScoreForMsd(score, lnRatio, odOverride ?? chartOd, ssrFacts);
+    const goal = calibrated.goal ?? SSR_GOAL_MIN;
     resolvedGoalsByIdentity.set(getScoreIdentity(score), goal);
     const key = playSlotKey(beatmapId, rate, inverse);
     const existing = candidates.get(key);
@@ -2917,12 +3282,44 @@ export async function computePlayerSkillRatings(
       || (tiedQuality && source === "top" && existing.source === "tracked")) {
       candidates.set(key, {
         score, beatmapId, rate, goal, lnRatio, identity: getScoreIdentity(score), source,
+        lnGoal: calibrated.lnGoal ?? undefined,
         odOverride, chartOdPending: odOverride != null && chartOd == null, inverse,
+        wifeCalibration,
       });
     }
   };
   for (const score of topPlays) await consider(score, "top");
   for (const score of trackedScores) await consider(score, "tracked");
+
+  // Re-evaluate retained counts when their provenance was recorded, including
+  // Dan-only scores. Older records without provenance keep their existing
+  // estimate until an exact source score is available; never guess a client.
+  const visibleIdentities = new Set([...topPlays, ...trackedScores].map(getScoreIdentity));
+  for (const play of previousPlays) {
+    if (visibleIdentities.has(play.identity) || !isMsdSupportedKeyCount(play.keyCount)
+      || (!play.score?.statistics && !play.vibroClearEvidence?.statistics && !Number.isFinite(play.accuracy ?? play.stableAccuracy)) || !play.mods) continue;
+    if (play.source !== "top" && untrustedIdentities.has(play.identity)) continue;
+    if ((!play.inverse && play.mods.includes(INVERSE_MOD_VARIANT))
+      || (play.inverse && !INVERSE_MOD_KEY_COUNTS.has(play.keyCount))) continue;
+    const id = Number(/^official:(\d+)$/.exec(play.identity)?.[1]);
+    if (!(id > 0)) continue;
+    const score = {
+      id, user_id: 0, beatmap_id: play.beatmapId, retainedRate: play.rate,
+      ...(play.wifeScoring === "stable" ? { legacy_score_id: id } : {}),
+      wifeScoring: play.wifeScoring ?? "unknown",
+      accuracy: play.accuracy ?? play.stableAccuracy ?? 0,
+      statistics: play.score?.statistics ?? play.vibroClearEvidence?.statistics ?? {}, mods: play.mods.map((acronym): OsuMod => {
+        const mod: OsuMod = { acronym };
+        if (["DT", "NC", "HT", "DC"].includes(acronym)) mod.settings = { speed_change: play.rate };
+        else if (acronym === "DA" && play.odOverride != null) mod.settings = { overall_difficulty: play.odOverride };
+        return mod;
+      }),
+      pp: play.pp, passed: true, rank: play.score?.rank ?? "",
+      max_combo: play.score?.maxCombo ?? 0, score: play.score?.totalScore ?? 0,
+      ended_at: play.endedAt ?? undefined,
+    };
+    await consider(score, play.source ?? "tracked");
+  }
 
   // One score id has exactly one true rate; the retention pass uses this to
   // drop stored plays that contradict a live candidate's rate.
@@ -2945,6 +3342,9 @@ export async function computePlayerSkillRatings(
   };
 
   const analyzedByKey = new Map<string, StoredPlaySsr>();
+  for (const play of pendingCalibrationEvidence.values()) {
+    analyzedByKey.set(playSlotKey(play.beatmapId, play.rate, play.inverse), play);
+  }
   // Keep explanations beside the rated pool. They never seed SSR reuse or
   // enter an aggregate, but survive when the original score ages out.
   const excludedByKey = new Map<string, StoredVibroExclusion>();
@@ -2954,6 +3354,8 @@ export async function computePlayerSkillRatings(
     return counts.some((count) => count > 0) ? JSON.stringify(counts) : undefined;
   };
   const excludeVibro = (play: StoredPlaySsr, reason: StoredVibroExclusion["reason"], fresh = false) => {
+    const historical = previousByIdentity.get(play.identity)?.vibroClearEvidence;
+    if (!play.vibroClearEvidence && historical) play = { ...play, vibroClearEvidence: historical };
     const key = playSlotKey(play.beatmapId, play.rate, play.inverse);
     const previous = excludedByKey.get(key);
     if (!previous || ((fresh || previous.checkedVersion !== RATE_VIBRO_CHECK_VERSION) && play.identity === previous.play.identity)
@@ -2978,6 +3380,7 @@ export async function computePlayerSkillRatings(
   }
   let calcRuns = 0;
   let calcRunsTotal = 0;
+  let deferredCalibration = 0;
   let rateVibroChecks = 0;
   const pendingRateVibroKeys = new Set<string>();
   for (const [key, candidate] of candidates) {
@@ -2988,28 +3391,34 @@ export async function computePlayerSkillRatings(
         pendingPlays += 1;
         continue;
       }
-      if (daWidensHitWindows(candidate.odOverride, chartOd)) {
+      const pendingInfo = infoByBeatmap.get(beatmapId);
+      const daFloor = daRatingOdFloorFor(pendingInfo?.keyCount, candidate.inverse, { lnRatio: candidate.lnRatio, lnEffectiveRatio: pendingInfo?.lnEffectiveRatio });
+      if (daWidensHitWindows(candidate.odOverride, chartOd, daFloor)) {
         widenedWindowIdentities.add(identity);
         if (source === "top") unsupportedPlays += 1;
         continue;
       }
     }
     scoresByIdentity.set(identity, score);
+    const previous = previousByIdentity.get(identity);
+    const hasJudgments = Object.values(readWifeCounts(score.statistics ?? {})).some((count) => count > 0);
     const clearEvidence = {
       score: playerSkillScoreDetails(score, previousByIdentity.get(identity)?.score),
       source,
       accuracy: getDisplayedAccuracy(score),
-      stableAccuracy: calculateStableAccuracy(score.statistics ?? {}) || null,
-      scoreV2Accuracy: calculateScoreV2Accuracy(score.statistics) || null,
-      customAccuracy: getStoredScoreAccuracy(score),
-      missShare: getMissShare(score.statistics),
+      stableAccuracy: hasJudgments ? calculateStableAccuracy(score.statistics ?? {}) || null : previous?.stableAccuracy ?? null,
+      scoreV2Accuracy: hasJudgments ? calculateScoreV2Accuracy(score.statistics) || null : previous?.scoreV2Accuracy ?? null,
+      customAccuracy: hasJudgments ? getStoredScoreAccuracy(score) : previous?.customAccuracy ?? getStoredScoreAccuracy(score),
+      missShare: hasJudgments ? getMissShare(score.statistics) : previous?.missShare ?? null,
       endedAt: score.ended_at ?? score.created_at ?? null,
       rateMod: getRateModAcronym(score.mods),
       mods: score.mods == null ? undefined : getModAcronyms(score.mods, false),
       ezWindows: score.mods == null ? undefined : ezWindowScale(score) > 1,
       odOverride: difficultyAdjustOd(score.mods),
+      wifeScoring: wifeScoringFor(score),
+      wifeCalibration: candidate.wifeCalibration ?? null,
+      lnGoal: candidate.lnGoal,
     };
-    const previous = previousByIdentity.get(identity);
     const exclusionPlay = (keyCount: number): StoredPlaySsr => ({
       identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0,
       // Freshly rejected plays need no MinaCalc pass. Existing vectors are
@@ -3041,8 +3450,12 @@ export async function computePlayerSkillRatings(
     }
     if (
       previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal
+      && previous.calibrationPending !== true
+      && !(previous.wifeCalibration?.fileVersion && candidate.wifeCalibration?.fileVersion
+        && previous.wifeCalibration.fileVersion !== candidate.wifeCalibration.fileVersion)
       && (goal > SSR_GOAL_MIN || previous.ratingExcluded === true)
       && (previous.inverse === true) === candidate.inverse
+      && playTailPassCurrent(previous, infoByBeatmap.get(beatmapId))
     ) {
       analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence,
         // A corrected score must re-earn its exception from the current counts.
@@ -3050,14 +3463,19 @@ export async function computePlayerSkillRatings(
       });
       continue;
     }
-    if (calcRunsTotal >= MAX_CALC_RUNS_PER_COMPUTE) {
+    if (calcRunsTotal + (goal > SSR_CALC_GOAL_CAP ? 4 : 2) > MAX_CALC_RUNS_PER_COMPUTE) {
       pendingPlays += 1;
+      deferredCalibration += 1;
+      if (previous) analyzedByKey.set(key, { ...exclusionPlay(previous.keyCount), values: {},
+        ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
       continue;
     }
 
     const osuText = await loadOsuText(db, osu, beatmapId);
     if (osuText == null) {
       pendingPlays += 1;
+      if (previous) analyzedByKey.set(key, { ...exclusionPlay(previous.keyCount), values: {},
+        ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
       continue;
     }
     // Converts serve the std .osu under the mania beatmap id; the calc would
@@ -3128,14 +3546,26 @@ export async function computePlayerSkillRatings(
     }
     const ssr = await computePlaySsrValues(ratedText, {
       rate, keyCount, goal: ratingGoal,
+      lnGoal: candidate.lnGoal == null ? undefined : vibroAdjustment ? conservativeVibroAccuracy(candidate.lnGoal, vibroAdjustment.judgementShare) : candidate.lnGoal,
       lnRatio: candidate.lnRatio,
+      od: candidate.odOverride ?? odByBeatmap.get(beatmapId) ?? infoByBeatmap.get(beatmapId)?.od ?? null,
     });
     if (!ssr) {
       if (source === "top") unsupportedPlays += 1;
+      // A rejected chart/calculator result cannot erase the only surviving
+      // score input while replacing its old calibration. Keep unrated evidence
+      // for a later file/model repair; no immediate continuation loop.
+      if (previous) {
+        pendingPlays += 1;
+        analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {},
+          ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
+      }
       continue;
     }
     analyzedByKey.set(key, {
       identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: ssr.values, patterns: [], ...clearEvidence,
+      lnTailPass: LN_TAIL_PASS_VERSION,
+      ...(ssr.lnSkill ? { lnSkill: ssr.lnSkill } : {}),
       ...(rateVibroChecked != null ? { rateVibroChecked } : {}),
       ...(vibroAdjustment ? { vibroAdjustment } : {}),
       ...(vibroClearEvidence ? { vibroClearEvidence } : {}),
@@ -3198,7 +3628,11 @@ export async function computePlayerSkillRatings(
     // exclusion existed even after their score payload is gone - which is the
     // common case, since DA earns no pp and such plays are tracked-sourced.
     if (widenedWindowIdentities.has(previous.identity)) continue;
-    if (previous.odOverride != null && daWidensHitWindows(previous.odOverride, (await chartOdFor(previous.beatmapId)) ?? null)) continue;
+    if (previous.odOverride != null) {
+      const previousInfo = infoByBeatmap.get(previous.beatmapId);
+      const daFloor = daRatingOdFloorFor(previous.keyCount, previous.inverse, { lnRatio: previous.inverse ? 1 : previousInfo?.lnRatio, lnEffectiveRatio: previousInfo?.lnEffectiveRatio });
+      if (daWidensHitWindows(previous.odOverride, (await chartOdFor(previous.beatmapId)) ?? null, daFloor)) continue;
+    }
     if (
       infoByBeatmap.get(previous.beatmapId)?.vibro &&
       previous.keyCount !== 4 &&
@@ -3263,13 +3697,17 @@ export async function computePlayerSkillRatings(
       }
       const ssr = needsCalc ? await computePlaySsrValues(ratedText, {
         rate: play.rate, keyCount: play.keyCount, goal: ratingGoal,
+        lnGoal: play.lnGoal == null ? undefined : check.adjustment ? conservativeVibroAccuracy(play.lnGoal, check.adjustment.judgementShare) : play.lnGoal,
         lnRatio: play.inverse ? 1 : infoByBeatmap.get(play.beatmapId)?.lnRatio,
+        od: play.odOverride ?? infoByBeatmap.get(play.beatmapId)?.od,
       }) : null;
       if (needsCalc && !ssr) { pendingRateVibroKeys.add(key); continue; }
       calcRunsTotal += ssr?.calcRuns ?? 0;
       analyzedByKey.set(key, {
         ...play, values: ratingGoal <= SSR_GOAL_MIN ? {} : ssr?.values ?? play.values,
+        ...(ssr ? { lnTailPass: LN_TAIL_PASS_VERSION, lnSkill: ssr.lnSkill } : {}),
         ratingExcluded: ratingGoal <= SSR_GOAL_MIN,
+        calibrationPending: false,
         vibroAdjustment: check.adjustment, vibroClearEvidence: check.clearEvidence, rateVibroChecked: RATE_VIBRO_CHECK_VERSION,
       });
     }
@@ -3283,10 +3721,76 @@ export async function computePlayerSkillRatings(
       pendingRateVibroKeys.add(key);
     }
   }
-  const analyzed = [...analyzedByKey.values()];
+
+  // A retained play can outlive the score payload that originally put it in
+  // the candidate loop. Tail-pass migrations still have enough durable input
+  // to rerate it (chart, rate and goal), so refresh those stale copies here
+  // instead of preserving an inflated SSR forever. A missing cached chart
+  // leaves the old stamp in place and retries on the next ordinary compute.
+  const pendingMigrations = new Set<string>();
+  const deferredMigrations = new Set<string>();
+  for (const [key, play] of analyzedByKey) {
+    const info = infoByBeatmap.get(play.beatmapId);
+    if (play.ratingExcluded || playTailPassCurrent(play, info)) continue;
+    // The tail pass can need four runs (base + extrapolation, twice). Reserve
+    // the whole operation so retained history obeys the candidate loop's cap.
+    const neededRuns = play.goal > SSR_CALC_GOAL_CAP ? 4 : 2;
+    if (calcRunsTotal + neededRuns > MAX_CALC_RUNS_PER_COMPUTE) {
+      pendingMigrations.add(play.identity);
+      deferredMigrations.add(play.identity);
+      continue;
+    }
+    const osuText = await loadOsuText(db, osu, play.beatmapId);
+    const ratedText = osuText == null ? null : ratedOsuTextFor(osuText, play.inverse);
+    if (ratedText == null) { pendingMigrations.add(play.identity); continue; }
+    const ssr = await computePlaySsrValues(ratedText, {
+      rate: play.rate,
+      keyCount: play.keyCount,
+      goal: play.vibroAdjustment ? conservativeVibroAccuracy(play.goal, play.vibroAdjustment.judgementShare) : play.goal,
+      lnGoal: play.lnGoal == null ? undefined : play.vibroAdjustment ? conservativeVibroAccuracy(play.lnGoal, play.vibroAdjustment.judgementShare) : play.lnGoal,
+      od: play.odOverride ?? info?.od ?? parseOsuOd(ratedText),
+    });
+    if (!ssr) { pendingMigrations.add(play.identity); continue; }
+    analyzedByKey.set(key, { ...play, values: ssr.values, lnTailPass: LN_TAIL_PASS_VERSION, lnSkill: ssr.lnSkill });
+    calcRuns += ssr.calcRuns;
+    calcRunsTotal += ssr.calcRuns;
+    if (calcRuns >= 5) {
+      calcRuns = 0;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+  // LN has its own inexpensive pass and migration stamp; adding or tuning it
+  // never requires rerunning MinaCalc. Bound large retained histories too.
+  let lnComputes = 0;
+  const lnTexts = new Map<number, Promise<string | null>>();
+  const readLnText = (id: number) => {
+    let text = lnTexts.get(id);
+    if (!text) lnTexts.set(id, (text = loadOsuText(db, osu, id)));
+    return text;
+  };
+  for (const [key, play] of analyzedByKey) {
+    const info = infoByBeatmap.get(play.beatmapId);
+    if (play.ratingExcluded || playLnSkillCurrent(play, info)) continue;
+    if (lnComputes >= MAX_CALC_RUNS_PER_COMPUTE) {
+      pendingMigrations.add(play.identity);
+      deferredMigrations.add(play.identity);
+      analyzedByKey.set(key, { ...play, lnSkill: undefined, values: { ...play.values, LN: 0 } });
+      continue;
+    }
+    lnComputes += 1;
+    const refreshed = await refreshPlayLnSkill(play, info, readLnText);
+    analyzedByKey.set(key, refreshed);
+    if (!playLnSkillCurrent(refreshed, info)) pendingMigrations.add(play.identity);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  const analyzed = [...analyzedByKey.values()].map((play) => {
+    if (!play.lnSkill?.structure) return play;
+    const { structure, ...compact } = play.lnSkill;
+    return { ...play, lnSkill: { ...compact, structureKey: compact.structureKey ?? structure.cacheKey } };
+  });
   const rated = analyzed.filter((play) => !play.ratingExcluded);
   const danOnly = analyzed.filter((play) => play.ratingExcluded);
-  unsupportedPlays += danOnly.filter((play) => play.source === "top").length;
+  unsupportedPlays += danOnly.filter((play) => play.source === "top" && !play.calibrationPending).length;
   // A newly eligible/better play on a slot replaces its former explanation.
   for (const key of analyzedByKey.keys()) excludedByKey.delete(key);
   const vibroExcluded = [...excludedByKey.values()];
@@ -3296,11 +3800,11 @@ export async function computePlayerSkillRatings(
 
   // Pattern tags apply fresh every compute (never from the SSR cache):
   // analysis rows keep landing after the plays that referenced them. The info
-  // map itself was loaded up-front for the goal fade.
+  // map itself was loaded up-front for score calibration.
   const untaggedBeatmapIds: number[] = [];
   for (const play of analyzed) {
     const info = infoByBeatmap.get(play.beatmapId);
-    if (info) play.patterns = play.inverse ? INVERSE_MOD_PATTERNS : info.patterns;
+    if (info) play.patterns = play.inverse ? INVERSE_MOD_PATTERNS : playPatternsFor(info, play.rate, play.keyCount, play.lnSkill);
     else untaggedBeatmapIds.push(play.beatmapId);
   }
 
@@ -3351,6 +3855,7 @@ export async function computePlayerSkillRatings(
       analyzedPlays: list.filter((play) => !play.ratingExcluded).length,
       ratings: aggregateModeRatings(list),
       patterns: aggregateModePatternRatings(list),
+      ...(isLnSkillSupported(keyCount) ? { lnSkillVersion: LN_SKILL_VERSION } : {}),
       dan: computeModeDan(keyCount, list, scoresByIdentity, infoByBeatmap, options.courseClears, rateVerdicts),
     }))
     .sort((a, b) => b.analyzedPlays - a.analyzedPlays);
@@ -3359,7 +3864,7 @@ export async function computePlayerSkillRatings(
     summary: {
       totalPlays: rated.length + pendingPlays + unsupportedPlays,
       analyzedPlays: rated.length,
-      pendingPlays,
+      pendingPlays: pendingPlays + [...analyzedByKey].filter(([key, play]) => pendingMigrations.has(play.identity) && !pendingRateVibroKeys.has(key)).length,
       unsupportedPlays,
       modes,
     },
@@ -3368,6 +3873,8 @@ export async function computePlayerSkillRatings(
     vibroExcluded,
     untaggedBeatmapIds: [...new Set(untaggedBeatmapIds)],
     pendingRateVibroChecks: pendingRateVibroKeys.size,
+    deferredLnMigrations: deferredMigrations.size,
+    deferredCalibration,
   };
 }
 
@@ -3385,7 +3892,7 @@ async function loadOsuText(db: Db, osu: Pick<OsuApiClient, "getBeatmapFile">, be
 
 type ProfileOsuClient = Pick<OsuApiClient, "getBeatmapFile" | "getUserByKey" | "getUserBestScoresWindow">;
 
-export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: { userId: number; rateVibroPending?: number }): Promise<void> {
+export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: { userId: number; rateVibroPending?: number; calibrationPending?: number }): Promise<void> {
   const userId = Math.floor(Number(payload?.userId));
   if (!Number.isInteger(userId) || userId <= 0) return;
 
@@ -3479,6 +3986,19 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       } else {
         logWarn("player_skills_rate_vibro_recheck_stalled", { userId, pending: result.pendingRateVibroChecks });
       }
+    }
+    if (result.deferredLnMigrations > 0) {
+      // A budget boundary is resumable local work, not a reason to wait for
+      // another profile view. A changing progress key lets the active chunk
+      // finish before the next one is claimed. Missing files alone never loop.
+      const migrated = `${result.plays.filter(play => play.lnTailPass === LN_TAIL_PASS_VERSION).length}:${result.plays.filter(play => play.lnSkill?.version === LN_SKILL_VERSION).length}`;
+      await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:${PLAYER_SKILLS_VERSION}:${userId}:ln:${migrated}`,
+        { userId }, { priority: -5, replaceDone: true });
+    }
+    if (result.deferredCalibration > 0 && (payload.calibrationPending == null || result.deferredCalibration < payload.calibrationPending)) {
+      await queue.enqueue(PLAYER_SKILLS_JOB,
+        `player-skills:${PLAYER_SKILLS_VERSION}:${userId}:wife:${result.deferredCalibration}`,
+        { userId, calibrationPending: result.deferredCalibration }, { priority: -5, replaceDone: true });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -3585,6 +4105,7 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number, knownS
     const statistics = parseJson<OscScore["statistics"] | null>(String(row.best_statistics_json ?? ""), null);
     const score = {
       id: Number(row.best_solo_score_id) > 0 ? Number(row.best_solo_score_id) : Number.isFinite(scoreId) && scoreId > 0 ? scoreId : 0,
+      wifeScoring: row.best_is_lazer === 0 ? "stable" : row.best_is_lazer === 1 ? "lazer" : "unknown",
       ...(Number(row.best_solo_score_id) > 0 ? {
         type: "solo_score",
         // Stable graveyard plays can have only a solo id. Zero is the raw
@@ -3907,14 +4428,12 @@ export async function getPlayerSkillPlays(
       if (!play || play.keyCount !== keyCount || !Number.isInteger(play.beatmapId) || play.beatmapId <= 0) return [];
       if (patternId && !Array.isArray(play.patterns)) return [];
       if (patternId && !play.patterns.includes(patternId)) return [];
-      const rating = Number(play.values?.[patternId ? "Overall" : axis] ?? 0);
+      const rating = patternId ? patternPlayRating(play, patternId) : Number(play.values?.[axis] ?? 0);
       if (!Number.isFinite(rating) || rating <= 0) return [];
       return [{ play, rating }];
     });
-  // No LN re-check here: the lnRatio gate rides on the stored ln tag itself
-  // (loadChartSkillInfo), so this list and the LN rating above it are the same
-  // set of plays. Plays stored before the gate keep their old tags until the
-  // profile's next recompute.
+  // Only 4K LN uses the versioned independent SSR and its eligibility;
+  // every other pattern axis keeps Overall on the same tagged plays.
   const ranked = candidates.sort(comparePlayerSkillPlays(sort));
   const cohort = options.scoreId != null
     ? ranked.filter(({ play }) => play.identity === `official:${options.scoreId}`)
@@ -4130,7 +4649,7 @@ export function buildPlayerSkillPlay(
     coverUrl: map?.coverUrl ?? null,
     beatmapStatus: map?.status ?? null,
     keyCount,
-    ...(play.ratingExcluded ? { ratingExcluded: true, ratingExclusionReason: "msd_floor" as const } : {}),
+    ...(play.ratingExcluded ? { ratingExcluded: true, ratingExclusionReason: play.calibrationPending ? "pending_calibration" as const : "msd_floor" as const } : {}),
     ...(play.vibroAdjustment ? { vibroAdjustment: play.vibroAdjustment } : {}),
     ...(play.vibroClearEvidence ? { vibroClearEvidence: summarizeVibroClear(play.vibroClearEvidence) } : {}),
     rating: Math.round(rating * 100) / 100,
@@ -4169,6 +4688,8 @@ export interface PlayerSkillDanEvidencePlay {
   creditedDan: number;
   creditedDanLabel: string;
   clearAccuracy: number;
+  /** The formula clearAccuracy is written in, which is not always the one the client showed. */
+  currency: "stable" | "v2";
   /** The skillset tiles this clear is filed under; two when the rules share it. */
   skillsets: string[];
   countsTowardDan: boolean;
@@ -4247,6 +4768,8 @@ export interface PlayerSkillDanRejectedPlay {
   bar: number | null;
   /** Only set for below_bar: the lowest accuracy that would still have credited. */
   minAccuracy: number | null;
+  /** Only set for below_bar: the formula clearAccuracy, bar and minAccuracy are written in. */
+  currency: "stable" | "v2" | null;
   /** Only set for low_od: the OD the play was judged at, which failed the floor. */
   od: number | null;
   /** The skillset tiles it would have been filed under, had it counted. */
@@ -4602,7 +5125,17 @@ function resolveTilesForClear(
     const base = dominantSkillset(pickSkillsets(values, BASE_MSD_SKILLSETS));
     if (base !== "Stream" && base !== "Technical") return filed;
     const modelled = speedTechTiles(values, chart?.motion ?? null, chart?.techScore ?? 0);
-    if (!modelled || modelled.primary !== "tech") return filed;
+    // No motion block yet: the older reading stands, as everywhere else.
+    if (!modelled) return filed;
+    // Past the near-tie the model was fitted on, the ratings settle the base
+    // the same way they settle the tile itself (SPEED_TECH_MODEL_MAX_STREAM_GAP):
+    // a clear Technical lead is a tech marathon, a clear Stream lead is the
+    // stream marathon the stamina tile is for. The model's inputs are clipped
+    // (SPEED_TECH_INPUT_CLIP), so it cannot read a ten-point lead as
+    // certainty on its own; the ratings have to say it here.
+    const lead = Number(values?.Technical ?? 0) - Number(values?.Stream ?? 0);
+    if (Math.abs(lead) > SPEED_TECH_MODEL_MAX_STREAM_GAP) return lead > 0 ? add("tech") : filed;
+    if (modelled.primary !== "tech") return filed;
     return add("tech");
   }
 
@@ -4771,7 +5304,7 @@ export async function getPlayerSkillDanEvidence(
     rejectSink?.push({
       play: entry.play, reason: entry.reason,
       side: target?.side ?? null, chartDan: target?.rawDan ?? null, chartDanLabel: target?.label ?? null,
-      accuracy: null, bar: null, minAccuracy: null, od: null,
+      accuracy: null, bar: null, minAccuracy: null, currency: null, od: null,
     });
   }
   // A play whose chart names no side at this rate cannot be filed under one,
@@ -4906,6 +5439,7 @@ export async function getPlayerSkillDanEvidence(
       // chart's exact words too; only a real credit shift re-bands.
       creditedDanLabel: clear.creditedDan === clear.chartDan ? chartDanLabel : danLabelFor(clear.creditedDan, side, keyCount),
       clearAccuracy: clear.accuracy,
+      currency: clear.currency,
       skillsets: danSkillsetBucketsForPlay(buckets, clear.play, infoByBeatmap.get(clear.play.beatmapId)).map((bucket) => bucket.id),
       countsTowardDan: threshold != null && clear.creditedDan >= threshold,
       ...((section === ALL_CLEARS_SECTION ? ignoredInAllClears.has(clear) : ignoredBySection.get(section)?.has(clear) === true)
@@ -4967,6 +5501,7 @@ export async function getPlayerSkillDanEvidence(
           clearAccuracy: entry.accuracy,
           bar: entry.bar,
           minAccuracy: entry.minAccuracy,
+          currency: entry.currency,
           od: entry.od,
           skillsets: danSkillsetBucketsForPlay(buckets, entry.play, infoByBeatmap.get(entry.play.beatmapId)).map((bucket) => bucket.id),
         })),
@@ -5099,36 +5634,77 @@ const TECH_NEAR_TIE_MSD_LEAD = 0.35;
 // (two-column trills, minijacks, patterns that keep returning to a column), a
 // speed chart rolls the fingers across the hands. dan/motion-features.ts
 // measures exactly that off the note data, and those shares separate the same
-// 738 charts at AUC 0.84 on their own. Combined with the two ratings, 0.86.
+// 738 charts at AUC 0.84 on their own. Combined with the two ratings, 0.88.
 //
 // The combination is this logistic model. It is small on purpose: six inputs,
-// fitted on charts from 170 packs with the packs held out whole (a chart never
+// fitted on charts from 181 packs with the packs held out whole (a chart never
 // scores against a model that saw another diff from its own pack), and the
 // diagnostics say it is reading a real signal rather than memorising one.
-// Repeated grouped 5-fold CV over ten fold splits gives AUC 0.870 +/- 0.003,
-// every weight keeps its sign across ten refits on 80% of the packs, and the
-// learning curve is flat: training on a quarter of the packs (31 of them)
-// scores 0.852 on held-out packs against 0.857 for all 127. A model that had
-// memorised its corpus would improve with more of it.
+// Repeated grouped 5-fold CV over ten fold splits gives AUC 0.883 +/- 0.002
+// and the learning curve is flat: training on a quarter of the packs scores
+// 0.889 on held-out packs against 0.893 for all of them. A model that had
+// memorised its corpus would improve with more of it. The rating lead's
+// weight is small and negative: inside the near-tie the shares carry the
+// answer and the lead adds nothing on top of them.
 //
-// Held out entirely from the fit: the twelve charts a 4K dan player labelled
-// by hand on 2026-08-30. Ten get a decisive verdict and all ten are right;
-// the other two land in the shared band, which is the honest answer for
-// Blastix Riotz [4K] Jinjin's INFINITE (p 0.49).
+// Held out entirely from the fit: the charts a 4K dan player labelled by hand
+// (twelve on 2026-08-30, twenty-three more on 2026-09-12 drawn from the
+// speed-pack and stream-pack charts the model was filing under tech, and the
+// six 4K dan tech maps from 10th to epsilon on 2026-09-13). One of the
+// 2026-09-12 speed labels still reads tech, a 210 BPM jumpstream whose short
+// runs between the jumps keep returning to the middle columns; the rest are
+// right or land in the shared band, which is the honest answer for Blastix
+// Riotz [4K] Jinjin's INFINITE (p 0.51).
+//
+// The anchor share joined on 2026-09-13. The minijack share reads single-note
+// pairs only, so a jumpstream tech chart, whose jacks are almost all a column
+// carried into or out of a jump, reads a minijack share of exactly zero: the
+// gamma dan's tech map had 3 single-note repeats against 71 chord-involved
+// ones and filed speed at p 0.26. The anchor share counts those. Alone it
+// separates the packs at AUC 0.835, better than any other single input, and
+// it takes the model 0.858 -> 0.883 out of fold; the gamma map reads 0.57
+// (shared) and the other five dan tech maps 0.72 to 1.00.
+//
+// The motion block's rhythm share (rhythmBreak) was the sixth input until
+// 2026-09-12 and is deliberately not one now. It separates the packs (AUC
+// 0.82 alone) but what it reads is unsnapped dump charts sitting in tech
+// packs, and on a stream it reads swing and rate-edit jitter: a 41 ms stream
+// written as alternating 31 and 51 ms gaps scored 0.86 against a corpus
+// median of 0.01, twelve standard deviations out, and that one input filed
+// the chart under tech with nothing else pointing there. Ten of the eleven
+// charts the player labelled speed that day had been filed tech by it alone.
+// Without it the pack AUC drops 0.871 -> 0.857 and nine of the ten file
+// under speed; the packs are wrong about those charts, not the player.
+//
+// Refitted 2026-09-12 when the motion features started reading only the
+// sections at a chart's own pace (dan/motion-features.ts): the corpus
+// minijack share fell by half once break-section jacks stopped counting, so
+// its standardisation moved and its weight rose, while the one-off filler a
+// 277 BPM roll chart carried in its breaks stopped filing it under tech
+// (p 0.82 -> 0.37). Refitted again the same day without the rhythm input
+// and with the inputs clipped (SPEED_TECH_INPUT_CLIP); the trill and
+// minijack weights took up the slack (0.82 -> 0.91, 0.64 -> 1.06). Refitted
+// on 2026-09-13 with the anchor share added.
 //
 // Standardisation constants are the fitted corpus mean and standard deviation
 // per input; they are part of the model and move only with a refit.
 const SPEED_TECH_MODEL = {
-  bias: -0.5869,
+  bias: -0.4458,
   terms: [
-    { mean: 0.0439, sd: 0.0659, weight: 0.7207 },  // rhythmBreak
-    { mean: 0.0551, sd: 0.0456, weight: 0.9009 },  // crossHandTrill
-    { mean: 0.0044, sd: 0.0065, weight: 0.5595 },  // miniJack
-    { mean: 0.2300, sd: 0.0534, weight: 0.2510 },  // sameHand
-    { mean: -0.3886, sd: 0.7180, weight: 0.1252 }, // Technical - Stream
-    { mean: 0.3927, sd: 0.1981, weight: 1.2100 },  // analyzer tech score
+    { mean: 0.0509, sd: 0.0463, weight: 1.0015 },  // crossHandTrill
+    { mean: 0.0020, sd: 0.0047, weight: 0.8832 },  // miniJack
+    { mean: 0.0093, sd: 0.0120, weight: 1.0178 },  // anchor
+    { mean: 0.2453, sd: 0.0571, weight: 0.2939 },  // sameHand
+    { mean: -0.3798, sd: 0.7222, weight: -0.1484 }, // Technical - Stream
+    { mean: 0.3912, sd: 0.1990, weight: 0.8007 },  // analyzer tech score
   ],
 } as const;
+
+// Each standardised input is clipped to this many standard deviations before
+// it is weighed, in the fit and here. The shares are heavy-tailed: one chart
+// can sit ten sd out on a single input, and an unclipped logistic lets that
+// input alone decide the chart (the rhythm share used to do exactly that).
+const SPEED_TECH_INPUT_CLIP = 3;
 
 // Where the model stops claiming a single answer and the chart carries both
 // tiles. Not symmetric around the 0.5 decision point: the labelled speed
@@ -5159,8 +5735,34 @@ const SPEED_TECH_MODEL = {
 // two-tiled). The band is genuinely mixed: the speed-pack charts in it are
 // almost all LeoBlack "Minitrills Tech", and so are the tech-pack ones. The
 // wider band is what made SPEED_TECH_MODEL_MAX_STREAM_GAP necessary.
+//
+// 0.85 -> 0.90 on 2026-09-12 with the pace-gated refit: the same chart moved
+// to p 0.88, since its minijacks sit at its pace and the corpus minijack
+// baseline halved once break jacks stopped counting, and the ruling that it
+// counts toward speed stands. Measured through this code at 0.90 against
+// 0.85: speed-pack coverage 77.3% -> 78.1%, stream-pack 52.6% -> 53.4%,
+// tech-pack unchanged at 80.4% with 28.4% -> 32.9% of it carrying a
+// secondary speed tile, and the random library 81.4% -> 80.6% unchanged.
+// Out of fold the band shares 34.1% -> 37.5% of the fit band and the
+// decided remainder is right 91.0% -> 92.2% of the time.
+//
+// 0.90 -> 0.95 later on 2026-09-12, with the rhythm share dropped from the
+// model and the inputs clipped: the same chart reads 0.94 now that the trill
+// and minijack weights carry what the rhythm share used to, and the ruling
+// stands. Measured through this code at 0.95 against 0.90 with this model:
+// speed-pack coverage 78.4% -> 78.7%, stream-pack 54.3% -> 54.9%, tech-pack
+// unchanged at 80.0% with 34.7% -> 39.8% of it carrying a secondary speed
+// tile, and the random library 81.0% -> 82.4% unchanged. Out of fold the
+// band shares 41.0% -> 43.6% of the fit band and the decided remainder is
+// right 92.1% -> 92.9% of the time.
+//
+// Re-measured 2026-09-13 with the anchor share in the model, same bars:
+// speed-pack coverage 78.6%, stream-pack 54.8%, tech-pack 80.4% with 37.3%
+// carrying a secondary speed tile, random library 81.4% unchanged. Out of
+// fold the band shares 37.6% of the fit band and the decided remainder is
+// right 93.3% of the time.
 const SPEED_TECH_DUAL_LOW = 0.35;
-const SPEED_TECH_DUAL_HIGH = 0.85;
+const SPEED_TECH_DUAL_HIGH = 0.95;
 
 // How far Stream may sit under the chart's best skillset for the model to
 // have a say at all. The model was fitted on near-ties (Stream beside the
@@ -5203,9 +5805,9 @@ function speedTechProbability(
 ): number | null {
   if (!motion) return null;
   const inputs = [
-    motion.rhythmBreak,
     motion.crossHandTrill,
     motion.miniJack,
+    motion.anchor,
     motion.sameHand,
     Number(values?.Technical ?? 0) - Number(values?.Stream ?? 0),
     techScore,
@@ -5215,7 +5817,8 @@ function speedTechProbability(
     const term = SPEED_TECH_MODEL.terms[index];
     const input = Number(inputs[index]);
     if (!Number.isFinite(input)) return null;
-    z += term.weight * ((input - term.mean) / term.sd);
+    const standardised = (input - term.mean) / term.sd;
+    z += term.weight * Math.max(-SPEED_TECH_INPUT_CLIP, Math.min(SPEED_TECH_INPUT_CLIP, standardised));
   }
   return 1 / (1 + Math.exp(-z));
 }
@@ -6047,7 +6650,20 @@ async function enqueuePlayerSkillMsdCapSweep(queue: JobQueue, cursor: number): P
 // everything they need. Without this sweep they would only ever appear on rows
 // that recompute for some other reason, which is nobody inactive.
 export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
-// v30 (current): the stamina tile's jack veto spares a chart LeoBlack
+// v33 (current): the above-bar accuracy bonus is halved for 4K rice clears
+// whose primary tile is jack (DAN_CREDIT_JACK_BONUS_SCALE, 2026-09-13): on
+// jack, 99%+ is what a pass looks like, and the shared curve was pricing a
+// 99.3% on an alpha- chart at beta. Only the credit offset of those clears
+// moves; the decay half, the bar and every other tile are untouched. Same
+// plays_json re-derivation as every earlier bump.
+// v31 and v32: the 4K motion features read only the sections at the
+// chart's own pace and gain the anchor share, SPEED_TECH_MODEL is refitted
+// on them without the rhythm share and with clipped inputs, the sharing
+// band's high bar moves 0.85 -> 0.95 and the stamina marathon's tech share
+// follows the rating lead past the near-tie (2026-09-12 and 2026-09-13), so
+// the speed/tech tile of every 4K rice clear can move. Waits for the v2 motion sweep like v21 waited for v1
+// (playerSkillDanDependenciesReady). Tiles only; no rating moves.
+// v30: the stamina tile's jack veto spares a chart LeoBlack
 // headlines as Handstream (jackContaminated), and the speed/tech sharing
 // band's high bar moves 0.75 -> 0.85 (SPEED_TECH_DUAL_HIGH) with the model
 // confined to near-ties (SPEED_TECH_MODEL_MAX_STREAM_GAP). Tiles only; no
@@ -6087,12 +6703,23 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // and the change reaches every ladder anyway; the narrower 4k-ln scope stays
 // for callers that explicitly want the historical curve-only repair.
 //
+// v34: the 4K LN decay re-priced (dan-credit.ts, 2026-09-13). The window
+// went from 2.5 points under the 97% bar to six, the line under it is the
+// rice one point for point (a 96% costs half a level, not a full one), and
+// the 0.3 step at the bar is gone. Every 4K LN clear under the bar credits
+// more and 91-94.5% passes credit for the first time. The same day 6K/7K LN
+// lost its 0.26 step too: the last point under its 95% bar runs from zero to
+// the unchanged -1.25 at 94%, so 94-95% clears credit up to 0.26 more. Rows
+// with any keymode's LN side have to be folded again; the full scope.
+//
 // Two things every bump here inherits. The sweep re-derives from plays_json
 // (plus stored rate verdicts) and never re-rates, so it costs no MinaCalc. And
 // until it rewrites a row, that player's badge and leaderboard entry show the
 // old number while the evidence modal, which recomputes live, already shows the
 // new one. Earlier bumps: `git log -S PLAYER_SKILL_DAN_SWEEP_META_KEY`.
-export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v30";
+// v36: lower the 4K LN OD floor from 7.5 to 7 and re-fold stored evidence
+// so newly eligible clears contribute to existing player estimates.
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v36";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -6250,7 +6877,7 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */
 async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
-  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY]) {
+  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY, LN_EFFECTIVE_META_KEY]) {
     const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
     if (!row) continue;
     const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;
@@ -6321,8 +6948,8 @@ async function enqueuePlayerSkillDanSweep(
   );
 }
 
-// One-shot sweep behind the 6K/7K jack re-tag (the chart-side
-// JACK_TAG_RECOMPUTE_JOB): a mode's pattern ratings are folded from stored
+// One-shot sweep behind the 6K/7K jack re-tag and the 4K effective-LN sweep:
+// a mode's pattern ratings are folded from stored
 // plays against whatever chart tags existed at compute time, and a stored row
 // otherwise refreshes only when a profile view or a new top play triggers a
 // recompute - which is nobody inactive, so the population would take weeks to
@@ -6352,9 +6979,12 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // chordjack chord-repeat gate, so the stored tags this folds moved again.
 // v5 (2026-09-03): the delay tag now reads off-grid rows (jack tag sweep v4),
 // which empties the Delay tile of 1/4 chordstream and refills it.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v5";
+// v6: 4K effective LN became a demotion-only gate. The chart-side sweep can
+// move stored 4K LN tags, so those plays and their LN axis need the same refold.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v11";
 // The keymodes whose stored per-play tags may still predate their summary.
-const PATTERN_SWEEP_KEY_COUNTS = [6, 7, 8];
+// Preserve the existing pattern-keymode sweep; the LN update adds only 4K.
+const PATTERN_SWEEP_KEY_COUNTS = [...new Set([...PATTERN_AXIS_KEY_COUNTS, ...LN_SKILL_KEY_COUNTS])];
 const PLAYER_SKILL_PATTERN_SWEEP_CHUNK = 200;
 
 export interface PlayerSkillPatternSweepChunkResult {
@@ -6411,17 +7041,25 @@ export async function recomputePlayerSkillPatternChunk(
     // its post-sweep re-analysis heals on the row's next ordinary recompute).
     const playsByKeyCount = new Map<number, StoredPlaySsr[]>();
     let tagsMoved = false;
-    const refreshedPlays = plays.map((play) => {
-      const info = infoByBeatmap.get(play.beatmapId);
-      const refreshed = info ? { ...play, patterns: info.patterns } : play;
-      if (info && json(info.patterns) !== json(play.patterns ?? [])) tagsMoved = true;
+    const refreshedPlays: StoredPlaySsr[] = [];
+    for (const storedPlay of plays) {
+      const info = infoByBeatmap.get(storedPlay.beatmapId);
+      // Native LN computation belongs to the budgeted player job. This sweep
+      // only refolds stored values/tags and must remain cheap across a roster.
+      const play = storedPlay;
+      const patterns = info
+        ? play.inverse ? INVERSE_MOD_PATTERNS : playPatternsFor(info, play.rate, play.keyCount, play.lnSkill)
+        : null;
+      const refreshed = patterns ? { ...play, patterns } : play;
+      if (patterns && json(patterns) !== json(play.patterns ?? [])) tagsMoved = true;
       const list = playsByKeyCount.get(play.keyCount);
       if (list) list.push(refreshed);
       else playsByKeyCount.set(play.keyCount, [refreshed]);
-      return refreshed;
-    });
+      refreshedPlays.push(refreshed);
+    }
     const modes = summary.modes.map((mode) => ({
       ...mode,
+      ...(isLnSkillSupported(mode.keyCount) ? { lnSkillVersion: LN_SKILL_VERSION } : {}),
       patterns: aggregateModePatternRatings(playsByKeyCount.get(mode.keyCount) ?? []),
     }));
     // Most rows fold to the tags they already hold; skip the no-op writes so
@@ -6429,7 +7067,8 @@ export async function recomputePlayerSkillPatternChunk(
     // already folded (v2) but whose plays still carry the old tags is not a
     // no-op: the explorer reads those tags.
     const unchanged = !tagsMoved && modes.every((mode, index) =>
-      json(mode.patterns) === json(summary.modes[index]?.patterns ?? []));
+      json(mode.patterns) === json(summary.modes[index]?.patterns ?? [])
+      && mode.lnSkillVersion === summary.modes[index]?.lnSkillVersion);
     if (unchanged) continue;
     // updated_at guard, same as the dan sweep: a normal recompute in another
     // lane can rewrite the row between our read and this write, and its fold
@@ -6449,11 +7088,19 @@ export async function recomputePlayerSkillPatternChunk(
   return { nextCursor, scanned: rows.length, rewritten, done: rows.length < limit };
 }
 
-export async function ensurePlayerSkillPatternSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+async function playerSkillPatternDependenciesReady(db: Db): Promise<boolean> {
   // Folding mid-chart-sweep would bake half-swept tags into stored rows and
-  // call the sweep done; wait for the chart side to stamp its marker.
-  const chartSweepDone = (await exec(db, "select 1 from live_meta where key = ? limit 1", [JACK_TAG_META_KEY])).rows[0];
-  if (!chartSweepDone) return;
+  // call the sweep done; wait for both chart-side producers this version uses.
+  const chartSweepRows = (await exec(
+    db,
+    "select key from live_meta where key in (?, ?)",
+    [JACK_TAG_META_KEY, LN_EFFECTIVE_META_KEY],
+  )).rows;
+  return new Set(chartSweepRows.map((row) => String(row.key))).size === 2;
+}
+
+export async function ensurePlayerSkillPatternSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  if (!(await playerSkillPatternDependenciesReady(db))) return;
   const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [PLAYER_SKILL_PATTERN_SWEEP_META_KEY])).rows[0];
   if (done) return;
   const pending = (await exec(
@@ -6472,6 +7119,10 @@ export async function runPlayerSkillPatternSweepJob(
   queue: JobQueue,
   payload: { cursor?: number } | undefined,
 ): Promise<boolean> {
+  // A pre-deploy job can survive into code with a new chart dependency. Do
+  // not stamp the new done key from a half-swept corpus; the chart sweep's
+  // finishing worker will seed a fresh job.
+  if (!(await playerSkillPatternDependenciesReady(db))) return false;
   const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
   const result = await recomputePlayerSkillPatternChunk(db, cursor);
   if (result.rewritten > 0) {

@@ -79,6 +79,9 @@ export interface MapSearchUiState {
   bpmMax: number;
   lenMin: number;
   lenMax: number;
+  // Hold share of the chart's objects, in percent; 0/0 means any.
+  lnMin: number;
+  lnMax: number;
   danMin: number | null;
   danMax: number | null;
   sort: string;
@@ -127,7 +130,7 @@ function stateKey(s: MapSearchUiState): string {
     [...s.statusesExclude].sort(),
     [...s.patterns].sort(),
     [...s.patternsExclude].sort(),
-    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.danMin, s.danMax,
+    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax,
     s.sort, s.dir, s.page,
   ]);
 }
@@ -968,6 +971,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       bpmMax: ui.bpmMax > 0 ? ui.bpmMax : null,
       lenMin: ui.lenMin > 0 ? ui.lenMin : null,
       lenMax: ui.lenMax > 0 ? ui.lenMax : null,
+      lnMin: ui.lnMin > 0 ? ui.lnMin : null,
+      lnMax: ui.lnMax > 0 ? ui.lnMax : null,
       danMin: noDans ? null : ui.danMin,
       danMax: noDans ? null : ui.danMax,
       country: null,
@@ -1029,6 +1034,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0 ||
+    ui.lnMin > 0 || ui.lnMax > 0 ||
     (!noDans && (ui.danMin != null || ui.danMax != null));
 
   // How many collapsed filters are active, for the mobile toggle's badge.
@@ -1051,7 +1057,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     setSearchInput("");
     apply({
       q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
-      starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0,
+      starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
       danMin: null, danMax: null,
       page: 0,
     });
@@ -1107,6 +1113,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
               const next = cycleFacet(ui.patterns, ui.patternsExclude, pattern, reverse);
               apply({ patterns: next.includes, patternsExclude: next.excludes, page: 0 });
             }}
+            lnShare={{ min: ui.lnMin, max: ui.lnMax }}
+            onLnShareChange={(min, max) => apply({ lnMin: min, lnMax: max, page: 0 })}
           />
         </div>
 

@@ -2,7 +2,7 @@ import { skillPlaySharePath } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
-import { X } from "lucide-react";
+import { CircleHelp, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -266,8 +266,18 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
               <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} />
               <div className="flex items-center gap-4 pr-10">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-osu-f1">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-osu-f1">
                     <Trans>{keyCount}K {sideLabel} dan</Trans>
+                    {/* The rules used to be spelled out under the title. Everyone has read
+                        the article by now, so this is just a quiet way back to it. */}
+                    <Link
+                      to="/dan-estimates"
+                      aria-label={t`How dans are estimated`}
+                      title={t`How dans are estimated`}
+                      className="text-osu-f1/60 transition-colors hover:text-white"
+                    >
+                      <CircleHelp size={12} />
+                    </Link>
                   </div>
                   <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
                     {dan && beyond ? (
@@ -313,13 +323,6 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       ) : null}
                     </p>
                   ) : null}
-                  {/* The rules used to be spelled out here in four sentences. They live
-                      in the article now, so this is one line the reader can ignore. */}
-                  <p className="mt-1.5 text-[11px] leading-relaxed sm:text-xs">
-                    <Link to="/dan-estimates" className="text-osu-pink-light transition-colors hover:text-white">
-                      <Trans>Click here to read how dans are estimated</Trans>
-                    </Link>
-                  </p>
                 </div>
                 {image ? (
                   <span className="ml-auto flex shrink-0 items-start gap-[2px] leading-none">

@@ -58,6 +58,9 @@ const SPEEDJACK_CHART = {
   // No stored motion block, so these fixtures exercise the fallback arms.
   motion: null,
   lnRatio: 0,
+  lnEffectiveRatio: null,
+  dtLnEffectiveRatio: null,
+  htLnEffectiveRatio: null,
   vibro: false,
   danEligible: true,
   rcRawDan: 10,
@@ -264,7 +267,7 @@ describe("pattern tag thresholds", () => {
     const { danTagBucketsForTest: buckets, patternTagMinScoreForTest } = await import("../src/features/player-skills.js");
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
-      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
+      patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, lnEffectiveRatio: null, dtLnEffectiveRatio: null, htLnEffectiveRatio: null, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
       lengthSeconds: null, od: null,
@@ -274,7 +277,7 @@ describe("pattern tag thresholds", () => {
 
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
-    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, vibro: false,
+    patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, lnEffectiveRatio: null, dtLnEffectiveRatio: null, htLnEffectiveRatio: null, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
     lengthSeconds: null, od: null,
@@ -570,7 +573,7 @@ describe("Stamina first with Handstream as the strongest base skillset", () => {
     jumpstreamCluster: null,
     jackShare: 0.20,
     techScore: 0.8,
-    motion: { sameHand: 0.1134, miniJack: 0.0001, oneHandTrill: 0.0153, crossHandTrill: 0.0613, roll4: 0.1022, rhythmBreak: 0.0074, chordSwing: 0.5928, densitySwing: 0.2359 },
+    motion: { sameHand: 0.1134, miniJack: 0.0001, anchor: 0.0193, oneHandTrill: 0.0153, crossHandTrill: 0.0613, roll4: 0.1022, rhythmBreak: 0.0074, chordSwing: 0.5928, densitySwing: 0.2359 },
   };
 
   it("keeps handstream endurance on stamina before the speed/tech near-tie", () => {
@@ -976,27 +979,27 @@ const withMotion = (motion: MotionFeatures, techScore: number, extra: Record<str
 const GRAVITY = {
   values: { Stream: 21.22, Jumpstream: 27.91, Handstream: 21.38, Stamina: 26.06, JackSpeed: 18.90, Chordjack: 20.82, Technical: 26.71 },
   chart: withMotion({
-    sameHand: 0.1608, miniJack: 0.0012, oneHandTrill: 0.0412, crossHandTrill: 0.0547,
-    roll4: 0.1875, rhythmBreak: 0.0062, chordSwing: 0.2532, densitySwing: 0.4450,
+    sameHand: 0.1531, miniJack: 0, anchor: 0.0532, oneHandTrill: 0.0233, crossHandTrill: 0.0316,
+    roll4: 0.2152, rhythmBreak: 0.0042, chordSwing: 0.2581, densitySwing: 0.4450,
   }, 0.73, { clusterTrill: true, techCategory: false, chordjackScore: 0.50, jackShare: 0.11 }),
 };
 
 // Blastix Riotz [4K] Jinjin's INFINITE (789784). Same reporter, same verdict,
-// but the model reads it at 0.49 - the honest answer is both tiles.
+// but the model reads it at 0.51 - the honest answer is both tiles.
 const JINJIN = {
   values: { Stream: 22.26, Jumpstream: 23.27, Handstream: 15.22, Stamina: 23.07, JackSpeed: 14.90, Chordjack: 16.74, Technical: 23.85 },
   chart: withMotion({
-    sameHand: 0.2173, miniJack: 0.0008, oneHandTrill: 0.0265, crossHandTrill: 0.0601,
-    roll4: 0.1258, rhythmBreak: 0.0065, chordSwing: 0.3009, densitySwing: 0.3833,
+    sameHand: 0.2201, miniJack: 0.0005, anchor: 0.0183, oneHandTrill: 0.0219, crossHandTrill: 0.0487,
+    roll4: 0.1313, rhythmBreak: 0.0044, chordSwing: 0.3128, densitySwing: 0.3833,
   }, 0.538, { clusterTrill: false, techCategory: true, chordjackScore: 0.233, jackShare: 0.086 }),
 };
 
-// Beajek's 4K Training Pack, a named speed chart the model calls speed at 0.16.
+// Beajek's 4K Training Pack, a named speed chart the model calls speed at 0.09.
 const NAMED_SPEED = {
   values: { Stream: 28.48, Jumpstream: 26.18, Handstream: 16.82, Stamina: 25.84, JackSpeed: 15.78, Chordjack: 22.58, Technical: 26.55 },
   chart: withMotion({
-    sameHand: 0.2349, miniJack: 0.0088, oneHandTrill: 0.0030, crossHandTrill: 0.0007,
-    roll4: 0.0585, rhythmBreak: 0.0068, chordSwing: 0.3279, densitySwing: 0.4581,
+    sameHand: 0.2473, miniJack: 0, anchor: 0, oneHandTrill: 0.0027, crossHandTrill: 0,
+    roll4: 0.0554, rhythmBreak: 0.0072, chordSwing: 0.3081, densitySwing: 0.4581,
   }, 0.44),
 };
 
@@ -1005,20 +1008,22 @@ const NAMED_SPEED = {
 const STRONG_280 = {
   values: { Stream: 19.78, Jumpstream: 25.39, Handstream: 23.55, Stamina: 25.50, JackSpeed: 17.22, Chordjack: 20.10, Technical: 24.96 },
   chart: withMotion({
-    sameHand: 0.1133, miniJack: 0.0027, oneHandTrill: 0.0135, crossHandTrill: 0.0508,
-    roll4: 0.0441, rhythmBreak: 0.0034, chordSwing: 0.5188, densitySwing: 0.2985,
+    sameHand: 0.1480, miniJack: 0.0006, anchor: 0.0537, oneHandTrill: 0, crossHandTrill: 0.0364,
+    roll4: 0.0589, rhythmBreak: 0.0046, chordSwing: 0.4307, densitySwing: 0.2985,
   }, 0.96, { clusterTrill: true, techCategory: true, chordjackScore: 0.79, jackShare: 0.45, lengthSeconds: 253 }),
 };
 
 // Skwid's Challenge 1.15x (1941077): a Korean dump the mapper tags speed,
 // stamina and technical, Technical 30.42 over Stream 29.96, which the model
-// reads at 0.81 off its cross-hand minitrills. Tech alone under the old 0.75
-// bar; the 2026-09-10 bar (0.85) files it under both.
+// reads at 0.88 off its cross-hand minitrills and at-pace minijacks (0.81
+// before the pace-gated refit). Tech alone under the old 0.75 bar; the
+// 2026-09-10 bar (0.85) filed it under both and the 2026-09-12 bar (0.90)
+// keeps it there.
 const SKWID = {
   values: { Stream: 29.96, Jumpstream: 22.74, Handstream: 20.10, Stamina: 29.95, JackSpeed: 16.10, Chordjack: 19.70, Technical: 30.42 },
   chart: withMotion({
-    sameHand: 0.1593, miniJack: 0.0086, oneHandTrill: 0.0279, crossHandTrill: 0.1423,
-    roll4: 0.0254, rhythmBreak: 0.0555, chordSwing: 0.2118, densitySwing: 0.2226,
+    sameHand: 0.1533, miniJack: 0.0081, anchor: 0.0042, oneHandTrill: 0.0226, crossHandTrill: 0.1431,
+    roll4: 0.0213, rhythmBreak: 0.0501, chordSwing: 0.1967, densitySwing: 0.2226,
   }, 0.394, { clusterTrill: true, techCategory: true, chordjackScore: 0, jackShare: 0.03 }),
 };
 
@@ -1056,12 +1061,12 @@ describe("the 4K speed/tech split read off the notes", () => {
 
 // PEACE BREAKER [4K] FINAL PUNISHMENT (777348): 4:51 of Stamina 30.15 /
 // Technical 30.03 / Stream 30.02. The stamina hold keeps it off the speed tile
-// and the model reads its notes at 0.70 tech, so it is a tech marathon.
+// and the model reads its notes at 0.55 tech, so it is a tech marathon.
 const FINAL_PUNISHMENT_MOTION = {
   values: { Stream: 30.02, Jumpstream: 25.54, Handstream: 24.02, Stamina: 30.15, JackSpeed: 17.78, Chordjack: 20.34, Technical: 30.03 },
   chart: withMotion({
-    sameHand: 0.2274, miniJack: 0.0128, oneHandTrill: 0.0148, crossHandTrill: 0.0768,
-    roll4: 0.0772, rhythmBreak: 0.0365, chordSwing: 0.2692, densitySwing: 0.3895,
+    sameHand: 0.2302, miniJack: 0.0020, anchor: 0.0114, oneHandTrill: 0.0117, crossHandTrill: 0.0780,
+    roll4: 0.0798, rhythmBreak: 0.0391, chordSwing: 0.2609, densitySwing: 0.3895,
   }, 0.439, { techCategory: true, chordjackScore: 0.0, jackShare: 0.08, lengthSeconds: 291 }),
 };
 

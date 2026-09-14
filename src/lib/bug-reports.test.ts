@@ -4,7 +4,7 @@ import { bugReportSeenReceipt, bugReportThreadMessages } from "./bug-reports";
 
 describe("bug report thread compatibility", () => {
   it("uses the append-only messages when the backend supplies them", () => {
-    const messages = [{ id: "m1", author: "reporter" as const, body: "More detail", createdAt: 2, editedAt: null }];
+    const messages = [{ id: "m1", author: "reporter" as const, body: "More detail", createdAt: 2, editedAt: null, notify: false }];
     expect(bugReportThreadMessages({
       messages,
       reply: "Old compatibility value",
@@ -23,6 +23,8 @@ describe("bug report thread compatibility", () => {
       body: "Please try again now.",
       createdAt: 123,
       editedAt: null,
+      // A legacy reply predates the notify flag, so it raises no badge.
+      notify: false,
       // Both sides' screenshot shapes, so the synthetic row reads as either.
       screenshotKeys: [],
       screenshotCount: 0,
@@ -31,7 +33,7 @@ describe("bug report thread compatibility", () => {
 });
 
 it("acknowledges only the reporter messages in the displayed snapshot", () => {
-  const message = { body: "Text", createdAt: 123, editedAt: null, screenshotKeys: [] };
+  const message = { body: "Text", createdAt: 123, editedAt: null, notify: false, screenshotKeys: [] };
   expect(bugReportSeenReceipt({
     id: "report",
     messages: [

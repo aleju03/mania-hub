@@ -18,6 +18,24 @@
  * once at 1.0x, and a rate edit of the same chart reads the same. What the
  * rate changes is the MSD vector, which the reader supplies separately.
  *
+ * Only the sections at the chart's own pace are read. The pace is the gap a
+ * quarter of its rows sit at or under, and a window whose surroundings (the
+ * median gap over the PACE_CONTEXT rows either side) run more than PACE_SLACK
+ * times slower than that is filler (a break, a half-time bridge, the
+ * jumpstream between the streams) and is dropped the way a window past
+ * MAX_GAP_MS already is. Weighting by 1/gap alone only halved such material,
+ * and that was enough for it to decide a chart: a 277 BPM roll chart with
+ * fifteen slow triple jacks in its breaks and two 139 BPM trill bridges read
+ * five times the corpus minijack share and twice its cross-hand trill share
+ * off notes at half the speed its difficulty sits at, and filed under tech.
+ * The gate reads the surroundings rather than the window's own gap so that a
+ * jack or a trill written INTO a stream at half its snap still counts: that
+ * is where the tech-pack minijacks live, and gating on the window's own gap
+ * threw them away (minijack alone separates the fit band at AUC 0.77 with
+ * this gate, 0.73 without it, 0.60 gated on its own gap; measured 2026-09-12
+ * with scripts/dev/speed-tech-model.ts). Measured relative to the pace, the
+ * gate is rate-invariant like the shares.
+ *
  * 4K only. The hand split (columns 0-1 against 2-3) is what makes "one hand
  * oscillating" meaningful, and the pack corpus that validated the features is
  * 4K; other keymodes bucket by analyzer tags and never ask for this.
@@ -30,6 +48,12 @@ export interface MotionFeatures {
   sameHand: number;
   /** Adjacent single-note pairs repeating one column (minijack). */
   miniJack: number;
+  /** Adjacent row pairs that differ, involve at least one chord and share a
+   *  column: a minijack into or out of a jump, the anchor a jumpstream keeps
+   *  one finger on. miniJack cannot see these because it reads single-note
+   *  pairs only, and a jumpstream tech chart writes almost all of its jacks
+   *  this way. Added 2026-09-13; blocks stored before then lack the field. */
+  anchor: number;
   /** Three-note windows reading c,d,c with c and d on ONE hand. */
   oneHandTrill: number;
   /** Three-note windows reading c,d,c with c and d on opposite hands. The
@@ -57,6 +81,21 @@ const MAX_GAP_MS = 400;
 // Under this many rows the shares are noise, and no chart a player clears for
 // dan credit is this short.
 const MIN_ROWS = 24;
+// The chart's pace: the gap this share of its adjacent-row gaps (within
+// MAX_GAP_MS) sit at or under. A quarter says the fast material has to be a
+// real body of the chart, not a burst: a file that is 15% 1/8 bursts over a
+// 1/4 body keeps the body, one that is a third bursts is read off the bursts.
+const PACE_QUANTILE = 0.25;
+// How much slower than the pace a window's surroundings may run and still
+// count. 1.6 keeps the neighbouring snaps of one tempo (1/3 beside 1/4 at
+// 1.33x, 1/6 beside 1/4 at 1.5x) and drops the half-time ones (1/2 beside
+// 1/4 at 2x), with margin on both sides so a BPM change of a few percent
+// cannot flip a snap.
+const PACE_SLACK = 1.6;
+// Rows either side of a window whose median gap is "its surroundings": 17
+// gaps, about a bar of 1/4 notes, so a section has to be slow for a bar to
+// read as filler and a single slow jack inside a stream never does.
+const PACE_CONTEXT = 8;
 
 interface Row {
   time: number;
@@ -83,6 +122,26 @@ function weightFor(gap: number): number {
   return 1 / Math.max(gap, MIN_GAP_MS);
 }
 
+/** Per adjacent-row gap, whether the window starting there sits in a section
+ *  at the chart's pace (true) or in filler (false). */
+function atPace(rows: Row[]): boolean[] {
+  const gaps: number[] = [];
+  for (let i = 0; i + 1 < rows.length; i++) gaps.push(rows[i + 1].time - rows[i].time);
+  const valid = gaps.filter((gap) => gap > 0 && gap <= MAX_GAP_MS).sort((a, b) => a - b);
+  if (valid.length === 0) return gaps.map(() => false);
+  const pace = valid[Math.min(valid.length - 1, Math.floor(valid.length * PACE_QUANTILE))];
+  const limit = pace * PACE_SLACK;
+  return gaps.map((_, index) => {
+    const around: number[] = [];
+    for (let j = Math.max(0, index - PACE_CONTEXT); j <= Math.min(gaps.length - 1, index + PACE_CONTEXT); j++) {
+      if (gaps[j] > 0 && gaps[j] <= MAX_GAP_MS) around.push(gaps[j]);
+    }
+    if (around.length === 0) return false;
+    around.sort((a, b) => a - b);
+    return around[Math.floor(around.length / 2)] <= limit;
+  });
+}
+
 function ratioIsMusical(ratio: number): boolean {
   for (const target of [1, 2, 0.5, 1.5, 2 / 3, 3, 1 / 3, 4, 0.25]) {
     if (Math.abs(ratio - target) <= target * 0.08) return true;
@@ -97,8 +156,9 @@ export function motionFeatures(notes: ManiaNote[], keyCount: number): MotionFeat
   if (keyCount !== 4 || notes.length < 32) return null;
   const rows = buildRows(notes);
   if (rows.length < MIN_ROWS) return null;
+  const inPace = atPace(rows);
 
-  let pairW = 0, sameHandW = 0, miniJackW = 0, chordSwingW = 0;
+  let pairW = 0, sameHandW = 0, miniJackW = 0, anchorW = 0, chordSwingW = 0;
   let tripW = 0, trillW = 0, crossTrillW = 0;
   let quadW = 0, roll4W = 0;
   let rhythmW = 0, rhythmBreakW = 0;
@@ -106,7 +166,7 @@ export function motionFeatures(notes: ManiaNote[], keyCount: number): MotionFeat
   for (let i = 0; i + 1 < rows.length; i++) {
     const a = rows[i], b = rows[i + 1];
     const gap = b.time - a.time;
-    if (gap <= 0 || gap > MAX_GAP_MS) continue;
+    if (gap <= 0 || gap > MAX_GAP_MS || !inPace[i]) continue;
     const w = weightFor(gap);
     pairW += w;
     if (a.columns.length !== b.columns.length) chordSwingW += w;
@@ -114,13 +174,16 @@ export function motionFeatures(notes: ManiaNote[], keyCount: number): MotionFeat
       const ca = a.columns[0], cb = b.columns[0];
       if (ca === cb) miniJackW += w;
       else if (hand(ca) === hand(cb)) sameHandW += w;
+    } else if (a.columns.some((column) => b.columns.includes(column))) {
+      const identical = a.columns.length === b.columns.length && a.columns.every((column, k) => column === b.columns[k]);
+      if (!identical) anchorW += w;
     }
   }
 
   for (let i = 0; i + 2 < rows.length; i++) {
     const a = rows[i], b = rows[i + 1], c = rows[i + 2];
     const g0 = b.time - a.time, g1 = c.time - b.time;
-    if (g0 <= 0 || g1 <= 0 || g0 > MAX_GAP_MS || g1 > MAX_GAP_MS) continue;
+    if (g0 <= 0 || g1 <= 0 || g0 > MAX_GAP_MS || g1 > MAX_GAP_MS || !inPace[i]) continue;
     const w = weightFor(Math.max(g0, g1));
     rhythmW += w;
     if (!ratioIsMusical(g1 / g0)) rhythmBreakW += w;
@@ -136,7 +199,7 @@ export function motionFeatures(notes: ManiaNote[], keyCount: number): MotionFeat
   for (let i = 0; i + 3 < rows.length; i++) {
     const window = [rows[i], rows[i + 1], rows[i + 2], rows[i + 3]];
     const gaps = [window[1].time - window[0].time, window[2].time - window[1].time, window[3].time - window[2].time];
-    if (gaps.some((gap) => gap <= 0 || gap > MAX_GAP_MS)) continue;
+    if (gaps.some((gap) => gap <= 0 || gap > MAX_GAP_MS) || !inPace[i]) continue;
     if (window.some((row) => row.columns.length !== 1)) continue;
     const w = weightFor(Math.max(...gaps));
     quadW += w;
@@ -162,6 +225,7 @@ export function motionFeatures(notes: ManiaNote[], keyCount: number): MotionFeat
   return {
     sameHand: round4(share(sameHandW, pairW)),
     miniJack: round4(share(miniJackW, pairW)),
+    anchor: round4(share(anchorW, pairW)),
     oneHandTrill: round4(share(trillW, tripW)),
     crossHandTrill: round4(share(crossTrillW, tripW)),
     roll4: round4(share(roll4W, quadW)),

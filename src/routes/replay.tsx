@@ -40,7 +40,7 @@ import { getReplayBackNavigation } from "../lib/replay-navigation";
 import { resolveStableManiaReplayScrollSpeed, unpackReplayFrames } from "../lib/replay-frames";
 import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
-import { getReplayScoreAvailability } from "../lib/replay-score-availability";
+import { getReplayScoreAvailability, isReplayFileMissingError, replayFileMissingMessage } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
 import { buildReplayShareUrl } from "../lib/replay-share";
 import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
@@ -993,7 +993,8 @@ function ReplayPage() {
         });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : t`Failed to load replay`);
+      if (isReplayFileMissingError(e)) setError(i18n._(replayFileMissingMessage));
+      else setError(e instanceof Error ? e.message : t`Failed to load replay`);
     } finally {
       setLoading(false);
     }

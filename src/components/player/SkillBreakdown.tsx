@@ -63,11 +63,8 @@ function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
   );
 }
 
-// The LN row's context line (4K only, see lnPlayShare): the LN number mostly
-// reflects what the player plays, so the share is shown as data next to it.
-// "Are LN charts", because the ln tag itself is gated to the analyzer's LN
-// verdict (the backend's LN_PATTERN_LN_RATIO_MIN on the chart's hold share):
-// this count, the LN bar and the top LN plays list are all the same plays.
+// The independent LN model still needs evidence: retain the cohort size
+// beside the axis so readers can see how much LN work supports the rating.
 function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; className?: string }) {
   const share = lnPlayShare(mode);
   if (share == null) return null;
@@ -82,13 +79,17 @@ function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; classNam
 }
 
 function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18n): string | undefined {
+  const model = mode.keyCount === 4 && entry.key === "ln"
+    ? i18n._(msg`Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.`)
+    : undefined;
   const percentile = mode.percentiles?.[entry.axis];
-  if (!percentile) return undefined;
+  if (!percentile) return model;
   const label = i18n._(entry.labelMsg);
   const share = i18n._(msg`top ${topSharePercent(percentile)}%`);
   const population = percentile.population.toLocaleString("en-US");
   const keyCount = mode.keyCount;
-  return i18n._(msg`${label}: ${share} of ${population} tracked ${keyCount}K mains`);
+  const ranking = i18n._(msg`${label}: ${share} of ${population} tracked ${keyCount}K mains`);
+  return model ? `${model}\n${ranking}` : ranking;
 }
 
 function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side: "rc" | "ln") => void }) {

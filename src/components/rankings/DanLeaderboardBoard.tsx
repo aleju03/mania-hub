@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { CircleHelp } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Pagination } from "../ui/Pagination";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -148,6 +149,14 @@ export function DanLeaderboardBoard({
             onChange={(next) => onNavigate({ side: next, skillset: undefined, page: 1 })}
           />
         </div>
+        <Link
+          to="/dan-estimates"
+          aria-label={t`How dans are estimated`}
+          title={t`How dans are estimated`}
+          className="ml-auto text-osu-f1/60 transition-colors hover:text-white"
+        >
+          <CircleHelp size={14} />
+        </Link>
       </div>
 
       {/* A skillset belongs to one keymode and side (stamina is 4K's, the LN
@@ -164,12 +173,6 @@ export function DanLeaderboardBoard({
           disabled={staleLadder}
         />
       </div>
-
-      <p className="text-[11px] text-osu-f1">
-        <Link to="/dan-estimates" className="text-osu-pink-light transition-colors hover:text-white">
-          <Trans>Click here to read how dans are estimated</Trans>
-        </Link>
-      </p>
 
       <LeaderboardTable
         rows={rows}

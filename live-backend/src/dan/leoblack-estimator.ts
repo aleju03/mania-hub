@@ -4,7 +4,7 @@ import type { ManiaBeatmap } from "./beatmap-parser.js";
 import type { DanEstimate, DanEstimateInput, DanSkillFamily } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
 import { getInputRate } from "./dan-estimator/labels.js";
-import { lnPrimaryMinRatioFor } from "./dan-estimator/ln.js";
+import { LN_EFFECTIVE_KEY_COUNTS, analyzeEffectiveLn, chartIsLn } from "./dan-estimator/ln-effective.js";
 import {
   runMixedEstimatorFromText,
   type LeoBlackEstimatorOptions,
@@ -194,7 +194,13 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
 
   const prefer = input.preferFamily ?? "auto";
   const lnRatio = Number(mixed.lnRatio);
-  const useLn = lnText != null && (prefer === "ln" || (prefer === "auto" && lnRatio >= lnPrimaryMinRatioFor(map.keyCount)));
+  // Same identity read as the classifier: hold + effective gates on 4K.
+  const readsLn = chartIsLn(map.keyCount, {
+    lnRatio,
+    lnEffectiveRatio: LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
+      ? analyzeEffectiveLn(map.notes, { rate, od: map.od }).effectiveLnRatio : undefined,
+  }) === true;
+  const useLn = lnText != null && (prefer === "ln" || (prefer === "auto" && readsLn));
 
   const parsed = useLn ? parseLeoBlackLnHalf(lnText as string) : parseLeoBlackRcHalf(rcText, mixed.numericDifficulty);
   if (!parsed) {

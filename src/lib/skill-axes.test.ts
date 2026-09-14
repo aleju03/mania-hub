@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { topSharePercent } from "./skill-axes";
+import { lnPlayShare, skillModeEntries, topSharePercent } from "./skill-axes";
+
+describe.each(Array.from({ length: 15 }, (_, i) => i + 4))("%iK LN presentation", keyCount => {
+  it("preserves the LN axis and limits independent-model evidence to 4K", () => {
+    const mode = { keyCount, analyzedPlays: 100, ratings: { Overall: 30, Stream: 29 },
+      patterns: [{ id: "ln", rating: 12.5, plays: 20 }, { id: "bracket", rating: 18, plays: 30 }] };
+    expect(skillModeEntries(mode).filter(entry => entry.key === "ln")).toMatchObject([{ value: 12.5, axis: "pattern:ln" }]);
+    expect(lnPlayShare(mode)).toBe(keyCount === 4 ? 0.2 : null);
+    expect(skillModeEntries({ ...mode, patterns: [] }).some(entry => entry.key === "ln")).toBe(false);
+  });
+});
 
 describe("topSharePercent", () => {
   it("keeps whole percents for ordinary standings", () => {

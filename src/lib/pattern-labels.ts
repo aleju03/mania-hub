@@ -8,6 +8,7 @@ import { useCallback } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
+import { LN_SEARCH_PATTERN_IDS } from "#dan/ln-analysis/search-patterns";
 
 export const PATTERN_LABEL: Record<string, string> = {
   jack: "Jack",
@@ -58,6 +59,7 @@ export const PATTERN_LABEL_MSG: Record<string, MessageDescriptor> = {
 };
 
 export const PATTERN_COLOR: Record<string, string> = {
+  ...Object.fromEntries(LN_SEARCH_PATTERN_IDS.map((id) => [id, "#f07474"])),
   jack: "#ec6a9c",
   stream: "#5ab2f2",
   jumpstream: "#46c7b8",

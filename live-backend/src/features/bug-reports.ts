@@ -113,6 +113,8 @@ export interface BugReportMessage {
   editedAt: number | null;
   /** Screenshots attached to this follow-up, in the private bucket. */
   screenshotKeys: string[];
+  /** Owner messages only: sent with the reporter's badge raised. */
+  notify: boolean;
 }
 
 /** A message as its reporter reads it: the count, not the object keys, exactly
@@ -140,6 +142,10 @@ export interface BugReport {
   messages: BugReportMessage[];
   /** Read acknowledgement for the current reporter activity; reset on follow-up. */
   adminSeenAt: number | null;
+  /** When the reporter last opened this thread. Reading never moves updated_at. */
+  reporterSeenAt: number | null;
+  /** Notifying owner messages the reporter has not opened yet. */
+  unreadReplies: number;
   /** The admin_todos row this was promoted into, if it was. */
   todoId: string | null;
   /** Human-readable admin todo number, when the linked todo still exists. */
@@ -159,6 +165,8 @@ export interface BugReportForReporter {
   reply: string | null;
   repliedAt: number | null;
   messages: BugReportMessageForReporter[];
+  /** Notifying owner messages still unopened; what the avatar badge counts. */
+  unreadReplies: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -310,6 +318,7 @@ function parseMessages(value: unknown): BugReportMessage[] {
         createdAt,
         editedAt: row.editedAt == null || !Number.isFinite(editedAt) ? null : editedAt,
         screenshotKeys: parseScreenshotKeys(row.screenshots),
+        notify: row.notify === 1 || row.notify === true,
       }];
     });
   } catch {
@@ -339,7 +348,17 @@ export function isBugReportScreenshotKey(id: string, key: unknown, messageId?: s
 
 const STORED_COLUMNS =
   "id, status, body, page_path, context_json, user_id, username, screenshot_keys, admin_note, reply, replied_at, todo_id, created_at, updated_at, resolved_at";
-const SELECT_COLUMNS = `${STORED_COLUMNS}, admin_seen_at, (
+/* The reporter's side of the unread question. Only messages the owner chose to
+   send with the badge raised count, so answering a thread quietly leaves the
+   reporter's avatar alone; everything written before `notify` existed defaults
+   to 0 and stays quiet too. */
+const UNREAD_REPLIES_SQL = `(
+  select count(*) from bug_report_messages
+   where report_id = bug_reports.id and author_role = 'admin' and notify = 1
+     and created_at > coalesce(bug_reports.reporter_seen_at, 0)
+)`;
+
+const SELECT_COLUMNS = `${STORED_COLUMNS}, admin_seen_at, reporter_seen_at, ${UNREAD_REPLIES_SQL} as unread_replies, (
   select seq from admin_todos where admin_todos.id = bug_reports.todo_id
 ) as todo_seq, (
   select coalesce(json_group_array(json_object(
@@ -348,10 +367,11 @@ const SELECT_COLUMNS = `${STORED_COLUMNS}, admin_seen_at, (
     'body', message.body,
     'createdAt', message.created_at,
     'editedAt', message.edited_at,
-    'screenshots', message.screenshot_keys
+    'screenshots', message.screenshot_keys,
+    'notify', message.notify
   )), '[]')
   from (
-    select id, author_role, body, created_at, edited_at, screenshot_keys, rowid as insertion_order
+    select id, author_role, body, created_at, edited_at, screenshot_keys, notify, rowid as insertion_order
       from bug_report_messages
      where report_id = bug_reports.id
      order by created_at, insertion_order
@@ -373,6 +393,8 @@ function rowToReport(row: Record<string, unknown>): BugReport {
     repliedAt: row.replied_at == null ? null : Number(row.replied_at),
     messages: parseMessages(row.messages_json),
     adminSeenAt: row.admin_seen_at == null ? null : Number(row.admin_seen_at),
+    reporterSeenAt: row.reporter_seen_at == null ? null : Number(row.reporter_seen_at),
+    unreadReplies: Number(row.unread_replies ?? 0),
     todoId: row.todo_id == null ? null : String(row.todo_id),
     todoSeq: row.todo_seq == null ? null : Number(row.todo_seq),
     createdAt: Number(row.created_at),
@@ -401,6 +423,7 @@ export function toBugReportForReporter(report: BugReport): BugReportForReporter 
       ...message,
       screenshotCount: screenshotKeys.length,
     })),
+    unreadReplies: report.unreadReplies,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -497,6 +520,8 @@ export async function createBugReport(db: Db, input: BugReportInput): Promise<Cr
     repliedAt: null,
     messages: [],
     adminSeenAt: null,
+    reporterSeenAt: null,
+    unreadReplies: 0,
     todoId: null,
     todoSeq: null,
     createdAt: now,
@@ -881,6 +906,69 @@ export async function markBugReportsSeen(
   return { marked, alert: await countUnseenBugReports(db) };
 }
 
+export interface ReporterReplyAlert {
+  /** Notifying owner messages the reporter has not opened yet. */
+  count: number;
+  /** Threads those sit in, so the list can be pointed at rather than counted. */
+  reports: number;
+  /** When the newest of them was sent. */
+  latestAt: number | null;
+}
+
+const NO_REPORTER_ALERT: ReporterReplyAlert = { count: 0, reports: 0, latestAt: null };
+
+/**
+ * The reporter's half of the unread question, and the payload behind the badge
+ * on their own avatar. One row per thread they own, so it is the same shape of
+ * read the board does from the other side.
+ *
+ * A reply only lands here when the owner sent it with notify on. Answering a
+ * thread quietly is the default and stays invisible until the reporter opens
+ * /report themselves.
+ */
+export async function countUnreadReporterReplies(db: Db, userId: unknown): Promise<ReporterReplyAlert> {
+  const id = normalizeUserId(userId);
+  if (!id) return NO_REPORTER_ALERT;
+  const row = (await exec(
+    db,
+    `select count(*) as messages, count(distinct message.report_id) as reports, max(message.created_at) as latest
+       from bug_report_messages as message
+       join bug_reports as report on report.id = message.report_id
+      where report.user_id = ? and message.author_role = 'admin' and message.notify = 1
+        and message.created_at > coalesce(report.reporter_seen_at, 0)`,
+    [id],
+  )).rows[0];
+  const latest = Number(row?.latest ?? 0);
+  return {
+    count: Number(row?.messages ?? 0),
+    reports: Number(row?.reports ?? 0),
+    latestAt: Number.isFinite(latest) && latest > 0 ? latest : null,
+  };
+}
+
+/**
+ * Acknowledge one of the reporter's own threads, or all of them. Stamped at
+ * "now" rather than at the newest message, so a reply written while the thread
+ * was open stays unread; `updated_at` is deliberately untouched, because
+ * reading is not activity and must not reorder either side's queue.
+ */
+export async function markReporterRepliesRead(
+  db: Db,
+  input: { userId?: unknown; id?: unknown } = {},
+): Promise<{ marked: number; alert: ReporterReplyAlert }> {
+  const userId = normalizeUserId(input.userId);
+  if (!userId) return { marked: 0, alert: NO_REPORTER_ALERT };
+  const id = typeof input.id === "string" && input.id ? input.id : null;
+  const now = Date.now();
+  const updated = await exec(
+    db,
+    `update bug_reports set reporter_seen_at = ?
+      where user_id = ? ${id ? "and id = ?" : ""} and ${UNREAD_REPLIES_SQL} > 0`,
+    id ? [now, userId, id] : [now, userId],
+  );
+  return { marked: updated.rowsAffected ?? 0, alert: await countUnreadReporterReplies(db, userId) };
+}
+
 function normalizeMessageBody(value: unknown): string | null {
   return text(value, MESSAGE_MAX);
 }
@@ -950,7 +1038,7 @@ export async function addReporterBugReportMessage(
  *  count acknowledges the thread; an answer from an older view must not. */
 export async function addAdminBugReportMessage(
   db: Db,
-  input: { id?: unknown; body?: unknown; screenshotCount?: unknown; reporterMessageCount?: unknown },
+  input: { id?: unknown; body?: unknown; screenshotCount?: unknown; reporterMessageCount?: unknown; notify?: unknown },
 ): Promise<AddBugReportMessageResult> {
   const id = typeof input.id === "string" ? input.id : "";
   const body = normalizeMessageBody(input.body);
@@ -964,12 +1052,16 @@ export async function addAdminBugReportMessage(
   // The owner answers with screenshots on the same terms the reporter does:
   // a ticket on this message, spent by the upload route.
   const uploadToken = Number(input.screenshotCount) > 0 ? randomUUID() : null;
+  // Opt-in per message: most answers are read the next time the reporter looks
+  // at their own thread, and a badge on someone's avatar is an interruption.
+  // The report already had an owner checked above, so there is somebody to tell.
+  const notify = input.notify === true ? 1 : 0;
   await execBatch(db, [
     {
       sql: `insert into bug_report_messages
-              (id, report_id, author_role, body, created_at, legacy_reply, upload_token, token_expires_at)
-            values (?, ?, 'admin', ?, ?, 0, ?, ?)`,
-      args: [messageId, id, body, now, uploadToken, uploadToken ? now + BUG_REPORT_UPLOAD_TOKEN_TTL_MS : null],
+              (id, report_id, author_role, body, created_at, legacy_reply, upload_token, token_expires_at, notify)
+            values (?, ?, 'admin', ?, ?, 0, ?, ?, ?)`,
+      args: [messageId, id, body, now, uploadToken, uploadToken ? now + BUG_REPORT_UPLOAD_TOKEN_TTL_MS : null, notify],
     },
     {
       sql: `update bug_reports set reply = ?, replied_at = ?, updated_at = ?,

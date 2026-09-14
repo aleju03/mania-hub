@@ -7,11 +7,12 @@ import { unpackJson } from "../src/shared/compressed-json.js";
 import {
   PLAYER_SKILLS_VERSION,
   PLAYER_SKILL_PATTERN_SWEEP_JOB,
+  PLAYER_SKILL_PATTERN_SWEEP_META_KEY,
   ensurePlayerSkillPatternSweepSeeded,
   recomputePlayerSkillPatternChunk,
   runPlayerSkillPatternSweepJob,
 } from "../src/features/player-skills.js";
-import { CHART_ANALYSIS_VERSION, JACK_TAG_META_KEY } from "../src/features/chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, JACK_TAG_META_KEY, LN_EFFECTIVE_META_KEY } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 let dir = "";
@@ -28,12 +29,29 @@ async function makeDb(): Promise<Db> {
   return db;
 }
 
-async function seedChart(db: Db, beatmapId: number, patterns: Array<{ id: string; score: number }>): Promise<void> {
+async function seedChart(
+  db: Db,
+  beatmapId: number,
+  patterns: Array<{ id: string; score: number }>,
+  options: { keyCount?: number; lnRatio?: number; lnEffectiveRatio?: number | null } = {},
+): Promise<void> {
+  const keyCount = options.keyCount ?? 8;
   await exec(
     db,
     `insert into beatmap_chart_analysis (beatmap_id, analysis_version, key_count, status, classification_json, updated_at)
-     values (?, ?, 8, 'ready', json(?), ?)`,
-    [beatmapId, CHART_ANALYSIS_VERSION, json({ lnRatio: 0, patterns }), "2026-08-27T00:00:00.000Z"],
+     values (?, ?, ?, 'ready', json(?), ?)`,
+    [
+      beatmapId,
+      CHART_ANALYSIS_VERSION,
+      keyCount,
+      json({
+        keyCount,
+        lnRatio: options.lnRatio ?? 0,
+        ...(options.lnEffectiveRatio == null ? {} : { lnEffectiveRatio: options.lnEffectiveRatio }),
+        patterns,
+      }),
+      "2026-08-27T00:00:00.000Z",
+    ],
   );
 }
 
@@ -45,7 +63,7 @@ function play(beatmapId: number, patterns: string[]) {
 }
 
 // A row folded before the jack re-tag: its charts carried only a tech tag.
-async function seedRow(db: Db, userId: number, beatmapIds: number[], keyCount = 8): Promise<void> {
+async function seedRow(db: Db, userId: number, beatmapIds: number[], keyCount = 8, storedPatterns = ["tech"]): Promise<void> {
   await exec(
     db,
     `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
@@ -57,10 +75,10 @@ async function seedRow(db: Db, userId: number, beatmapIds: number[], keyCount = 
         totalPlays: beatmapIds.length, analyzedPlays: beatmapIds.length, pendingPlays: 0, unsupportedPlays: 0,
         modes: [{
           keyCount, analyzedPlays: beatmapIds.length, ratings: { Overall: 22 },
-          patterns: [{ id: "tech", rating: 22, plays: beatmapIds.length }], dan: null,
+          patterns: storedPatterns.map((id) => ({ id, rating: 22, plays: beatmapIds.length })), dan: null,
         }],
       }),
-      json({ plays: beatmapIds.map((id) => ({ ...play(id, ["tech"]), keyCount })) }),
+      json({ plays: beatmapIds.map((id) => ({ ...play(id, storedPatterns), keyCount })) }),
       "2026-08-20T00:00:00.000Z",
       "2026-08-20T00:00:00.000Z",
     ],
@@ -126,16 +144,37 @@ describe("recomputePlayerSkillPatternChunk", () => {
     db.close();
   });
 
-  it("skips pure-4K rows and is idempotent on a second pass", async () => {
+  it("removes 4K LN tags from a low-hold chart even when its section median is high", async () => {
+    const db = await makeDb();
+    for (const beatmapId of [901, 902, 903]) {
+      await seedChart(db, beatmapId, [{ id: "ln", score: 1 }], {
+        keyCount: 4,
+        lnRatio: 0.37796123474515436,
+        lnEffectiveRatio: 0.4122137404580153,
+      });
+    }
+    await seedRow(db, 22, [901, 902, 903], 4, ["ln"]);
+
+    const result = await recomputePlayerSkillPatternChunk(db, 0);
+    expect(result).toMatchObject({ scanned: 1, rewritten: 1, done: true });
+    const row = (await exec(db, "select modes_json, plays_json from player_skill_ratings where user_id = 22")).rows[0];
+    const summary = parseJson<{ modes: Array<{ patterns: Array<{ id: string }> }> }>(String(row.modes_json ?? ""), { modes: [] });
+    expect(summary.modes[0].patterns).toEqual([]);
+    const stored = unpackJson<{ plays: Array<{ patterns: string[] }> }>(row.plays_json, { plays: [] });
+    expect(stored.plays.map((entry) => entry.patterns)).toEqual([[], [], []]);
+    db.close();
+  });
+
+  it("includes 4K rows and is idempotent on a second pass", async () => {
     const db = await makeDb();
     for (const beatmapId of [701, 702, 703]) await seedChart(db, beatmapId, [{ id: "jack", score: 0.9 }]);
     await seedRow(db, 31, [701, 702, 703]);
     await seedRow(db, 32, [701, 702, 703], 4);
 
     const first = await recomputePlayerSkillPatternChunk(db, 0);
-    expect(first).toMatchObject({ scanned: 1, rewritten: 1, done: true });
+    expect(first).toMatchObject({ scanned: 2, rewritten: 2, done: true });
     const second = await recomputePlayerSkillPatternChunk(db, 0);
-    expect(second).toMatchObject({ scanned: 1, rewritten: 0, done: true });
+    expect(second).toMatchObject({ scanned: 2, rewritten: 0, done: true });
     db.close();
   });
 
@@ -174,7 +213,7 @@ describe("recomputePlayerSkillPatternChunk", () => {
 });
 
 describe("ensurePlayerSkillPatternSweepSeeded", () => {
-  it("waits for the chart-side jack sweep, seeds once, and stays quiet after the done key", async () => {
+  it("waits for both chart-side sweeps, seeds once, and stays quiet after the done key", async () => {
     const db = await makeDb();
     const queue = new JobQueue(db);
     const jobCount = async () => Number((await exec(
@@ -186,6 +225,8 @@ describe("ensurePlayerSkillPatternSweepSeeded", () => {
     // Chart sweep still running: folding now would bake half-swept tags.
     await ensurePlayerSkillPatternSweepSeeded(db, queue);
     expect(await jobCount()).toBe(0);
+    expect(await runPlayerSkillPatternSweepJob(db, queue, { cursor: 0 })).toBe(false);
+    expect((await exec(db, "select 1 from live_meta where key = ?", [PLAYER_SKILL_PATTERN_SWEEP_META_KEY])).rows[0]).toBeUndefined();
 
     await exec(
       db,
@@ -193,12 +234,20 @@ describe("ensurePlayerSkillPatternSweepSeeded", () => {
       [JACK_TAG_META_KEY, json({ finishedAt: "2026-08-28T00:00:00.000Z" }), "2026-08-28T00:00:00.000Z"],
     );
     await ensurePlayerSkillPatternSweepSeeded(db, queue);
+    expect(await jobCount()).toBe(0);
+
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_EFFECTIVE_META_KEY, json({ finishedAt: "2026-09-04T00:00:00.000Z" }), "2026-09-04T00:00:00.000Z"],
+    );
+    await ensurePlayerSkillPatternSweepSeeded(db, queue);
     expect(await jobCount()).toBe(1);
 
     // The finishing chunk stamps done and reports it, so the dispatcher can
     // force the baseline rebuild.
     expect(await runPlayerSkillPatternSweepJob(db, queue, { cursor: 0 })).toBe(true);
-    const done = (await exec(db, "select 1 from live_meta where key = 'player_skill_pattern_sweep_done:v5'", [])).rows[0];
+    const done = (await exec(db, "select 1 from live_meta where key = ?", [PLAYER_SKILL_PATTERN_SWEEP_META_KEY])).rows[0];
     expect(done).toBeTruthy();
 
     await ensurePlayerSkillPatternSweepSeeded(db, queue);

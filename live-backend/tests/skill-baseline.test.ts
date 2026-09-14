@@ -6,6 +6,7 @@ import { createDb, exec, migrate, parseJson } from "../src/db.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { PLAYER_SKILLS_VERSION, SKILL_RATING_SKILLSETS } from "../src/features/player-skills.js";
+import { LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
 import {
   EXACT_SKILL_CURVES_META_KEY,
   SKILL_BASELINE_CURVES_META_KEY,
@@ -15,6 +16,7 @@ import {
   decoratePlayerSkillBreakdown,
   enqueueSkillBaselineIfDue,
   readExactSkillCurves,
+  readBaselineCurves,
   runSkillBaselineJob,
   type BaselineChartEntry,
   type BaselineCurves,
@@ -56,7 +58,48 @@ function chartEntry(overrides: Partial<BaselineChartEntry> & { msdValues?: Recor
 
 const NEUTRAL_PARAMS = { gamma: Object.fromEntries(SKILL_RATING_SKILLSETS.map((axis) => [axis, 1])), accSlope: 1.09 };
 
+describe("4K-only LN population migration", () => {
+  it.each([undefined, LN_SKILL_VERSION])("retains other axes while checking the 4K LN curve stamp (%s)", async lnSkillVersion => {
+    await withDb(async db => {
+      const axis = { count: 50, curve: [10, 15, 20], median: 15 };
+      const curves = Object.fromEntries(Array.from({ length: 15 }, (_, i) => [String(i + 4), {
+        Overall: axis, "pattern:ln": axis, "pattern:lntech": axis, "pattern:tech": axis,
+      }]));
+      const blob = { computedAt: "2026-09-01", playerSkillsVersion: PLAYER_SKILLS_VERSION - 1,
+        format: 4, minPlays: 3, users: {}, curves, lnSkillVersion };
+      // The deployed storage key stays readable throughout the migration.
+      await exec(db, "insert into live_meta (key, value_json, updated_at) values ('skill_exact_curves:v1', ?, ?)",
+        [JSON.stringify(blob), "2026-09-01"]);
+      await exec(db, "insert into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+        [SKILL_BASELINE_CURVES_META_KEY, JSON.stringify(blob), "2026-09-01"]);
+      const exact = (await readExactSkillCurves(db))!;
+      const approximate = (await readBaselineCurves(db))!;
+      for (let keys = 5; keys <= 18; keys += 1) {
+        expect(exact.curves[String(keys)]).toEqual(curves[String(keys)]);
+        expect(approximate.curves[String(keys)]).toEqual(curves[String(keys)]);
+      }
+      expect(exact.curves["4"].Overall).toEqual(axis);
+      expect(exact.curves["4"]["pattern:tech"]).toEqual(axis);
+      expect(exact.curves["4"]["pattern:ln"]).toEqual(lnSkillVersion === LN_SKILL_VERSION ? axis : undefined);
+      expect(exact.curves["4"]["pattern:lntech"]).toEqual(lnSkillVersion === LN_SKILL_VERSION ? axis : undefined);
+      // Approximate curves never contain the independent strain rating.
+      expect(approximate.curves["4"]["pattern:ln"]).toBeUndefined();
+    });
+  });
+});
+
 describe("computeApproxRatings", () => {
+  it("keeps legacy non-4K LN approximation while excluding independent 4K LN", () => {
+    const plays = [1, 2, 3].map(() => ({ beatmapId: 1, rate: 1, goal: 0.93, patterns: ["ln"] }));
+    for (const keyCount of [4, 5, 6, 7, 8, 18]) {
+      const charts = new Map([[1, chartEntry({ keyCount, msdValues: { Overall: 20 } })]]);
+      const ratings = computeApproxRatings(plays, charts, NEUTRAL_PARAMS).get(keyCount)!.ratings;
+      expect(ratings.Overall).toBeGreaterThan(0);
+      if (keyCount === 4) expect(ratings["pattern:ln"]).toBeUndefined();
+      else expect(ratings["pattern:ln"]).toBe(ratings.Overall);
+    }
+  });
+
   it("aggregates per-keymode axes plus pattern axes from chart tags", () => {
     const charts = new Map([[1, chartEntry({ msdValues: { Overall: 20, Stream: 18 }, patterns: ["stream"] })]]);
     const plays = [1, 2, 3].map(() => ({ beatmapId: 1, rate: 1, goal: 0.93, patterns: ["stream"] }));

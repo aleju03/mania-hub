@@ -1,9 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { lnAdjustedMsd } from "../../dan/msd.js";
+import type { MsdResult } from "../../dan/msd.js";
+import { LN_SKILL_VERSION } from "../../dan/ln-skill.js";
 import { exec, parseJson } from "../../db.js";
 import { lookupAvatarAccents } from "../../features/avatar-accents.js";
 import { CHART_ANALYSIS_VERSION } from "../../features/chart-analysis.js";
-import { getDanEstimateBatch, getRateAdjustedChartAnalysis } from "../../features/dan-estimates.js";
+import { getDanEstimateBatch, getRateAdjustedChartAnalysis, type RateAdjustedChartAnalysis } from "../../features/dan-estimates.js";
 import { parseDtRateVerdict } from "../../features/map-search.js";
 import type { HttpContext } from "../context.js";
 import { readBody } from "../request.js";
@@ -57,6 +59,7 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
       return true;
     }
     const ratePercent = Math.round(rate * 100);
+    let cachedDt: RateAdjustedChartAnalysis | null = null;
     if (ratePercent === 150) {
       const row = (await exec(
         ctx.db,
@@ -65,7 +68,14 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
         [beatmapId, CHART_ANALYSIS_VERSION],
       )).rows[0];
       const { danDt, msdDt, vibroAnalysisDt } = parseDtRateVerdict(row);
-      if (msdDt || danDt) {
+      const artifact = parseJson<MsdResult | null>(row?.msd_dt_json, null);
+      const currentLn = Number(row?.key_count) !== 4 || artifact?.lnSkill?.version === LN_SKILL_VERSION;
+      if (msdDt && !currentLn) {
+        const native = { ...msdDt };
+        delete native.LN;
+        cachedDt = { beatmapId, rate: 1.5, ratePercent, status: "ready", dan: danDt, msd: native };
+      }
+      if ((msdDt || danDt) && currentLn) {
         sendJson(req, res, ctx, 200, {
           beatmapId,
           rate: 1.5,
@@ -85,7 +95,7 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
       sendJson(req, res, ctx, 400, { error: "invalid_rate" });
       return true;
     }
-    sendJson(req, res, ctx, 200, analysis);
+    sendJson(req, res, ctx, 200, analysis.msd == null && cachedDt ? cachedDt : analysis);
     return true;
   }
   if (url.pathname === "/api/chart-analysis") {
@@ -140,8 +150,12 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
       ...(classification?.vibroAnalysis ? { vibroAnalysis: classification.vibroAnalysis } : {}),
       verdictText: typeof classification?.verdictText === "string" ? classification.verdictText : null,
       lnRatio: Number.isFinite(Number(classification?.lnRatio)) ? Number(classification?.lnRatio) : null,
-      // LN-adjusted (tail-aware, keymode-blended) MSD; null for rice charts or
-      // until the LN MSD sweep covers this chart.
+      // Rate-aware share of the chart that demands a release at 1.0x
+      // (dan/dan-estimator/ln-effective.ts); null on rows the effective-LN
+      // sweep has not patched yet.
+      lnEffectiveRatio: Number.isFinite(Number(classification?.lnEffectiveRatio)) ? Number(classification?.lnEffectiveRatio) : null,
+      // LN-adjusted (tail-aware, keymode-blended) MSD; null when the chart has
+      // no eligible tail pass or until the LN MSD sweep covers it.
       msdLn,
     });
     return true;

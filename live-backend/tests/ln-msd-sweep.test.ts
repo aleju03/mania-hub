@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { blendLnTailValues } from "../src/dan/msd.js";
+import { blendLnTailValues, lnAdjustedMsd } from "../src/dan/msd.js";
 import { CHART_ANALYSIS_VERSION, recomputeLnMsdChunk } from "../src/features/chart-analysis.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 
@@ -105,12 +105,29 @@ describe("blendLnTailValues", () => {
     const base = { Overall: 20, Stream: 10 };
     const tails = { Overall: 30, Stream: 8 };
     const blended4 = blendLnTailValues(base, tails, 4);
-    expect(blended4.Overall).toBeCloseTo(21, 5);
+    expect(blended4).toEqual(base); // Native 4K never receives tail blending.
     // A tails value below base (calc noise) never drags the blend down.
     expect(blended4.Stream).toBe(10);
     const blended7 = blendLnTailValues(base, tails, 7);
     expect(blended7.Overall).toBeCloseTo(23, 5);
     // Unsupported keymodes pass through untouched.
     expect(blendLnTailValues(base, tails, 8).Overall).toBe(20);
+  });
+});
+
+describe("lnAdjustedMsd", () => {
+  it("suppresses legacy 4K tail adjustments without changing the independent LN axis", () => {
+    const adjusted = lnAdjustedMsd(
+      { Overall: 20, Jumpstream: 19, LN: 14 },
+      { Overall: 40, Jumpstream: 29, LN: 100 },
+      4,
+    );
+    expect(adjusted).toBeNull();
+    expect(blendLnTailValues({ Overall: 20, LN: 14 }, { Overall: 40, LN: 100 }, 4)).toEqual({ Overall: 20, LN: 14 });
+    expect(lnAdjustedMsd({ Overall: 20 }, { Overall: 40 }, 7)).toEqual({ Overall: 26 });
+  });
+
+  it("returns no LN record when the tail pass changes nothing", () => {
+    expect(lnAdjustedMsd({ Overall: 20 }, { Overall: 20 }, 4)).toBeNull();
   });
 });

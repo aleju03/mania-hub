@@ -144,14 +144,14 @@ describe("vibro recompute sweep", () => {
     expect(classification.vibroAnalysis.status).toBe("adjusted");
     expect(Number(row.msd_overall)).toBeLessThan(999);
     expect(JSON.parse(String(row.msd_json)).values).toEqual(
-      (await computeMsdOnThread(localizedVibroFixture(), { keyCount: 4 })).values,
+      { ...(await computeMsdOnThread(localizedVibroFixture(), { keyCount: 4 })).values, LN: 0 },
     );
     expect(JSON.parse(String(row.msd_json)).vibroAdjusted).toBe(false);
     const dt = JSON.parse(String(row.msd_dt_json));
     expect(dt.values.Overall).toBeLessThan(999);
     expect(dt.vibroAnalysis.status).toBe("adjusted");
     expect(dt.vibroAdjusted).toBe(false);
-    expect(dt.values).toEqual((await computeMsdOnThread(localizedVibroFixture(), { keyCount: 4, rate: 1.5 })).values);
+    expect(dt.values).toEqual({ ...(await computeMsdOnThread(localizedVibroFixture(), { keyCount: 4, rate: 1.5 })).values, LN: 0 });
     expect(Number((await exec(db, "select vibro from map_search_index where beatmap_id = 1")).rows[0].vibro)).toBe(0);
 
     // Arbitrary-rate responses preserve the explanation on cache hits too.

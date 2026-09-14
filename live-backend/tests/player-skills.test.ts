@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { unpackJson } from "../src/shared/compressed-json.js";
+import { WIFE_CALIBRATION_VERSION } from "../src/features/wife-calibration.js";
 import {
   PLAYER_SKILLS_SEED_VERSIONS,
   PLAYER_SKILLS_VERSION,
+  LN_TAIL_PASS_VERSION,
   aggregateSsrs,
   selectMsdRatingPlays,
   computePlayerSkillRatings,
@@ -26,9 +28,15 @@ import {
   parseNamedRate,
   ssrGoalForAccuracy,
   ssrGoalForScore,
+  calibrateScoreForMsd,
+  analyzeLnSsr,
+  lnSsrSolverGoal,
   RATE_VIBRO_CHECK_VERSION,
+  type StoredPlaySsr,
 } from "../src/features/player-skills.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
+import { analyzeLnSkillFromText, LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
+import * as msdModule from "../src/dan/msd.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import type { OscScore } from "../src/shared/types.js";
 import { buildVibroOsu, localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
@@ -139,7 +147,10 @@ function buildLnBeatmapFile(): string {
     const column = pattern[index % pattern.length];
     const x = 64 + column * 128;
     const time = 1000 + index * 88;
-    return `${x},192,${time},128,0,${time + 250}:0:0:0:0:`;
+    const next = Array.from({ length: pattern.length }, (_, i) => i + 1).find((gap) => pattern[(index + gap) % pattern.length] === column)!;
+    // Legal holds: end before the next object in the same lane.
+    const duration = Math.min(250, next * 88 - 20);
+    return `${x},192,${time},128,0,${time + duration}:0:0:0:0:`;
   }).join("\n");
   return `osu file format v14
 
@@ -163,6 +174,22 @@ OverallDifficulty:8
 [HitObjects]
 ${notes}
 `;
+}
+
+// Same rice skeleton, but only two of every five heads are holds. This is a
+// regular chart under the 45% first gate, so tails must not move its MSD.
+function buildLowHoldBeatmapFile(): string {
+  const pattern = [0, 1, 2, 3, 1, 3, 0, 2, 3, 0, 1, 3, 2, 0, 2, 1];
+  const notes = Array.from({ length: 700 }, (_, index) => {
+    const column = pattern[index % pattern.length];
+    const x = 64 + column * 128;
+    const time = 1000 + index * 88;
+    const next = Array.from({ length: pattern.length }, (_, i) => i + 1).find((gap) => pattern[(index + gap) % pattern.length] === column)!;
+    return index % 5 < 2
+      ? `${x},192,${time},128,0,${time + Math.min(250, next * 88 - 20)}:0:0:0:0:`
+      : `${x},192,${time},1,0,0:0:0:0:`;
+  }).join("\n");
+  return buildLnBeatmapFile().replace(/\[HitObjects\][\s\S]*$/, `[HitObjects]\n${notes}\n`);
 }
 
 function buildStdBeatmapFile(): string {
@@ -591,9 +618,9 @@ describe("ssrGoalForScore", () => {
     expect(mixed).toBeLessThan(0.9975);
   });
 
-  it("falls back to capped accuracy when a score has no judgement counts", () => {
+  it("converts accuracy-only evidence and keeps it below the extrapolation cap", () => {
     expect(ssrGoalForScore({ accuracy: 0.9999, statistics: {} }, 0)).toBe(0.965);
-    expect(ssrGoalForScore({ accuracy: 0.94, statistics: {} }, 0)).toBe(0.94);
+    expect(ssrGoalForScore({ accuracy: 0.94, statistics: {} }, 0)).toBe(0.8536);
   });
 
   it("refuses plays whose goal lands on the calc's 0.8 floor", () => {
@@ -601,7 +628,7 @@ describe("ssrGoalForScore", () => {
     // full MSD; it must not rate at all.
     expect(ssrGoalForScore({ accuracy: 0.6156, statistics: {} }, 0)).toBeNull();
     expect(ssrGoalForScore({ accuracy: 0.8, statistics: {} }, 0)).toBeNull();
-    expect(ssrGoalForScore({ accuracy: 0.81, statistics: {} }, 0)).toBe(0.81);
+    expect(ssrGoalForScore({ accuracy: 0.81, statistics: {} }, 0)).toBeNull();
     // Judgement-backed: decent osu accuracy but a wife estimate the misses
     // drag below the floor is refused on the wife path too.
     const sloppy = {
@@ -613,41 +640,31 @@ describe("ssrGoalForScore", () => {
     expect(ssrGoalForScore(sloppy, 0)).toBeNull();
   });
 
-  it("fades the wife estimate toward plain accuracy by LN share for lazer plays", () => {
-    // Same judgement counts: a rice chart keeps the full MAX:300 spread, an
-    // LN-heavy chart mostly ignores it (lazer judges LN head+tail separately,
-    // sagging the ratio), and an unknown chart trusts none of it.
-    const score = { accuracy: 0.998, statistics: { perfect: 400, great: 580, good: 15, ok: 4, miss: 1 } };
-    const rice = ssrGoalForScore(score, 0);
-    const half = ssrGoalForScore(score, 0.5);
-    const lnHeavy = ssrGoalForScore(score, 1);
-    const unknown = ssrGoalForScore(score, null);
-    const accGoal = ssrGoalForAccuracy(score.accuracy);
-    expect(rice).toBeLessThan(accGoal);
-    expect(half).toBeGreaterThan(rice!);
-    expect(half).toBeLessThan(lnHeavy!);
-    expect(lnHeavy).toBe(accGoal);
-    expect(unknown).toBe(accGoal);
+  it("uses judgment calibration rather than fading toward raw accuracy on LN charts", () => {
+    const score = { type: "solo_score", accuracy: 0.998, statistics: { perfect: 400, great: 580, good: 15, ok: 4, miss: 1 } };
+    for (const holdRatio of [0, 0.01, 0.5, 1]) {
+      expect(ssrGoalForScore(score, holdRatio, 8)).toBe(ssrGoalForScore({ ...score, accuracy: 0.81 }, holdRatio, 8));
+    }
+    expect(ssrGoalForScore(score, 1, 8)).not.toBe(ssrGoalForAccuracy(score.accuracy));
   });
 
-  it("never fades stable scores: one judgement covers the whole hold", () => {
+  it("calibrates combined stable hold judgments independently of raw accuracy", () => {
     const score = {
       accuracy: 0.998,
       legacy_score_id: 12345,
       statistics: { count_geki: 600, count_300: 380, count_katu: 15, count_100: 4, count_miss: 1 },
     };
-    expect(ssrGoalForScore(score, 1)).toBe(ssrGoalForScore(score, 0));
+    expect(ssrGoalForScore(score, 1)).toBe(ssrGoalForScore({ ...score, accuracy: 0.81 }, 1));
+    expect(ssrGoalForScore(score, 1)).not.toBe(ssrGoalForScore(score, 0));
   });
 
   it("does not lift a sub-floor Wife estimate into eligibility through a tiny LN share", () => {
     const score = {
       accuracy: 0.9098396185522324,
-      statistics: { perfect: 969, great: 879, good: 344, ok: 62, meh: 6, miss: 47 },
+      statistics: { perfect: 969, great: 879, good: 344, ok: 62, meh: 6, miss: 67 },
     };
-    expect(estimateWifeAccuracy(score.statistics, { od: 8.5 })).toBeCloseTo(0.7792356);
     expect(ssrGoalForScore(score, 14 / 2307, 8.5)).toBeNull();
-    // An actual LN-heavy lazer play still gets the intended weighted goal.
-    expect(ssrGoalForScore(score, 0.8, 8.5)).toBeCloseTo(0.8837);
+    expect(ssrGoalForScore({ ...score, accuracy: 1 }, 14 / 2307, 8.5)).toBeNull();
   });
 
   it("values a 300-heavy play far lower on a 0 OD chart than on OD8", () => {
@@ -659,7 +676,7 @@ describe("ssrGoalForScore", () => {
     const od0 = ssrGoalForScore(score, 0, 0);
     const od8 = ssrGoalForScore(score, 0, 8);
     expect(od8).toBeCloseTo(0.9756, 3);
-    expect(od0).toBeCloseTo(0.8256, 3);
+    expect(od0).toBeCloseTo(0.832, 3);
     expect(ssrGoalForScore(score, 0, null)).toBe(od8);
   });
 
@@ -734,6 +751,92 @@ describe("selectMsdRatingPlays", () => {
 });
 
 describe("computePlayerSkillRatings", () => {
+  it.each([4, 7, 10].flatMap((keyCount) => [false, true].flatMap((ln) => [0.75, 1.25, 1.5].map((rate) => ({ keyCount, ln, rate })))))
+    ("calibrates and retains $keyCount K at $rate x (holds: $ln)", async ({ keyCount, ln, rate }) => {
+      await withDb(async (db) => {
+        const text = (ln ? buildLnBeatmapFile() : buildStreamBeatmapFile()).replace("CircleSize:4", `CircleSize:${keyCount}`);
+        await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+        const statistics = ln ? { perfect: 1000, great: 350, good: 30, ok: 10, meh: 4, miss: 6 }
+          : { perfect: 500, great: 175, good: 15, ok: 5, meh: 2, miss: 3 };
+        const score = play({ id: 801, beatmap_id: 101, type: "solo_score", accuracy: 0.99, statistics,
+          mods: [{ acronym: rate < 1 ? "HT" : "DT", settings: { speed_change: rate } }] });
+        const expected = ssrGoalForScore(score, ln ? 1 : 0, 8, { keyCount, nativeMania: true, rate });
+        expect(expected).not.toBeNull();
+        const result = await computePlayerSkillRatings(db, failingOsu, [score], []);
+        expect(result.plays).toHaveLength(1);
+        expect(result.plays[0]).toMatchObject({ keyCount, rate, goal: expected,
+          wifeCalibration: { version: WIFE_CALIBRATION_VERSION, keyCount, chartHoldRatio: ln ? 1 : 0 } });
+        const retained = await computePlayerSkillRatings(db, failingOsu, [], result.plays);
+        expect(retained.plays).toHaveLength(1);
+        expect(retained.plays[0].goal).toBe(expected);
+        expect(retained.plays[0].rate).toBe(rate);
+        expect(retained.plays[0].values).toEqual(result.plays[0].values);
+      });
+    });
+
+  it("recalculates a retained tap goal and restores eligible Dan-only evidence without a raw score", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+      const statistics = { perfect: 1088, great: 760, good: 241, ok: 43, meh: 17, miss: 42 };
+      const previous = { identity: "official:501", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.8,
+        pp: 0, values: {}, patterns: [], source: "tracked" as const, ratingExcluded: true,
+        accuracy: 0.94, wifeScoring: "lazer" as const, tapWifeMods: true, mods: [],
+        score: { statistics, maxCombo: 500, totalScore: 900000, rank: "A", scoreUrl: "https://osu.ppy.sh/scores/501" } };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.plays).toHaveLength(1);
+      expect(result.plays[0]).toMatchObject({ identity: previous.identity, goal: 0.8218, wifeScoring: "lazer",
+        wifeCalibration: { chartOd: 8, chartHoldRatio: 0, keyCount: 4 } });
+      expect(result.plays[0].values.Overall).toBeGreaterThan(0);
+      expect(result.plays[0].score?.scoreUrl).toBe(previous.score.scoreUrl);
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], result.plays);
+      expect(retained.plays[0].goal).toBe(result.plays[0].goal);
+      expect(retained.plays[0].values).toEqual(result.plays[0].values);
+
+      await exec(db, "delete from beatmap_osu_files where beatmap_id = 101");
+      const missingFile = await computePlayerSkillRatings(db, failingOsu, [], retained.plays);
+      expect(missingFile.plays[0].goal).toBe(0.8218);
+      expect(missingFile.plays[0].values).toEqual(retained.plays[0].values);
+      expect(missingFile.summary.pendingPlays).toBeGreaterThan(0);
+
+      const corrected = await computePlayerSkillRatings(db, failingOsu, [play({
+        id: 501, beatmap_id: 101, type: "solo_score", accuracy: 1, statistics: { perfect: 2191 },
+      })], retained.plays);
+      expect(corrected.plays).toEqual([]);
+      expect(corrected.summary.pendingPlays).toBeGreaterThan(0);
+
+      // A replaced file invalidates the cached zero-hold proof, even when
+      // its OD is unchanged and the analysis row has not caught up yet.
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile()
+        .replace("64,192,1000,1,0,0:0:0:0:", "64,192,1000,128,0,1050:0:0:0:0:"), { source: "test" });
+      await exec(db, "update beatmap_osu_files set fetched_at = '2026-09-11T00:00:00Z' where beatmap_id = 101");
+      const changed = await computePlayerSkillRatings(db, failingOsu, [], retained.plays);
+      expect(changed.plays[0].wifeCalibration?.chartHoldRatio).toBe(1 / 700);
+      expect(changed.plays[0].lnSkill?.structureKey).not.toBe(retained.plays[0].lnSkill?.structureKey);
+
+      // Unknown client provenance remains explicit and uses the conservative
+      // calibrated value; an obsolete tap-only mod flag is no longer a gate.
+      const unknown = await computePlayerSkillRatings(db, failingOsu, [], [{ ...previous, wifeScoring: undefined }]);
+      expect(unknown.plays[0].wifeScoring).toBe("unknown");
+      expect(unknown.plays[0].wifeCalibration).toBeDefined();
+    });
+  });
+
+  it("checks the file for holds even when stored chart analysis says zero", async () => {
+    await withDb(async (db) => {
+      const text = buildStreamBeatmapFile().replace("64,192,1000,1,0,0:0:0:0:", "64,192,1000,128,0,1050:0:0:0:0:");
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+        values (101, 1, 'ready', 4, '{"lnRatio":0,"patterns":[]}', ?)`, [new Date().toISOString()]);
+      const score = play({ beatmap_id: 101, type: "solo_score", legacy_score_id: 0,
+        statistics: { perfect: 400, great: 230, good: 50, ok: 10, miss: 10 } });
+      const result = await computePlayerSkillRatings(db, failingOsu, [score], []);
+      expect(result.plays[0].goal).toBe(ssrGoalForScore(score, 1 / 700, 8));
+      expect(result.plays[0].wifeCalibration?.chartHoldRatio).toBe(1 / 700);
+    });
+  });
+
   it.each([0, 1])("uses the same goal and SSR before and after chart analysis arrives at LN share %s", async (lnRatio) => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, lnRatio ? buildLnBeatmapFile() : buildStreamBeatmapFile(), { source: "test" });
@@ -741,7 +844,7 @@ describe("computePlayerSkillRatings", () => {
         statistics: { perfect: 400, great: 230, good: 50, ok: 10, miss: 10 } });
       const first = await computePlayerSkillRatings(db, failingOsu, [score], []);
       expect(first.plays).toHaveLength(1);
-      expect(first.plays[0].goal).toBe(ssrGoalForScore(score, lnRatio, 8));
+      expect(first.plays[0].goal).toBe(ssrGoalForScore(score, lnRatio, 8, { keyCount: 4, nativeMania: true, rate: 1 }));
       if (lnRatio === 0) expect(first.plays[0].goal).toBeLessThan(ssrGoalForAccuracy(score.accuracy));
       await exec(db, `insert into beatmap_chart_analysis
         (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
@@ -762,7 +865,7 @@ describe("computePlayerSkillRatings", () => {
         pp: 100, values: { Overall: 30, Chordjack: 30 }, patterns: [] };
       const result = await computePlayerSkillRatings(db, failingOsu, [score], [stale]);
       expect(result.plays).toEqual([]);
-      expect(result.danOnly).toEqual([]);
+      expect(result.danOnly).toMatchObject([{ identity: "official:1", ratingExcluded: true, calibrationPending: true, values: {} }]);
       expect(result.summary.pendingPlays).toBe(1);
     });
   });
@@ -793,12 +896,15 @@ describe("computePlayerSkillRatings", () => {
   it("repairs legacy archive provenance and replaces an inflated SSR with Dan-only evidence", async () => {
     await withDb(async (db) => {
       const queue = new JobQueue(db);
-      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile().replace("OverallDifficulty:8", "OverallDifficulty:8.5"), { source: "test" });
+      // One hold keeps this provenance regression outside tap calibration,
+      // as in the hold-bearing original report that motivated the repair.
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile().replace("OverallDifficulty:8", "OverallDifficulty:8.5")
+        .replace("64,192,1000,1,0,0:0:0:0:", "64,192,1000,128,0,1050:0:0:0:0:"), { source: "test" });
       await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at)
         values (101, 10, 'mania', 'test', '{"accuracy":8.5}', ?)`, [new Date().toISOString()]);
       const score = play({ id: 5001, beatmap_id: 101, ruleset_id: 3, type: "solo_score", pp: null,
         legacy_score_id: 0, legacy_total_score: 751969, accuracy: 0, mods: [{ acronym: "CL" }],
-        statistics: { perfect: 969, great: 879, good: 344, ok: 62, meh: 6, miss: 47 } });
+        statistics: { perfect: 969, great: 879, good: 344, ok: 62, meh: 6, miss: 67 } });
       await recordPlayerActivity(db, queue, "CR", score, getScoreIdentity(score));
       await exec(db, "update player_activity_maps set best_is_lazer = null where user_id = 99");
       const repaired = await loadArchivedTrackedEvidence(db, 99, [score]);
@@ -858,6 +964,8 @@ describe("computePlayerSkillRatings", () => {
       const initial = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 101 })], []);
       const retained = [1, 0.95, 0.9, 0.85].map((rate, index) => ({
         ...initial.plays[0], identity: `official:${index + 1}`, rate,
+        goal: calibrateScoreForMsd(play({ accuracy: initial.plays[0].accuracy ?? 0.97 }), 0, 8, { keyCount: 4, nativeMania: true, rate }).goal!,
+        lnGoal: calibrateScoreForMsd(play({ accuracy: initial.plays[0].accuracy ?? 0.97 }), 0, 8, { keyCount: 4, nativeMania: true, rate }).lnGoal!,
         values: { Overall: 30 - index, Stream: index === 3 ? 50 : 25 - index },
       }));
       const result = await computePlayerSkillRatings(db, failingOsu, [], retained);
@@ -1072,14 +1180,33 @@ describe("computePlayerSkillRatings", () => {
       expect(top.summary.analyzedPlays).toBe(0);
       expect(top.summary.unsupportedPlays).toBe(1);
 
-      // Any DA under the chart's own OD widens windows, not just the extreme.
+      // A DA under the chart's own OD that stops at or above the ladder's
+      // floor is a play of the chart at a looser OD: it rates (the wife goal
+      // prices the wider windows) and answers to the dan floor like a chart
+      // that ships at that OD. Under the floor it is refused.
       const nudged = await computePlayerSkillRatings(
         db,
         failingOsu,
         [play({ id: 42, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 7.5 } }] })],
         [],
       );
-      expect(nudged.summary.analyzedPlays).toBe(0);
+      expect(nudged.summary.analyzedPlays).toBe(1);
+      expect(nudged.plays[0].odOverride).toBe(7.5);
+      const atFloor = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 45, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 5.5 } }] })],
+        [],
+      );
+      expect(atFloor.summary.analyzedPlays).toBe(1);
+      const underFloor = await computePlayerSkillRatings(
+        db,
+        failingOsu,
+        [play({ id: 46, beatmap_id: 101, mods: [{ acronym: "DA", settings: { overall_difficulty: 5 } }] })],
+        [],
+      );
+      expect(underFloor.summary.analyzedPlays).toBe(0);
+      expect(underFloor.summary.unsupportedPlays).toBe(1);
 
       // Raising OD is the harder play and keeps rating, and the 2.0x rate
       // itself is not what disqualifies: the same run without DA is fine.
@@ -1285,7 +1412,7 @@ describe("computePlayerSkillRatings", () => {
       const scores = [
         play({ id: 1, beatmap_id: 101, accuracy: 0.99 }),
         play({ id: 2, beatmap_id: 102, accuracy: 0.95 }),
-        play({ id: 3, beatmap_id: 103, accuracy: 0.9 }),
+        play({ id: 3, beatmap_id: 103, accuracy: 0.94 }),
         play({ id: 4, beatmap_id: 105, accuracy: 0.97 }),
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
@@ -1432,10 +1559,8 @@ describe("computePlayerSkillRatings", () => {
         // it lands on the verdict's primary side (rc here).
         play({ id: 3, beatmap_id: 101, mods: [{ acronym: "DT" }], accuracy: 0.96, statistics: atRcBar }),
         // Below the credit window entirely (90.9%, under the 91% edge):
-        // analyzed, but credits nothing (if this 9.9 counted even decayed,
-        // the rc dan would move). Count-free so the goal falls back to the
-        // displayed accuracy and stays above the 0.8 floor: judgement counts
-        // this bad wife-rate under the floor and would not rate at all.
+        // Retained as Dan-only under the calibrated Wife floor; it credits
+        // nothing because its game accuracy is outside the Dan credit window.
         play({ id: 4, beatmap_id: 107, accuracy: 0.909 }),
         play({ id: 5, beatmap_id: 108, accuracy: 0.97, statistics: atLnBar }),
         // Hybrid below the LN cutoff (lnRatio 0.4): counts as a rice clear
@@ -1446,7 +1571,8 @@ describe("computePlayerSkillRatings", () => {
         play({ id: 9, beatmap_id: 112, accuracy: 0.97, statistics: atLnBar }),
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
-      expect(result.summary.analyzedPlays).toBe(9);
+      expect(result.summary.analyzedPlays).toBe(8);
+      expect(result.danOnly.some((entry) => entry.identity === "official:4")).toBe(true);
       const dan = result.summary.modes[0].dan!;
       // rc evidence uses stable-formula accuracy from the judgement counts,
       // rice-primary charts only: 8.0, 9.0 (DT), 9.0 (hybrid counts rice),
@@ -1478,18 +1604,19 @@ describe("computePlayerSkillRatings", () => {
         );
       }
 
-      // 956 max / 44 ok is 97.04% in ScoreV2's 305-weighted accuracy; 880/120
-      // is 91.93%, below even the credit window. The clearing plays would read
-      // as ~97.07% on stable's 300-weighted display accuracy, so a bar checked
-      // in the wrong currency also credits the wrong bonus.
+      // 956 max / 44 ok is 97.04% in ScoreV2's 305-weighted accuracy; 860/140
+      // is 90.59%, below even the credit window (91% since 2026-09-13). The
+      // clearing plays would read as ~97.07% on stable's 300-weighted display
+      // accuracy, so a bar checked in the wrong currency also credits the
+      // wrong bonus.
       const clearing = { perfect: 956, ok: 44 };
-      const failing = { perfect: 880, ok: 120 };
+      const failing = { perfect: 860, ok: 140 };
       const scores = [
         play({ id: 1, beatmap_id: 201, accuracy: 0.9704, statistics: clearing }),
         play({ id: 2, beatmap_id: 202, accuracy: 0.9704, statistics: clearing }),
         play({ id: 3, beatmap_id: 203, accuracy: 0.9704, statistics: clearing }),
         play({ id: 4, beatmap_id: 204, accuracy: 0.9704, statistics: clearing }),
-        play({ id: 5, beatmap_id: 205, accuracy: 0.9193, statistics: failing }),
+        play({ id: 5, beatmap_id: 205, accuracy: 0.9059, statistics: failing }),
       ];
       const dan = (await computePlayerSkillRatings(db, failingOsu, scores, [])).summary.modes[0].dan!;
       // 8.0 / 7.0 / 6.5 / 6.0 qualify, each a hair over the bar (+0.01 credit),
@@ -1714,14 +1841,14 @@ describe("computePlayerSkillRatings", () => {
       });
       // 97.2% stable converts to below the 97.5% stable-equivalent bar, so it
       // credits a decayed level: three tenths of a point under the converted
-      // bar puts a 7.0 chart at 6.34. This also documents the
+      // bar puts a 7.0 chart at 6.85. This also documents the
       // converted floor arithmetic: the credit window rides the converted bar,
-      // so it ends at 95%, not 94.5%.
+      // so it ends at 91.5%, not 91%.
       const below = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.972)), infoByBeatmap);
       expect(below.length).toBe(4);
       expect(below.every((clear) => clear.side === "ln" && clear.chartDan === 7)).toBe(true);
-      for (const clear of below) expect(clear.creditedDan).toBeCloseTo(6.34, 9);
-      const under = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.949)), infoByBeatmap);
+      for (const clear of below) expect(clear.creditedDan).toBeCloseTo(6.84775, 6);
+      const under = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.914)), infoByBeatmap);
       expect(under.length).toBe(0);
       const above = collectDanClearsForTest(4, [221, 222, 223, 224].map((id) => stablePlay(id, 0.976)), infoByBeatmap);
       expect(above.length).toBe(4);
@@ -1841,8 +1968,8 @@ describe("computePlayerSkillRatings", () => {
             clusters: [],
             rc: { rawDan: chart.rawDan },
             ...(chart.techMotion ? { motion: {
-              sameHand: 0.2274, miniJack: 0.0128, oneHandTrill: 0.0148, crossHandTrill: 0.0768,
-              roll4: 0.0772, rhythmBreak: 0.0365, chordSwing: 0.2692, densitySwing: 0.3895,
+              sameHand: 0.2302, miniJack: 0.0020, anchor: 0.0114, oneHandTrill: 0.0117, crossHandTrill: 0.0780,
+              roll4: 0.0798, rhythmBreak: 0.0391, chordSwing: 0.2609, densitySwing: 0.3895,
             } } : {}),
           }), now],
         );
@@ -2261,7 +2388,7 @@ describe("computePlayerSkillRatings", () => {
       expect(byBeatmap.get(101)?.source).toBe("top");
       expect(byBeatmap.get(101)?.goal).toBe(0.965);
       expect(byBeatmap.get(106)?.source).toBe("tracked");
-      expect(byBeatmap.get(106)?.goal).toBe(0.95);
+      expect(byBeatmap.get(106)?.goal).toBe(ssrGoalForScore(trackedScores.find((score) => score.beatmap_id === 106)!, 0, 8));
     });
   });
 
@@ -2442,15 +2569,66 @@ describe("computePlayerSkillRatings", () => {
       const seed = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 106, accuracy: 0.95 })], [], {});
       const previous = Array.from({ length: 201 }, (_, index) => ({
         ...seed.plays[0], identity: `official:${1000 + index}`, rate: (1100 + index) / 1000,
+        goal: calibrateScoreForMsd(play({ accuracy: 0.95 }), 0, 8, { keyCount: 4, nativeMania: true, rate: (1100 + index) / 1000 }).goal!,
+        lnGoal: calibrateScoreForMsd(play({ accuracy: 0.95 }), 0, 8, { keyCount: 4, nativeMania: true, rate: (1100 + index) / 1000 }).lnGoal!,
         source: "top" as const, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
       }));
       const first = await computePlayerSkillRatings(db, failingOsu, [], previous, {});
       expect(first.plays).toHaveLength(201);
-      expect(first.summary.pendingPlays).toBe(1);
+      expect(first.pendingRateVibroChecks).toBe(1);
+      // The independent LN pass has its own 150-play budget; the pending
+      // vibro play is included only once in the combined pending count.
+      expect(first.summary.pendingPlays).toBe(51);
+      expect(first.deferredLnMigrations).toBe(51);
       expect(first.plays.filter((entry) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toHaveLength(200);
       const second = await computePlayerSkillRatings(db, failingOsu, [], first.plays, {});
       expect(second.summary.pendingPlays).toBe(0);
       expect(second.plays.every((entry) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
+    });
+  });
+
+  it("preserves sole-source history while a calibration migration spans calculator budgets", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile().replace("CircleSize:4", "CircleSize:7"), { source: "test" });
+      const previous: StoredPlaySsr[] = Array.from({ length: 201 }, (_, index) => ({
+        identity: `official:${10000 + index}`, beatmapId: 106, keyCount: 7, rate: 1 + index / 1000,
+        goal: 0.93, accuracy: 0.9999, pp: 100, values: { Overall: 30 }, patterns: [], source: "top", mods: ["DT"],
+      }));
+      const first = await computePlayerSkillRatings(db, failingOsu, [], previous);
+      expect(first.deferredCalibration).toBeGreaterThan(0);
+      expect(first.plays.length + first.danOnly.length).toBe(201);
+      expect(first.danOnly.every((entry) => entry.calibrationPending && Object.keys(entry.values).length === 0)).toBe(true);
+      const second = await computePlayerSkillRatings(db, failingOsu, [], [...first.plays, ...first.danOnly]);
+      expect(second.deferredCalibration).toBe(0);
+      expect(second.danOnly).toEqual([]);
+      expect(second.plays).toHaveLength(201);
+      expect(second.plays.every((entry) => entry.goal === 0.965 && entry.wifeCalibration?.version === WIFE_CALIBRATION_VERSION)).toBe(true);
+    });
+  }, 30000);
+
+  it("preserves sole-source calibration evidence when the calculator cannot return a rating", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile().replace("CircleSize:4", "CircleSize:7"), { source: "test" });
+      const previous: StoredPlaySsr = {
+        identity: "official:10000", beatmapId: 106, keyCount: 7, rate: 1.5,
+        goal: 0.93, accuracy: 0.9999, pp: 100, values: { Overall: 30 }, patterns: [], source: "top", mods: ["DT"],
+      };
+      const spy = vi.spyOn(msdModule, "computeMsd").mockResolvedValue(null);
+      let pending: StoredPlaySsr[];
+      try {
+        const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+        expect(result.plays).toEqual([]);
+        expect(result.danOnly).toEqual([expect.objectContaining({ identity: previous.identity,
+          calibrationPending: true, values: {}, goal: 0.965 })]);
+        expect(result.deferredCalibration).toBe(0);
+        pending = result.danOnly;
+      } finally {
+        spy.mockRestore();
+      }
+      const recovered = await computePlayerSkillRatings(db, failingOsu, [], pending);
+      expect(recovered.danOnly).toEqual([]);
+      expect(recovered.plays).toEqual([expect.objectContaining({ identity: previous.identity, goal: 0.965 })]);
+      expect(recovered.plays[0].calibrationPending).not.toBe(true);
     });
   });
 
@@ -2521,16 +2699,16 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
-  it("blends LN-chart SSRs toward the tail-aware calc pass", async () => {
+  it("preserves the native 4K press baseline and keeps LN analysis separate", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
-      // Same chart twice: once as pure rice, once with every note a hold.
+      // Same chart three times: pure rice, every note a hold, and 40% holds.
       // Identical heads mean the head-only calc rates them the same; the LN
-      // copy must come out strictly higher once its lnRatio unlocks the
-      // tail-aware blend. The rice copy's rating must not change at all.
+      // endings are analyzed by the sidecar, never converted to extra presses.
       await storeCachedBeatmapFile(db, 301, buildStreamBeatmapFile(), { source: "test" });
       await storeCachedBeatmapFile(db, 302, buildLnBeatmapFile(), { source: "test" });
-      for (const [beatmapId, lnRatio] of [[301, 0], [302, 1]] as const) {
+      await storeCachedBeatmapFile(db, 303, buildLowHoldBeatmapFile(), { source: "test" });
+      for (const [beatmapId, lnRatio] of [[301, 0], [302, 1], [303, 0.4]] as const) {
         await exec(
           db,
           `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
@@ -2539,21 +2717,39 @@ describe("computePlayerSkillRatings", () => {
         );
       }
       const scores = [
-        play({ id: 11, beatmap_id: 301, accuracy: 0.95 }),
-        play({ id: 12, beatmap_id: 302, accuracy: 0.95 }),
+        play({ id: 11, beatmap_id: 301, accuracy: 1 }),
+        play({ id: 12, beatmap_id: 302, accuracy: 1 }),
+        play({ id: 13, beatmap_id: 303, accuracy: 1 }),
       ];
       const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
-      expect(result.summary.analyzedPlays).toBe(2);
+      expect(result.summary.analyzedPlays).toBe(3);
       const byBeatmap = new Map(result.plays.map((entry) => [entry.beatmapId, entry]));
       const rice = byBeatmap.get(301);
       const ln = byBeatmap.get(302);
-      expect(rice && ln).toBeTruthy();
-      expect(ln!.values.Overall).toBeGreaterThan(rice!.values.Overall);
+      const lowHold = byBeatmap.get(303);
+      expect(rice && ln && lowHold).toBeTruthy();
+      expect(ln!.values.Overall).toBeCloseTo(rice!.values.Overall, 4);
+      expect(ln!.lnSkill?.structureKey).toBeTruthy();
+      expect(ln!.lnSkill?.structure).toBeUndefined(); // Shared interval evidence is not duplicated per play.
+      expect(lowHold!.values.Overall).toBeCloseTo(rice!.values.Overall, 4);
 
       // The rice play matches a no-analysis-row compute exactly (lnRatio 0
       // never triggers the second calc pass).
-      const bare = await computePlayerSkillRatings(db, failingOsu, [play({ id: 13, beatmap_id: 301, accuracy: 0.95 })], []);
+      const bare = await computePlayerSkillRatings(db, failingOsu, [play({ id: 14, beatmap_id: 301, accuracy: 1 })], []);
       expect(bare.plays[0].values.Overall).toBeCloseTo(rice!.values.Overall, 4);
+
+      // A low-hold play retained after its source payload aged out still
+      // migrates off a v2 tail-pass value using its durable chart/rate/goal.
+      const staleRetained = {
+        ...lowHold!,
+        identity: "official:old-low-hold",
+        source: "top" as const,
+        values: ln!.values,
+        lnTailPass: 2,
+      };
+      const migrated = await computePlayerSkillRatings(db, failingOsu, [], [staleRetained]);
+      expect(migrated.plays[0].values.Overall).toBeCloseTo(rice!.values.Overall, 4);
+      expect(migrated.plays[0].lnTailPass).toBe(LN_TAIL_PASS_VERSION);
     });
   });
 
@@ -2611,7 +2807,7 @@ describe("computePlayerSkillRatings", () => {
       await exec(db, "delete from beatmap_osu_files where beatmap_id = 106");
       const second = await computePlayerSkillRatings(db, failingOsu, [], first.plays, {});
       expect(second.summary.analyzedPlays).toBe(1);
-      expect(second.summary.pendingPlays).toBe(0);
+      expect(second.summary.pendingPlays).toBeGreaterThan(0);
       expect(second.plays[0].values).toEqual(first.plays[0].values);
     });
   });
@@ -2628,7 +2824,7 @@ describe("computePlayerSkillRatings", () => {
       await exec(db, "delete from beatmap_osu_files where beatmap_id = 101");
       const second = await computePlayerSkillRatings(db, failingOsu, scores, first.plays);
       expect(second.summary.analyzedPlays).toBe(1);
-      expect(second.summary.pendingPlays).toBe(0);
+      expect(second.summary.pendingPlays).toBeGreaterThan(0);
       expect(second.plays[0].values).toEqual(first.plays[0].values);
 
       // A correction to this identity invalidates its old rating immediately;
@@ -2640,7 +2836,7 @@ describe("computePlayerSkillRatings", () => {
       // A different attempt cannot invalidate the original's sound evidence.
       const another = await computePlayerSkillRatings(db, failingOsu, [play({ id: 2, beatmap_id: 101, accuracy: 0.9 })], first.plays);
       expect(another.summary.analyzedPlays).toBe(1);
-      expect(another.summary.pendingPlays).toBe(1);
+      expect(another.summary.pendingPlays).toBe(2);
       expect(another.plays[0].goal).toBe(first.plays[0].goal);
     });
   });
@@ -2940,15 +3136,20 @@ describe("computePlayerSkillsJob", () => {
 
       await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
       const followUps = (await exec(db, "select id, dedupe_key, payload_json, run_after from jobs where type = 'compute_player_skills'")).rows;
-      expect(followUps).toHaveLength(1);
-      expect(followUps[0].dedupe_key).toBe(`player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:99:1`);
-      expect(Date.parse(String(followUps[0].run_after))).toBeGreaterThan(Date.parse(now));
-      const payload = JSON.parse(String(followUps[0].payload_json));
-      expect(payload).toEqual({ userId: 99, rateVibroPending: 1 });
+      expect(followUps).toHaveLength(2);
+      const rateJob = followUps.find(row => String(row.dedupe_key).startsWith("player-skills-rate-vibro:"))!;
+      expect(rateJob.dedupe_key).toBe(`player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:99:1`);
+      expect(Date.parse(String(rateJob.run_after))).toBeGreaterThan(Date.parse(now));
+      expect(JSON.parse(String(rateJob.payload_json))).toEqual({ userId: 99, rateVibroPending: 1 });
+      expect(followUps.some(row => String(row.dedupe_key).startsWith(`player-skills:${PLAYER_SKILLS_VERSION}:99:ln:`))).toBe(true);
 
-      await exec(db, "update jobs set status = 'running' where id = ?", [Number(followUps[0].id)]);
-      await computePlayerSkillsJob(db, jobOsu, queue, payload);
-      await queue.complete(Number(followUps[0].id));
+      // Both independent budgets schedule work, and either continuation can
+      // finish the remaining checks without creating an endless job chain.
+      for (const followUp of followUps) {
+        await exec(db, "update jobs set status = 'running' where id = ?", [Number(followUp.id)]);
+        await computePlayerSkillsJob(db, jobOsu, queue, JSON.parse(String(followUp.payload_json)));
+        await queue.complete(Number(followUp.id));
+      }
       const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 99 and analysis_version = ?", [PLAYER_SKILLS_VERSION])).rows[0];
       expect(unpackJson<{ plays: Array<{ rateVibroChecked?: number }> }>(row.plays_json, { plays: [] }).plays.every((entry: { rateVibroChecked?: number }) => entry.rateVibroChecked === RATE_VIBRO_CHECK_VERSION)).toBe(true);
       expect((await exec(db, "select id from jobs where type = 'compute_player_skills' and status = 'queued'")).rows).toHaveLength(0);
@@ -3004,12 +3205,32 @@ describe("computePlayerSkillsJob", () => {
       expect(plays.find((entry) => entry.identity === "official:31")?.values.Overall).toBe(20);
       const summary = JSON.parse(String(rows[0].modes_json));
       expect(summary.analyzedPlays).toBe(1);
-      expect(summary.pendingPlays).toBe(1);
+      // The retained play also lacks its file for the LN/tail migration.
+      expect(summary.pendingPlays).toBe(2);
     });
   });
 });
 
 describe("getPlayerSkillPlays", () => {
+  it.each(Array.from({ length: 14 }, (_, i) => i + 5))("keeps the %iK LN explorer ranked by Overall without a model stamp", async keyCount => {
+    await withDb(async db => {
+      const plays = [
+        { identity: "legacy-a", beatmapId: 101, keyCount, rate: 1, goal: 0.93, pp: 100,
+          values: { Overall: 28 }, patterns: ["ln"], source: "top" },
+        { identity: "legacy-b", beatmapId: 102, keyCount, rate: 1, goal: 0.93, pp: 100,
+          values: { Overall: 24, LN: 99 }, patterns: ["ln"], source: "top",
+          lnSkill: { version: LN_SKILL_VERSION - 1, eligible: false } },
+      ];
+      await exec(db, `insert into player_skill_ratings
+        (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+        values (99, ?, 'ready', '{}', ?, '2026-09-01', '2026-09-01')`,
+      [PLAYER_SKILLS_VERSION - 1, JSON.stringify({ plays })]);
+      const result = await getPlayerSkillPlays(db, 99, keyCount, "pattern:ln");
+      expect(result.total).toBe(2);
+      expect(result.items.map(play => [play.beatmapId, play.rating])).toEqual([[101, 28], [102, 24]]);
+    });
+  });
+
   it("keeps serving persisted breakdown and evidence while a refresh is running", async () => {
     await withDb(async (db) => {
       const now = new Date().toISOString();
@@ -3071,7 +3292,7 @@ describe("getPlayerSkillPlays", () => {
       // tag here and cannot reach the top LN plays surface.
       const plays = [
         { identity: "official:1", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.95, pp: 200, values: { Overall: 22, Stream: 24 }, patterns: ["stream"], source: "top", accuracy: 0.97, endedAt: "2026-08-01T00:00:00Z" },
-        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29 }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z", rateMod: "NC", mods: ["NC", "MR", "DA"] },
+        { identity: "official:2", beatmapId: 102, keyCount: 4, rate: 1.5, goal: 0.96, pp: 180, values: { Overall: 25, Stream: 29, LN: 18 }, lnSkill: { version: LN_SKILL_VERSION, eligible: true }, patterns: ["stream", "ln"], source: "tracked", accuracy: 0.98, endedAt: "2026-08-02T00:00:00Z", rateMod: "NC", mods: ["NC", "MR", "DA"] },
         { identity: "official:3", beatmapId: 103, keyCount: 7, rate: 1, goal: 0.94, pp: 250, values: { Overall: 30, Stream: 31 }, patterns: ["stream"], source: "top", accuracy: 0.96, endedAt: "2026-08-03T00:00:00Z" },
         { identity: "official:4", beatmapId: 104, keyCount: 4, rate: 1, goal: 0.97, pp: 210, values: { Overall: 27, Stream: 20 }, patterns: ["stamina"], source: "top", accuracy: 0.99, endedAt: "2026-08-04T00:00:00Z" },
       ];
@@ -3108,10 +3329,95 @@ describe("getPlayerSkillPlays", () => {
       expect(second.items[0].mods).toBeUndefined();
 
       const ln = await getPlayerSkillPlays(db, 99, 4, "pattern:ln");
-      // The LN list is exactly the ln-tagged plays, ranked by Overall, so it
-      // matches the set the LN pattern rating aggregates.
+      // The LN list uses independent LN SSR, not Overall.
       expect(ln.total).toBe(1);
-      expect(ln.items[0]).toMatchObject({ beatmapId: 102, rating: 25 });
+      expect(ln.items[0]).toMatchObject({ beatmapId: 102, rating: 18 });
+    });
+  });
+});
+
+describe("4K LN migrations", () => {
+  const retained = (beatmapId: number, rate = 1): StoredPlaySsr => ({
+    identity: `official:${beatmapId}:${rate}`, beatmapId, keyCount: 4, rate, goal: 0.93,
+    pp: 100, values: { Overall: 40 }, patterns: ["ln"], source: "top", lnTailPass: LN_TAIL_PASS_VERSION,
+  });
+  async function seed(db: Awaited<ReturnType<typeof createDb>>, id: number, text: string, effective = 1) {
+    const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+    const { parseManiaBeatmap } = await import("../src/dan/beatmap-parser.js");
+    const keyCount = parseManiaBeatmap(text).keyCount;
+    await storeCachedBeatmapFile(db, id, text, { source: "test" });
+    await exec(db, `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+      values (?, ?, 'ready', ?, ?, '2026-01-01')`,
+    [id, CHART_ANALYSIS_VERSION, keyCount, JSON.stringify({ lnRatio: 1, lnEffectiveRatio: effective, patterns: [{ id: "ln", score: 1 }, { id: "lntech", score: 1 }] })]);
+  }
+
+  it("removes LN credit at custom and uncached DT rates and restores it when slowing free tails", async () => {
+    await withDb(async db => {
+      const full = buildLnBeatmapFile();
+      const short = full.replace(/(\d+),192,(\d+),128,0,\d+:/g, (_match, x, time) => `${x},192,${time},128,0,${Number(time) + 67}:`);
+      await seed(db, 901, short);
+      const input = [retained(901, 1), retained(901, 1.25), retained(901, 1.5), retained(901, 1.51)];
+      const result = await computePlayerSkillRatings(db, failingOsu, [], input);
+      expect(result.plays.find(p => p.rate === 1)!.patterns).toContain("ln");
+      for (const p of result.plays.filter(p => p.rate !== 1)) {
+        expect(p.patterns).not.toContain("ln");
+        expect(p.patterns).not.toContain("lntech");
+        expect(p.values.LN).toBe(0);
+      }
+      const free = full.replace(/(\d+),192,(\d+),128,0,\d+:/g, (_match, x, time) => `${x},192,${time},128,0,${Number(time) + 45}:`);
+      await seed(db, 902, free, 0);
+      const slowed = await computePlayerSkillRatings(db, failingOsu, [], [retained(902, 0.5)]);
+      expect(slowed.plays[0].lnSkill?.eligible).toBe(true);
+      expect(slowed.plays[0].patterns).toContain("ln");
+    });
+  });
+
+  it.each(Array.from({ length: 15 }, (_, i) => i + 4))("uses independent LN only in 4K and preserves %iK cached Overall", async keyCount => {
+    await withDb(async db => {
+      for (const id of [911, 912, 913]) await seed(db, id, buildLnBeatmapFile().replace("CircleSize:4", `CircleSize:${keyCount}`));
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [911, 912, 913].map(id => ({ ...retained(id), keyCount })));
+      const mode = result.summary.modes[0];
+      expect(result.plays.every(p => p.values.Overall === 40)).toBe(true);
+      if (keyCount === 4) {
+        expect(mode.lnSkillVersion).toBe(LN_SKILL_VERSION);
+        expect(mode.patterns.find(p => p.id === "ln")!.rating).toBe(aggregateSsrs(result.plays.map(p => p.values.LN)));
+        expect(mode.patterns.find(p => p.id === "ln")!.rating).not.toBe(mode.ratings.Overall);
+        expect(result.plays.every(p => p.lnSkill?.keyCount === keyCount)).toBe(true);
+      } else {
+        expect(mode.lnSkillVersion).toBeUndefined();
+        expect(mode.patterns.find(p => p.id === "ln")!.rating).toBe(mode.ratings.Overall);
+        expect(result.plays.every(p => p.lnSkill == null && p.values.LN == null)).toBe(true);
+        expect(result.deferredLnMigrations).toBe(0);
+      }
+    });
+  });
+
+  it("bounds retained tail rerating and resumes without dropping durable plays", async () => {
+    await withDb(async db => {
+      const spy = vi.spyOn(msdModule, "computeMsd").mockResolvedValue({ etternaVersion: "test", values: { Overall: 20 } });
+      try {
+        const input: StoredPlaySsr[] = [];
+        for (let id = 1001; id <= 1152; id += 1) {
+          await seed(db, id, buildLnBeatmapFile());
+          input.push({ ...retained(id), lnTailPass: 1 });
+        }
+        const first = await computePlayerSkillRatings(db, failingOsu, [], input);
+        expect(spy.mock.calls.length).toBeGreaterThan(0);
+        expect(spy.mock.calls.length).toBeLessThanOrEqual(150);
+        expect(first.plays).toHaveLength(input.length);
+        expect(first.summary.pendingPlays).toBeGreaterThan(0);
+        const stamps = first.plays.filter(p => p.lnTailPass === LN_TAIL_PASS_VERSION).length;
+        spy.mockClear();
+        const second = await computePlayerSkillRatings(db, failingOsu, [], first.plays);
+        expect(spy.mock.calls.length).toBeLessThanOrEqual(150);
+        expect(second.plays).toHaveLength(input.length);
+        expect(second.plays.filter(p => p.lnTailPass === LN_TAIL_PASS_VERSION).length).toBeGreaterThan(stamps);
+        expect(second.summary.pendingPlays).toBeLessThan(first.summary.pendingPlays);
+        const third = await computePlayerSkillRatings(db, failingOsu, [], second.plays);
+        expect(third.summary.pendingPlays).toBe(0);
+        expect(third.deferredLnMigrations).toBe(0);
+        expect(third.plays).toHaveLength(input.length);
+      } finally { spy.mockRestore(); }
     });
   });
 });
@@ -3474,6 +3780,13 @@ describe("Invert plays on 7K", () => {
       expect(again.summary.analyzedPlays).toBe(2);
       expect(again.plays.find((entry) => entry.identity === getScoreIdentity(inverted))!.inverse).toBe(true);
 
+      // 7K Invert retains the legacy rating and never runs the 4K LN migration.
+      const withoutLn = { ...stored, lnSkill: undefined, values: { ...stored.values, LN: 0 } };
+      const migrated = await computePlayerSkillRatings(db, failingOsu, [], [withoutLn]);
+      expect(migrated.plays[0].lnSkill).toBeUndefined();
+      expect(migrated.deferredLnMigrations).toBe(0);
+      expect(migrated.plays[0].values.Overall).toBe(stored.values.Overall);
+
       // A stored Invert play without the flag was rated against the
       // un-inverted chart, before the mod was supported: it evicts.
       const legacy = { ...stored, inverse: undefined, identity: "official:73", mods: ["IN"] };
@@ -3524,6 +3837,68 @@ describe("Invert plays on 7K", () => {
     });
   });
 
+  it("keeps a 7K Invert play at DA OD 5 rated and dan-eligible: the 7K LN floor, not the chart's own OD", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      const { getScoreIdentity } = await import("../src/shared/score.js");
+      const { collectDanClearsForTest, loadChartSkillInfo } = await import("../src/features/player-skills.js");
+      // An OD 7 rice chart. Inverting it makes every note a hold, which is
+      // harder, so the player set DA OD 5: the OD the official 7K LN courses
+      // are set at, and so the floor of the ladder the play testifies for.
+      await storeCachedBeatmapFile(db, 702, buildSevenKeyRiceBeatmapFile().replace("OverallDifficulty:8", "OverallDifficulty:7"), { source: "test" });
+      await exec(
+        db,
+        "insert into beatmaps (beatmap_id, beatmapset_id, mode, version, metadata_json, updated_at) values (?, ?, 'mania', 'x', ?, ?)",
+        [702, 1, JSON.stringify({ accuracy: 7 }), "2026-01-01T00:00:00Z"],
+      );
+      await exec(
+        db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+         values (?, ?, 'ready', 7, ?, ?)`,
+        [702, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, patterns: [{ id: "chordstream", score: 0.9 }], rc: { rawDan: 9 } }), new Date().toISOString()],
+      );
+      const inverted = play({
+        id: 74, beatmap_id: 702, accuracy: 0.97, statistics: { perfect: 800, great: 290, good: 5 },
+        mods: [{ acronym: "IN" }, { acronym: "DA", settings: { overall_difficulty: 5 } }],
+      });
+      const result = await computePlayerSkillRatings(db, failingOsu, [inverted], []);
+      expect(result.summary.analyzedPlays).toBe(1);
+      expect(result.summary.unsupportedPlays).toBe(0);
+      const stored = result.plays.find((entry) => entry.identity === getScoreIdentity(inverted))!;
+      expect(stored.inverse).toBe(true);
+      expect(stored.odOverride).toBe(5);
+
+      // The dan floor holds the play to the 7K LN line, even before the
+      // inverted chart's verdict is around: it waits on the verdict rather
+      // than being turned away as low_od.
+      const info = await loadChartSkillInfo(db, [702]);
+      const rejects: Parameters<typeof collectDanClearsForTest>[4] = [];
+      expect(collectDanClearsForTest(7, [stored], info, new Map(), rejects)).toEqual([]);
+      expect(rejects.map((entry) => entry.reason)).toEqual(["no_chart_dan"]);
+      const verdicts = new Map([["702:100:IN", { rawDan: 11, side: "ln" as const, displayName: "zenith" }]]);
+      const clears = collectDanClearsForTest(7, [stored], info, verdicts);
+      expect(clears).toHaveLength(1);
+      expect(clears[0].side).toBe("ln");
+      expect(clears[0].chartDan).toBe(11);
+
+      // The same slider without Invert is a rice play of an OD 7 chart at OD
+      // 5, under the 5.5 rice floor: refused a rating, as before.
+      const rice = play({ id: 75, beatmap_id: 702, accuracy: 0.97, statistics: { perfect: 800, great: 290, good: 5 },
+        mods: [{ acronym: "DA", settings: { overall_difficulty: 5 } }] });
+      const riceResult = await computePlayerSkillRatings(db, failingOsu, [rice], []);
+      expect(riceResult.summary.analyzedPlays).toBe(0);
+      expect(riceResult.summary.unsupportedPlays).toBe(1);
+
+      // A stored copy of the Invert play survives the retention pass on the
+      // same reading, with no score payload left.
+      const retained = await computePlayerSkillRatings(db, failingOsu, [], [{ ...stored, identity: "legacy-inverse-da" }], {});
+      expect(retained.summary.analyzedPlays).toBe(1);
+      // Under the floor it does not, Invert or not.
+      const purged = await computePlayerSkillRatings(db, failingOsu, [], [{ ...stored, identity: "legacy-inverse-low", odOverride: 4.5 }], {});
+      expect(purged.summary.analyzedPlays).toBe(0);
+    });
+  });
+
   it("credits a chart rated at or below the ladder floor at the floor instead of dropping it", async () => {
     await withDb(async (db) => {
       const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
@@ -3569,5 +3944,22 @@ describe("Invert plays on 7K", () => {
       expect(rated).toHaveLength(1);
       expect(rated[0]).toMatchObject({ chartDan: 0, chartDanLabel: "0-" });
     });
+  });
+});
+
+describe("LN SSR goal cap", () => {
+  it("solves at most at 96.5% and extrapolates like the press SSR above it", () => {
+    const text = buildLnBeatmapFile();
+    const atCap = analyzeLnSkillFromText(text, { rate: 1, od: 8, scoreGoal: 0.965 })!.rating!;
+    const atBase = analyzeLnSkillFromText(text, { rate: 1, od: 8, scoreGoal: 0.93 })!.rating!;
+    const raw = analyzeLnSkillFromText(text, { rate: 1, od: 8, scoreGoal: 0.9975 })!.rating!;
+    const ssr = analyzeLnSsr(text, { rate: 1, od: 8, scoreGoal: 0.9975 })!;
+    const exponent = (0.9975 - 0.965) / (0.965 - 0.93);
+    expect(ssr.rating).toBeCloseTo(atCap * Math.pow(Math.min(atCap / atBase, 1.2), exponent), 6);
+    expect(ssr.rating!).toBeLessThan(raw);
+    expect(ssr.scoreGoal).toBe(0.965);
+    expect(lnSsrSolverGoal(0.9975)).toBe(0.965);
+    expect(lnSsrSolverGoal(0.95)).toBe(0.95);
+    expect(analyzeLnSsr(text, { rate: 1, od: 8, scoreGoal: 0.95 })!.rating).toBe(analyzeLnSkillFromText(text, { rate: 1, od: 8, scoreGoal: 0.95 })!.rating);
   });
 });

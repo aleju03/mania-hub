@@ -14,7 +14,7 @@ import {
   recomputeHtRateChunk,
   runHtRateAnalysisJob,
 } from "../src/features/chart-analysis.js";
-import { PLAYER_SKILL_DAN_SWEEP_JOB, ensurePlayerSkillDanSweepSeeded, loadChartSkillInfo } from "../src/features/player-skills.js";
+import { PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_META_KEY, ensurePlayerSkillDanSweepSeeded, loadChartSkillInfo } from "../src/features/player-skills.js";
 import { JobQueue } from "../src/jobs/queue.js";
 
 let dir = "";
@@ -107,7 +107,7 @@ describe("HT rate analysis", () => {
     await exec(
       db,
       "insert or replace into live_meta (key, value_json, updated_at) values (?, json(?), ?)",
-      ["player_skill_dan_sweep_done:v30", json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
+      [PLAYER_SKILL_DAN_SWEEP_META_KEY, json({ finishedAt: "2026-08-20T00:00:00.000Z" }), "2026-08-20T00:00:00.000Z"],
     );
     // The fold's other dependency, the chart-side jack-demand sweep, is done.
     await exec(

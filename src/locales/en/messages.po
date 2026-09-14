@@ -165,6 +165,11 @@ msgstr "{0, plural, one {# member} other {# members}}"
 msgid "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
 msgstr "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
 
+#. placeholder {0}: replyAlert.count
+#: src/components/layout/Nav.tsx
+msgid "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
+msgstr "{0, plural, one {# new reply} other {# new replies}} on your bug reports"
+
 #. placeholder {0}: playerScores.length - replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{0, plural, one {# other score found, but no replay is available} other {# other scores found, but no replay is available}}"
@@ -908,21 +913,25 @@ msgstr "{0}pp spread"
 msgid "{acc}% {speed} on {map}"
 msgstr "{acc}% {speed} on {map}"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{actions} same-hand actions"
+#~ msgstr "{actions} same-hand actions"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "{ALBUM_SEASON} series"
 msgstr "{ALBUM_SEASON} series"
 
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
-#: src/components/maps/StarRangePill.tsx
 msgid "{ariaLabel} maximum"
 msgstr "{ariaLabel} maximum"
 
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
-#: src/components/maps/StarRangePill.tsx
 msgid "{ariaLabel} minimum"
 msgstr "{ariaLabel} minimum"
 
-#: src/components/maps/StarRangePill.tsx
+#: src/components/maps/RangePill.tsx
 msgid "{ariaLabel} range"
 msgstr "{ariaLabel} range"
 
@@ -1011,6 +1020,10 @@ msgstr "{countryName} mania unrated plays"
 msgid "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgstr "{courseAccuracy} on {courseName}, under its {courseBar}."
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{coverage}% of objects"
+#~ msgstr "{coverage}% of objects"
+
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, one {# day} other {# days}}"
@@ -1075,6 +1088,10 @@ msgstr "{gap}pp to go"
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
 msgstr "{have} / {want} plays"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{headRate}/s · {duration}ms median hold"
+#~ msgstr "{headRate}/s · {duration}ms median hold"
 
 #: src/routes/farm-helper.tsx
 msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
@@ -1149,6 +1166,10 @@ msgstr "{label}: {share} of {population} tracked {keyCount}K mains"
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "{label}'s history"
 #~ msgstr "{label}'s history"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{lanes} lanes · {gap}ms gaps"
+#~ msgstr "{lanes} lanes · {gap}ms gaps"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "{left} to go at {at}pp+"
@@ -1364,6 +1385,10 @@ msgstr "{rangeStart}–{pageEnd} of {totalText} cards"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} of {totalText} players"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "{releases} release groups"
+#~ msgstr "{releases} release groups"
 
 #: src/routes/farm-helper.tsx
 msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
@@ -1855,6 +1880,10 @@ msgid "4K"
 msgstr "4K"
 
 #: src/routes/dan-estimates.tsx
+msgid "4K jack"
+msgstr "4K jack"
+
+#: src/routes/dan-estimates.tsx
 msgid "4K LN"
 msgstr "4K LN"
 
@@ -2008,8 +2037,8 @@ msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, s
 msgstr "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 
 #: src/routes/dan-estimates.tsx
-msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
-msgstr "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+#~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
+#~ msgstr "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -3136,8 +3165,8 @@ msgstr "below 92%"
 #~ msgstr "below 93%"
 
 #: src/routes/dan-estimates.tsx
-msgid "below 94.5%"
-msgstr "below 94.5%"
+#~ msgid "below 94.5%"
+#~ msgstr "below 94.5%"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "below 94%"
@@ -3692,8 +3721,8 @@ msgstr "CJ"
 msgid "clear"
 msgstr "clear"
 
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
-#: src/components/maps/StarRangePill.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/maps.tsx
@@ -3810,10 +3839,9 @@ msgstr "Click again to discard edits"
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "Click an image first. Imagemap turns that image into clickable areas."
 
-#: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
-msgid "Click here to read how dans are estimated"
-msgstr "Click here to read how dans are estimated"
+#~ msgid "Click here to read how dans are estimated"
+#~ msgstr "Click here to read how dans are estimated"
 
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
@@ -4798,6 +4826,7 @@ msgstr "Dan estimate: {0} ({1})"
 #~ msgid "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 #~ msgstr "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 
+#: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "Dan plays"
 msgstr "Dan plays"
@@ -5616,9 +5645,21 @@ msgstr "Exclusives"
 msgid "Exit fullscreen"
 msgstr "Exit fullscreen"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Experimental"
+#~ msgstr "Experimental"
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+#~ msgstr "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
 msgstr "Explore Global maps"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Exposed Releases"
+#~ msgstr "Exposed Releases"
 
 #: src/routes/dan-estimates.tsx
 msgid "Extra: clearing a real course overrides all of it"
@@ -6451,6 +6492,10 @@ msgstr "Hebrew"
 msgid "Height of the exported image, in pixels"
 msgstr "Height of the exported image, in pixels"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "Held-chord Coordination"
+#~ msgstr "Held-chord Coordination"
+
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "hidden"
@@ -6606,8 +6651,16 @@ msgid "hitsounds and interface samples"
 msgstr "hitsounds and interface samples"
 
 #: src/routes/dan-estimates.tsx
-msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
-msgstr "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is normal there. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 91%, with the same penalty as regular charts at each point below the bar and 1.75 levels less at 91%, and its bonus stops rising at 99.7%:"
+msgstr "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is normal there. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 91%, with the same penalty as regular charts at each point below the bar and 1.75 levels less at 91%, and its bonus stops rising at 99.7%:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is normal there. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+#~ msgstr "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is normal there. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
+#~ msgstr "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. On regular charts, the penalty rises smoothly from zero at 96% to about half a level at 95%. A near miss can keep the same dan label while contributing less to the estimate; it still falls short of a full clear. Regular charts count down to 5 percentage points below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75 levels less. 4K LN counts down to 94.5%, for 1.55 levels less, and its bonus stops rising at 99.7%:"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the bar still gives full credit. After that, bonus credit starts. It stays small until 99%, then rises faster. Scores below the bar can still count at a lower level. Regular charts count down to 4% below the bar, while 6K/7K LN charts count down to 1% below it. At those cutoffs, the chart counts as 1.25 levels lower. 4K LN counts down to 94.5%, where the chart is worth 1.5 levels less, and its bonus stops rising at 99.7%:"
@@ -6658,6 +6711,11 @@ msgstr "How card rating is calculated"
 #: src/routes/dan-estimates.tsx
 msgid "How dan levels are estimated"
 msgstr "How dan levels are estimated"
+
+#: src/components/player/DanEvidenceModal.tsx
+#: src/components/rankings/DanLeaderboardBoard.tsx
+msgid "How dans are estimated"
+msgstr "How dans are estimated"
 
 #: src/routes/dan-estimates.tsx
 msgid "How every osu!mania chart gets a dan level, and how a player's dan is read from the charts they have passed."
@@ -6846,6 +6904,10 @@ msgstr "in {hours}h"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {minutes}m"
 msgstr "in {minutes}m"
+
+#: src/routes/dan-estimates.tsx
+msgid "In 4K, hold notes must first make up at least 45% of the chart. The site then checks whether those holds still demand releases at the played rate; short tails that can be played like ordinary taps can make the chart regular, but this check can never promote a chart below the 45% hold line to LN. On 7K the hold line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. The maps pages and your skill rating use the same verdict."
+msgstr "In 4K, hold notes must first make up at least 45% of the chart. The site then checks whether those holds still demand releases at the played rate; short tails that can be played like ordinary taps can make the chart regular, but this check can never promote a chart below the 45% hold line to LN. On 7K the hold line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. The maps pages and your skill rating use the same verdict."
 
 #: src/routes/player/$username.tsx
 msgid "in 90d"
@@ -7266,6 +7328,10 @@ msgstr "Land a play worth <0/>"
 msgid "lane cover"
 msgstr "lane cover"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Lanes"
+#~ msgstr "Lanes"
+
 #: src/routes/communities.tsx
 msgid "language"
 msgstr "language"
@@ -7544,6 +7610,7 @@ msgstr "Live updates delayed"
 msgid "Live updates on"
 msgstr "Live updates on"
 
+#: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
@@ -7559,6 +7626,10 @@ msgstr "Live updates on"
 msgid "LN"
 msgstr "LN"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Anchors"
+#~ msgstr "LN Anchors"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "LN body"
 msgstr "LN body"
@@ -7571,6 +7642,18 @@ msgstr "LN body color"
 msgid "LN Body color"
 msgstr "LN Body color"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Chordjacks"
+#~ msgstr "LN Chordjacks"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Chordtrills"
+#~ msgstr "LN Chordtrills"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "LN Coordination"
+#~ msgstr "LN Coordination"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "LN dan"
 msgstr "LN dan"
@@ -7579,6 +7662,10 @@ msgstr "LN dan"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "LN dan est."
 msgstr "LN dan est."
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "LN Density"
+#~ msgstr "LN Density"
 
 #: src/lib/pattern-labels.ts
 #: src/routes/player/$username.tsx
@@ -7606,6 +7693,10 @@ msgstr "LN Head color"
 msgid "LN Inverse"
 msgstr "LN Inverse"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Jacks"
+#~ msgstr "LN Jacks"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "LN notes"
 msgstr "LN notes"
@@ -7614,6 +7705,22 @@ msgstr "LN notes"
 #: src/routes/player/$username.tsx
 msgid "LN Release"
 msgstr "LN Release"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Rolls"
+#~ msgstr "LN Rolls"
+
+#: src/components/maps/PatternPicker.tsx
+msgid "LN share"
+msgstr "LN share"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Stairs"
+#~ msgstr "LN Stairs"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "LN structure"
+#~ msgstr "LN structure"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -7624,6 +7731,10 @@ msgstr "LN tail"
 #: src/routes/player/$username.tsx
 msgid "LN Tech"
 msgstr "LN Tech"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "LN Trills"
+#~ msgstr "LN Trills"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -8001,6 +8112,11 @@ msgstr "manager"
 #~ msgid "Mania Hub just updated"
 #~ msgstr "Mania Hub just updated"
 
+#: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+msgstr "Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania maps"
@@ -8318,8 +8434,20 @@ msgstr "Minimum pp per play"
 #. placeholder {1}: formatAccuracyAgainst(accuracy, bar)
 #. placeholder {1}: formatAccuracyAgainst(accuracy, minAccuracy)
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Minimum required for dan credit is {0}. This play got {1}."
-msgstr "Minimum required for dan credit is {0}. This play got {1}."
+#~ msgid "Minimum required for dan credit is {0}. This play got {1}."
+#~ msgstr "Minimum required for dan credit is {0}. This play got {1}."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {floorText} {currency}. This play got {accText} {currency}, not the {displayedText} the score screen shows."
+msgstr "Minimum required for dan credit is {floorText} {currency}. This play got {accText} {currency}, not the {displayedText} the score screen shows."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {floorText} {currency}. This play got {accText} {currency}."
+msgstr "Minimum required for dan credit is {floorText} {currency}. This play got {accText} {currency}."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Minimum required for dan credit is {floorText}. This play got {accText}."
+msgstr "Minimum required for dan credit is {floorText}. This play got {accText}."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
@@ -8548,6 +8676,7 @@ msgstr "MSD"
 msgid "MSD at {0}"
 msgstr "MSD at {0}"
 
+#: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "MSD plays"
@@ -9956,6 +10085,10 @@ msgstr "osu! didn't answer. Try again in a minute."
 msgid "osu! Login"
 msgstr "osu! Login"
 
+#: src/lib/replay-score-availability.ts
+msgid "osu! no longer has the replay file for this score."
+msgstr "osu! no longer has the replay file for this score."
+
 #: src/routes/player/$username.tsx
 msgid "osu! profile"
 msgstr "osu! profile"
@@ -10219,6 +10352,10 @@ msgstr "pattern"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Pattern"
 msgstr "Pattern"
+
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Pattern evidence"
+#~ msgstr "Pattern evidence"
 
 #: src/routes/player/$username.tsx
 msgid "Pattern mix"
@@ -10830,6 +10967,10 @@ msgstr "Profile"
 msgid "Profile banner"
 msgstr "Profile banner"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Profile difficulty is not yet calibrated. Overlapping coverage is not additive."
+#~ msgstr "Profile difficulty is not yet calibrated. Overlapping coverage is not additive."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Profile link"
@@ -11407,6 +11548,10 @@ msgstr "Regular dan"
 msgid "Release"
 msgstr "Release"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "Release Chords"
+#~ msgstr "Release Chords"
+
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "Reload now"
 #~ msgstr "Reload now"
@@ -11653,6 +11798,10 @@ msgstr "Report something else"
 msgid "report this server"
 msgstr "report this server"
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Representative intervals are shown for each detected pattern."
+#~ msgstr "Representative intervals are shown for each detected pattern."
+
 #: src/routes/maps.tsx
 msgid "Reroll"
 msgstr "Reroll"
@@ -11741,6 +11890,10 @@ msgstr "reveal all"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "Revealing the rest..."
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Reverse Shields"
+#~ msgstr "Reverse Shields"
 
 #. placeholder {0}: status.cost
 #: src/components/packs/ForgePanel.tsx
@@ -12536,6 +12689,14 @@ msgstr "Shared replay"
 msgid "Sharing"
 msgstr "Sharing"
 
+#: src/lib/pattern-labels.ts
+#~ msgid "Shield Streams"
+#~ msgstr "Shield Streams"
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Shields"
+#~ msgstr "Shields"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Shift = lock ratio"
 msgstr "Shift = lock ratio"
@@ -12888,6 +13049,10 @@ msgstr "Skill radar"
 msgid "Skill rating"
 msgstr "Skill rating"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Skill rating recalculation pending"
+msgstr "Skill rating recalculation pending"
+
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Skill ratings and dan update in a few minutes, if the play qualifies."
 #~ msgstr "Skill ratings and dan update in a few minutes, if the play qualifies."
@@ -13053,6 +13218,10 @@ msgstr "Some charts are two of those things at once, and those count in both. A 
 #~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
 #~ msgstr "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
 
+#: src/components/maps/LnStructurePanel.tsx
+#~ msgid "Some LN objects have invalid or overlapping timing. LN difficulty is unavailable."
+#~ msgstr "Some LN objects have invalid or overlapping timing. LN difficulty is unavailable."
+
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -13186,6 +13355,10 @@ msgstr "Stage"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
 msgstr "Stage's left edge, skin.ini ColumnStart."
+
+#: src/lib/pattern-labels.ts
+#~ msgid "Staggered Releases"
+#~ msgstr "Staggered Releases"
 
 #: src/components/maps/PatternRadar.tsx
 msgid "STAM"
@@ -13934,6 +14107,10 @@ msgid "the chart's full level"
 msgstr "the chart's full level"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level -0.13"
+msgstr "the chart's level -0.13"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level -0.25"
 msgstr "the chart's level -0.25"
 
@@ -13962,16 +14139,16 @@ msgstr "the chart's level -0.25"
 #~ msgstr "the chart's level -0.33"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.36"
-msgstr "the chart's level -0.36"
+#~ msgid "the chart's level -0.36"
+#~ msgstr "the chart's level -0.36"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.38"
 #~ msgstr "the chart's level -0.38"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.42"
-msgstr "the chart's level -0.42"
+#~ msgid "the chart's level -0.42"
+#~ msgstr "the chart's level -0.42"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.45"
@@ -13994,8 +14171,8 @@ msgstr "the chart's level -0.51"
 #~ msgstr "the chart's level -0.61"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level -0.63"
-#~ msgstr "the chart's level -0.63"
+msgid "the chart's level -0.63"
+msgstr "the chart's level -0.63"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.75"
@@ -14026,24 +14203,24 @@ msgstr "the chart's level -0.76"
 #~ msgstr "the chart's level -0.88"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -0.9"
-msgstr "the chart's level -0.9"
+#~ msgid "the chart's level -0.9"
+#~ msgstr "the chart's level -0.9"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -0.95"
 #~ msgstr "the chart's level -0.95"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level -1"
-#~ msgstr "the chart's level -1"
+msgid "the chart's level -1"
+msgstr "the chart's level -1"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -1.05"
 #~ msgstr "the chart's level -1.05"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.06"
-msgstr "the chart's level -1.06"
+#~ msgid "the chart's level -1.06"
+#~ msgstr "the chart's level -1.06"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level -1.15"
@@ -14058,16 +14235,16 @@ msgstr "the chart's level -1.25"
 #~ msgstr "the chart's level -1.35"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.39"
-msgstr "the chart's level -1.39"
+#~ msgid "the chart's level -1.39"
+#~ msgstr "the chart's level -1.39"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.5"
 msgstr "the chart's level -1.5"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level -1.55"
-msgstr "the chart's level -1.55"
+#~ msgid "the chart's level -1.55"
+#~ msgstr "the chart's level -1.55"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level -1.75"
@@ -14079,12 +14256,20 @@ msgid "the chart's level {0}"
 msgstr "the chart's level {0}"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.03"
+msgstr "the chart's level +0.03"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.06"
 msgstr "the chart's level +0.06"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "the chart's level +0.07"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.1"
+msgstr "the chart's level +0.1"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.12"
@@ -14119,8 +14304,8 @@ msgid "the chart's level +0.3"
 msgstr "the chart's level +0.3"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.35"
-#~ msgstr "the chart's level +0.35"
+msgid "the chart's level +0.35"
+msgstr "the chart's level +0.35"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.49"
@@ -14135,8 +14320,16 @@ msgstr "the chart's level +0.5"
 #~ msgstr "the chart's level +0.53"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.55"
+msgstr "the chart's level +0.55"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
 msgstr "the chart's level +0.7"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.75"
+msgstr "the chart's level +0.75"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.86"
@@ -15241,6 +15434,10 @@ msgstr "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
 #: src/components/maps/StarRangePill.tsx
 msgid "Type a range: 3.6-6.7, 5+, <4"
 msgstr "Type a range: 3.6-6.7, 5+, <4"
+
+#: src/components/maps/LnSharePill.tsx
+msgid "Type a range: 40-60, 50+, <30"
+msgstr "Type a range: 40-60, 50+, <30"
 
 #. placeholder {0}: activity.typicalSession
 #: src/routes/player/$username.tsx

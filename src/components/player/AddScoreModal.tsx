@@ -571,6 +571,8 @@ function LeaderboardImportPanel() {
           lenMax: null,
           danMin: null,
           danMax: null,
+          lnMin: null,
+          lnMax: null,
           country: null,
           sort,
           dir,

@@ -4,8 +4,11 @@ import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
 import { PATTERN_AXIS_KEY_COUNTS } from "./player-skills.js";
-import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
+import { chartIsLn, chartLnShareFor } from "../dan/dan-estimator/ln-effective.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
+import { LN_SKILL_VERSION } from "../dan/ln-skill.js";
+import type { LnStructureSummary4K } from "../dan/ln-analysis/index.js";
+import { readLnSearchPatternIds, LN_SEARCH_PATTERN_IDS } from "../dan/ln-analysis/search-patterns.js";
 import { VIBRO_SECTION_VERSION, type VibroAnalysis } from "../dan/vibro-sections.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
@@ -39,7 +42,10 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // skill cards, built on the analyzer, listed them under Jack; r13: OD from
 // beatmaps.metadata_json so map detail stats do not need to fetch the .osu).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 13;
+// r15 requires LN eligibility and full-analysis recurring-section evidence.
+// r17: ln_share column, the hold share from osu!'s object counts, for the
+// LN share filter; the shield tags now come from search evidence v2.
+const BUILD_REVISION = 17;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -68,6 +74,7 @@ export const MAP_SEARCH_SUB_PATTERNS = [
   "speedjack", "handjack",
   "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
+  ...LN_SEARCH_PATTERN_IDS,
 ];
 const SUB_PATTERN_SET = new Set(MAP_SEARCH_SUB_PATTERNS);
 
@@ -109,6 +116,9 @@ export interface MapSearchQuery {
   lenMax: number | null;
   danMin: number | null;
   danMax: number | null;
+  // Hold share of the chart's objects, in percent.
+  lnMin: number | null;
+  lnMax: number | null;
   country: string | null;
   sort: MapSearchSort;
   dir: SortDirection;
@@ -139,6 +149,8 @@ export interface MapSearchEntry {
   // ISO ranked (or loved) date from the set's metadata; null while pending.
   rankedDate: string | null;
   lnCount: number;
+  // Hold share of the chart's objects from osu!'s counts; null without counts.
+  lnShare: number | null;
   primaryPattern: string;
   patterns: Record<string, number>;
   /** Detected subfamily tags (bracket, speedjack, lngeneral, ...) from the chart analysis, strongest first; empty until it lands. */
@@ -350,15 +362,23 @@ function clusterFamily(classification: { clusterCategory?: unknown } | null): st
 // - 4K with MSD: primary = top MinaCalc base skillset (Stamina only wins on
 //   endurance-length files, see STAMINA_PRIMARY_MIN_LENGTH_SECONDS), pat_* mix
 //   normalized against it so card tags agree with the modal.
-// - Every keymode with a chart analysis: LN primary iff the hold share clears
-//   the keymode's identity line (lnPrimaryMinRatioFor), the same threshold the classifier uses to route the
-//   dan verdict.
+// - Every keymode with a chart analysis: LN primary iff chartIsLn clears its
+//   identity gates (hold + effective on 4K, hold alone elsewhere), the same
+//   rule the classifier uses to route the dan verdict.
 // - No analysis yet: the skills_json profile as before.
+// Hold share of the chart's objects from osu!'s own counts (the same numbers
+// behind the modal's LN notes figure), null when the metadata carries none.
+function lnShareOf(row: Record<string, unknown>): number | null {
+  const holds = intOr(row.ln_count);
+  const objects = holds + intOr(row.circle_count);
+  return objects > 0 ? holds / objects : null;
+}
+
 function derivePatternProfile(row: Record<string, unknown>): { primary: string; scores: Record<string, number> } {
   const { primary, scores } = readPatternProfile(row.skills_json);
   let result = primary;
 
-  const classification = parseJson<{ lnRatio?: unknown; keyCount?: unknown; category?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
+  const classification = parseJson<{ lnRatio?: unknown; lnEffectiveRatio?: unknown; keyCount?: unknown; category?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
   // MinaCalc reads split trills as jacks: each column repeats every second row,
   // which JackSpeed/Chordjack score as same-column speed even though the chart
   // never hits a column twice in a row (gdmem 3814262: 0.2% of row pairs share
@@ -456,13 +476,20 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
     }
   }
 
-  const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
+  const readOptionalShare = (value: unknown): number | null => (value != null && Number.isFinite(Number(value)) ? Number(value) : null);
   let lnDerouted = false;
   let lnPromoted = false;
   const classificationKeyCount = classification != null && Number.isFinite(Number(classification.keyCount))
     ? Number(classification.keyCount)
     : null;
-  if (lnRatio != null && lnRatio >= lnPrimaryMinRatioFor(classificationKeyCount)) {
+  // The displayed identity metric is effective on 4K and hold share elsewhere;
+  // chartIsLn separately applies both required 4K gates.
+  const shares = { lnRatio: Number(classification?.lnRatio), lnEffectiveRatio: readOptionalShare(classification?.lnEffectiveRatio) };
+  const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio))
+    ? chartLnShareFor(classificationKeyCount, shares)
+    : null;
+  const readsLn = chartIsLn(classificationKeyCount, shares) === true;
+  if (lnRatio != null && readsLn) {
     result = "ln";
     scores.ln = 1;
     lnPromoted = true;
@@ -528,16 +555,21 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
 // spaces so subfamily filters can match with like '% id %'. Zero-score entries
 // are skipped: they are not detections (pre-fix classifications carry a
 // force-appended score-0 ln candidate even on charts with zero long notes).
-function readPatternTags(classificationJson: unknown): string {
+function readPatternTags(classificationJson: unknown, msdJson: unknown, keyCount: number): string {
   const parsed = parseJson<{ patterns?: Array<{ id?: unknown; score?: unknown }> } | null>(classificationJson, null);
-  if (!parsed || !Array.isArray(parsed.patterns)) return "";
   const ids = [...new Set(
-    parsed.patterns
+    (Array.isArray(parsed?.patterns) ? parsed.patterns : [])
       .filter((hit) => Number(hit?.score ?? 0) > 0)
       .map((hit) => String(hit?.id ?? ""))
       .filter(Boolean),
   )];
-  return ids.length > 0 ? ` ${ids.join(" ")} ` : "";
+  // Search needs recurring sections on an eligible LN chart, not an isolated
+  // candidate in the diagnostic preview. Full-analysis evidence is versioned;
+  // missing evidence stays untagged until the cached-file sweep fills it.
+  const artifact = keyCount === 4 ? parseJson<{ lnSkill?: { version?: number; eligible?: boolean; structure?: LnStructureSummary4K } } | null>(msdJson, null) : null;
+  ids.push(...readLnSearchPatternIds(artifact?.lnSkill?.structure, keyCount,
+    artifact?.lnSkill?.version === LN_SKILL_VERSION && artifact.lnSkill.eligible === true));
+  return ids.length > 0 ? ` ${[...new Set(ids)].join(" ")} ` : "";
 }
 
 // ── Source rows -> index rows ────────────────────────────────────────────────
@@ -570,6 +602,7 @@ const SOURCE_SELECT = `
     json_extract(b.metadata_json, '$.playcount') as play_count,
     json_extract(b.metadata_json, '$.passcount') as pass_count,
     json_extract(b.metadata_json, '$.count_sliders') as ln_count,
+    json_extract(b.metadata_json, '$.count_circles') as circle_count,
     json_extract(b.metadata_json, '$.total_length') as total_length,
     json_extract(b.metadata_json, '$.status') as meta_status,
     s.title as title,
@@ -665,9 +698,10 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     row.ca_msd_json == null ? null : String(row.ca_msd_json),
     row.ca_msd_overall == null ? null : realOr(row.ca_msd_overall),
     row.ca_msd_ln_json == null ? null : String(row.ca_msd_ln_json),
-    readPatternTags(row.ca_classification_json),
+    readPatternTags(row.ca_classification_json, row.ca_msd_json, intOr(row.cs)),
     intOr(row.ca_vibro) === 1 ? 1 : 0,
     row.ca_note_bpm == null || !(realOr(row.ca_note_bpm) > 0) ? null : realOr(row.ca_note_bpm),
+    lnShareOf(row),
     nowIso(),
   ];
   return {
@@ -676,8 +710,8 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         search_text, key_count, stars, bpm, od, length, status, play_count, pass_count, ln_count,
         primary_pattern, pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina,
         pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date,
-        dan_label, dan_family, raw_dan, msd_json, msd_overall, msd_ln_json, pattern_tags, vibro, note_bpm, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dan_label, dan_family, raw_dan, msd_json, msd_overall, msd_ln_json, pattern_tags, vibro, note_bpm, ln_share, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(beatmap_id) do update set
         beatmapset_id = excluded.beatmapset_id,
         analysis_version = excluded.analysis_version,
@@ -693,7 +727,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         dan_label = excluded.dan_label, dan_family = excluded.dan_family, raw_dan = excluded.raw_dan,
         msd_json = excluded.msd_json, msd_overall = excluded.msd_overall,
         msd_ln_json = excluded.msd_ln_json,
-        pattern_tags = excluded.pattern_tags, vibro = excluded.vibro, note_bpm = excluded.note_bpm,
+        pattern_tags = excluded.pattern_tags, vibro = excluded.vibro, note_bpm = excluded.note_bpm, ln_share = excluded.ln_share,
         updated_at = excluded.updated_at`,
     args,
   };
@@ -1096,7 +1130,7 @@ const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
   stars, bpm, od, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
-  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro, note_bpm, ranked_date`;
+  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro, note_bpm, ln_share, ranked_date`;
 
 const KEY_CLAUSES: Record<string, (p: string) => string> = {
   "4k": (p) => `${p}key_count = 4`,
@@ -1530,6 +1564,17 @@ function buildWhereParts(query: MapSearchQuery, p = "", fts = false): { conditio
     conditions.push(`${p}length <= ?`);
     args.push(query.lenMax);
   }
+  // LN share is the hold share of the chart's objects from osu!'s counts
+  // (percent on the wire, fraction in the column); a row without counts
+  // leaves an active LN share filter.
+  if (query.lnMin != null) {
+    conditions.push(`${p}ln_share >= ?`);
+    args.push(query.lnMin / 100);
+  }
+  if (query.lnMax != null) {
+    conditions.push(`${p}ln_share <= ?`);
+    args.push(query.lnMax / 100);
+  }
 
   // Family picks match the map's dominant pattern (select chordjack -> chordjack
   // maps); subfamily picks match detected-pattern tags. Within the facet the
@@ -1731,7 +1776,7 @@ export async function getMapSearchSetEntry(db: Db, beatmapId: number): Promise<M
 // msd_ln_json stores the raw tail-aware calc run; the entry carries the
 // blended (display-ready) values so the frontend never needs the weights.
 // Null when the sweep has not covered the chart, when the base MSD is
-// missing, or when blending changes nothing (rice charts).
+// missing, or when the chart has no eligible tail pass.
 function parseLnAdjustedMsd(
   row: Record<string, unknown> | undefined,
   baseMsd: Record<string, number> | null,
@@ -1832,6 +1877,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     playCount: intOr(row.play_count),
     rankedDate: row.ranked_date == null ? null : String(row.ranked_date),
     lnCount: intOr(row.ln_count),
+    lnShare: row.ln_share == null ? null : realOr(row.ln_share),
     primaryPattern: String(row.primary_pattern ?? "unknown"),
     patterns,
     // Only the canonical subfamily vocabulary reaches clients; family-level

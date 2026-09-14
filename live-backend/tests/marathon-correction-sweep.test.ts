@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
+import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { MARATHON_CORRECTION_JOB, MARATHON_CORRECTION_META_KEY, ensureMarathonCorrectionSeeded,
   recomputeMarathonCorrectionChunk, runMarathonCorrectionJob } from "../src/features/marathon-correction.js";
@@ -112,7 +113,7 @@ describe("targeted marathon correction rollout", () => {
         expect(JSON.parse(String(row.dan_ht_json)).rawDan).not.toBe(99);
       }
       expect((await exec(db, "select raw_dan from dan_estimates where estimator_version = 20 and rate_percent = 120")).rows[0].raw_dan).toBe(77);
-      expect((await exec(db, "select raw_dan from dan_mod_estimates where estimator_version = 20")).rows[0].raw_dan).not.toBe(99);
+      expect((await exec(db, "select raw_dan from dan_mod_estimates where estimator_version = ?", [DAN_ESTIMATE_CACHE_VERSION])).rows[0].raw_dan).not.toBe(99);
     });
   }, 30_000);
 
@@ -133,7 +134,7 @@ describe("targeted marathon correction rollout", () => {
       const promoted = (await exec(db, "select rate_percent, raw_dan from dan_estimates where beatmap_id = 1 and estimator_version = 20 order by rate_percent")).rows;
       expect(promoted.map((r) => [r.rate_percent, r.raw_dan])).toEqual([[115, 99], [125, 77]]);
       expect((await exec(db, "select estimator_version from dan_mod_estimates")).rows[0].estimator_version).toBe(20);
-      expect((await exec(db, "select raw_dan from dan_estimates where beatmap_id = 3 and estimator_version = 20")).rows[0].raw_dan).not.toBe(99);
+      expect((await exec(db, "select raw_dan from dan_estimates where beatmap_id = 3 and estimator_version = ?", [DAN_ESTIMATE_CACHE_VERSION])).rows[0].raw_dan).not.toBe(99);
     });
   }, 30_000);
 

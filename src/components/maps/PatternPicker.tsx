@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { PATTERN_COLOR, usePatternLabel } from "./SearchCard";
 import { playPatternHit } from "./patternSfx";
+import { LnSharePill } from "./LnSharePill";
 import type { TriStateMode } from "../../lib/maps-random-filter";
 
 // Hit-to-select: tapping a pattern lands like hitting a note. An osu-style ring
@@ -27,7 +28,10 @@ const SUBFAMILIES: Record<string, string[]> = {
 // everything else with the wide-key stream set. Jack and stream stay in every
 // list: the analyzer detects both for all keymodes. The LN subfamilies are 4K
 // and 7K only, and 4K omits LN Release: the release ramps are measured on 7K
-// charts, so the analyzer doesn't emit the tag on 4 columns at all.
+// charts, so the old classifier doesn't emit that broad tag on 4 columns.
+// The shield facets the backend indexes (lnshield, lnreverseshield) are not
+// offered: a tap right after a release is ordinary LN texture, so the owner
+// pulled the buttons until the tags mean something to players.
 // The full generic list only shows when the Keys facet is empty or mixed.
 const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
   "4k": ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"],
@@ -207,12 +211,18 @@ export function PatternPicker({
   excluded = [],
   keys = [],
   onToggle,
+  lnShare,
+  onLnShareChange,
 }: {
   selected: string[];
   excluded?: string[];
   keys?: string[];
   onToggle: (pattern: string, reverse: boolean) => void;
+  /** Hold share of the map in percent, 0/0 for any; shown as a slider in the LN flyout. */
+  lnShare?: { min: number; max: number };
+  onLnShareChange?: (min: number, max: number) => void;
 }) {
+  const lnShareActive = lnShare != null && (lnShare.min > 0 || lnShare.max > 0);
   const { t } = useLingui();
   const patternName = usePatternLabel();
   const [openFamily, setOpenFamily] = useState<string | null>(null);
@@ -255,7 +265,7 @@ export function PatternPicker({
     // Mobile: a compact 3-column grid so the chips read as a tidy matrix instead
     // of ragged wrapped rows, without eating vertical space. From sm up it
     // relaxes back to the natural inline palette row.
-    <div ref={rootRef} className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+    <div ref={rootRef} className="relative grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
       {options.map((pattern) => {
         const subs = subfamilies[pattern];
         if (!subs) {
@@ -271,9 +281,11 @@ export function PatternPicker({
           );
         }
         const open = openFamily === pattern;
-        const selectedSubs = subs.filter((sub) => selected.includes(sub) || excluded.includes(sub)).length;
+        const selectedSubs = subs.filter((sub) => selected.includes(sub) || excluded.includes(sub)).length
+          + (pattern === "ln" && lnShareActive ? 1 : 0);
+        const showLnShare = pattern === "ln" && lnShare != null && onLnShareChange != null;
         return (
-          <span key={pattern} className="relative inline-flex w-full items-stretch gap-px sm:w-auto">
+          <span key={pattern} className="inline-flex w-full items-stretch gap-px sm:relative sm:w-auto">
             <PatternChip
               pattern={pattern}
               mode={modeFor(pattern)}
@@ -292,7 +304,7 @@ export function PatternPicker({
               <div
                 role="group"
                 aria-label={t`${patternName(pattern)} subfamilies`}
-                className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-max max-w-[min(280px,80vw)] flex-wrap gap-1.5 rounded-lg bg-osu-b4 p-2 ring-1 ring-white/10 shadow-xl"
+                className={`absolute left-0 ${pattern === "ln" ? "sm:left-auto sm:right-0" : ""} top-[calc(100%+6px)] z-30 flex max-h-72 w-max max-w-[min(340px,80vw)] flex-wrap gap-1.5 overflow-y-auto rounded-lg bg-osu-b4 p-2 ring-1 ring-white/10 shadow-xl`}
               >
                 {subs.map((sub) => (
                   <PatternChip
@@ -304,6 +316,17 @@ export function PatternPicker({
                     small
                   />
                 ))}
+                {showLnShare && (
+                  <div className="basis-full pt-1">
+                    <LnSharePill
+                      min={lnShare.min}
+                      max={lnShare.max}
+                      ariaLabel={t`LN share`}
+                      onChange={onLnShareChange}
+                      heading={<span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`LN share`}</span>}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </span>
