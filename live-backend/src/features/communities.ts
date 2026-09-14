@@ -208,7 +208,6 @@ export interface CommunityRow {
   isGuildOwner: boolean;
   status: CommunityStatus;
   rejectReason: string | null;
-  editedSinceReview: boolean;
   reviewedAt: string | null;
   approvedAt: string | null;
   inviteOk: boolean;
@@ -278,7 +277,6 @@ export interface CommunitySummary {
   wasApproved?: boolean;
   inviteOk?: boolean;
   inviteExpiresAt?: string | null;
-  editedSinceReview?: boolean;
   discordUsername?: string;
   isGuildOwner?: boolean;
 }
@@ -312,7 +310,7 @@ export function toCommunitySummary(
    * settled, a moderator browsing sees the same lock as everyone else, which is
    * also what its card on the directory has been showing them all along.
    */
-  const inReview = row.status !== "approved" || row.editedSinceReview || options.underReview === true;
+  const inReview = row.status !== "approved" || options.underReview === true;
   const mayJoin =
     options.asOwner === true ||
     (options.asAdmin === true && inReview) ||
@@ -352,7 +350,6 @@ export function toCommunitySummary(
     summary.wasApproved = row.approvedAt != null;
     summary.inviteOk = row.inviteOk;
     summary.inviteExpiresAt = row.inviteExpiresAt;
-    summary.editedSinceReview = row.editedSinceReview;
   }
   if (options.asAdmin === true) {
     summary.discordUsername = row.discordUsername;
@@ -387,7 +384,6 @@ export function rowToCommunity(row: Record<string, unknown>): CommunityRow {
     isGuildOwner: Number(row.is_guild_owner ?? 0) === 1,
     status: normalizeStatus(row.status),
     rejectReason: row.reject_reason == null ? null : String(row.reject_reason),
-    editedSinceReview: Number(row.edited_since_review ?? 0) === 1,
     reviewedAt: row.reviewed_at == null ? null : String(row.reviewed_at),
     approvedAt: row.approved_at == null ? null : String(row.approved_at),
     inviteOk: Number(row.invite_ok ?? 1) === 1,
@@ -559,23 +555,22 @@ export async function listCommunitiesForOwner(db: Db, ownerUserId: number): Prom
 
 export interface CommunityReviewQueue {
   pending: CommunitySummary[];
-  edited: CommunitySummary[];
-  // Listings someone flagged, minus any already standing in one of the two
-  // lists above: a listing is on this page once, with its reports under it.
+  // Listings someone flagged, minus any already standing in the list above: a
+  // listing is on this page once, with its reports under it.
   reported: CommunitySummary[];
-  // Open reports by listing id, for every card in any of the three lists.
+  // Open reports by listing id, for every card in either list.
   reports: Record<string, CommunityReport[]>;
 }
 
 /**
- * Pending rows first, then approved rows edited since their last review, then
- * anything the directory flagged, each card carrying the reports against it.
+ * Pending rows first, then anything the directory flagged, each card carrying
+ * the reports against it.
  */
 export async function listReviewQueue(db: Db): Promise<CommunityReviewQueue> {
   const rows = (await exec(
     db,
     `select * from discord_communities
-      where status = 'pending' or (status = 'approved' and edited_since_review = 1)
+      where status = 'pending'
       order by created_at asc`,
   )).rows.map((row) => rowToCommunity(row as Record<string, unknown>));
 
@@ -595,8 +590,7 @@ export async function listReviewQueue(db: Db): Promise<CommunityReviewQueue> {
     )).rows.map((row) => rowToCommunity(row as Record<string, unknown>));
 
   return {
-    pending: rows.filter((row) => row.status === "pending").map((row) => toCommunitySummary(row, { asAdmin: true })),
-    edited: rows.filter((row) => row.status === "approved").map((row) => toCommunitySummary(row, { asAdmin: true })),
+    pending: rows.map((row) => toCommunitySummary(row, { asAdmin: true })),
     // Most-reported first: three people flagging the same listing is the one to
     // read before a single passing complaint. Each carries its invite even when
     // the server named places the moderator is not in: "go and look" is most of
@@ -758,8 +752,9 @@ export async function updateCommunity(
 
   /*
    * What an edit does to the review state, by where the listing stands:
-   *  - approved stays visible and raises the edited flag, so a listing that was
-   *    approved with a clean pitch and then rewritten shows up on the admin page.
+   *  - approved stays approved and stays live. Editing a listing that already
+   *    passed asks nobody for anything; a listing rewritten into something else
+   *    is what the flag button on its page is for.
    *  - rejected goes back to pending, since editing is how someone answers the
    *    reason they were turned down.
    *  - hidden stays hidden. An admin took it down on purpose.
@@ -768,7 +763,6 @@ export async function updateCommunity(
    * brings their own listing back without anyone's help.
    */
   const status: CommunityStatus = row.status === "rejected" ? "pending" : row.status;
-  const editedSinceReview = row.status === "approved" ? 1 : 0;
   const rejectReason = row.status === "rejected" ? null : row.rejectReason;
 
   await exec(
@@ -787,7 +781,7 @@ export async function updateCommunity(
        invite_ok = case when ? is null then invite_ok else 1 end,
        invite_fail_count = case when ? is null then invite_fail_count else 0 end,
        invite_expires_at = case when ? is null then invite_expires_at else ? end,
-       status = ?, reject_reason = ?, edited_since_review = ?, updated_at = ?
+       status = ?, reject_reason = ?, updated_at = ?
      where id = ?`,
     [
       pitch,
@@ -816,7 +810,6 @@ export async function updateCommunity(
       input.invite?.expiresAt ?? null,
       status,
       rejectReason,
-      editedSinceReview,
       nowIso(),
       id,
     ],
@@ -867,13 +860,13 @@ export async function reviewCommunity(
     await exec(
       db,
       `update discord_communities set status = 'rejected', reject_reason = ?, reviewed_at = ?,
-         edited_since_review = 0, updated_at = ? where id = ?`,
+         updated_at = ? where id = ?`,
       [cleanText(reason ?? "", COMMUNITY_REJECT_REASON_MAX_LENGTH) || null, now, now, id],
     );
   } else if (action === "hide") {
     await exec(
       db,
-      "update discord_communities set status = 'hidden', reviewed_at = ?, edited_since_review = 0, updated_at = ? where id = ?",
+      "update discord_communities set status = 'hidden', reviewed_at = ?, updated_at = ? where id = ?",
       [now, now, id],
     );
   } else {
@@ -882,7 +875,7 @@ export async function reviewCommunity(
     await exec(
       db,
       `update discord_communities set status = 'approved', reject_reason = null, reviewed_at = ?,
-         approved_at = coalesce(approved_at, ?), edited_since_review = 0, updated_at = ? where id = ?`,
+         approved_at = coalesce(approved_at, ?), updated_at = ? where id = ?`,
       [now, now, now, id],
     );
   }

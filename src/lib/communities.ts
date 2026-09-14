@@ -600,23 +600,22 @@ export const disconnectDiscord = createServerFn({ method: "POST" })
 
 export interface CommunityQueue {
   pending: CommunitySummary[];
-  edited: CommunitySummary[];
   // Listings the directory flagged, and the reports themselves keyed by listing
-  // id. Reports ride along for every list, since a pending listing can be
+  // id. Reports ride along for both lists, since a pending listing can be
   // flagged too and its card should carry them.
   reported: CommunitySummary[];
   reports: Record<string, CommunityReport[]>;
 }
 
-const EMPTY_QUEUE: CommunityQueue = { pending: [], edited: [], reported: [], reports: {} };
+const EMPTY_QUEUE: CommunityQueue = { pending: [], reported: [], reports: {} };
 
 /**
- * Everything the review page has waiting, as one number. The three lists are
+ * Everything the review page has waiting, as one number. The two lists are
  * disjoint - a flagged listing that is also pending rides in `pending` only -
  * so they add up without deduping.
  */
 export function countCommunityQueue(queue: Partial<CommunityQueue>): number {
-  return (queue.pending?.length ?? 0) + (queue.edited?.length ?? 0) + (queue.reported?.length ?? 0);
+  return (queue.pending?.length ?? 0) + (queue.reported?.length ?? 0);
 }
 
 export const fetchCommunityQueue = createServerFn({ method: "GET" })
@@ -630,7 +629,6 @@ export const fetchCommunityQueue = createServerFn({ method: "GET" })
       const body = (await response.json()) as Partial<CommunityQueue>;
       return {
         pending: Array.isArray(body.pending) ? body.pending : [],
-        edited: Array.isArray(body.edited) ? body.edited : [],
         reported: Array.isArray(body.reported) ? body.reported : [],
         reports: body.reports && typeof body.reports === "object" ? body.reports : {},
       };

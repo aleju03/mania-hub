@@ -198,7 +198,6 @@ export interface CommunitySummary {
   wasApproved?: boolean;
   inviteOk?: boolean;
   inviteExpiresAt?: string | null;
-  editedSinceReview?: boolean;
   discordUsername?: string;
   isGuildOwner?: boolean;
 }

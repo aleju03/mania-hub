@@ -34,11 +34,10 @@ import { pageSeo } from "../lib/seo";
  * site. Every review server function re-checks that same list, which makes this
  * gate the courtesy and that one the lock.
  *
- * Three lists: servers someone flagged, servers waiting for a first decision,
- * and servers that were already approved and have been edited since. The last
- * one is the whole point of letting edits go live immediately - it is how a
- * listing approved with a clean pitch and then rewritten into something else
- * gets noticed. The first is what the people reading the directory noticed.
+ * Two lists: servers someone flagged, and servers waiting for a first decision.
+ * An owner editing a listing that already passed is not a third one - that edit
+ * goes live on its own, and a listing rewritten into something else is what the
+ * flag button on its page is for.
  *
  * Any decision on a listing clears the reports against it, including "looks
  * fine": approving one is a moderator's answer to whoever flagged it.
@@ -360,7 +359,7 @@ function HistoryRow({ entry }: { entry: CommunityReviewLogEntry }) {
 }
 
 function CommunityReviewPage() {
-  const [queue, setQueue] = useState<CommunityQueue>({ pending: [], edited: [], reported: [], reports: {} });
+  const [queue, setQueue] = useState<CommunityQueue>({ pending: [], reported: [], reports: {} });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -413,7 +412,6 @@ function CommunityReviewPage() {
         delete reports[id];
         return {
           pending: prev.pending.filter((row) => row.id !== id),
-          edited: prev.edited.filter((row) => row.id !== id),
           reported: prev.reported.filter((row) => row.id !== id),
           reports,
         };
@@ -580,28 +578,6 @@ function CommunityReviewPage() {
               </h2>
               <div className="space-y-2">
                 {queue.pending.map((community) => (
-                  <ReviewCard
-                    key={community.id}
-                    community={community}
-                    reports={queue.reports[community.id] ?? []}
-                    onAction={handleAction}
-                    busy={busyId === community.id}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {queue.edited.length > 0 && (
-            <section>
-              <h2 className="mb-1 text-[13px] font-bold text-white">
-                Edited since approval ({queue.edited.length})
-              </h2>
-              <p className="mb-2 text-[11.5px] text-osu-f1">
-                Already live. Leaving one up just clears it off this list.
-              </p>
-              <div className="space-y-2">
-                {queue.edited.map((community) => (
                   <ReviewCard
                     key={community.id}
                     community={community}

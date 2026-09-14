@@ -287,7 +287,7 @@ describe("review", () => {
     expect((await list()).body.total).toBe(1);
   });
 
-  it("queues pending listings and, separately, ones edited since approval", async () => {
+  it("queues pending listings and leaves an edited approved one alone", async () => {
     const pending = await submit();
     guildForCode.code2 = "guild-2";
     const approved = await submit({ guildId: "guild-2", invite: "code2" });
@@ -295,17 +295,18 @@ describe("review", () => {
 
     let queueBody = (await call(mockReq("GET", "/api/communities/queue", ADMIN))).body;
     expect(queueBody.pending.map((row: { id: string }) => row.id)).toEqual([pending.body.community.id]);
-    expect(queueBody.edited).toHaveLength(0);
 
-    await call(bodyReq("POST", "/api/communities/update", {
+    const edited = await call(bodyReq("POST", "/api/communities/update", {
       userId: OWNER,
       id: approved.body.community.id,
       pitch: "Rewritten after approval.",
     }, JSON_HEADERS));
+    expect(edited.body.community.status).toBe("approved");
 
+    // Editing a listing that already passed asks nobody for anything: it stays
+    // live and never reaches the review page.
     queueBody = (await call(mockReq("GET", "/api/communities/queue", ADMIN))).body;
-    expect(queueBody.edited.map((row: { id: string }) => row.id)).toEqual([approved.body.community.id]);
-    // An edited listing stays live while it waits to be looked at again.
+    expect(queueBody.pending.map((row: { id: string }) => row.id)).toEqual([pending.body.community.id]);
     expect((await list()).body.total).toBe(1);
   });
 });
@@ -469,13 +470,14 @@ describe("who a server is for", () => {
     await approve(pending.body.community.id);
     expect((await asModerator(pending.body.community.id)).body.community.inviteUrl).toBeNull();
 
-    // Rewritten since that review, so it is back in front of them.
+    // An owner rewriting it does not put it back in front of them: the edit
+    // needs no decision, so there is nothing to join the server to judge.
     await call(bodyReq("POST", "/api/communities/update", {
       userId: OWNER,
       id: pending.body.community.id,
       pitch: "Rewritten after approval.",
     }, JSON_HEADERS));
-    expect((await asModerator(pending.body.community.id)).body.community.inviteUrl).toBe("https://discord.gg/code1");
+    expect((await asModerator(pending.body.community.id)).body.community.inviteUrl).toBeNull();
   });
 
   it("keeps a hidden listing out of the directory, its totals and its facets", async () => {

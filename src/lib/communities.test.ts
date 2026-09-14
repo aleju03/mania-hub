@@ -52,17 +52,16 @@ describe("communitiesListCacheKey", () => {
 // The number on the Review button. A moderator should know a server is waiting
 // without opening the page, so this counts every list the page shows.
 describe("countCommunityQueue", () => {
-  it("adds up the three lists", () => {
+  it("adds up both lists", () => {
     expect(countCommunityQueue({
       pending: [{ id: "a" }, { id: "b" }] as never,
-      edited: [{ id: "c" }] as never,
       reported: [{ id: "d" }] as never,
       reports: {},
-    })).toBe(4);
+    })).toBe(3);
   });
 
   it("counts an empty or half-shaped queue as nothing waiting", () => {
-    expect(countCommunityQueue({ pending: [], edited: [], reported: [], reports: {} })).toBe(0);
+    expect(countCommunityQueue({ pending: [], reported: [], reports: {} })).toBe(0);
     expect(countCommunityQueue({})).toBe(0);
   });
 });

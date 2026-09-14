@@ -393,8 +393,8 @@ export async function handleCommunitiesRoutes(
     });
     // Editing a rejected listing is how its owner answers the reason they were
     // turned down, so it lands back in the pending queue and is worth the same
-    // ping a first submit gets. An edit to an approved listing only raises the
-    // edited flag, which the review page shows without anyone being paged.
+    // ping a first submit gets. An edit to an approved listing goes live on its
+    // own and pages nobody.
     if (result.ok && row.status === "rejected") void pingOwnerReviewQueue(ctx, result.community, true);
     sendJson(req, res, ctx, result.ok ? 200 : statusForWriteError(result.error), result);
     return true;

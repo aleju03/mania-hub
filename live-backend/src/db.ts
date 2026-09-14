@@ -2582,7 +2582,6 @@ async function migrateDiscordCommunities(db: Db): Promise<void> {
       is_guild_owner integer not null default 0,
       status text not null default 'pending',
       reject_reason text,
-      edited_since_review integer not null default 0,
       reviewed_at text,
       approved_at text,
       invite_ok integer not null default 1,
@@ -2610,6 +2609,14 @@ async function migrateDiscordCommunities(db: Db): Promise<void> {
   // JSON array of already-normalized strings, read with json_each for the facet
   // row on the directory, so the filters are only ever what people actually
   // typed. Added after the table existed, hence the guard.
+  // An owner's edit used to raise this flag and stand an already approved
+  // listing back in front of a moderator. Editing a listing no longer asks
+  // anyone for approval, so the flag has nothing left to say. The review index
+  // goes first because SQLite will not drop a column an index names.
+  if (communityColumns.includes("edited_since_review")) {
+    await db.execute("drop index if exists idx_discord_communities_review");
+    await db.execute("alter table discord_communities drop column edited_since_review");
+  }
   if (!communityColumns.includes("tags_json")) {
     await db.execute("alter table discord_communities add column tags_json text not null default '[]'");
   }
@@ -2664,11 +2671,10 @@ async function migrateDiscordCommunities(db: Db): Promise<void> {
     create index if not exists idx_discord_communities_owner
       on discord_communities(owner_user_id, created_at desc)
   `);
-  // The admin queue reads pending rows and approved-but-edited rows together;
-  // both are covered by leading with status.
+  // The admin queue reads the pending rows, oldest first.
   await db.execute(`
     create index if not exists idx_discord_communities_review
-      on discord_communities(status, edited_since_review, created_at desc)
+      on discord_communities(status, created_at)
   `);
   // The refresh sweep claims the approved rows checked longest ago. Nulls sort
   // first in SQLite, so a never-checked row is picked up before any other.
