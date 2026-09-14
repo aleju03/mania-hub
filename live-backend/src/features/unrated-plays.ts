@@ -1,4 +1,5 @@
 import type { Db } from "../db.js";
+import { resolveCountryScope } from "../countries.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logInfo, logWarn } from "../logger.js";
@@ -924,12 +925,14 @@ export async function getUnratedPlaysBoard(
   options: { country?: string | null; keyCount: number | null; sort?: UnratedPlaysSort; range?: UnratedPlaysRange; page?: number; pageSize?: number },
 ): Promise<UnratedPlaysSnapshot> {
   const board = await readBoard(db);
-  const country = (options.country ?? "").trim().toUpperCase();
+  // Country, region or GLOBAL: the same read-time scope the rankings serve,
+  // so a region lists every member country's plays instead of matching none.
+  const countryCodes = options.country?.trim() ? resolveCountryScope(options.country).codes : null;
   const sort: UnratedPlaysSort = isUnratedPlaysSort(options.sort) ? options.sort : "pp";
   const range: UnratedPlaysRange = isUnratedPlaysRange(options.range) ? options.range : "all";
   const since = range === "week" ? Date.now() - WEEK_MS : null;
   const scoped = board.rows.filter((row) =>
-    (!country || country === "GLOBAL" || row.user.country_code === country)
+    (countryCodes == null || countryCodes.includes(row.user.country_code))
     && (since == null || (row.playedAtMs != null && row.playedAtMs >= since)));
   const keyCounts = [...new Set(scoped.map((row) => row.keyCount))].sort((a, b) => a - b);
   // No keymode means every keymode side by side: a plays list, not a rating,

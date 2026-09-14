@@ -288,6 +288,10 @@ describe("the board", () => {
 
     const cr = await getUnratedPlaysBoard(db, { country: "CR", keyCount: 4, sort: "msd" });
     expect(cr.ranking.map((entry) => entry.user.id)).toEqual([4, 2]);
+    const centralAmerica = await getUnratedPlaysBoard(db, { country: "R-CAMERICA", keyCount: 4, sort: "msd" });
+    expect(centralAmerica.ranking.map((entry) => entry.user.id)).toEqual([4, 2]);
+    const northAmerica = await getUnratedPlaysBoard(db, { country: "R-NAMERICA", keyCount: 4, sort: "msd" });
+    expect(northAmerica.ranking.map((entry) => entry.user.id)).toEqual([3]);
 
     const week = await getUnratedPlaysBoard(db, { country: "GLOBAL", keyCount: 4, sort: "msd", range: "week" });
     expect(week.ranking.map((entry) => entry.user.id)).toEqual([4, 2]);
