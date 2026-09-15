@@ -21,6 +21,8 @@ Do not start dev servers or run builds unprompted; the user usually has servers 
 
 Scripts live in `package.json` and `live-backend/package.json`. Non-obvious: `npm run live-db:update` pulls a fresh VPS snapshot of the prod DB to local, while `npm run live-db:sync-from-vps` reuses the newest existing backup (`--dry-run` supported). Either takes `--with-analytics` to pull the separate analytics DB in the same run (`--analytics-only` for just that one).
 
+`npm run bugs:pull` fetches open production bug reports (reporter, issue, replies, images) into readable Markdown and JSON under gitignored `local-notes/bug-reports/`. Add `-- --status all` to include closed reports; read the printed `README.md` index. Read-only; setup/options in `docs/admin.md`.
+
 Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `live-backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root.
 
 ## Live Backend Architecture
