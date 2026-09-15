@@ -19,6 +19,9 @@ import { LiveEventLog } from "../src/live/event-log.js";
 import { getLastIngestAtMs } from "../src/live/sse.js";
 import { OsuApiError } from "../src/osu/client.js";
 import type { OscScore } from "../src/shared/types.js";
+import { packJson } from "../src/shared/compressed-json.js";
+import { getScoreIdentity } from "../src/shared/score.js";
+import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
 
 let dir = "";
 let db: Db;
@@ -304,6 +307,63 @@ describe("score submission HTTP route", () => {
     expect(osu.getScoreById).toHaveBeenCalledTimes(2);
     expect(osu.getScoreById).toHaveBeenLastCalledWith(9001, "legacy", expect.any(String));
   });
+
+  it.each(["profile-text", "profile-gzip", "top-scores", "plays", "danOnly", "vibroExcluded"])(
+    "reports already tracked for a score held in %s while still repairing its missing event",
+    async (source) => {
+      const score = { ...await fixtureScore(), legacy_score_id: 7001 };
+      const now = new Date().toISOString();
+      if (source.startsWith("profile-")) {
+        await exec(db, `insert into profile_snapshots
+          (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+          values (101, 'sniper', '{}', ?, 200, ?, ?, ?)`,
+        [source === "profile-gzip" ? packJson([score]) : JSON.stringify([score]), now, now, now]);
+      } else if (source === "top-scores") {
+        await exec(db, `insert into user_top_scores (user_id, score_id, position, score_json, refreshed_at)
+          values (101, ?, 153, ?, ?)`, [score.id, JSON.stringify(score), now]);
+      } else {
+        const play = { identity: getScoreIdentity(score), beatmapId: score.beatmap_id, keyCount: 4, rate: 1,
+          goal: 0.95, pp: score.pp, values: source === "plays" ? { Overall: 25 } : {}, patterns: [] };
+        const stored = { plays: [], [source]: source === "vibroExcluded"
+          ? [{ play, reason: "rate_vibro", checkedVersion: 1 }] : [play] };
+        // An in-flight refresh still has the evidence already shown on the
+        // profile; it must not make an existing score appear newly added.
+        await exec(db, `insert into player_skill_ratings (user_id, analysis_version, status, plays_json, updated_at)
+          values (101, ?, 'running', ?, ?)`, [PLAYER_SKILLS_VERSION, packJson(stored), now]);
+      }
+      const getScoreById = vi.fn(async () => score as unknown as Record<string, unknown>);
+      const ctx = context(getScoreById);
+      const input = { userId: 101, link: "https://osu.ppy.sh/scores/9001" };
+      const result = await call(ctx, input);
+      expect(result.body).toMatchObject({ ok: true, alreadyTracked: true, countries: ["CR"],
+        play: { scoreId: 9001, scoreUrl: "https://osu.ppy.sh/scores/9001" } });
+      expect(getScoreById).toHaveBeenCalledTimes(1);
+      expect((await exec(db, "select score_identity, source from score_events")).rows).toEqual([
+        expect.objectContaining({ score_identity: "official:7001", source: "manual_submit" }),
+      ]);
+      expect((await exec(db, "select count(*) as n from jobs where dedupe_key like 'player-skills:%'")).rows[0].n).toBe(1);
+      const repeat = await call(ctx, input);
+      expect(repeat.body?.alreadyTracked).toBe(true);
+      expect(getScoreById).toHaveBeenCalledTimes(1);
+      expect((await exec(db, "select count(*) as n from score_events")).rows[0].n).toBe(1);
+    },
+  );
+
+  it.each(["another-player", "another-attempt", "overlapping-id-space"])(
+    "still reports added when cached evidence belongs to %s", async (scenario) => {
+      const score = { ...await fixtureScore(), legacy_score_id: 7001 };
+      const cached = scenario === "another-player" ? { ...score, user_id: 202 }
+        : { ...score, id: 9002, legacy_score_id: scenario === "overlapping-id-space" ? 9001 : 7002 };
+      const now = new Date().toISOString();
+      await exec(db, `insert into profile_snapshots
+        (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+        values (?, 'cached-player', '{}', ?, 200, ?, ?, ?)`,
+      [cached.user_id, packJson([cached]), now, now, now]);
+      const result = await call(context(async () => score as unknown as Record<string, unknown>),
+        { userId: 101, link: "https://osu.ppy.sh/scores/9001" });
+      expect(result.body).toMatchObject({ ok: true, alreadyTracked: false });
+    },
+  );
 
   it("charges admission only for new work requiring an osu! call", async () => {
     const score = await fixtureScore();

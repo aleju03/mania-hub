@@ -469,6 +469,13 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       </Trans>
                     </div>
                   ) : null}
+                  {/* A pass that ran out of budget publishes what it has; say
+                      so here, where the dan is read, not only on the card. */}
+                  {(evidence.pendingPlays ?? 0) > 0 ? (
+                    <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                      <Trans>{evidence.pendingPlays} plays still analyzing, so this estimate can still move.</Trans>
+                    </div>
+                  ) : null}
                   <AnimatePresence initial={false}>
                     {openedSection ? (
                       <motion.div

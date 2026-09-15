@@ -8,10 +8,11 @@ import type { RateLimitResult } from "../http/abuse-guard.js";
 import { logInfo } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getDisplayedAccuracy, getScoreIdentity } from "../shared/score.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import type { OscScore, OsuMod } from "../shared/types.js";
 import { isUserKnownInactive } from "../user-status.js";
 import { SOLO_SCORE_ID_FLOOR } from "./activity-mods-backfill.js";
-import { enqueuePlayerSkills } from "./player-skills.js";
+import { enqueuePlayerSkills, loadLatestStoredPlayerSkillPayload, storedPlaysOf } from "./player-skills.js";
 
 /**
  * Manual score submission: anyone pastes an osu! score link on a player's
@@ -246,6 +247,11 @@ export async function submitMissingScore(
     return { ok: true, alreadyTracked: true, countries: existing, play: toPlaySummary(score) };
   }
 
+  // The recent event can be absent even though a top-score cache or durable
+  // skill record already contains this play. Preserve historical ingest to
+  // fill missing projections, but report whether the score was already known.
+  const alreadyTracked = await hasStoredScoreEvidence(db, targetUserId, score);
+
   const ingestor = new ScoreIngestor(db, queue, events, config);
   // The board-shaped projections stay on: an old score can legitimately hold
   // a snipe board spot, and boards are all-time. But nothing may present a
@@ -284,7 +290,28 @@ export async function submitMissingScore(
     beatmap_id: score.beatmap_id ?? score.beatmap?.id ?? null,
     countries,
   });
-  return { ok: true, alreadyTracked: false, countries, play: toPlaySummary(score) };
+  return { ok: true, alreadyTracked, countries, play: toPlaySummary(score) };
+}
+
+async function hasStoredScoreEvidence(db: Db, userId: number, verifiedScore: OscScore): Promise<boolean> {
+  // Match the verified score's canonical identity, not the pasted integer:
+  // osu!'s solo and legacy URL id spaces overlap.
+  const identity = getScoreIdentity(verifiedScore);
+  const snapshot = (await exec(db,
+    "select best_scores_json from profile_snapshots where user_id = ?", [userId],
+  )).rows[0];
+  const matches = (score: OscScore | null) => score != null && score.passed !== false && getScoreIdentity(score) === identity;
+  if (unpackJson<OscScore[]>(snapshot?.best_scores_json, []).some(matches)) return true;
+
+  const topScores = (await exec(db,
+    "select score_json from user_top_scores where user_id = ? and score_id in (?, ?)",
+    [userId, verifiedScore.id, verifiedScore.legacy_score_id ?? verifiedScore.id],
+  )).rows;
+  if (topScores.some((row) => matches(unpackJson<OscScore | null>(row.score_json, null)))) return true;
+
+  const stored = await loadLatestStoredPlayerSkillPayload(db, userId);
+  return storedPlaysOf(stored).some((play) => play.identity === identity)
+    || (stored?.vibroExcluded ?? []).some((entry) => entry.play.identity === identity);
 }
 
 async function trackedCountriesForIdentity(db: Db, identity: string): Promise<string[]> {

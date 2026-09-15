@@ -668,6 +668,11 @@ msgstr "{selectedYear} 年游玩 {0} 次"
 msgid "{0} plays since {1}"
 msgstr "自 {1} 起 {0} 次游玩"
 
+#. placeholder {0}: evidence.pendingPlays
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0} plays still analyzing, so this estimate can still move."
+msgstr "还有 {0} 次游玩正在分析，此段位估算仍可能变动。"
+
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
 #. placeholder {2}: formatTimeAgo(mapsUpdatedAt, locale)
@@ -13095,6 +13100,7 @@ msgid "Skill rating"
 msgstr "技能评分"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Skill rating recalculation pending"
 msgstr "技能评分等待重新计算"
 

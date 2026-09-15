@@ -2589,6 +2589,88 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it.each([RATE_VIBRO_CHECK_VERSION, RATE_VIBRO_CHECK_VERSION - 1])("keeps a budget-deferred candidate on last pass's rating with detector version %s", async (detectorVersion) => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
+      await storeCachedBeatmapFile(db, 107, buildStreamBeatmapFile(), { source: "test" });
+      const seed = await computePlayerSkillRatings(db, failingOsu, [play({ id: 1, beatmap_id: 106, accuracy: 0.95 })], [], {});
+      // 160 rated plays whose tail pass is stale, so none can reuse its SSR;
+      // the 150-run calc budget rerates what it can and cuts off the rest.
+      // Rates read at two decimals, so each slot needs its own hundredth.
+      const rates = Array.from({ length: 80 }, (_, index) => (index < 40 ? 60 + index : 70 + index) / 100);
+      const slots = [106, 107].flatMap((beatmapId) => rates.map((rate) => ({ beatmapId, rate })));
+      const previous = slots.map(({ beatmapId, rate }, index) => ({
+        ...seed.plays[0], identity: `official:${1000 + index}`, beatmapId, rate, source: "top" as const,
+        lnTailPass: LN_TAIL_PASS_VERSION - 1, rateVibroChecked: detectorVersion,
+      }));
+      const scores = slots.map(({ beatmapId, rate }, index) => play({
+        id: 1000 + index, beatmap_id: beatmapId, accuracy: 0.95, mods: [{ acronym: rate < 1 ? "HT" : "DT", settings: { speed_change: rate } }],
+      }));
+      const first = await computePlayerSkillRatings(db, failingOsu, scores, previous, {});
+      const deferred = first.summary.pendingPlays;
+      expect(deferred).toBeGreaterThan(0);
+      expect(first.deferredCalibration).toBe(deferred);
+      // The cut-off plays stay in the rated pool on their previous vector.
+      expect(first.plays).toHaveLength(160);
+      expect(first.danOnly).toEqual([]);
+      const carried = first.plays.filter((entry) => entry.calibrationPending);
+      expect(carried).toHaveLength(deferred);
+      expect(carried.every((entry) => entry.values.Overall === seed.plays[0].values.Overall)).toBe(true);
+      expect(first.summary.totalPlays).toBe(160);
+      expect(first.summary.modes[0].analyzedPlays).toBe(160);
+      // The next pass rerates exactly those and clears the flag.
+      const second = await computePlayerSkillRatings(db, failingOsu, scores, first.plays, {});
+      expect(second.summary.pendingPlays).toBe(0);
+      expect(second.plays).toHaveLength(160);
+      expect(second.plays.every((entry) => !entry.calibrationPending && entry.lnTailPass === LN_TAIL_PASS_VERSION)).toBe(true);
+      // Correcting the first deferred score leaves it beyond the same budget;
+      // it must wait unrated instead of inheriting the old vector.
+      const correctedId = carried[0].identity;
+      const corrected = await computePlayerSkillRatings(db, failingOsu,
+        scores.map((score) => getScoreIdentity(score) === correctedId ? { ...score, accuracy: 0.9 } : score), previous, {});
+      const entry = [...corrected.plays, ...corrected.danOnly].find((play) => play.identity === correctedId);
+      expect(entry).toMatchObject({ calibrationPending: true, ratingExcluded: true, values: {} });
+      expect(corrected.plays.filter((play) => play.calibrationPending && play.identity !== correctedId).length).toBeGreaterThan(0);
+    });
+  }, 60000);
+
+  it.each([false, true])("retains only unchanged evidence while chart facts are unavailable (budget exhausted: %s)", async (exhaustBudget) => {
+    await withDb(async (db) => {
+      const text = buildStreamBeatmapFile();
+      const score = play({ beatmap_id: 106, type: "solo_score", statistics: { perfect: 650, great: 50 } });
+      await storeCachedBeatmapFile(db, 106, text, { source: "test" });
+      const seed = await computePlayerSkillRatings(db, failingOsu, [score], []);
+      expect(seed.plays).toHaveLength(1);
+      await exec(db, "delete from beatmap_osu_files where beatmap_id = 106");
+      const earlier = exhaustBudget ? Array.from({ length: 150 }, (_, index) => play({
+        id: 1000 + index, beatmap_id: 1000 + index,
+      })) : [];
+      const unchanged = await computePlayerSkillRatings(db, failingOsu, [...earlier, score], seed.plays);
+      expect(unchanged.plays).toMatchObject([{ calibrationPending: true, values: seed.plays[0].values }]);
+      expect(unchanged.summary.totalPlays).toBe(earlier.length + 1);
+      for (const correction of [
+        { mods: [{ acronym: "EZ" }] },
+        { mods: [{ acronym: "HR" }] },
+        { mods: [{ acronym: "CL" }] },
+        { mods: [{ acronym: "SV2" }] },
+        { legacy_score_id: 1 },
+        { statistics: { perfect: 600, great: 100 } },
+      ]) {
+        const correctedScore = { ...score, ...correction };
+        const corrected = await computePlayerSkillRatings(db, failingOsu, [...earlier, correctedScore], seed.plays);
+        expect(corrected.plays, JSON.stringify(correction)).toEqual([]);
+        expect(corrected.danOnly).toMatchObject([{ calibrationPending: true, ratingExcluded: true, values: {} }]);
+        // Once facts return, retained evidence must use the corrected inputs
+        // even if the original score has left the visible window.
+        await storeCachedBeatmapFile(db, 106, text, { source: "test" });
+        const recovered = await computePlayerSkillRatings(db, failingOsu, [], corrected.danOnly);
+        const fresh = await computePlayerSkillRatings(db, failingOsu, [correctedScore], []);
+        expect([...recovered.plays, ...recovered.danOnly][0].goal).toBe([...fresh.plays, ...fresh.danOnly][0].goal);
+        await exec(db, "delete from beatmap_osu_files where beatmap_id = 106");
+      }
+    });
+  });
+
   it("preserves sole-source history while a calibration migration spans calculator budgets", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile().replace("CircleSize:4", "CircleSize:7"), { source: "test" });
@@ -2598,8 +2680,14 @@ describe("computePlayerSkillRatings", () => {
       }));
       const first = await computePlayerSkillRatings(db, failingOsu, [], previous);
       expect(first.deferredCalibration).toBeGreaterThan(0);
-      expect(first.plays.length + first.danOnly.length).toBe(201);
-      expect(first.danOnly.every((entry) => entry.calibrationPending && Object.keys(entry.values).length === 0)).toBe(true);
+      // The plays the budget did not reach stay rated on their old vector,
+      // flagged for the next pass, rather than dropping out for one pass.
+      expect(first.plays).toHaveLength(201);
+      expect(first.danOnly).toEqual([]);
+      const deferred = first.plays.filter((entry) => entry.calibrationPending);
+      expect(deferred).toHaveLength(first.summary.pendingPlays);
+      expect(deferred.every((entry) => entry.values.Overall === 30)).toBe(true);
+      expect(first.summary.totalPlays).toBe(201);
       const second = await computePlayerSkillRatings(db, failingOsu, [], [...first.plays, ...first.danOnly]);
       expect(second.deferredCalibration).toBe(0);
       expect(second.danOnly).toEqual([]);

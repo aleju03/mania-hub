@@ -1275,7 +1275,7 @@ function wifeScoringFor(score: SsrGoalScore): "stable" | "lazer" | "unknown" {
 // approximation for the older lazer plays.
 const EZ_WINDOW_SCALE = 1.4;
 
-function ezWindowScale(score: SsrGoalScore): number {
+function ezWindowScale(score: Pick<SsrGoalScore, "mods">): number {
   let scale = 1;
   for (const mod of score.mods ?? []) {
     const acronym = typeof mod === "string" ? mod : String(mod?.acronym ?? "");
@@ -1283,6 +1283,16 @@ function ezWindowScale(score: SsrGoalScore): number {
     else if (acronym === "HR") scale /= EZ_WINDOW_SCALE;
   }
   return scale;
+}
+
+function sameCalibrationMods(previous: StoredPlaySsr, score: SsrGoalScore): boolean {
+  const mods = (score.mods ?? []).map((mod) => typeof mod === "string" ? mod : mod.acronym);
+  const previousScale = previous.mods != null ? ezWindowScale({ mods: previous.mods })
+    : previous.ezWindows ? EZ_WINDOW_SCALE : 1;
+  const scoreV2 = (acronyms: string[]) => acronyms.some((mod) => mod === "SV2" || mod === "V2");
+  return previousScale === ezWindowScale(score)
+    && (previous.mods?.includes("CL") ?? false) === mods.includes("CL")
+    && scoreV2(previous.mods ?? []) === scoreV2(mods);
 }
 
 /**
@@ -3129,6 +3139,10 @@ export async function computePlayerSkillRatings(
   let goalFactReads = 0;
   const pendingGoalIdentities = new Set<string>();
   const pendingCalibrationEvidence = new Map<string, StoredPlaySsr>();
+  // Slots a budget boundary left on last pass's rating (retainPendingEvidence,
+  // deferCandidate): still pending, but already in the rated pool, so not a
+  // second play in the total.
+  const carriedForward = new Set<string>();
   const resolvedGoalsByIdentity = new Map<string, number>();
   const consider = async (score: OscScore & { retainedRate?: number }, source: "top" | "tracked") => {
     const beatmapId = beatmapIdOf(score);
@@ -3198,21 +3212,43 @@ export async function computePlayerSkillRatings(
       if (!facts) {
         pendingPlays += 1;
         const previous = previousByIdentity.get(getScoreIdentity(score));
-        const retainPendingEvidence = () => {
+        // The score as last rated, against the score as it arrives now. A
+        // corrected histogram, client, rate or OD cannot inherit the old goal.
+        const sameScore = previous != null && previous.beatmapId === beatmapId
+          && (previous.wifeScoring ?? "unknown") === wifeScoringFor(score)
+          && previous.rate === rate && (previous.inverse === true) === inverse
+          && (previous.odOverride ?? null) === (odOverride ?? null)
+          && sameCalibrationMods(previous, score)
+          && (hasJudgements || previous.accuracy === getDisplayedAccuracy(score))
+          && JSON.stringify(readWifeCounts(previous.score?.statistics ?? {})) === JSON.stringify(readWifeCounts(score.statistics ?? {}));
+        // `carry`: the only reason to wait is a newer goal model or a chart
+        // fact the budget could not read, so last pass's vector stays in the
+        // rated pool until the recompute reaches it (deferCandidate below
+        // does the same for a live candidate). A corrected score waits unrated.
+        const retainPendingEvidence = (carry: boolean) => {
           if (!previous || previous.beatmapId !== beatmapId) return;
-          pendingCalibrationEvidence.set(previous.identity, { ...previous, rate, source,
+          const refreshed: StoredPlaySsr = { ...previous, rate, source,
             score: playerSkillScoreDetails(score, previous.score), accuracy: getDisplayedAccuracy(score),
             stableAccuracy: hasJudgements ? calculateStableAccuracy(score.statistics ?? {}) || null
               : previous.accuracy === getDisplayedAccuracy(score) ? previous.stableAccuracy : null,
             mods: score.mods == null ? previous.mods : getModAcronyms(score.mods, false),
-            values: {}, ratingExcluded: true, calibrationPending: true,
-          });
+            ezWindows: score.mods == null ? previous.ezWindows : ezWindowScale(score) > 1,
+            wifeScoring: wifeScoringFor(score), odOverride, inverse,
+            rateMod: getRateModAcronym(score.mods),
+            calibrationPending: true,
+          };
+          if (carry && sameScore && previous.goal > SSR_GOAL_MIN && !previous.ratingExcluded && Number(previous.values?.Overall) > 0) {
+            carriedForward.add(playSlotKey(previous.beatmapId, previous.rate, previous.inverse));
+            pendingCalibrationEvidence.set(previous.identity, refreshed);
+            return;
+          }
+          pendingCalibrationEvidence.set(previous.identity, { ...refreshed, values: {}, ratingExcluded: true });
         };
         if (!goalFactsByBeatmap.has(beatmapId) && goalFactReads >= MAX_CALC_RUNS_PER_COMPUTE) {
           // A budget-deferred immutable score keeps its prior evidence until
           // the next bounded pass. Proven corrections cannot inherit it.
-          if (previous && (previous.rate !== rate || (previous.inverse === true) !== inverse
-            || (previous.odOverride ?? null) !== (odOverride ?? null))) pendingGoalIdentities.add(getScoreIdentity(score));
+          pendingGoalIdentities.add(getScoreIdentity(score));
+          retainPendingEvidence(true);
           return;
         }
         const verifiedOd = previous?.wifeCalibration?.chartOd ?? previous?.tapWifeOd;
@@ -3220,21 +3256,14 @@ export async function computePlayerSkillRatings(
           // File eviction must not downgrade a verified score to the old
           // model. Keep its last result while retrying, but a corrected
           // histogram/client/OD cannot inherit that old goal.
-          const sameEvidence = previous.wifeScoring === wifeScoringFor(score)
-            && (chartOd == null || verifiedOd === chartOd)
-            && previous.rate === rate && (previous.odOverride ?? null) === (odOverride ?? null)
-            && previous.mods?.includes("CL") === getModAcronyms(score.mods, false).includes("CL")
-            && (hasJudgements || previous.accuracy === getDisplayedAccuracy(score))
-            && JSON.stringify(readWifeCounts(previous.score?.statistics ?? {})) === JSON.stringify(readWifeCounts(score.statistics ?? {}));
-          if (!sameEvidence || previous.wifeCalibration?.version !== WIFE_CALIBRATION_VERSION || previous.lnGoal == null) {
-            pendingGoalIdentities.add(getScoreIdentity(score));
-            retainPendingEvidence();
-          }
+          const sameEvidence = sameScore && (chartOd == null || verifiedOd === chartOd);
+          pendingGoalIdentities.add(getScoreIdentity(score));
+          retainPendingEvidence(sameEvidence);
           return;
         }
         if (needsOriginalFacts) {
           pendingGoalIdentities.add(getScoreIdentity(score));
-          retainPendingEvidence();
+          retainPendingEvidence(true);
           return;
         }
       } else {
@@ -3430,6 +3459,32 @@ export async function computePlayerSkillRatings(
       ...clearEvidence,
       ...(candidate.inverse ? { inverse: true } : {}),
     });
+    // A play this pass cannot reach (calc budget, rate-vibro budget, .osu not
+    // cached yet) keeps last pass's rating in the pool instead of dropping to
+    // an empty vector. The pass is still published as ready, and a pool
+    // missing the plays a budget cut off read as a lower rating and a lower
+    // dan for the minutes until the retries drained it (v40 rollout,
+    // 2026-09-15). Only unchanged evidence inherits, the same test the
+    // wife-facts read applies to a verified score behind a missing file; a
+    // corrected score still waits unrated. calibrationPending keeps the play
+    // out of SSR reuse, so the next pass recomputes it.
+    const sameEvidence = previous != null && previous.beatmapId === beatmapId && previous.rate === rate
+      && (previous.inverse === true) === candidate.inverse
+      && (previous.wifeScoring ?? "unknown") === clearEvidence.wifeScoring
+      && (previous.odOverride ?? null) === (clearEvidence.odOverride ?? null)
+      && sameCalibrationMods(previous, score)
+      && (hasJudgments || previous.accuracy === clearEvidence.accuracy)
+      && JSON.stringify(readWifeCounts(previous.score?.statistics ?? {})) === JSON.stringify(readWifeCounts(score.statistics ?? {}));
+    const deferCandidate = (keyCount: number) => {
+      if (!previous) return;
+      if (sameEvidence && !previous.ratingExcluded && goal > SSR_GOAL_MIN && Number(previous.values?.Overall) > 0) {
+        carriedForward.add(key);
+        analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence, calibrationPending: true });
+        return;
+      }
+      analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {},
+        ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
+    };
     const chartInfo = infoByBeatmap.get(beatmapId);
     const chartVibro = chartInfo?.vibro && !ppBackedChartIds.has(beatmapId);
     const exclusionKeyCount = chartInfo?.keyCount || (previous?.beatmapId === beatmapId ? previous.keyCount : 0);
@@ -3468,16 +3523,14 @@ export async function computePlayerSkillRatings(
     if (calcRunsTotal + (goal > SSR_CALC_GOAL_CAP ? 4 : 2) > MAX_CALC_RUNS_PER_COMPUTE) {
       pendingPlays += 1;
       deferredCalibration += 1;
-      if (previous) analyzedByKey.set(key, { ...exclusionPlay(previous.keyCount), values: {},
-        ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
+      if (previous) deferCandidate(previous.keyCount);
       continue;
     }
 
     const osuText = await loadOsuText(db, osu, beatmapId);
     if (osuText == null) {
       pendingPlays += 1;
-      if (previous) analyzedByKey.set(key, { ...exclusionPlay(previous.keyCount), values: {},
-        ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
+      if (previous) deferCandidate(previous.keyCount);
       continue;
     }
     // Converts serve the std .osu under the mania beatmap id; the calc would
@@ -3518,6 +3571,7 @@ export async function computePlayerSkillRatings(
     if (shouldCheckRateVibro(keyCount, rate, ppBackedChartIds.has(beatmapId))) {
       if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
         pendingRateVibroKeys.add(key);
+        if (previous) deferCandidate(keyCount);
         continue;
       }
       rateVibroChecks += 1;
@@ -3671,6 +3725,9 @@ export async function computePlayerSkillRatings(
   // A chart whose .osu is not cached stays as it is
   // and checks on a later compute, like a pending play.
   for (const [key, play] of analyzedByKey) {
+    // The candidate still needs a calibrated SSR. A detector-only check must
+    // not clear that pending state or count the same deferred slot twice.
+    if (play.calibrationPending) continue;
     if (!shouldCheckRateVibro(play.keyCount, play.rate, play.source === "top" || ppBackedChartIds.has(play.beatmapId))) continue;
     if (play.rateVibroChecked === RATE_VIBRO_CHECK_VERSION) continue;
     if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
@@ -3733,7 +3790,8 @@ export async function computePlayerSkillRatings(
   const deferredMigrations = new Set<string>();
   for (const [key, play] of analyzedByKey) {
     const info = infoByBeatmap.get(play.beatmapId);
-    if (play.ratingExcluded || playTailPassCurrent(play, info)) continue;
+    // A carried slot (deferCandidate) is the candidate loop's to recompute.
+    if (play.ratingExcluded || play.calibrationPending || playTailPassCurrent(play, info)) continue;
     // The tail pass can need four runs (base + extrapolation, twice). Reserve
     // the whole operation so retained history obeys the candidate loop's cap.
     const neededRuns = play.goal > SSR_CALC_GOAL_CAP ? 4 : 2;
@@ -3772,7 +3830,7 @@ export async function computePlayerSkillRatings(
   };
   for (const [key, play] of analyzedByKey) {
     const info = infoByBeatmap.get(play.beatmapId);
-    if (play.ratingExcluded || playLnSkillCurrent(play, info)) continue;
+    if (play.ratingExcluded || play.calibrationPending || playLnSkillCurrent(play, info)) continue;
     if (lnComputes >= MAX_CALC_RUNS_PER_COMPUTE) {
       pendingMigrations.add(play.identity);
       deferredMigrations.add(play.identity);
@@ -3862,9 +3920,10 @@ export async function computePlayerSkillRatings(
     }))
     .sort((a, b) => b.analyzedPlays - a.analyzedPlays);
 
+  const carriedRated = [...carriedForward].filter((key) => analyzedByKey.get(key)?.ratingExcluded !== true && analyzedByKey.has(key)).length;
   return {
     summary: {
-      totalPlays: rated.length + pendingPlays + unsupportedPlays,
+      totalPlays: rated.length + pendingPlays - carriedRated + unsupportedPlays,
       analyzedPlays: rated.length,
       pendingPlays: pendingPlays + [...analyzedByKey].filter(([key, play]) => pendingMigrations.has(play.identity) && !pendingRateVibroKeys.has(key)).length,
       unsupportedPlays,
@@ -4783,6 +4842,10 @@ export interface PlayerSkillDanEvidence {
   averageWindow: number;
   dan: PlayerSkillDanSide | null;
   totalClears: number;
+  /** Plays on this keymode a compute pass has not reached yet (calibrationPending):
+   *  still rated on their last vector or waiting unrated, so the numbers here
+   *  can still move without a new play. */
+  pendingPlays: number;
   clears: PlayerSkillDanEvidencePlay[];
   skillsets: PlayerSkillDanSkillsetEvidence[];
   /** The tile the headline follows (DanSkillsetBucket.anchor), null on sides that average. */
@@ -5468,6 +5531,7 @@ export async function getPlayerSkillDanEvidence(
     averageWindow: danClearAverageWindowFor(side, keyCount),
     dan,
     totalClears: clears.length,
+    pendingPlays: plays.filter((play) => play.calibrationPending === true).length,
     weightedClears: windows.get(ALL_CLEARS_SECTION)!.have,
     clears: topClears.map((clear) => toEvidencePlay(clear)),
     skillsets,

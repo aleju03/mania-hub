@@ -893,9 +893,13 @@ function UnratedPlayRow({
   onPrefetch: () => void;
 }) {
   const { t } = useLingui();
+  // Same three states the map card prints (MapDetailModal): a play the
+  // compute has not reached yet is pending, not vibro.
   const reason = play.ratingExclusionReason === "msd_floor"
     ? t`Accuracy below skill rating range, so this play has no MSD rating on any skillset.`
-    : t`Vibro detected. This play does not count toward skill or dan ratings.`;
+    : play.ratingExclusionReason === "pending_calibration"
+      ? t`Skill rating recalculation pending`
+      : t`Vibro detected. This play does not count toward skill or dan ratings.`;
   return (
     <PlayRow
       play={play}

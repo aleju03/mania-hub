@@ -152,6 +152,31 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(screen.getByText("Recent 101")).toBeTruthy();
   });
 
+  it("names a play the compute has not reached yet as pending, not vibro", async () => {
+    fetchSkillPlays.mockImplementation(async (_userId: number, _keys: number, _axis: string, options: { sort?: string; includeRejected?: boolean }) => ({
+      items: [play(101, options.sort === "recent" ? "Recent" : "Best")],
+      total: 1,
+      limit: 200,
+      offset: 0,
+      ...(options.includeRejected ? {
+        rejected: [{ ...play(103, "Recent"), rating: 0, overallRating: 0, pp: null, accuracy: 0.97,
+          playedAt: new Date(Date.UTC(2026, 0, 2)).toISOString(), source: "tracked",
+          ratingExcluded: true, ratingExclusionReason: "pending_calibration" }],
+      } : {}),
+    }));
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41007} username="player" modes={[mode]} view="msd" />
+    </I18nProvider>);
+    await screen.findByText("Best 101");
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    await screen.findByText("Recent 103");
+    fireEvent.click(screen.getByText("not rated"));
+    expect(screen.getByText("Skill rating recalculation pending")).toBeTruthy();
+    expect(screen.queryByText(/Vibro detected/)).toBeNull();
+    fireEvent.click(screen.getByText("Recent 103"));
+    expect(within(screen.getByTestId("map-rating-state")).getByText("Skill rating recalculation pending")).toBeTruthy();
+  });
+
   it("keeps rejected low-accuracy passes in Recent and explains Dan rejection in the popup", async () => {
     fetchDanEvidence.mockResolvedValue({
       clears: [],

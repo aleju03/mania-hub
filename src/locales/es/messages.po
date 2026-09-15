@@ -659,6 +659,11 @@ msgstr "{0} plays en {selectedYear}"
 msgid "{0} plays since {1}"
 msgstr "{0} plays desde {1}"
 
+#. placeholder {0}: evidence.pendingPlays
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{0} plays still analyzing, so this estimate can still move."
+msgstr "Todavía se están analizando {0} plays, así que esta estimación aún puede cambiar."
+
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
 #. placeholder {2}: formatTimeAgo(mapsUpdatedAt, locale)
@@ -13086,6 +13091,7 @@ msgid "Skill rating"
 msgstr "Nivel de habilidad"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Skill rating recalculation pending"
 msgstr "Recálculo de la valoración de habilidad pendiente"
 

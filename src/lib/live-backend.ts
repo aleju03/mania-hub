@@ -205,6 +205,9 @@ export interface LivePlayerDanEvidence {
   averageWindow?: number;
   dan: { rawDan: number; label: string; clears: number; beyondTable?: boolean; courseClear?: LivePlayerDanCourseClear } | null;
   totalClears: number;
+  /** Plays on this keymode the compute has not reached yet; optional until
+   *  the backend that ships it is deployed. */
+  pendingPlays?: number;
   clears: LivePlayerDanEvidencePlay[];
   skillsets: LivePlayerDanSkillsetEvidence[];
   /** The skillset the headline follows (7K LN: General); null or absent on
