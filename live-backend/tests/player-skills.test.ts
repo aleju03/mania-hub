@@ -36,6 +36,8 @@ import {
 } from "../src/features/player-skills.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { analyzeLnSkillFromText, LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
+import * as skillJobsModule from "../src/features/player-skill-jobs.js";
+import * as skillHistoryModule from "../src/features/player-skill-history.js";
 import * as msdModule from "../src/dan/msd.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import type { OscScore } from "../src/shared/types.js";
@@ -3059,6 +3061,36 @@ describe("getPlayerSkillBreakdown", () => {
 });
 
 describe("computePlayerSkillsJob", () => {
+  it.each(["stale writer", "continuation failure"])("preserves a ready rating after %s", async failure => {
+    await withDb(async db => {
+      const queue = new JobQueue(db);
+      const now = new Date().toISOString();
+      await exec(db, `insert into profile_snapshots
+        (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+        values (99, '99', '{}', ?, 200, ?, ?, ?)`, [JSON.stringify([play({ id: 41, beatmap_id: 777 })]), now, now, now]);
+      const jobOsu = {
+        ...failingOsu,
+        getUserByKey: async (): Promise<never> => { throw new Error("no network in tests"); },
+        getUserBestScoresWindow: async (): Promise<never> => { throw new Error("no network in tests"); },
+      };
+      const spy = failure === "stale writer"
+        ? vi.spyOn(skillHistoryModule, "writePlayerSkillRatingWithHistory").mockImplementationOnce(async () => {
+          // Another writer wins after this computation read its seed.
+          await exec(db, "update player_skill_ratings set status = 'ready', updated_at = '2099-01-01' where user_id = 99");
+          return exec(db, "update player_skill_ratings set status = 'ready' where user_id = -1");
+        })
+        : vi.spyOn(skillJobsModule, "settlePlayerSkillContinuations").mockRejectedValueOnce(new Error("continuation write unavailable"));
+      try {
+        await expect(computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 })).rejects.toThrow(
+          failure === "stale writer" ? "Cached player ratings changed" : "continuation write unavailable");
+        expect((await exec(db, "select status, error from player_skill_ratings where user_id = 99")).rows[0])
+          .toMatchObject({ status: "ready", error: null });
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
   it("persists vibro explanations outside both rating pools, including after the score ages out", async () => {
     await withDb(async (db) => {
       const queue = new JobQueue(db);
@@ -3136,15 +3168,12 @@ describe("computePlayerSkillsJob", () => {
 
       await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
       const followUps = (await exec(db, "select id, dedupe_key, payload_json, run_after from jobs where type = 'compute_player_skills'")).rows;
-      expect(followUps).toHaveLength(2);
-      const rateJob = followUps.find(row => String(row.dedupe_key).startsWith("player-skills-rate-vibro:"))!;
-      expect(rateJob.dedupe_key).toBe(`player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:99:1`);
-      expect(Date.parse(String(rateJob.run_after))).toBeGreaterThan(Date.parse(now));
-      expect(JSON.parse(String(rateJob.payload_json))).toEqual({ userId: 99, rateVibroPending: 1 });
-      expect(followUps.some(row => String(row.dedupe_key).startsWith(`player-skills:${PLAYER_SKILLS_VERSION}:99:ln:`))).toBe(true);
+      expect(followUps).toHaveLength(1);
+      expect(String(followUps[0].dedupe_key)).toMatch(new RegExp(`^player-skills:${PLAYER_SKILLS_VERSION}:99:continue:`));
+      expect(Date.parse(String(followUps[0].run_after))).toBeGreaterThan(Date.parse(now));
+      expect(JSON.parse(String(followUps[0].payload_json))).toMatchObject({ userId: 99, rateVibroPending: 1 });
 
-      // Both independent budgets schedule work, and either continuation can
-      // finish the remaining checks without creating an endless job chain.
+      // One continuation advances all budgets without creating sibling chains.
       for (const followUp of followUps) {
         await exec(db, "update jobs set status = 'running' where id = ?", [Number(followUp.id)]);
         await computePlayerSkillsJob(db, jobOsu, queue, JSON.parse(String(followUp.payload_json)));

@@ -6,6 +6,7 @@ import type { Db } from "../db.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
 import { LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { exec, execBatch, json, parseJson } from "../db.js";
+import { settlePlayerSkillContinuations, withPlayerSkillTurn, type PlayerSkillJobPayload } from "./player-skill-jobs.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
@@ -3893,10 +3894,15 @@ async function loadOsuText(db: Db, osu: Pick<OsuApiClient, "getBeatmapFile">, be
 
 type ProfileOsuClient = Pick<OsuApiClient, "getBeatmapFile" | "getUserByKey" | "getUserBestScoresWindow">;
 
-export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: { userId: number; rateVibroPending?: number; calibrationPending?: number }): Promise<void> {
+export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: PlayerSkillJobPayload): Promise<void> {
   const userId = Math.floor(Number(payload?.userId));
   if (!Number.isInteger(userId) || userId <= 0) return;
+  return withPlayerSkillTurn(db, userId, () => computePlayerSkillsTurn(db, osu, queue, { ...payload, userId }));
+}
 
+async function computePlayerSkillsTurn(db: Db, osu: ProfileOsuClient, queue: JobQueue, payload: PlayerSkillJobPayload): Promise<void> {
+  const { userId } = payload;
+  const startedAt = nowIso();
   await exec(
     db,
     `insert into player_skill_ratings (user_id, analysis_version, status, updated_at)
@@ -3905,7 +3911,7 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
        status = 'running',
        error = null,
        updated_at = excluded.updated_at`,
-    [userId, PLAYER_SKILLS_VERSION, nowIso()],
+    [userId, PLAYER_SKILLS_VERSION, startedAt],
   );
 
   try {
@@ -3981,43 +3987,20 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     // Charts with no analysis row yet contribute no pattern tags; queue them so
     // the next recompute (12h TTL) picks their tags up.
     await enqueueMissingChartAnalyses(db, queue, result.untaggedBeatmapIds).catch(() => {});
-    if (result.pendingRateVibroChecks > 0) {
-      // A version-current row leaves the roster drip, so its remaining rate
-      // checks need their own continuation. Distinct keys avoid trying to
-      // enqueue the job currently running. Stop a stalled chain rather than
-      // repeatedly revisiting the same uncheckable candidate pool.
-      if (payload.rateVibroPending == null || result.pendingRateVibroChecks < payload.rateVibroPending) {
-        await queue.enqueue(
-          PLAYER_SKILLS_JOB,
-          `player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:${userId}:${result.pendingRateVibroChecks}`,
-          { userId, rateVibroPending: result.pendingRateVibroChecks },
-          { priority: 5, runAfter: new Date(Date.now() + 60_000), replaceDone: true },
-        );
-      } else {
-        logWarn("player_skills_rate_vibro_recheck_stalled", { userId, pending: result.pendingRateVibroChecks });
-      }
-    }
-    if (result.deferredLnMigrations > 0) {
-      // A budget boundary is resumable local work, not a reason to wait for
-      // another profile view. A changing progress key lets the active chunk
-      // finish before the next one is claimed. Missing files alone never loop.
-      const migrated = `${result.plays.filter(play => play.lnTailPass === LN_TAIL_PASS_VERSION).length}:${result.plays.filter(play => play.lnSkill?.version === LN_SKILL_VERSION).length}`;
-      await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:${PLAYER_SKILLS_VERSION}:${userId}:ln:${migrated}`,
-        { userId }, { priority: -5, replaceDone: true });
-    }
-    if (result.deferredCalibration > 0 && (payload.calibrationPending == null || result.deferredCalibration < payload.calibrationPending)) {
-      await queue.enqueue(PLAYER_SKILLS_JOB,
-        `player-skills:${PLAYER_SKILLS_VERSION}:${userId}:wife:${result.deferredCalibration}`,
-        { userId, calibrationPending: result.deferredCalibration }, { priority: -5, replaceDone: true });
-    }
+    await settlePlayerSkillContinuations(db, queue, PLAYER_SKILLS_VERSION, RATE_VIBRO_CHECK_VERSION, payload, {
+      rateVibroPending: result.pendingRateVibroChecks,
+      calibrationPending: result.deferredCalibration,
+      lnPending: result.deferredLnMigrations,
+      lnMigrationProgress: `${result.plays.filter(play => play.lnTailPass === LN_TAIL_PASS_VERSION).length}:${result.plays.filter(play => play.lnSkill?.version === LN_SKILL_VERSION).length}`,
+    }, startedAt);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await exec(
       db,
       `update player_skill_ratings
        set status = 'failed', error = ?, updated_at = ?
-       where user_id = ? and analysis_version = ?`,
-      [message.slice(0, 500), nowIso(), userId, PLAYER_SKILLS_VERSION],
+       where user_id = ? and analysis_version = ? and status = 'running' and updated_at = ?`,
+      [message.slice(0, 500), nowIso(), userId, PLAYER_SKILLS_VERSION, startedAt],
     );
     throw error;
   }
