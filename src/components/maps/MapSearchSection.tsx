@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -512,6 +512,32 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  // The trigger is the last control in the filter row, so on a narrow desktop
+  // (1272px was the reported one) a left-anchored ladder wall runs off the right
+  // edge and the top dan badges become unclickable. Measure once per open and
+  // slide the panel back inside, never past the left edge.
+  const [shift, setShift] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setShift(0);
+      return;
+    }
+    const measure = () => {
+      const anchor = rootRef.current;
+      const panel = popRef.current;
+      if (!anchor || !panel) return;
+      const anchorLeft = anchor.getBoundingClientRect().left;
+      const margin = 8;
+      // offsetWidth ignores the translate we apply, so this stays stable.
+      const overhang = window.innerWidth - margin - panel.offsetWidth - anchorLeft;
+      setShift(Math.round(Math.max(margin - anchorLeft, Math.min(0, overhang))));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -570,7 +596,11 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-max max-w-[min(440px,92vw)] rounded-lg bg-osu-b4 p-3 ring-1 ring-white/10 shadow-xl">
+        <div
+          ref={popRef}
+          className="absolute left-0 top-[calc(100%+6px)] z-30 w-max max-w-[min(440px,92vw)] rounded-lg bg-osu-b4 p-3 ring-1 ring-white/10 shadow-xl"
+          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
+        >
           <DanBadgeWall ui={ui} apply={apply} />
         </div>
       )}

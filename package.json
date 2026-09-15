@@ -21,6 +21,7 @@
     "validate:mania-pp": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/validate-mania-pp.ts",
     "live-db:sync-from-vps": "npm --prefix live-backend run db:sync-from-vps --",
     "live-db:update": "npm --prefix live-backend run db:sync-from-vps -- --fresh",
+    "bugs:pull": "node scripts/fetch-prod-bug-reports.mjs",
     "replay:capture-stable": "node --env-file-if-exists=.env scripts/replay-capture-stable.ts",
     "replay:compare-capture": "node --env-file-if-exists=.env scripts/replay-compare-capture.ts",
     "replay:convert-capture": "node scripts/replay-capture-convert.mjs",
