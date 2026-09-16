@@ -19,6 +19,7 @@ import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAc
 import type { OscScore } from "../shared/types.js";
 import { logInfo, logWarn } from "../logger.js";
 import { isUserKnownInactive } from "../user-status.js";
+import { enqueueBeatmapRevisionCheck, observedScoreChecksum } from "../osu/beatmap-revisions.js";
 
 export interface ScoreIngestOptions {
   enqueueRecentReconcile?: boolean;
@@ -106,6 +107,9 @@ export class ScoreIngestor {
     if (countries.length === 0) return false;
     logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, countries, beatmap_id: beatmapId, source });
     await this.persistMetadata(score, options.countryAllowlist, metadataSeen);
+    await enqueueBeatmapRevisionCheck(this.db, this.queue, beatmapId).catch(error => {
+      logWarn("beatmap_revision_enqueue_failed", { beatmapId, error: String(error) });
+    });
     const totalScore = getDisplayedTotalScore(score);
     const scoreIdentity = getScoreIdentity(score);
     let inserted = 0;
@@ -400,9 +404,14 @@ export class ScoreIngestor {
       addMetadata(`map:${score.beatmap.id}`, {
         sql: `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
               values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              on conflict(beatmap_id) do update set version = excluded.version, status = excluded.status, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at
-              where beatmaps.version is not excluded.version or beatmaps.status is not excluded.status
-                 or beatmaps.metadata_json is not excluded.metadata_json`,
+              on conflict(beatmap_id) do update set version = excluded.version, status = excluded.status,
+                cs = excluded.cs, difficulty_rating = excluded.difficulty_rating, bpm = excluded.bpm,
+                max_combo = coalesce(excluded.max_combo, beatmaps.max_combo),
+                metadata_json = json_patch(coalesce(beatmaps.metadata_json, '{}'), excluded.metadata_json), updated_at = excluded.updated_at
+              where (beatmaps.version is not excluded.version or beatmaps.status is not excluded.status
+                 or beatmaps.metadata_json is not excluded.metadata_json)
+                and coalesce(julianday(json_extract(excluded.metadata_json, '$.last_updated')), 1e99)
+                  >= coalesce(julianday(json_extract(beatmaps.metadata_json, '$.last_updated')), 0)`,
         args: [score.beatmap.id, score.beatmap.beatmapset_id, score.beatmap.mode, score.beatmap.status ?? null, score.beatmap.cs, score.beatmap.difficulty_rating, score.beatmap.bpm, score.beatmap.max_combo ?? null, score.beatmap.version, score.beatmap.url, json(score.beatmap), now],
       });
     }
@@ -415,5 +424,6 @@ export class ScoreIngestor {
 
 export function toStoredScoreEvent(score: OscScore): Omit<OscScore, "user" | "beatmap" | "beatmapset"> {
   const { user: _user, beatmap: _beatmap, beatmapset: _beatmapset, ...stored } = score;
-  return stored;
+  const checksum = observedScoreChecksum(score);
+  return checksum ? { ...stored, beatmapChecksum: checksum } : stored;
 }

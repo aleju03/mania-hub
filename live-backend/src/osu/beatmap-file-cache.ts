@@ -1,5 +1,5 @@
 import type { Db } from "../db.js";
-import { exec, execBatch, type DbStatement } from "../db.js";
+import { exec, execBatch, parseJson, type DbStatement } from "../db.js";
 import { extractBeatmapOsuFileFromArchive } from "../audio/beatmap-archive.js";
 import { isLikelyBeatmapFile, OsuApiClient } from "./client.js";
 import { nowIso } from "../shared/score.js";
@@ -53,6 +53,9 @@ export interface CachedBeatmapFileOptions {
   /** osu!'s current md5 of the .osu file; a cached copy that doesn't match it
    *  is refetched (throttled) instead of served stale. */
   expectedChecksum?: string | null;
+  /** Calculations must never accept a known wrong revision. Replay callers
+   * may still opt into their existing best-effort fallback. */
+  requireChecksumMatch?: boolean;
 }
 
 interface BeatmapArchiveMeta {
@@ -70,12 +73,26 @@ export async function getCachedBeatmapFile(
   const safeId = Math.floor(beatmapId);
   if (!Number.isFinite(safeId) || safeId <= 0) throw new Error("Invalid beatmap ID");
 
-  const expectedChecksum = normalizeBeatmapFileChecksum(options.expectedChecksum);
+  // Computation callers use the latest observed revision automatically. An
+  // explicit checksum is a replay's hint and retains its best-effort policy.
+  const expectedChecksum = options.expectedChecksum === undefined
+    ? await readCurrentBeatmapChecksum(db, safeId)
+    : normalizeBeatmapFileChecksum(options.expectedChecksum);
+  options = { ...options, expectedChecksum,
+    requireChecksumMatch: options.requireChecksumMatch ?? options.expectedChecksum === undefined };
+  const verified = (content: string): string => {
+    if (options.requireChecksumMatch && expectedChecksum && beatmapFileMd5(content) !== expectedChecksum) {
+      throw new Error(`Beatmap ${safeId} revision is pending checksum verification`);
+    }
+    return content;
+  };
   const cached = await readCachedBeatmapFileEntry(db, safeId);
   if (cached) {
     if (!expectedChecksum || beatmapFileMd5(cached.content) === expectedChecksum) return cached.content;
+    const bomRestored = await restoreCachedBeatmapBom(db, safeId, expectedChecksum, cached);
+    if (bomRestored) return bomRestored;
     const refreshed = await refreshStaleCachedBeatmapFile(db, osu, safeId, caller, cached, options);
-    return refreshed ?? cached.content;
+    return verified(refreshed ?? cached.content);
   }
 
   let archiveError: unknown = null;
@@ -90,6 +107,7 @@ export async function getCachedBeatmapFile(
       try {
         const archiveContent = await readBeatmapFileFromArchive(archiveMeta, safeId);
         if (!expectedChecksum || beatmapFileMd5(archiveContent) === expectedChecksum || options.allowDirect === false) {
+          verified(archiveContent);
           await storeCachedBeatmapFile(db, safeId, archiveContent, {
             beatmapsetId: archiveMeta.beatmapsetId,
             source: "beatmap_archive",
@@ -111,10 +129,11 @@ export async function getCachedBeatmapFile(
   const beatmapsetId = archiveMeta?.beatmapsetId ?? await readKnownBeatmapsetId(db, safeId).catch(() => null);
   try {
     const content = await osu.getBeatmapFile(safeId, caller);
+    verified(content);
     await storeCachedBeatmapFile(db, safeId, content, { beatmapsetId, source: "osu_api" }).catch(() => {});
     return content;
   } catch (error) {
-    if (mismatchedArchiveContent != null) {
+    if (mismatchedArchiveContent != null && !options.requireChecksumMatch) {
       await storeCachedBeatmapFile(db, safeId, mismatchedArchiveContent, {
         beatmapsetId,
         source: "beatmap_archive",
@@ -148,7 +167,7 @@ async function readCachedBeatmapFileEntry(
 
   const row = (await exec(
     db,
-    `select content, content_blob, compression, fetched_at, last_used_at
+    `select content, content_blob, compression, fetched_at, last_used_at, content_md5
      from beatmap_osu_files
      where beatmap_id = ?
      limit 1`,
@@ -159,6 +178,9 @@ async function readCachedBeatmapFileEntry(
   const fetchedAt = row.fetched_at == null ? null : String(row.fetched_at);
   const storedBlob = await readCompressedContent(row).catch(() => null);
   if (storedBlob) {
+    if (options.touch !== false && row.content_md5 == null) await exec(db,
+      "update beatmap_osu_files set content_md5 = ? where beatmap_id = ? and fetched_at = ? and content_blob = ?",
+      [beatmapFileMd5(storedBlob), safeId, fetchedAt, toBuffer(row.content_blob)]);
     if (options.touch !== false) await touchCachedBeatmapFile(db, safeId, row).catch(() => {});
     return { content: storedBlob, fetchedAt };
   }
@@ -166,7 +188,10 @@ async function readCachedBeatmapFileEntry(
   const legacyContent = row.content == null ? "" : String(row.content);
   if (!legacyContent) return null;
   if (options.touch !== false) {
-    await storeCachedBeatmapFile(db, safeId, legacyContent, { source: "legacy_raw" }).catch(() => {});
+    const compressed = await gzipAsync(Buffer.from(legacyContent));
+    await exec(db, `update beatmap_osu_files set content = '', content_blob = ?, compression = 'gzip',
+      raw_bytes = ?, compressed_bytes = ?, content_md5 = ? where beatmap_id = ? and content = ?`,
+    [compressed, Buffer.byteLength(legacyContent), compressed.byteLength, beatmapFileMd5(legacyContent), safeId, legacyContent]);
   }
   return { content: legacyContent, fetchedAt };
 }
@@ -193,6 +218,9 @@ async function refreshStaleCachedBeatmapFile(
 
   try {
     const content = await osu.getBeatmapFile(beatmapId, caller);
+    if (options.requireChecksumMatch && options.expectedChecksum && beatmapFileMd5(content) !== options.expectedChecksum) {
+      throw new Error("osu! has not served the expected beatmap revision yet");
+    }
     checksumRefreshFailureAt.delete(beatmapId);
     const beatmapsetId = await readKnownBeatmapsetId(db, beatmapId).catch(() => null);
     await storeCachedBeatmapFile(db, beatmapId, content, {
@@ -217,8 +245,31 @@ export function normalizeBeatmapFileChecksum(value: unknown): string | null {
   return /^[a-f0-9]{32}$/.test(checksum) ? checksum : null;
 }
 
-function beatmapFileMd5(content: string): string {
+export function beatmapFileMd5(content: string): string {
   return createHash("md5").update(content, "utf8").digest("hex");
+}
+
+/** Old Response.text() downloads lost only the UTF-8 BOM. Restore it solely
+ * when that exact byte change satisfies osu!'s checksum; notes never change. */
+export async function restoreCachedBeatmapBom(
+  db: Db, beatmapId: number, expectedChecksum: string, entry?: CachedBeatmapFileEntry,
+): Promise<string | null> {
+  const cached = entry ?? await readCachedBeatmapFileEntry(db, beatmapId, { touch: false });
+  if (!cached || cached.content.startsWith("\uFEFF")) return null;
+  const restored = `\uFEFF${cached.content}`;
+  if (beatmapFileMd5(restored) !== expectedChecksum) return null;
+  const blob = await gzipAsync(Buffer.from(restored));
+  const result = await exec(db, `update beatmap_osu_files set content = '', compression = 'gzip', content_blob = ?,
+    content_md5 = ?, raw_bytes = ?, compressed_bytes = ? where beatmap_id = ? and fetched_at = ?
+    and (content_md5 is null or content_md5 = ?)`,
+  [blob, expectedChecksum, Buffer.byteLength(restored), blob.byteLength, beatmapId, cached.fetchedAt, beatmapFileMd5(cached.content)]);
+  if (Number(result.rowsAffected) !== 1) throw new Error("Beatmap changed during encoding repair; retry");
+  return restored;
+}
+
+export async function readCurrentBeatmapChecksum(db: Db, beatmapId: number): Promise<string | null> {
+  const row = (await exec(db, "select metadata_json from beatmaps where beatmap_id = ?", [beatmapId])).rows[0];
+  return normalizeBeatmapFileChecksum(parseJson<Record<string, unknown>>(row?.metadata_json, {}).checksum);
 }
 
 async function readBeatmapFileFromArchive(archiveMeta: BeatmapArchiveMeta, beatmapId: number): Promise<string> {
@@ -266,9 +317,9 @@ export async function storeCachedBeatmapFile(
   const statement: DbStatement = {
     sql: `insert into beatmap_osu_files (
        beatmap_id, beatmapset_id, compression, content_blob, content,
-       raw_bytes, compressed_bytes, source, fetched_at, last_used_at
+       raw_bytes, compressed_bytes, source, fetched_at, last_used_at, content_md5
      )
-     values (?, ?, ?, ?, '', ?, ?, ?, ?, ?)
+     values (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?)
      on conflict(beatmap_id) do update set
        beatmapset_id = coalesce(excluded.beatmapset_id, beatmap_osu_files.beatmapset_id),
        compression = excluded.compression,
@@ -277,6 +328,7 @@ export async function storeCachedBeatmapFile(
        raw_bytes = excluded.raw_bytes,
        compressed_bytes = excluded.compressed_bytes,
        source = excluded.source,
+       content_md5 = excluded.content_md5,
        error = null,
        fetched_at = excluded.fetched_at,
        last_used_at = excluded.last_used_at`,
@@ -290,6 +342,7 @@ export async function storeCachedBeatmapFile(
       normalizeSource(options.source),
       now,
       now,
+      beatmapFileMd5(content),
     ],
   };
   if (options.repairDerivatives) {
@@ -325,6 +378,7 @@ export async function markCachedBeatmapFileUnavailable(
      on conflict(beatmap_id) do update set
        beatmapset_id = coalesce(excluded.beatmapset_id, beatmap_osu_files.beatmapset_id),
        content_blob = null,
+       content_md5 = null,
        content = '',
        raw_bytes = 0,
        compressed_bytes = 0,

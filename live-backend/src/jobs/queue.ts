@@ -62,6 +62,8 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   analyze_activity_beatmap: 10,
   backfill_player_activity: 2,
   analyze_beatmap_chart: 10,
+  verify_beatmap_revision: 3,
+  audit_beatmap_revisions: 2,
   // Self-chaining top-up runner for the chart-analysis backfill: one slot for
   // the runner and one for the queued continuation.
   chart_analysis_backfill: 2,

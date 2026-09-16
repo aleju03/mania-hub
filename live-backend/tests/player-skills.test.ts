@@ -35,7 +35,7 @@ import {
   RATE_VIBRO_CHECK_VERSION,
   type StoredPlaySsr,
 } from "../src/features/player-skills.js";
-import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
+import { beatmapFileMd5, storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { analyzeLnSkillFromText, LN_SKILL_VERSION } from "../src/dan/ln-skill.js";
 import * as skillJobsModule from "../src/features/player-skill-jobs.js";
 import * as skillHistoryModule from "../src/features/player-skill-history.js";
@@ -811,6 +811,59 @@ describe("selectMsdRatingPlays", () => {
 });
 
 describe("computePlayerSkillRatings", () => {
+  it("withholds new and retained ratings on an edited map, then rerates the new revision", async () => {
+    await withDb(async db => {
+      const oldText = buildLnBeatmapFile();
+      const newText = buildStreamBeatmapFile();
+      const oldChecksum = beatmapFileMd5(oldText);
+      const newChecksum = beatmapFileMd5(newText);
+      await storeCachedBeatmapFile(db, 101, oldText);
+      const metadata = (checksum: string, last_updated: string) => JSON.stringify({ checksum, last_updated });
+      await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, version, metadata_json, updated_at)
+        values (101, 1, 'mania', 'wip', 4, 'Chart', ?, ?)`,
+      [metadata(oldChecksum, "2026-09-14T00:00:00Z"), new Date().toISOString()]);
+      const analyze = () => exec(db, `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, computed_at, updated_at)
+        values (101, 1, 'ready', 4, ?, ?) on conflict(beatmap_id, analysis_version) do update set computed_at = excluded.computed_at`,
+      [new Date().toISOString(), new Date().toISOString()]);
+      await analyze();
+      const oldScore = play({ id: 7001, beatmap_id: 101, ended_at: "2026-09-15T10:00:00Z", mods: [],
+        type: "solo_score", accuracy: 0.99, statistics: { perfect: 680, great: 20 } });
+      const first = await computePlayerSkillRatings(db, failingOsu, [oldScore], []);
+      expect(first.plays).toHaveLength(1);
+      expect(first.plays[0].fileChecksum).toBe(oldChecksum);
+      await exec(db, "update beatmaps set metadata_json = ? where beatmap_id = 101",
+        [metadata(newChecksum, "2026-09-16T09:00:00Z")]);
+      const newScore = { ...oldScore, id: 7002, ended_at: "2026-09-16T10:00:00Z" };
+      const pending = await computePlayerSkillRatings(db, failingOsu, [newScore], first.plays);
+      expect(pending.plays).toEqual([]);
+      expect(pending.danOnly).toHaveLength(1);
+      expect(pending.danOnly[0]).toMatchObject({ values: {}, revisionPending: true, calibrationPending: true });
+      expect(pending.summary.pendingPlays).toBe(1);
+      expect((await exec(db, "select type from jobs")).rows).toEqual([{ type: "verify_beatmap_revision" }]);
+      // The matching file is insufficient until chart derivatives catch up.
+      await storeCachedBeatmapFile(db, 101, newText);
+      await exec(db, "update beatmap_chart_analysis set computed_at = '2020-01-01T00:00:00Z' where beatmap_id = 101");
+      expect((await computePlayerSkillRatings(db, failingOsu, [newScore], pending.danOnly)).plays).toEqual([]);
+      await analyze();
+      const repaired = await computePlayerSkillRatings(db, failingOsu, [newScore], pending.danOnly);
+      expect(repaired.plays).toHaveLength(1);
+      expect(repaired.plays[0]).toMatchObject({ identity: "official:7002", fileChecksum: newChecksum,
+        beatmapChecksum: newChecksum, wifeCalibration: { chartHoldRatio: 0 } });
+      expect(repaired.plays[0].values).not.toEqual(first.plays[0].values);
+      // Original revision evidence must never be applied to the replacement.
+      const historical = await computePlayerSkillRatings(db, failingOsu, [], first.plays);
+      expect(historical.plays).toEqual([]);
+      expect(historical.danOnly[0]).toMatchObject({ identity: "official:7001", beatmapChecksum: oldChecksum,
+        revisionPending: true, values: {} });
+      const crossing = await computePlayerSkillRatings(db, failingOsu,
+        [{ ...newScore, id: 7003, started_at: "2026-09-16T08:59:00Z" }], []);
+      expect(crossing.plays).toEqual([]);
+      const retainedCrossing = await computePlayerSkillRatings(db, failingOsu, [], crossing.danOnly);
+      expect(retainedCrossing.plays).toEqual([]);
+      expect(retainedCrossing.danOnly[0]).toMatchObject({ identity: "official:7003", startedAt: "2026-09-16T08:59:00Z" });
+    });
+  });
+
   it.each([4, 7, 10].flatMap((keyCount) => [false, true].flatMap((ln) => [0.75, 1.25, 1.5].map((rate) => ({ keyCount, ln, rate })))))
     ("calibrates and retains $keyCount K at $rate x (holds: $ln)", async ({ keyCount, ln, rate }) => {
       await withDb(async (db) => {

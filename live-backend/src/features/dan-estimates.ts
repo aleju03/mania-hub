@@ -11,7 +11,7 @@ import type { LeoBlackOdFlag } from "../dan/leoblack-estimator.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
 import type { OsuApiClient } from "../osu/client.js";
-import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { getCachedBeatmapFile, readCurrentBeatmapChecksum } from "../osu/beatmap-file-cache.js";
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import { nowIso } from "../shared/score.js";
 
@@ -653,8 +653,8 @@ export async function enqueueRateDanEstimate(
 async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ParsedDanBeatmap> {
   // The serving and worker processes have separate LRUs. A durable file
   // replacement must evict both, even when this process did not fetch it.
-  const fileVersion = String((await exec(db,
-    "select fetched_at from beatmap_osu_files where beatmap_id = ?", [beatmapId])).rows[0]?.fetched_at ?? "");
+  const fileVersion = `${String((await exec(db,
+    "select fetched_at from beatmap_osu_files where beatmap_id = ?", [beatmapId])).rows[0]?.fetched_at ?? "")}:${await readCurrentBeatmapChecksum(db, beatmapId) ?? ""}`;
   const cached = parsedDanBeatmapCache.get(beatmapId);
   if (cached && cached.fileVersion === fileVersion) {
     parsedDanBeatmapCache.delete(beatmapId);

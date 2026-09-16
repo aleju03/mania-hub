@@ -1,3 +1,4 @@
+import { seedBeatmapRevisionAudit } from "./osu/beatmap-revisions.js";
 import { ensureMarathonCorrectionSeeded } from "./features/marathon-correction.js";
 import { ensureLeoblackFusionSeeded } from "./features/leoblack-fusion.js";
 import { prioritizePendingRecentRepairs } from "./jobs/recent-reconcile.js";
@@ -590,6 +591,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // charts whose cached .osu is filed under a different difficulty; the
       // job caps refetches per chunk and the shared limiter paces the chain.
       if (app.config.enableOsuApiJobs) {
+        void seedBeatmapRevisionAudit(app.db, app.queue).catch(error => logWarn("beatmap_revision_audit_seed_failed", errorContext(error)));
         void ensureOsuFileRepairSeeded(app.db, app.queue).catch((error) => {
           logWarn("osu_file_repair_seed_failed", errorContext(error));
         });
