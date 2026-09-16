@@ -102,6 +102,7 @@ are evaluated with the same five-fold player and chart-family partitions.
 | Lazer 7K taps | 89 | 0.222 → 0.222 | 0.223 → 0.223 |
 | Lazer 7K hybrid | 61 | 0.451 → 0.451 | 0.429 → 0.430 |
 | Lazer 7K LN native rescores | 79 | 0.955 → 0.915 | 1.006 → 0.971 |
+| Lazer 4K LN native rescores | 1,173 | 0.795 | 0.797 |
 
 Here LN means hold fraction >=40% for audit grouping, not the application's
 LN identity verdict. The native 7K LN audit processed original cached `.osr`
@@ -149,6 +150,78 @@ holdout respectively. Errors occur in both directions. **MAE remains above
 for lazer 7K LN goals. The original v1 secondary 7K LN result (248 plays,
 0.77/0.79 pp) is not the new audit's ground truth.
 
+## Native lazer 4K LN audit
+
+The "Lazer 4K LN | 5" row above counts only the plays that reproduced their
+saved header exactly through the site's own frame simulator. The cell was
+never fitted on five observations: 994 lazer 4K plays with hold share >= 40%
+entered the fit, 989 of them as secondary rows at weight 0.35 whose targets
+came from that reconstruction. Those targets were unverified until the
+2026-09-16 audit, which rescored every cached lazer 4K play with hold share
+>= 40% through the same pinned engine used for 7K.
+
+Of 1,239 cached replays: 8 did not complete, 38 were Tachyon-fork recordings,
+13 were DifficultyAdjust plays with an OD outside the supported range (unrated
+in production too), and 6 were rejected because the engine did not reproduce
+the live histogram within 5% of judgments. The corpus p50/p90/p99 of that
+count difference is 0.34% / 0.57% / 0.95%, so the rejects (7.6% to 83.5%) are
+not a borderline call. Final set: **1,173 plays, 483 players, 181 charts,
+6,291,367 original notes**, hold share 40.1%–100%, rates 0.75x–1.5x. Five of
+the 1,173 native histograms match their saved header exactly, for the same
+integer-millisecond encoder reason as 7K.
+
+The reconstruction targets were already correct. Against the engine's own
+targets over the same 1,173 plays, the frame simulator's press/hold target has
+MAE **0.0101 pp** (bias -0.0002, max 2.79) and its LN action target MAE
+**0.0085 pp** (max 2.18). Those secondary rows were labelled mismatches
+because the count histogram drifted, not because the quality target was wrong.
+
+Refitting the three lazer press contexts with all 1,173 native rescores added
+is a regression and was not adopted:
+
+| Metric | shipped | with 4K native added |
+| --- | ---: | ---: |
+| 4K LN press MAE, player holdout | 0.795 | 0.810 |
+| 4K LN press MAE, family holdout | 0.797 | 0.817 |
+| 7K LN press MAE, player holdout | 0.915 | 1.036 |
+| 7K LN press MAE, family holdout | 0.971 | 1.149 |
+
+Press bias is within 0.05 pp of zero on both holdout axes, so there is no
+systematic over- or under-pricing of lazer 4K LN to correct. Action-quality
+MAE on header input is 0.725 pp under both holdouts.
+
+### Read these numbers at the production floor
+
+Whole-corpus MAE over native 4K LN rescores mixes in plays the rating path
+never uses. A press goal at or below `SSR_GOAL_MIN` sets `ratingExcluded` and
+skips `computePlaySsrValues`, so neither the press axis nor the independent LN
+axis sees the play. Restricted to the 1,123 plays whose calibrated goal clears
+that floor, player holdout, saved header input:
+
+| Group | Plays | Press MAE | Press bias |
+| --- | ---: | ---: | ---: |
+| All rated | 1,123 | 0.729 | -0.021 |
+| Hold share >= 85% | 45 | 0.999 | +0.079 |
+| Hold share >= 99.9% | 7 | 1.130 | +0.817 |
+| Saved accuracy >= 95% | 892 | 0.592 | -0.089 |
+| Saved accuracy < 95% | 231 | 1.254 | +0.244 |
+
+The corpus worst case, a 61-object pure-LN chart at 80.7% saved accuracy
+priced 31 pp low, sits well under the floor and is excluded either way: the
+player's presses averaged 17.5 ms of error while the releases averaged 54.5 ms,
+and the six-count histogram cannot separate the two. That head/tail split is
+not identifiable from counts, so it is a limit of count-based estimation rather
+than a calibration error to fit away. A decomposed variant that takes the
+observed drop count from lazer's saved `combo_break` and `ignore_miss` and
+fits only the drop-free press timing was tried and is worse under the same
+holdouts (0.674 vs 0.608 pp at accuracy >= 95%), because predicting the
+combined target lets timing and drop errors cancel.
+
+Floor agreement is the metric that matters for the rated set: the model and
+the native truth put a play on the same side of the floor for 98.7% of the
+1,173, for **100%** of the 46 plays at hold share >= 85%, and 14 of the 15
+disagreements sit within 1 pp of the floor.
+
 LN action-quality MAE on the same native set, in percentage points; the
 independent 4K LN model is unchanged:
 
@@ -158,7 +231,8 @@ independent 4K LN model is unchanged:
 | Saved header counts / LN action quality | 79 | 0.881 | 0.875 |
 
 For the separate LN action-quality target, exact 4K stable MAE is 0.50 pp
-under both holdouts; exact 4K lazer is 1.07 pp with only five samples.
+under both holdouts; exact 4K lazer is 1.07 pp over the five exactly
+reconstructed samples, and 0.725 pp over the 1,173 native rescores.
 Secondary 4K lazer LN is 0.69 pp. These validate a quality estimate, not the
 independent LN difficulty scale or specialist rankings. Accuracy-only input
 is substantially less informative: exact all-keymode tap MAE is 0.43 pp for
