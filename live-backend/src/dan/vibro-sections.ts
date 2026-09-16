@@ -1,6 +1,7 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
+import { scanMotionVibro } from "./vibro-motion.js";
 
-export const VIBRO_SECTION_VERSION = 3;
+export const VIBRO_SECTION_VERSION = 5;
 
 // Short repetitions need faster reloads than the 92ms sustained-longjack
 // floor, plus corroborating bursts in the same local phrase.
@@ -16,7 +17,10 @@ export type VibroReason =
   | "sustained_chords"
   | "dense_chord_repetition"
   | "fast_roll"
-  | "extreme_density";
+  | "extreme_density"
+  | "split_hand_double"
+  | "finger_rate_ceiling"
+  | "hand_action_ceiling";
 
 export interface VibroSection {
   /** Original chart timestamps, before applying the music rate. */
@@ -38,6 +42,11 @@ export interface VibroAnalysis {
    * Used to assign all observed accuracy loss to the retained material. */
   judgementShare: number;
   remainingNotes: number;
+  /** Share of active duration each reason covers on its own, before sections
+   * are merged. Merging unions reasons, so a one-second detection inside a long
+   * one is indistinguishable from evidence in its own right once merged; a
+   * caller weighing one kind of evidence against another needs this instead. */
+  reasonShares: Partial<Record<VibroReason, number>>;
 }
 
 export function usesSectionVibro(map: ManiaBeatmap): boolean {
@@ -57,12 +66,13 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   const result: VibroAnalysis = {
     version: VIBRO_SECTION_VERSION, status: "clean", sections: [],
     excludedDurationMs: 0, activeDurationMs: 0, timeShare: 0,
-    noteShare: 0, judgementShare: 0, remainingNotes: map.notes.length,
+    noteShare: 0, judgementShare: 0, remainingNotes: map.notes.length, reasonShares: {},
   };
   if (!usesSectionVibro(map) || !Number.isFinite(rate) || rate <= 0) return result;
   const scan = buildVibroScan(map, rate);
   result.activeDurationMs = measureActiveDuration(scan);
 
+  for (const motion of scanMotionVibro(map, rate)) addSection(scan, motion.startTime, motion.endTime, motion.reason);
   scanRepeatedRows(scan);
   scanRepeatedJackStreams(scan);
   scanRepeatedPairs(scan);
@@ -75,6 +85,7 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   scanExtremeDensity(scan);
   scanRecurringRepetitions(scan);
 
+  result.reasonShares = measureReasonShares(scan.intervals, rate, result.activeDurationMs);
   result.sections = mergeSections(scan.intervals);
   if (result.sections.length > 0) measureSectionCoverage(result, map, scan);
   return result;
@@ -97,6 +108,29 @@ function buildVibroScan(map: ManiaBeatmap, rate: number): VibroScan {
   const prefixNotes = [0];
   for (const mask of rows) prefixNotes.push(prefixNotes.at(-1)! + bitCount(mask));
   return { times, rows, prefixNotes, rate, intervals: [], repetitionBursts: [] };
+}
+
+function measureReasonShares(
+  intervals: readonly VibroSection[],
+  rate: number,
+  activeDurationMs: number,
+): Partial<Record<VibroReason, number>> {
+  const shares: Partial<Record<VibroReason, number>> = {};
+  if (activeDurationMs <= 0) return shares;
+  const byReason = new Map<VibroReason, VibroSection[]>();
+  for (const interval of intervals) {
+    for (const reason of interval.reasons) {
+      const bucket = byReason.get(reason);
+      if (bucket) bucket.push(interval);
+      else byReason.set(reason, [interval]);
+    }
+  }
+  for (const [reason, group] of byReason) {
+    let covered = 0;
+    for (const merged of mergeSections(group)) covered += (merged.endTime - merged.startTime) / rate;
+    shares[reason] = covered / activeDurationMs;
+  }
+  return shares;
 }
 
 function addSection(scan: VibroScan, start: number, end: number, reason: VibroReason): void {
@@ -136,7 +170,10 @@ function scanRepeatedJackStreams(scan: VibroScan): void {
   // on the accents and a different repeated jump in the next beat must not
   // reset the evidence for the entire passage. Measure rows participating in
   // 3..11-hit repetitions across 64 uninterrupted fast rows, with substantial
-  // repeated-chord work. Single-finger triples with occasional chord accents
+  // repeated-chord work and at least two repeated shapes. Quadjacks with
+  // individual finger omissions are not separate repeated jack groups. Their
+  // actual walls and excessive finger/hand rates are detected independently.
+  // Single-finger triples with occasional chord accents
   // are ordinary minijack; doubles alone do not qualify either. Longer walls
   // already have their own detector and must not expand into surrounding
   // ordinary chordjack through this window. Short repetitions use the same
@@ -144,6 +181,7 @@ function scanRepeatedJackStreams(scan: VibroScan): void {
   // make them vibro just because the passage lasts longer. Quad repetitions
   // retain their wider cutoff, still bounded by the 100ms continuous stream.
   const burstRows = new Uint8Array(times.length);
+  const burstShapes = new Uint8Array(times.length);
   let repeatStart = 0;
   let maxRepeatGap = 0;
   for (let i = 1; i <= times.length; i++) {
@@ -156,6 +194,7 @@ function scanRepeatedJackStreams(scan: VibroScan): void {
     const count = i - repeatStart;
     if (count >= 3 && count < 12 && maxRepeatGap <= repeatedRowGapMs(rows[repeatStart]) * rate) {
       burstRows.fill(1, repeatStart, i);
+      burstShapes.fill(rows[repeatStart], repeatStart, i);
     }
     repeatStart = i;
     maxRepeatGap = 0;
@@ -163,15 +202,20 @@ function scanRepeatedJackStreams(scan: VibroScan): void {
   let fastStart = 0;
   let repeatedInWindow = 0;
   let repeatedChordsInWindow = 0;
+  const shapeCounts = new Int32Array(16);
+  let distinctShapes = 0;
   const burstWindowRows = 64;
   for (let i = 0; i < times.length; i++) {
     if (i > 0 && times[i] - times[i - 1] > 100 * rate) fastStart = i;
     repeatedInWindow += burstRows[i];
     repeatedChordsInWindow += burstRows[i] && bitCount(rows[i]) >= 2 ? 1 : 0;
+    if (burstShapes[i] && shapeCounts[burstShapes[i]]++ === 0) distinctShapes++;
     if (i >= burstWindowRows) repeatedInWindow -= burstRows[i - burstWindowRows];
     if (i >= burstWindowRows) repeatedChordsInWindow -= burstRows[i - burstWindowRows] && bitCount(rows[i - burstWindowRows]) >= 2 ? 1 : 0;
+    if (i >= burstWindowRows && burstShapes[i - burstWindowRows]
+      && --shapeCounts[burstShapes[i - burstWindowRows]] === 0) distinctShapes--;
     if (i - fastStart + 1 >= burstWindowRows && repeatedInWindow / burstWindowRows >= 0.7
-      && repeatedChordsInWindow / burstWindowRows >= 0.35) {
+      && repeatedChordsInWindow / burstWindowRows >= 0.35 && distinctShapes >= 2) {
       addSection(scan, times[i - burstWindowRows + 1], times[i], "repeated_jack_stream");
     }
   }
@@ -225,14 +269,33 @@ function scanFixedFingerWindows(scan: VibroScan): void {
     const bands = fingers === 1 ? SINGLE_FINGER_BANDS : fingers === 4 ? QUAD_BANDS : PAIR_BANDS;
     for (const band of bands) {
       let phraseStart = 0;
+      let phraseEnd = 0;
       for (let i = 0; i < indices.length; i++) {
         if (i > 0 && times[indices[i]] - times[indices[i - 1]] > band.gapMs * rate) phraseStart = i;
+        if (fingers === 2 && band.minShare > 0 && i === phraseStart) {
+          phraseEnd = i;
+          while (phraseEnd + 1 < indices.length
+            && times[indices[phraseEnd + 1]] - times[indices[phraseEnd]] <= band.gapMs * rate) phraseEnd++;
+        }
         const firstHit = i - band.minHits + 1;
         if (firstHit < phraseStart) continue;
         const first = indices[firstHit];
         const last = indices[i];
         if (times[last] - times[first] > (band.minHits - 1) * band.averageGapMs * rate) continue;
         const localNotes = prefixNotes[last + 1] - prefixNotes[first];
+        // At the moderate long-jack speed, a shared pair under continuously
+        // changing accompaniment is chordjack, not a fixed repeated chord.
+        // Require the pair itself on most rows. Occasional accents still fit;
+        // longer majority locks (25 hits), faster bursts and the independent
+        // motion limits remain unrestricted.
+        if (fingers === 2 && band.minShare > 0) {
+          let exactRows = 0;
+          for (let row = first; row <= last; row++) if (rows[row] === mask) exactRows++;
+          const phraseHits = phraseEnd - phraseStart + 1;
+          const phraseNotes = prefixNotes[indices[phraseEnd] + 1] - prefixNotes[indices[phraseStart]];
+          const sustainedPair = phraseHits >= 25 && phraseHits * fingers / phraseNotes >= band.minShare;
+          if (!sustainedPair && exactRows / (last - first + 1) < 2 / 3) continue;
+        }
         if (band.minHits * fingers / localNotes >= band.minShare) addSection(scan, times[first], times[last], band.reason);
       }
     }
@@ -276,6 +339,7 @@ function scanIsolatedJacks(scan: VibroScan): void {
   // every row; short bursts still need the stronger 65% dominance/coverage
   // policy. Dense changing chords around a busy finger do not meet this rule.
   const bursts: VibroSection[] = [];
+  const slowerRuns: Array<VibroSection & { column: number }> = [];
   let isolatedBurstNotes = 0;
   for (let column = 0; column < 4; column++) {
     const indices = rows.flatMap((mask, i) => mask & (1 << column) ? [i] : []);
@@ -290,6 +354,10 @@ function scanIsolatedJacks(scan: VibroScan): void {
         const dominant = count / localNotes >= 0.65;
         const longRun = count >= 25 && (times[last] - times[first]) / (count - 1) <= 92 * rate;
         const accompaniedLongJack = longRun && count / localNotes > 0.5 && count / (last - first + 1) >= 0.9;
+        if (!longRun && count >= 25 && (times[last] - times[first]) / (count - 1) <= 100 * rate
+          && count / localNotes > 0.5 && count / (last - first + 1) >= 0.9) {
+          slowerRuns.push({ startTime: times[first], endTime: times[last], reasons: ["isolated_jack"], column });
+        }
         if (dominant || accompaniedLongJack) {
           const section: VibroSection = { startTime: times[first], endTime: times[last], reasons: ["isolated_jack"] };
           if (dominant) {
@@ -305,6 +373,26 @@ function scanIsolatedJacks(scan: VibroScan): void {
   // Repeated short isolated bursts are evidence together, not a reason to
   // carve a lone speedjack burst out of an otherwise varied chart.
   if (bursts.length >= 4 && isolatedBurstNotes / prefixNotes.at(-1)! >= 0.2) intervals.push(...bursts);
+  // A slower accompanied longjack alone is legitimate training material.
+  // Require a local mixed repetition phrase: long runs handed to at least two
+  // different fingers, next to an independently detected chord wall. This
+  // follows the repeated motion through accompaniment without using whole-
+  // chart density, pack names, or distant easy padding as evidence.
+  const wallSections = mergeSections(intervals.filter((section) => section.reasons.includes("repeated_wall")
+    || section.reasons.includes("repeated_chord")))
+    .filter((section) => section.endTime - section.startTime >= 1000 * rate);
+  slowerRuns.sort((a, b) => a.startTime - b.startTime);
+  let start = 0;
+  for (let end = 1; end <= slowerRuns.length; end++) {
+    if (end < slowerRuns.length && slowerRuns[end].startTime - slowerRuns[end - 1].endTime <= 2000 * rate) continue;
+    const phrase = slowerRuns.slice(start, end);
+    if (new Set(phrase.map((run) => run.column)).size >= 2 && wallSections.some((wall) =>
+      wall.startTime <= phrase.at(-1)!.endTime + 2000 * rate
+      && wall.endTime >= phrase[0].startTime - 2000 * rate)) {
+      for (const { column: _column, ...section } of phrase) intervals.push(section);
+    }
+    start = end;
+  }
 }
 
 function countFastFingerReturns(scan: VibroScan, gapMs: number): number[] {

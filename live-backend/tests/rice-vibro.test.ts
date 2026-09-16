@@ -394,7 +394,12 @@ describe("sustained chord vibro at rate", () => {
     // A long 67ms repeated-chord section is still substantial after adding
     // easy singles. Local structure and time/note coverage now decide it.
     expect(detectRateVibro(mixedChordChart(100, 400, 1000), 1.5)).toBe(true);
-    expect(detectRateVibro(mixedChordChart(82, 20, 1000), 1.5)).toBe(false);
+    // Twenty-row bursts hold no 67ms repeated-chord section long enough for
+    // the shape rules, but at 1.5x each burst is 1.09s of rotating triples at
+    // 55ms, which asks one finger for 13.7 hits/s - past the 12.81 peak of
+    // 6,175 ranked charts and the 13.33 of 1,939 loved ones - twenty times
+    // over. The rate arm reads that where the share floors could not.
+    expect(detectRateVibro(mixedChordChart(82, 20, 1000), 1.5)).toBe(true);
   });
 
   it("keeps the new chord arm scoped to 4K rice", () => {

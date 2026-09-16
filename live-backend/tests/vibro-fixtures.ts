@@ -13,6 +13,17 @@ export function vibroFixture(id: number, bakedRate = 1): string {
     hold < 0 ? -1 : Math.round((time + hold) / bakedRate) - Math.round(time / bakedRate)]));
 }
 
+// Anonymous note geometry from the September 2026 chordjack/vibro reports,
+// plus longjack controls. Source ids in the data are provenance only.
+const chordjackReports = JSON.parse(gunzipSync(readFileSync(new URL("./fixtures/vibro-chordjack-report.json.gz", import.meta.url))).toString("utf8")) as Array<{
+  name: string; sourceBeatmapId: number; od: number; notes: [number, number, number][];
+}>;
+
+export function chordjackReportFixture(name: string): string {
+  const fixture = chordjackReports.find((chart) => chart.name === name)!;
+  return buildVibroOsu(fixture.notes).replace("OverallDifficulty:8", `OverallDifficulty:${fixture.od}`);
+}
+
 export function buildVibroOsu(notes: [number, number, number][]): string {
   return `osu file format v14
 [General]

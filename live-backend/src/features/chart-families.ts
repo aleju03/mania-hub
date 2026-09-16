@@ -6,6 +6,7 @@ import { exec, json } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { nowIso } from "../shared/score.js";
+import { danSkillsetMatchStatement } from "./dan-skillset-identity.js";
 
 // This is player-evidence identity, never an input to chart difficulty. Edge
 // hashes only find candidates; every head and hold tail must then agree after
@@ -15,7 +16,8 @@ import { nowIso } from "../shared/score.js";
 // rounding in rate reuploads is tolerated.
 export const CHART_FAMILY_VERSION = 2;
 export const CHART_FAMILY_SWEEP_JOB = "recompute_chart_family_sweep";
-export const CHART_FAMILY_META_KEY = "chart_family_sweep_done:v2";
+// v3 also indexes strict note/timing/OD fingerprints for skillset credentials.
+export const CHART_FAMILY_META_KEY = "chart_family_sweep_done:v3";
 
 /** Notes hashed at each end for candidate lookup; padding one end leaves the other key intact. */
 const EDGE_WINDOW = 64;
@@ -167,7 +169,7 @@ export async function storeChartFamily(db: Db, beatmapId: number, osuText: strin
 
 export async function recomputeChartFamilyChunk(db: Db, cursor: number, limit = 50): Promise<{ nextCursor: number; done: boolean }> {
   const rows = (await exec(db,
-    `select beatmap_id from beatmap_osu_files where beatmap_id > ?
+    `select beatmap_id, fetched_at from beatmap_osu_files where beatmap_id > ?
      and (compressed_bytes > 0 or length(content) > 0) order by beatmap_id limit ?`,
     [cursor, limit],
   )).rows;
@@ -176,6 +178,11 @@ export async function recomputeChartFamilyChunk(db: Db, cursor: number, limit = 
     const beatmapId = Number(row.beatmap_id);
     nextCursor = beatmapId;
     const text = await readCachedBeatmapFile(db, beatmapId, { touch: false });
+    if (text) {
+      // A concurrent file replacement must win over this sweep's older read.
+      const match = danSkillsetMatchStatement(beatmapId, text, String(row.fetched_at));
+      await exec(db, match.sql, match.args);
+    }
     if (text && /^Mode\s*:\s*3\s*$/m.test(text)) await storeChartFamily(db, beatmapId, text);
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
@@ -188,11 +195,13 @@ export async function ensureChartFamilySweepSeeded(db: Db, queue: JobQueue): Pro
     "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
     [CHART_FAMILY_SWEEP_JOB],
   )).rows.length) return;
-  await queue.enqueue(CHART_FAMILY_SWEEP_JOB, `${CHART_FAMILY_SWEEP_JOB}:0`, { cursor: 0 }, { priority: -9, replaceDone: true });
+  await queue.enqueue(CHART_FAMILY_SWEEP_JOB, `${CHART_FAMILY_SWEEP_JOB}:0`, { cursor: 0, sweepVersion: 3 }, { priority: -9, replaceDone: true });
 }
 
-export async function runChartFamilySweepJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
-  const result = await recomputeChartFamilyChunk(db, Math.max(0, Math.floor(Number(payload?.cursor) || 0)));
+export async function runChartFamilySweepJob(db: Db, queue: JobQueue, payload: { cursor?: number; sweepVersion?: number } | undefined): Promise<void> {
+  // A queued v2 continuation did not index the prefix's skillset fingerprints.
+  const cursor = payload?.sweepVersion === 3 ? Math.max(0, Math.floor(Number(payload.cursor) || 0)) : 0;
+  const result = await recomputeChartFamilyChunk(db, cursor);
   if (result.done) {
     const now = nowIso();
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
@@ -202,5 +211,5 @@ export async function runChartFamilySweepJob(db: Db, queue: JobQueue, payload: {
     return;
   }
   await queue.enqueue(CHART_FAMILY_SWEEP_JOB, `${CHART_FAMILY_SWEEP_JOB}:${result.nextCursor}`,
-    { cursor: result.nextCursor }, { priority: -9, replaceDone: true });
+    { cursor: result.nextCursor, sweepVersion: 3 }, { priority: -9, replaceDone: true });
 }

@@ -7,6 +7,7 @@ import type { VibroAnalysis } from "../dan/vibro-sections.js";
 import { LN_SKILL_VERSION } from "../dan/ln-skill.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
+import type { LeoBlackOdFlag } from "../dan/leoblack-estimator.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -64,6 +65,7 @@ export interface DanEstimateRequest {
  * the played notes; vibro-adjusted rates only the retained material for player
  * dan credit. Both use the existing variant table (dan_mod_estimates), so
  * neither can overwrite or be read as an ordinary full-chart estimate.
+ * Played OD is independent and composes with either transformation below.
  */
 export type DanChartVariant = "IN" | "vibro-adjusted";
 export const INVERSE_MOD_VARIANT = "IN" satisfies DanChartVariant;
@@ -73,6 +75,29 @@ function isDanChartVariant(value: unknown): value is DanChartVariant {
   return value === INVERSE_MOD_VARIANT || value === VIBRO_ADJUSTED_VARIANT;
 }
 
+export function normalizeDanOdFlag(value: unknown): LeoBlackOdFlag | undefined {
+  if (value === "HR" || value === "EZ") return value;
+  return typeof value === "number" && Number.isFinite(value) && value >= -15 && value <= 15
+    ? (Object.is(value, -0) ? 0 : value) : undefined;
+}
+
+// Use the existing variant dimension for played OD as well as note rewrites.
+// An explicit DA equal to file OD still needs its own key: upstream's Mixed
+// routing distinguishes explicit OD from no flag, even at the same value.
+function storedDanVariant(modVariant?: DanChartVariant, odFlag?: LeoBlackOdFlag): string | undefined {
+  return odFlag == null ? modVariant : `${modVariant ? `${modVariant}:` : ""}OD:${odFlag}`;
+}
+
+function parseStoredDanVariant(value: unknown): Pick<RateDanVerdictPair, "modVariant" | "odFlag"> | null {
+  if (isDanChartVariant(value)) return { modVariant: value };
+  if (typeof value !== "string") return null;
+  const match = /^(?:(IN|vibro-adjusted):)?OD:(.+)$/.exec(value);
+  if (!match) return null;
+  const modVariant = isDanChartVariant(match[1]) ? match[1] : undefined;
+  const odFlag = normalizeDanOdFlag(match[2] === "HR" || match[2] === "EZ" ? match[2] : Number(match[2]));
+  return odFlag != null && storedDanVariant(modVariant, odFlag) === value ? { modVariant, odFlag } : null;
+}
+
 export interface NormalizedDanEstimateRequest {
   beatmapId: number;
   rate: number;
@@ -80,6 +105,8 @@ export interface NormalizedDanEstimateRequest {
   key: string;
   /** Set only by internal callers (the clear rules, their job); never off the wire. */
   modVariant?: DanChartVariant;
+  /** Internal only, independent of the chart transformation. */
+  odFlag?: LeoBlackOdFlag;
 }
 
 export interface DanEstimateBatchResponse {
@@ -104,7 +131,8 @@ type CachedDanEstimate =
 export function normalizeDanEstimateItems(
   items: unknown[],
   // The public batch endpoint never sets this: a mod variant on an item is
-  // honoured only for the job payloads the internal callers write.
+  // honoured only for the job payloads the internal callers write. Played OD
+  // uses the same internal-only boundary; public requests rate the chart.
   options: { modVariants?: boolean } = {},
 ): NormalizedDanEstimateRequest[] {
   const normalized: NormalizedDanEstimateRequest[] = [];
@@ -120,7 +148,11 @@ export function normalizeDanEstimateItems(
     const safeRate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
     const ratePercent = Math.max(MIN_RATE_PERCENT, Math.min(MAX_RATE_PERCENT, Math.round(safeRate * 100)));
     const modVariant = options.modVariants && isDanChartVariant(raw.mod) ? raw.mod : undefined;
-    const key = modVariant ? rateDanVerdictKey(beatmapId, ratePercent, modVariant) : responseKey(beatmapId, ratePercent);
+    const odFlag = options.modVariants ? normalizeDanOdFlag(raw.odFlag) : undefined;
+    // Invalid internal OD must not silently compute an unmodified verdict.
+    if (options.modVariants && raw.odFlag != null && odFlag == null) continue;
+    const key = modVariant || odFlag != null
+      ? rateDanVerdictKey(beatmapId, ratePercent, modVariant, odFlag) : responseKey(beatmapId, ratePercent);
     if (seen.has(key)) continue;
     seen.add(key);
     normalized.push({
@@ -129,6 +161,7 @@ export function normalizeDanEstimateItems(
       ratePercent,
       key,
       ...(modVariant ? { modVariant } : {}),
+      ...(odFlag != null ? { odFlag } : {}),
     });
   }
 
@@ -140,9 +173,10 @@ function normalizeRateDanRequest(
   beatmapId: number,
   ratePercent: number,
   modVariant?: DanChartVariant,
+  odFlag?: LeoBlackOdFlag,
 ): NormalizedDanEstimateRequest | null {
   const [request] = normalizeDanEstimateItems(
-    [{ beatmapId, rate: ratePercent / 100, ...(modVariant ? { mod: modVariant } : {}) }],
+    [{ beatmapId, rate: ratePercent / 100, ...(modVariant ? { mod: modVariant } : {}), odFlag }],
     { modVariants: true },
   );
   if (!request || request.ratePercent !== ratePercent) return null;
@@ -305,11 +339,12 @@ async function fillCachedRateMsd(
 export async function enqueueDanEstimate(queue: JobQueue, request: NormalizedDanEstimateRequest): Promise<void> {
   await queue.enqueue(
     "compute_dan_estimate",
-    danEstimateJobKey(request.beatmapId, request.ratePercent, request.modVariant),
+    danEstimateJobKey(request.beatmapId, request.ratePercent, request.modVariant, request.odFlag),
     {
       beatmapId: request.beatmapId,
       rate: request.rate,
       ...(request.modVariant ? { mod: request.modVariant } : {}),
+      ...(request.odFlag != null ? { odFlag: request.odFlag } : {}),
     },
     { priority: 45 },
   );
@@ -389,6 +424,7 @@ async function classifyAndStoreDanEstimate(
     : null);
   const classification = await classifyChartWithCompanella(map, osuText, {
     adjustVibro,
+    odFlag: request.odFlag,
     starRating,
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
     version: map.version,
@@ -433,8 +469,9 @@ async function classifyAndStoreDanEstimate(
  * rules read. A mod variant's key carries the mod, so an Invert play on a
  * chart and a plain play on it at the same rate read different verdicts.
  */
-export function rateDanVerdictKey(beatmapId: number, ratePercent: number, modVariant?: DanChartVariant): string {
-  return `${beatmapId}:${ratePercent}${modVariant ? `:${modVariant}` : ""}`;
+export function rateDanVerdictKey(beatmapId: number, ratePercent: number, modVariant?: DanChartVariant, odFlag?: LeoBlackOdFlag): string {
+  const variant = storedDanVariant(modVariant, odFlag);
+  return `${beatmapId}:${ratePercent}${variant ? `:${variant}` : ""}`;
 }
 
 /** One (chart, rate[, mod]) the clear rules want a verdict for. */
@@ -442,6 +479,7 @@ export interface RateDanVerdictPair {
   beatmapId: number;
   ratePercent: number;
   modVariant?: DanChartVariant;
+  odFlag?: LeoBlackOdFlag;
 }
 
 export interface StoredRateDanVerdict {
@@ -477,8 +515,8 @@ export async function loadStoredRateDanVerdicts(
   for (const pair of pairs) {
     if (!Number.isInteger(pair.beatmapId) || pair.beatmapId <= 0) continue;
     if (!Number.isInteger(pair.ratePercent)) continue;
-    wanted.add(rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant));
-    (pair.modVariant ? modBeatmapIds : beatmapIds).add(pair.beatmapId);
+    wanted.add(rateDanVerdictKey(pair.beatmapId, pair.ratePercent, pair.modVariant, pair.odFlag));
+    (pair.modVariant || pair.odFlag != null ? modBeatmapIds : beatmapIds).add(pair.beatmapId);
   }
   const verdicts = new Map<string, StoredRateDanVerdict | null>();
   if (wanted.size === 0) return verdicts;
@@ -530,9 +568,9 @@ async function collectStoredRateDanVerdicts(
     }
     const seen = new Set<string>();
     for (const row of rows) {
-      if (table === "dan_mod_estimates" && !isDanChartVariant(row.mod_variant)) continue;
-      const modVariant = isDanChartVariant(row.mod_variant) ? row.mod_variant : undefined;
-      const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent), modVariant);
+      const variant = table === "dan_mod_estimates" ? parseStoredDanVariant(row.mod_variant) : {};
+      if (!variant) continue;
+      const key = rateDanVerdictKey(Number(row.beatmap_id), Number(row.rate_percent), variant.modVariant, variant.odFlag);
       if (!wanted.has(key) || seen.has(key)) continue;
       // A newer terminal or invalid result must never resurrect an older clear.
       seen.add(key);
@@ -577,9 +615,9 @@ export async function computeAndStoreRateDanVerdictFromText(
   ratePercent: number,
   osuText: string,
   modVariant?: DanChartVariant,
-  options: { msd?: MsdResult | null; requireComplete?: boolean } = {},
+  options: { msd?: MsdResult | null; requireComplete?: boolean; odFlag?: LeoBlackOdFlag } = {},
 ): Promise<LeanDanEstimate | null> {
-  const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
+  const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant, options.odFlag);
   if (!request) return null;
   const cached = await readCachedDanEstimate(db, request);
   if (cached.found) return cached.status === "ready" ? cached.value : null;
@@ -605,8 +643,9 @@ export async function enqueueRateDanEstimate(
   beatmapId: number,
   ratePercent: number,
   modVariant?: DanChartVariant,
+  odFlag?: LeoBlackOdFlag,
 ): Promise<void> {
-  const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant);
+  const request = normalizeRateDanRequest(beatmapId, ratePercent, modVariant, odFlag);
   if (!request) return;
   await enqueueDanEstimate(queue, request);
 }
@@ -655,7 +694,7 @@ async function readCachedDanEstimate(
   options: { allowPrevious?: boolean } = {},
 ): Promise<CachedDanEstimate> {
   const { table, keyColumns, keyValues } = danEstimateTable(request);
-  const servingVersions = request.modVariant ? VARIANT_SERVING_VERSIONS_SQL : SERVING_VERSIONS_SQL;
+  const servingVersions = request.modVariant || request.odFlag != null ? VARIANT_SERVING_VERSIONS_SQL : SERVING_VERSIONS_SQL;
   const versionFilter = options.allowPrevious ? `estimator_version in (${servingVersions})` : "estimator_version = ?";
   const row = (await exec(
     db,
@@ -781,11 +820,12 @@ async function storeTerminalDanEstimate(
  * mod, so the two can never be confused for each other on a read.
  */
 function danEstimateTable(request: NormalizedDanEstimateRequest): { table: string; keyColumns: string[]; keyValues: Array<number | string> } {
-  return request.modVariant
+  const variant = storedDanVariant(request.modVariant, request.odFlag);
+  return variant
     ? {
       table: "dan_mod_estimates",
       keyColumns: ["estimator_version", "beatmap_id", "rate_percent", "mod_variant"],
-      keyValues: [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent, request.modVariant],
+      keyValues: [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent, variant],
     }
     : {
       table: "dan_estimates",
@@ -857,8 +897,9 @@ async function readBeatmapStarRating(db: Db, beatmapId: number): Promise<number 
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-function danEstimateJobKey(beatmapId: number, ratePercent: number, modVariant?: DanChartVariant): string {
-  return `dan:${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}:r${ratePercent}${modVariant ? `:${modVariant}` : ""}`;
+function danEstimateJobKey(beatmapId: number, ratePercent: number, modVariant?: DanChartVariant, odFlag?: LeoBlackOdFlag): string {
+  const variant = storedDanVariant(modVariant, odFlag);
+  return `dan:${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}:r${ratePercent}${variant ? `:${variant}` : ""}`;
 }
 
 function responseKey(beatmapId: number, ratePercent: number): string {

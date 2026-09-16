@@ -202,6 +202,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     ? [
       {
         id: "all",
+        skillsetClear: undefined as LivePlayerDanCourseEvidence | undefined,
         label: t`All clears`,
         color,
         dan: evidence.dan,
@@ -213,6 +214,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         const meta = DAN_SKILLSET_META[skillset.id];
         return {
           id: skillset.id,
+          skillsetClear: skillset.skillsetClear,
           label: meta ? i18n._(meta.labelMsg) : skillset.id,
           color: meta?.color ?? color,
           dan: skillset.dan,
@@ -362,7 +364,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     </div>
                   ))}
                 </div>
-              ) : !evidence || evidence.clears.length === 0 ? (
+              ) : !evidence || (evidence.clears.length === 0 && !evidence.skillsets.some((skill) => skill.skillsetClear)) ? (
                 <div className="px-4 py-14 text-center">
                   <div className="text-sm font-semibold text-osu-l2">
                     {error ? t`Could not load the clears` : t`No qualifying clears yet`}
@@ -426,7 +428,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                           </span>
                           {sectionLabel ? (
                             <span className="max-w-full truncate text-sm font-black leading-none text-white">
-                              {sectionBeyond ? ">" : "~"}{sectionLabel}
+                              {sectionBeyond ? ">" : section.skillsetClear ? "" : "~"}{sectionLabel}
                             </span>
                           ) : (
                             <span className="text-[11px] leading-none text-osu-f1">
@@ -437,10 +439,10 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                             {/* Under the averaging window the count reads as
                                 progress toward it: this dan is averaged from
                                 fewer plays than it wants. */}
-                            {t`${section.clears} plays`}
-                            {section.weightedClears < averageWindow ? (
+                            {section.skillsetClear ? t`Verified clear` : t`${section.clears} plays`}
+                            {!section.skillsetClear && section.weightedClears < averageWindow ? (
                               <span className="ml-1">
-                                {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} weighted`}
+                                {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} counted`}
                               </span>
                             ) : null}
                           </span>
@@ -453,10 +455,10 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   </div>
                   {/* Shown only while some column is short of the window, so a
                       filled-out breakdown carries no caveat at all. */}
-                  {sections.some((section) => section.weightedClears < averageWindow) ? (
+                  {sections.some((section) => !section.skillsetClear && section.weightedClears < averageWindow) ? (
                     <div className="px-2 pt-2 text-[11px] text-osu-f1">
                       <Trans>
-                        Each skillset uses your best clears up to {averageWindow} weighted slots.
+                        Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count.
                         With less evidence, it averages what you have and the estimate is still filling in.
                       </Trans>
                     </div>
@@ -487,6 +489,18 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                         className="overflow-hidden"
                       >
                         <div className="pt-2">
+                          {/* Only when the clear itself is not in the list
+                              under it: a stored play of the practice chart
+                              already carries the credential in its own row. */}
+                          {openedSection.skillsetClear && !openedSection.plays.some((clear) =>
+                            clear.play.beatmapId === openedSection.skillsetClear!.beatmapId) ? (
+                            <CredentialRow
+                              credential={openedSection.skillsetClear}
+                              color={openedSection.color}
+                              formatDan={formatDan}
+                              onOpen={onOpenCourseScore ? () => onOpenCourseScore(openedSection.skillsetClear!) : undefined}
+                            />
+                          ) : null}
                           {openedSection.plays.map((clear, index) => (
                             <ClearRow
                               key={`${openedSection.id}:${clear.play.beatmapId}:${clear.play.rate}:${clear.play.scoreId ?? index}`}
@@ -576,6 +590,53 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   );
 }
 
+// The practice-chart credential, in the same row grammar as the clears under
+// it: the skillset header already says "Verified clear", so the row only has to
+// name the chart and show what it granted. Everything the old panel spelled out
+// lives in the tooltip.
+function CredentialRow({
+  credential,
+  color,
+  formatDan,
+  onOpen,
+}: {
+  credential: LivePlayerDanCourseEvidence;
+  color: string;
+  formatDan: (label: string) => string;
+  onOpen?: () => void;
+}) {
+  const { t } = useLingui();
+  const currency = credential.displayedAccuracy != null
+    ? credential.currency === "v2" ? " (ScoreV2)" : " (stable)"
+    : "";
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={!onOpen}
+      className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left transition-colors enabled:cursor-pointer enabled:hover:bg-osu-b4"
+      title={`${credential.artist} - ${credential.title} [${credential.version}] · ${
+        t`The ${formatDan(credential.level)} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept`
+      }${onOpen ? ` · ${t`view the score`}` : ""}`}
+    >
+      <span className="w-4 shrink-0 text-right text-[10px] leading-none" style={{ color }} aria-hidden>✓</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
+        {credential.title}
+        <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{credential.version}]</span>
+      </span>
+      <span
+        className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2"
+        title={t`Accuracy this clear was judged on, against its ${formatAccuracy(credential.bar)} bar` + currency}
+      >
+        {formatAccuracy(credential.accuracy)}
+      </span>
+      <span className="w-16 shrink-0 text-right text-[11px] font-black sm:w-20" style={{ color }}>
+        {formatDan(credential.label)}
+      </span>
+    </button>
+  );
+}
+
 function ClearRow({
   clear,
   position,
@@ -612,11 +673,13 @@ function ClearRow({
         clear.ignoredAsStray ? "opacity-45" : clear.countsTowardDan ? "" : "opacity-60"
       }`}
       title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""}${
-        reduced
-          ? ` · ${t`Below the full-clear requirement: reduced credit, even if the dan label stays the same`}`
-          : clear.creditedDanLabel !== clear.chartDanLabel
-            ? ` · ${t`A ${formatDan(clear.chartDanLabel)} chart, credited as ${formatDan(clear.creditedDanLabel)} at this accuracy`}`
-            : ""
+        clear.credential
+          ? ` · ${t`The ${formatDan(clear.credential.level)} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as`}`
+          : reduced
+            ? ` · ${t`Below the full-clear requirement: reduced credit, even if the dan label stays the same`}`
+            : clear.creditedDanLabel !== clear.chartDanLabel
+              ? ` · ${t`A ${formatDan(clear.chartDanLabel)} chart, credited as ${formatDan(clear.creditedDanLabel)} at this accuracy`}`
+              : ""
       } · ${
         clear.ignoredAsStray
           ? t`Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average`
@@ -651,8 +714,8 @@ function ClearRow({
         <span
           className="shrink-0 text-[10px] tabular-nums text-osu-f1"
           title={clear.averagingWeight === 0
-            ? t`Outside this average's weighted window`
-            : t`Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged`}
+            ? t`Outside this average's best-clear window`
+            : t`Influence in this average; Dan credit is unchanged`}
         >
           {clear.averagingWeight === 0 ? t`outside average`
             : clear.averagingWeight < 0.01 ? t`<1% weight`

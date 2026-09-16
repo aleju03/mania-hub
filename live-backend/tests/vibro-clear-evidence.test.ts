@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { assessVibroClear } from "../src/dan/vibro-clear-evidence.js";
+import { assessVibroClear, hasOnlyClearEvidencePatterns } from "../src/dan/vibro-clear-evidence.js";
+import { analyzeVibroSections } from "../src/dan/vibro-sections.js";
+import { vibroFixture } from "./vibro-fixtures.js";
+import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import { calculateManiaCustomAccuracy, calculateStableAccuracy } from "../src/shared/score.js";
 
 // Judgement evidence from the reviewed clear; no player/chart identity.
@@ -64,5 +67,46 @@ describe("individual vibro clear evidence", () => {
       }
     }
     expect(accepted).toBeGreaterThan(0);
+  });
+});
+
+describe("which detections a clear can vouch for", () => {
+  const section = (reasons: string[]) => ({ startTime: 0, endTime: 1000, reasons: reasons as never });
+
+  it("needs clear-evidence material and refuses a chart made of limit breaches", () => {
+    expect(hasOnlyClearEvidencePatterns([section(["dense_chord_repetition"])], { dense_chord_repetition: 0.4 })).toBe(true);
+    expect(hasOnlyClearEvidencePatterns([], {})).toBe(false);
+    expect(hasOnlyClearEvidencePatterns([section(["finger_rate_ceiling"])], { finger_rate_ceiling: 0.4 })).toBe(false);
+    // A repeated wall is not a dense chord and no score vouches for it.
+    expect(hasOnlyClearEvidencePatterns([section(["dense_chord_repetition", "repeated_wall"])],
+      { dense_chord_repetition: 0.4, repeated_wall: 0.3 })).toBe(false);
+  });
+
+  it("does not let an incidental brush against a limit veto the exception", () => {
+    // Merging unions reasons, so a one-second breach inside a twelve-second
+    // chord passage arrives tagged onto it. Weigh it by what it covers alone.
+    const merged = [section(["dense_chord_repetition", "sustained_chords", "finger_rate_ceiling"])];
+    expect(hasOnlyClearEvidencePatterns(merged,
+      { dense_chord_repetition: 0.22, sustained_chords: 0.06, finger_rate_ceiling: 0.022 })).toBe(true);
+    expect(hasOnlyClearEvidencePatterns(merged,
+      { dense_chord_repetition: 0.22, sustained_chords: 0.06, finger_rate_ceiling: 0.13 })).toBe(false);
+    // Missing shares stay conservative: an unknown reason blocks.
+    expect(hasOnlyClearEvidencePatterns(merged, {})).toBe(false);
+  });
+
+  it("holds on the reported uprate the exception was built for", () => {
+    const analysis = analyzeVibroSections(parseManiaBeatmap(vibroFixture(4706643)), 1.5);
+    expect(analysis.status).toBe("excluded");
+    expect(analysis.reasonShares.finger_rate_ceiling).toBeLessThan(0.05);
+    expect(hasOnlyClearEvidencePatterns(analysis.sections, analysis.reasonShares)).toBe(true);
+  });
+
+  it("does not forgive hard patterns or give each ceiling a separate allowance", () => {
+    for (const reason of ["repeated_wall", "isolated_jack", "fast_roll", "split_hand_double"] as const) {
+      expect(hasOnlyClearEvidencePatterns([section(["dense_chord_repetition", reason])],
+        { dense_chord_repetition: 0.3, [reason]: 0.01 })).toBe(false);
+    }
+    expect(hasOnlyClearEvidencePatterns([section(["dense_chord_repetition", "finger_rate_ceiling", "hand_action_ceiling"])],
+      { dense_chord_repetition: 0.3, finger_rate_ceiling: 0.04, hand_action_ceiling: 0.04 })).toBe(false);
   });
 });

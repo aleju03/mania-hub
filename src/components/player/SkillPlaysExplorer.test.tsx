@@ -223,6 +223,26 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(popup.queryByText("does not count")).toBeNull();
   });
 
+  it("explains a rate play outside the chart's best two without labelling it vibro", async () => {
+    fetchDanEvidence.mockResolvedValue({
+      clears: [],
+      rejected: [{
+        play: play(103, "Recent"), reason: "chart_repeat_limit", side: "rc",
+        chartDan: 12, chartDanLabel: "beta", clearAccuracy: 0.97, bar: 0.96, od: null,
+      }],
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41009} username="player" modes={[mode]} view="dan" />
+    </I18nProvider>);
+    await waitFor(() => expect(fetchDanEvidence).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    fireEvent.click(await screen.findByText("Recent 103"));
+    expect(within(screen.getByTestId("map-rating-state")).getByText(
+      "Only your two best rate plays on the same chart count toward Dan. This play is outside those two.",
+    )).toBeTruthy();
+    expect(screen.queryByText(/Vibro detected/)).toBeNull();
+  });
+
   it("shows and filters every recorded mod, not only the rate mod", async () => {
     fetchSkillPlays.mockImplementation((_: number, __: number, ___: string, options: { sort?: "rating" | "recent" }) => {
       const order = options.sort === "recent" ? "Recent" : "Best";

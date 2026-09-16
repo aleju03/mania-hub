@@ -130,7 +130,7 @@ describe("skill history", () => {
     expect(view.queryByText("25.70")).toBeNull();
     expect(view.queryByText(/Adjusted 4K vibro detection/)).toBeNull();
     const rows = [...view.baseElement.querySelectorAll("li")];
-    expect(rows[0].textContent).toContain("Reduced the rice dan penalty");
+    expect(rows[0].textContent).toContain("Only your two best rate plays");
     expect(view.getByText("2026-09-06")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "History" }));
     expect(view.getByText("25.70")).toBeTruthy();

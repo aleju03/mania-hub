@@ -7,11 +7,12 @@ import { danLevelForLabel } from "../dan/dan-estimator/labels.js";
 import { LN_LADDER_TOP } from "../dan/dan-estimator/ln.js";
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, isLazerScore, scoreHasReplay } from "../shared/score.js";
 import type { OscScore, OsuMod } from "../shared/types.js";
+import { DAN_SKILLSET_BY_FINGERPRINT } from "./dan-skillset-identity.js";
 
 // The real dan courses, by beatmap id.
 //
-// This is the ONE place in the codebase that names charts by identity, and it
-// is deliberately not a classification shortcut: nothing here changes what a
+// Together with the practice-chart fingerprints in dan-skillset-registry.ts,
+// this names player credentials by identity. It is not a classification shortcut: nothing here changes what a
 // chart is rated. It exists at the player layer, where a course is not a chart
 // but an exam - the community says "clearing this map at this accuracy IS
 // gamma dan", and a player who has passed that exam should not read as beta
@@ -32,6 +33,10 @@ import type { OscScore, OsuMod } from "../shared/types.js";
 export type DanCourseSide = "rc" | "ln";
 
 export interface DanCourse {
+  /** Practice-chart credentials floor only this player skillset. */
+  skillset?: string;
+  referenceBeatmapId?: number;
+  checksum?: string;
   beatmapId: number;
   keyCount: number;
   side: DanCourseSide;
@@ -166,6 +171,8 @@ const DAN_COURSES: DanCourse[] = [
  * registry test turns into a build failure rather than a silent miscredit.
  */
 export function danCourseLevelFor(course: DanCourse): number | null {
+  // The practice packs also certify 7K LN 0th–2nd, below the estimator table.
+  if (course.skillset && course.keyCount === 7 && course.side === "ln" && /^[012]$/.test(course.level)) return Number(course.level);
   if (course.keyCount !== 4) return danTableLevelForLabel(course.level, course.side, course.keyCount);
   if (course.side === "ln") {
     const level = Number(course.level);
@@ -351,6 +358,8 @@ export interface DanCoursePlay {
 }
 
 export interface DanCourseClear {
+  skillset?: string;
+  referenceBeatmapId?: number;
   keyCount: number;
   side: DanCourseSide;
   beatmapId: number;
@@ -422,9 +431,14 @@ function creditPass(pass: CoursePass, options: DanCourseCreditOptions, statusByB
   // 97% ScoreV2 pass bar with nothing under it, so a sub-bar run is a fail
   // rather than a discounted clear.
   const allowBelowBar = !(course.keyCount === 4 && course.side === "ln");
-  const offset = danCourseCreditOffset(accuracy, threshold, allowBelowBar, course);
+  // A skillset credential requires the full pass bar and grants exactly its
+  // named baseline. Ordinary chart evidence still earns its usual bonuses.
+  const offset = course.skillset
+    ? (Number.isFinite(accuracy) && accuracy <= 1 && accuracy + 1e-9 >= threshold ? 0 : null)
+    : danCourseCreditOffset(accuracy, threshold, allowBelowBar, course);
   if (offset == null) return null;
   return {
+    ...(course.skillset ? { skillset: course.skillset, referenceBeatmapId: course.referenceBeatmapId } : {}),
     keyCount: course.keyCount,
     side: course.side,
     beatmapId: course.beatmapId,
@@ -450,9 +464,6 @@ function bestPerCourse(clears: DanCourseClear[]): DanCourseClear[] {
   return [...best.values()].sort((a, b) => b.rawDan - a.rawDan);
 }
 
-const COURSE_IDS = DAN_COURSES.map((course) => course.beatmapId);
-const COURSE_ID_LIST = COURSE_IDS.join(",");
-
 /**
  * Every registered dan course this player has a verified pass on.
  *
@@ -465,20 +476,60 @@ const COURSE_ID_LIST = COURSE_IDS.join(",");
  * lookups rather than a scan.
  */
 export async function loadDanCourseClears(db: Db, userId: number, options: DanCourseCreditOptions): Promise<DanCourseClear[]> {
+  return loadRegisteredDanClears(db, userId, options, COURSES_BY_BEATMAP);
+}
+
+/** Resolve the player's submitted uploads by strict content fingerprint. */
+export async function loadDanSkillsetClears(db: Db, userId: number, options: DanCourseCreditOptions): Promise<DanCourseClear[]> {
+  const rows = (await exec(db, `select m.beatmap_id, m.fingerprint, m.checksum
+    from dan_skillset_chart_matches m join (
+      select beatmap_id from score_events where user_id = ? and passed = 1 and ruleset_id = 3
+      union select beatmap_id from player_activity_maps where user_id = ?
+    ) p on p.beatmap_id = m.beatmap_id`, [userId, userId])).rows;
+  const courses = new Map<number, DanCourse>();
+  for (const row of rows) {
+    const reference = DAN_SKILLSET_BY_FINGERPRINT.get(String(row.fingerprint));
+    if (!reference) continue;
+    const beatmapId = Number(row.beatmap_id);
+    courses.set(beatmapId, {
+      beatmapId, keyCount: reference.keyCount, side: reference.side,
+      level: reference.level, courseName: reference.name, skillset: reference.skillset,
+      referenceBeatmapId: reference.beatmapId, checksum: String(row.checksum),
+    });
+  }
+  return loadRegisteredDanClears(db, userId, options, courses);
+}
+
+const SKILLSET_ALLOWED_MODS = new Set(["NM", "MR", "HD", "FI", "FL", "SD", "PF", "DT", "NC", "CL", "V2", "SV2"]);
+
+function registeredModsAllowed(course: DanCourse, mods: OsuMod[] | null | undefined): boolean {
+  if (!danCourseModsAllowed(mods)) return false;
+  // OD must equal the reference, including at play time. Unknown future mods
+  // must not silently alter a credential's notes or judgement conditions.
+  return !course.skillset || mods!.every((mod) => SKILLSET_ALLOWED_MODS.has(
+    (typeof mod === "string" ? mod : String(mod.acronym)).toUpperCase(),
+  ));
+}
+
+async function loadRegisteredDanClears(db: Db, userId: number, options: DanCourseCreditOptions, courses: Map<number, DanCourse>): Promise<DanCourseClear[]> {
+  if (!courses.size) return [];
+  const idList = [...courses.keys()].filter((id) => Number.isInteger(id) && id > 0).join(",");
   const passes: CoursePass[] = [];
 
   // The fresh window, with the full payload.
   const scoreRows = (await exec(
     db,
     `select score_json from score_events
-     where user_id = ? and passed = 1 and ruleset_id = 3 and beatmap_id in (${COURSE_ID_LIST})`,
+     where user_id = ? and passed = 1 and ruleset_id = 3 and beatmap_id in (${idList})`,
     [userId],
   )).rows;
   for (const row of scoreRows) {
     const score = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
     if (!score) continue;
-    const course = COURSES_BY_BEATMAP.get(Number(score.beatmap_id));
-    if (!course || !danCourseModsAllowed(score.mods)) continue;
+    const course = courses.get(Number(score.beatmap_id));
+    if (!course || !registeredModsAllowed(course, score.mods)) continue;
+    const checksum = (score.beatmap as { checksum?: string } | undefined)?.checksum;
+    if (course.checksum && checksum && course.checksum !== checksum.toLowerCase()) continue;
     const legacyScoreId = score.legacy_score_id == null ? null : Number(score.legacy_score_id);
     passes.push({
       course,
@@ -516,22 +567,27 @@ export async function loadDanCourseClears(db: Db, userId: number, options: DanCo
             m.best_rank, m.best_has_replay, m.best_played_at, m.day
      from player_activity_maps m
      where m.user_id = ?
-       and m.beatmap_id in (${COURSE_ID_LIST})
+       and m.beatmap_id in (${idList})
        and m.best_accuracy > 0
+       ${courses === COURSES_BY_BEATMAP ? "" : `and not exists (
+         select 1 from score_events e where e.user_id = m.user_id
+           and e.score_identity = 'official:' || coalesce(m.best_score_id, m.best_solo_score_id)
+       )`}
        and exists (
          select 1 from player_activity_score_refs r
          where r.country = m.country and r.user_id = m.user_id
            and r.day = m.day and r.beatmap_id = m.beatmap_id and r.passed = 1
+           ${courses === COURSES_BY_BEATMAP ? "" : "and r.score_identity = 'official:' || coalesce(m.best_score_id, m.best_solo_score_id)"}
        )`,
     [userId],
   )).rows;
   for (const row of activityRows) {
-    const course = COURSES_BY_BEATMAP.get(Number(row.beatmap_id));
+    const course = courses.get(Number(row.beatmap_id));
     if (!course) continue;
     const displayed = Number(row.best_accuracy);
     if (!(displayed > 0 && displayed <= 1)) continue;
     const mods = parseJson<OsuMod[] | null>(String(row.best_mods_json ?? ""), null);
-    if (!danCourseModsAllowed(mods)) continue;
+    if (!registeredModsAllowed(course, mods)) continue;
     const statistics = parseJson<OscScore["statistics"] | null>(String(row.best_statistics_json ?? ""), null);
     const soloScoreId = Number(row.best_solo_score_id) || null;
     const scoreId = Number(row.best_score_id) || null;
@@ -564,7 +620,7 @@ export async function loadDanCourseClears(db: Db, userId: number, options: DanCo
   // link, a graveyard one has none, and the evidence surface has to choose.
   const statusByBeatmap = new Map<number, string>();
   if (passes.length > 0) {
-    for (const row of (await exec(db, `select beatmap_id, status from beatmaps where beatmap_id in (${COURSE_ID_LIST})`, [])).rows) {
+    for (const row of (await exec(db, `select beatmap_id, status from beatmaps where beatmap_id in (${idList})`, [])).rows) {
       if (row.status != null) statusByBeatmap.set(Number(row.beatmap_id), String(row.status));
     }
   }

@@ -30,4 +30,7 @@
 // v22: tap-covered 4K holds do not become LN from geometric head overlap.
 // v23: near-window chained 4K holds retain LN rearticulation work.
 // v24: tap-covered chains contribute difficulty but cannot establish LN identity.
-export const DAN_ESTIMATE_CACHE_VERSION = 24;
+// v25: refresh player-adjusted verdicts after the articulated-chordjack and
+// mixed-repetition fix. A stale terminal verdict must not suppress a restored
+// clear, and the retained-note variants must use the new section boundaries.
+export const DAN_ESTIMATE_CACHE_VERSION = 25;

@@ -462,7 +462,7 @@ export async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
           },
         ) => {
           const rawDan = Number(verdict?.rawDan);
-          if (!(rawDan > 0)) return;
+          if (!Number.isFinite(rawDan) || rawDan < 0 || !verdict.label) return;
           let column = draft.dan.get(key);
           if (!column) {
             draft.dan.set(key, (column = { raw: [], labels: [], beyond: [], windowHave: [], windowNeed: [], windowFull: [], windowSkills: [] }));
@@ -486,8 +486,8 @@ export async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
         };
         for (const side of ["rc", "ln"] as const) {
           const dan = mode?.dan?.[side];
-          if (!dan || !(Number(dan.rawDan) > 0)) continue;
-          pushDan(danColumnKey(side, DAN_LEADERBOARD_DEFAULT_SKILLSET), dan);
+          if (!dan) continue;
+          if (!dan.skillsetsOnly) pushDan(danColumnKey(side, DAN_LEADERBOARD_DEFAULT_SKILLSET), dan);
           // Absent on rows written before the skillset verdicts shipped; the
           // dan sweep backfills them, and until it does those players are
           // simply not on a skillset column.
@@ -533,7 +533,10 @@ export async function buildSkillBoard(db: Db): Promise<SkillBoardCache> {
         windowNeed: Uint8Array.from(column.windowNeed),
         windowFull: Uint8Array.from(column.windowFull),
         windowSkills: Uint8Array.from(column.windowSkills),
-        order: sortedOrder(column.raw),
+        // Zero is a real 7K practice credential; empty labels mark missing slots.
+        order: Int32Array.from(column.raw.map((_, slot) => slot)
+          .filter((slot) => column.labels[slot] !== "")
+          .sort((a, b) => column.raw[b] - column.raw[a])),
       });
     }
     keymodes.set(keyCount, {

@@ -87,8 +87,13 @@ msgstr "? replay views"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
-msgid "· {0}/{averageWindow} weighted"
-msgstr "· {0}/{averageWindow} weighted"
+msgid "· {0}/{averageWindow} counted"
+msgstr "· {0}/{averageWindow} counted"
+
+#. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "· {0}/{averageWindow} weighted"
+#~ msgstr "· {0}/{averageWindow} weighted"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "(extra) Step 7: clearing a real course overrides all of it"
@@ -2340,6 +2345,11 @@ msgstr "Accuracy below skill rating range, so this play has no MSD rating on any
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
+
+#. placeholder {0}: formatAccuracy(credential.bar)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Accuracy this clear was judged on, against its {0} bar"
+msgstr "Accuracy this clear was judged on, against its {0} bar"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
@@ -5365,6 +5375,10 @@ msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "Each player is equally likely, no matter how many favourites they have."
 
 #: src/components/player/DanEvidenceModal.tsx
+msgid "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+msgstr "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+
+#: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
 #~ msgstr "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
 
@@ -5373,8 +5387,8 @@ msgstr "Each player is equally likely, no matter how many favourites they have."
 #~ msgstr "Each skillset is the average of your {averageWindow} best clears in it. With fewer than {averageWindow} it averages what you have, so the number is less accurate until you reach {averageWindow}."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgstr "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
 
 #: src/lib/streak-game.ts
 msgid "Earlier"
@@ -6988,8 +7002,12 @@ msgid "Indonesian"
 msgstr "Indonesian"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
-msgstr "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
+#~ msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
+#~ msgstr "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Influence in this average; Dan credit is unchanged"
+msgstr "Influence in this average; Dan credit is unchanged"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -9930,6 +9948,14 @@ msgstr "only you"
 msgid "only you can open these"
 msgstr "only you can open these"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
+msgstr "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
+
+#: src/routes/dan-estimates.tsx
+msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
+msgstr "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Opacity"
 msgstr "Opacity"
@@ -10259,8 +10285,12 @@ msgid "outside average"
 msgstr "outside average"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Outside this average's weighted window"
-msgstr "Outside this average's weighted window"
+msgid "Outside this average's best-clear window"
+msgstr "Outside this average's best-clear window"
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Outside this average's weighted window"
+#~ msgstr "Outside this average's weighted window"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "overall"
@@ -10872,6 +10902,16 @@ msgstr "PP Range"
 msgid "PP-gain map recommendations tuned to a player."
 msgstr "PP-gain map recommendations tuned to a player."
 
+#. placeholder {0}: formatDan(credential.label)
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Practice chart for this skillset: clearing it grants {0} outright, and a higher estimate is kept"
+#~ msgstr "Practice chart for this skillset: clearing it grants {0} outright, and a higher estimate is kept"
+
+#. placeholder {0}: formatDan(clear.credential.level)
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Practice chart for this skillset: the clear certifies {0}, whatever the estimator reads the file as"
+#~ msgstr "Practice chart for this skillset: the clear certifies {0}, whatever the estimator reads the file as"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Preparing the update."
@@ -11289,8 +11329,8 @@ msgid "Rated from only {plays} plays - treat as a rough estimate until more {key
 msgstr "Rated from only {plays} plays - treat as a rough estimate until more {keyCount}K plays are rated"
 
 #: src/routes/dan-estimates.tsx
-msgid "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
-msgstr "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
+#~ msgid "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
+#~ msgstr "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
@@ -13151,6 +13191,10 @@ msgstr "Skills"
 msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
 msgstr "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "Skillset clears"
+msgstr "Skillset clears"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Skin"
@@ -13520,8 +13564,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "Step 4: your passes are sorted into four skills"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is a weighted average of your best passes"
-msgstr "Step 5: each skill's dan is a weighted average of your best passes"
+#~ msgid "Step 5: each skill's dan is a weighted average of your best passes"
+#~ msgstr "Step 5: each skill's dan is a weighted average of your best passes"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 5: each skill's dan is an average of your best passes"
+msgstr "Step 5: each skill's dan is an average of your best passes"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
@@ -13749,6 +13797,10 @@ msgid "Take it down for good?"
 msgstr "Take it down for good?"
 
 #: src/routes/dan-estimates.tsx
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 #~ msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 
@@ -13757,8 +13809,8 @@ msgstr "Take it down for good?"
 #~ msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -14054,6 +14106,16 @@ msgstr "That username doesn't look right."
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
 msgstr "That's the same score on both sides. Pick a different run for the other side."
+
+#. placeholder {0}: formatDan(credential.level)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {0} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept"
+msgstr "The {0} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept"
+
+#. placeholder {0}: formatDan(clear.credential.level)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {0} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as"
+msgstr "The {0} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as"
 
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -15852,6 +15914,10 @@ msgstr "username..."
 msgid "Verified"
 msgstr "Verified"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Verified clear"
+msgstr "Verified clear"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"
 msgstr "vibro"
@@ -15987,6 +16053,10 @@ msgstr "View osu! profile"
 msgid "View profile"
 msgstr "View profile"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "view the score"
+msgstr "view the score"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
 msgstr "View the skin page"
@@ -15994,6 +16064,10 @@ msgstr "View the skin page"
 #: src/components/player/SkillBreakdown.tsx
 msgid "View top {entryLabel} plays"
 msgstr "View top {entryLabel} plays"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "View verified skillset clears"
+msgstr "View verified skillset clears"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Viewer editor"
@@ -16316,8 +16390,12 @@ msgid "With different charts, your jack dan is the average of your 20 best of th
 msgstr "With different charts, your jack dan is the average of your 20 best of these. The gamma pass does not make you gamma on its own: averaged against everything below it, it can pull your dan up a fraction of a level, but it cannot set it."
 
 #: src/routes/dan-estimates.tsx
-msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgid "With fewer than 20 eligible clears the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr "With fewer than 20 eligible clears the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
 
 #: src/routes/farm-helper.tsx
 msgid "with no mods"

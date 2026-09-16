@@ -169,18 +169,18 @@ describe("structural chart families", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [CHART_FAMILY_SWEEP_JOB])).rows).toHaveLength(1);
   });
 
-  it("ships every weighted contributor and agrees with the persisted dan refold", async () => {
+  it("caps verified rate reuploads in both the evidence and persisted Dan refold", async () => {
     const db = await database();
     const plays = [];
     for (let id = 1; id <= 22; id += 1) {
-      const rawDan = id <= 2 ? 12 : 10;
+      const rawDan = id <= 3 ? 12 : 10;
       await exec(db,
         `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
          values (?, ?, 'ready', 4, ?, '2026-09-06')`,
         [id, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, rc: { rawDan } })]);
-      if (id <= 2) {
-        await storeCachedBeatmapFile(db, id, file(id === 1 ? 1 : 1.05));
-        await storeChartFamily(db, id, file(id === 1 ? 1 : 1.05));
+      if (id <= 3) {
+        await storeCachedBeatmapFile(db, id, file(1 + (id - 1) * 0.05));
+        await storeChartFamily(db, id, file(1 + (id - 1) * 0.05));
       }
       plays.push({ identity: `score:${id}`, beatmapId: id, keyCount: 4, rate: 1, goal: 0.93,
         pp: 0, patterns: [], accuracy: 0.96, stableAccuracy: 0.96, values: { Overall: 20, Chordjack: 20 } });
@@ -190,12 +190,14 @@ describe("structural chart families", () => {
        values (123, ?, 'ready', ?, ?, '2026-09-06', '2026-09-06')`,
       [PLAYER_SKILLS_VERSION, JSON.stringify({ modes: [{ keyCount: 4, ratings: { Overall: 20 } }] }), JSON.stringify({ plays })]);
     await recomputePlayerSkillDanChunk(db, 0);
-    const evidence = (await getPlayerSkillDanEvidence(db, 123, 4, "rc"))!;
+    const evidence = (await getPlayerSkillDanEvidence(db, 123, 4, "rc", null, { includeRejected: true }))!;
     const jack = evidence.skillsets.find((section) => section.id === "jack")!;
-    expect(jack.plays).toHaveLength(21);
+    expect(jack.plays).toHaveLength(20);
     expect(jack.weightedClears).toBe(20);
-    expect(jack.plays[1].averagingWeight).toBeCloseTo(0.9);
-    expect(jack.plays.at(-1)?.averagingWeight).toBeCloseTo(0.1);
+    expect(jack.plays.every((play) => play.averagingWeight === 1)).toBe(true);
+    expect(evidence.totalClears).toBe(21);
+    expect(evidence.rejected).toMatchObject([{ reason: "chart_repeat_limit", play: { beatmapId: 3 } }]);
+    expect(jack.plays.filter((play) => play.play.beatmapId <= 3)).toHaveLength(2);
     const reconstructed = jack.plays.reduce((sum, play) => sum + play.creditedDan * play.averagingWeight!, 0) / 20;
     expect(jack.dan?.rawDan).toBe(Math.round(reconstructed * 100) / 100);
     const summary = JSON.parse(String((await exec(db, "select modes_json from player_skill_ratings where user_id = 123")).rows[0].modes_json));

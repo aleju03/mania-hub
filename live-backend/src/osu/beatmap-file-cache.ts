@@ -6,6 +6,7 @@ import { nowIso } from "../shared/score.js";
 import { createHash, randomUUID } from "node:crypto";
 import { gzip, gunzip } from "node:zlib";
 import { promisify } from "node:util";
+import { danSkillsetMatchStatement } from "../features/dan-skillset-identity.js";
 
 // Durable cache for compressed .osu files. The dan estimator and activity
 // analyzer both parse a chart's .osu text; keeping the chart text itself means a
@@ -295,7 +296,7 @@ export async function storeCachedBeatmapFile(
     // The file and its repair obligation must commit together. This small,
     // non-sheddable job joins the existing serialized chart-analysis lane.
     const revision = `${safeId}:${randomUUID()}`;
-    await execBatch(db, [statement, {
+    await execBatch(db, [statement, danSkillsetMatchStatement(safeId, content, now), {
       sql: `insert into jobs
         (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
         values (?, ?, 'queued', 4, ?, 0, ?, ?, ?)`,
@@ -303,7 +304,7 @@ export async function storeCachedBeatmapFile(
         JSON.stringify({ beatmapIds: [safeId], revision }), now, now],
     }]);
   } else {
-    await exec(db, statement.sql, statement.args);
+    await execBatch(db, [statement, danSkillsetMatchStatement(safeId, content, now)]);
   }
 }
 
@@ -315,9 +316,8 @@ export async function markCachedBeatmapFileUnavailable(
   const safeId = Math.floor(beatmapId);
   if (!Number.isFinite(safeId) || safeId <= 0) throw new Error("Invalid beatmap ID");
   const now = nowIso();
-  await exec(
-    db,
-    `insert into beatmap_osu_files (
+  await execBatch(db, [{
+    sql: `insert into beatmap_osu_files (
        beatmap_id, beatmapset_id, compression, content_blob, content,
        raw_bytes, compressed_bytes, source, error, fetched_at, last_used_at
      )
@@ -332,7 +332,7 @@ export async function markCachedBeatmapFileUnavailable(
        error = excluded.error,
        fetched_at = excluded.fetched_at,
        last_used_at = excluded.last_used_at`,
-    [
+    args: [
       safeId,
       normalizeBeatmapsetId(options.beatmapsetId),
       COMPRESSION,
@@ -341,7 +341,7 @@ export async function markCachedBeatmapFileUnavailable(
       now,
       now,
     ],
-  );
+  }, { sql: "delete from dan_skillset_chart_matches where beatmap_id = ?", args: [safeId] }]);
 }
 
 async function readCompressedContent(row: Record<string, unknown>): Promise<string | null> {

@@ -93,6 +93,7 @@ export type LiveDanRejectReason =
   | "ez_windows"
   | "no_accuracy"
   | "no_chart_dan"
+  | "chart_repeat_limit"
   | "below_bar";
 
 /** One rated play that credits no dan, with the rule that stopped it. */
@@ -136,11 +137,15 @@ export interface LivePlayerDanEvidencePlay {
    *  when the rules deliberately share the chart. Absent on older payloads. */
   skillsets?: string[];
   countsTowardDan: boolean;
+  /** A registered practice chart set creditedDan outright, not the accuracy
+   *  curve; chartDan beside it stays the estimator's own reading. */
+  credential?: { level: string; courseName: string };
   /** The stray rule left this clear out of the average behind the estimate. */
   ignoredAsStray?: boolean;
 }
 
 export interface LivePlayerDanSkillsetEvidence {
+  skillsetClear?: LivePlayerDanCourseEvidence;
   weightedClears?: number;
   id: string;
   clears: number;

@@ -107,6 +107,7 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
     id: "rc" | "ln";
     label: MessageDescriptor;
     side: {
+      skillsetsOnly?: boolean;
       rawDan: number;
       label: string;
       clears: number;
@@ -141,14 +142,18 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
         const body = (
           <>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{sideLabel}</span>
-            <DanLevelBadge
-              label={entry.side!.label}
-              keyCount={mode.keyCount}
-              side={entry.id}
-              beyondTable={beyond}
-              clearWindow={entry.side!.clearWindow}
-              formatLabel={formatDanChip}
-            />
+            {entry.side!.skillsetsOnly ? (
+              <span className="text-xs font-semibold text-osu-l2"><Trans>Skillset clears</Trans></span>
+            ) : (
+              <DanLevelBadge
+                label={entry.side!.label}
+                keyCount={mode.keyCount}
+                side={entry.id}
+                beyondTable={beyond}
+                clearWindow={entry.side!.clearWindow}
+                formatLabel={formatDanChip}
+              />
+            )}
           </>
         );
         const keys = mode.keyCount;
@@ -158,7 +163,7 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
            has only 4", when the evidence modal right behind it shows 151. Say
            what the number actually measures - passes at or above this level -
            and leave the total to the modal, which re-derives it. */
-        const title = courseClear
+        const title = entry.side!.skillsetsOnly ? t`View verified skillset clears` : courseClear
           ? onSelect
             ? t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy} · click for the clears behind it`
             : t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy}`
@@ -239,7 +244,7 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, use
     return () => clearTimeout(timer);
   }, [modeKey]);
   const empty = skillEmptyState(skills, mode, own);
-  if (empty) return empty;
+  if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty;
   const entries = skillModeEntries(mode!);
   const overall = Number(mode!.ratings.Overall ?? 0);
   const overallPercentile = mode!.percentiles?.Overall;

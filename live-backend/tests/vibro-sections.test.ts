@@ -113,9 +113,22 @@ describe("section-based vibro ratings", () => {
     expect(analyzeVibroSections(build(32, 100), 1.5).status).toBe("adjusted");
   });
 
+  // Two of the restored charts are baked rate edits that ask one finger for
+  // more than any ranked chart does, over a large share of their length:
+  // 14.3 hits/s across 18.5% of a 2.0x edit, and 16.3 across 52% of a 1.35x
+  // one. Ranked 4K rice peaks at 12.81 hits/s over 6,175 charts and loved at
+  // 13.33 over 1,939, so the ceiling arm reaches them where the shape rules
+  // could not. They were restored before that arm existed, on the shape rules'
+  // reading alone; the rate is the stronger evidence and it overrules them.
+  const CEILING_REVERSALS = [5589167, 5259004];
   it.each(vibroCharts.filter((chart) => !VIBRO_CONTROLS.includes(chart.id)))("restores $source", ({ id }) => {
     const map = parseManiaBeatmap(vibroFixture(id));
     const result = analyzeVibroSections(map, id === 1612787 ? 1.5 : 1);
+    if (CEILING_REVERSALS.includes(id)) {
+      expect(result.status).toBe("excluded");
+      expect(result.sections.some((section) => section.reasons.includes("finger_rate_ceiling"))).toBe(true);
+      return;
+    }
     expect(result.status).not.toBe("excluded");
     if ([2690150, 2690151, 2793589, 2793590, 2793591, 2793592, 1612787].includes(id)) {
       expect(result.status).toBe("adjusted");
@@ -198,10 +211,30 @@ describe("section-based vibro ratings", () => {
     expect(analyzeVibroSections(build(25, 24)).sections.some((section) => section.reasons.includes("dense_chord_repetition"))).toBe(false);
   });
 
-  it.each([5589167, 4704087])("removes localized rapid bursts before rating chart %s", (id) => {
+  it("stops treating a 2.0x edit past the finger ceiling as a localized burst", () => {
+    // Was adjusted on the shape rules alone. 14.3 hits/s on one finger across
+    // 18.5% of the chart is past the 12.81 peak of 6,175 ranked charts.
+    const text = vibroFixture(5589167);
+    const map = parseManiaBeatmap(text);
+    const result = analyzeVibroSections(map);
+    expect(result.status).toBe("excluded");
+    expect(result.sections.some((section) => section.reasons.includes("finger_rate_ceiling"))).toBe(true);
+    expect(analyzeVibroSections({ ...map, title: "unrelated", creator: "unrelated", od: 5 })).toEqual(result);
+    for (const rate of [0.75, 1.5]) {
+      const baked = analyzeVibroSections({ ...map, notes: map.notes.map((note) => ({
+        ...note, time: note.time / rate, endTime: note.endTime / rate,
+      })) });
+      expect(baked.noteShare).toBe(analyzeVibroSections(map, rate).noteShare);
+    }
+  });
+
+  it.each([4704087])("removes localized rapid bursts before rating chart %s", (id) => {
     const text = vibroFixture(id);
     const map = parseManiaBeatmap(text);
     const result = analyzeVibroSections(map);
+    // 5589167 is a 2.0x edit asking 14.3 hits/s of one finger across 18.5% of
+    // its length, past the 12.81 hits/s peak of 6,175 ranked charts, so it is
+    // no longer a localized case; every other invariant below still holds.
     expect(result.status).toBe("adjusted");
     expect(classifyChart(map, text).vibro).toBe(false);
     const checkpoints = id === 5589167 ? [35_600] : [35_700, 35_800, 39_250, 40_600, 42_300, 45_100, 45_500];
@@ -209,7 +242,10 @@ describe("section-based vibro ratings", () => {
       expect(result.sections.some((section) => section.startTime <= time && section.endTime >= time
         && section.reasons.includes("rapid_jack_burst"))).toBe(true);
     }
-    expect(result.noteShare).toBeLessThan(0.15);
+    // The motion arms reach further into this burst than the shape rules did:
+    // 18ms rows are 36 hits/s on one finger and 41 actions/s on one hand. The
+    // chart stays eligible; what grew is how much comes out before rating.
+    expect(result.noteShare).toBeLessThan(0.22);
     const prepared = prepareVibroChart(text);
     const retained = parseManiaBeatmap(prepared.osuText);
     expect(retained.notes).toHaveLength(result.remainingNotes);
@@ -307,12 +343,13 @@ describe("section-based vibro ratings", () => {
     expect(analyzeVibroSections(map, 1.2).status).toBe("excluded");
   });
 
-  it("retains the localized quad-heavy adjustment in Makiba", () => {
+  it("keeps quadjack with individual finger omissions eligible", () => {
+    // This passage is the same controlled pattern as the new report:
+    // quad triples separated by one-finger omissions, never a second
+    // repeated group. Its old adjustment was the same false positive.
     const result = analyzeVibroSections(parseManiaBeatmap(vibroFixture(5526453)));
-    expect(result.status).toBe("adjusted");
-    expect(result.sections).toEqual([{
-      startTime: 116756, endTime: 128272, reasons: ["repeated_jack_stream"],
-    }]);
+    expect(result.status).toBe("clean");
+    expect(result.sections).toEqual([]);
   });
 
   it("does not split a long slower jack into artificial short bursts at rounding boundaries", () => {

@@ -41,8 +41,8 @@ interface SeedPlayer {
   patterns?: Array<{ id: string; rating: number; plays: number }>;
   lnSkillVersion?: number;
   dan?: {
-    rc?: { rawDan: number; label: string; clears: number; beyondTable?: boolean; skillsets?: Record<string, { rawDan: number; label: string; clears: number }> };
-    ln?: { rawDan: number; label: string; clears: number };
+    rc?: { skillsetsOnly?: boolean; rawDan: number; label: string; clears: number; beyondTable?: boolean; skillsets?: Record<string, { rawDan: number; label: string; clears: number }> };
+    ln?: { skillsetsOnly?: boolean; rawDan: number; label: string; clears: number; skillsets?: Record<string, { rawDan: number; label: string; clears: number }> };
   };
 }
 
@@ -482,6 +482,19 @@ describe("dan leaderboard", () => {
       // A player with no dan side is simply absent, not a zero row.
       expect(board.ranking.some((entry) => entry.user.username === "nodan")).toBe(false);
       expect(board.ranking[2].beyondTable).toBeUndefined();
+    });
+  });
+
+  it("publishes skillset-only credentials including 0th without an overall dan", async () => {
+    await withDb(async (db) => {
+      await seed(db, [{ userId: 42, username: "credential", country: "CR", keyCount: 7, analyzedPlays: 0,
+        dan: { ln: { rawDan: 0, label: "", clears: 0, skillsetsOnly: true,
+          skillsets: { lninverse: { rawDan: 0, label: "0", clears: 1 } } } } }]);
+      const skill = await getDanLeaderboard(db, { country: "GLOBAL", keyCount: 7, side: "ln", skillset: "lninverse" });
+      expect(skill.ranking).toEqual([expect.objectContaining({ rawDan: 0, label: "0" })]);
+      const overall = await getDanLeaderboard(db, { country: "GLOBAL", keyCount: 7, side: "ln" });
+      expect(overall.ranking).toEqual([]);
+      expect(overall.skillsets).toContainEqual({ skillset: "lninverse", players: 1 });
     });
   });
 

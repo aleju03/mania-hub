@@ -15,6 +15,7 @@ import {
   parseLeoBlackRcHalf,
   runLeoBlackMixed,
   runLeoBlackSunny,
+  type LeoBlackOdFlag,
   type ParsedDanPart,
 } from "./leoblack-estimator.js";
 import { DAN_INDEX, type DanIntervalTable } from "../../vendor/leoblack/estimator/intervals/index.js";
@@ -92,6 +93,8 @@ export interface ChartClassification {
 }
 
 export interface ClassifyChartInput extends DanEstimateInput {
+  /** Played OD/mod for LeoBlack; omitted for a chart's own rating. */
+  odFlag?: LeoBlackOdFlag;
   /** Player-rating policy only. Ordinary chart estimates always rate all notes. */
   adjustVibro?: boolean;
   /** Which half becomes the primary verdict; "auto" uses chartIsLn's keymode-aware identity gates. */
@@ -428,9 +431,10 @@ export function sunnyLowEndReroute(
   mixed: LeoBlackReworkResult,
   osuText: string,
   rate: number,
+  odFlag?: ClassifyChartInput["odFlag"],
 ): Omit<LeoBlackReworkResult, "mixedCompanellaPlan"> | null {
   if (!isRoxyFloorPinned(mixed) && !isAzusaLowEndSuspect(mixed)) return null;
-  const sunny = runLeoBlackSunny(osuText, { speedRate: rate });
+  const sunny = runLeoBlackSunny(osuText, { speedRate: rate, odFlag });
   return Number(sunny.star) < SUNNY_LOW_END_MAX_STAR ? sunny : null;
 }
 
@@ -481,6 +485,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   try {
     const rawMixed = runLeoBlackMixed(osuText, {
       speedRate: rate,
+      odFlag: input.odFlag,
       marathonCorrection: isMarathonCorrectionCandidate(map) && input.marathonMsdValues
         ? { durationS: chartNoteSpanSeconds(map), ettValues: input.marathonMsdValues }
         : undefined,
@@ -496,8 +501,8 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
       : rawMixed;
     // A Sunny failure inside the reroute check throws into the catch below,
     // leaving mixed null: better no verdict than the known-bad pinned one.
-    const reroute = sunnyLowEndReroute(rawMixed, osuText, rate)
-      ?? (candidate !== rawMixed ? sunnyLowEndReroute(candidate, osuText, rate) : null);
+    const reroute = sunnyLowEndReroute(rawMixed, osuText, rate, input.odFlag)
+      ?? (candidate !== rawMixed ? sunnyLowEndReroute(candidate, osuText, rate, input.odFlag) : null);
     if (reroute) {
       mixed = {
         ...candidate,

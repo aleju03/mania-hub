@@ -1,17 +1,48 @@
 import { calculateStableAccuracy, getScoreHitCounts } from "../shared/score.js";
 import type { OsuScoreStatistics } from "../shared/types.js";
-import type { VibroReason, VibroSection } from "./vibro-sections.js";
+import type { VibroAnalysis, VibroReason, VibroSection } from "./vibro-sections.js";
 
 const CLEAR_EVIDENCE_PATTERNS: ReadonlySet<VibroReason> = new Set([
   "dense_chord_repetition",
   "sustained_chords",
 ]);
 
+// Anything dense enough to read as a repeated chord at an uprate will touch the
+// per-finger ceiling somewhere, and merged sections carry the union of their
+// reasons, so a one-second brush against a limit inside a twelve-second chord
+// passage looks exactly like a chart built out of limit breaches. Weigh the
+// ceiling evidence by what it covers on its own instead. Measured on the report
+// fixtures: the incidental case covers 2.2% of a chart, the charts that are
+// actually made of it cover 15% and up.
+const INCIDENTAL_REASON_SHARE = 0.05;
+const INCIDENTAL_CEILING_REASONS: ReadonlySet<VibroReason> = new Set([
+  "finger_rate_ceiling", "hand_action_ceiling",
+]);
+
 /** Pattern gate only; the caller still requires a PP-backed uprate, a clean
  * base chart, valid structure and qualifying judgement/window evidence. */
-export function hasOnlyClearEvidencePatterns(sections: readonly VibroSection[]): boolean {
-  return sections.length > 0 && sections.every((section) => section.reasons.length > 0
-    && section.reasons.every((reason) => CLEAR_EVIDENCE_PATTERNS.has(reason)));
+export function hasOnlyClearEvidencePatterns(
+  sections: readonly VibroSection[],
+  reasonShares: VibroAnalysis["reasonShares"] = {},
+): boolean {
+  if (sections.length === 0) return false;
+  const reasons = new Set<VibroReason>();
+  for (const section of sections) {
+    if (section.reasons.length === 0) return false;
+    for (const reason of section.reasons) reasons.add(reason);
+  }
+  if (![...reasons].some((reason) => CLEAR_EVIDENCE_PATTERNS.has(reason))) return false;
+  let ceilingShare = 0;
+  for (const reason of reasons) {
+    if (CLEAR_EVIDENCE_PATTERNS.has(reason)) continue;
+    // Walls, rolls, isolated jacks and split doubles remain hard evidence,
+    // even when brief. Only the two empirical ceilings can be incidental.
+    if (!INCIDENTAL_CEILING_REASONS.has(reason)) return false;
+    // Summing is a conservative upper bound on their combined coverage;
+    // separate kinds of breaches must not each get their own 5% allowance.
+    ceilingShare += reasonShares[reason] ?? 1;
+  }
+  return ceilingShare <= INCIDENTAL_REASON_SHARE;
 }
 
 export interface VibroClearEvidence {
@@ -37,7 +68,8 @@ export interface VibroClearInput {
 
 /** A score-quality exception, not a claim that judgements prove hand technique.
  * This checks the score evidence only. The caller must also require a
- * PP-backed uprate of a clean base chart with dense-chord-only detections.
+ * PP-backed uprate of a clean base chart with dense-chord detections and at
+ * most incidental ceiling evidence (never explicit wall/jack/roll evidence).
  * Applies at the player layer only; chart classification never reads this. */
 export function assessVibroClear(input: VibroClearInput, od: number): VibroClearEvidence | undefined {
   if (!Number.isFinite(od) || od < 9 || input.widenedWindows !== false) return undefined;

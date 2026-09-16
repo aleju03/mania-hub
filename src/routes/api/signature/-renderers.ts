@@ -1270,7 +1270,7 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
   const sides = [
     { id: "rc", label: "Regular", side: riceMode?.dan?.rc, keyCount: riceMode?.keyCount },
     { id: "ln", label: "LN", side: lnMode?.dan?.ln, keyCount: lnMode?.keyCount },
-  ].filter((entry) => entry.side != null && entry.keyCount != null) as Array<{
+  ].filter((entry) => entry.side != null && !entry.side.skillsetsOnly && entry.keyCount != null) as Array<{
     id: string; label: string; keyCount: number; side: { rawDan: number; label: string; clears: number };
   }>;
   if (sides.length === 0) return renderPlate(ctx, "Not enough dan-level clears yet.");

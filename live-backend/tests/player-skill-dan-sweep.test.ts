@@ -115,6 +115,37 @@ async function seedRow(db: Db, userId: number, beatmapIds: number[]): Promise<vo
 }
 
 describe("recomputePlayerSkillDanChunk", () => {
+  it("queues missing played-OD verdicts and a player refresh before replacing the old summary", async () => {
+    const db = await makeDb();
+    try {
+      const ids = [901, 902, 903, 904];
+      for (const id of ids) await seedChart(db, id, 8);
+      await seedRow(db, 90, ids);
+      await seedRow(db, 91, ids);
+      await exec(db, "update player_skill_ratings set plays_json = ? where user_id = 90", [
+        json({ plays: ids.map(id => ({ ...barePass(id), mods: ["DA"], odOverride: 9 })) }),
+      ]);
+      const queue = new JobQueue(db);
+      const result = await recomputePlayerSkillDanChunk(db, 0, 200, "all", queue);
+      expect(result).toMatchObject({ scanned: 2, rewritten: 1, done: true });
+      const pending = (await exec(db, "select type, payload_json from jobs order by id")).rows;
+      expect(pending.filter(row => row.type === "compute_dan_estimate").map(row => JSON.parse(String(row.payload_json))))
+        .toEqual(ids.map(beatmapId => ({ beatmapId, rate: 1, odFlag: 9 })));
+      expect(pending.filter(row => row.type === "compute_player_skills").map(row => JSON.parse(String(row.payload_json))))
+        .toEqual([{ userId: 90 }]);
+      const before = (await exec(db, "select modes_json from player_skill_ratings where user_id = 90")).rows[0];
+      expect(JSON.parse(String(before.modes_json)).modes[0].dan).toEqual(STALE_DAN);
+      for (const id of ids) {
+        await exec(db, `insert into dan_mod_estimates
+          (estimator_version, beatmap_id, rate_percent, mod_variant, status, raw_dan, family, display_name, computed_at, updated_at)
+          values (?, ?, 100, 'OD:9', 'ready', 9, 'dan', '9', '2026-01-01', '2026-01-01')`, [DAN_ESTIMATE_CACHE_VERSION, id]);
+      }
+      await recomputePlayerSkillDanChunk(db, 0, 200, "all", queue);
+      const after = (await exec(db, "select modes_json from player_skill_ratings where user_id = 90")).rows[0];
+      expect(JSON.parse(String(after.modes_json)).modes[0].dan.rc.rawDan).toBe(9);
+    } finally { db.close(); }
+  });
+
   it("preserves custom-rate credit through a version bump while evidence reads queue replacements", async () => {
     const db = await makeDb();
     try {

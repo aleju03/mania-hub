@@ -473,11 +473,11 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`Step 5: each skill's dan is a weighted average of your best passes`}>
+        <Section title={t`Step 5: each skill's dan is an average of your best passes`}>
           <P>
             <Trans>
               Take your credited passes in one skill, sort them by the level each one credited, and
-              average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the
+              average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the
               evidence, and no single pass can set it on its own.
             </Trans>
           </P>
@@ -498,16 +498,15 @@ function DanEstimatesPage() {
           </div>
           <P>
             <Trans>
-              Rates and verified rate reuploads of the same chart share influence within each skill:
-              your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits
-              stay unchanged, and a better clear takes the strongest position. Two rates contribute
-              1.9 slots; five contribute about 4.1. The average reaches further into your other clears
-              to fill 20 weighted slots.
+              Only your two best rate plays on the same chart count toward each Dan ladder,
+              chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count
+              fully. Verified rate reuploads share this limit, and further rate plays cannot
+              fill the average or satisfy a clear requirement. A better play can replace either one.
             </Trans>
           </P>
           <P>
             <Trans>
-              With fewer than 20 weighted slots the average is over the evidence you have;
+              With fewer than 20 eligible clears the average is over the evidence you have;
               you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no
               dan of its own, and a side you have fewer than four on gets no estimate at all rather
               than a shaky one.

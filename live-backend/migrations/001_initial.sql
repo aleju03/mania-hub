@@ -448,7 +448,9 @@ create table if not exists dan_estimates (
 );
 
 -- dan_estimates for a chart as a lazer mod rewrites it before play (today only
--- Invert, mod_variant 'IN'; dan/invert-mod.ts). Same columns, keyed once more
+-- Invert, mod_variant 'IN'; dan/invert-mod.ts), or at a played OD. OD variants
+-- use 'OD:6', 'OD:HR', 'OD:EZ', etc., composed with note rewrites as
+-- 'IN:OD:6' or 'vibro-adjusted:OD:6'. Same columns, keyed once more
 -- by the mod, so a rewritten chart's verdict can never be read as the chart's
 -- own. Written by the player dan clear rules and their job, read by them alone.
 create table if not exists dan_mod_estimates (

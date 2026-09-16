@@ -846,7 +846,11 @@ export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // Bump history: `git log -S VIBRO_RECOMPUTE_META_KEY`.
 // v12 also catches coherent phrases of short repetitions. Revisit cached
 // classifications and rate metadata so player eligibility follows the fix.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v12";
+// v13 adds the motion arms: a chart is now also read for what it asks of one
+// finger and of one hand, which every cached 4K rice verdict predates.
+// v14 restores articulated chordjack and completes local mixed-repetition
+// phrases, refreshing old exclusions as well as previously adjusted credit.
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v14";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {

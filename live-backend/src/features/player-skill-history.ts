@@ -36,7 +36,7 @@ function snapshotFor(mode: PlayerSkillModeBreakdown): PlayerSkillHistorySnapshot
   }
   const danSide = (side: "rc" | "ln") => {
     const dan = mode.dan?.[side];
-    return dan ? { label: dan.label, beyondTable: dan.beyondTable === true } : null;
+    return dan && !dan.skillsetsOnly ? { label: dan.label, beyondTable: dan.beyondTable === true } : null;
   };
   return {
     ratings: Object.fromEntries(Object.entries(values).sort(([a], [b]) => a.localeCompare(b, "en-US"))

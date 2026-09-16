@@ -96,8 +96,13 @@ msgstr "? 次回放观看"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
-msgid "· {0}/{averageWindow} weighted"
-msgstr "· 加权 {0}/{averageWindow}"
+msgid "· {0}/{averageWindow} counted"
+msgstr ""
+
+#. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "· {0}/{averageWindow} weighted"
+#~ msgstr "· 加权 {0}/{averageWindow}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "(extra) Step 7: clearing a real course overrides all of it"
@@ -2345,6 +2350,11 @@ msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别
 #: src/routes/dan-estimates.tsx
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "准度决定档次，不只是过没过。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>，而 94% 差一点没过仍然读作 <3>delta--</3>，因为差一点通关也比什么都没有强。再低就完全不算。要求别的准度的段位系统，整条刻度也跟着平移。"
+
+#. placeholder {0}: formatAccuracy(credential.bar)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Accuracy this clear was judged on, against its {0} bar"
+msgstr ""
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
@@ -5370,6 +5380,10 @@ msgid "Each player is equally likely, no matter how many favourites they have."
 msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
 
 #: src/components/player/DanEvidenceModal.tsx
+msgid "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+msgstr ""
+
+#: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
 #~ msgstr "每个技能都是其背后最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次的技能会按现有的通过来平均，所以随着通过增多它会越来越准。"
 
@@ -5378,8 +5392,8 @@ msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
 #~ msgstr "每个技能是你在它上面最好 {averageWindow} 次通过的平均。不足 {averageWindow} 次时就取你现有的求平均，所以在凑够 {averageWindow} 次之前这个数字没那么准。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr "每个技能取你最好的通过成绩，直到权重总和达到 {averageWindow}。证据不足时，就按已有的成绩取加权平均，估计仍在逐步完善。"
+#~ msgid "Each skillset uses your best clears up to {averageWindow} weighted slots. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgstr "每个技能取你最好的通过成绩，直到权重总和达到 {averageWindow}。证据不足时，就按已有的成绩取加权平均，估计仍在逐步完善。"
 
 #: src/lib/streak-game.ts
 msgid "Earlier"
@@ -6985,8 +6999,12 @@ msgid "Indonesian"
 msgstr "印尼语"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
-msgstr "计入同谱面重复成绩的权重衰减及窗口上限后，在本次平均中的权重；段位折算值不变"
+#~ msgid "Influence in this average after repeated-chart weighting and the window limit; dan credit is unchanged"
+#~ msgstr "计入同谱面重复成绩的权重衰减及窗口上限后，在本次平均中的权重；段位折算值不变"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Influence in this average; Dan credit is unchanged"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -9927,6 +9945,14 @@ msgstr "仅你可见"
 msgid "only you can open these"
 msgstr "只有你能打开这些"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
+msgstr ""
+
+#: src/routes/dan-estimates.tsx
+msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
+msgstr ""
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Opacity"
 msgstr "不透明度"
@@ -10256,8 +10282,12 @@ msgid "outside average"
 msgstr "不计入平均"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Outside this average's weighted window"
-msgstr "超出本次平均的加权窗口"
+msgid "Outside this average's best-clear window"
+msgstr ""
+
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Outside this average's weighted window"
+#~ msgstr "超出本次平均的加权窗口"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "overall"
@@ -10869,6 +10899,16 @@ msgstr "pp 区间"
 msgid "PP-gain map recommendations tuned to a player."
 msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 
+#. placeholder {0}: formatDan(credential.label)
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Practice chart for this skillset: clearing it grants {0} outright, and a higher estimate is kept"
+#~ msgstr ""
+
+#. placeholder {0}: formatDan(clear.credential.level)
+#: src/components/player/DanEvidenceModal.tsx
+#~ msgid "Practice chart for this skillset: the clear certifies {0}, whatever the estimator reads the file as"
+#~ msgstr ""
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Preparing the update."
@@ -11286,8 +11326,8 @@ msgid "Rated from only {plays} plays - treat as a rough estimate until more {key
 msgstr "仅依据 {plays} 个成绩评分，在更多 {keyCount}K 成绩被评分之前只能当作粗略估算"
 
 #: src/routes/dan-estimates.tsx
-msgid "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
-msgstr "同一谱面的不同倍率成绩，以及经验证仅改变倍率的重传谱面成绩，在每个技能中共享权重：最好的通过权重为 100%，下一次为 90%，再下一次为 81%，以此类推。每次通过的段位折算值不变，更好的成绩会占据权重最高的位置。两个倍率合计占 1.9 个加权名额，五个约占 4.1 个。平均值会纳入更多其他通过成绩，直到填满 20 个加权名额。"
+#~ msgid "Rates and verified rate reuploads of the same chart share influence within each skill: your best clear has 100% weight, the next 90%, then 81%, and so on. Their dan credits stay unchanged, and a better clear takes the strongest position. Two rates contribute 1.9 slots; five contribute about 4.1. The average reaches further into your other clears to fill 20 weighted slots."
+#~ msgstr "同一谱面的不同倍率成绩，以及经验证仅改变倍率的重传谱面成绩，在每个技能中共享权重：最好的通过权重为 100%，下一次为 90%，再下一次为 81%，以此类推。每次通过的段位折算值不变，更好的成绩会占据权重最高的位置。两个倍率合计占 1.9 个加权名额，五个约占 4.1 个。平均值会纳入更多其他通过成绩，直到填满 20 个加权名额。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Rates of the same chart share influence within each skillset: your best clear has 100% weight, then 90%, 81%, and so on. Each clear keeps its dan credit."
@@ -13148,6 +13188,10 @@ msgstr "技能"
 msgid "Skills you do not have four passes in are left out of the average rather than counted as zero, because a missing skill is nearly always a short play history rather than a hole in your playing. Players with fewer than two rated skills are read off the same average over their 20 best passes overall."
 msgstr "通过数不到四次的技能会被排除在平均之外，而不是按零来算，因为缺一个技能几乎总是意味着成绩太少，而不是你在这方面真的是一片空白。评出的技能不到两个的玩家按同样的平均来读，取全部通过里最好的 20 次。"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "Skillset clears"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Skin"
@@ -13517,8 +13561,12 @@ msgid "Step 4: your passes are sorted into four skills"
 msgstr "第四步：你的通过会被分进四个技能"
 
 #: src/routes/dan-estimates.tsx
-msgid "Step 5: each skill's dan is a weighted average of your best passes"
-msgstr "第五步：每个技能的段位，是你最好通过成绩的加权平均"
+#~ msgid "Step 5: each skill's dan is a weighted average of your best passes"
+#~ msgstr "第五步：每个技能的段位，是你最好通过成绩的加权平均"
+
+#: src/routes/dan-estimates.tsx
+msgid "Step 5: each skill's dan is an average of your best passes"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
@@ -13746,6 +13794,10 @@ msgid "Take it down for good?"
 msgstr "确定要永久下架吗？"
 
 #: src/routes/dan-estimates.tsx
+msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+msgstr ""
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
 #~ msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的 20 个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
 
@@ -13754,8 +13806,8 @@ msgstr "确定要永久下架吗？"
 #~ msgstr "把你在某一个技能上计入的通过拿出来，按各自计入的段位排好，取最好的五个求平均。那就是你在这个技能上的段位。证据之外不会再加任何东西，任何单独一次通过也决定不了它。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr "取你在一个技能中获得段位折算值的通过成绩，按折算等级从高到低排序，并取加权平均，直到权重总和填满 20 个名额。这就是你在该技能上的段位。不会在这些证据之上额外加分，也没有哪一次通过能单独决定它。"
+#~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average them until their weights fill 20 slots. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
+#~ msgstr "取你在一个技能中获得段位折算值的通过成绩，按折算等级从高到低排序，并取加权平均，直到权重总和填满 20 个名额。这就是你在该技能上的段位。不会在这些证据之上额外加分，也没有哪一次通过能单独决定它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your qualifying passes in one skill, sort them by the chart's dan level, and average the top 5. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -14051,6 +14103,16 @@ msgstr "这个用户名看起来不对。"
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
 msgstr "两边是同一个成绩。给另一边选一份别的成绩。"
+
+#. placeholder {0}: formatDan(credential.level)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {0} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept"
+msgstr ""
+
+#. placeholder {0}: formatDan(clear.credential.level)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {0} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as"
+msgstr ""
 
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -15849,6 +15911,10 @@ msgstr "用户名…"
 msgid "Verified"
 msgstr "已认证"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Verified clear"
+msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"
 msgstr "vibro"
@@ -15984,6 +16050,10 @@ msgstr "查看 osu! 主页"
 msgid "View profile"
 msgstr "查看主页"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "view the score"
+msgstr ""
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
 msgstr "查看皮肤页面"
@@ -15991,6 +16061,10 @@ msgstr "查看皮肤页面"
 #: src/components/player/SkillBreakdown.tsx
 msgid "View top {entryLabel} plays"
 msgstr "查看 {entryLabel} 最佳成绩"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "View verified skillset clears"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Viewer editor"
@@ -16313,8 +16387,12 @@ msgid "With different charts, your jack dan is the average of your 20 best of th
 msgstr "如果这些成绩来自不同谱面，你的叠段位就是其中最好 20 次通过的平均。那次 gamma 的通过本身不会让你变成 gamma：和它下面的那些放在一起平均，它最多把你的段位拉高一点，但决定不了它。"
 
 #: src/routes/dan-estimates.tsx
-msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr "不足 20 个加权名额时，就按你已有的证据取平均；不要求通过 20 张不同的谱面。某个技能的有效通过不足四次，就不会给出该技能的段位；某一侧不足四次时，也不会给出不可靠的估计。"
+msgid "With fewer than 20 eligible clears the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+msgstr ""
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
+#~ msgstr "不足 20 个加权名额时，就按你已有的证据取平均；不要求通过 20 张不同的谱面。某个技能的有效通过不足四次，就不会给出该技能的段位；某一侧不足四次时，也不会给出不可靠的估计。"
 
 #: src/routes/farm-helper.tsx
 msgid "with no mods"

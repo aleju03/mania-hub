@@ -22,6 +22,22 @@ const progress = { rateVibroPending: 3, calibrationPending: 40, lnPending: 20, l
 const done = { rateVibroPending: 0, calibrationPending: 0, lnPending: 0, lnMigrationProgress: "120:140" };
 
 describe("player skill continuations", () => {
+  it("continues a bounded OD verdict backlog while progress advances and stops when stalled", async () => {
+    await withDb(async (db, queue) => {
+      await settlePlayerSkillContinuations(db, queue, 40, 7, { userId: 99 }, { ...done, danPending: 12 }, "2099-01-01");
+      let rows = (await exec(db, "select payload_json from jobs where status = 'queued'")).rows;
+      expect(rows).toHaveLength(1);
+      const payload = JSON.parse(String(rows[0].payload_json));
+      expect(payload.danPending).toBe(12);
+      await settlePlayerSkillContinuations(db, queue, 40, 7, payload, { ...done, danPending: 4 }, "2099-01-01");
+      rows = (await exec(db, "select payload_json from jobs where status = 'queued'")).rows;
+      expect(rows).toHaveLength(1);
+      expect(JSON.parse(String(rows[0].payload_json)).danPending).toBe(4);
+      await settlePlayerSkillContinuations(db, queue, 40, 7, { userId: 99, danPending: 4 }, { ...done, danPending: 4 }, "2099-01-01");
+      expect((await exec(db, "select id from jobs where status = 'queued'")).rows).toHaveLength(0);
+    });
+  });
+
   it("replaces all legacy budgets with one follow-up, preserving wakeups, leases and newer work", async () => {
     await withDb(async (db, queue) => {
       const keys = ["player-skills:40:99:ln:10:20", "player-skills:40:99:wife:100", "player-skills-rate-vibro:7:99:10",

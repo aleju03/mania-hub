@@ -24,6 +24,7 @@ import {
   getPlayerSkillPlays,
   loadArchivedTrackedEvidence,
   loadChartSkillInfo,
+  loadRateVerdictCredits,
   loadBeatmapOds,
   parseNamedRate,
   ssrGoalForAccuracy,
@@ -41,12 +42,13 @@ import * as skillHistoryModule from "../src/features/player-skill-history.js";
 import * as msdModule from "../src/dan/msd.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import type { OscScore } from "../src/shared/types.js";
-import { buildVibroOsu, localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
+import { buildVibroOsu, chordjackReportFixture, localizedVibroFixture, vibroFixture } from "./vibro-fixtures.js";
 import { conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { computeMsd } from "../src/dan/msd.js";
 import { recordPlayerActivity } from "../src/features/activity.js";
 import { getScoreIdentity, isLazerScore } from "../src/shared/score.js";
 import { VIBRO_ADJUSTED_VARIANT, loadStoredRateDanVerdicts, rateDanVerdictKey } from "../src/features/dan-estimates.js";
+import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
 
 async function withDb(run: (db: Awaited<ReturnType<typeof createDb>>) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), "mania-live-skills-"));
@@ -241,6 +243,62 @@ function play(overrides: Partial<OscScore>): OscScore {
 
 describe("localized vibro player credit", () => {
   const reviewedJudgements = { perfect: 1072, great: 418, good: 176, ok: 13, miss: 4 };
+
+  it.each([
+    ["varied_pair", 0.9746, 0.95], ["quad_omissions", 0.9605, 0.9214],
+  ] as const)("restores aged-out %s credit with a fresh adjusted SSR", async (name, accuracy, goal) => {
+    await withDb(async (db) => {
+      const text = chordjackReportFixture(name);
+      await storeCachedBeatmapFile(db, 101, text, { source: "test" });
+      const now = new Date().toISOString();
+      await exec(db, `insert into beatmap_chart_analysis
+        (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+        values (101, 1, 'ready', 4, ?, ?)`,
+      [JSON.stringify({ lnRatio: 0, rc: { rawDan: 15 }, vibro: false }), now]);
+      // A previous detector can leave a terminal adjusted verdict. Restoring
+      // SSR alone must not leave the Dan clear pinned to that cached refusal.
+      await exec(db, `insert into dan_mod_estimates
+        (estimator_version, beatmap_id, rate_percent, mod_variant, status, computed_at, updated_at)
+        values (?, 101, 100, ?, 'unsupported', ?, ?)`,
+      [DAN_ESTIMATE_CACHE_VERSION - 1, VIBRO_ADJUSTED_VARIANT, now, now]);
+      const previous: StoredPlaySsr = {
+        identity: "official:42", beatmapId: 101, keyCount: 4, rate: 1, goal,
+        pp: 0, accuracy, stableAccuracy: accuracy, source: "tracked", patterns: [], values: {},
+        rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], {
+        previousVibroExcluded: [{ play: previous, reason: "rate_vibro", checkedVersion: RATE_VIBRO_CHECK_VERSION - 1 }],
+      });
+      expect(result.vibroExcluded).toEqual([]);
+      expect(result.plays).toHaveLength(1);
+      expect(result.plays[0].values.Chordjack).toBeGreaterThan(0);
+      expect(result.plays[0].vibroAdjustment?.noteShare).toBeLessThan(0.1);
+      const prepared = prepareVibroChart(text);
+      const expected = await computeMsd(prepared.osuText, { keyCount: 4,
+        scoreGoal: conservativeVibroAccuracy(previous.goal, prepared.analysis.judgementShare) });
+      expect(result.plays[0].values.Chordjack).toBeCloseTo(expected!.values.Chordjack, 5);
+      expect(result.plays[0].rateVibroChecked).toBe(RATE_VIBRO_CHECK_VERSION);
+      const clears = collectDanClearsForTest(4, result.plays,
+        await loadChartSkillInfo(db, [101]), await loadRateVerdictCredits(db, result.plays));
+      expect(clears).toHaveLength(1);
+      expect(clears[0].creditedDan).toBeGreaterThan(0);
+    });
+  });
+
+  it("removes the old mixed-vibro SSR from both MSD and Dan evidence", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, chordjackReportFixture("mixed_vibro"), { source: "test" });
+      const previous: StoredPlaySsr = {
+        identity: "official:42", beatmapId: 101, keyCount: 4, rate: 1, goal: 0.96,
+        pp: 100, accuracy: 0.9993, stableAccuracy: 0.9993, source: "top", patterns: [],
+        values: { Overall: 30, Chordjack: 25.59 }, rateVibroChecked: RATE_VIBRO_CHECK_VERSION - 1,
+      };
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [previous]);
+      expect(result.plays).toEqual([]);
+      expect(result.danOnly).toEqual([]);
+      expect(result.vibroExcluded).toMatchObject([{ reason: "rate_vibro", checkedVersion: RATE_VIBRO_CHECK_VERSION }]);
+    });
+  });
 
   it.each([1, 1.5])("never rescues a perfect Arpia vibro clear at %sx", async (rate) => {
     await withDb(async (db) => {
@@ -1578,9 +1636,9 @@ describe("computePlayerSkillRatings", () => {
       const dan = result.summary.modes[0].dan!;
       // rc evidence uses stable-formula accuracy from the judgement counts,
       // rice-primary charts only: 8.0, 9.0 (DT), 9.0 (hybrid counts rice),
-      // 7.4. The 8.0 base-rate clear shares the DT chart and gets 90% weight:
-      // (9 + 9 + 8 * .9 + 7.4) / 3.9 = 8.36. Both 9.0s reach the estimate.
-      expect(dan.rc?.rawDan).toBe(8.36);
+      // 7.4. The base-rate and DT clears are the chart's two best and both
+      // count fully: (9 + 9 + 8 + 7.4) / 4 = 8.35.
+      expect(dan.rc?.rawDan).toBe(8.35);
       expect(dan.rc?.clears).toBe(2);
       expect(dan.rc?.label).toBeTruthy();
       // The LN side labels on the numeric LN ladder (never the rice greek
@@ -1772,7 +1830,8 @@ describe("computePlayerSkillRatings", () => {
 
       // Difficulty Adjust decides the OD the floor reads: raising a below-floor
       // chart to the floor credits, and lowering an above-floor one does not.
-      expect(collectDanClearsForTest(4, [{ ...playOn(281), odOverride: 8 }], info)).toHaveLength(1);
+      const odVerdicts = new Map([[rateDanVerdictKey(281, 100, undefined, 8), { rawDan: 11, side: "rc" as const }]]);
+      expect(collectDanClearsForTest(4, [{ ...playOn(281), odOverride: 8 }], info, odVerdicts)).toHaveLength(1);
       expect(collectDanClearsForTest(4, [{ ...playOn(282), odOverride: 3 }], info)).toEqual([]);
 
       // An EZ play earned its accuracy on 1.4x windows (both clients), so it
@@ -3992,7 +4051,7 @@ describe("Invert plays on 7K", () => {
       const rejects: Parameters<typeof collectDanClearsForTest>[4] = [];
       expect(collectDanClearsForTest(7, [stored], info, new Map(), rejects)).toEqual([]);
       expect(rejects.map((entry) => entry.reason)).toEqual(["no_chart_dan"]);
-      const verdicts = new Map([["702:100:IN", { rawDan: 11, side: "ln" as const, displayName: "zenith" }]]);
+      const verdicts = new Map([[rateDanVerdictKey(702, 100, "IN", 5), { rawDan: 11, side: "ln" as const, displayName: "zenith" }]]);
       const clears = collectDanClearsForTest(7, [stored], info, verdicts);
       expect(clears).toHaveLength(1);
       expect(clears[0].side).toBe("ln");

@@ -105,8 +105,9 @@ export function skillAxisMeta(axis: string): SkillAxisMeta | null {
 // dominant one.
 export function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDataSkillMode[] {
   const modes = skills?.modes ?? [];
-  const qualifying = modes.filter((mode) => mode.analyzedPlays >= 3);
-  return qualifying.length > 0 ? qualifying : modes.slice(0, 1);
+  // A single certified practice clear must make its keymode reachable too.
+  return modes.filter((mode, index) => index === 0 || mode.analyzedPlays >= 3
+    || mode.dan?.rc != null || mode.dan?.ln != null);
 }
 
 export interface SkillAxisEntry extends SkillAxisMeta {

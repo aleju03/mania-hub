@@ -3315,6 +3315,13 @@ async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
       tail_key text
     )
   `);
+  await db.execute(`
+    create table if not exists dan_skillset_chart_matches (
+      beatmap_id integer primary key,
+      fingerprint text not null,
+      checksum text not null
+    )
+  `);
   const familyColumns = (await db.execute("pragma table_info(beatmap_chart_families)")).rows.map((row) => String(row.name));
   if (!familyColumns.includes("head_key")) await db.execute("alter table beatmap_chart_families add column head_key text");
   if (!familyColumns.includes("tail_key")) await db.execute("alter table beatmap_chart_families add column tail_key text");

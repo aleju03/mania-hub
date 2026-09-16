@@ -1218,6 +1218,9 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
     const displayedText = formatAccuracy(displayed);
     return t`Minimum required for dan credit is ${floorText} ${currency}. This play got ${accText} ${currency}, not the ${displayedText} the score screen shows.`;
   };
+  if (rejected.reason === "chart_repeat_limit") {
+    return t`Only your two best rate plays on the same chart count toward Dan. This play is outside those two.`;
+  }
   const reason = rejected.reason === "rate_vibro"
     ? t`Vibro detected. This play does not count toward skill or dan ratings.`
     : rejected.reason === "chart_vibro"

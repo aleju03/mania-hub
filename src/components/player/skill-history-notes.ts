@@ -24,9 +24,103 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-09-16",
+    text: "Improved 4K vibro detection to catch more patterns that were inflating ratings, while restoring MSD and Dan credit to dense chordjack plays that were incorrectly excluded.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-16",
+    text: "Only your two best rate plays on the same chart now count toward Dan, chosen by Dan credit, and both count fully. Verified rate reuploads share the limit; further rates no longer contribute a shrinking share.",
+    keyCounts: [4, 6, 7],
+  },
+  {
+    date: "2026-09-16",
+    text: "Clearing a supported skillset practice chart can now set that skillset's Dan, even without enough ordinary clears for an estimate. A higher estimate from your other clears is kept.",
+    keyCounts: [4, 7],
+  },
+  {
+    date: "2026-09-16",
+    text: "Dan credit now uses the OD actually played for Hard Rock and Difficulty Adjust scores instead of rating them at the original file's OD.",
+    keyCounts: [4, 6, 7],
+  },
+  {
+    date: "2026-09-15",
+    text: "Prevented temporary rating drops when unchanged scores were waiting for recalculation or missing chart data. Their previous ratings now stay available while the update is pending.",
+  },
+  {
+    date: "2026-09-13",
+    text: "4K LN now has its own skill rating based on holding, release timing and finger coordination, instead of using Overall MSD as the LN rating.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-13",
+    text: "MSD ratings now use a recalibrated accuracy estimate based on judgements, scoring client, OD, playback rate and hold share. Ratings can move up or down, including on LN maps and custom rates.",
+  },
+  {
+    date: "2026-09-13",
+    text: "4K LN eligibility now checks hold lengths at the played rate and OD. Charts whose holds mostly play like taps can move to regular ratings instead of contributing LN credit.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-13",
+    text: "4K LN Dan now accepts OD 7 and above, and passes down to 91% instead of 94.5%. Below-bar penalties are gentler: a 96% clear loses about half a level instead of a full level.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-13",
+    text: "Removed the penalty jump just below the 6K/7K LN Dan accuracy requirement. A 94.9% clear now loses about 0.13 levels instead of 0.36; scores at 94% or below are unchanged.",
+    keyCounts: [6, 7],
+  },
+  {
+    date: "2026-09-13",
+    text: "Improved 4K speed and tech classification: slow sections no longer decide a fast map's skill, and jacks within chords are recognized. Some clears now contribute to different skillset Dans.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-13",
+    text: "Halved the above-bar accuracy bonus for 4K jack Dan clears. The chart's base credit and penalties for scores below the accuracy requirement are unchanged.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-13",
+    text: "Restored eligible Difficulty Adjust plays that lowered OD, including 7K Invert plays at OD 5. Dan credit still requires the minimum OD for the relevant ladder.",
+  },
+  {
+    date: "2026-09-11",
+    text: "Reuploads with a few added notes are now recognized as the same chart, reducing extra rating credit from farming copies.",
+  },
+  {
     date: "2026-09-10",
     text: "Fixed some 4K handstream and jumpstream maps incorrectly counting toward tech dan.",
     keyCounts: [4],
+  },
+  {
+    date: "2026-09-10",
+    text: "Clears at the bottom of a Dan ladder, such as 7K kyu or 4K 1--, now contribute evidence instead of being ignored.",
+    keyCounts: [4, 6, 7],
+  },
+  {
+    date: "2026-09-09",
+    text: "4K Dan estimates now apply the marathon correction to maps longer than five minutes, which can change the level credited for long-map clears.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-09",
+    text: "Improved detection of recurring short vibro bursts in 4K. Localized bursts are removed before rating the remaining notes; maps dominated by vibro remain excluded.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-09",
+    text: "Fixed archived stable scores being rated as lazer, which had inflated some LN MSD ratings.",
+  },
+  {
+    date: "2026-09-07",
+    text: "MSD ratings now use at most two plays per chart across its rates, chosen by Overall MSD. Further rate farms no longer add entries to your skill ratings.",
+  },
+  {
+    date: "2026-09-07",
+    text: "Passes below the MSD accuracy floor can now contribute Dan evidence when they meet the Dan requirements, instead of being dropped with their MSD rating.",
+    keyCounts: [4, 6, 7],
   },
   {
     date: "2026-09-06",

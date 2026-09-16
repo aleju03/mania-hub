@@ -50,6 +50,7 @@ export interface MyDataDashboard {
 
 // Player dan positioning per verdict side (RC vs LN), on the chart-dan scale.
 export interface MyDataSkillDanSide {
+  skillsetsOnly?: boolean;
   rawDan: number;
   label: string;
   clears: number;

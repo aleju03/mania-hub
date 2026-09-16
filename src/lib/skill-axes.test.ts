@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lnPlayShare, skillModeEntries, topSharePercent } from "./skill-axes";
+import { qualifyingSkillModes, lnPlayShare, skillModeEntries, topSharePercent } from "./skill-axes";
 
 describe.each(Array.from({ length: 15 }, (_, i) => i + 4))("%iK LN presentation", keyCount => {
   it("preserves the LN axis and limits independent-model evidence to 4K", () => {
@@ -32,4 +32,15 @@ describe("topSharePercent", () => {
     // No population to divide by: nothing finer can be claimed.
     expect(topSharePercent({ value: 100, population: 0 })).toBe("1");
   });
+});
+
+
+it("keeps a newly certified keymode reachable alongside a well-established main", () => {
+  const modes = [
+    { keyCount: 4, analyzedPlays: 100, ratings: { Overall: 30 }, patterns: [] },
+    { keyCount: 7, analyzedPlays: 0, ratings: { Overall: 0 }, patterns: [],
+      dan: { rc: null, ln: { rawDan: 0, label: "", clears: 0, skillsetsOnly: true } } },
+    { keyCount: 6, analyzedPlays: 1, ratings: { Overall: 4 }, patterns: [] },
+  ];
+  expect(qualifyingSkillModes({ modes, status: "ready", version: 1, computedAt: null, totalPlays: 101, analyzedPlays: 101, pendingPlays: 0, unsupportedPlays: 0 }).map((mode) => mode.keyCount)).toEqual([4, 7]);
 });

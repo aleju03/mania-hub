@@ -6,6 +6,7 @@ export interface PlayerSkillJobPayload {
   userId: number;
   rateVibroPending?: number;
   calibrationPending?: number;
+  danPending?: number;
   lnMigrationProgress?: string;
 }
 
@@ -37,7 +38,7 @@ export async function settlePlayerSkillContinuations(
   version: number,
   rateVersion: number,
   payload: PlayerSkillJobPayload,
-  progress: { rateVibroPending: number; calibrationPending: number; lnPending: number; lnMigrationProgress: string },
+  progress: { rateVibroPending: number; calibrationPending: number; lnPending: number; lnMigrationProgress: string; danPending?: number },
   startedAt: string,
 ): Promise<void> {
   const rateAdvanced = progress.rateVibroPending > 0
@@ -45,10 +46,12 @@ export async function settlePlayerSkillContinuations(
   const calibrationAdvanced = progress.calibrationPending > 0
     && (payload.calibrationPending == null || progress.calibrationPending < payload.calibrationPending);
   const lnAdvanced = progress.lnPending > 0 && progress.lnMigrationProgress !== payload.lnMigrationProgress;
+  const danPending = progress.danPending ?? 0;
+  const danAdvanced = danPending > 0 && (payload.danPending == null || danPending < payload.danPending);
   const prefix = `player-skills:${version}:${payload.userId}:`;
   let nextKey = "";
-  if (rateAdvanced || calibrationAdvanced || lnAdvanced) {
-    nextKey = `${prefix}continue:${progress.lnMigrationProgress}:${progress.calibrationPending}:${progress.rateVibroPending}`;
+  if (rateAdvanced || calibrationAdvanced || lnAdvanced || danAdvanced) {
+    nextKey = `${prefix}continue:${progress.lnMigrationProgress}:${progress.calibrationPending}:${progress.rateVibroPending}${danPending ? `:dan:${danPending}` : ""}`;
     // Persist the replacement BEFORE retiring siblings. A failed enqueue or
     // process exit must leave the old work recoverable. All budgets advance
     // in the same compute, so they need only one continuation between them.
@@ -57,12 +60,13 @@ export async function settlePlayerSkillContinuations(
       rateVibroPending: progress.rateVibroPending,
       calibrationPending: progress.calibrationPending,
       lnMigrationProgress: progress.lnMigrationProgress,
+      ...(danPending ? { danPending } : {}),
     }, {
       priority: rateAdvanced ? 5 : -5,
       runAfter: new Date(Date.now() + (rateAdvanced ? 60_000 : 0)),
       replaceDone: true,
     });
-  } else if (progress.rateVibroPending > 0 || progress.calibrationPending > 0 || progress.lnPending > 0) {
+  } else if (progress.rateVibroPending > 0 || progress.calibrationPending > 0 || progress.lnPending > 0 || danPending > 0) {
     logWarn("player_skills_continuation_stalled", { userId: payload.userId, ...progress });
   }
 

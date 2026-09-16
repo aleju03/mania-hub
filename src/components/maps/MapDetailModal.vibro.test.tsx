@@ -20,7 +20,7 @@ it.each(["adjusted", "excluded"] as const)("shows readable sections without play
   const entry = { ...MAP_ENTRY, vibro: status === "excluded" };
   const analysis: VibroAnalysis = {
     version: 1, status, excludedDurationMs: 3000, activeDurationMs: 120_000,
-    timeShare: 0.025, noteShare: 0.05, judgementShare: 0.05, remainingNotes: 1000,
+    timeShare: 0.025, noteShare: 0.05, judgementShare: 0.05, remainingNotes: 1000, reasonShares: {},
     sections: [
       { startTime: 39_430, endTime: 42_886, reasons: ["rapid_jack_burst"] },
       { startTime: 88_488, endTime: 111_001.00000000005, reasons: ["repeated_chord"] },
@@ -40,7 +40,7 @@ it.each(["adjusted", "excluded"] as const)("shows readable sections without play
 it("scales section timestamps to the displayed rate", () => {
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={MAP_ENTRY} rate={1.5} rateMsd={{ Overall: 25 }} vibroAnalysis={{
     version: 1, status: "adjusted", sections: [{ startTime: 60_000, endTime: 64_329, reasons: ["repeated_chord"] }],
-    excludedDurationMs: 3000, activeDurationMs: 100_000, timeShare: 0.03, noteShare: 0.05, judgementShare: 0.05, remainingNotes: 1000,
+    excludedDurationMs: 3000, activeDurationMs: 100_000, timeShare: 0.03, noteShare: 0.05, judgementShare: 0.05, remainingNotes: 1000, reasonShares: {},
   }} /></I18nProvider>);
   expect(screen.getByText("0:40.00–0:42.89")).toBeTruthy();
 });
@@ -48,7 +48,7 @@ it("scales section timestamps to the displayed rate", () => {
 it("shows continuous passages as unified ranges without changing the source exclusions", () => {
   const analysis: VibroAnalysis = {
     version: 1, status: "excluded", excludedDurationMs: 40_000, activeDurationMs: 180_000,
-    timeShare: 0.22, noteShare: 0.3, judgementShare: 0.3, remainingNotes: 1000,
+    timeShare: 0.22, noteShare: 0.3, judgementShare: 0.3, remainingNotes: 1000, reasonShares: {},
     sections: [
       [53_210, 54_420], [54_510, 55_720], [55_800, 57_020], [57_100, 58_320],
       [58_400, 59_610], [59_700, 60_910], [60_990, 62_210], [62_290, 63_510],
@@ -68,7 +68,7 @@ it("shows continuous passages as unified ranges without changing the source excl
 it.each([0.75, 1, 1.5])("measures the display gap at the displayed %sx speed", (rate) => {
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={MAP_ENTRY} rate={rate} rateMsd={{ Overall: 25 }} vibroAnalysis={{
     version: 1, status: "adjusted", excludedDurationMs: 2000, activeDurationMs: 100_000,
-    timeShare: 0.02, noteShare: 0.03, judgementShare: 0.03, remainingNotes: 1000,
+    timeShare: 0.02, noteShare: 0.03, judgementShare: 0.03, remainingNotes: 1000, reasonShares: {},
     sections: [
       { startTime: 60_000, endTime: 61_000, reasons: ["repeated_wall"] },
       { startTime: 61_300, endTime: 62_000, reasons: ["repeated_wall"] },

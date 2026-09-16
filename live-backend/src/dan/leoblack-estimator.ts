@@ -29,6 +29,9 @@ export interface LeoBlackDanInput extends DanEstimateInput {
   preferFamily?: "rc" | "ln" | "auto";
 }
 
+/** LeoBlack resolves HR/EZ itself; numeric values are the played DA slider. */
+export type LeoBlackOdFlag = number | "HR" | "EZ";
+
 export interface ParsedDanPart {
   label: string;
   variant: string | null;
