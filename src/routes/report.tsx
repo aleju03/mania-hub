@@ -5,6 +5,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 
 import { Avatar } from "../components/ui/Avatar";
 import { ImageLightbox } from "../components/ui/ImageLightbox";
+import { MessageText } from "../components/ui/MessageText";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
 import {
@@ -699,7 +700,7 @@ function ReporterThread({
         if (!admin) {
           return (
             <div key={message.id} className={spacing}>
-              <MessageBubble mine time={time}>{message.body}</MessageBubble>
+              <MessageBubble mine time={time}><MessageText text={message.body} /></MessageBubble>
               {screenshots}
             </div>
           );
@@ -715,7 +716,7 @@ function ReporterThread({
                   {REPLY_AUTHOR.username}
                 </span>
               ) : null}
-              <MessageBubble mine={false} time={time}>{message.body}</MessageBubble>
+              <MessageBubble mine={false} time={time}><MessageText text={message.body} /></MessageBubble>
               {screenshots}
             </div>
           </div>
@@ -1017,7 +1018,7 @@ function ReportRow({
         <div className="px-3.5 pb-3.5">
           {messages.length ? (
             <>
-              <MessageBubble mine time={null}>{report.body}</MessageBubble>
+              <MessageBubble mine time={null}><MessageText text={report.body} /></MessageBubble>
               <div className="mt-1.5 flex justify-end">
                 <ReporterScreenshots
                   reportId={report.id}
@@ -1030,8 +1031,8 @@ function ReportRow({
             </>
           ) : (
             <div className="pl-6">
-              <p className="whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-osu-l1">
-                {report.body}
+              <p className="whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-osu-l1 [overflow-wrap:anywhere]">
+                <MessageText text={report.body} />
               </p>
               <div className="mt-2">
                 <ReporterScreenshots

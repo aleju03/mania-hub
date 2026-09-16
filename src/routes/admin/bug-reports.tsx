@@ -27,6 +27,7 @@ import {
 import { Avatar } from "../../components/ui/Avatar";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { ImageLightbox } from "../../components/ui/ImageLightbox";
+import { MessageText } from "../../components/ui/MessageText";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { describeBrowser } from "../../lib/bug-report-context";
@@ -410,7 +411,7 @@ function AdminThreadMessage({
                   ? "rounded-br-md bg-osu-pink/[0.12] ring-1 ring-inset ring-osu-pink/20"
                   : "rounded-bl-md bg-osu-b4/60 ring-1 ring-inset ring-osu-b3/20"
               }`}>
-                {message.body}
+                <MessageText text={message.body} embedClassName="mt-1.5" />
               </p>
               <Screenshots
                 reportId={report.id}
@@ -729,7 +730,9 @@ function ReportCard({
             ) : null}
           </div>
 
-          <p className="mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-white">{report.body}</p>
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-white [overflow-wrap:anywhere]">
+            <MessageText text={report.body} />
+          </p>
           <ContextLine context={report.context} />
           <Screenshots reportId={report.id} count={report.screenshotKeys.length} />
         </div>
