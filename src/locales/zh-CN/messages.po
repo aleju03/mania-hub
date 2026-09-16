@@ -2183,6 +2183,10 @@ msgstr "刚刚有新更新。正在刷新..."
 #~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，和通过段位课题一样；通过线上方的第一个百分点也一样：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成一直很小，到 99% 才开始上升。低于通过线的成绩仍然计入，按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表计入到通过线以下 4 个百分点，6K/7K LN 到 1 个百分点。4K LN 用自己的一套数值：向下计入到 94.5%，在那里比谱面段位低一级半，加成在 99.7% 到顶："
 
 #: src/routes/dan-estimates.tsx
+msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
+msgstr "只有真的按这张谱面原样打的成绩才算。<0/>、<1/> 以及任何改变 OD 的东西（<2/>、<3/>）都会让它作废，拖慢谱面也一样；Mirror、可见度类 Mod 和 <4/>/<5/> 都没问题。谱面是按音符和 OD 来核对的，不是按 beatmap id，所以同一份文件的任何上传都算，改编版和变速版不算。"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
 #~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入，6K/7K LN 只到 1 个百分点。4K LN 有自己的一条曲线：它的通过线以 ScoreV2 计算，而在大多数有长条的谱面上 100% 根本打不出来，所以它向下计入到 94.5%，并在那里降到低一级半，加成也在 99.7% 就到顶，而不是停在一个没人打得出的准确率上："
 
@@ -4665,6 +4669,14 @@ msgstr "国家/地区 mania 排行榜"
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 #~ msgstr "段位课题谱面都未上架，通过与否由维护对应段位表的人认定。这些结果都不会以段位形式从 osu! API 返回，因此无法直接查询你的段位，只能根据你的成绩推算。"
 
+#: src/routes/dan-estimates.tsx
+msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
+msgstr "覆盖范围：4K 常规的叠、技、速度和耐力，7K 常规的叠、技、速度和切，以及 7K LN 的综合、技、反键和放手。4K LN 和 6K 目前没有。"
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none."
+#~ msgstr ""
+
 #. placeholder {0}: names[finish]
 #. placeholder {1}: status?.cost ?? 20
 #: src/components/packs/ForgePanel.tsx
@@ -5601,6 +5613,10 @@ msgstr "每张被收藏的谱面等概率。因此收藏更多的玩家会更常
 msgid "Every image you have already pasted will stop working."
 msgstr "你已经贴出去的图片都会失效。"
 
+#: src/routes/dan-estimates.tsx
+msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
+msgstr "每个段位系统还有最低 OD 要求：常规谱面 5.5，4K LN 是 7，7K LN 是 5。用 <0/> 把 OD 降到该系统的最低值以下，这个成绩就得不到段位认定；<1/> 在任何地方都得不到，因为它会放宽所有判定窗。"
+
 #: src/routes/farm-helper.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
 msgstr "这里的每张谱面都是提升技能的推荐。默认隐藏，直到你打出其中一个成绩。"
@@ -5708,6 +5724,10 @@ msgstr "浏览全球谱面"
 #: src/routes/dan-estimates.tsx
 msgid "Extra: clearing a real course overrides all of it"
 msgstr "附加：通过真正的课题会盖过以上一切"
+
+#: src/routes/dan-estimates.tsx
+msgid "Extra: practice charts set one skill directly"
+msgstr "附加：练习谱面可以直接定下一个技能"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Failed"
@@ -10004,6 +10024,7 @@ msgstr "在 osu! 上打开谱面"
 msgid "Open beatmap page on osu!"
 msgstr "在 osu! 上打开谱面页面"
 
+#: src/components/ui/MessageText.tsx
 #: src/routes/report.tsx
 msgid "Open image"
 msgstr "查看图片"
@@ -13321,6 +13342,10 @@ msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 msgstr "部分登录后的功能会在服务器上存储与你的 osu! 用户 ID 关联的数据：你创建的目标（目标类型、指标、进度和状态）、你的卡包钱包和收藏（抽到的卡和抽取时间），以及名册的加入或退出选择。My Stats 面板不会额外存储任何东西；它只是向你展示本站已经掌握的、关于你账号的数据。"
 
+#: src/routes/dan-estimates.tsx
+msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
+msgstr "有些技能练习包会和课题一样被核对。按对应段位系统的准度线通过其中一张谱面，就能直接定下那个技能的段位，不需要平时要求的四次通过。例如，通过 <0>Volcanic ~ Delta ~</0> 会把你的 4K 速度段位定为 <1>delta</1>。"
+
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "有人举报了你的服务器，它已因以下原因被下架{said}"
@@ -14469,6 +14494,10 @@ msgstr "谱面段位 +1.5"
 #~ msgstr "课题是真正的那些，按谱面来认。就是这些，也只有这些：别人重新上传的同一个图包不算，借用课题名字的练习图包也不算。"
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "The credit stays in that one skill: a speed chart sets speed and leaves your other skills on what your ordinary passes give them. Like a course, it only ever raises the number, and the level is exactly the one the chart is named for, with no credit below the bar and no bonus above it."
+#~ msgstr "这份认定只留在那一个技能里：速度谱面只定速度，其他技能仍然按你平时的通过来算。和课题一样，它只会把数字往上抬，等级就是谱面标注的那一级，低于准度线不计分，高于也没有加成。"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "The curve is still being tuned, so these numbers can change."
 #~ msgstr "这条曲线仍在调整中，这些数字可能会变化。"
 
@@ -14601,6 +14630,10 @@ msgstr "新文件没有 {0} 部分，所以皮肤页面上的这些预览图会�
 #: src/components/packs/GoatPoll.tsx
 msgid "The new GOAT"
 msgstr "新的 GOAT"
+
+#: src/routes/dan-estimates.tsx
+msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
+msgstr "OD 也一样。谱面按你实际打的 OD 来评：<0/> 直接设定它，<1/> 会把它提高，谱面就按那个 OD 的难度来算。在 4K 上它还可能决定这次通过算进哪个段位系统，因为在低 OD 的宽判定窗里可以随手松开的长条，不再算作 LN 的工作量。"
 
 #: src/routes/packs.tsx
 msgid "The pack could not be opened. Please try again in a moment."

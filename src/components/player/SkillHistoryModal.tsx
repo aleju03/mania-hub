@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronRight, History, Info, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -188,10 +189,23 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
 }
 
 function NoteRow({ note }: { note: SkillHistoryNote }) {
+  const [before, after] = note.mapLink ? note.text.split("{link}") : [note.text];
   return (
     <li className="flex items-start gap-2 px-4 py-2.5 text-[11px] leading-snug text-osu-f1">
       <Info className="mt-0.5 h-3 w-3 shrink-0 text-osu-pink-light" aria-hidden="true" />
-      <span>{note.text}</span>
+      <span>
+        {before}
+        {note.mapLink && after != null ? (
+          <>
+            <Link
+              to="/maps"
+              search={{ map: note.mapLink.beatmapId } as never}
+              className="text-osu-pink-light hover:underline"
+            >{note.mapLink.label}</Link>
+            {after}
+          </>
+        ) : null}
+      </span>
     </li>
   );
 }

@@ -2174,6 +2174,10 @@ msgstr "A new update just came in. Refreshing..."
 #~ msgstr "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
 
 #: src/routes/dan-estimates.tsx
+msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
+msgstr "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
 #~ msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
 
@@ -4660,6 +4664,14 @@ msgstr "Country mania rankings"
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 #~ msgstr "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so yours cannot be looked up. It can only be inferred from your plays."
 
+#: src/routes/dan-estimates.tsx
+msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
+msgstr "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now."
+
+#: src/routes/dan-estimates.tsx
+#~ msgid "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none."
+#~ msgstr "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none."
+
 #. placeholder {0}: names[finish]
 #. placeholder {1}: status?.cost ?? 20
 #: src/components/packs/ForgePanel.tsx
@@ -5600,6 +5612,10 @@ msgstr "Every favourited map is equally likely. Players with bigger collections 
 msgid "Every image you have already pasted will stop working."
 msgstr "Every image you have already pasted will stop working."
 
+#: src/routes/dan-estimates.tsx
+msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
+msgstr "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
+
 #: src/routes/farm-helper.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
 msgstr "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
@@ -5707,6 +5723,10 @@ msgstr "Explore Global maps"
 #: src/routes/dan-estimates.tsx
 msgid "Extra: clearing a real course overrides all of it"
 msgstr "Extra: clearing a real course overrides all of it"
+
+#: src/routes/dan-estimates.tsx
+msgid "Extra: practice charts set one skill directly"
+msgstr "Extra: practice charts set one skill directly"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Failed"
@@ -10007,6 +10027,7 @@ msgstr "Open beatmap on osu!"
 msgid "Open beatmap page on osu!"
 msgstr "Open beatmap page on osu!"
 
+#: src/components/ui/MessageText.tsx
 #: src/routes/report.tsx
 msgid "Open image"
 msgstr "Open image"
@@ -13324,6 +13345,10 @@ msgstr "Some charts are two of those things at once, and those count in both. A 
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 msgstr "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
 
+#: src/routes/dan-estimates.tsx
+msgid "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
+msgstr "Some skillset practice packs are checked the same way the courses are. Clearing one of their charts at its ladder's bar sets that skill's dan outright, without the four passes a skill normally needs. For example, clearing <0>Volcanic ~ Delta ~</0> sets your 4K speed dan to <1>delta</1>."
+
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "Someone reported your server and it got taken down for the following reason{said}"
@@ -14472,6 +14497,10 @@ msgstr "the chart's level +1.5"
 #~ msgstr "The courses are the real ones, matched by beatmap. These are all of them, and only these: a re-upload of the same pack by somebody else does not count, and neither does a practice pack that borrows a course's name."
 
 #: src/routes/dan-estimates.tsx
+#~ msgid "The credit stays in that one skill: a speed chart sets speed and leaves your other skills on what your ordinary passes give them. Like a course, it only ever raises the number, and the level is exactly the one the chart is named for, with no credit below the bar and no bonus above it."
+#~ msgstr "The credit stays in that one skill: a speed chart sets speed and leaves your other skills on what your ordinary passes give them. Like a course, it only ever raises the number, and the level is exactly the one the chart is named for, with no credit below the bar and no bonus above it."
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "The curve is still being tuned, so these numbers can change."
 #~ msgstr "The curve is still being tuned, so these numbers can change."
 
@@ -14604,6 +14633,10 @@ msgstr "The new file has no {0} block, so those previews are dropped from the sk
 #: src/components/packs/GoatPoll.tsx
 msgid "The new GOAT"
 msgstr "The new GOAT"
+
+#: src/routes/dan-estimates.tsx
+msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
+msgstr "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
 
 #: src/routes/packs.tsx
 msgid "The pack could not be opened. Please try again in a moment."

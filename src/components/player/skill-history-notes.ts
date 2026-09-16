@@ -14,12 +14,16 @@ import type { LivePlayerSkillHistoryEntry } from "../../lib/live-backend";
  * - Newest first. `date` is the day it went live on the site clock (UTC-6).
  * - `keyCounts` limits a note to the keymodes it can touch; leave it out for
  *   a change every keymode feels.
+ * - `mapLink` names one chart the note is easier to read with an example of.
+ *   Write `{link}` where its name belongs in the sentence.
  */
 export interface SkillHistoryNote {
   /** Day it went live on the site clock (UTC-6), as YYYY-MM-DD. */
   date: string;
   text: string;
   keyCounts?: readonly number[];
+  /** Rendered in place of `{link}`, linking to the map page. */
+  mapLink?: { label: string; beatmapId: number };
 }
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
@@ -35,12 +39,13 @@ export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   },
   {
     date: "2026-09-16",
-    text: "Clearing a supported skillset practice chart can now set that skillset's Dan, even without enough ordinary clears for an estimate. A higher estimate from your other clears is kept.",
+    text: "Clearing a supported skillset chart can now set that skillset's Dan, even without enough ordinary clears for an estimate. For example, clearing {link} sets your 4K Speed Dan to Delta. A higher estimate from your other clears is kept.",
     keyCounts: [4, 7],
+    mapLink: { label: "Volcanic ~ Delta ~", beatmapId: 4969890 },
   },
   {
     date: "2026-09-16",
-    text: "Dan credit now uses the OD actually played for Hard Rock and Difficulty Adjust scores instead of rating them at the original file's OD.",
+    text: "Fixed Hard Rock and Difficulty Adjust scores being rated at the original file's OD. Dan credit now uses the OD you actually played, which also decides whether the clear counts on the LN or the regular ladder.",
     keyCounts: [4, 6, 7],
   },
   {
@@ -54,7 +59,7 @@ export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   },
   {
     date: "2026-09-13",
-    text: "MSD ratings now use a recalibrated accuracy estimate based on judgements, scoring client, OD, playback rate and hold share. Ratings can move up or down, including on LN maps and custom rates.",
+    text: "The accuracy estimate behind MSD ratings was recalibrated: it now reads your judgements against your scoring client, OD, playback rate and hold share instead of treating every judgement window the same. Ratings can move up or down, including on LN maps and custom rates.",
   },
   {
     date: "2026-09-13",

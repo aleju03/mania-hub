@@ -434,6 +434,21 @@ function DanEstimatesPage() {
               counting.
             </Trans>
           </P>
+          <P>
+            <Trans>
+              The OD counts the same way. A chart is rated at the OD you actually played it at:{' '}
+              <ModPill mod="DA" /> sets it outright and <ModPill mod="HR" /> raises it, and the chart is
+              then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on,
+              because holds you can release inside a wide low-OD window stop counting as LN work.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN.
+              A <ModPill mod="DA" /> play that drops the OD under its ladder's minimum earns no dan
+              credit, and <ModPill mod="EZ" /> earns none anywhere, because it widens every hit window.
+            </Trans>
+          </P>
         </Section>
 
         <Section title={t`Step 4: your passes are sorted into four skills`}>
@@ -601,6 +616,38 @@ function DanEstimatesPage() {
               <strong className="text-[17px] font-bold text-white">
                 Clicking your dan badge shows the course that set your estimate, when one did.
               </strong>
+            </Trans>
+          </P>
+        </Section>
+
+        <Section title={t`Extra: practice charts set one skill directly`}>
+          <P>
+            <Trans>
+              Some skillset practice packs are checked the same way the courses are. Clearing one of
+              their charts at its ladder's bar sets that skill's dan outright, without the four passes a
+              skill normally needs. For example, clearing{' '}
+              <Link
+                to="/maps"
+                search={{ map: 4969890 } as never}
+                className="text-osu-pink-light transition-colors hover:text-white"
+              >Volcanic ~ Delta ~</Link>{' '}
+              sets your 4K speed dan to <B>delta</B>.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K
+              regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              A pass only counts if it was really that chart, played straight. <ModPill mod="NF" />,{' '}
+              <ModPill mod="EZ" /> and anything that changes the OD (<ModPill mod="HR" />,{' '}
+              <ModPill mod="DA" />) disqualify it, and so does slowing the chart down; Mirror, the
+              visibility mods and <ModPill mod="DT" />/<ModPill mod="NC" /> are fine. The charts are
+              matched by their notes and OD rather than by beatmap id, so any upload of the same file
+              counts, while edits and rate versions do not.
             </Trans>
           </P>
         </Section>
