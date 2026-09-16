@@ -7,7 +7,8 @@ import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import { classifyChart, sunnyLowEndReroute } from "../src/dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../src/dan/companella.js";
 import { invertManiaOsuText } from "../src/dan/invert-mod.js";
-import { runLeoBlackMixed, runLeoBlackSunny, type LeoBlackOdFlag } from "../src/dan/leoblack-estimator.js";
+import { resolvePlayedOd, runLeoBlackMixed, runLeoBlackSunny, type LeoBlackOdFlag } from "../src/dan/leoblack-estimator.js";
+import { LN_EFFECTIVE_MIN_RATIO, analyzeEffectiveLn } from "../src/dan/dan-estimator/ln-effective.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
 import { computeAndStoreRateDanVerdictFromText, computeDanEstimateJob, enqueueRateDanEstimate,
   getDanEstimateBatch, loadStoredRateDanVerdicts, normalizeDanEstimateItems, rateDanVerdictKey } from "../src/features/dan-estimates.js";
@@ -33,6 +34,29 @@ CircleSize:${keys}
 OverallDifficulty:7
 [TimingPoints]
 0,700,4,2,0,100,1,0
+[HitObjects]
+${notes.join("\n")}`;
+}
+
+// 4K holds that release inside the OD0 window (96ms) but not the OD8 one
+// (60ms): nominally all-LN either way, effectively free only at the file's OD.
+function shortHoldLnChart(holdMs = 80, gap = 125, count = 1200): string {
+  const notes = Array.from({ length: count }, (_, i) => {
+    const column = [0, 2, 1, 3, 2, 0, 3, 1][i % 8];
+    const time = 1000 + i * gap;
+    return `${Math.floor((column + 0.5) * 512 / 4)},192,${time},128,0,${time + holdMs}:0:0:0:0:`;
+  });
+  return `osu file format v14
+[General]
+Mode:3
+[Metadata]
+Title:Synthetic LN identity
+Version:Test
+[Difficulty]
+CircleSize:4
+OverallDifficulty:0
+[TimingPoints]
+0,500,4,2,0,100,1,0
 [HitObjects]
 ${notes.join("\n")}`;
 }
@@ -135,6 +159,29 @@ describe("played OD in LeoBlack dan estimates", () => {
       expect(direct?.rawDan).toBe(classifyChart(parseManiaBeatmap(invertManiaOsuText(text)!), invertManiaOsuText(text)!, { odFlag: 6 }).primary?.rawDan);
     });
   });
+
+  it("reads 4K LN identity at the played OD, so DA credits the side it played", () => {
+    const text = shortHoldLnChart();
+    const map = parseManiaBeatmap(text);
+    expect(map.od).toBe(0);
+    // Every hold is free inside the OD0 release window, so the file is rice.
+    expect(analyzeEffectiveLn(map.notes, { rate: 1, od: 0 }).effectiveLnRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
+    expect(classifyChart(map, text, {}).primary?.kind).toBe("rc");
+    // The same holds demand a release at the OD the play set: LN, both halves
+    // computed there too, exactly as the same chart uploaded at that OD reads.
+    expect(analyzeEffectiveLn(map.notes, { rate: 1, od: 8 }).effectiveLnRatio).toBeGreaterThanOrEqual(LN_EFFECTIVE_MIN_RATIO);
+    for (const odFlag of [8, "HR"] satisfies LeoBlackOdFlag[]) {
+      expect(classifyChart(map, text, { odFlag }).primary?.kind).toBe("ln");
+    }
+    // EZ only widens the window further; the chart stays as free as the file.
+    expect(classifyChart(map, text, { odFlag: "EZ" }).primary?.kind).toBe("rc");
+    // preferFamily still overrides the gate for the callers that pin a side.
+    expect(classifyChart(map, text, { preferFamily: "rc", odFlag: 8 }).primary?.kind).toBe("rc");
+    expect(resolvePlayedOd(4, undefined)).toBe(4);
+    expect(resolvePlayedOd(4, 0)).toBe(0);
+    expect(resolvePlayedOd(0, "HR")).toBeCloseTo(6.462, 3);
+    expect(resolvePlayedOd(8, "EZ")).toBeCloseTo(-0.233, 3);
+  }, 30_000);
 
   it("uses played OD instead of ordinary normal/DT/HT columns and preserves DA precedence", async () => {
     await withDb(async db => {

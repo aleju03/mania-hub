@@ -13,6 +13,7 @@ import { LN_EFFECTIVE_KEY_COUNTS, analyzeEffectiveLn, chartIsLn } from "./dan-es
 import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
+  resolvePlayedOd,
   runLeoBlackMixed,
   runLeoBlackSunny,
   type LeoBlackOdFlag,
@@ -529,9 +530,11 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     && !/^Invalid\b/i.test(verdictText) && !/^Unknown\b/i.test(verdictText);
   const lnRatio = mixed && Number.isFinite(Number(mixed.lnRatio)) ? Number(mixed.lnRatio) : features.metrics.holdRatio;
   const lnEffectiveRatio = LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
-    ? analyzeEffectiveLn(map.notes, { rate, od: map.od }).effectiveLnRatio : undefined;
+    ? analyzeEffectiveLn(map.notes, { rate, od: resolvePlayedOd(map.od, input.odFlag) }).effectiveLnRatio : undefined;
   // What "this chart is LN" reads: hold share plus the effective gate on 4K,
-  // hold share alone elsewhere (chartIsLn).
+  // hold share alone elsewhere (chartIsLn). The gate reads the played OD, so a
+  // Difficulty Adjust play is filed on the side of the chart it played rather
+  // than the side the file's own OD would have given it.
   const chartReadsLn = chartIsLn(map.keyCount, { lnRatio, lnEffectiveRatio }) === true;
   const sunnySr = mixed && Number.isFinite(mixed.star) ? mixed.star : null;
 

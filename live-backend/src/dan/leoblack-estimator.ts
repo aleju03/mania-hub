@@ -27,10 +27,29 @@ export interface LeoBlackDanInput extends DanEstimateInput {
   // Which half of a hybrid "RC || LN" verdict to report. "auto" picks LN when the
   // chart is LN-dominant (the keymode's identity line of holds or more).
   preferFamily?: "rc" | "ln" | "auto";
+  /** Played OD/mod; omitted rates the chart at its own OD. */
+  odFlag?: LeoBlackOdFlag;
 }
 
 /** LeoBlack resolves HR/EZ itself; numeric values are the played DA slider. */
 export type LeoBlackOdFlag = number | "HR" | "EZ";
+
+/**
+ * The OD a play was actually judged at: Difficulty Adjust replaces the file's
+ * value outright, HR/EZ scale it. Same conversion the vendored Sunny/Roxy
+ * preprocess does, so anything reading a judgement window off this OD reads the
+ * window LeoBlack rated the play against. Needed wherever a window decides
+ * something structural, above all the 4K effective-LN identity gate: a nominal
+ * LN chart at OD0 releases inside a 96ms window and reads as rice, the same
+ * chart at OD8 has 60ms and reads as LN, so a DA play that rates at its own OD
+ * must have its RC/LN side read there too.
+ */
+export function resolvePlayedOd(fileOd: number, odFlag?: LeoBlackOdFlag): number {
+  if (odFlag == null) return fileOd;
+  if (odFlag === "HR") return 6.462 + (0.715 * fileOd);
+  if (odFlag === "EZ") return -20.761 + (2.566 * fileOd);
+  return Number.isFinite(odFlag) ? odFlag : fileOd;
+}
 
 export interface ParsedDanPart {
   label: string;
@@ -185,7 +204,7 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
   }
 
   const rate = getInputRate(input);
-  const mixed = runLeoBlackMixed(osuText, { speedRate: rate });
+  const mixed = runLeoBlackMixed(osuText, { speedRate: rate, odFlag: input.odFlag });
   const verdict = String(mixed.estDiff ?? "").trim();
   if (!verdict || /^Invalid\b/i.test(verdict) || /^Unknown\b/i.test(verdict)) {
     throw new Error(`LeoBlack estimator could not classify this chart (${verdict || "empty verdict"}).`);
@@ -201,7 +220,7 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
   const readsLn = chartIsLn(map.keyCount, {
     lnRatio,
     lnEffectiveRatio: LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
-      ? analyzeEffectiveLn(map.notes, { rate, od: map.od }).effectiveLnRatio : undefined,
+      ? analyzeEffectiveLn(map.notes, { rate, od: resolvePlayedOd(map.od, input.odFlag) }).effectiveLnRatio : undefined,
   }) === true;
   const useLn = lnText != null && (prefer === "ln" || (prefer === "auto" && readsLn));
 
