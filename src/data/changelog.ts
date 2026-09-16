@@ -33,8 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-16", text: "Clearing a skillset dan chart now sets that skillset's dan directly. The play popup shows the chart's own estimate next to the level the clear sets, and a higher estimate from your other clears is kept", to: "/dan-estimates" },
-  { date: "2026-09-16", text: "One skillset dan clear is enough to show that skillset even with no overall dan yet. Those sides read Skillset clears instead of a level, and count on that skillset's leaderboard but not the overall dan one", to: "/my-stats" },
+  { date: "2026-09-16", text: "Clearing a dan's skillset map sets that skillset to its level, even with no overall dan yet. For example clearing Volcanic immediately sets your speed to delta, even if your other clears average lower. Supported skillsets: 4K Reform, 7K regular, 7K LN. 4K LN skillset support is planned", to: "/dan-estimates" },
   { date: "2026-09-16", text: "Only your two best rate plays on the same chart count toward dan now, both fully, instead of every rate adding a shrinking share. Verified rate reuploads share the limit", to: "/dan-estimates" },
   { date: "2026-09-16", text: "Dan estimates now use the OD you actually played. HR, EZ and Difficulty Adjust plays get their own rating for the chart instead of being rated at the file's OD", to: "/dan-estimates" },
   { date: "2026-09-16", text: "Improved 4K vibro detection to catch more patterns that were inflating ratings, while restoring MSD and Dan credit to dense chordjack plays that were incorrectly excluded.", to: "/dan-estimates" },
