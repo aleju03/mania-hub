@@ -12,7 +12,8 @@ import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn, lnTailPassText } from "../dan/dan-e
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import type { MotionFeatures } from "../dan/motion-features.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, msdChartErrorFallback, isMsdSupportedKeyCount } from "../dan/msd.js";
-import type { JobQueue } from "../jobs/queue.js";
+import { JobQueue } from "../jobs/queue.js";
+import { observedScoreChecksum, queueRevisionCheck, readBeatmapRevisionStates, scoreMatchesRevision } from "../osu/beatmap-revisions.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LN_EFFECTIVE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
@@ -769,6 +770,13 @@ export function isPlayerSkillAxis(axis: string): boolean {
 }
 
 export interface StoredPlaySsr {
+  /** Observed played revision, retained independently of mutable display metadata. */
+  beatmapChecksum?: string;
+  /** File that produced the computed values, never evidence of what was played. */
+  fileChecksum?: string;
+  revisionPending?: boolean;
+  /** Preserve plays that span a map upload without relabelling them later. */
+  startedAt?: string | null;
   score?: PlayerSkillScoreDetails | null;
   /** Explicit provenance survives raw-score retention; absence stays unknown. */
   wifeScoring?: "stable" | "lazer" | "unknown";
@@ -3083,7 +3091,113 @@ export async function computePlayerSkillRatings(
   scores: OscScore[],
   previousPlays: StoredPlaySsr[],
   options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[]; previousVibroExcluded?: StoredVibroExclusion[] } = {},
-): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; danOnly: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number; deferredLnMigrations: number; deferredCalibration: number }> {
+): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; danOnly: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number; deferredLnMigrations: number; deferredCalibration: number; pendingRevisions?: number }> {
+  // Validate the whole input pool before any candidate or retention path can
+  // reuse an SSR. File/network work is queued; a known mismatch stays unrated.
+  const allStored = [...previousPlays, ...(options.previousVibroExcluded ?? []).map(entry => entry.play)];
+  const allScores = [...scores, ...(options.trackedScores ?? [])];
+  const states = await readBeatmapRevisionStates(db, [
+    ...allScores.map(score => Number(score.beatmap_id ?? score.beatmap?.id)), ...allStored.map(play => play.beatmapId),
+  ]);
+  const queue = new JobQueue(db);
+  for (const [id, state] of states) {
+    if (!state.ready) await queueRevisionCheck(db, queue, id, state.checksum);
+  }
+  const previousById = new Map(allStored.map(play => [play.identity, play]));
+  const pending = new Map<string, StoredPlaySsr>();
+  const defer = (play: StoredPlaySsr) => {
+    const cleared = invalidateStoredPlayRevision(play);
+    const key = playSlotKey(play.beatmapId, play.rate, play.inverse);
+    const existing = pending.get(key);
+    if (!existing || (play.accuracy ?? 0) > (existing.accuracy ?? 0)) pending.set(key, cleared);
+  };
+  const eligibleScore = (score: OscScore): boolean => {
+    const id = Number(score.beatmap_id ?? score.beatmap?.id);
+    const state = states.get(id);
+    const previous = previousById.get(getScoreIdentity(score));
+    const checksum = observedScoreChecksum(score) ?? previous?.beatmapChecksum;
+    if (!state || (state.ready && scoreMatchesRevision(state, checksum, score.started_at ?? score.ended_at ?? score.created_at))) return true;
+    const rate = getPlayRate(score.mods);
+    if (rate != null && rate > 0) defer({
+      ...previous, identity: getScoreIdentity(score), beatmapId: id,
+      keyCount: previous?.keyCount ?? state.keyCount, rate, goal: previous?.goal ?? SSR_GOAL_MIN,
+      pp: score.pp ?? 0, values: {}, patterns: [],
+      beatmapChecksum: checksum ?? undefined, score: playerSkillScoreDetails(score, previous?.score),
+      accuracy: getDisplayedAccuracy(score), endedAt: score.ended_at ?? score.created_at ?? null,
+      startedAt: score.started_at ?? previous?.startedAt ?? null,
+      wifeScoring: wifeScoringFor(score), mods: score.mods == null ? previous?.mods : getModAcronyms(score.mods, false),
+      odOverride: difficultyAdjustOd(score.mods), ezWindows: ezWindowScale(score) > 1,
+      inverse: scoreInvertsChart(score.mods), source: score.pp && score.pp > 0 ? "top" : "tracked",
+    });
+    return false;
+  };
+  const eligibleStored = (play: StoredPlaySsr): StoredPlaySsr | null => {
+    const state = states.get(play.beatmapId);
+    if (!state) return play;
+    if (!state.ready || !scoreMatchesRevision(state, play.beatmapChecksum, play.startedAt ?? play.endedAt)) { defer(play); return null; }
+    if (play.revisionPending || (play.fileChecksum && play.fileChecksum !== state.fileChecksum)
+      || (state.mutable && !play.fileChecksum)
+      || (play.wifeCalibration?.fileVersion && play.wifeCalibration.fileVersion !== state.fetchedAt)) {
+      return invalidateStoredPlayRevision(play);
+    }
+    return play;
+  };
+  const filteredScores = scores.filter(eligibleScore);
+  const filteredTracked = (options.trackedScores ?? []).filter(eligibleScore);
+  const filteredStored = previousPlays.map(eligibleStored).filter((play): play is StoredPlaySsr => play != null);
+  const filteredExcluded = (options.previousVibroExcluded ?? []).flatMap(entry => {
+    const play = eligibleStored(entry.play);
+    if (!play) return [];
+    if (play.revisionPending) { filteredStored.push(play); return []; }
+    return [{ ...entry, play }];
+  });
+  const result = await computeVerifiedPlayerSkillRatings(db, osu, filteredScores, filteredStored, {
+    ...options, trackedScores: filteredTracked, previousVibroExcluded: filteredExcluded,
+  });
+  const after = await readBeatmapRevisionStates(db, [...states.keys()]);
+  for (const [id, before] of states) {
+    const current = after.get(id);
+    if (!current || current.checksum !== before.checksum || current.fileChecksum !== before.fileChecksum
+      || current.fetchedAt !== before.fetchedAt) {
+      if (current) await queueRevisionCheck(db, queue, id, current.checksum);
+      throw new Error("Beatmap revision changed during skill computation; retry");
+    }
+  }
+  for (const play of [...result.plays, ...result.danOnly, ...result.vibroExcluded.map(entry => entry.play)]) {
+    const state = states.get(play.beatmapId);
+    if (state?.ready && !play.calibrationPending) {
+      play.fileChecksum = state.fileChecksum ?? undefined;
+      play.revisionPending = undefined;
+      if (!play.beatmapChecksum && scoreMatchesRevision(state, null, play.startedAt ?? play.endedAt) && state.mutable) {
+        play.beatmapChecksum = state.checksum;
+      }
+    }
+    pending.delete(playSlotKey(play.beatmapId, play.rate, play.inverse));
+  }
+  const waiting = [...pending.values()];
+  result.pendingRevisions = [...states.values()].filter(state => !state.ready).length;
+  result.danOnly.push(...waiting);
+  result.summary.pendingPlays += waiting.length;
+  result.summary.totalPlays += waiting.length;
+  return result;
+}
+
+/** Keep sole-source score evidence while discarding every file-derived fact. */
+export function invalidateStoredPlayRevision(play: StoredPlaySsr): StoredPlaySsr {
+  return { ...play, values: {}, patterns: [], ratingExcluded: true, calibrationPending: true, revisionPending: true,
+    fileChecksum: undefined, wifeCalibration: null, tapWifeOd: undefined, tapWifeFileVersion: undefined,
+    lnGoal: undefined, lnTailPass: undefined, lnSkill: undefined, chartFamily: null,
+    rateVibroChecked: undefined, vibroAdjustment: undefined,
+  };
+}
+
+async function computeVerifiedPlayerSkillRatings(
+  db: Db,
+  osu: Pick<OsuApiClient, "getBeatmapFile">,
+  scores: OscScore[],
+  previousPlays: StoredPlaySsr[],
+  options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string>; courseClears?: DanCourseClear[]; previousVibroExcluded?: StoredVibroExclusion[] } = {},
+): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; danOnly: StoredPlaySsr[]; vibroExcluded: StoredVibroExclusion[]; untaggedBeatmapIds: number[]; pendingRateVibroChecks: number; deferredLnMigrations: number; deferredCalibration: number; pendingRevisions?: number }> {
   const topPlays = scores.filter((score) => typeof score.pp === "number" && score.pp > 0);
   const trackedScores = options.trackedScores ?? [];
   const untrustedIdentities = options.untrustedIdentities ?? new Set<string>();
@@ -3338,6 +3452,8 @@ export async function computePlayerSkillRatings(
       id, user_id: 0, beatmap_id: play.beatmapId, retainedRate: play.rate,
       ...(play.wifeScoring === "stable" ? { legacy_score_id: id } : {}),
       wifeScoring: play.wifeScoring ?? "unknown",
+      beatmapChecksum: play.beatmapChecksum,
+      started_at: play.startedAt,
       accuracy: play.accuracy ?? play.stableAccuracy ?? 0,
       statistics: play.score?.statistics ?? play.vibroClearEvidence?.statistics ?? {}, mods: play.mods.map((acronym): OsuMod => {
         const mod: OsuMod = { acronym };
@@ -3442,11 +3558,14 @@ export async function computePlayerSkillRatings(
       customAccuracy: hasJudgments ? getStoredScoreAccuracy(score) : previous?.customAccuracy ?? getStoredScoreAccuracy(score),
       missShare: hasJudgments ? getMissShare(score.statistics) : previous?.missShare ?? null,
       endedAt: score.ended_at ?? score.created_at ?? null,
+      ...(score.started_at ? { startedAt: score.started_at } : {}),
       rateMod: getRateModAcronym(score.mods),
       mods: score.mods == null ? undefined : getModAcronyms(score.mods, false),
       ezWindows: score.mods == null ? undefined : ezWindowScale(score) > 1,
       odOverride: difficultyAdjustOd(score.mods),
       wifeScoring: wifeScoringFor(score),
+      ...((observedScoreChecksum(score) ?? previous?.beatmapChecksum)
+        ? { beatmapChecksum: observedScoreChecksum(score) ?? previous?.beatmapChecksum } : {}),
       wifeCalibration: candidate.wifeCalibration ?? null,
       lnGoal: candidate.lnGoal,
     };
@@ -4046,6 +4165,13 @@ async function computePlayerSkillsTurn(db: Db, osu: ProfileOsuClient, queue: Job
     // Charts with no analysis row yet contribute no pattern tags; queue them so
     // the next recompute (12h TTL) picks their tags up.
     await enqueueMissingChartAnalyses(db, queue, result.untaggedBeatmapIds).catch(() => {});
+    if (result.pendingRevisions) {
+      // Matching files/analyses can land without a changed-file repair (a
+      // first cache fill). Retry independently of calculator-budget progress.
+      const retryAt = Date.now() + 15 * 60_000;
+      await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:revision:${userId}:${Math.floor(retryAt / (15 * 60_000))}`,
+        { userId }, { priority: -5, runAfter: new Date(retryAt), replaceDone: true });
+    }
     await settlePlayerSkillContinuations(db, queue, PLAYER_SKILLS_VERSION, RATE_VIBRO_CHECK_VERSION, payload, {
       rateVibroPending: result.pendingRateVibroChecks,
       calibrationPending: result.deferredCalibration,

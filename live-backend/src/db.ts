@@ -1393,6 +1393,9 @@ async function migrateActivityMapsBestPayload(db: Db): Promise<void> {
 
 async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
   const columns = (await db.execute("pragma table_info(beatmap_chart_analysis)")).rows.map((row) => String(row.name));
+  if (!columns.includes("source_file_md5")) {
+    await db.execute("alter table beatmap_chart_analysis add column source_file_md5 text");
+  }
   if (!columns.includes("msd_dt_json")) {
     await db.execute("alter table beatmap_chart_analysis add column msd_dt_json text");
   }
@@ -3347,6 +3350,9 @@ async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
   `);
 
   const columns = (await db.execute("pragma table_info(beatmap_osu_files)")).rows.map((row) => String(row.name));
+  if (!columns.includes("content_md5")) {
+    await db.execute("alter table beatmap_osu_files add column content_md5 text");
+  }
   if (!columns.includes("beatmapset_id")) {
     await db.execute("alter table beatmap_osu_files add column beatmapset_id integer");
   }

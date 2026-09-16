@@ -18,7 +18,7 @@ import { LN_TAIL_MIN_RATIO, computeMsd, msdChartErrorFallback } from "../dan/msd
 import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
-import { BEATMAP_FILE_CHANGE_JOB, getCachedBeatmapFile, markCachedBeatmapFileUnavailable, readCachedBeatmapFile, storeCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { BEATMAP_FILE_CHANGE_JOB, beatmapFileMd5, getCachedBeatmapFile, markCachedBeatmapFileUnavailable, readCachedBeatmapFile, readCurrentBeatmapChecksum, storeCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
@@ -315,6 +315,10 @@ export async function computeBeatmapChartAnalysis(
     if (osuText == null) {
       throw new Error(".osu file not cached and osu API jobs are disabled");
     }
+    const expectedChecksum = await readCurrentBeatmapChecksum(db, beatmapId);
+    if (expectedChecksum && beatmapFileMd5(osuText) !== expectedChecksum) {
+      throw new Error("Beatmap revision is pending checksum verification");
+    }
     // The backend parser has no std->mania convert support and would silently
     // read a standard chart's x positions as columns; gate on the mode header.
     if (!/^Mode\s*:\s*3\s*$/m.test(osuText)) {
@@ -357,12 +361,14 @@ export async function computeBeatmapChartAnalysis(
 
     const lean = leanClassification(classification, computeNoteBpm(osuText), motionFeatures(map.notes, map.keyCount));
     const computedAt = nowIso();
-    await exec(
+    const fileChecksum = beatmapFileMd5(osuText);
+    const written = await exec(
       db,
       `insert into beatmap_chart_analysis
          (beatmap_id, analysis_version, status, key_count, primary_label, primary_family,
-          raw_dan, msd_overall, classification_json, msd_json, msd_ln_json, error, computed_at, updated_at)
-       values (?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, ?, null, ?, ?)
+          raw_dan, msd_overall, classification_json, msd_json, msd_ln_json, error, computed_at, updated_at, source_file_md5)
+       select ?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, ?, null, ?, ?, ?
+       where not exists (select 1 from beatmap_osu_files where beatmap_id = ? and content_md5 is not null and content_md5 != ?)
        on conflict(beatmap_id, analysis_version) do update set
          status = excluded.status,
          key_count = excluded.key_count,
@@ -373,6 +379,7 @@ export async function computeBeatmapChartAnalysis(
          classification_json = excluded.classification_json,
          msd_json = excluded.msd_json,
          msd_ln_json = excluded.msd_ln_json,
+         source_file_md5 = excluded.source_file_md5,
          error = excluded.error,
          computed_at = excluded.computed_at,
          updated_at = excluded.updated_at`,
@@ -389,8 +396,12 @@ export async function computeBeatmapChartAnalysis(
         msdLn ? json(msdLn) : null,
         computedAt,
         computedAt,
+        fileChecksum,
+        beatmapId,
+        fileChecksum,
       ],
     );
+    if (Number(written.rowsAffected) !== 1) throw new Error("Beatmap file changed during chart analysis; retry");
     // Surface the fresh analysis in map search without waiting for a rebuild.
     // Dynamic import keeps the static graph acyclic (map-search imports this
     // module for the version constant).
@@ -589,7 +600,7 @@ function isRecent(updatedAt: string, cooldownMs: number): boolean {
   return Date.now() - updatedAtMs < cooldownMs;
 }
 
-async function enqueueChartAnalysis(
+export async function enqueueChartAnalysis(
   queue: JobQueue,
   beatmapId: number,
   options: { recomputeDtRate?: boolean; recomputeHtRate?: boolean; repair?: boolean } = {},
@@ -4498,6 +4509,8 @@ export async function invalidateOsuFileRepairDerivatives(
     await exec(db, `delete from dan_mod_estimates where beatmap_id in (${placeholders})`, chunk);
     await exec(db, `delete from beatmap_chart_analysis where beatmap_id in (${placeholders})`, chunk);
     await exec(db, `delete from beatmap_skill_vectors where beatmap_id in (${placeholders})`, chunk);
+    await exec(db, `delete from chart_raw_ssr where beatmap_id in (${placeholders})`, chunk);
+    await exec(db, `delete from unrated_plays where beatmap_id in (${placeholders})`, chunk);
 
     for (const beatmapId of chunk) {
       // A terminal 404 or invalid direct response has no trustworthy file to
@@ -4546,18 +4559,17 @@ function osuFileRepairQueuedSource(dt: boolean, ht: boolean): string {
 
 interface RepairStoredPlayerSkillPlay {
   beatmapId?: unknown;
-  [field: string]: unknown;
+  revisionPending?: boolean;
 }
 
-// Per-play SSR reuse has no file hash. Remove the plays minted from a repaired
-// cache entry or every later player recompute would copy the wrong values
-// forward. This lives with the repair instead of player-skills.ts so the
-// one-shot incident code does not become part of that feature's permanent API.
+// Legacy per-play SSRs have no file hash. The historical wrong-file purge
+// removes them; ongoing revision repairs preserve their score inputs while
+// invalidating computed values in every retained pool.
 export async function purgePlayerSkillPlaysForRepairedBeatmaps(
   db: Db,
   queue: JobQueue,
   beatmapIds: number[],
-  options: { enqueue?: boolean; cursor?: number; pageSize?: number; maxPages?: number } = {},
+  options: { enqueue?: boolean; cursor?: number; pageSize?: number; maxPages?: number; preserveEvidence?: boolean } = {},
 ): Promise<{ users: number[]; droppedPlays: number; nextCursor: number; done: boolean }> {
   const ids = [...new Set(beatmapIds)]
     .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
@@ -4595,11 +4607,27 @@ export async function purgePlayerSkillPlaysForRepairedBeatmaps(
       const userId = Number(row.user_id);
       const analysisVersion = Number(row.analysis_version);
       cursor = Math.max(cursor, userId);
-      const stored = unpackJson<{ plays?: RepairStoredPlayerSkillPlay[] } | null>(row.plays_json, null);
+      const stored = unpackJson<{ plays?: RepairStoredPlayerSkillPlay[]; danOnly?: RepairStoredPlayerSkillPlay[]; vibroExcluded?: Array<{ play: RepairStoredPlayerSkillPlay }> } | null>(row.plays_json, null);
       const plays = Array.isArray(stored?.plays) ? stored.plays : [];
-      const kept = plays.filter((play) => !repairedIds.has(Number(play?.beatmapId)));
-      const dropped = plays.length - kept.length;
-      if (!Number.isSafeInteger(userId) || userId <= 0 || dropped <= 0) continue;
+      const affected = (play: RepairStoredPlayerSkillPlay) => repairedIds.has(Number(play?.beatmapId));
+      const kept = plays.filter(play => !affected(play));
+      let dropped = plays.length - kept.length;
+      let replacement = { ...(stored ?? {}), plays: kept };
+      if (options.preserveEvidence) {
+        const danOnly = stored?.danOnly ?? [];
+        const excluded = stored?.vibroExcluded ?? [];
+        const invalidated = [...plays, ...danOnly, ...excluded.map(entry => entry.play)]
+          .filter(play => affected(play) && play.revisionPending !== true);
+        dropped = invalidated.length;
+        const { invalidateStoredPlayRevision } = await import("./player-skills.js");
+        replacement = { ...replacement,
+          danOnly: [...danOnly.filter(play => !affected(play) || play.revisionPending === true),
+            ...invalidated.map(play => invalidateStoredPlayRevision(play as unknown as import("./player-skills.js").StoredPlaySsr))],
+          vibroExcluded: excluded.filter(entry => !affected(entry.play)),
+        };
+      }
+      const hasPending = options.preserveEvidence && stored?.danOnly?.some(affected);
+      if (!Number.isSafeInteger(userId) || userId <= 0 || (dropped <= 0 && !hasPending)) continue;
 
       // Queue before changing the reusable evidence: a crash must not leave a
       // stale aggregate with no remaining play that can trigger its refresh.
@@ -4608,12 +4636,15 @@ export async function purgePlayerSkillPlaysForRepairedBeatmaps(
         await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:${PLAYER_SKILLS_VERSION}:${userId}`,
           { userId }, { priority: -5, runAfter: new Date(Date.now() + 5 * 60_000), replaceDone: true });
       }
+      // A compute may already have withheld the stale scores. They still
+      // need waking after the replacement arrives, even with nothing to clear.
+      if (dropped <= 0) { users.add(userId); continue; }
       const updated = await exec(
         db,
         `update player_skill_ratings
          set plays_json = ?, computed_at = ?, updated_at = ?
          where user_id = ? and analysis_version = ? and plays_json = ?`,
-        [packJson({ ...(stored ?? {}), plays: kept }), staleComputedAt, nowIso(), userId, analysisVersion, row.plays_json],
+        [packJson(replacement), staleComputedAt, nowIso(), userId, analysisVersion, row.plays_json],
       );
       if (Number(updated.rowsAffected) !== 1) throw new Error(`Player ${userId} changed during chart repair; retry this page`);
       users.add(userId);
@@ -4650,7 +4681,7 @@ export async function runChangedBeatmapFileRepairJob(
   const result = payload.playerCursor == null
     ? { nextCursor: 0, done: false }
     : await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, beatmapIds,
-      { cursor: payload.playerCursor, pageSize: 20, maxPages: 1 });
+      { cursor: payload.playerCursor, pageSize: 20, maxPages: 1, preserveEvidence: true });
   if (!result.done) {
     await queue.enqueue(BEATMAP_FILE_CHANGE_JOB,
       `changed-osu-file:players:${payload.revision}:${result.nextCursor}`,

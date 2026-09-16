@@ -1,3 +1,4 @@
+import { BEATMAP_REVISION_JOB, BEATMAP_REVISION_AUDIT_JOB, verifyBeatmapRevision, auditBeatmapRevisions } from "./osu/beatmap-revisions.js";
 import { BEATMAP_FILE_CHANGE_JOB } from "./osu/beatmap-file-cache.js";
 import { runChangedBeatmapFileRepairJob, type ChangedBeatmapFileRepairPayload } from "./features/chart-analysis.js";
 import { MARATHON_CORRECTION_JOB, runMarathonCorrectionJob } from "./features/marathon-correction.js";
@@ -126,7 +127,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // PROFILE_USER_REFRESH_JOB rides here because someone is looking at that
     // profile right now: the page served the stored snapshot and its
     // stale-metadata retry is polling for what this job writes.
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores", PROFILE_USER_REFRESH_JOB, PROFILE_SNAPSHOT_REFRESH_JOB],
+    jobTypes: [BEATMAP_REVISION_JOB, "refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores", PROFILE_USER_REFRESH_JOB, PROFILE_SNAPSHOT_REFRESH_JOB],
     claimLimit: 3,
     intervalMs: 750,
   },
@@ -239,7 +240,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // Tunable via CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run
     // flat out.
     name: "chart-analysis",
-    jobTypes: [BEATMAP_FILE_CHANGE_JOB, MARATHON_CORRECTION_JOB, LEOBLACK_FUSION_JOB, CHART_FAMILY_SWEEP_JOB, CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, JACK_DEMAND_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_EFFECTIVE_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, NKEY_MSD_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, UNRATED_PLAYS_SWEEP_JOB],
+    jobTypes: [BEATMAP_REVISION_AUDIT_JOB, BEATMAP_FILE_CHANGE_JOB, MARATHON_CORRECTION_JOB, LEOBLACK_FUSION_JOB, CHART_FAMILY_SWEEP_JOB, CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_ELIGIBILITY_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_LEOBLACK_RECOMPUTE_JOB, CHORDJACK_TAG_RECOMPUTE_JOB, JACK_TAG_RECOMPUTE_JOB, JACK_DEMAND_RECOMPUTE_JOB, MOTION_FEATURES_RECOMPUTE_JOB, BRACKET_TAG_RECOMPUTE_JOB, BRACKET_CONTENT_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, HT_RATE_ANALYSIS_JOB, LN_MSD_SWEEP_JOB, LN_EFFECTIVE_RECOMPUTE_JOB, LN_PRIMARY_REPIN_JOB, LN7_PRIMARY_REPIN_JOB, NOTE_BPM_RECOMPUTE_JOB, OSU_FILE_REPAIR_JOB, COMPANELLA_RECOMPUTE_JOB, SUNNY_REPIN_RECOMPUTE_JOB, SUNNY_REPIN_DT_RECOMPUTE_JOB, LEOBLACK_REPIN_RECOMPUTE_JOB, LEOBLACK_REPIN_DT_RECOMPUTE_JOB, MSD_POISON_RECOVERY_JOB, INVERSE_CLUSTER_BPM_JOB, NKEY_MSD_JOB, PLAYER_SKILL_POISON_JOB, PLAYER_SKILL_FLOOR_SWEEP_JOB, PLAYER_SKILL_MSD_CAP_JOB, PLAYER_SKILL_VIBRO_SWEEP_JOB, PLAYER_SKILL_DAN_SWEEP_JOB, PLAYER_SKILL_PATTERN_SWEEP_JOB, UNRATED_PLAYS_SWEEP_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -363,6 +364,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
 ];
 
 const OSU_API_JOB_TYPES = new Set([
+  BEATMAP_REVISION_JOB,
   "refresh_user_top_scores",
   "refresh_user_maps_farmed_scores",
   "refresh_country_maps",
@@ -871,6 +873,14 @@ export class WorkerRunner {
     }
     if (job.type === UNRATED_PLAYS_SWEEP_JOB) {
       await runUnratedPlaysSweepJob(this.db, this.queue, job.payload as { cursor?: number; revision?: string });
+      return;
+    }
+    if (job.type === BEATMAP_REVISION_JOB) {
+      await verifyBeatmapRevision(this.db, this.osu, this.queue, (job.payload as { beatmapId: number }).beatmapId);
+      return;
+    }
+    if (job.type === BEATMAP_REVISION_AUDIT_JOB) {
+      await auditBeatmapRevisions(this.db, this.queue, (job.payload as { cursor: number }).cursor);
       return;
     }
     if (job.type === BEATMAP_FILE_CHANGE_JOB) {

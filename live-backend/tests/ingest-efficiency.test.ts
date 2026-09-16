@@ -2,6 +2,7 @@ import { createClient } from "@libsql/client";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { exec, migrate } from "../src/db.js";
+import { beatmapFileMd5, storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { countOpenRecentSessions, liveRecentIntervalMs, planNextRecentPoll, promotePendingRecentReconcileJobs, RECENT_CLOSING_DELAY_MS, reserveRecentReconcileRequest, type RecentReconcilePayload } from "../src/jobs/recent-reconcile.js";
@@ -27,6 +28,25 @@ async function setup() {
 const options = { processLeaderboardFeatures: false, processGoalFeatures: false, suppressTrackerEvents: true };
 
 describe("ingest metadata efficiency", () => {
+  it("queues an edited chart once and preserves revision evidence without letting old metadata roll it back", async () => {
+    const { db, ingestor, score } = await setup();
+    try {
+      const original = { ...score, ended_at: "2026-09-15T10:00:00Z", beatmap: { ...score.beatmap!,
+        checksum: beatmapFileMd5("old"), last_updated: "2026-09-15T09:00:00Z" } };
+      await ingestor.ingestBatch([original], "osu_recent", options);
+      await storeCachedBeatmapFile(db, score.beatmap!.id, "old");
+      const updated = { ...score, id: score.id + 1, ended_at: "2026-09-16T10:00:00Z", beatmap: { ...score.beatmap!,
+        cs: 7, checksum: beatmapFileMd5("new"), last_updated: "2026-09-16T09:00:00Z" } };
+      await ingestor.ingestBatch([updated, updated, original], "osu_recent", options);
+      const map = (await exec(db, "select metadata_json, cs from beatmaps where beatmap_id = ?", [score.beatmap!.id])).rows[0];
+      expect(JSON.parse(String(map.metadata_json)).checksum).toBe(beatmapFileMd5("new"));
+      expect(map.cs).toBe(7);
+      expect((await exec(db, "select type from jobs where type = 'verify_beatmap_revision'")).rows).toHaveLength(1);
+      const stored = (await exec(db, "select score_json from score_events where score_id = ?", [updated.id])).rows[0];
+      expect(JSON.parse(String(stored.score_json)).beatmapChecksum).toBe(beatmapFileMd5("new"));
+    } finally { db.close(); }
+  });
+
   it("leaves metadata timestamps unchanged on duplicate delivery while persisting corrected metadata", async () => {
     const { db, ingestor, score } = await setup();
     try {

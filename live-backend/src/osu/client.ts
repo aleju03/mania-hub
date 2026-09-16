@@ -646,7 +646,8 @@ export class OsuApiClient {
           if (response.status === 429) this.pauseFor429(retryAfterMs, url);
           throw new Error(`${response.status}`);
         }
-        const text = await response.text();
+        // Response.text() strips a UTF-8 BOM, changing osu!'s file checksum.
+        const text = Buffer.from(await response.arrayBuffer()).toString("utf8");
         if (!isLikelyBeatmapFile(text)) throw new Error("invalid .osu file");
         return text;
       } finally {

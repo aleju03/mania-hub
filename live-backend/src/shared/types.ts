@@ -19,6 +19,8 @@ export interface OsuScoreStatistics {
 }
 
 export interface OsuBeatmap {
+  checksum?: string | null;
+  last_updated?: string;
   id: number;
   beatmapset_id: number;
   difficulty_rating: number;
@@ -63,6 +65,8 @@ export interface ScoreUser {
 }
 
 export interface OscScore {
+  /** Checksum observed with metadata predating this play; not hydrated from today's map. */
+  beatmapChecksum?: string;
   id: number;
   best_id?: number | null;
   legacy_score_id?: number | null;

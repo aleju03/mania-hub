@@ -252,6 +252,30 @@ describe("invalidateOsuFileRepairDerivatives", () => {
     });
   });
 
+  it("preserves raw evidence from all three pools when a revision invalidates their calculations", async () => {
+    await withDb(async db => {
+      const base = { identity: "official:1", beatmapId: 10, keyCount: 4, rate: 1, goal: 0.97, pp: 0,
+        values: { Overall: 42, LN: 40 }, patterns: ["ln"], wifeCalibration: { fileVersion: "old" },
+        mods: [], accuracy: 0.99, score: { statistics: { perfect: 2000 } } };
+      await exec(db, `insert into player_skill_ratings
+        (user_id, analysis_version, status, modes_json, plays_json, updated_at) values (7, 40, 'ready', '{}', ?, ?)`,
+      [JSON.stringify({ plays: [base], danOnly: [{ ...base, identity: "official:2", rate: 1.5 }],
+        vibroExcluded: [{ play: { ...base, identity: "official:3", rate: 0.75 }, reason: "rate_vibro", checkedVersion: 7 }] }), nowIso()]);
+      const queue = new JobQueue(db);
+      const result = await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, [10], { preserveEvidence: true });
+      expect(result.droppedPlays).toBe(3);
+      const row = (await exec(db, "select plays_json from player_skill_ratings where user_id = 7")).rows[0];
+      const stored = unpackJson<{ plays: unknown[]; vibroExcluded: unknown[]; danOnly: unknown[] }>(row.plays_json, { plays: [], vibroExcluded: [], danOnly: [] });
+      expect(stored.plays).toEqual([]);
+      expect(stored.vibroExcluded).toEqual([]);
+      expect(stored.danOnly).toHaveLength(3);
+      for (const play of stored.danOnly) expect(play).toMatchObject({ values: {}, patterns: [], wifeCalibration: null,
+        revisionPending: true, calibrationPending: true, score: { statistics: { perfect: 2000 } } });
+      // A retried player page must preserve the pending inputs exactly once.
+      expect((await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, [10], { preserveEvidence: true })).droppedPlays).toBe(0);
+    });
+  });
+
   it("pages distinct users without losing another version at the boundary", async () => {
     await withDb(async (db) => {
       for (const [userId, version] of [[7, 18], [7, 19], [8, 19]]) {

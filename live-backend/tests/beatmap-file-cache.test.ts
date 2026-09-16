@@ -119,6 +119,32 @@ describe("beatmap .osu file cache", () => {
     }
   });
 
+  it.each(["throttled", "failed", "wrong response", "matching response"])("checks the current metadata checksum for calculation callers: %s", async (scenario) => {
+    const { db, cleanup } = await setupDb();
+    try {
+      const id = 1991 + ["throttled", "failed", "wrong response", "matching response"].indexOf(scenario);
+      const stale = buildBeatmapFile();
+      const current = `${stale}\n// new revision\n`;
+      await insertBeatmapMeta(db, id, 1, "Chart");
+      await exec(db, "update beatmaps set metadata_json = ? where beatmap_id = ?", [JSON.stringify({ checksum: md5(current) }), id]);
+      await storeCachedBeatmapFile(db, id, stale);
+      if (scenario !== "throttled") await exec(db, "update beatmap_osu_files set fetched_at = '2020-01-01T00:00:00Z' where beatmap_id = ?", [id]);
+      const osu = { getBeatmapFile: vi.fn(async () => {
+        if (scenario === "failed") throw new Error("offline");
+        return scenario === "wrong response" ? stale : current;
+      }) };
+      if (scenario === "matching response") {
+        await expect(getCachedBeatmapFile(db, osu, id, "test:calculation")).resolves.toBe(current);
+        expect((await exec(db, "select type from jobs")).rows).toEqual([{ type: "repair_changed_beatmap_file" }]);
+      } else {
+        await expect(getCachedBeatmapFile(db, osu, id, "test:calculation")).rejects.toThrow(/checksum verification/);
+        expect(await readCachedBeatmapFile(db, id)).toBe(stale);
+        expect((await exec(db, "select type from jobs")).rows).toEqual([]);
+      }
+      if (scenario === "throttled") expect(osu.getBeatmapFile).not.toHaveBeenCalled();
+    } finally { await cleanup(); }
+  });
+
   it("refetches a cached copy whose checksum no longer matches", async () => {
     const { db, cleanup } = await setupDb();
     try {
