@@ -864,7 +864,11 @@ export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // v15 reads a decorated pair as locked below 85ms and lets a chart's own jack
 // content lower its exclusion bar, so charts built out of repetition lose the
 // credit their few provable sections had been leaving them.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v15";
+// v16 adds the four-key cycle arm, which reads a passage for the motion it
+// admits rather than the shape it is written in, so rotating chords and
+// jumptrills that collapse onto one repeated four-finger cycle stop reading as
+// clean at the rates where they collapse.
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v16";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {

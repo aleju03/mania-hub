@@ -37,4 +37,6 @@
 // body-repeat exclusion bar. Charts that leave the adjusted pool must stop
 // serving a retained-note variant, and the ones that stay must use the new
 // section boundaries.
-export const DAN_ESTIMATE_CACHE_VERSION = 26;
+// v27: refresh verdicts for the four-key cycle arm, which finds walls written
+// as rotating chords and jumptrills.
+export const DAN_ESTIMATE_CACHE_VERSION = 27;

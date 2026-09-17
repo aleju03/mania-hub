@@ -141,9 +141,154 @@ export function scanHandActionCeiling(map: ManiaBeatmap, rate: number): MotionIn
   return out;
 }
 
+// Arm B constants. A four-key cycle is a run of evenly spaced instants at which
+// every column has a note to give, so one repeated four-finger motion covers the
+// whole passage whatever the notation says. The pathology is not the tapping
+// rate, which sits under arms C and D by construction; it is that four fingers
+// share one clock.
+//
+// How far a note may sit from its pulse and still ride it. Half of the 85ms at
+// which a decorated pair already reads as one locked motion in vibro-sections,
+// so the two rules agree about when separate notes stop being separate.
+const CYCLE_TOLERANCE_MS = 43;
+// The pulses must account for this share of every note inside their own span.
+// Without it the search is free to thread a cycle through a busy passage and
+// ignore the material it did not cover, which no player may do. Measured over
+// the local snapshot at 31,217 played 4K chart+rate pairs: at 0.92 an official
+// dan course stage reaches 0.205 at 1.2x, at 0.98 it reaches 0.111 while the
+// reported chart holds 0.532, so this is what separates the two populations.
+const CYCLE_PURITY = 0.98;
+// Cycle period bounds. 105ms is the reload the repeated-wall rule already treats
+// as a wall; below 55ms one finger would breach arm C on its own.
+const CYCLE_MIN_PERIOD_MS = 55;
+const CYCLE_MAX_PERIOD_MS = 105;
+// Same length bar as a literal repeated wall: 12 rows of it.
+const CYCLE_MIN_PULSES = 12;
+const CYCLE_PERIOD_STEP_MS = 2;
+const CYCLE_PHASE_DIVISOR = 8;
+// A cycle counts when the chart is built from one, not when a bar of ordinary
+// dense material happens to admit one. Measured over the local snapshot at
+// 31,217 played 4K chart+rate pairs: 506 carry some cycle at all, and the share
+// they carry sorts the two populations cleanly. Everything from 0.12 up is a
+// vibro, jumptrill or rate-spam pack naming itself as one in its own metadata,
+// topping out at 4 plays; below it sit ranked charts with one incidental dense
+// second, including a 760-play ranked chart at 1.0x. The reported chart holds
+// 0.25 at 1.1x and 0.36 at 1.2x, twice the bar and rising with the rate.
+const CYCLE_BODY_SHARE = 0.12;
+
+/** Cheap necessary condition, so the phase search only ever sees candidates:
+ * a chain of 12 pulses needs some window of 12 * CYCLE_MAX_PERIOD_MS in which
+ * every column has at least 11 notes to give. Skips 91% of the played corpus. */
+function couldCarryCycle(columns: readonly number[][], rate: number): boolean {
+  const window = CYCLE_MIN_PULSES * CYCLE_MAX_PERIOD_MS * rate;
+  for (const column of columns) if (column.length < CYCLE_MIN_PULSES - 1) return false;
+  for (const anchor of columns[0]) {
+    let ok = true;
+    for (const column of columns) {
+      let count = 0;
+      for (let i = lowerBound(column, anchor); i < column.length && column[i] <= anchor + window; i++) count++;
+      if (count < CYCLE_MIN_PULSES - 1) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+function lowerBound(values: readonly number[], target: number): number {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (values[mid] < target) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
+
+/** Arm B. Four fingers on one clock.
+ * Walks a fixed period and phase across the chart, consuming one note per column
+ * per pulse. A run of pulses that every column can feed, and that leaves almost
+ * nothing else inside its own span, is a four-key wall however it is written:
+ * rotating chords, rolls and jumptrills all collapse onto the same motion. */
+export function scanFourKeyCycles(map: ManiaBeatmap, rate: number): MotionInterval[] {
+  const columns: number[][] = [[], [], [], []];
+  const all: number[] = [];
+  for (const note of map.notes) {
+    if (note.column >= 4) continue;
+    columns[note.column].push(note.time);
+    all.push(note.time);
+  }
+  for (const column of columns) column.sort((a, b) => a - b);
+  all.sort((a, b) => a - b);
+  if (!couldCarryCycle(columns, rate)) return [];
+
+  const tolerance = CYCLE_TOLERANCE_MS * rate;
+  const firstNote = all[0];
+  const lastNote = all.at(-1)!;
+  const notesInside = (from: number, to: number) =>
+    lowerBound(all, to + 1e-6) - lowerBound(all, from);
+
+  const found: MotionInterval[] = [];
+  for (let step = CYCLE_MIN_PERIOD_MS; step <= CYCLE_MAX_PERIOD_MS; step += CYCLE_PERIOD_STEP_MS) {
+    const period = step * rate;
+    for (let phase = 0; phase < period; phase += period / CYCLE_PHASE_DIVISOR) {
+      const cursor = [0, 0, 0, 0];
+      // Bounds are the notes the pulses actually consumed, not the pulse times:
+      // a chain must claim the material it covers and nothing either side of it.
+      let from = Infinity;
+      let to = -Infinity;
+      let pulses = 0;
+      const close = () => {
+        if (pulses >= CYCLE_MIN_PULSES && pulses * 4 >= notesInside(from, to) * CYCLE_PURITY) {
+          found.push({ startTime: from, endTime: to, reason: "four_key_cycle" });
+        }
+        from = Infinity;
+        to = -Infinity;
+        pulses = 0;
+      };
+      for (let time = firstNote - tolerance + phase; time <= lastNote + tolerance; time += period) {
+        const take = [0, 0, 0, 0];
+        let complete = true;
+        for (let column = 0; column < 4; column++) {
+          const notes = columns[column];
+          let i = cursor[column];
+          while (i < notes.length && notes[i] < time - tolerance) i++;
+          if (i < notes.length && notes[i] <= time + tolerance) take[column] = i + 1;
+          else { take[column] = i; complete = false; }
+        }
+        if (!complete) { close(); for (let c = 0; c < 4; c++) cursor[c] = take[c]; continue; }
+        for (let c = 0; c < 4; c++) {
+          from = Math.min(from, columns[c][take[c] - 1]);
+          to = Math.max(to, columns[c][take[c] - 1]);
+          cursor[c] = take[c];
+        }
+        pulses++;
+      }
+      close();
+    }
+  }
+  return coversEnough(found, all) ? found : [];
+}
+
+/** Share of the chart's notes the cycles cover once their spans are merged. */
+function coversEnough(found: readonly MotionInterval[], all: readonly number[]): boolean {
+  if (found.length === 0 || all.length === 0) return false;
+  const spans = found.map((interval) => [interval.startTime, interval.endTime] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of spans) {
+    const last = merged.at(-1);
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  let covered = 0;
+  for (const [start, end] of merged) covered += lowerBound(all, end + 1e-6) - lowerBound(all, start);
+  return covered >= all.length * CYCLE_BODY_SHARE;
+}
+
 export function scanMotionVibro(map: ManiaBeatmap, rate: number): MotionInterval[] {
   return [
     ...scanSplitHandDoubles(map, rate),
+    ...scanFourKeyCycles(map, rate),
     ...scanFingerRateCeiling(map, rate),
     ...scanHandActionCeiling(map, rate),
   ];

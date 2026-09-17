@@ -143,7 +143,9 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // hand, so a chart that varies its rows can no longer pass by notation alone.
 // v42: restore articulated chordjack, complete local mixed-vibro phrases and
 // keep incidental-clear evidence confined to the combined ceiling coverage.
-export const PLAYER_SKILLS_VERSION = 43;
+// v44: the four-key cycle arm, which reads the motion a passage admits rather
+// than the shape it is written in.
+export const PLAYER_SKILLS_VERSION = 44;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -165,7 +167,7 @@ export const PLAYER_SKILLS_VERSION = 43;
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
 // of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -3136,7 +3138,7 @@ const MAX_RATE_VERDICT_COMPUTES = 24;
 // detector stamp certifies both eligibility and any section-adjusted SSR;
 // restoring an old exclusion with no SSR therefore requires a calculator pass.
 // Hold-heavy and wider-key charts retain their legacy trust policy.
-export const RATE_VIBRO_CHECK_VERSION = 10;
+export const RATE_VIBRO_CHECK_VERSION = 11;
 // Parses per compute, on top of the calc budget: a player with a long rate
 // history checks its backlog across a few computes rather than one long job.
 const MAX_RATE_VIBRO_CHECKS_PER_COMPUTE = 200;
@@ -7061,7 +7063,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v40: only the best two rate clears per verified chart family count, at full
 // weight and before skillset/quorum selection. Re-fold without rerating SSRs.
 // v41: practice credit is scoped to its named skillset, never shared tiles.
-export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v42";
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v43";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

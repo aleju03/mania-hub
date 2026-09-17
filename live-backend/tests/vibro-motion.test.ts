@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import { analyzeVibroSections } from "../src/dan/vibro-sections.js";
-import { scanFingerRateCeiling, scanHandActionCeiling, scanSplitHandDoubles } from "../src/dan/vibro-motion.js";
+import { scanFingerRateCeiling, scanFourKeyCycles, scanHandActionCeiling, scanSplitHandDoubles } from "../src/dan/vibro-motion.js";
 import { buildVibroOsu } from "./vibro-fixtures.js";
 
 type Note = [number, number, number];
@@ -118,6 +118,65 @@ describe("the motion arms resist the shapes that bypass row rules", () => {
 
   it("never reads chart identity", () => {
     const map = chart([...filler(1000, 300), ...wall(60, 71)]);
+    const renamed = { ...map, title: "unrelated", creator: "unrelated", od: 3 };
+    const mirrored = { ...map, notes: map.notes.map((note) => ({ ...note, column: 3 - note.column })) };
+    expect(analyzeVibroSections(renamed, 1)).toEqual(analyzeVibroSections(map, 1));
+    expect(analyzeVibroSections(mirrored, 1).noteShare).toBe(analyzeVibroSections(map, 1).noteShare);
+  });
+});
+
+describe("four-key cycle", () => {
+  /** `rows` cycles of four notes, one per column, scattered inside the period
+   * by `spread` so the passage reads as rotating chords rather than a wall. */
+  function cycle(from: number, rows: number, periodMs: number, spread = 0.35): Note[] {
+    const offsets = [0, 1, 2, 3].map((i) => Math.round(periodMs * spread * (i % 2 === 0 ? -0.5 : 0.5) * ((i >> 1) ? 1 : 0.6)));
+    return Array.from({ length: rows }, (_, row) => [0, 1, 2, 3].map((column) =>
+      [from + row * periodMs + offsets[(column + row) % 4], column, -1] as Note)).flat();
+  }
+
+  it("reads a scattered four-column cycle as one repeated motion", () => {
+    // 96ms is 10.4 cycles/s: every finger under the 13.5 ceiling and every hand
+    // under 23 actions/s, so only the shared clock gives the passage away.
+    const map = chart([...filler(1000, 120), ...cycle(30_000, 90, 96), ...filler(50_000, 120)]);
+    const found = scanFourKeyCycles(map, 1);
+    expect(found.length).toBeGreaterThan(0);
+    expect(scanFingerRateCeiling(map, 1)).toHaveLength(0);
+    expect(scanHandActionCeiling(map, 1)).toHaveLength(0);
+    for (const one of found) {
+      expect(one.startTime).toBeGreaterThanOrEqual(30_000 - 96);
+      expect(one.endTime).toBeLessThanOrEqual(30_000 + 90 * 96);
+    }
+  });
+
+  it("lets the same material stand once the cycle is slow enough to articulate", () => {
+    expect(scanFourKeyCycles(chart([...filler(1000, 120), ...cycle(30_000, 90, 96)]), 1).length).toBeGreaterThan(0);
+    expect(scanFourKeyCycles(chart([...filler(1000, 120), ...cycle(30_000, 90, 140)]), 1)).toHaveLength(0);
+  });
+
+  it("reads the played rate, so a chart can collapse at one rate and not another", () => {
+    const map = chart([...filler(1000, 120), ...cycle(30_000, 90, 125)]);
+    expect(scanFourKeyCycles(map, 1)).toHaveLength(0);
+    expect(scanFourKeyCycles(map, 1.3).length).toBeGreaterThan(0);
+  });
+
+  it("wants the chart to be built from cycles, not to contain one bar of them", () => {
+    // One 13-cycle bar inside a long ordinary chart is an accident of density.
+    const incidental = chart([...filler(1000, 900, 120), ...cycle(200_000, 13, 96)]);
+    expect(scanFourKeyCycles(incidental, 1)).toHaveLength(0);
+    const built = chart([...filler(1000, 200, 120), ...cycle(40_000, 200, 96)]);
+    expect(scanFourKeyCycles(built, 1).length).toBeGreaterThan(0);
+  });
+
+  it("will not thread a cycle through a passage it cannot account for", () => {
+    // The same cycle with a note nobody pressed on every other row: a player
+    // has to hit those too, so the four-key reading no longer describes it.
+    const laced = cycle(30_000, 200, 96).concat(
+      Array.from({ length: 100 }, (_, i) => [30_000 + i * 192 + 48, i % 4, -1] as Note));
+    expect(scanFourKeyCycles(chart([...filler(1000, 200), ...laced]), 1)).toHaveLength(0);
+  });
+
+  it("never reads chart identity", () => {
+    const map = chart([...filler(1000, 200), ...cycle(40_000, 200, 96)]);
     const renamed = { ...map, title: "unrelated", creator: "unrelated", od: 3 };
     const mirrored = { ...map, notes: map.notes.map((note) => ({ ...note, column: 3 - note.column })) };
     expect(analyzeVibroSections(renamed, 1)).toEqual(analyzeVibroSections(map, 1));

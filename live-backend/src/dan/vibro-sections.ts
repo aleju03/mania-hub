@@ -1,7 +1,7 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 import { scanMotionVibro } from "./vibro-motion.js";
 
-export const VIBRO_SECTION_VERSION = 6;
+export const VIBRO_SECTION_VERSION = 7;
 
 // Short repetitions need faster reloads than the 92ms sustained-longjack
 // floor, plus corroborating bursts in the same local phrase.
@@ -20,7 +20,8 @@ export type VibroReason =
   | "extreme_density"
   | "split_hand_double"
   | "finger_rate_ceiling"
-  | "hand_action_ceiling";
+  | "hand_action_ceiling"
+  | "four_key_cycle";
 
 export interface VibroSection {
   /** Original chart timestamps, before applying the music rate. */
