@@ -41,7 +41,8 @@ describe("ingest metadata efficiency", () => {
       const map = (await exec(db, "select metadata_json, cs from beatmaps where beatmap_id = ?", [score.beatmap!.id])).rows[0];
       expect(JSON.parse(String(map.metadata_json)).checksum).toBe(beatmapFileMd5("new"));
       expect(map.cs).toBe(7);
-      expect((await exec(db, "select type from jobs where type = 'verify_beatmap_revision'")).rows).toHaveLength(1);
+      // Ingest no longer queues the verify; a compute that parks a play does.
+      expect((await exec(db, "select type from jobs where type = 'verify_beatmap_revision'")).rows).toHaveLength(0);
       const stored = (await exec(db, "select score_json from score_events where score_id = ?", [updated.id])).rows[0];
       expect(JSON.parse(String(stored.score_json)).beatmapChecksum).toBe(beatmapFileMd5("new"));
     } finally { db.close(); }

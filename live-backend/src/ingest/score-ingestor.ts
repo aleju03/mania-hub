@@ -19,7 +19,7 @@ import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAc
 import type { OscScore } from "../shared/types.js";
 import { logInfo, logWarn } from "../logger.js";
 import { isUserKnownInactive } from "../user-status.js";
-import { enqueueBeatmapRevisionCheck, observedScoreChecksum } from "../osu/beatmap-revisions.js";
+import { observedScoreChecksum } from "../osu/beatmap-revisions.js";
 
 export interface ScoreIngestOptions {
   enqueueRecentReconcile?: boolean;
@@ -107,9 +107,12 @@ export class ScoreIngestor {
     if (countries.length === 0) return false;
     logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, countries, beatmap_id: beatmapId, source });
     await this.persistMetadata(score, options.countryAllowlist, metadataSeen);
-    await enqueueBeatmapRevisionCheck(this.db, this.queue, beatmapId).catch(error => {
-      logWarn("beatmap_revision_enqueue_failed", { beatmapId, error: String(error) });
-    });
+    // No revision verify here (removed 2026-09-17). Every score on an edited
+    // graveyard/WIP map queued one, ~500/h, into a queue draining ~20/h behind
+    // profile views, and each costs an osu! call. A player's compute queues
+    // the verify itself the moment it parks a play on the stale file
+    // (queueRevisionCheck in player-skills.ts), which is the only time the
+    // fetch is worth the budget.
     const totalScore = getDisplayedTotalScore(score);
     const scoreIdentity = getScoreIdentity(score);
     let inserted = 0;
