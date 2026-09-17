@@ -3,7 +3,7 @@ import { erf, wife3PointsAt, WIFE3_MISS_POINTS } from "./tap-wife-accuracy.js";
 import { estimateManiaWifeAccuracy, estimateManiaWifeAccuracyFromAccuracy, WIFE_CALIBRATION_VERSION, type WifeCalibrationOptions } from "./wife-calibration.js";
 import { detectRateVibro } from "../dan/vibro-detection.js";
 import type { Db } from "../db.js";
-import { CHART_FAMILY_META_KEY, CHART_FAMILY_VERSION } from "./chart-families.js";
+import { CHART_FAMILY_META_KEY, CHART_FAMILY_STRUCTURE_META_KEYS, CHART_FAMILY_VERSION, DAN_SKILLSET_REGISTRY_META_KEY } from "./chart-families.js";
 import { LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { exec, execBatch, json, parseJson } from "../db.js";
 import { settlePlayerSkillContinuations, withPlayerSkillTurn, type PlayerSkillJobPayload } from "./player-skill-jobs.js";
@@ -7087,12 +7087,19 @@ export interface PlayerSkillDanSweepPayload {
 }
 
 async function playerSkillDanDependenciesReady(db: Db): Promise<boolean> {
+  // Chart families must be structurally complete (v2 or later) and the
+  // registry's own credentials indexed; the v3 corpus re-walk only adds
+  // reupload aliases, and its finish re-seeds one more pass (see
+  // rateVerdictsLandedAfter) rather than holding every stored dan dark for
+  // the ~20h it takes.
   const rows = (await exec(
     db,
-    "select key from live_meta where key in (?, ?, ?)",
-    [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, CHART_FAMILY_META_KEY],
+    "select key from live_meta where key in (?, ?, ?, ?, ?)",
+    [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, DAN_SKILLSET_REGISTRY_META_KEY, ...CHART_FAMILY_STRUCTURE_META_KEYS],
   )).rows;
-  return new Set(rows.map((row) => String(row.key))).size === 3;
+  const keys = new Set(rows.map((row) => String(row.key)));
+  return keys.has(JACK_DEMAND_RECOMPUTE_META_KEY) && keys.has(MOTION_FEATURES_RECOMPUTE_META_KEY)
+    && keys.has(DAN_SKILLSET_REGISTRY_META_KEY) && CHART_FAMILY_STRUCTURE_META_KEYS.some((key) => keys.has(key));
 }
 
 export async function recomputePlayerSkillDanChunk(
@@ -7242,7 +7249,9 @@ export async function ensurePlayerSkillDanSweepSeeded(db: Db, queue: JobQueue): 
 /** True when a rate-verdict producer stamped its done key after this dan pass began. */
 async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolean> {
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
-  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY, LN_EFFECTIVE_META_KEY]) {
+  // The chart-family v3 sweep counts too: a pass started on registry-only
+  // credentials must run once more when the corpus aliases are indexed.
+  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY, LN_EFFECTIVE_META_KEY, CHART_FAMILY_META_KEY]) {
     const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
     if (!row) continue;
     const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;
@@ -7310,7 +7319,10 @@ async function enqueuePlayerSkillDanSweep(
     PLAYER_SKILL_DAN_SWEEP_JOB,
     rateVerdictRestart ? `${PLAYER_SKILL_DAN_SWEEP_JOB}:rate-verdict-restart` : `${PLAYER_SKILL_DAN_SWEEP_JOB}:${cursor}`,
     { cursor, startedAt: startedAt ?? nowIso(), scope, version: PLAYER_SKILL_DAN_SWEEP_META_KEY },
-    { priority: -10, replaceDone: true },
+    // Same priority as the chart-family sweep on purpose: the maintenance
+    // lane's priority-desc claim then falls through to run_after, so the two
+    // self-chaining passes alternate instead of one owning the lane.
+    { priority: -9, replaceDone: true },
   );
 }
 

@@ -3325,6 +3325,17 @@ async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
       checksum text not null
     )
   `);
+  // Changed .osu files waiting for the coalesced player-rating walk
+  // (features/chart-analysis.ts, runChangedBeatmapFileRepairJob). One row
+  // per beatmap; a newer revision replaces the row and survives a walk that
+  // snapshotted the older one.
+  await db.execute(`
+    create table if not exists beatmap_file_repairs_pending (
+      beatmap_id integer primary key,
+      revision text not null,
+      queued_at text not null
+    )
+  `);
   const familyColumns = (await db.execute("pragma table_info(beatmap_chart_families)")).rows.map((row) => String(row.name));
   if (!familyColumns.includes("head_key")) await db.execute("alter table beatmap_chart_families add column head_key text");
   if (!familyColumns.includes("tail_key")) await db.execute("alter table beatmap_chart_families add column tail_key text");

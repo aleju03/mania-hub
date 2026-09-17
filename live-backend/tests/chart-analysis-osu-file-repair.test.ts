@@ -12,6 +12,7 @@ import {
   repairMismatchedOsuFilesChunk,
   runOsuFileRepairJob,
   runChangedBeatmapFileRepairJob,
+  ensureChangedBeatmapFileWalkSeeded,
   purgePlayerSkillPlaysForRepairedBeatmaps,
 } from "../src/features/chart-analysis.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -243,12 +244,82 @@ describe("invalidateOsuFileRepairDerivatives", () => {
       await runChangedBeatmapFileRepairJob(db, new JobQueue(db), { beatmapIds: [10], revision: "test" });
       expect((await exec(db, "select * from beatmap_chart_analysis where beatmap_id = 10")).rows).toHaveLength(0);
       expect((await exec(db, "select * from dan_mod_estimates where beatmap_id = 10")).rows).toHaveLength(0);
-      const jobs = (await exec(db, "select type, payload_json from jobs order by type")).rows;
+      const jobs = (await exec(db, "select type, dedupe_key, payload_json from jobs order by type")).rows;
       expect(jobs.map((job) => job.type)).toEqual([
         "analyze_activity_beatmap", "analyze_beatmap_chart", "repair_changed_beatmap_file",
       ]);
       expect(JSON.parse(String(jobs[1].payload_json)).recomputeDtRate).toBe(true);
-      expect(JSON.parse(String(jobs[2].payload_json)).playerCursor).toBe(0);
+      // The player pages are not this file's own chain any more: the file is
+      // filed as pending and one walk is asked for.
+      expect(jobs[2].dedupe_key).toBe("changed-osu-file:walk");
+      expect((await exec(db, "select beatmap_id, revision from beatmap_file_repairs_pending")).rows)
+        .toEqual([{ beatmap_id: 10, revision: "test" }]);
+    });
+  });
+
+  it("walks the player caches once for every pending file and settles only the revisions it covered", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const play = (beatmapId: number) => ({ identity: `s:${beatmapId}`, beatmapId, keyCount: 4, rate: 1, goal: 0.95,
+        pp: 10, values: { Overall: 20 }, patterns: [], wifeCalibration: { fileVersion: "old" } });
+      for (const [userId, ids] of [[7, [10, 11]], [8, [11]], [9, [12]]] as const) {
+        await exec(db, `insert into player_skill_ratings
+          (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at) values (?, 40, 'ready', '{}', ?, ?, ?)`,
+        [userId, JSON.stringify({ plays: ids.map(play) }), nowIso(), nowIso()]);
+      }
+      await runChangedBeatmapFileRepairJob(db, queue, { beatmapIds: [10], revision: "10:a" });
+      await runChangedBeatmapFileRepairJob(db, queue, { beatmapIds: [11], revision: "11:a" });
+      const walk = (await exec(db, "select payload_json from jobs where dedupe_key = 'changed-osu-file:walk'")).rows;
+      expect(walk).toHaveLength(1);
+      await runChangedBeatmapFileRepairJob(db, queue, JSON.parse(String(walk[0].payload_json)));
+      let chunk = (await exec(db, "select dedupe_key, payload_json from jobs where dedupe_key like 'changed-osu-file:players:%' order by id desc limit 1")).rows[0];
+      const first = JSON.parse(String(chunk.payload_json));
+      expect(first).toMatchObject({ beatmapIds: [10, 11], revisions: ["10:a", "11:a"], playerCursor: 0 });
+      expect(chunk.dedupe_key).toBe(`changed-osu-file:players:${first.generation}:0`);
+      // A second walk request while this generation is in flight starts nothing.
+      await runChangedBeatmapFileRepairJob(db, queue, { beatmapIds: [], revision: "walk" });
+      expect((await exec(db, "select count(*) as n from jobs where dedupe_key like 'changed-osu-file:players:%'")).rows[0].n).toBe(1);
+      // File 11 changes again mid-walk: its newer revision must outlive this generation.
+      await runChangedBeatmapFileRepairJob(db, queue, { beatmapIds: [11], revision: "11:b" });
+      let payload = first;
+      for (let guard = 0; guard < 10; guard += 1) {
+        await runChangedBeatmapFileRepairJob(db, queue, payload);
+        chunk = (await exec(db, "select dedupe_key, payload_json, status from jobs where dedupe_key like 'changed-osu-file:players:%' and status = 'queued' order by id desc limit 1")).rows[0];
+        if (!chunk) break;
+        payload = JSON.parse(String(chunk.payload_json));
+      }
+      const computes = (await exec(db, "select dedupe_key from jobs where type = 'compute_player_skills' order by dedupe_key")).rows.map((r) => r.dedupe_key);
+      expect(computes).toHaveLength(2);
+      expect(computes.every((key) => /:(7|8)$/.test(String(key)))).toBe(true);
+      const user7 = unpackJson<{ plays: unknown[]; danOnly: unknown[] }>((await exec(db, "select plays_json from player_skill_ratings where user_id = 7")).rows[0].plays_json, { plays: [], danOnly: [] });
+      expect(user7.plays).toEqual([]);
+      expect(user7.danOnly).toHaveLength(2);
+      expect((await exec(db, "select beatmap_id, revision from beatmap_file_repairs_pending")).rows)
+        .toEqual([{ beatmap_id: 11, revision: "11:b" }]);
+      // and the finishing chunk asked for the next generation.
+      expect((await exec(db, "select status from jobs where dedupe_key = 'changed-osu-file:walk'")).rows[0].status).toBe("queued");
+    });
+  });
+
+  it("folds pre-coalescing per-file chains into the pending table at boot", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      await queue.enqueue("repair_changed_beatmap_file", "changed-osu-file:players:10:abc:5000",
+        { beatmapIds: [10], revision: "10:abc", playerCursor: 5000 }, { priority: -5 });
+      await queue.enqueue("repair_changed_beatmap_file", "changed-osu-file:players:11:def:0",
+        { beatmapIds: [11], revision: "11:def", playerCursor: 0 }, { priority: -5 });
+      await ensureChangedBeatmapFileWalkSeeded(db, queue);
+      const rows = (await exec(db, "select dedupe_key, status from jobs order by dedupe_key")).rows;
+      expect(rows).toEqual([
+        { dedupe_key: "changed-osu-file:players:10:abc:5000", status: "done" },
+        { dedupe_key: "changed-osu-file:players:11:def:0", status: "done" },
+        { dedupe_key: "changed-osu-file:walk", status: "queued" },
+      ]);
+      expect((await exec(db, "select beatmap_id, revision from beatmap_file_repairs_pending order by beatmap_id")).rows)
+        .toEqual([{ beatmap_id: 10, revision: "10:abc" }, { beatmap_id: 11, revision: "11:def" }]);
+      // A legacy chunk the boot fold missed folds itself when claimed.
+      await runChangedBeatmapFileRepairJob(db, queue, { beatmapIds: [12], revision: "12:ghi", playerCursor: 300 });
+      expect((await exec(db, "select revision from beatmap_file_repairs_pending where beatmap_id = 12")).rows).toEqual([{ revision: "12:ghi" }]);
     });
   });
 

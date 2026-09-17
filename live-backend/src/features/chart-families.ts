@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import type { ManiaBeatmap, ManiaNote } from "../dan/beatmap-parser.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
-import type { Db } from "../db.js";
-import { exec, json } from "../db.js";
+import type { Db, DbStatement } from "../db.js";
+import { exec, execBatch, json } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
+import { logInfo, logWarn } from "../logger.js";
 import { readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { nowIso } from "../shared/score.js";
-import { danSkillsetMatchStatement } from "./dan-skillset-identity.js";
+import { danSkillsetFingerprint, danSkillsetMatchStatement, DAN_SKILLSET_BY_FINGERPRINT } from "./dan-skillset-identity.js";
+import { DAN_SKILLSET_CHARTS } from "./dan-skillset-registry.js";
 
 // This is player-evidence identity, never an input to chart difficulty. Edge
 // hashes only find candidates; every head and hold tail must then agree after
@@ -18,6 +20,14 @@ export const CHART_FAMILY_VERSION = 2;
 export const CHART_FAMILY_SWEEP_JOB = "recompute_chart_family_sweep";
 // v3 also indexes strict note/timing/OD fingerprints for skillset credentials.
 export const CHART_FAMILY_META_KEY = "chart_family_sweep_done:v3";
+// The family structure the dan refold reads was complete at v2; v3 re-walks the
+// corpus only for the fingerprints, so a v2 stamp plus the registry bootstrap
+// below is enough structure for the refold to start on.
+export const CHART_FAMILY_STRUCTURE_META_KEYS = ["chart_family_sweep_done:v2", CHART_FAMILY_META_KEY] as const;
+// Canonical credential coverage: every registry chart whose .osu is cached is
+// fingerprinted at boot, so the credentials do not wait ~20h for the corpus
+// sweep to crawl past their beatmap ids. Bump when the registry changes shape.
+export const DAN_SKILLSET_REGISTRY_META_KEY = `dan_skillset_registry_seeded:v1:${DAN_SKILLSET_CHARTS.length}`;
 
 /** Notes hashed at each end for candidate lookup; padding one end leaves the other key intact. */
 const EDGE_WINDOW = 64;
@@ -174,19 +184,77 @@ export async function recomputeChartFamilyChunk(db: Db, cursor: number, limit = 
     [cursor, limit],
   )).rows;
   let nextCursor = cursor;
+  // Fingerprints are computed outside any write transaction and committed
+  // once per chunk: one short write instead of one per row on the shared
+  // SQLite writer. Each statement still carries the fetched_at guard, so a
+  // concurrent file replacement wins over this sweep's older read.
+  const matches: DbStatement[] = [];
   for (const row of rows) {
     const beatmapId = Number(row.beatmap_id);
     nextCursor = beatmapId;
     const text = await readCachedBeatmapFile(db, beatmapId, { touch: false });
-    if (text) {
-      // A concurrent file replacement must win over this sweep's older read.
-      const match = danSkillsetMatchStatement(beatmapId, text, String(row.fetched_at));
-      await exec(db, match.sql, match.args);
-    }
+    if (text) matches.push(danSkillsetMatchStatement(beatmapId, text, String(row.fetched_at)));
     if (text && /^Mode\s*:\s*3\s*$/m.test(text)) await storeChartFamily(db, beatmapId, text);
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
+  if (matches.length) await execBatch(db, matches);
   return { nextCursor, done: rows.length < limit };
+}
+
+/**
+ * Seeds `dan_skillset_chart_matches` for the registry's own beatmap ids from
+ * cached files only: no osu! API, no change to the fingerprint rules, no
+ * credit by id. A registry chart whose cached file is not the registry chart
+ * (a later upload changed it) is reported, not matched; an uncached one is
+ * indexed the moment its file is fetched. Stamped once per registry shape.
+ */
+export async function ensureDanSkillsetRegistrySeeded(db: Db, queue: JobQueue): Promise<void> {
+  if ((await exec(db, "select 1 from live_meta where key = ?", [DAN_SKILLSET_REGISTRY_META_KEY])).rows.length) return;
+  const ids = [...new Set(DAN_SKILLSET_CHARTS.map((chart) => chart.beatmapId))];
+  const matched: number[] = [];
+  const mismatched: number[] = [];
+  const raced: number[] = [];
+  let uncached = 0;
+  for (let offset = 0; offset < ids.length; offset += 50) {
+    const chunk = ids.slice(offset, offset + 50);
+    const rows = (await exec(db,
+      `select beatmap_id, fetched_at from beatmap_osu_files
+       where beatmap_id in (${chunk.map(() => "?").join(", ")}) and (compressed_bytes > 0 or length(content) > 0)`,
+      chunk,
+    )).rows;
+    uncached += chunk.length - rows.length;
+    const statements: DbStatement[] = [];
+    const expected: number[] = [];
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      const text = await readCachedBeatmapFile(db, beatmapId, { touch: false });
+      if (!text) { uncached += 1; continue; }
+      const fingerprint = danSkillsetFingerprint(text);
+      if (fingerprint && DAN_SKILLSET_BY_FINGERPRINT.has(fingerprint)) expected.push(beatmapId);
+      else mismatched.push(beatmapId);
+      statements.push(danSkillsetMatchStatement(beatmapId, text, String(row.fetched_at)));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    if (statements.length) await execBatch(db, statements);
+    // A guard miss (the file was replaced between the read and the write) is
+    // a skip, not a match; the replacement's own store indexed the new file.
+    if (expected.length) {
+      const present = new Set((await exec(db,
+        `select beatmap_id from dan_skillset_chart_matches where beatmap_id in (${expected.map(() => "?").join(", ")})`,
+        expected,
+      )).rows.map((row) => Number(row.beatmap_id)));
+      for (const beatmapId of expected) (present.has(beatmapId) ? matched : raced).push(beatmapId);
+    }
+  }
+  const now = nowIso();
+  const summary = { finishedAt: now, matched: matched.length, mismatched, raced, uncached };
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+    [DAN_SKILLSET_REGISTRY_META_KEY, json(summary), now]);
+  (mismatched.length || raced.length ? logWarn : logInfo)("dan_skillset_registry_seeded", { registry: ids.length, ...summary });
+  // Canonical coverage is what the stored-dan refold needs; let it start now
+  // rather than after the corpus sweep.
+  const { ensurePlayerSkillDanSweepSeeded } = await import("./player-skills.js");
+  await ensurePlayerSkillDanSweepSeeded(db, queue);
 }
 
 export async function ensureChartFamilySweepSeeded(db: Db, queue: JobQueue): Promise<void> {

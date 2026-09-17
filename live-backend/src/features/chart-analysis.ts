@@ -1,7 +1,7 @@
 import { detectLnVibro, detectRiceVibro } from "../dan/vibro-detection.js";
 import { randomUUID } from "node:crypto";
-import type { Db } from "../db.js";
-import { exec, json, parseJson } from "../db.js";
+import type { Db, DbStatement } from "../db.js";
+import { exec, execBatch, json, parseJson } from "../db.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
@@ -4674,30 +4674,167 @@ export interface ChangedBeatmapFileRepairPayload {
   beatmapIds: number[];
   revision: string;
   playerCursor?: number;
+  // Coalesced walk chunks only: the set of (beatmap, revision) pairs this
+  // generation is answering for, and the running totals for its done log.
+  generation?: string;
+  revisions?: string[];
+  affectedUsers?: number;
+  droppedPlays?: number;
+}
+
+const CHANGED_FILE_WALK_KEY = "changed-osu-file:walk";
+const CHANGED_FILE_WALK_PREFIX = "changed-osu-file:players:";
+// Users inspected per queued step. Blobs average ~50KB compressed on prod,
+// so a step is a few MB of gunzip + parse, well under a second.
+const CHANGED_FILE_WALK_PAGE = 40;
+// Dirty files folded into one walk generation. Files past the cap wait in
+// the pending table for the next generation; the payload stays small enough
+// to rewrite on every chunk.
+const CHANGED_FILE_WALK_MAX_BEATMAPS = 2_000;
+
+function pendingRepairUpserts(beatmapIds: number[], revision: string): DbStatement[] {
+  const now = nowIso();
+  return beatmapIds.map((beatmapId) => ({
+    sql: `insert into beatmap_file_repairs_pending (beatmap_id, revision, queued_at) values (?, ?, ?)
+      on conflict(beatmap_id) do update set revision = excluded.revision, queued_at = excluded.queued_at`,
+    args: [beatmapId, revision, now],
+  }));
+}
+
+async function enqueueChangedFileWalk(queue: JobQueue, delayMs = 1_000): Promise<void> {
+  await queue.enqueue(BEATMAP_FILE_CHANGE_JOB, CHANGED_FILE_WALK_KEY, { beatmapIds: [], revision: "walk" },
+    { priority: -5, runAfter: new Date(Date.now() + delayMs), replaceDone: true });
+}
+
+const CHANGED_FILE_WALK_LIKE = `${CHANGED_FILE_WALK_PREFIX.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+async function changedFileWalkInFlight(db: Db): Promise<boolean> {
+  return (await exec(db,
+    `select 1 from jobs where type = ? and dedupe_key like ? escape '\\'
+     and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1`,
+    [BEATMAP_FILE_CHANGE_JOB, CHANGED_FILE_WALK_LIKE],
+  )).rows.length > 0;
 }
 
 // A checksum refresh can fix the file while leaving every derived rating
 // wrong. Keep that repair separate from the historical archive-source audit.
-// Player payloads are compressed: inspect only twenty users per queued step.
+//
+// Three shapes share this job type, all serialized on the chart-analysis lane:
+//  - per-file head ({ beatmapIds, revision }, committed with the file store):
+//    invalidates the file's chart/activity derivatives right away, then files
+//    the beatmap in `beatmap_file_repairs_pending` and asks for a walk.
+//  - walk start (`changed-osu-file:walk`): if no walk generation is in
+//    flight, snapshots the pending table into one generation and starts its
+//    chain at player cursor 0.
+//  - walk chunk (`changed-osu-file:players:<generation>:<cursor>`): pages the
+//    compressed player caches once against the whole dirty set, so a hundred
+//    changed files cost one pass over the roster instead of a hundred.
+// Every player page used to belong to one file's own chain; on prod that put
+// 498 chains x 1,184 pages on a single lane and starved everything behind it.
 export async function runChangedBeatmapFileRepairJob(
   db: Db,
   queue: JobQueue,
   payload: ChangedBeatmapFileRepairPayload,
 ): Promise<void> {
-  const beatmapIds = [...new Set(payload.beatmapIds)].filter((id) => Number.isSafeInteger(id) && id > 0);
+  const beatmapIds = [...new Set(payload.beatmapIds ?? [])].filter((id) => Number.isSafeInteger(id) && id > 0);
+
+  if (payload.revision === "walk" && payload.playerCursor == null) {
+    if (await changedFileWalkInFlight(db)) return;
+    const pending = (await exec(db,
+      "select beatmap_id, revision from beatmap_file_repairs_pending order by queued_at, beatmap_id limit ?",
+      [CHANGED_FILE_WALK_MAX_BEATMAPS],
+    )).rows;
+    if (!pending.length) return;
+    const generation = randomUUID();
+    await queue.enqueue(BEATMAP_FILE_CHANGE_JOB, `${CHANGED_FILE_WALK_PREFIX}${generation}:0`, {
+      beatmapIds: pending.map((row) => Number(row.beatmap_id)),
+      revisions: pending.map((row) => String(row.revision)),
+      revision: `gen:${generation}`,
+      generation,
+      playerCursor: 0,
+      affectedUsers: 0,
+      droppedPlays: 0,
+    } satisfies ChangedBeatmapFileRepairPayload, { priority: -5, runAfter: new Date(Date.now() + 1_000), replaceDone: true });
+    logInfo("changed_beatmap_files_walk_started", { generation, beatmaps: pending.length });
+    return;
+  }
+
   if (!beatmapIds.length) return;
+
   if (payload.playerCursor == null) {
     await invalidateOsuFileRepairDerivatives(db, queue, beatmapIds);
+    await execBatch(db, pendingRepairUpserts(beatmapIds, payload.revision));
+    await enqueueChangedFileWalk(queue);
+    return;
   }
-  const result = payload.playerCursor == null
-    ? { nextCursor: 0, done: false }
-    : await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, beatmapIds,
-      { cursor: payload.playerCursor, pageSize: 20, maxPages: 1, preserveEvidence: true });
+
+  if (!payload.generation) {
+    // A per-file chain from before coalescing: hand its obligation to the
+    // pending table and let the next generation cover it from cursor 0.
+    // Pages it already repaired hold pending evidence, which the walk skips.
+    await execBatch(db, pendingRepairUpserts(beatmapIds, payload.revision));
+    await enqueueChangedFileWalk(queue);
+    return;
+  }
+
+  const result = await purgePlayerSkillPlaysForRepairedBeatmaps(db, queue, beatmapIds,
+    { cursor: payload.playerCursor, pageSize: CHANGED_FILE_WALK_PAGE, maxPages: 1, preserveEvidence: true });
+  const affectedUsers = (payload.affectedUsers ?? 0) + result.users.length;
+  const droppedPlays = (payload.droppedPlays ?? 0) + result.droppedPlays;
   if (!result.done) {
     await queue.enqueue(BEATMAP_FILE_CHANGE_JOB,
-      `changed-osu-file:players:${payload.revision}:${result.nextCursor}`,
-      { ...payload, beatmapIds, playerCursor: result.nextCursor },
+      `${CHANGED_FILE_WALK_PREFIX}${payload.generation}:${result.nextCursor}`,
+      { ...payload, beatmapIds, playerCursor: result.nextCursor, affectedUsers, droppedPlays },
       { priority: -5, runAfter: new Date(Date.now() + 1_000), replaceDone: true });
+    return;
+  }
+  // Only the revisions this generation answered for are settled; a file that
+  // changed again mid-walk keeps its newer row and rides the next generation.
+  const revisions = payload.revisions ?? [];
+  const settled = beatmapIds.map((beatmapId, index) => ({
+    sql: "delete from beatmap_file_repairs_pending where beatmap_id = ? and revision = ?",
+    args: [beatmapId, revisions[index] ?? ""],
+  }));
+  for (let offset = 0; offset < settled.length; offset += 200) {
+    await execBatch(db, settled.slice(offset, offset + 200));
+  }
+  logInfo("changed_beatmap_files_walk_done", { generation: payload.generation, beatmaps: beatmapIds.length, affectedUsers, droppedPlays });
+  if ((await exec(db, "select 1 from beatmap_file_repairs_pending limit 1")).rows.length) {
+    await enqueueChangedFileWalk(queue);
+  }
+}
+
+// Boot: fold any per-file player chains left from before coalescing into the
+// pending table (their obligations move, the rows are closed), and make sure
+// a walk is queued whenever something is pending.
+export async function ensureChangedBeatmapFileWalkSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const legacy = (await exec(db,
+    `select id, payload_json from jobs where type = ? and status in ('queued', 'failed', 'deferred_pressure')
+     and dedupe_key like ? escape '\\'`,
+    [BEATMAP_FILE_CHANGE_JOB, CHANGED_FILE_WALK_LIKE],
+  )).rows;
+  // Hundreds of chains on prod: move each obligation and close its row in
+  // the same short transaction, a couple of hundred at a time, rather than
+  // one write per row on the shared writer.
+  const statements: DbStatement[] = [];
+  let folded = 0;
+  for (const row of legacy) {
+    const payload = parseJson<ChangedBeatmapFileRepairPayload>(row.payload_json, { beatmapIds: [], revision: "" });
+    if (payload.generation || payload.playerCursor == null) continue;
+    const ids = [...new Set(payload.beatmapIds ?? [])].filter((id) => Number.isSafeInteger(id) && id > 0);
+    statements.push(...pendingRepairUpserts(ids, payload.revision), {
+      sql: `update jobs set status = 'done', locked_by = null, locked_until = null, last_error = ?, updated_at = ?
+        where id = ? and status in ('queued', 'failed', 'deferred_pressure')`,
+      args: ["folded into the coalesced changed-file walk", nowIso(), Number(row.id)],
+    });
+    folded += 1;
+  }
+  for (let offset = 0; offset < statements.length; offset += 200) {
+    await execBatch(db, statements.slice(offset, offset + 200));
+  }
+  if (folded) logInfo("changed_beatmap_file_chains_folded", { chains: folded });
+  if ((await exec(db, "select 1 from beatmap_file_repairs_pending limit 1")).rows.length) {
+    await enqueueChangedFileWalk(queue);
   }
 }
 

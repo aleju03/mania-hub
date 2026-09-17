@@ -140,6 +140,9 @@ export interface Config {
   // each tick runs one classify+MSD job (~0.1-0.3s of local CPU). The default
   // keeps prod gentle; lower it for a fast local backfill.
   chartAnalysisLaneIntervalMs: number;
+  // Gap between chunks on the maintenance-sweeps lane (chart-family sweep,
+  // stored-dan refold). A chunk is 5-15s of local CPU; the gap is the budget.
+  maintenanceSweepLaneIntervalMs: number;
   activityModsBackfillChainDelayMs: number;
   activityModsBackfillPinUsers: number[];
   activityComboBackfillChainDelayMs: number;
@@ -450,6 +453,7 @@ export function readConfig(): Config {
     qualifiedMapsWatchIntervalMs: readInt("QUALIFIED_MAPS_WATCH_INTERVAL_MS", 60 * 60 * 1000),
     settledSetsReconcileIntervalMs: readInt("SETTLED_SETS_RECONCILE_INTERVAL_MS", 60 * 60 * 1000),
     chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
+    maintenanceSweepLaneIntervalMs: readBoundedInt("MAINTENANCE_SWEEP_LANE_INTERVAL_MS", 8_000, 25, 600_000),
     // 30 rows per link at this spacing is ~15 osu! calls/min. Lower it to
     // spend the sweep faster, raise it to give the budget back.
     activityModsBackfillChainDelayMs: readBoundedInt("ACTIVITY_MODS_BACKFILL_CHAIN_DELAY_MS", 120_000, 1_000, 3_600_000),

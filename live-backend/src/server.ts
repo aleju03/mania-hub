@@ -2,7 +2,7 @@ import { seedBeatmapRevisionAudit } from "./osu/beatmap-revisions.js";
 import { ensureMarathonCorrectionSeeded } from "./features/marathon-correction.js";
 import { ensureLeoblackFusionSeeded } from "./features/leoblack-fusion.js";
 import { prioritizePendingRecentRepairs } from "./jobs/recent-reconcile.js";
-import { ensureChartFamilySweepSeeded } from "./features/chart-families.js";
+import { ensureChartFamilySweepSeeded, ensureDanSkillsetRegistrySeeded } from "./features/chart-families.js";
 import { registerServingReadThreads } from "./serving-read-thread.js";
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
@@ -21,7 +21,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, enqueueRankedDateEnrichment, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileBeatmapStatusColumns, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexRankedDates, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackDemandRecomputeSeeded, ensureNkeyMsdSeeded, ensureJackTagRecomputeSeeded, ensureMotionFeaturesRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnEffectiveRecomputeSeeded, ensureLnLeoblackRecomputeSeeded, ensureLn7PrimaryRepinSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureOsuFileRepairSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureBracketContentRecomputeSeeded, ensureBracketTagRecomputeSeeded, ensureChangedBeatmapFileWalkSeeded, ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanEligibilityRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureHtRateAnalysisSeeded, ensureInverseClusterBpmRecoverySeeded, ensureJackDemandRecomputeSeeded, ensureNkeyMsdSeeded, ensureJackTagRecomputeSeeded, ensureMotionFeaturesRecomputeSeeded, ensureLnMsdSweepSeeded, ensureLnEffectiveRecomputeSeeded, ensureLnLeoblackRecomputeSeeded, ensureLn7PrimaryRepinSeeded, ensureLnPrimaryRepinSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureMsdPoisonRecoverySeeded, ensureNegativeTimeMsdRecoverySeeded, ensureNoteBpmRecomputeSeeded, ensureOsuFileRepairSeeded, ensureLeoblackRepinDtRecomputeSeeded, ensureLeoblackRepinRecomputeSeeded, ensureSunnyRepinDtRecomputeSeeded, ensureSunnyRepinRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -559,6 +559,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       });
       void ensureChartFamilySweepSeeded(app.db, app.queue).catch((error) => {
         logWarn("chart_family_seed_failed", errorContext(error));
+      });
+      // Registry credentials from cached files, so course/skillset credit
+      // does not wait for the corpus sweep above to crawl to their ids.
+      void ensureDanSkillsetRegistrySeeded(app.db, app.queue).catch((error) => {
+        logWarn("dan_skillset_registry_seed_failed", errorContext(error));
+      });
+      // Changed-file rating repairs: fold pre-coalescing per-file chains and
+      // make sure a walk is queued for anything pending.
+      void ensureChangedBeatmapFileWalkSeeded(app.db, app.queue).catch((error) => {
+        logWarn("changed_beatmap_file_walk_seed_failed", errorContext(error));
       });
       void ensureDanFloorPinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[dan-floor-pin] seed failed", error));
       void ensureLnSubtypeRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-subtype] seed failed", error));

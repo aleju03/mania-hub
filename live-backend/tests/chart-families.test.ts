@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
+import { readFileSync } from "node:fs";
 import {
   chartTopologyKey, chartEdgeKeys, paddingAllowance, sameChart, storeChartFamily,
-  recomputeChartFamilyChunk, ensureChartFamilySweepSeeded, runChartFamilySweepJob,
-  CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB,
+  recomputeChartFamilyChunk, ensureChartFamilySweepSeeded, ensureDanSkillsetRegistrySeeded, runChartFamilySweepJob,
+  CHART_FAMILY_META_KEY, CHART_FAMILY_SWEEP_JOB, DAN_SKILLSET_REGISTRY_META_KEY,
 } from "../src/features/chart-families.js";
+import { danSkillsetFingerprint, DAN_SKILLSET_BY_FINGERPRINT } from "../src/features/dan-skillset-identity.js";
+import { DAN_SKILLSET_CHARTS } from "../src/features/dan-skillset-registry.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { CHART_ANALYSIS_VERSION, JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY } from "../src/features/chart-analysis.js";
 import { getPlayerSkillDanEvidence, loadChartSkillInfo, PLAYER_SKILLS_VERSION, recomputePlayerSkillDanChunk } from "../src/features/player-skills.js";
@@ -28,6 +31,8 @@ async function database(): Promise<Db> {
   await migrate(db);
   return db;
 }
+
+const AQUARIS = readFileSync(new URL("./fixtures/dan-skillsets/1887432.osu", import.meta.url), "utf8");
 
 function file(rate = 1, offset = 1000): string {
   const columns = [0, 1, 3, 2, 1, 2, 0, 3];
@@ -153,10 +158,34 @@ describe("structural chart families", () => {
     }
   });
 
+  it("seeds the registry's own credentials from cached files and lets the dan refold start on them", async () => {
+    const db = await database();
+    const queue = new JobQueue(db);
+    for (const key of [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, "chart_family_sweep_done:v2"]) {
+      await exec(db, "insert into live_meta (key, value_json, updated_at) values (?, '{}', '2026-09-06')", [key]);
+    }
+    const chart = DAN_SKILLSET_BY_FINGERPRINT.get(danSkillsetFingerprint(AQUARIS)!)!;
+    await storeCachedBeatmapFile(db, chart.beatmapId, AQUARIS);
+    // A registry id whose cached file is no longer the registry chart earns nothing.
+    const other = DAN_SKILLSET_CHARTS.find((c) => c.beatmapId !== chart.beatmapId)!;
+    await storeCachedBeatmapFile(db, other.beatmapId, file());
+    await exec(db, "delete from dan_skillset_chart_matches");
+    await ensureDanSkillsetRegistrySeeded(db, queue);
+    expect((await exec(db, "select beatmap_id from dan_skillset_chart_matches")).rows).toEqual([{ beatmap_id: chart.beatmapId }]);
+    const stamp = JSON.parse(String((await exec(db, "select value_json from live_meta where key = ?", [DAN_SKILLSET_REGISTRY_META_KEY])).rows[0].value_json));
+    expect(stamp).toMatchObject({ matched: 1, mismatched: [other.beatmapId], raced: [] });
+    expect(stamp.uncached).toBe(new Set(DAN_SKILLSET_CHARTS.map((c) => c.beatmapId)).size - 2);
+    // Structure v2 + registry coverage is enough for the refold; v3 is not required.
+    expect((await exec(db, "select 1 from jobs where type = 'recompute_player_skill_dan_sweep'")).rows).toHaveLength(1);
+    await exec(db, "delete from dan_skillset_chart_matches");
+    await ensureDanSkillsetRegistrySeeded(db, queue);
+    expect((await exec(db, "select 1 from dan_skillset_chart_matches")).rows).toHaveLength(0);
+  });
+
   it("resumes once and seeds the dan refold after family backfill finishes", async () => {
     const db = await database();
     const queue = new JobQueue(db);
-    for (const key of [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY]) {
+    for (const key of [JACK_DEMAND_RECOMPUTE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, DAN_SKILLSET_REGISTRY_META_KEY]) {
       await exec(db, "insert into live_meta (key, value_json, updated_at) values (?, '{}', '2026-09-06')", [key]);
     }
     await ensureChartFamilySweepSeeded(db, queue);
