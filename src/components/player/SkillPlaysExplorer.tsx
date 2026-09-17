@@ -1241,6 +1241,8 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
               ? t`This chart is not built in a way a dan level can be read off a clear of it.`
               : rejected.reason === "chart_unanalyzed"
                 ? t`This chart has not been analyzed yet, so there is no dan level to credit. It can count later.`
+                : rejected.reason === "unverifiable_revision"
+                  ? t`This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan.`
                 : rejected.reason === "no_chart_dan"
                   ? t`This chart has no dan level at the rate it was played at.`
                   : rejected.reason === "no_accuracy"

@@ -1,6 +1,6 @@
 import { MARATHON_CORRECTION_META_KEY } from "../src/features/marathon-correction.js";
 import { LEOBLACK_FUSION_META_KEY } from "../src/features/leoblack-fusion.js";
-import { CHART_FAMILY_META_KEY } from "../src/features/chart-families.js";
+import { CHART_FAMILY_META_KEY, DAN_SKILLSET_REGISTRY_META_KEY } from "../src/features/chart-families.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../src/dan/dan-estimator/cache-version.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -56,6 +56,8 @@ async function markMotionFeaturesSwept(db: Db): Promise<void> {
 async function markChartFamiliesSwept(db: Db): Promise<void> {
   await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, '{}', ?)",
     [CHART_FAMILY_META_KEY, "2026-09-06T00:00:00.000Z"]);
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, '{}', ?)",
+    [DAN_SKILLSET_REGISTRY_META_KEY, "2026-09-17T00:00:00.000Z"]);
 }
 
 async function markDanDependenciesSwept(db: Db): Promise<void> {

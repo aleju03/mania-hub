@@ -198,6 +198,48 @@ describe("structural chart families", () => {
     expect((await exec(db, "select 1 from jobs where type = ?", [CHART_FAMILY_SWEEP_JOB])).rows).toHaveLength(1);
   });
 
+  it("stops crediting a parked play once the editable chart it was set on has moved past it", async () => {
+    const db = await database();
+    const chart = async (id: number, status: string, lastUpdated: string) => {
+      await exec(db,
+        `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+         values (?, ?, 'ready', 4, ?, '2026-09-16')`,
+        [id, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio: 0, rc: { rawDan: 18 } })]);
+      await exec(db,
+        `insert into beatmaps (beatmap_id, beatmapset_id, mode, version, status, metadata_json, updated_at)
+         values (?, 1, 'mania', 'x', ?, ?, '2026-09-16')`,
+        [id, status, JSON.stringify({ checksum: `md5-${id}`, last_updated: lastUpdated })]);
+    };
+    // 1: pending map edited after the play. 2: same, but the play verified
+    // already. 3: pending map edited before the play (a verify can settle it).
+    // 4: ranked map edited after the play (settled charts keep their history).
+    // 5: parked play whose own checksum is no longer the chart's.
+    await chart(1, "pending", "2026-09-16T15:54:11Z");
+    await chart(2, "pending", "2026-09-16T15:54:11Z");
+    await chart(3, "pending", "2026-09-16T10:00:00Z");
+    await chart(4, "ranked", "2026-09-16T15:54:11Z");
+    await chart(5, "pending", "2026-09-16T10:00:00Z");
+    const play = (beatmapId: number, extra: Record<string, unknown>) => ({ identity: `score:${beatmapId}`, beatmapId, keyCount: 4,
+      rate: 1, goal: 0.93, pp: 0, patterns: [], accuracy: 0.97, stableAccuracy: 0.97, values: { Overall: 20, Chordjack: 20 },
+      startedAt: "2026-09-16T14:04:14Z", endedAt: "2026-09-16T14:05:05Z", ...extra });
+    await exec(db,
+      `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+       values (7, ?, 'ready', ?, ?, '2026-09-16', '2026-09-16')`,
+      [PLAYER_SKILLS_VERSION, JSON.stringify({ modes: [{ keyCount: 4, ratings: { Overall: 20 } }] }), JSON.stringify({ plays: [
+        play(1, { revisionPending: true }),
+        play(2, {}),
+        play(3, { revisionPending: true }),
+        play(4, { revisionPending: true }),
+        play(5, { revisionPending: true, beatmapChecksum: "md5-old" }),
+      ] })]);
+    const evidence = (await getPlayerSkillDanEvidence(db, 7, 4, "rc", null, { includeRejected: true }))!;
+    const counted = evidence.skillsets.flatMap((section) => section.plays.map((entry) => entry.play.beatmapId)).sort();
+    expect(counted).toEqual([2, 3, 4]);
+    expect(evidence.rejected.map((entry) => [entry.play.beatmapId, entry.reason]))
+      .toEqual([[1, "unverifiable_revision"], [5, "unverifiable_revision"]]);
+    expect(evidence.rejected[0]).toMatchObject({ chartDan: 18 });
+  });
+
   it("caps verified rate reuploads in both the evidence and persisted Dan refold", async () => {
     const db = await database();
     const plays = [];

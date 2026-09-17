@@ -1634,6 +1634,11 @@ export interface ChartSkillInfo {
   dtLnEffectiveRatio: number | null;
   htLnEffectiveRatio: number | null;
   vibro: boolean;
+  /** The chart's current file identity, for isUnverifiableRevision: the osu!
+   * checksum, when it last changed, and whether it can still change. */
+  revisionChecksum: string | null;
+  revisionUpdatedAt: string | null;
+  revisionMutable: boolean;
   /** False when the chart's raw object structure makes its dan verdict unsafe
    * as player evidence. The chart may still display that verdict on /maps. */
   danEligible: boolean;
@@ -1995,6 +2000,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       `select a.beatmap_id, a.status, a.key_count, a.classification_json, a.msd_json, a.dan_dt_json, a.dan_ht_json,
               json_extract(b.metadata_json, '$.total_length') as total_length,
               json_extract(b.metadata_json, '$.accuracy') as od,
+              json_extract(b.metadata_json, '$.checksum') as revision_checksum,
+              json_extract(b.metadata_json, '$.last_updated') as revision_updated_at,
+              b.status as beatmap_status,
               b.beatmapset_id, b.version, f.family_key
          from beatmap_chart_analysis a
          left join beatmaps b on b.beatmap_id = a.beatmap_id
@@ -2090,6 +2098,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         dtLnEffectiveRatio: readShare(danDt?.lnEffectiveRatio),
         htLnEffectiveRatio: readShare(danHt?.lnEffectiveRatio),
         vibro: parsed?.vibro === true,
+        revisionChecksum: typeof row.revision_checksum === "string" && row.revision_checksum ? row.revision_checksum : null,
+        revisionUpdatedAt: typeof row.revision_updated_at === "string" && row.revision_updated_at ? row.revision_updated_at : null,
+        revisionMutable: !["ranked", "approved", "loved"].includes(String(row.beatmap_status ?? "")),
         // Legacy rows have no field and stay eligible until the targeted
         // cached-.osu sweep inspects them. Fresh analyses always store it.
         danEligible: parsed?.danEligibility?.eligible !== false,
@@ -2418,6 +2429,7 @@ export type DanClearRejectReason =
   | "no_accuracy"
   | "no_chart_dan"
   | "chart_repeat_limit"
+  | "unverifiable_revision"
   | "below_bar";
 
 /** One rated play that credited no dan, with the rule that stopped it. */
@@ -2445,6 +2457,27 @@ export interface DanClearTarget {
   rawDan: number;
   side: "rc" | "ln";
   label: string | null;
+}
+
+/**
+ * A revision-pending play that no verify job can ever settle: the chart is
+ * still editable and was updated after the play was set, or the play names a
+ * file checksum the chart no longer has. Same test scoreMatchesRevision makes
+ * when it parks the play. Parked evidence keeps its stored credit while a
+ * verify is merely outstanding, which is right for a file refresh and wrong
+ * here: an unranked map edited after the play kept crediting the old notes
+ * forever (2026-09-17, two iota clears on a since-edited exploit chart).
+ */
+export function isUnverifiableRevision(
+  play: Pick<StoredPlaySsr, "revisionPending" | "beatmapChecksum" | "startedAt" | "endedAt">,
+  info: Pick<ChartSkillInfo, "revisionChecksum" | "revisionUpdatedAt" | "revisionMutable">,
+): boolean {
+  if (play.revisionPending !== true) return false;
+  if (play.beatmapChecksum && info.revisionChecksum) return play.beatmapChecksum !== info.revisionChecksum;
+  if (!info.revisionMutable || !info.revisionUpdatedAt) return false;
+  const played = Date.parse(play.startedAt ?? play.endedAt ?? "");
+  const updated = Date.parse(info.revisionUpdatedAt);
+  return Number.isFinite(played) && Number.isFinite(updated) && played < updated;
 }
 
 /**
@@ -2528,6 +2561,10 @@ function collectDanClears(
       : {};
     if (!info.danEligible) {
       reject(play, "chart_ineligible", aimed);
+      continue;
+    }
+    if (isUnverifiableRevision(play, info)) {
+      reject(play, "unverifiable_revision", aimed);
       continue;
     }
     // A Difficulty Adjust play was judged at the OD it set, not the chart's,
@@ -7063,7 +7100,8 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // v40: only the best two rate clears per verified chart family count, at full
 // weight and before skillset/quorum selection. Re-fold without rerating SSRs.
 // v41: practice credit is scoped to its named skillset, never shared tiles.
-export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v43";
+// v44 (2026-09-17): unverifiable_revision stops crediting parked plays on since-edited charts.
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v44";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;

@@ -94,6 +94,7 @@ export type LiveDanRejectReason =
   | "no_accuracy"
   | "no_chart_dan"
   | "chart_repeat_limit"
+  | "unverifiable_revision"
   | "below_bar";
 
 /** One rated play that credits no dan, with the rule that stopped it. */
