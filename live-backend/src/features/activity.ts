@@ -1,10 +1,11 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
-import { parseManiaBeatmap, type ManiaNote } from "../dan/beatmap-parser.js";
+import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { chooseSkillFamily } from "../dan/dan-estimator/family-choice.js";
+import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { estimateFamilyScores } from "../dan/dan-estimator/scoring.js";
-import { DAN_PRIMARY_FAMILIES, type DanFeatureMetrics } from "../dan/dan-estimator/types.js";
+import { DAN_PRIMARY_FAMILIES } from "../dan/dan-estimator/types.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
@@ -19,7 +20,23 @@ import { errorContext, logWarn } from "../logger.js";
 // v5: chordjack requires actual chord-column repetition (chordColumnOverlapRatio
 // gate in the family choice + pattern scorer), so dense 7K bracket/jumpstream
 // files stop minting "chordjack" primaries.
-export const ACTIVITY_SKILL_ANALYSIS_VERSION = 5;
+// v6: the LN axis comes from the shared pattern analyzer instead of the fork
+// that used to live in this file (see getActivityPatternVector).
+export const ACTIVITY_SKILL_ANALYSIS_VERSION = 6;
+// A version bump re-analyzes every chart in the background, and until the
+// sweep reaches a map its current-version row does not exist. Reading the
+// newest ready vector at or below the current version keeps those maps showing
+// the previous analysis instead of "unknown"; retention drops the superseded
+// row once the new one lands. The enqueue paths deliberately keep matching the
+// current version alone, so an older row never counts as analyzed.
+function skillVectorJoin(beatmapIdColumn: string): string {
+  return `beatmap_skill_vectors v
+       on v.beatmap_id = ${beatmapIdColumn} and v.analysis_version = (
+         select max(s.analysis_version) from beatmap_skill_vectors s
+         where s.beatmap_id = ${beatmapIdColumn} and s.status = 'ready' and s.analysis_version <= ?
+       )`;
+}
+
 export const ACTIVITY_BACKFILL_JOB = "backfill_player_activity";
 const ACTIVITY_BACKFILL_BATCH_SIZE = 2_000;
 const ACTIVITY_BACKFILL_ENQUEUE_COOLDOWN_MS = 60_000;
@@ -34,11 +51,23 @@ const ACTIVITY_ANALYSIS_FAILED_RETRY_MS = 5 * 60_000;
 // scores: the strongest family sits at 1 and the rest decay with their score
 // distance, so the mix reads as "what this chart is" rather than raw SR.
 const ACTIVITY_PATTERN_MIX_TEMPERATURE = 0.75;
-const ACTIVITY_LN_PRIMARY_THRESHOLD = 0.6;
 const ACTIVITY_MIN_ANALYZED_NOTES = 24;
 const ACTIVITY_PATTERN_MIN_VALUE = 0.01;
+// A subtype has to be this strong before it replaces the plain "ln" headline.
+const ACTIVITY_LN_SUBTYPE_MIN_VALUE = 0.2;
 
 const ACTIVITY_LN_SUBTYPES = ["lnGeneral", "lnRelease", "lnInverse", "lnTech"] as const;
+
+// The shared pattern analyzer's LN ids, in this file's camelCase. Everything
+// LN on the activity page is read straight off that analyzer, so a chart reads
+// the same here as it does on its chart page and in the /maps chips.
+const ACTIVITY_LN_PATTERN_IDS: Record<string, (typeof ACTIVITY_LN_SUBTYPES)[number] | "ln"> = {
+  ln: "ln",
+  lngeneral: "lnGeneral",
+  lnrelease: "lnRelease",
+  lninverse: "lnInverse",
+  lntech: "lnTech",
+};
 
 // Pattern ids come from the dan estimator's families plus LN and its 7K
 // subtypes; the record stays open so new estimator families flow through the
@@ -909,8 +938,7 @@ async function getActivityScoreRefs(
        v.skills_json
      from player_activity_score_refs r
      left join beatmaps b on b.beatmap_id = r.beatmap_id
-     left join beatmap_skill_vectors v
-       on v.beatmap_id = r.beatmap_id and v.analysis_version = ?
+     left join ${skillVectorJoin("r.beatmap_id")}
      where r.country = ? and r.user_id = ? and r.day >= ? and r.day <= ?
      order by r.ended_at asc, r.score_identity asc`,
     [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, range.from, range.to],
@@ -996,8 +1024,7 @@ async function getActivityDayScoreRows(
        v.skills_json
      from player_activity_score_refs r
      left join beatmaps b on b.beatmap_id = r.beatmap_id
-     left join beatmap_skill_vectors v
-       on v.beatmap_id = r.beatmap_id and v.analysis_version = ?
+     left join ${skillVectorJoin("r.beatmap_id")}
      where r.country = ? and r.user_id = ? and r.day >= ? and r.day <= ?
      order by r.ended_at asc, r.score_identity asc`,
     [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, addDayKeyDays(day, -1), addDayKeyDays(day, 1)],
@@ -1072,8 +1099,7 @@ async function getActivityMapsForLocalDay(
      from player_activity_maps m
      left join beatmaps b on b.beatmap_id = m.beatmap_id
      left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
-     left join beatmap_skill_vectors v
-       on v.beatmap_id = m.beatmap_id and v.analysis_version = ?
+     left join ${skillVectorJoin("m.beatmap_id")}
      where m.country = ? and m.user_id = ? and m.day >= ? and m.day <= ? and m.beatmap_id in (${placeholders})`,
     [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, addDayKeyDays(day, -1), addDayKeyDays(day, 1), ...beatmapIds],
   )).rows;
@@ -1285,7 +1311,7 @@ function getPrimaryActivitySkill(vector: ActivityPatternVector | null): PlayerAc
 
 function getPrimaryLnActivitySubtype(patterns: Record<string, number>): string | null {
   let best: string | null = null;
-  let bestValue = 0.2;
+  let bestValue = ACTIVITY_LN_SUBTYPE_MIN_VALUE;
   for (const key of ACTIVITY_LN_SUBTYPES) {
     const value = patterns[key] ?? 0;
     if (value >= bestValue) {
@@ -1316,10 +1342,11 @@ export function getCurrentActivityStreak(days: PlayerActivityDay[], year: number
 }
 
 function getActivityPatternVector(map: ReturnType<typeof parseManiaBeatmap>, starRating: number): ActivityPatternVector {
-  const features = extractDanFeatures(map, {
+  const input = {
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
     version: map.version,
-  }, 1);
+  };
+  const features = extractDanFeatures(map, input, 1);
   const { metrics, durationMs } = features;
   if (features.notes.length < ACTIVITY_MIN_ANALYZED_NOTES) {
     return { primary: "unknown", patterns: {} };
@@ -1339,224 +1366,51 @@ function getActivityPatternVector(map: ReturnType<typeof parseManiaBeatmap>, sta
   patterns.jumpstream *= pressure(twoNoteShare, 0.45, 0.85);
   patterns.handstream *= pressure(1 - twoNoteShare, 0.08, 0.35);
 
-  // LN stays an absolute hold-pressure score: it is an orthogonal axis that
-  // hybrids combine with any of the families above.
-  const lnScore = clamp01(
-    metrics.holdRatio * 1.25
-    + pressureScore(metrics.lnReleasePressure, 30) * 0.28
-    + pressureScore(metrics.lnOverlapPressure, 8) * 0.24
-    + pressureScore(metrics.lnChordPressure, 1) * 0.18,
-  );
-  patterns.ln = lnScore;
-  Object.assign(
-    patterns,
-    getActivityLnSubtypeScores(
-      features.notes,
-      features.orderedRows,
-      metrics,
-      Number.isFinite(map.bpm) && map.bpm > 0 ? 60000 / map.bpm : 0,
-    ),
-  );
+  // The LN axis is an orthogonal one that hybrids combine with any family
+  // above, and it is the shared pattern analyzer's, not a second opinion: the
+  // copy that used to live here scored LN off its own composite and only knew
+  // the 7K subtypes, so a gapped-inverse chart the chart page and the /maps
+  // chips called LN Inverse printed "Tech" on the activity page. The analyzer
+  // runs on the features already extracted above, so this costs no extra parse.
+  const analysis = analyzeManiaPatterns(map, input, features);
+  for (const hit of analysis.allPatterns) {
+    const id = ACTIVITY_LN_PATTERN_IDS[hit.id];
+    if (id) patterns[id] = clamp01(hit.score);
+  }
 
   let primary: string = chooseSkillFamily(skillScores, metrics).family;
   if (primary === "handstream" || primary === "jumpstream") {
     primary = patterns.jumpstream > patterns.handstream ? "jumpstream" : "handstream";
   }
 
-  // The family chooser is benchmarked on real charts and can pick a primary
-  // whose raw score trails other families; cap the rejected families just
-  // under the chosen one so the displayed mix agrees with the chart identity.
-  const chosenValue = patterns[primary] ?? 0;
-  if (chosenValue > 0 && chosenValue < 1) {
-    for (const family of DAN_PRIMARY_FAMILIES) {
-      if (family !== primary && patterns[family] > chosenValue) {
-        patterns[family] = Math.min(patterns[family], Math.max(chosenValue, 0.92));
-      }
-    }
-    patterns[primary] = 1;
-  }
-
-  if (lnScore >= ACTIVITY_LN_PRIMARY_THRESHOLD) {
+  // LN leads when it leads the analyzer: its top-scoring pattern outscoring
+  // every rice one is the same evidence the chart page prints as the chart's
+  // category, and it is a pattern claim, not the dan-routing identity gate
+  // (chartIsLn), which a hybrid can miss while still playing as an LN chart.
+  const analyzerLeadsLn = analysis.primary != null && ACTIVITY_LN_PATTERN_IDS[analysis.primary.id] != null;
+  if (analyzerLeadsLn) {
     primary = getPrimaryLnActivitySubtype(patterns) ?? "ln";
+  } else {
+    // The family chooser is benchmarked on real charts and can pick a primary
+    // whose raw score trails other families; cap the rejected families just
+    // under the chosen one so the displayed mix agrees with the chart identity.
+    // Only a rice headline earns the cap: forcing it under an LN headline is
+    // what left holds-heavy charts carrying a phantom 1.0 rice chip.
+    const chosenValue = patterns[primary] ?? 0;
+    if (chosenValue > 0 && chosenValue < 1) {
+      for (const family of DAN_PRIMARY_FAMILIES) {
+        if (family !== primary && patterns[family] > chosenValue) {
+          patterns[family] = Math.min(patterns[family], Math.max(chosenValue, 0.92));
+        }
+      }
+      patterns[primary] = 1;
+    }
   }
 
   for (const [key, value] of Object.entries(patterns)) {
     if (!(value >= ACTIVITY_PATTERN_MIN_VALUE)) delete patterns[key];
   }
   return { primary, patterns };
-}
-
-interface ActivityLnPatternStats {
-  inverseReleaseRatio: number;
-  releaseOnlyRatio: number;
-  headTailSwitchRatio: number;
-  mixedRowRatio: number;
-  tapWhileHoldingRatio: number;
-}
-
-// Same tempo-aware inverse gap cap as the dan-estimator pattern analyzer:
-// inverse release gaps are charted as beat fractions (1/8 to 1/4 beat), so a
-// fixed 120ms cutoff misses slow charts (127ms gaps at 79 BPM).
-function inverseGapCapMs(beatLengthMs: number): number {
-  if (!Number.isFinite(beatLengthMs) || beatLengthMs <= 0) return 120;
-  return Math.min(250, Math.max(120, beatLengthMs * 0.27));
-}
-
-function getActivityLnPatternStats(
-  notes: ManiaNote[],
-  orderedRows: Array<[number, ManiaNote[]]>,
-  keyCount: number,
-  beatLengthMs: number,
-): ActivityLnPatternStats {
-  const releaseRows = new Map<number, ManiaNote[]>();
-  const headTimes = new Set<number>();
-  const holdEvents: Array<{ time: number; delta: number }> = [];
-  const notesByColumn = Array.from({ length: Math.max(1, keyCount) }, () => [] as ManiaNote[]);
-
-  for (const note of notes) {
-    if (note.column >= 0 && note.column < notesByColumn.length) notesByColumn[note.column].push(note);
-    if (!note.isHold || note.endTime <= note.time) continue;
-
-    const releaseRow = releaseRows.get(note.endTime);
-    if (releaseRow) releaseRow.push(note);
-    else releaseRows.set(note.endTime, [note]);
-    holdEvents.push({ time: note.time, delta: 1 }, { time: note.endTime, delta: -1 });
-  }
-
-  holdEvents.sort((left, right) => left.time - right.time || right.delta - left.delta);
-
-  let activeHolds = 0;
-  let eventIndex = 0;
-  let mixedRows = 0;
-  let tapWhileHoldingRows = 0;
-  let headTailSwitchRows = 0;
-
-  for (const [time, rowNotes] of orderedRows) {
-    headTimes.add(time);
-
-    while (eventIndex < holdEvents.length && holdEvents[eventIndex].time < time) {
-      activeHolds = Math.max(0, activeHolds + holdEvents[eventIndex].delta);
-      eventIndex++;
-    }
-
-    const hasHold = rowNotes.some((note) => note.isHold);
-    const hasTap = rowNotes.some((note) => !note.isHold);
-    if (hasHold && hasTap) mixedRows++;
-    if (hasTap && activeHolds > 0) tapWhileHoldingRows++;
-    if (releaseRows.has(time)) headTailSwitchRows++;
-  }
-
-  let releaseOnlyRows = 0;
-  for (const time of releaseRows.keys()) {
-    if (!headTimes.has(time)) releaseOnlyRows++;
-  }
-
-  const gapCap = inverseGapCapMs(beatLengthMs);
-  let inverseLikeHolds = 0;
-  let sameColumnNextHolds = 0;
-  for (const columnNotes of notesByColumn) {
-    columnNotes.sort((left, right) => left.time - right.time || left.endTime - right.endTime);
-    for (let index = 0; index < columnNotes.length - 1; index++) {
-      const note = columnNotes[index];
-      if (!note.isHold || note.endTime <= note.time) continue;
-
-      const nextNote = columnNotes[index + 1];
-      const gap = nextNote.time - note.endTime;
-      if (gap < 0) continue;
-
-      const gapRatio = gap / Math.max(1, note.endTime - note.time);
-      sameColumnNextHolds++;
-      if (gap <= gapCap && gapRatio <= 0.7) inverseLikeHolds++;
-    }
-  }
-
-  const rowCount = Math.max(1, orderedRows.length);
-  const releaseRowCount = releaseRows.size;
-
-  return {
-    inverseReleaseRatio: sameColumnNextHolds ? inverseLikeHolds / sameColumnNextHolds : 0,
-    releaseOnlyRatio: releaseRowCount ? releaseOnlyRows / releaseRowCount : 0,
-    headTailSwitchRatio: headTailSwitchRows / rowCount,
-    mixedRowRatio: mixedRows / rowCount,
-    tapWhileHoldingRatio: tapWhileHoldingRows / rowCount,
-  };
-}
-
-function getActivityLnSubtypeScores(
-  notes: ManiaNote[],
-  orderedRows: Array<[number, ManiaNote[]]>,
-  metrics: DanFeatureMetrics,
-  beatLengthMs: number,
-): Record<(typeof ACTIVITY_LN_SUBTYPES)[number], number> {
-  if (metrics.keyCount !== 7) {
-    return { lnGeneral: 0, lnRelease: 0, lnInverse: 0, lnTech: 0 };
-  }
-
-  const stats = getActivityLnPatternStats(notes, orderedRows, metrics.keyCount, beatLengthMs);
-  const lnPatternScore = Math.max(
-    pressure(metrics.holdRatio, 0.03, 0.32),
-    minGate(pressure(metrics.lnDensity, 0.02, 0.18), pressure(metrics.lnOverlapPressure, 0.4, 2.4)),
-    minGate(pressure(metrics.lnReleasePressure, 1.2, 5.5), pressure(metrics.holdRatio, 0.015, 0.16)),
-    minGate(pressure(metrics.lnChordPressure, 0.15, 0.65), pressure(metrics.holdRatio, 0.02, 0.18)),
-  );
-  const gate = pressure(lnPatternScore, 0.18, 0.58);
-  const lnInverse = gate * minGate(
-    pressure(stats.inverseReleaseRatio, 0.24, 0.62),
-    pressure(metrics.lnDensity, 0.12, 0.5),
-    Math.max(
-      pressure(metrics.lnOverlapPressure, 1.1, 3.1),
-      pressure(metrics.lnHoldDurationP90, 260, 520),
-    ),
-    clamp01((0.16 - stats.mixedRowRatio) / 0.16),
-  );
-  const lnRelease = gate * minGate(
-    pressure(stats.releaseOnlyRatio, 0.48, 0.68),
-    pressure(metrics.lnReleasePressure, 12, 30),
-    clamp01((0.45 - stats.inverseReleaseRatio) / 0.32),
-    clamp01((520 - metrics.lnHoldDurationP90) / 260),
-  );
-  const lnTechBurst = Math.max(
-    pressure(metrics.fastRowRatio, 0.18, 0.36),
-    pressure(metrics.rowBurstPressure, 16, 26),
-  );
-  const lnTechCoordination = Math.max(
-    pressure(stats.tapWhileHoldingRatio, 0.04, 0.11),
-    pressure(stats.headTailSwitchRatio, 0.52, 0.72),
-    pressure(metrics.chordSizeChangeRate, 0.55, 0.78),
-  );
-  const lnTech = gate * minGate(
-    lnTechBurst,
-    lnTechCoordination,
-    Math.max(
-      pressure(metrics.techPressure, 4.2, 8.4),
-      pressure(metrics.rowIntervalEntropy, 2.0, 2.45),
-    ),
-    clamp01((0.6 - stats.inverseReleaseRatio) / 0.34),
-    clamp01((0.66 - stats.releaseOnlyRatio) / 0.22),
-  );
-  const lnGeneralCoverage = Math.max(
-    minGate(
-      pressure(metrics.holdRatio, 0.35, 0.82),
-      pressure(metrics.lnChordPressure, 0.32, 0.66),
-      pressure(stats.headTailSwitchRatio, 0.35, 0.62),
-    ),
-    minGate(
-      pressure(metrics.lnDensity, 0.12, 0.42),
-      pressure(metrics.lnReleasePressure, 8, 24),
-      pressure(metrics.chordRatio, 0.28, 0.62),
-    ),
-  );
-  const lnSpecialtyScore = Math.max(lnInverse, lnRelease, lnTech);
-  const lnGeneral = gate
-    * lnGeneralCoverage
-    * (0.35 + 0.65 * clamp01((0.78 - lnSpecialtyScore) / 0.38));
-
-  return {
-    lnGeneral: clamp01(lnGeneral),
-    lnRelease: clamp01(lnRelease),
-    lnInverse: clamp01(lnInverse),
-    lnTech: clamp01(lnTech),
-  };
 }
 
 function readScoreActivityInput(country: string, score: OscScore, scoreIdentity: string) {
@@ -1639,17 +1493,8 @@ function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-function pressureScore(value: number, cap: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return clamp01(value / cap);
-}
-
 function pressure(value: number, low: number, high: number): number {
   return clamp01((value - low) / Math.max(0.001, high - low));
-}
-
-function minGate(...values: number[]): number {
-  return clamp01(Math.min(...values));
 }
 
 function clamp01(value: number): number {

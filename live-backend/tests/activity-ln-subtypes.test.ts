@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate } from "../src/db.js";
+import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
+import { analyzeManiaPatterns } from "../src/dan/dan-estimator/patterns.js";
+import type { ManiaPatternId } from "../src/dan/dan-estimator/types.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, computeBeatmapActivitySkillVector } from "../src/features/activity.js";
 
 const dirs: string[] = [];
@@ -11,10 +14,6 @@ afterEach(async () => {
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
   dirs.length = 0;
 });
-
-function repeatRows<T>(pattern: T[][], times: number): T[][] {
-  return Array.from({ length: times }).flatMap(() => pattern);
-}
 
 function makeOsu(
   rows: Array<Array<number | { column: number; holdMs?: number }>>,
@@ -80,28 +79,70 @@ describe("activity LN subtype vectors", () => {
     expect(JSON.parse(String(row.skills_json))).toMatchObject({ primary: expect.any(String) });
   });
 
-  it("stores the strongest 7K LN subtype score", async () => {
-    const releaseRows = Array.from({ length: 7 * 36 }, (_, index) => [
-      { column: index % 7, holdMs: 45 },
-      { column: (index + 3) % 7, holdMs: 45 },
-    ]);
-    const techRows = repeatRows<number | { column: number; holdMs?: number }>([
-      [{ column: 0, holdMs: 110 }, 4],
-      [{ column: 2, holdMs: 55 }, { column: 5, holdMs: 55 }],
-      [{ column: 1, holdMs: 110 }, 6],
-      [{ column: 3, holdMs: 55 }, { column: 4, holdMs: 55 }],
-      [{ column: 0, holdMs: 165 }, { column: 2, holdMs: 165 }, 5],
-      [{ column: 1, holdMs: 55 }, { column: 6, holdMs: 55 }],
-    ], 34);
+  // The LN axis is the shared pattern analyzer's, not a second scorer living in
+  // the activity feature: a chart has to read the same on the activity page as
+  // it does on its chart page and in the /maps chips.
+  it("carries the shared analyzer's LN scores", async () => {
+    const osuFile = makeOsu(
+      Array.from({ length: 300 }, (_, index) => [
+        { column: index % 7, holdMs: 100 },
+        { column: (index + 2) % 7, holdMs: 100 },
+        { column: (index + 4) % 7, holdMs: 100 },
+      ]),
+      120,
+    );
+    const row = await analyzeFixture(103, osuFile);
+    const patterns = JSON.parse(String(row.skills_json)).patterns as Record<string, number>;
 
-    const release = await analyzeFixture(101, makeOsu(releaseRows, 60));
-    const releasePatterns = JSON.parse(String(release.skills_json)).patterns as Record<string, number>;
-    expect(releasePatterns.lnRelease).toBeGreaterThan(0.5);
-    expect(releasePatterns.lnRelease).toBeGreaterThan(releasePatterns.lnTech ?? 0);
+    const map = parseManiaBeatmap(osuFile);
+    const analysis = analyzeManiaPatterns(map, {
+      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+      version: map.version,
+    });
+    const shared = new Map(analysis.allPatterns.map((hit) => [hit.id, hit.score]));
+    const ids: Array<[ManiaPatternId, string]> = [
+      ["ln", "ln"],
+      ["lngeneral", "lnGeneral"],
+      ["lnrelease", "lnRelease"],
+      ["lninverse", "lnInverse"],
+      ["lntech", "lnTech"],
+    ];
+    for (const [sharedId, activityId] of ids) {
+      const score = shared.get(sharedId) ?? 0;
+      if (score >= 0.01) expect(patterns[activityId]).toBeCloseTo(score, 5);
+      else expect(patterns[activityId]).toBeUndefined();
+    }
+  });
 
-    const tech = await analyzeFixture(102, makeOsu(techRows, 55));
-    const techPatterns = JSON.parse(String(tech.skills_json)).patterns as Record<string, number>;
-    expect(techPatterns.lnTech).toBeGreaterThan(0.5);
-    expect(techPatterns.lnTech).toBeGreaterThan(techPatterns.lnRelease ?? 0);
+  it("gives an LN-led chart an LN headline instead of a rice family", async () => {
+    const sevenKey = await analyzeFixture(
+      104,
+      makeOsu(
+        Array.from({ length: 300 }, (_, index) => [
+          { column: index % 7, holdMs: 100 },
+          { column: (index + 2) % 7, holdMs: 100 },
+          { column: (index + 4) % 7, holdMs: 100 },
+        ]),
+        120,
+      ),
+    );
+    expect(String(JSON.parse(String(sevenKey.skills_json)).primary)).toMatch(/^ln/);
+
+    // 4K used to have no LN subtypes at all here, so every 4K LN chart either
+    // flattened to "ln" or fell through to a rice family.
+    const fourKey = await analyzeFixture(
+      105,
+      makeOsu(
+        Array.from({ length: 300 }, (_, index) => [
+          { column: index % 4, holdMs: 100 },
+          { column: (index + 2) % 4, holdMs: 100 },
+        ]),
+        120,
+        { keyCount: 4 },
+      ),
+    );
+    const fourKeyVector = JSON.parse(String(fourKey.skills_json));
+    expect(String(fourKeyVector.primary)).toMatch(/^ln/);
+    expect(fourKeyVector.patterns.lnGeneral).toBeGreaterThan(0);
   });
 });

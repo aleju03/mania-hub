@@ -353,11 +353,13 @@ function clusterFamily(classification: { clusterCategory?: unknown } | null): st
 
 // The chart's family identity, from the strongest available signal per row.
 //
-// The in-house activity scorer force-caps its chosen family to 1.0 and reads
-// dense chord charts as jump/handstream (Planet Shaper indexed as handstream
-// with MinaCalc saying Stamina 23.2 / Handstream 18.5), and it promotes any
-// holds-heavy hybrid to LN off a soft composite even when the classifier
-// routed the chart RC. So:
+// The in-house activity scorer force-caps its chosen rice family to 1.0 and
+// reads dense chord charts as jump/handstream (Planet Shaper indexed as
+// handstream with MinaCalc saying Stamina 23.2 / Handstream 18.5). Its LN
+// headline is the shared pattern analyzer's dominant pattern since vector v6
+// (a hold-share composite against a 0.6 bar before that), which is the right
+// question for "what did you play" and the wrong one for this index: a hybrid
+// can play as an LN chart while the classifier routes its verdict RC. So:
 // - 4K with MSD: primary = top MinaCalc base skillset (Stamina only wins on
 //   endurance-length files, see STAMINA_PRIMARY_MIN_LENGTH_SECONDS), pat_* mix
 //   normalized against it so card tags agree with the modal.
