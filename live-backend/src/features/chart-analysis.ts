@@ -861,7 +861,10 @@ export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // finger and of one hand, which every cached 4K rice verdict predates.
 // v14 restores articulated chordjack and completes local mixed-repetition
 // phrases, refreshing old exclusions as well as previously adjusted credit.
-export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v14";
+// v15 reads a decorated pair as locked below 85ms and lets a chart's own jack
+// content lower its exclusion bar, so charts built out of repetition lose the
+// credit their few provable sections had been leaving them.
+export const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v15";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {

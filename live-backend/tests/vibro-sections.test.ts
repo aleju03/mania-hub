@@ -4,7 +4,11 @@ import { classifyChart, detectRateVibro, detectRiceVibro } from "../src/dan/char
 import { analyzeVibroSections, conservativeVibroAccuracy, prepareVibroChart } from "../src/dan/vibro-sections.js";
 import { buildVibroOsu, localizedVibroFixture, vibroCharts, vibroFixture } from "./vibro-fixtures.js";
 
-const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854, 1545540, 3261949];
+// 3261945 was restored on the shape rules alone, before the body-repeat bar
+// existed. Half of its notes sit in jack runs and a quarter of them are in
+// proven sections, which is the shape of a chart made of repetition rather
+// than one wearing a few accents, so it joins the controls.
+const VIBRO_CONTROLS = [1104870, 1206131, 4871104, 918842, 5442206, 5847544, 1545542, 3948472, 3813854, 1545540, 3261949, 3261945];
 
 describe("section-based vibro ratings", () => {
   it("covers the reported short repetitions and their later reprises without metadata shortcuts", () => {
@@ -439,6 +443,47 @@ describe("section-based vibro ratings", () => {
     const verdict = classifyChart(map, text);
     expect(verdict.vibroAnalysis?.status).toBe("adjusted");
     expect(verdict.danEligibility.eligible).toBe(false);
+  });
+
+  // A decorated pair: the same two fingers on every row, with a third or
+  // fourth note struck alongside them on two rows out of three. Under 85ms
+  // those fingers are doing vibro work whatever lands next to them; above it
+  // the same shape is chordjack a player articulates (the reported
+  // varied_pair chart reloads at 89ms and keeps its restoration).
+  it.each([[79, true], [89, false]])("reads a pair decorated on most rows at %sms as locked: %s", (gapMs, locked) => {
+    const notes: [number, number, number][] = [];
+    for (let i = 0; i < 24; i++) {
+      notes.push([10_000 + i * gapMs, 2, -1], [10_000 + i * gapMs, 3, -1]);
+      if (i % 3 !== 0) notes.push([10_000 + i * gapMs, i % 3 === 1 ? 1 : 0, -1]);
+    }
+    for (let i = 0; i < 220; i++) notes.push([30_000 + i * 240, i % 4, -1]);
+    const sections = analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(notes))).sections;
+    expect(sections.some((section) => section.reasons.includes("repeated_chord"))).toBe(locked);
+  });
+
+  // Same wall, same note share, three different bodies around it. Only the
+  // body decides, and a body of trills is not a body of jacks.
+  it.each([
+    ["jacks", (i: number) => [[i % 3, 90], [i % 3, 90], [i % 3, 90], [i % 3, 300]] as const, "excluded"],
+    ["trills", (i: number) => [[i % 3, 90], [(i + 1) % 3, 90], [i % 3, 90], [(i + 1) % 3, 300]] as const, "adjusted"],
+    ["stream", (_i: number) => [[0, 120], [1, 120], [2, 120], [3, 120]] as const, "adjusted"],
+  ])("reads a %s body around the same wall as %s", (_name, cycle, status) => {
+    const notes: [number, number, number][] = [];
+    for (let row = 0; row < 24; row++) {
+      for (let column = 0; column < 4; column++) notes.push([10_000 + row * 79, column, -1]);
+    }
+    let time = 30_000;
+    for (let i = 0; i < 120; i++) {
+      for (const [column, gap] of cycle(i)) {
+        notes.push([time, column, -1]);
+        time += gap;
+      }
+    }
+    const result = analyzeVibroSections(parseManiaBeatmap(buildVibroOsu(notes)));
+    expect(result.noteShare).toBeCloseTo(96 / 576, 3);
+    expect(result.timeShare).toBeLessThan(0.15);
+    expect(result.status).toBe(status);
+    expect(result.repeatShare >= 0.25).toBe(status === "excluded");
   });
 
   it("assigns all accuracy loss to the retained notes, never inventing a cleaner clear", () => {

@@ -33,4 +33,8 @@
 // v25: refresh player-adjusted verdicts after the articulated-chordjack and
 // mixed-repetition fix. A stale terminal verdict must not suppress a restored
 // clear, and the retained-note variants must use the new section boundaries.
-export const DAN_ESTIMATE_CACHE_VERSION = 25;
+// v26: refresh player-adjusted verdicts for the locked-pair reading and the
+// body-repeat exclusion bar. Charts that leave the adjusted pool must stop
+// serving a retained-note variant, and the ones that stay must use the new
+// section boundaries.
+export const DAN_ESTIMATE_CACHE_VERSION = 26;

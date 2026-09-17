@@ -1,7 +1,7 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 import { scanMotionVibro } from "./vibro-motion.js";
 
-export const VIBRO_SECTION_VERSION = 5;
+export const VIBRO_SECTION_VERSION = 6;
 
 // Short repetitions need faster reloads than the 92ms sustained-longjack
 // floor, plus corroborating bursts in the same local phrase.
@@ -42,6 +42,9 @@ export interface VibroAnalysis {
    * Used to assign all observed accuracy loss to the retained material. */
   judgementShare: number;
   remainingNotes: number;
+  /** Share of notes sitting in repeated single-column runs across the whole
+   * chart, proven sections or not. Says what the body is built from. */
+  repeatShare: number;
   /** Share of active duration each reason covers on its own, before sections
    * are merged. Merging unions reasons, so a one-second detection inside a long
    * one is indistinguishable from evidence in its own right once merged; a
@@ -66,7 +69,7 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   const result: VibroAnalysis = {
     version: VIBRO_SECTION_VERSION, status: "clean", sections: [],
     excludedDurationMs: 0, activeDurationMs: 0, timeShare: 0,
-    noteShare: 0, judgementShare: 0, remainingNotes: map.notes.length, reasonShares: {},
+    noteShare: 0, judgementShare: 0, remainingNotes: map.notes.length, repeatShare: 0, reasonShares: {},
   };
   if (!usesSectionVibro(map) || !Number.isFinite(rate) || rate <= 0) return result;
   const scan = buildVibroScan(map, rate);
@@ -245,6 +248,12 @@ const SINGLE_FINGER_BANDS: readonly RepetitionBand[] = [
   { gapMs: 30, averageGapMs: 30, minHits: 4, minShare: 0, reason: "rapid_jack_burst" },
   { gapMs: 85, averageGapMs: 55, minHits: 9, minShare: 0, reason: "rapid_jack_burst" },
 ];
+// Row spacing at which a shared pair stops being material a player can
+// articulate: two fingers returning this fast sit at the ranked corpus's
+// finger maximum (12.81 hits/s, 4K rice), where the reported chordjack that
+// this gate protects reloads at 11.24/s. Measured on the cached corpus.
+const PAIR_LOCK_GAP_MS = 85;
+
 const PAIR_BANDS: readonly RepetitionBand[] = [
   { gapMs: 55, averageGapMs: 55, minHits: 4, minShare: 0, reason: "rapid_jack_burst" },
   { gapMs: 60, averageGapMs: 60, minHits: 6, minShare: 0, reason: "rapid_jack_burst" },
@@ -284,17 +293,28 @@ function scanFixedFingerWindows(scan: VibroScan): void {
         if (times[last] - times[first] > (band.minHits - 1) * band.averageGapMs * rate) continue;
         const localNotes = prefixNotes[last + 1] - prefixNotes[first];
         // At the moderate long-jack speed, a shared pair under continuously
-        // changing accompaniment is chordjack, not a fixed repeated chord.
-        // Require the pair itself on most rows. Occasional accents still fit;
-        // longer majority locks (25 hits), faster bursts and the independent
-        // motion limits remain unrestricted.
+        // changing accompaniment is chordjack, not a fixed repeated chord, so
+        // the pair itself has to hold most of the rows. What counts as the pair
+        // depends on how fast it reloads. Above PAIR_LOCK_GAP_MS the bare pair
+        // is required: a chart that keeps restriking those two fingers while
+        // the shape around them changes is chordjack a player can articulate.
+        // At or under it the pair only has to be present, because two fingers
+        // returning every 85ms or less do the same work whether or not
+        // something is struck alongside them, and demanding a bare row let a
+        // 79ms double survive by decorating every other row. Varied chordjack
+        // rotates its pairs, so no single pair holds two thirds of the rows
+        // either way. Longer majority locks (25 hits), faster bursts and the
+        // independent motion limits remain unrestricted.
         if (fingers === 2 && band.minShare > 0) {
-          let exactRows = 0;
-          for (let row = first; row <= last; row++) if (rows[row] === mask) exactRows++;
+          const locked = (times[last] - times[first]) / (last - first) <= PAIR_LOCK_GAP_MS * rate;
+          let heldRows = 0;
+          for (let row = first; row <= last; row++) {
+            if (locked ? (rows[row] & mask) === mask : rows[row] === mask) heldRows++;
+          }
           const phraseHits = phraseEnd - phraseStart + 1;
           const phraseNotes = prefixNotes[indices[phraseEnd] + 1] - prefixNotes[indices[phraseStart]];
           const sustainedPair = phraseHits >= 25 && phraseHits * fingers / phraseNotes >= band.minShare;
-          if (!sustainedPair && exactRows / (last - first + 1) < 2 / 3) continue;
+          if (!sustainedPair && heldRows / (last - first + 1) < 2 / 3) continue;
         }
         if (band.minHits * fingers / localNotes >= band.minShare) addSection(scan, times[first], times[last], band.reason);
       }
@@ -589,6 +609,7 @@ function measureSectionCoverage(result: VibroAnalysis, map: ManiaBeatmap, scan: 
   }
   result.remainingNotes -= removedNotes;
   result.noteShare = removedNotes / map.notes.length;
+  result.repeatShare = measureRepeatShare(scan);
   result.judgementShare = removedWeight / (removedWeight + result.remainingNotes);
   let sectionIndex = 0;
   for (let i = 1; i < times.length; i++) {
@@ -602,9 +623,53 @@ function measureSectionCoverage(result: VibroAnalysis, map: ManiaBeatmap, scan: 
   result.timeShare = result.activeDurationMs > 0 ? result.excludedDurationMs / result.activeDurationMs : 1;
   // Both time and note coverage matter. The remaining chart is recomputed,
   // so easy padding cannot retain the original spam-inflated difficulty.
-  result.status = result.timeShare <= 0.15 && result.noteShare <= 0.25
+  // The note cap also reads what surrounds the sections. Sections are only the
+  // material this detector can prove; a chart that repeats a column this often
+  // across its whole body is not a varied chart wearing a few vibro accents,
+  // and the proven sections in it are samples rather than exceptions.
+  const noteCap = result.repeatShare >= REPEAT_BODY_SHARE ? REPEAT_BODY_NOTE_CAP : 0.25;
+  result.status = result.timeShare <= 0.15 && result.noteShare <= noteCap
     && result.remainingNotes >= 300 && result.activeDurationMs - result.excludedDurationMs >= 20_000
     ? "adjusted" : "excluded";
+}
+
+/** Notes inside single-column runs that reload inside the jack band, over the
+ * whole chart. This is corpus evidence about the body, not a section: it never
+ * removes anything on its own, it only decides how much proven vibro a chart
+ * is allowed to carry and still be rated on what is left.
+ *
+ * Measured over the 70,074 cached 4K rice charts carrying rated plays: 85 of
+ * them (665 of 1,754,954 rated plays, 0.038%) clear both bars, and the list is
+ * almost entirely charts from packs that advertise themselves as vibro. No
+ * chart in the dan course registry comes within 0.12 of the note bar, and the
+ * closest restored chart stops at 0.12 of it with a higher repeat share, which
+ * is what sets the bar where it is. */
+const REPEAT_RUN_GAP_MS = 95;
+const REPEAT_RUN_MIN_HITS = 4;
+const REPEAT_BODY_SHARE = 0.25;
+const REPEAT_BODY_NOTE_CAP = 0.13;
+
+function measureRepeatShare(scan: VibroScan): number {
+  const { times, rows, prefixNotes, rate } = scan;
+  const total = prefixNotes.at(-1)!;
+  if (total === 0) return 0;
+  const covered = new Uint8Array(rows.length);
+  for (let column = 0; column < 4; column++) {
+    const indices = rows.flatMap((mask, index) => mask & (1 << column) ? [index] : []);
+    let start = 0;
+    for (let i = 1; i <= indices.length; i++) {
+      // Back-to-back rows only. A finger that returns every other row is
+      // trilling with its neighbour, and a fast trill is already the motion
+      // arms' business; what this measures is the chart's jack content.
+      if (i < indices.length && indices[i] === indices[i - 1] + 1
+        && times[indices[i]] - times[indices[i - 1]] <= REPEAT_RUN_GAP_MS * rate) continue;
+      if (i - start >= REPEAT_RUN_MIN_HITS) for (let k = start; k < i; k++) covered[indices[k]] = 1;
+      start = i;
+    }
+  }
+  let notes = 0;
+  for (let i = 0; i < rows.length; i++) if (covered[i]) notes += bitCount(rows[i]);
+  return notes / total;
 }
 
 function overlapsVibro(start: number, end: number, sections: VibroSection[]): boolean {
