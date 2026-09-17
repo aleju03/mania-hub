@@ -4,6 +4,9 @@ import { logInfo, logWarn } from "../logger.js";
 
 export interface PlayerSkillJobPayload {
   userId: number;
+  /** How many revision retries this chain has already spent (see
+   * revisionRetryDelayMs); absent on ordinary computes. */
+  revisionRetries?: number;
   rateVibroPending?: number;
   calibrationPending?: number;
   danPending?: number;
@@ -88,4 +91,19 @@ export async function settlePlayerSkillContinuations(
   if (retired.rowsAffected > 0) {
     logInfo("player_skills_continuations_coalesced", { userId: payload.userId, retired: retired.rowsAffected, continued: !!nextKey });
   }
+}
+
+const REVISION_RETRY_BASE_MS = 15 * 60_000;
+const REVISION_RETRY_MAX_MS = 6 * 60 * 60_000;
+
+/**
+ * Delay before a compute retries a player whose charts are still waiting on
+ * a revision verify. 15 minutes doubling to 6 hours: the verify queue can sit
+ * at thousands of deferred rows for days, and a flat 15-minute retry per
+ * affected player (2,200 of them on prod, 2026-09-17) asked the calc lane
+ * for ~8,800 no-op computes an hour against ~600 it can do.
+ */
+export function revisionRetryDelayMs(retries: number): number {
+  const n = Math.max(0, Math.min(20, Math.floor(Number(retries) || 0)));
+  return Math.min(REVISION_RETRY_MAX_MS, REVISION_RETRY_BASE_MS * 2 ** n);
 }

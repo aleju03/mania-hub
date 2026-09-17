@@ -6,7 +6,7 @@ import type { Db } from "../db.js";
 import { CHART_FAMILY_META_KEY, CHART_FAMILY_STRUCTURE_META_KEYS, CHART_FAMILY_VERSION, DAN_SKILLSET_REGISTRY_META_KEY } from "./chart-families.js";
 import { LEOBLACK_FUSION_META_KEY } from "./leoblack-fusion.js";
 import { exec, execBatch, json, parseJson } from "../db.js";
-import { settlePlayerSkillContinuations, withPlayerSkillTurn, type PlayerSkillJobPayload } from "./player-skill-jobs.js";
+import { revisionRetryDelayMs, settlePlayerSkillContinuations, withPlayerSkillTurn, type PlayerSkillJobPayload } from "./player-skill-jobs.js";
 import { writePlayerSkillRatingWithHistory } from "./player-skill-history.js";
 import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
 import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
@@ -4334,10 +4334,22 @@ async function computePlayerSkillsTurn(db: Db, osu: ProfileOsuClient, queue: Job
     await enqueueMissingChartAnalyses(db, queue, result.untaggedBeatmapIds).catch(() => {});
     if (result.pendingRevisions) {
       // Matching files/analyses can land without a changed-file repair (a
-      // first cache fill). Retry independently of calculator-budget progress.
-      const retryAt = Date.now() + 15 * 60_000;
-      await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:revision:${userId}:${Math.floor(retryAt / (15 * 60_000))}`,
-        { userId }, { priority: -5, runAfter: new Date(retryAt), replaceDone: true });
+      // first cache fill). Retry independently of calculator-budget progress,
+      // but one queued retry per player, backing off while the verify stays
+      // stuck: a retry queued per 15-minute slot stacked twenty deep per
+      // player on prod and ate a third of the calc lane doing nothing.
+      // Waiting rows only: this compute may itself be the running retry.
+      const alreadyQueued = (await exec(db,
+        `select 1 from jobs where type = ? and dedupe_key like ? escape '\\'
+         and status in ('queued', 'failed', 'deferred_pressure') limit 1`,
+        [PLAYER_SKILLS_JOB, `player-skills:revision:${userId}:%`],
+      )).rows.length > 0;
+      if (!alreadyQueued) {
+        const revisionRetries = (payload.revisionRetries ?? 0) + 1;
+        const retryAt = Date.now() + revisionRetryDelayMs(payload.revisionRetries ?? 0);
+        await queue.enqueue(PLAYER_SKILLS_JOB, `player-skills:revision:${userId}:${Math.floor(retryAt / 60_000)}`,
+          { userId, revisionRetries }, { priority: -5, runAfter: new Date(retryAt), replaceDone: true });
+      }
     }
     await settlePlayerSkillContinuations(db, queue, PLAYER_SKILLS_VERSION, RATE_VIBRO_CHECK_VERSION, payload, {
       rateVibroPending: result.pendingRateVibroChecks,
