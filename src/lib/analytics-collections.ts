@@ -48,10 +48,12 @@ export function getCollectionsPageviewProperties(params: URLSearchParams): Recor
   return props;
 }
 
-/** Properties for a move inside somebody's shelf (search, tier, page). */
+/** Properties for a move inside somebody's shelf (search, tier, mark, page). */
 export function collectionsShelfProperties(input: {
   collector: string;
   tierLabel: string | null;
+  /** The mark chip in force, if one is; null means the row is untouched. */
+  markLabel?: string | null;
   query: string;
   /** Zero-based, as the component holds it; reported as the page shown. */
   page: number;
@@ -62,6 +64,8 @@ export function collectionsShelfProperties(input: {
   // "All" is the tier filter sitting where it started, which says nothing.
   const tier = trimmed(input.tierLabel, MAX_NAME_CHARS);
   if (tier && tier !== "All") props.collections_tier = tier;
+  const mark = trimmed(input.markLabel ?? null, MAX_NAME_CHARS);
+  if (mark) props.collections_mark = mark;
   const query = trimmed(input.query, MAX_QUERY_CHARS);
   if (query) props.collections_query = query;
   if (input.page > 0) props.collections_page = String(Math.round(input.page) + 1);

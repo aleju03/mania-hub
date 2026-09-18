@@ -614,6 +614,48 @@ describe("snapshot disk cache", () => {
 
 
 describe("sets in the showcase wall", () => {
+  it("filters the wall to one mark, flattening sets to the members that wear it", async () => {
+    await seedCollector(BIG, "curator");
+    for (const id of [11, 12, 13, BIG]) await seedCollectionCard(db, BIG, id, { tier: "rare" });
+    const serial = (cardUserId: number, ownerUserId: number, value: number) => exec(
+      db,
+      "insert into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at) values (?, ?, ?, ?, 1000)",
+      [String(cardUserId), cardUserId, ownerUserId, value],
+    );
+    // 11: first of several. 12: second. 13: the only one. The own card: serial 5.
+    await serial(11, BIG, 1);
+    await serial(11, SMALL, 2);
+    await serial(12, SMALL, 1);
+    await serial(12, BIG, 2);
+    await serial(13, BIG, 1);
+    await serial(BIG, SMALL, 1);
+    await serial(BIG, BIG, 5);
+    // 11 and 12 sit in a set; 13 and the own card are pinned on their own.
+    const setId = await createPackBinder(db, BIG, "Early ones");
+    await setPackBinderCards(db, BIG, setId, ["11", "12"]);
+    await setPackBinderShowcased(db, BIG, setId, true);
+    await exec(db, "update pack_binders set created_at = 2000 where id = ?", [setId]);
+    await exec(db, "insert into pack_showcase_cards (owner_user_id, position, card_key, updated_at) values (?, 0, '13', 3000), (?, 1, ?, 1000)", [BIG, BIG, String(BIG)]);
+
+    const all = await listPackShowcaseWall(db, { page: 0, pageSize: 10, withMarkCounts: true });
+    expect(all.total).toBe(3);
+    expect(all.markCounts).toEqual({ only: 1, first: 1, second: 1, third: 0, self: 1 });
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 10 })).markCounts).toBeUndefined();
+
+    const first = await listPackShowcaseWall(db, { page: 0, pageSize: 10, mark: "first", withMarkCounts: true });
+    expect(first.total).toBe(1);
+    expect(first.cardTotal).toBe(1);
+    expect(first.cards[0].set).toBeUndefined();
+    expect(first.cards[0]).toMatchObject({ showcasedAt: 2000 });
+    expect(first.cards[0].card.userId).toBe(11);
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 10, mark: "second" })).cards.map((entry) => entry.card.userId)).toEqual([12]);
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 10, mark: "only" })).cards.map((entry) => entry.card.userId)).toEqual([13]);
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 10, mark: "self" })).cards.map((entry) => entry.card.userId)).toEqual([BIG]);
+    expect((await listPackShowcaseWall(db, { page: 0, pageSize: 10, mark: "third" })).total).toBe(0);
+    // Counts describe the whole wall whatever the page was filtered to.
+    expect(first.markCounts).toEqual(all.markCounts);
+  });
+
   it("mixes groups with individual cards in one order and keeps a set together across pages", async () => {
     await seedCollector(BIG, "curator");
     for (const id of [11, 12, 13, 14]) await seedCollectionCard(db, BIG, id, { tier: "rare" });

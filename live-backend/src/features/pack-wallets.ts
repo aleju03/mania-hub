@@ -72,6 +72,12 @@ export interface PackCollectionPage {
   cards: StoredPackCard[];
   total: number;
   tierCounts: Record<string, number>;
+  /* How many of the collector's cards wear each mark (see PACK_CARD_MARKS),
+     over the whole shelf like tierCounts, so the chips for marks nobody here
+     earned can stay off the page. Only counted when asked for (the community
+     shelf): it is a pass over every card of the shelf, which the owner's own
+     grid has no chip to spend it on. */
+  markCounts?: Record<PackCardMark, number>;
   /* How many held cards sit at two copies or more. Filter-independent, like
      tierCounts, because the chip that switches the duplicates filter on has
      to say how many there are while the filter is off. */
@@ -1388,6 +1394,46 @@ export async function savePackWallet(
   return { ok: false, current: current ?? existing };
 }
 
+/* The marks a holding can wear on the community shelf, mirrored from
+   src/components/packs/collections/CardMarks.tsx: the first three serials of
+   a card somebody actually pulled (a granted card is minted a serial like any
+   other but was never pulled, so its serial says nothing), "only" being a
+   serial 1 nobody else ever followed, and the collector holding their own
+   card. Written as predicates over pack_collection_cards alone, with the
+   serial registry reached through subqueries, so the same clause serves the
+   unjoined count reads as well as the page. */
+export const PACK_CARD_MARKS = ["only", "first", "second", "third", "self"] as const;
+export type PackCardMark = (typeof PACK_CARD_MARKS)[number];
+
+export function isPackCardMark(value: unknown): value is PackCardMark {
+  return typeof value === "string" && (PACK_CARD_MARKS as readonly string[]).includes(value);
+}
+
+/* The predicate for one mark over a pack_collection_cards row, under the
+   alias the query gives that table. */
+export function packCardMarkSql(mark: PackCardMark, alias = "pack_collection_cards"): string {
+  const own = `(select own.serial from pack_card_serials own
+    where own.card_key = ${alias}.card_key and own.owner_user_id = ${alias}.owner_user_id)`;
+  const minted = `(select max(other.serial) from pack_card_serials other where other.card_key = ${alias}.card_key)`;
+  const pulled = `coalesce(${alias}.granted_at, 0) = 0`;
+  switch (mark) {
+    case "only": return `(${pulled} and ${own} = 1 and ${minted} = 1)`;
+    case "first": return `(${pulled} and ${own} = 1 and ${minted} > 1)`;
+    case "second": return `(${pulled} and ${own} = 2)`;
+    case "third": return `(${pulled} and ${own} = 3)`;
+    case "self": return `${alias}.card_user_id = ${alias}.owner_user_id`;
+  }
+}
+
+/* One column per mark, summed over whatever rows the query feeds it. */
+export function packCardMarkCountsSql(alias = "pack_collection_cards"): string {
+  return PACK_CARD_MARKS.map((mark) => `sum(${packCardMarkSql(mark, alias)}) as ${mark}`).join(", ");
+}
+
+export function packCardMarkCountsFromRow(row: Record<string, unknown> | undefined): Record<PackCardMark, number> {
+  return Object.fromEntries(PACK_CARD_MARKS.map((mark) => [mark, Number(row?.[mark]) || 0])) as Record<PackCardMark, number>;
+}
+
 export async function listPackCollectionCards(
   db: Db,
   userId: number,
@@ -1396,6 +1442,10 @@ export async function listPackCollectionCards(
     pageSize: number;
     tier?: string | null;
     query?: string | null;
+    /* Lists only the cards wearing this mark. */
+    mark?: PackCardMark | null;
+    /* Counts each mark over the whole shelf into markCounts. */
+    withMarkCounts?: boolean;
     /* "newest" orders by when the card first joined the collection (a
        duplicate pull does not resurface an old card); "copies" puts the most
        duplicated cards first; anything else is the default rarity order. Legacy cards without a timestamp sink to the end,
@@ -1422,6 +1472,9 @@ export async function listPackCollectionCards(
   }
   if (options.duplicatesOnly) {
     where.push("pack_collection_cards.copies > 1");
+  }
+  if (options.mark) {
+    where.push(packCardMarkSql(options.mark));
   }
   if (options.restrictToCardUserIds) {
     where.push(cardUserIdRestrictionSql(options.restrictToCardUserIds));
@@ -1469,6 +1522,15 @@ export async function listPackCollectionCards(
      group by coalesce(tier, 'unrated')`,
     [userId],
   )).rows;
+  const markRow = options.withMarkCounts
+    ? (await exec(
+        db,
+        `select ${packCardMarkCountsSql()}
+         from pack_collection_cards
+         where pack_collection_cards.owner_user_id = ? and pack_collection_cards.copies > 0`,
+        [userId],
+      )).rows[0]
+    : null;
   const duplicateRow = (await exec(
     db,
     `select coalesce(sum(max(copies - 1, 0) * ${duplicateShardValueSql("tier")}), 0) as total
@@ -1492,6 +1554,7 @@ export async function listPackCollectionCards(
     cards: rows.map((row) => cardFromRow(row as Record<string, unknown>)),
     total: Number(totalRow?.total) || 0,
     tierCounts: Object.fromEntries(tierRows.map((row) => [String(row.tier), Number(row.count) || 0])),
+    ...(markRow ? { markCounts: packCardMarkCountsFromRow(markRow as Record<string, unknown>) } : {}),
     duplicateCardCount: Number(duplicateCardRow?.total) || 0,
     duplicateShardTotal: Number(duplicateRow?.total) || 0,
     filteredShardTotal: Number(filteredShardRow?.total) || 0,
@@ -1678,32 +1741,80 @@ export interface ShowcasedCard {
   set?: { id: number; name: string; cards: StoredPackCard[] };
 }
 
-export async function listShowcasedCards(
-  db: Db,
-  options: { page: number; pageSize: number },
-): Promise<{ cards: ShowcasedCard[]; total: number; cardTotal: number }> {
-  const pageSize = Math.min(60, Math.max(1, Math.floor(options.pageSize) || 1));
-  const page = Math.max(0, Math.floor(options.page) || 0);
-  // A group is one entry, so its cards never get split across pages. A pin
-  // already shown in one of this owner's sets is represented by the set.
-  const feedSql = `with visible_sets as (
+/* The sets the wall shows, and the pins that are not already inside one.
+
+   The cross joins are the join order, not a product: they hold SQLite to
+   set -> member -> held card. Left to choose, it reached the held card first
+   through the (owner, tier) index and walked every card that owner holds for
+   each of their sets, sixteen thousand for the largest collector, and this
+   read alone was 200ms of every wall page; in this order it is 4ms. */
+const WALL_SETS_SQL = `visible_sets as (
     select b.id, b.name, b.owner_user_id, b.created_at, count(*) as card_count
-    from pack_binders b join pack_binder_cards bc on bc.binder_id = b.id
-    join pack_collection_cards c on c.owner_user_id = b.owner_user_id
+    from pack_binders b cross join pack_binder_cards bc on bc.binder_id = b.id
+    cross join pack_collection_cards c on c.owner_user_id = b.owner_user_id
       and c.card_key = bc.card_key and c.copies > 0
     where b.showcased = 1
       and (select count(*) from pack_binder_cards where binder_id = b.id) <= ${BINDER_MAX_CARDS}
     group by b.id
-  ), feed as (
-    select s.owner_user_id, s.card_key, s.updated_at as chosen_at,
-      s.position, 0 as set_id, '' as set_name, 1 as card_count
-    from pack_showcase_cards s join pack_collection_cards c
+  )`;
+const WALL_PINS_SQL = `from pack_showcase_cards s join pack_collection_cards c
       on c.owner_user_id = s.owner_user_id and c.card_key = s.card_key and c.copies > 0
     where not exists (
       select 1 from pack_binders b join pack_binder_cards bc on bc.binder_id = b.id
       where b.owner_user_id = s.owner_user_id and b.showcased = 1 and bc.card_key = s.card_key
         and (select count(*) from pack_binder_cards where binder_id = b.id) <= ${BINDER_MAX_CARDS}
-    )
+    )`;
+/* Every member of a set the wall shows, with the row it is held on. */
+const WALL_SET_MEMBERS_SQL = `from visible_sets b cross join pack_binder_cards bc on bc.binder_id = b.id
+    cross join pack_collection_cards c on c.owner_user_id = b.owner_user_id
+      and c.card_key = bc.card_key and c.copies > 0`;
+/* The wall flat: every card on it on its own, a set's members stamped with
+   when the set went up. Materialized on purpose: it is a thousand-odd rows,
+   and the mark predicates over it are serial lookups per row. Left to the
+   planner they ran ahead of the joins, against every pin, and a filtered read
+   took six times the unfiltered one. Also carries the columns the marks read. */
+const WALL_FLAT_SQL = `shown as materialized (
+    select s.owner_user_id, s.card_key, s.updated_at as chosen_at, s.position,
+      c.card_user_id, c.granted_at
+    ${WALL_PINS_SQL}
+    union all
+    select b.owner_user_id, bc.card_key, max(b.created_at) as chosen_at, min(bc.position) as position,
+      c.card_user_id, c.granted_at
+    ${WALL_SET_MEMBERS_SQL}
+    group by b.owner_user_id, bc.card_key
+  )`;
+
+/* How many cards on the wall wear each mark, sets counted by their members. */
+export async function countShowcasedCardMarks(db: Db): Promise<Record<PackCardMark, number>> {
+  const row = (await exec(db, `with ${WALL_SETS_SQL}, ${WALL_FLAT_SQL}
+    select ${packCardMarkCountsSql("shown")} from shown`)).rows[0];
+  return packCardMarkCountsFromRow(row as Record<string, unknown> | undefined);
+}
+
+export async function listShowcasedCards(
+  db: Db,
+  options: {
+    page: number;
+    pageSize: number;
+    /* Only the cards wearing this mark. A set is not a thing that wears one,
+       so under a mark the wall is flat: its members that qualify are listed
+       on their own, stamped with when the set went up. */
+    mark?: PackCardMark | null;
+  },
+): Promise<{ cards: ShowcasedCard[]; total: number; cardTotal: number }> {
+  const pageSize = Math.min(60, Math.max(1, Math.floor(options.pageSize) || 1));
+  const page = Math.max(0, Math.floor(options.page) || 0);
+  // A group is one entry, so its cards never get split across pages. A pin
+  // already shown in one of this owner's sets is represented by the set.
+  const feedSql = options.mark
+    ? `with ${WALL_SETS_SQL}, ${WALL_FLAT_SQL}, feed as (
+    select owner_user_id, card_key, chosen_at, position, 0 as set_id, '' as set_name, 1 as card_count
+    from shown where ${packCardMarkSql(options.mark, "shown")}
+  )`
+    : `with ${WALL_SETS_SQL}, feed as (
+    select s.owner_user_id, s.card_key, s.updated_at as chosen_at,
+      s.position, 0 as set_id, '' as set_name, 1 as card_count
+    ${WALL_PINS_SQL}
     union all
     select owner_user_id, '', created_at, 0, id, name, card_count from visible_sets
   )`;

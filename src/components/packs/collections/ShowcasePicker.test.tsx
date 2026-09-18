@@ -57,6 +57,7 @@ const page: LivePackCommunityCollectionPage = {
   cards: [card(1, "alpha"), card(2, "bravo"), card(3, "charlie"), card(4, "delta"), card(5, "echo"), card(6, "foxtrot")] as never,
   total: 6,
   tierCounts: { rare: 6 },
+  markCounts: { only: 0, first: 0, second: 0, third: 0, self: 0 },
 };
 
 afterEach(() => {

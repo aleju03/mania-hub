@@ -7,6 +7,7 @@ import { seedCollectionCard } from "./helpers/pack-cards.js";
 import { buildPackCardSnapshot, buildPackCollectorSnapshotWire } from "../src/features/pack-community.js";
 import {
   ensurePackCommunityRollupTriggers,
+  readOwnerCardCounts,
   readPackCommunityRollupState,
   reconcilePackCommunityRollups,
 } from "../src/features/pack-community-rollups.js";
@@ -87,6 +88,26 @@ describe("pack community roll-ups", () => {
     expect(rolled).toEqual(scanned);
     // The Eternal count comes off the per-tier table on this path.
     expect(rolled.collectors.collectors.find((row) => row.userId === THIRD)?.eternals).toBe(1);
+  });
+
+  it("counts a named handful of owners off the roll-up, and a dirty one off their rows", async () => {
+    await seedEconomy();
+    // Not initialized: every owner is counted live.
+    const scanned = await readOwnerCardCounts(db, [BIG, SMALL, THIRD, 404]);
+    expect(scanned.get(BIG)?.cards).toBeGreaterThan(0);
+    expect(scanned.has(404)).toBe(false);
+
+    await ensurePackCommunityRollupTriggers(db);
+    await reconcilePackCommunityRollups(db, { now: NOW });
+    expect(await readOwnerCardCounts(db, [BIG, SMALL, THIRD, 404])).toEqual(scanned);
+
+    // A pull the reconciler has not seen yet: the trigger marks the owner
+    // dirty, and the count is theirs as of now rather than the stored one.
+    await seedCollectionCard(db, THIRD, 11, { copies: 1, tier: "rare", firstPulledAt: 4500 });
+    const stored = Number((await exec(db, "select cards from pack_community_owner_stats where owner_user_id = ?", [THIRD])).rows[0]?.cards);
+    const fresh = await readOwnerCardCounts(db, [THIRD, BIG]);
+    expect(fresh.get(THIRD)?.cards).toBe(stored + 1);
+    expect(fresh.get(BIG)).toEqual(scanned.get(BIG));
   });
 
   it("keeps up with a pull, a duplicate and a card recycled to nothing", async () => {

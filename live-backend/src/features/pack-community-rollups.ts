@@ -566,6 +566,51 @@ export async function readCollectorAggregates(db: Db): Promise<{
   return { owners, tierCopies, source: "scan" };
 }
 
+/* Cards held and GOATs held for a handful of collectors, the two numbers the
+   wall prints under a card's owner. Off the roll-up rows when the tables are
+   usable, which is a lookup per owner; a collector with a dirty mark still
+   pending, or with no row yet, is counted live so the number is never the one
+   from before their last pull. The live count is the fallback for the whole
+   list too, the same as every other reader here: it was the only path once,
+   and for a wall page of the largest collectors it read three hundred
+   thousand rows for thirty numbers. */
+export async function readOwnerCardCounts(
+  db: Db,
+  ownerIds: readonly number[],
+): Promise<Map<number, { cards: number; goats: number }>> {
+  const counts = new Map<number, { cards: number; goats: number }>();
+  if (ownerIds.length === 0) return counts;
+  const ids = idList(ownerIds);
+  let live: readonly number[] = ownerIds;
+  if (await packCommunityRollupsReady(db)) {
+    const rows = (await exec(
+      db,
+      `select s.owner_user_id, s.cards, s.goats
+       from pack_community_owner_stats s
+       where s.owner_user_id in (${ids})
+         and s.owner_user_id not in (select owner_user_id from pack_community_dirty_owners)`,
+    )).rows;
+    for (const row of rows) {
+      counts.set(Number(row.owner_user_id), { cards: Number(row.cards) || 0, goats: Number(row.goats) || 0 });
+    }
+    live = ownerIds.filter((id) => !counts.has(id));
+  }
+  if (live.length > 0) {
+    const rows = (await exec(
+      db,
+      `select owner_user_id, count(*) as cards,
+         sum(case when card_key like '%:goat' and card_user_id in (${HONORARY_ID_LIST}) then 1 else 0 end) as goats
+       from pack_collection_cards
+       where copies > 0 and owner_user_id in (${idList(live)})
+       group by owner_user_id`,
+    )).rows;
+    for (const row of rows) {
+      counts.set(Number(row.owner_user_id), { cards: Number(row.cards) || 0, goats: Number(row.goats) || 0 });
+    }
+  }
+  return counts;
+}
+
 export async function readCardAggregates(db: Db): Promise<{
   cards: PackCommunityCardRollup[];
   source: PackCommunityRollupSource;

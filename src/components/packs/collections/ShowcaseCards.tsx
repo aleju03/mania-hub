@@ -4,6 +4,7 @@ import { packCardKeyOf } from "#/lib/pack-collection";
 import type { ServerPackCollectionCard } from "#/lib/pack-wallet-sync";
 import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
 import { CollectionCardTile } from "../CardTile";
+import { CardMarks } from "./CardMarks";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
 import { SHOWCASE_ROW_CLASS, SHOWCASE_SLOT_CLASS } from "./chrome";
@@ -80,7 +81,7 @@ export function ShowcaseCards({
                 onCardOpen?.(card);
               }}
               style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
-              className={`${SHOWCASE_SLOT_CLASS} cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1`}
+              className={`${SHOWCASE_SLOT_CLASS} relative cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1`}
               title={card.serial ? `${card.username}, serial #${card.serial}` : card.username}
             >
               <CollectionCardTile
@@ -90,6 +91,7 @@ export function ShowcaseCards({
                 onApplyMint={() => false}
                 onThumbnailError={onThumbnailError}
               />
+              <CardMarks card={card} collectorUserId={ownerUserId} />
             </button>
           );
         })}

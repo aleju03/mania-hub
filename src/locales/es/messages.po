@@ -469,6 +469,11 @@ msgstr "{0} goats"
 #~ msgid "{0} held"
 #~ msgstr "{0} conservadas"
 
+#. placeholder {0}: card.username
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "{0} holds their own card"
+#~ msgstr "{0} tiene su propia carta"
+
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
 msgid "{0} icon"
@@ -692,6 +697,11 @@ msgstr "{0} opciones posibles · {1} sets únicos · actualizado {2}"
 #: src/components/skins/SkinCard.tsx
 msgid "{0} preview"
 msgstr "Vista previa de {0}"
+
+#. placeholder {0}: card.username
+#: src/components/packs/collections/CardMarks.tsx
+msgid "{0} pulled their own card"
+msgstr "{0} sacó su propia carta"
 
 #. placeholder {0}: formatNumber(info.players)
 #: src/components/rankings/LeaderboardControls.tsx
@@ -1355,6 +1365,10 @@ msgstr "{nextPackShardCost} fragmentos"
 #: src/components/maps/MapSearchSection.tsx
 msgid "{ordinal} dan"
 msgstr "{ordinal} dan"
+
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "{ordinal} to pull this card"
+#~ msgstr "{ordinal} en sacar esta carta"
 
 #. placeholder {0}: activeTab === "regions" ? i18n._(msg`Countries`) : i18n._(msg`Regions`)
 #: src/components/layout/CountrySelector.tsx
@@ -2198,6 +2212,10 @@ msgstr "Acaba de llegar una nueva actualización. Recargando..."
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "A new version went live while this page was open. Reloading to pick it up."
 #~ msgstr "Salió una nueva versión mientras esta página estaba abierta. Recargando para cargarla."
+
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "A one-off card made for its holder"
+#~ msgstr "Una carta única hecha para quien la tiene"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
@@ -4798,6 +4816,10 @@ msgstr "pp actual"
 msgid "Cursor trail"
 msgstr "Estela del cursor"
 
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "custom"
+#~ msgstr "única"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 msgid "Custom"
@@ -6108,6 +6130,10 @@ msgstr "Primera página"
 msgid "First Places"
 msgstr "Primeros puestos"
 
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "First pull"
+msgstr "Primera en sacarse"
+
 #: src/components/CountryWarming.tsx
 msgid "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
 msgstr "Es la primera vez que alguien visita {name}. Su clasificación, sus mapas y el seguimiento en vivo se están preparando en segundo plano."
@@ -6123,6 +6149,10 @@ msgstr "Primera vez que alguien sacó esta carta"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "first to find a card"
 msgstr "primero en encontrar una carta"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "First to pull this card"
+msgstr "Primero en sacar esta carta"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "firsts"
@@ -6368,6 +6398,11 @@ msgstr "Regalar una carta…"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift sent"
 msgstr "Regalo enviado"
+
+#. placeholder {0}: mark.giver
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "Gifted by {0}"
+#~ msgstr "Regalada por {0}"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Gifted by {giverLink}"
@@ -9094,6 +9129,10 @@ msgstr "No se encontraron beatmaps para \"{query}\""
 msgid "No board stored for this lane yet."
 msgstr "Aún no hay board guardado para este lane."
 
+#: src/components/packs/collections/ShowcaseTab.tsx
+msgid "No card on the wall wears this yet."
+msgstr "Ninguna carta del muro lo lleva todavía."
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "No cards"
 msgstr "Sin cartas"
@@ -9990,6 +10029,10 @@ msgstr "En línea"
 msgid "Only me"
 msgstr "Solo yo"
 
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Only one"
+msgstr "La única"
+
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
 msgstr "Solo gente de aquí puede unirse"
@@ -10376,6 +10419,10 @@ msgstr "Overlays"
 #: src/routes/privacy.tsx
 msgid "Overview"
 msgstr "Resumen"
+
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Own card"
+msgstr "Su propia carta"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "owner"
@@ -12521,6 +12568,14 @@ msgstr "Buscar..."
 msgid "searching"
 msgstr "buscando"
 
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Second pull"
+msgstr "Segunda en sacarse"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "Second to pull this card"
+msgstr "Segundo en sacar esta carta"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
 msgstr "Ver todos los comandos"
@@ -12599,6 +12654,10 @@ msgstr "seleccionar página"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "select text or type it here"
 msgstr "selecciona texto o escríbelo aquí"
+
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "self"
+#~ msgstr "propia"
 
 #: src/routes/report.tsx
 msgid "Send"
@@ -14722,6 +14781,10 @@ msgstr "El próximo cálculo empieza {when}."
 msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
 msgstr "El OD cuenta igual. Un mapa se califica con el OD con el que realmente lo jugaste: <0/> lo fija y <1/> lo sube, y el mapa vale lo que vale con ese OD. En 4K también puede decidir en qué ladder cae el pase, porque los holds que puedes soltar dentro de una ventana amplia de OD bajo dejan de contar como trabajo de LN."
 
+#: src/components/packs/collections/CardMarks.tsx
+msgid "The only one ever pulled"
+msgstr "La única que se ha sacado"
+
 #: src/routes/packs.tsx
 msgid "The pack could not be opened. Please try again in a moment."
 msgstr "No se pudo abrir el sobre. Inténtalo de nuevo en un momento."
@@ -15066,6 +15129,14 @@ msgstr "Esa persona ya no tiene esa carta para dar."
 #: src/components/packs/GoatPoll.tsx
 msgid "They're already a GOAT."
 msgstr "Ya es un GOAT."
+
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Third pull"
+msgstr "Tercera en sacarse"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "Third to pull this card"
+msgstr "Tercero en sacar esta carta"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx

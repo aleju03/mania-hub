@@ -18,10 +18,13 @@ import {
   type LivePackBinder,
   type LivePackCollectorProfile,
   type LivePackCommunityCollectionPage,
+  type PackCardMark,
 } from "#/lib/live-backend";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
 import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
+import { CardMarks } from "./CardMarks";
+import { MarkFilters, useMarkLabels } from "./MarkFilters";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
 import {
@@ -61,9 +64,10 @@ function shelfPageKey(
   userId: number,
   page: number,
   tier: ManiaCardTier | "all",
+  mark: PackCardMark | null,
   query: string,
 ) {
-  return `${userId}:${page}:${tier}:${query}`;
+  return `${userId}:${page}:${tier}:${mark ?? ""}:${query}`;
 }
 
 /* Pages already on the wire, so a turn taken before the warm behind it lands
@@ -74,14 +78,15 @@ function loadShelfPage(
   userId: number,
   page: number,
   tier: ManiaCardTier | "all",
+  mark: PackCardMark | null,
   query: string,
 ): Promise<LivePackCommunityCollectionPage> {
-  const key = shelfPageKey(userId, page, tier, query);
+  const key = shelfPageKey(userId, page, tier, mark, query);
   const held = shelfPageCache.get(key);
   if (held) return Promise.resolve(held);
   const inFlight = shelfPageRequests.get(key);
   if (inFlight) return inFlight;
-  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, query })
+  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query })
     .then((next) => {
       rememberShelfPage(key, next);
       return next;
@@ -240,10 +245,13 @@ function CardGrid({
   page,
   loading,
   liftedCardKey,
+  collectorUserId,
   onSpotlight,
 }: {
   page: LivePackCommunityCollectionPage | null;
   loading: boolean;
+  /* Whose shelf this is, for the mark on a card of the collector themselves. */
+  collectorUserId: number | null;
   /* Hidden until the spotlight's return flight lands back in the slot, so the
      card is never on screen twice. */
   liftedCardKey: string | null;
@@ -290,15 +298,18 @@ function CardGrid({
             style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
             className="block cursor-pointer text-left transition-transform duration-150 hover:-translate-y-1"
           >
-            <CollectionCardTile
-              card={card}
-              thumbnail={thumbnail}
-              /* Repairing a missing mint is the holder's job and costs an osu!
-                 read; a visitor just sees the sketch face. */
-              canBackfill={false}
-              onApplyMint={() => false}
-              onThumbnailError={onThumbnailError}
-            />
+            <div className="relative">
+              <CollectionCardTile
+                card={card}
+                thumbnail={thumbnail}
+                /* Repairing a missing mint is the holder's job and costs an osu!
+                   read; a visitor just sees the sketch face. */
+                canBackfill={false}
+                onApplyMint={() => false}
+                onThumbnailError={onThumbnailError}
+              />
+              <CardMarks card={card} collectorUserId={collectorUserId} />
+            </div>
             <div className="mt-1 truncate text-center text-[11px] text-osu-f1">{card.username}</div>
           </button>
         );
@@ -318,6 +329,9 @@ export function CollectorShelf({ collector, tab }: {
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [tier, setTier] = useState<ManiaCardTier | "all">("all");
+  /* One mark at a time, or none. A chip is a toggle rather than a row with
+     an "all" because none of them is the resting state. */
+  const [mark, setMark] = useState<PackCardMark | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [cardPage, setCardPage] = useState<LivePackCommunityCollectionPage | null>(null);
@@ -376,7 +390,7 @@ export function CollectorShelf({ collector, tab }: {
      new filter is paired with the old page index, and the read below would
      spend a request (and a warm behind it) on a page that is already on its
      way out. */
-  const filterKey = `${tier}:${debounced}`;
+  const filterKey = `${tier}:${mark ?? ""}:${debounced}`;
   const [pagedFilter, setPagedFilter] = useState(filterKey);
   if (pagedFilter !== filterKey) {
     setPagedFilter(filterKey);
@@ -384,7 +398,7 @@ export function CollectorShelf({ collector, tab }: {
   }
 
   const ownerUserId = profile?.collector.userId ?? null;
-  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, debounced) : null;
+  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced) : null;
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a frame later. */
   const cachedPage = requestKey ? shelfPageCache.get(requestKey) ?? null : null;
@@ -402,7 +416,7 @@ export function CollectorShelf({ collector, tab }: {
         setPrefetched([]);
         return;
       }
-      loadShelfPage(ownerUserId, nextPage, tier, debounced)
+      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced)
         .then((next) => {
           if (!cancelled) setPrefetched(next.cards as CollectedCard[]);
         })
@@ -423,7 +437,7 @@ export function CollectorShelf({ collector, tab }: {
     setCardsLoading(true);
     // Whatever was warmed sat next to a page that is no longer on screen.
     setPrefetched([]);
-    loadShelfPage(ownerUserId, page, tier, debounced)
+    loadShelfPage(ownerUserId, page, tier, mark, debounced)
       .then((next) => {
         if (cancelled) return;
         setCardPage(next);
@@ -436,19 +450,21 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, requestKey, page, tier, debounced]);
+  }, [ownerUserId, requestKey, page, tier, mark, debounced]);
 
   /* Mints the next page's faces into the shared thumbnail cache while this
      one is being read, so a turn lands on cards rather than on sketches. */
   useCardThumbnails(prefetched);
 
+  const markLabels = useMarkLabels();
+
   /* Every move inside the shelf, for the admin activity feed: the tier chips,
-     the player search, the pager. What is reported is the state
+     the mark chips, the player search, the pager. What is reported is the state
      the move landed on rather than which control was touched, so one line
      says what the visitor is looking at. The shelf as opened is skipped: the
      pageview already recorded that, and a filter change is one event because
      the reset to page one happens in the same render. */
-  const browseKey = `${tier}:${debounced}:${page}`;
+  const browseKey = `${tier}:${mark ?? ""}:${debounced}:${page}`;
   const browsedKey = useRef(browseKey);
   useEffect(() => {
     if (browsedKey.current === browseKey) return;
@@ -458,6 +474,7 @@ export function CollectorShelf({ collector, tab }: {
       collectionsShelfProperties({
         collector: profile?.collector.username ?? collectorLabel,
         tierLabel: TIER_FILTERS.find((filter) => filter.id === tier)?.label ?? null,
+        markLabel: mark ? markLabels[mark] : null,
         query: debounced,
         page,
       }),
@@ -613,10 +630,19 @@ export function CollectorShelf({ collector, tab }: {
           ))}
         </div>
 
+        <MarkFilters
+          className="mt-2"
+          value={mark}
+          counts={shownPage?.markCounts}
+          onChange={setMark}
+          selfFace={profile.collector.avatarUrl}
+        />
+
         <CardGrid
           page={shownPage}
           loading={cachedPage ? false : cardsLoading}
           liftedCardKey={liftedCardKey}
+          collectorUserId={profile.collector.userId}
           onSpotlight={(target, cardKey) => {
             setSpotlight({ ...target, ownerUserId: profile.collector.userId });
             setLiftedCardKey(cardKey);

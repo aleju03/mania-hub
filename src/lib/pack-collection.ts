@@ -727,3 +727,10 @@ export function loadWalletForViewer(viewerId: number | null, now: number): PackW
   }
   return settleCharges(wallet, now);
 }
+
+/* The marks a holding can wear on a shelf, as the backend filters and counts
+   them (see components/packs/collections/CardMarks.tsx for what each looks
+   like): the first three serials of a card somebody actually pulled, "only"
+   being a serial 1 nobody ever followed, and the collector's own card. */
+export const PACK_CARD_MARKS = ["only", "first", "second", "third", "self"] as const;
+export type PackCardMark = (typeof PACK_CARD_MARKS)[number];

@@ -9,6 +9,7 @@ import type { LivePackShowcaseWallCard } from "#/lib/live-backend";
 import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
 import { SHOWCASE_GRID_CLASS } from "./chrome";
 import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
+import { CardMarks } from "./CardMarks";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
 
@@ -56,7 +57,9 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
   const span = cards.length === 1 ? "[--set-cols:1]" : cards.length === 2 ? "col-span-2 [--set-cols:2]" : "col-span-2 sm:col-span-3 [--set-cols:2] sm:[--set-cols:3]";
   const move = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth });
   return <div role="group" aria-label={set.name} className={`min-w-0 self-start rounded-xl bg-white/[0.025] outline outline-1 outline-white/10 outline-offset-4 ${span}`}>
-    <div ref={strip} className="grid snap-x snap-mandatory grid-flow-col gap-3 overflow-x-auto rounded-[10px] scroll-smooth motion-reduce:scroll-auto [scrollbar-width:none]"
+    {/* A horizontal scroll box clips vertically too, so the marks hanging off
+        a card's bottom edge need room inside it. */}
+    <div ref={strip} className="grid snap-x snap-mandatory grid-flow-col gap-3 overflow-x-auto rounded-[10px] pb-2 scroll-smooth motion-reduce:scroll-auto [scrollbar-width:none]"
       style={{ gridAutoColumns: "calc((100% - (var(--set-cols) - 1) * 12px) / var(--set-cols))" }}
       onScroll={updateScroll}>
       {cards.map((card, index) => <div key={packCardKeyOf(card)} className="min-w-0 snap-start">
@@ -96,9 +99,10 @@ export function ShowcaseWallGrid({ entries }: { entries: LivePackShowcaseWallCar
         track("packs_collections_card", collectionsCardProperties({ player: card.username, tierLabel: card.tierLabel, collector: entry.collector.username }));
       }}
       style={liftedId === tileId ? { visibility: "hidden" } : undefined}
-      className="w-full self-start cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1"
+      className="relative w-full self-start cursor-pointer transition-transform duration-[120ms] hover:-translate-y-1"
       aria-label={t`Inspect ${card.username}'s maniacard`}>
       <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={false} onApplyMint={() => false} onThumbnailError={onError} showCopies={false} />
+      <CardMarks card={card} collectorUserId={entry.collector.userId} />
     </button>;
   };
   return <>

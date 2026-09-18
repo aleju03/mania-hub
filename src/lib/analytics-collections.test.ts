@@ -54,6 +54,16 @@ describe("collectionsShelfProperties", () => {
         .collections_query,
     ).toBe("jakads");
   });
+
+  it("carries the mark chip when one is on", () => {
+    expect(
+      collectionsShelfProperties({ collector: "manolo", tierLabel: null, markLabel: "First pull", query: "", page: 0 })
+        .collections_mark,
+    ).toBe("First pull");
+    expect(
+      collectionsShelfProperties({ collector: "manolo", tierLabel: null, markLabel: null, query: "", page: 0 }),
+    ).toEqual({ collections_collector: "manolo" });
+  });
 });
 
 describe("collectionsDirectoryProperties", () => {

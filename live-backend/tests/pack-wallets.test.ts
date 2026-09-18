@@ -12,6 +12,7 @@ import {
   GRANT_ONLY_TIERS,
   isPackCardVariantKey,
   normalizePackCardKey,
+  packCardKey,
   packCardVariantKey,
   getPackCollectionPoolProgress,
   getPackShowcase,
@@ -212,6 +213,44 @@ describe("pack wallets", () => {
 
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(page.cards[0].copies).toBe(2);
+  });
+
+  it("filters and counts the marks a holding wears", async () => {
+    // Serial 1 of one, serial 1 of several, serials 2 and 3, a serial 1 that
+    // was granted rather than pulled, and the collector's own card at serial 4.
+    for (const cardUserId of [1, 2, 3, 4, 5, USER_ID]) await seedCollectionCard(db, USER_ID, cardUserId);
+    const serial = (cardUserId: number, ownerUserId: number, value: number) => exec(
+      db,
+      "insert into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at) values (?, ?, ?, ?, 1000)",
+      [packCardKey(cardUserId, "rare"), cardUserId, ownerUserId, value],
+    );
+    await serial(1, USER_ID, 1);
+    await serial(2, USER_ID, 1);
+    await serial(2, 777, 2);
+    await serial(3, 777, 1);
+    await serial(3, USER_ID, 2);
+    await serial(4, 777, 1);
+    await serial(4, 778, 2);
+    await serial(4, USER_ID, 3);
+    await serial(5, USER_ID, 1);
+    await exec(db, "update pack_collection_cards set granted_at = 1500 where owner_user_id = ? and card_user_id = 5", [USER_ID]);
+    await serial(USER_ID, 777, 1);
+    await serial(USER_ID, USER_ID, 4);
+
+    const all = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, withMarkCounts: true });
+    expect(all.total).toBe(6);
+    expect(all.markCounts).toEqual({ only: 1, first: 1, second: 1, third: 1, self: 1 });
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).markCounts).toBeUndefined();
+
+    const listed = async (mark: "only" | "first" | "second" | "third" | "self") =>
+      (await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, mark })).cards.map((card) => card.userId);
+    expect(await listed("only")).toEqual([1]);
+    expect(await listed("first")).toEqual([2]);
+    expect(await listed("second")).toEqual([3]);
+    expect(await listed("third")).toEqual([4]);
+    expect(await listed("self")).toEqual([USER_ID]);
+    // The filter stacks with the rest: a first pull of another tier is not here.
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, mark: "first", tier: "common" })).total).toBe(0);
   });
 });
 
@@ -706,9 +745,11 @@ describe("pack collection rekey", () => {
   it("leaves a rebuilt table writable through the normal sync path", async () => {
     await createLegacyTable();
     await seedLegacyCard(42, "rare");
-    // Both rebuilds, in the order boot runs them.
+    // Both rebuilds, in the order boot runs them, then the column boot's
+    // later migration adds and the paged read's mark counts depend on.
     await ensurePackCollectionCardKeys(db);
     await ensurePackCardCatalog(db);
+    await exec(db, "alter table pack_collection_cards add column granted_at integer");
 
     await savePackWallet(db, USER_ID, cardPayload(3), 0, 1000);
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });

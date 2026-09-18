@@ -478,6 +478,11 @@ msgstr "{0} 张 GOAT"
 #~ msgid "{0} held"
 #~ msgstr "持有 {0}"
 
+#. placeholder {0}: card.username
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "{0} holds their own card"
+#~ msgstr "{0} 持有自己的卡片"
+
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
 msgid "{0} icon"
@@ -701,6 +706,11 @@ msgstr "{0} 个可抽选项 · {1} 个不同谱面集 · 更新于 {2}"
 #: src/components/skins/SkinCard.tsx
 msgid "{0} preview"
 msgstr "{0} 预览"
+
+#. placeholder {0}: card.username
+#: src/components/packs/collections/CardMarks.tsx
+msgid "{0} pulled their own card"
+msgstr "{0} 抽到了自己的卡片"
 
 #. placeholder {0}: formatNumber(info.players)
 #: src/components/rankings/LeaderboardControls.tsx
@@ -1364,6 +1374,10 @@ msgstr "{nextPackShardCost} 个碎片"
 #: src/components/maps/MapSearchSection.tsx
 msgid "{ordinal} dan"
 msgstr "{ordinal} 段"
+
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "{ordinal} to pull this card"
+#~ msgstr "{ordinal} 个抽到这张卡片"
 
 #. placeholder {0}: activeTab === "regions" ? i18n._(msg`Countries`) : i18n._(msg`Regions`)
 #: src/components/layout/CountrySelector.tsx
@@ -2207,6 +2221,10 @@ msgstr "刚刚有新更新。正在刷新..."
 #: src/components/layout/StaleBuildNotice.tsx
 #~ msgid "A new version went live while this page was open. Reloading to pick it up."
 #~ msgstr "此页面打开期间上线了新版本。正在刷新以加载它。"
+
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "A one-off card made for its holder"
+#~ msgstr "为持有者特制的独一无二的卡片"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass at the bar credits the chart's full level, the same as passing the course, and so does the first point above it: a 96.9% on a 96% ladder is a normal clear, not a bonus. Above that the bonus stays small until 99%, then it climbs. Under the bar a pass still counts, as a clear of a lower level, down to a level and a quarter less at the cutoff. Regular ladders credit to 4 points under the bar and 6K/7K LN to 1. 4K LN uses its own numbers: it credits down to 94.5%, a level and a half less there, and its bonus tops out at 99.7%:"
@@ -4807,6 +4825,10 @@ msgstr "当前 pp"
 msgid "Cursor trail"
 msgstr "光标拖尾"
 
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "custom"
+#~ msgstr "特制"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 msgid "Custom"
@@ -6117,6 +6139,10 @@ msgstr "第一页"
 msgid "First Places"
 msgstr "第一名成绩"
 
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "First pull"
+msgstr "第一个抽到"
+
 #: src/components/CountryWarming.tsx
 msgid "First time anyone has visited {name}. Its rankings, maps and live tracking are being set up in the background."
 msgstr "这是 {name} 第一次有人访问。它的排行榜、谱面和实时追踪正在后台建立。"
@@ -6132,6 +6158,10 @@ msgstr "这张卡片首次被抽出"
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "first to find a card"
 msgstr "最先找到卡片"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "First to pull this card"
+msgstr "第一个抽到这张卡片"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "firsts"
@@ -6377,6 +6407,11 @@ msgstr "赠送卡片…"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Gift sent"
 msgstr "礼物已送出"
+
+#. placeholder {0}: mark.giver
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "Gifted by {0}"
+#~ msgstr "由 {0} 赠送"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Gifted by {giverLink}"
@@ -9103,6 +9138,10 @@ msgstr "没有找到匹配「{query}」的谱面"
 msgid "No board stored for this lane yet."
 msgstr "此栏目还没有榜单数据。"
 
+#: src/components/packs/collections/ShowcaseTab.tsx
+msgid "No card on the wall wears this yet."
+msgstr "墙上还没有卡片带有这个标记。"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "No cards"
 msgstr "没有卡片"
@@ -9999,6 +10038,10 @@ msgstr "在线"
 msgid "Only me"
 msgstr "仅自己"
 
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Only one"
+msgstr "唯一一张"
+
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
 msgstr "只有来自该地区的玩家才能加入"
@@ -10385,6 +10428,10 @@ msgstr "覆盖层"
 #: src/routes/privacy.tsx
 msgid "Overview"
 msgstr "概述"
+
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Own card"
+msgstr "自己的卡片"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "owner"
@@ -12530,6 +12577,14 @@ msgstr "搜索..."
 msgid "searching"
 msgstr "搜索中"
 
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Second pull"
+msgstr "第二个抽到"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "Second to pull this card"
+msgstr "第二个抽到这张卡片"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "See every command"
 msgstr "查看所有命令"
@@ -12608,6 +12663,10 @@ msgstr "选择本页"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "select text or type it here"
 msgstr "选中文字，或直接在这里输入"
+
+#: src/components/packs/collections/CardMarks.tsx
+#~ msgid "self"
+#~ msgstr "本人"
 
 #: src/routes/report.tsx
 msgid "Send"
@@ -14731,6 +14790,10 @@ msgstr "下一轮评分将在{when}进行。"
 msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
 msgstr "OD 也一样。谱面按你实际打的 OD 来评：<0/> 直接设定它，<1/> 会把它提高，谱面就按那个 OD 的难度来算。在 4K 上它还可能决定这次通过算进哪个段位系统，因为在低 OD 的宽判定窗里可以随手松开的长条，不再算作 LN 的工作量。"
 
+#: src/components/packs/collections/CardMarks.tsx
+msgid "The only one ever pulled"
+msgstr "唯一一张被抽到的"
+
 #: src/routes/packs.tsx
 msgid "The pack could not be opened. Please try again in a moment."
 msgstr "无法打开卡包，请稍后重试。"
@@ -15075,6 +15138,14 @@ msgstr "对方已经没有那张卡片可以送出了。"
 #: src/components/packs/GoatPoll.tsx
 msgid "They're already a GOAT."
 msgstr "他们已经是 GOAT 了。"
+
+#: src/components/packs/collections/MarkFilters.tsx
+msgid "Third pull"
+msgstr "第三个抽到"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "Third to pull this card"
+msgstr "第三个抽到这张卡片"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx

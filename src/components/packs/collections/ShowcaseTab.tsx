@@ -9,7 +9,9 @@ import {
   fetchLivePackShowcaseWall,
   isLiveBackendConfigured,
   type LivePackShowcaseWallCard,
+  type PackCardMark,
 } from "#/lib/live-backend";
+import { MarkFilters, useMarkLabels } from "./MarkFilters";
 import { PACK_SHOWCASE_MAX_CARDS, writePackShowcaseSlotsClient } from "#/lib/pack-showcase";
 import { saveOwnPackShowcase, type ServerPackCollectionCard } from "#/lib/pack-wallet-sync";
 import { Section, SectionHeading, ShowcaseRowSkeleton, ShowcaseWallSkeleton } from "./chrome";
@@ -37,13 +39,18 @@ const WALL_PAGE_SIZE = 40;
    that were walked costs a map and nothing else. Same handling the shelf
    uses. */
 const WALL_PAGE_CACHE_LIMIT = 12;
-const wallPageCache = new Map<number, LivePackShowcaseWallPage>();
+const wallPageCache = new Map<string, LivePackShowcaseWallPage>();
 
 /* Pages already on the wire, so a turn taken before the warm behind it lands
    joins that read instead of opening a second one for the same page. */
-const wallPageRequests = new Map<number, Promise<LivePackShowcaseWallPage>>();
+const wallPageRequests = new Map<string, Promise<LivePackShowcaseWallPage>>();
 
-function rememberWallPage(page: number, value: LivePackShowcaseWallPage) {
+/* A page of the wall under a mark filter is a different page. */
+function wallPageKey(page: number, mark: PackCardMark | null) {
+  return `${mark ?? ""}:${page}`;
+}
+
+function rememberWallPage(page: string, value: LivePackShowcaseWallPage) {
   // Re-inserted so the map's order is least-recently-used, which is what the
   // eviction below reads.
   wallPageCache.delete(page);
@@ -55,20 +62,21 @@ function rememberWallPage(page: number, value: LivePackShowcaseWallPage) {
   }
 }
 
-function loadWallPage(page: number, fresh: boolean): Promise<LivePackShowcaseWallPage> {
-  const held = wallPageCache.get(page);
+function loadWallPage(page: number, mark: PackCardMark | null, fresh: boolean): Promise<LivePackShowcaseWallPage> {
+  const key = wallPageKey(page, mark);
+  const held = wallPageCache.get(key);
   if (held) return Promise.resolve(held);
-  const inFlight = wallPageRequests.get(page);
+  const inFlight = wallPageRequests.get(key);
   if (inFlight) return inFlight;
-  const request: Promise<LivePackShowcaseWallPage> = fetchLivePackShowcaseWall({ page, pageSize: WALL_PAGE_SIZE, fresh })
+  const request: Promise<LivePackShowcaseWallPage> = fetchLivePackShowcaseWall({ page, pageSize: WALL_PAGE_SIZE, ...(mark ? { mark } : {}), fresh })
     .then((next) => {
-      if (wallPageRequests.get(page) === request) rememberWallPage(page, next);
+      if (wallPageRequests.get(key) === request) rememberWallPage(key, next);
       return next;
     })
     .finally(() => {
-      if (wallPageRequests.get(page) === request) wallPageRequests.delete(page);
+      if (wallPageRequests.get(key) === request) wallPageRequests.delete(key);
     });
-  wallPageRequests.set(page, request);
+  wallPageRequests.set(key, request);
   return request;
 }
 
@@ -76,6 +84,7 @@ interface LivePackShowcaseWallPage {
   cards: LivePackShowcaseWallCard[];
   total: number;
   cardTotal?: number;
+  markCounts?: Record<PackCardMark, number>;
 }
 
 export function ShowcaseTab({ shelfSlots }: { shelfSlots: number }) {
@@ -234,6 +243,18 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
 function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPageKey: number }) {
   const { t } = useLingui();
   const [page, setPage] = useState(0);
+  /* One mark at a time, or none. Changing it starts over at the first page,
+     done while rendering so no read is spent on the old page under the new
+     filter. */
+  const [mark, setMarkState] = useState<PackCardMark | null>(null);
+  const setMark = (next: PackCardMark | null) => {
+    setMarkState(next);
+    setPage(0);
+  };
+  const markLabels = useMarkLabels();
+  /* The chips are decided by counts over the whole wall, which the first
+     page of any read carries; kept from the last one that did. */
+  const [markCounts, setMarkCounts] = useState<Record<PackCardMark, number> | null>(null);
   /* New individual pins sort to the front. Editing a set preserves its place
      in the feed, so those refreshes leave the reader on their current page. */
   const [seenReset, setSeenReset] = useState(resetPageKey);
@@ -257,12 +278,20 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
   /* Turning a page of the wall. The first page is what the pageview already
      says, and a save bouncing back to it is not a page turn either, so only a
      move away from where the visitor was gets reported. */
-  const pagedTo = useRef(page);
+  const pagedTo = useRef(wallPageKey(page, mark));
   useEffect(() => {
-    if (pagedTo.current === page) return;
-    pagedTo.current = page;
-    if (page > 0) track("packs_collections_wall", { collections_page: String(page + 1) });
-  }, [page]);
+    const key = wallPageKey(page, mark);
+    if (pagedTo.current === key) return;
+    pagedTo.current = key;
+    if (page > 0 || mark) {
+      track("packs_collections_wall", {
+        ...(page > 0 ? { collections_page: String(page + 1) } : {}),
+        ...(mark ? { collections_mark: markLabels[mark] } : {}),
+      });
+    }
+    // The labels are constants under one locale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, mark]);
 
   /* A save rewrites the front of the wall, so everything walked before it is
      stale. Dropped during the render the save causes, before the read below
@@ -277,7 +306,7 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
 
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a round trip later. */
-  const cached = wallPageCache.get(page) ?? null;
+  const cached = wallPageCache.get(wallPageKey(page, mark)) ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -291,7 +320,7 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
         setPrefetched([]);
         return;
       }
-      loadWallPage(nextPage, false)
+      loadWallPage(nextPage, mark, false)
         .then((next) => {
           if (!cancelled) setPrefetched(next.cards);
         })
@@ -299,10 +328,11 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
         .catch(() => {});
     };
 
-    const held = wallPageCache.get(page);
+    const held = wallPageCache.get(wallPageKey(page, mark));
     if (held) {
       setResult({ page, data: held });
       setFailed(false);
+      if (held.markCounts) setMarkCounts(held.markCounts);
       warmNextPage(held);
       return () => {
         cancelled = true;
@@ -312,10 +342,11 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
     setFailed(false);
     // Whatever was warmed sat next to a page that is no longer on screen.
     setPrefetched([]);
-    loadWallPage(page, reloadKey > 0)
+    loadWallPage(page, mark, reloadKey > 0)
       .then((next) => {
         if (cancelled) return;
         setResult({ page, data: next });
+        if (next.markCounts) setMarkCounts(next.markCounts);
         warmNextPage(next);
       })
       .catch(() => {
@@ -324,7 +355,7 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
     return () => {
       cancelled = true;
     };
-  }, [page, reloadKey]);
+  }, [page, mark, reloadKey]);
 
   /* Mints the next page's faces into the shared thumbnail cache while this one
      is being looked at, so a turn lands on cards rather than on empty tiles.
@@ -360,12 +391,15 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
     </div>
   );
 
+  const filters = <MarkFilters className="mt-3" value={mark} counts={markCounts} onChange={setMark} />;
+
   if (shown?.cards.length === 0) {
     return (
       <Section>
         {header}
+        {filters}
         <p className="mt-2 text-[12px] text-osu-f1">
-          {t`Nobody has picked cards yet. Yours would be the first.`}
+          {mark ? t`No card on the wall wears this yet.` : t`Nobody has picked cards yet. Yours would be the first.`}
         </p>
       </Section>
     );
@@ -379,6 +413,7 @@ function ShowcaseWall({ reloadKey, resetPageKey }: { reloadKey: number; resetPag
   return (
     <Section>
       {header}
+      {filters}
       <div className="mt-3">
         {shown ? (
           <ShowcaseWallGrid entries={shown.cards} />

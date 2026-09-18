@@ -3158,10 +3158,15 @@ export interface LivePackCollectorPage {
   total: number;
 }
 
+import { PACK_CARD_MARKS, type PackCardMark } from "./pack-collection";
+export { PACK_CARD_MARKS, type PackCardMark };
+
 export interface LivePackCommunityCollectionPage {
   cards: ServerPackCollectionCard[];
   total: number;
   tierCounts: Record<string, number>;
+  /* Over the whole shelf, like tierCounts, whatever the page was filtered to. */
+  markCounts: Record<PackCardMark, number>;
 }
 
 /* What to put in ?collector= for a link into someone's shelf.
@@ -3248,15 +3253,21 @@ export async function fetchLivePackShowcaseCards(userId: number, options: { fres
 export async function fetchLivePackShowcaseWall(options: {
   page?: number;
   pageSize?: number;
+  /* Only the cards wearing this mark, sets flattened to the members that do. */
+  mark?: PackCardMark | null;
   fresh?: boolean;
 } = {}): Promise<{
   cards: LivePackShowcaseWallCard[];
   total: number;
   cardTotal?: number;
+  /* Over the whole wall, whatever the page was filtered to; the backend
+     sends it with the first page only. */
+  markCounts?: Record<PackCardMark, number>;
 }> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
   if (options.pageSize) query.set("pageSize", String(options.pageSize));
+  if (options.mark) query.set("mark", options.mark);
   // Skips the browser's ten-second cache, for the read straight after a save:
   // the whole point of the wall is that you put something on it and see it.
   if (options.fresh) query.set("fresh", String(Date.now()));
@@ -3297,12 +3308,14 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   pageSize?: number;
   tier?: string;
   query?: string;
+  mark?: PackCardMark | null;
 } = {}): Promise<LivePackCommunityCollectionPage> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
   if (options.pageSize) query.set("pageSize", String(options.pageSize));
   if (options.tier && options.tier !== "all") query.set("tier", options.tier);
   if (options.query?.trim()) query.set("q", options.query.trim());
+  if (options.mark) query.set("mark", options.mark);
   return fetchLiveJson(`/api/packs/community/collection/${userId}?${query.toString()}`);
 }
 

@@ -9,6 +9,7 @@ import { getPackPoolMembership } from "./global-rankings.js";
 import {
   readCardAggregates,
   readCollectorAggregates,
+  readOwnerCardCounts,
   readPackCommunityHeadlineCounts,
   reconcilePackCommunityRollupsQuietly,
 } from "./pack-community-rollups.js";
@@ -17,7 +18,7 @@ import {
   PackCommunitySnapshotBuildError,
   type PackCommunitySnapshotKind,
 } from "./pack-community-thread.js";
-import { getOrdinaryPackPoolMembership, getPackShowcase, HONORARY_USER_IDS, listShowcasedCards, type StoredPackCard } from "./pack-wallets.js";
+import { countShowcasedCardMarks, getOrdinaryPackPoolMembership, getPackShowcase, HONORARY_USER_IDS, listShowcasedCards, type PackCardMark, type StoredPackCard } from "./pack-wallets.js";
 
 /* The community read of the pack economy, behind /packs/collections.
  *
@@ -227,7 +228,6 @@ function idListSql(ids: Iterable<number>): string {
   return safe.length > 0 ? safe.join(",") : "-1";
 }
 
-const HONORARY_ID_LIST = idListSql(HONORARY_USER_IDS);
 
 /* What a build produces, and the only shape that crosses the worker-thread
    boundary or lands in the disk cache: plain JSON, no Maps and no reliance on
@@ -1152,7 +1152,8 @@ export interface PackShowcaseCollector extends PackCollectorIdentity {
   goats: number;
 }
 
-/* Summaries for a named handful of collectors, grouped over their rows only.
+/* Summaries for a named handful of collectors, from their roll-up rows (or
+   their own card rows, where the roll-up is not usable or has them dirty).
    This is what keeps the showcase off the cached snapshot: the wall shows a
    dozen people, and scanning the whole ownership table to describe twelve of
    them was costing a cold page three and a half seconds. */
@@ -1163,13 +1164,8 @@ async function readShowcaseCollectors(
   const collectors = new Map<number, PackShowcaseCollector>();
   if (ownerIds.length === 0) return collectors;
   const ids = idListSql(ownerIds);
-  const [rows, identities, walletRows] = await Promise.all([
-    exec(db, `
-      select owner_user_id, count(*) as cards,
-        sum(case when card_key like '%:goat' and card_user_id in (${HONORARY_ID_LIST}) then 1 else 0 end) as goats
-      from pack_collection_cards
-      where copies > 0 and owner_user_id in (${ids})
-      group by owner_user_id`),
+  const [counts, identities, walletRows] = await Promise.all([
+    readOwnerCardCounts(db, ownerIds),
     readOwnerIdentities(db, ownerIds),
     exec(db, `select user_id, owner_username from pack_wallets where user_id in (${ids})`),
   ]);
@@ -1178,8 +1174,7 @@ async function readShowcaseCollectors(
     const frozen = nonEmptyString(row.owner_username);
     if (frozen) frozenNames.set(Number(row.user_id), frozen);
   }
-  for (const row of rows.rows) {
-    const userId = Number(row.owner_user_id);
+  for (const [userId, count] of counts) {
     const identity = identities.get(userId);
     collectors.set(userId, {
       userId,
@@ -1187,8 +1182,8 @@ async function readShowcaseCollectors(
       countryCode: identity?.countryCode ?? null,
       avatarUrl: identity?.avatarUrl ?? `https://a.ppy.sh/${userId}`,
       tracked: Boolean(identity),
-      cards: Number(row.cards) || 0,
-      goats: Number(row.goats) || 0,
+      cards: count.cards,
+      goats: count.goats,
     });
   }
   return collectors;
@@ -1212,16 +1207,27 @@ export interface PackShowcaseWallCard {
 
 export async function listPackShowcaseWall(
   db: Db,
-  options: { page: number; pageSize: number },
-): Promise<{ cards: PackShowcaseWallCard[]; total: number; cardTotal: number }> {
-  const { cards, total, cardTotal } = await listShowcasedCards(db, options);
-  if (cards.length === 0) return { cards: [], total, cardTotal };
+  options: {
+    page: number;
+    pageSize: number;
+    mark?: PackCardMark | null;
+    /* Counts each mark over the whole wall into markCounts: a second pass
+       over the feed, so the route asks for it with the first page only, which
+       is where the chips are decided. */
+    withMarkCounts?: boolean;
+  },
+): Promise<{ cards: PackShowcaseWallCard[]; total: number; cardTotal: number; markCounts?: Record<PackCardMark, number> }> {
+  const [{ cards, total, cardTotal }, markCounts] = await Promise.all([
+    listShowcasedCards(db, options),
+    options.withMarkCounts ? countShowcasedCardMarks(db) : undefined,
+  ]);
+  if (cards.length === 0) return { cards: [], total, cardTotal, ...(markCounts ? { markCounts } : {}) };
   const collectors = await readShowcaseCollectors(db, [...new Set(cards.map((entry) => entry.ownerUserId))]);
   const wall = cards.flatMap((entry) => {
     const collector = collectors.get(entry.ownerUserId);
     return collector ? [{ card: entry.card, collector, showcasedAt: entry.showcasedAt, ...(entry.set ? { set: entry.set } : {}) }] : [];
   });
-  return { cards: wall, total, cardTotal };
+  return { cards: wall, total, cardTotal, ...(markCounts ? { markCounts } : {}) };
 }
 
 /* A collector's page: their holdings, how far they are through both

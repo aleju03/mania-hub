@@ -4,7 +4,7 @@ import { getPackCardGiftSummary } from "../../features/pack-gifts.js";
 import { getPackGameAllowance, getStreakPlayerMetrics, grantPackGameShards, STREAK_METRICS_MAX_IDS, streakShardReward } from "../../features/pack-games.js";
 import { getPackCardCollectors, getPackCardKeyStats, getPackCardStats, getPackPulledStats, getSharedPackCard, listPackPullsByIds, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../../features/pack-pulls.js";
 import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGuess, normalizeStreakPool, normalizeStreakRunId, startStreakRun } from "../../features/pack-streak.js";
-import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, getPullableEternalIdentity, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, mintPulledEternalCard, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
+import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, getPullableEternalIdentity, isPackCardMark, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, mintPulledEternalCard, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
 import { claimPackMilestoneOnce, PACK_MILESTONE } from "../../features/pack-milestone.js";
@@ -641,8 +641,9 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     if (!checkRate(req, res, ctx, "publicApi")) return true;
     const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
     const pageSize = Math.min(60, Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 40)));
+    const mark = url.searchParams.get("mark");
     res.setHeader("cache-control", "public, max-age=10");
-    await sendAccentEnrichedJson(req, res, ctx, 200, await listPackShowcaseWall(ctx.db, { page, pageSize }));
+    await sendAccentEnrichedJson(req, res, ctx, 200, await listPackShowcaseWall(ctx.db, { page, pageSize, mark: isPackCardMark(mark) ? mark : null, withMarkCounts: page === 0 }));
     return true;
   }
   if (url.pathname === "/api/packs/community/showcase") {
@@ -720,12 +721,15 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       PACK_COLLECTION_MAX_PAGE_SIZE,
       Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 24)),
     );
+    const mark = url.searchParams.get("mark");
     const { duplicateShardTotal: _duplicates, filteredShardTotal: _filtered, ...collectionPage } =
       await listPackCollectionCards(ctx.db, ownerUserId, {
         page,
         pageSize,
         tier: url.searchParams.get("tier"),
         query: url.searchParams.get("q"),
+        mark: isPackCardMark(mark) ? mark : null,
+        withMarkCounts: true,
       });
     res.setHeader("cache-control", "public, max-age=60");
     await sendAccentEnrichedJson(req, res, ctx, 200, collectionPage);
