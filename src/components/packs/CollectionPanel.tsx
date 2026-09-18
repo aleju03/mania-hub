@@ -851,8 +851,21 @@ export function CollectionPanel({
     if (tierFilter === "untracked") return false;
     return card.tier === tierFilter;
   });
-  const filteredTotal = useServerCollection ? serverMetaPage?.total ?? 0 : visibleCards.length;
   const collectionTotal = useServerCollection ? serverCollectionTotal : localCards.length;
+  /* What the current filter will most likely return, from the whole-collection
+     counts every loaded page carries. The first read under a new filter has no
+     total of its own yet, and without one the pager unmounted for a beat and
+     the grid jumped up under the pointer; the skeletons size off this too. */
+  const estimatedFilteredTotal = mark
+    ? markCounts?.[mark] ?? 0
+    : duplicatesOnly
+      ? duplicateCardCount
+      : tierFilter === "all"
+        ? collectionTotal
+        : tierFilter === "untracked"
+          ? serverPoolProgress?.retiredOwnedCount ?? 0
+          : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
+  const filteredTotal = useServerCollection ? serverMetaPage?.total ?? estimatedFilteredTotal : visibleCards.length;
   const totalPages = Math.max(1, Math.ceil(filteredTotal / COLLECTION_PAGE_SIZE));
   const currentPage = Math.min(collectionPage, totalPages - 1);
   const pageStart = currentPage * COLLECTION_PAGE_SIZE;
@@ -918,22 +931,10 @@ export function CollectionPanel({
   const knownCollectionShape = Object.keys(serverTierCounts).length > 0;
   const showLoadingMessage = showPagePlaceholders && (!knownCollectionShape || Boolean(trimmedQuery));
   const showSkeletonGrid = skeletonSim === "page" || (showPagePlaceholders && !showLoadingMessage);
-  // Skeletons mirror what the current filter will return. tierCounts are
-  // filter-independent, so a rarity filter (without a search) resolves to
-  // exactly that rarity's count rather than a full page of placeholders.
-  const expectedFilterTotal =
-    filteredTotal > 0
-      ? filteredTotal
-      : mark
-        ? markCounts?.[mark] ?? 0
-        : duplicatesOnly
-        ? duplicateCardCount
-        : tierFilter === "all"
-        ? collectionTotal
-        : tierFilter === "untracked"
-          ? serverPoolProgress?.retiredOwnedCount ?? 0
-          : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
-  const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
+  // Skeletons mirror what the current filter will return: a rarity filter
+  // (without a search) resolves to exactly that rarity's count rather than a
+  // full page of placeholders.
+  const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
     ? (sortMode !== "rarity" || duplicatesOnly || mark !== null) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
