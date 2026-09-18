@@ -17,11 +17,13 @@ import {
 } from "./public-image-store";
 
 // Cache growth is bounded by R2 lifecycle rules configured per prefix (Cloudflare
-// dashboard or the S3 lifecycle API). As of 2026-08-04 the rules are: parsed/ 90d,
-// uploaded-replay-desc/ 90d, maniacards/ 90d, blob/ 90d, og/ 30d, signature/ 30d,
-// and the default multipart-abort (7d). signature/ needs one because its keys
-// carry a data version: every stat change writes a new object and orphans the
-// old one permanently, so without a rule the dead versions accumulate forever.
+// dashboard or the S3 lifecycle API). As of 2026-09-17 the rules are: parsed/ 90d,
+// uploaded-replay-desc/ 90d, maniacards/ 90d, blob/ 30d (was 90d until
+// 2026-09-17; the bucket is nearly all blobs and the bill is storage only),
+// og/ 30d, signature/ 30d, and the default multipart-abort (7d).
+// signature/ needs one because its keys carry a data version: every stat change
+// writes a new object and orphans the old one permanently, so without a rule the
+// dead versions accumulate forever.
 // Expiry is safe there because the URL players paste points at our origin, not
 // at the object, so a swept render is a miss that re-renders.
 // Everything else (audio/, background/, replays/,
