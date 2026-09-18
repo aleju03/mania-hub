@@ -457,13 +457,13 @@ export function MsdBlock({
   const msd = rateAdjusted ? rateMsd : msdLn ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
   // Independent LN is 4K-only, including when an older cached artifact
-  // still contains obsolete LN values for another keymode.
-  // Keep the identity guard for legacy nomod artifacts: v1 could carry a
-  // diagnostic LN value even on rice charts while v2's sweep is still running.
+  // still contains obsolete LN values for another keymode. The backend
+  // publishes the LN number on every chart past the hold line, LN identity
+  // or not; identity only decides whether LN can be the headline.
   const hasLnIdentity = rateAdjusted
     ? rateDan == null || rateDan.family === "ln"
     : entry.primaryPattern === "ln" || entry.dan?.family === "ln";
-  const skillsetNames = entry.keyCount === 4 && hasLnIdentity && Number(msd.LN ?? 0) > 0
+  const skillsetNames = entry.keyCount === 4 && Number(msd.LN ?? 0) > 0
     ? [...MSD_SKILLSETS, "LN"]
     : MSD_SKILLSETS;
   const skillsets = skillsetNames

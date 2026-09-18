@@ -54,7 +54,7 @@ half-inverse variants and mapper-coined labels; names never award bonuses.
 
 ## Scalar rating and performance target
 
-`ln-skill.ts` version 7 supplies the single independent LN rating and consumes
+`ln-skill.ts` version 8 supplies the single independent LN rating and consumes
 the same exact timeline. It uses
 `effectiveHoldMask` at the played rate/OD to remove free holds, then combines
 release impulses, same-hand held-finger coordination, hold starts and
@@ -70,14 +70,45 @@ minus the existing 20 ms shared-motion tolerance, and a nonnegative
 tail-to-next-head gap no greater than that window. A chain's final hold needs
 its own qualifying outgoing link or a genuinely long body to count.
 `chainedShortHolds` reports these additions separately from `longTails`.
-These chain additions contribute difficulty only: the 40% identity gate uses
-the note-weighted median of per-section **long-tail** share, excluding every
-tap-covered chain addition. In v3 the same additions also established
-identity, incorrectly promoting high-hold DT charts. V4 restores the
-long-tail identity gate while retaining the course difficulty improvement.
+Identity (effective model v5) reads each 10s section two ways and takes the
+higher: the **long-tail** share against the 40% line, or the release-work
+share (long plus chained holds) against a 60% line, scaled onto the same
+0.40 number so one stored share (`effectiveLnRatio`) answers both. A window
+made almost entirely of chained holds is inverse: an inverse handstream at
+264 bpm writes 57ms bodies under a 63ms window and never has a long hold,
+yet every note is a release and a repress. V3 let chains establish identity
+on the 40% line, which promoted high-hold DT charts (FREEDOM DiVE [FULL
+DiMENSiONS] and Le Porteur d'Ombre [Lightless] at 1.5x); v4 removed chains
+from identity entirely, which filed 95%-hold inverse charts as rice. The 60%
+line sits between the owner's labels: the 264 bpm inverse handstream (0.80
+release-work share) and a pack chart at the same tempo (0.66) are LN, while
+at 1.5x a 1/4-held jumpstream chart (0.53), FREEDOM DiVE (0.48) and Le
+Porteur (0.27) stay rice, as DT on such charts plays as jumpstream.
 This is a rearticulation workload heuristic, not a proof that an early
 release cannot score. Cached top-course gaps are commonly 40–60 ms, not
 literal same-lane tail/head contact.
+
+After structure, the rating tiebreak (`dan/ln-identity.ts`, 2026-09-18): a
+4K chart past the 45% hold line whose section share still falls short is LN
+when its LN rating at that rate is at least `LN_RATING_IDENTITY_MARGIN` (1)
+above native Overall at the same rate. The case that needed it is a 160 bpm
+chart of 1/4 and 1/2 holds with 1/4 same-lane gaps, half inverse and half
+minijacks under a held note, that plays as LN at 1.5x (LN 29.5 against
+Overall 26.5) while a 1/4-held jumpstream chart (28.9 / 29.1), FREEDOM DiVE
+[FULL DiMENSiONS] (32.4 / 37.4) and Le Porteur d'Ombre [Lightless]
+(26.9 / 31.4) play as jumpstream at the same rate. No structural reading
+(long share, chain share, notes under an active hold, occupancy) orders
+those four the way players do; the ratings do. Corpus cost on charts
+structure leaves rice: 10 at 1.5x, 5 at 0.75x, 154 at 1.0x (LN packs and
+full-LN diffs). The stored `lnEffectiveRatio` is lifted to the 0.40 line so
+every consumer keeps reading one share; `lnStructuralRatio` keeps the
+measured number and `lnRatingIdentity` marks the lift, on the nomod
+classification and the DT/HT verdicts alike. The classifier applies it
+whenever its caller supplied MSD at that rate; the async adapter
+(`classifyChartWithCompanella`) fetches MSD itself for the undecided band,
+and the effective-LN sweep reads the stored MSD artifacts. Plays inherit
+the chart's verdict at their rate through `ChartSkillInfo`, on top of their
+own structural reading at the played OD.
 
 Other-column overlap alone remains insufficient; `shortSpanning` is only a
 diagnostic. Isolated pairs, tiny bodies, and long recovery gaps do not gain
@@ -94,7 +125,16 @@ higher goal extrapolates the cap-to-0.93 slope (`analyzeLnSsr`); solved
 directly, a perfect play priced a 24.8 chart at 38.7.
 This is an empirical response model, not measured per-player release error.
 
-The inherited scale is `4.818919597751967 * strain^0.5277221146076253`.
+The inherited scale is `4.818919597751967 * strain^0.5277221146076253`,
+multiplied by `rate^(0.77 - 0.5277)` (`LN_SKILL_RATE_RESPONSE`, v8). Strain
+grows linearly with rate on a chart whose holds keep their work, so the fit
+alone answers as `rate^0.53`: HT LN plays priced at about 90% of their NM
+chart and DT plays at 88-105%, against native Overall's `rate^0.75` at 1.5x
+and `rate^0.80` at 0.75x on the 150 local 4K LN charts with cached DT/HT
+artifacts (2026-09-17). LN sits on the native scale, so it follows the same
+curve; 1.0x ratings and the course fit below are untouched. Holds that rate
+makes free are still stripped first, so a DT rating can stay under Overall
+when the chart's short holds become taps.
 Its historical fit used nine odd-level 4K LN courses against native MSD, with
 eight even-level courses as diagnostics. This only aligns a numerical range.
 The 17-course evaluation now gives Spearman 0.9902 (previously 0.9510), with
@@ -115,10 +155,13 @@ the fix makes these course-order results an in-sample check, not independent
 player-outcome validation. No scale transfers to other keycounts.
 
 To earn the independent 4K LN axis a play must pass both 45% hold share and
-40% long-tail section share at its own rate/OD. The difficulty mask and
-`effectiveHolds` still include near-window chains; `effectiveLnRatio` is the
-separate identity statistic and excludes them. Mixed charts can retain a diagnostic
-scalar while publishing `values.LN = 0` if they fail identity. Other modes
+the 40% identity share at its own rate/OD (`lnSkill.eligible`). The LN
+number itself is published (`values.LN`, `lnSkill.rated`) on every chart
+past the 45% hold line that has any effective hold, identity or not: a
+55%-hold technical chart whose LN sections fail identity still shows its LN
+difficulty beside the native values, and the map headline stays with
+identity (`msd-headline.ts`). Player LN credit follows `eligible` only.
+Other modes
 keep their existing hold-share gates and Overall-on-LN player axes (7K:
 37.5%; others: 45%). This is distinct from calibrating their score quality.
 
@@ -149,7 +192,10 @@ ratings. The general `compact:storage` command includes the same pass. Pages
 become reusable inside the database; the offline `VACUUM INTO` procedure in
 [backend storage](backend.md#retention-and-storage) returns space to disk.
 
-Player skills version 40 seeds from versions 39 through 16 and migrates
+Player skills version 45 (LN v8, effective v5, effective sweep v12, rate
+cache v28, player Dan/pattern sweeps v45/v13) seeds from 44 down: only the LN
+sidecar moves, and `playLnSkillCurrent` refreshes it per play on its own
+version. Player skills version 40 seeded from versions 39 through 16 and migrates
 compatible retained evidence in bounded
 passes. It recomputes changed calibrated goals, removes stale 4K tail blending
 (tail pass version 4), and refreshes LN version 7 metadata. Historical scores

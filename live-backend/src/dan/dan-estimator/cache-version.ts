@@ -39,4 +39,6 @@
 // section boundaries.
 // v27: refresh verdicts for the four-key cycle arm, which finds walls written
 // as rotating chords and jumptrills.
-export const DAN_ESTIMATE_CACHE_VERSION = 27;
+// v28: 4K LN identity admits chain-dense windows (effective v5) and the LN
+// rating follows rate like native MSD (LN v8); rate estimates carry both.
+export const DAN_ESTIMATE_CACHE_VERSION = 28;

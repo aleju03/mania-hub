@@ -145,7 +145,9 @@ import { loadPlayerSkillScoreDetails, playerSkillScoreDetails, type PlayerSkillS
 // keep incidental-clear evidence confined to the combined ceiling coverage.
 // v44: the four-key cycle arm, which reads the motion a passage admits rather
 // than the shape it is written in.
-export const PLAYER_SKILLS_VERSION = 44;
+// v45: LN v8 gives rate-modded LN plays native MSD's rate response, and
+// effective v5 files dense inverse charts under LN at 1.0x.
+export const PLAYER_SKILLS_VERSION = 45;
 // Prior versions whose stored plays_json is a sound seed for this version's
 // first compute, so a bump updates ratings in place instead of re-running
 // MinaCalc on every play and dropping the durable retained evidence. Sound
@@ -166,8 +168,9 @@ export const PLAYER_SKILLS_VERSION = 44;
 // against 12,134 on v17 and 383 on v16, so a list of [18] would have sent 71%
 // of the roster through a from-zero recompute, re-running MinaCalc on every
 // play and dropping the retained evidence for plays that have since aged out
-// of the top-100 window.
-export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
+// of the top-100 window. v45 moves only the LN sidecar (refreshed per play by
+// playLnSkillCurrent on its own version), never a native SSR value.
+export const PLAYER_SKILLS_SEED_VERSIONS: readonly number[] = [44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16];
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -1539,7 +1542,7 @@ export async function computePlaySsrValues(
   if (!base) return null;
   const lnSkill = isLnSkillSupported(keyCount) ? analyzeLnSsr(osuText, { rate, od, scoreGoal: options.lnGoal ?? goal }) : null;
   const finish = (rated: { values: Record<string, number>; calcRuns: number }) => lnSkill
-    ? { ...rated, values: { ...rated.values, LN: lnSkill.eligible ? lnSkill.rating ?? 0 : 0 }, lnSkill }
+    ? { ...rated, values: { ...rated.values, LN: lnSkill.rated ? lnSkill.rating ?? 0 : 0 }, lnSkill }
     : rated;
   const blend = LN_TAIL_BLEND_BY_KEYMODE[keyCount] ?? 0;
   if (!(blend > 0)) return finish(base);
@@ -1630,7 +1633,10 @@ function aggregateModePatternRatings(plays: StoredPlaySsr[]): PlayerSkillPattern
 
 function patternPlayRating(play: StoredPlaySsr, pattern: string): number {
   if (isLnSkillSupported(play.keyCount) && LN_PATTERN_IDS.has(pattern)) {
-    return play.lnSkill?.version === LN_SKILL_VERSION && play.lnSkill.eligible ? Number(play.values.LN ?? 0) : 0;
+    // Identity lives in the play's pattern tags (playPatternsFor); the value
+    // is published on every hold-heavy chart, so it is only read for a play
+    // that carries the LN tag.
+    return play.lnSkill?.version === LN_SKILL_VERSION && play.patterns.includes("ln") ? Number(play.values.LN ?? 0) : 0;
   }
   return Number(play.values.Overall ?? 0);
 }
@@ -1693,6 +1699,10 @@ export interface ChartSkillInfo {
   /** Effective LN share at 1.0x (ln-effective.ts); null until the sweep
    * patches the row. chartLnShareFor falls back to lnRatio without it. */
   lnEffectiveRatio: number | null;
+  /** The rating tiebreak decided the chart's LN identity at that rate (dan/ln-identity.ts). */
+  lnRatingIdentity?: boolean;
+  dtLnRatingIdentity?: boolean;
+  htLnRatingIdentity?: boolean;
   /** The same share at the stored 1.5x / 0.75x verdicts' rates. */
   dtLnEffectiveRatio: number | null;
   htLnEffectiveRatio: number | null;
@@ -1739,6 +1749,7 @@ interface LeanHalfJson {
 interface LeanClassificationJson {
   lnRatio?: unknown;
   lnEffectiveRatio?: unknown;
+  lnRatingIdentity?: unknown;
   vibro?: unknown;
   danEligibility?: { eligible?: unknown } | null;
   rc?: LeanHalfJson | null;
@@ -1766,7 +1777,12 @@ function playPatternsFor(info: ChartSkillInfo, rate: number, keyCount: number | 
   if (keyCount == null || !isLnSkillSupported(keyCount)) return info.patterns;
   const lnEffectiveRatio = rate === 1 ? info.lnEffectiveRatio
     : rate === 1.5 ? info.dtLnEffectiveRatio : rate === 0.75 ? info.htLnEffectiveRatio : null;
-  const eligible = lnSkill?.version === LN_SKILL_VERSION ? lnSkill.eligible
+  // The play's own structural reading at its rate and OD, or the chart's
+  // stored identity; the rating tiebreak is a chart fact at that rate and
+  // carries over to the play (dan/ln-identity.ts).
+  const ratingIdentity = rate === 1 ? info.lnRatingIdentity === true
+    : rate === 1.5 ? info.dtLnRatingIdentity === true : rate === 0.75 && info.htLnRatingIdentity === true;
+  const eligible = lnSkill?.version === LN_SKILL_VERSION ? lnSkill.eligible || ratingIdentity
     : (!LN_EFFECTIVE_KEY_COUNTS.has(keyCount) || lnEffectiveRatio != null)
       && chartIsLn(keyCount, { lnRatio: info.lnRatio, lnEffectiveRatio }) === true;
   const rice = info.patterns.filter((id) => !LN_PATTERN_IDS.has(id));
@@ -1804,7 +1820,7 @@ async function refreshPlayLnSkill(
   if (!lnSkill && play.lnSkill == null && play.values.LN === 0) return play;
   // Keep the expensive MinaCalc cache, but never publish a stale LN model as
   // a current value if a missing file prevents the cheap independent pass.
-  return { ...play, values: { ...play.values, LN: lnSkill?.eligible ? lnSkill.rating ?? 0 : 0 }, lnSkill: lnSkill ?? undefined };
+  return { ...play, values: { ...play.values, LN: lnSkill?.rated ? lnSkill.rating ?? 0 : 0 }, lnSkill: lnSkill ?? undefined };
 }
 
 // How much of a chart's difficulty is jack, from LeoBlack's pattern clusters.
@@ -2122,9 +2138,9 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       // beside it for the consumers that mean chord jack specifically; 4K
       // keeps its native analyzer tags untouched.
       if (keyCount != null && usesPatternSkillAxes(keyCount) && isJack && !patternIds.includes("jack")) patternIds.push("jack");
-      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown; lnEffectiveRatio?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
+      const danDt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown; lnEffectiveRatio?: unknown; lnRatingIdentity?: unknown } | null>(String(row.dan_dt_json ?? ""), null);
       const dtRawDan = readRawDan(danDt ?? undefined);
-      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown; lnEffectiveRatio?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
+      const danHt = parseJson<{ rawDan?: unknown; primaryFamily?: unknown; primaryLabel?: unknown; lnEffectiveRatio?: unknown; lnRatingIdentity?: unknown } | null>(String(row.dan_ht_json ?? ""), null);
       const htRawDan = readRawDan(danHt ?? undefined);
       const chartMsd = keyCount === 4
         ? parseJson<{ values?: Record<string, number> } | null>(String(row.msd_json ?? ""), null)
@@ -2158,8 +2174,11 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         motion: readMotionFeatures(parsed?.motion),
         lnRatio,
         lnEffectiveRatio,
+        lnRatingIdentity: parsed?.lnRatingIdentity === true,
         dtLnEffectiveRatio: readShare(danDt?.lnEffectiveRatio),
         htLnEffectiveRatio: readShare(danHt?.lnEffectiveRatio),
+        dtLnRatingIdentity: danDt?.lnRatingIdentity === true,
+        htLnRatingIdentity: danHt?.lnRatingIdentity === true,
         vibro: parsed?.vibro === true,
         revisionChecksum: typeof row.revision_checksum === "string" && row.revision_checksum ? row.revision_checksum : null,
         revisionUpdatedAt: typeof row.revision_updated_at === "string" && row.revision_updated_at ? row.revision_updated_at : null,
@@ -7335,7 +7354,7 @@ export const PLAYER_SKILL_DAN_SWEEP_JOB = "recompute_player_skill_dan_sweep";
 // weight and before skillset/quorum selection. Re-fold without rerating SSRs.
 // v41: practice credit is scoped to its named skillset, never shared tiles.
 // v44 (2026-09-17): unverifiable_revision stops crediting parked plays on since-edited charts.
-export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v44";
+export const PLAYER_SKILL_DAN_SWEEP_META_KEY = "player_skill_dan_sweep_done:v45";
 const PLAYER_SKILL_DAN_SWEEP_CHUNK = 200;
 // A live-sized chunk carries tens of thousands of cached plays. Parsing all 200
 // plays_json blobs in one turn cost ~50ms before the chart lookup even began;
@@ -7632,7 +7651,7 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // v6: 4K effective LN became a demotion-only gate. The chart-side sweep can
 // move stored 4K LN tags, so those plays and their LN axis need the same refold.
 // v12: remove LN tags/axis credit supported only by tap-covered chains.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v12";
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v13";
 // The keymodes whose stored per-play tags may still predate their summary.
 // Preserve the existing pattern-keymode sweep; the LN update adds only 4K.
 const PATTERN_SWEEP_KEY_COUNTS = [...new Set([...PATTERN_AXIS_KEY_COUNTS, ...LN_SKILL_KEY_COUNTS])];

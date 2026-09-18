@@ -28,6 +28,21 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-09-18",
+    text: "A chart with 45% or more holds now files as LN at a rate where its LN rating beats its Overall, so a DT play on such a chart can count toward your LN rating and LN dan.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-17",
+    text: "Inverse-style charts made of short holds chained one after another now count as LN charts at the rate you played, so plays on them can move your LN rating and LN dan.",
+    keyCounts: [4],
+  },
+  {
+    date: "2026-09-17",
+    text: "4K LN ratings now scale with rate the same way MSD does. DT LN plays rate higher and HT LN plays lower than before.",
+    keyCounts: [4],
+  },
+  {
     date: "2026-09-16",
     text: "Improved 4K vibro detection to catch more patterns that were inflating ratings, while restoring MSD and Dan credit to dense chordjack plays that were incorrectly excluded.",
     keyCounts: [4],

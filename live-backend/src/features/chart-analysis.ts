@@ -10,6 +10,7 @@ import { analyzeLnSkill, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION } from "../dan/ln
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { LN_EFFECTIVE_KEY_COUNTS, LN_EFFECTIVE_MIN_RATIO, LN_EFFECTIVE_MODEL_VERSION, analyzeEffectiveLn, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
+import { resolveChartLnIdentity } from "../dan/ln-identity.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
@@ -63,6 +64,9 @@ interface LeanChartClassification {
   lnEffectiveRatio?: number;
   /** Version of the effective-LN model that produced lnEffectiveRatio. */
   lnEffectiveVersion?: number;
+  /** The LN rating, not structure, decided identity (dan/ln-identity.ts). */
+  lnRatingIdentity?: boolean;
+  lnStructuralRatio?: number;
   sunnySr: number | null;
   vibro: boolean;
   vibroAnalysis?: VibroAnalysis;
@@ -123,6 +127,7 @@ export function leanClassification(
     ...(classification.lnEffectiveRatio != null ? {
       lnEffectiveRatio: classification.lnEffectiveRatio, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION,
     } : {}),
+    ...(classification.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: classification.lnStructuralRatio } : {}),
     sunnySr: classification.sunnySr,
     vibro: classification.vibro,
     ...(classification.vibroAnalysis ? { vibroAnalysis: classification.vibroAnalysis } : {}),
@@ -2347,6 +2352,7 @@ export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boo
       rawDan: lean.primary?.rawDan ?? null,
       lnEffectiveRatio: lean.lnEffectiveRatio,
       lnEffectiveVersion: lean.lnEffectiveVersion,
+      ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
     };
     await exec(
       db,
@@ -2505,6 +2511,7 @@ export async function storeHtRateVerdict(db: Db, beatmapId: number): Promise<boo
       rawDan: lean.primary?.rawDan ?? null,
       lnEffectiveRatio: lean.lnEffectiveRatio,
       lnEffectiveVersion: lean.lnEffectiveVersion,
+      ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
     };
     await exec(
       db,
@@ -3004,6 +3011,7 @@ export async function recomputeLnSourceChunk(
           ...(classification.lnEffectiveRatio != null ? {
             lnEffectiveRatio: classification.lnEffectiveRatio, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION,
           } : {}),
+          ...(classification.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: classification.lnStructuralRatio } : {}),
         };
         await exec(
           db,
@@ -3163,6 +3171,7 @@ export async function recomputeLnLeoblackChunk(
           rawDan: lean.primary?.rawDan ?? null,
           lnEffectiveRatio: lean.lnEffectiveRatio,
           lnEffectiveVersion: lean.lnEffectiveVersion,
+          ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
         };
         await exec(
           db,
@@ -3400,6 +3409,7 @@ export async function recomputeSunnyRepinDtChunk(
         rawDan: lean.primary?.rawDan ?? null,
         lnEffectiveRatio: lean.lnEffectiveRatio,
         lnEffectiveVersion: lean.lnEffectiveVersion,
+        ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
       };
       await exec(
         db,
@@ -3704,6 +3714,7 @@ export async function recomputeLeoblackRepinDtChunk(
         rawDan: lean.primary?.rawDan ?? null,
         lnEffectiveRatio: lean.lnEffectiveRatio,
         lnEffectiveVersion: lean.lnEffectiveVersion,
+        ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
       };
       await exec(
         db,
@@ -3970,6 +3981,7 @@ async function recomputePoisonedDtColumns(db: Db, beatmapId: number): Promise<vo
       rawDan: lean.primary?.rawDan ?? null,
       lnEffectiveRatio: lean.lnEffectiveRatio,
       lnEffectiveVersion: lean.lnEffectiveVersion,
+      ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
     };
     await exec(
       db,
@@ -4939,7 +4951,11 @@ export const LN_EFFECTIVE_RECOMPUTE_JOB = "recompute_ln_effective_sweep";
 // v9 fills full-analysis search evidence on eligible LN charts.
 // v10 refreshes effective v3, scalar v6 and structure-only profile contracts.
 // v11 separates long-tail identity from near-window chain difficulty.
-export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v11";
+// v12 lets a chain-dense window establish identity (effective v5), gives the
+// LN rating native MSD's rate response and publishes it on every chart past
+// the hold line (LN v8), and lets that rating decide identity when it beats
+// Overall by a point on a chart structure left rice (dan/ln-identity.ts).
+export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v12";
 const LN_EFFECTIVE_CHUNK = 60;
 
 export interface LnEffectiveChunkResult {
@@ -4957,6 +4973,7 @@ interface StoredRateDan {
   rawDan?: unknown;
   lnEffectiveRatio?: unknown;
   lnEffectiveVersion?: unknown;
+  lnRatingIdentity?: unknown;
 }
 
 /**
@@ -4996,6 +5013,7 @@ async function rederiveRateVerdictFromStoredMsd(
       rawDan: lean.primary?.rawDan ?? null,
       lnEffectiveRatio: lean.lnEffectiveRatio,
       lnEffectiveVersion: lean.lnEffectiveVersion,
+      ...(lean.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lean.lnStructuralRatio } : {}),
     };
     await exec(
       db,
@@ -5021,7 +5039,7 @@ async function refreshLnSkillArtifacts(
     if (!lnSkill) continue;
     await exec(db,
       `update beatmap_chart_analysis set ${column} = json(?) where beatmap_id = ? and analysis_version = ?`,
-      [json({ ...artifact, values: { ...artifact.values, LN: lnSkill.eligible ? lnSkill.rating ?? 0 : 0 }, lnSkill }), beatmapId, CHART_ANALYSIS_VERSION]);
+      [json({ ...artifact, values: { ...artifact.values, LN: lnSkill.rated ? lnSkill.rating ?? 0 : 0 }, lnSkill }), beatmapId, CHART_ANALYSIS_VERSION]);
   }
   // The index copies these artifacts even when no identity change occurred.
   await exec(db, "update beatmap_chart_analysis set updated_at = ? where beatmap_id = ? and analysis_version = ?",
@@ -5180,7 +5198,17 @@ export async function recomputeLnEffectiveChunk(
     if (!stored) continue;
     const analysis = analyzeEffectiveLn(map.notes, { rate: 1, od: map.od });
     const lnRatio = Number(stored.lnRatio);
-    const readsLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: analysis.effectiveLnRatio }) === true;
+    const storedOverall = (column: "msd_json" | "msd_dt_json" | "msd_ht_json"): number | null => {
+      const overall = parseJson<{ values?: { Overall?: unknown } } | null>(String(row[column] ?? ""), null)?.values?.Overall;
+      return Number.isFinite(Number(overall)) ? Number(overall) : null;
+    };
+    // Structure first, then the rating tiebreak against the stored native
+    // Overall at the same rate (dan/ln-identity.ts); the lifted share is what
+    // gets stored, beside the measured one.
+    const identity = resolveChartLnIdentity(map, { rate: 1, od: map.od, holdRatio: lnRatio, overall: storedOverall("msd_json") });
+    const identityJson = (resolved: { lnEffectiveRatio: number | undefined; lnRatingIdentity: boolean; lnStructuralRatio?: number }) =>
+      [JSON.stringify(resolved.lnEffectiveRatio ?? 0), resolved.lnRatingIdentity ? 1 : 0, resolved.lnStructuralRatio ?? null] as const;
+    const readsLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: identity.lnEffectiveRatio }) === true;
 
     // The 1.0x identity. Both halves are stored, so a flip is a re-route of
     // the stored primary, not a classifier run: the same choice classifyChart
@@ -5195,12 +5223,15 @@ export async function recomputeLnEffectiveChunk(
       await exec(
         db,
         `update beatmap_chart_analysis
-         set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?, '$.primary', json(?)),
+         set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?,
+               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?), '$.primary', json(?)),
              primary_label = ?, primary_family = ?, raw_dan = ?
          where beatmap_id = ? and analysis_version = ?`,
         [
-          JSON.stringify(analysis.effectiveLnRatio),
+          identityJson(identity)[0],
           LN_EFFECTIVE_MODEL_VERSION,
+          identityJson(identity)[1] ? "true" : "false",
+          JSON.stringify(identityJson(identity)[2]),
           json(nextPrimary),
           typeof nextPrimary.displayName === "string" ? nextPrimary.displayName : null,
           family,
@@ -5214,9 +5245,11 @@ export async function recomputeLnEffectiveChunk(
       await exec(
         db,
         `update beatmap_chart_analysis
-         set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?)
+         set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?,
+               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?))
          where beatmap_id = ? and analysis_version = ?`,
-        [JSON.stringify(analysis.effectiveLnRatio), LN_EFFECTIVE_MODEL_VERSION, beatmapId, CHART_ANALYSIS_VERSION],
+        [identityJson(identity)[0], LN_EFFECTIVE_MODEL_VERSION, identityJson(identity)[1] ? "true" : "false",
+          JSON.stringify(identityJson(identity)[2]), beatmapId, CHART_ANALYSIS_VERSION],
       );
     }
     patched += 1;
@@ -5229,8 +5262,8 @@ export async function recomputeLnEffectiveChunk(
     ] as const) {
       const storedRate = parseJson<StoredRateDan | null>(String(row[column] ?? ""), null);
       if (!storedRate) continue;
-      const rateEffective = analyzeEffectiveLn(map.notes, { rate, od: map.od }).effectiveLnRatio;
-      const rateWantLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: rateEffective }) === true && lnHalf != null;
+      const rateIdentity = resolveChartLnIdentity(map, { rate, od: map.od, holdRatio: lnRatio, overall: storedOverall(msdColumn) });
+      const rateWantLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: rateIdentity.lnEffectiveRatio }) === true && lnHalf != null;
       const rateIsLn = storedRate.primaryFamily === "ln";
       if (rateWantLn !== rateIsLn) {
         let rewritten = await rederiveRateVerdictFromStoredMsd(db, beatmapId, map, osuText, rate, row[msdColumn], column);
@@ -5249,9 +5282,11 @@ export async function recomputeLnEffectiveChunk(
       await exec(
         db,
         `update beatmap_chart_analysis
-         set ${column} = json_set(${column}, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?)
+         set ${column} = json_set(${column}, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?,
+               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?))
          where beatmap_id = ? and analysis_version = ?`,
-        [JSON.stringify(rateEffective), LN_EFFECTIVE_MODEL_VERSION, beatmapId, CHART_ANALYSIS_VERSION],
+        [identityJson(rateIdentity)[0], LN_EFFECTIVE_MODEL_VERSION, identityJson(rateIdentity)[1] ? "true" : "false",
+          JSON.stringify(identityJson(rateIdentity)[2]), beatmapId, CHART_ANALYSIS_VERSION],
       );
     }
 

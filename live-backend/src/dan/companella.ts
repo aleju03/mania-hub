@@ -2,6 +2,7 @@
 // the backend routes MSD through msd.ts so MinaCalc runs stay serialized
 // against the job lanes rather than stacking CPU bursts on the event loop.
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
+import { lnRatingIdentityUndecided } from "./ln-identity.js";
 import { classifyChart, isMarathonCorrectionCandidate, type ChartClassification, type ClassifyChartInput } from "./chart-classifier.js";
 import { getInputRate } from "./dan-estimator/labels.js";
 import { prepareVibroChart } from "./vibro-sections.js";
@@ -94,8 +95,18 @@ export async function classifyChartWithCompanella(
     msdValues = await computeMsd(effectiveText, { rate, keyCount: map.keyCount })
         .then((msd) => msd?.values ?? null).catch(msdChartErrorFallback);
   }
-  const classifyInput = { ...input, marathonMsdValues: msdValues };
-  const first = classifyChart(map, osuText, classifyInput);
+  let classifyInput = { ...input, marathonMsdValues: msdValues };
+  let first = classifyChart(map, osuText, classifyInput);
+  // A 4K chart past the hold line but under the structural share needs
+  // native Overall before its identity is settled (dan/ln-identity.ts).
+  if (!msdValues && lnRatingIdentityUndecided(first.keyCount, first)) {
+    msdValues = await computeMsd(effectiveText, { rate, keyCount: map.keyCount })
+      .then((msd) => msd?.values ?? null).catch(msdChartErrorFallback);
+    if (msdValues) {
+      classifyInput = { ...input, marathonMsdValues: msdValues };
+      first = classifyChart(map, osuText, classifyInput);
+    }
+  }
   if (options.skipCompanella || !first.companellaPending || first.sunnySr == null) return first;
   // A failed marathon MSD pass cannot supply Companella either. Do not retry
   // the same calculator a second time during this request.

@@ -9,7 +9,8 @@ import type { ManiaPatternAnalysis } from "./dan-estimator/types.js";
 import { extractDanFeatures } from "./dan-estimator/features.js";
 import { getInputRate, parseDan } from "./dan-estimator/labels.js";
 import { LN_LADDER_TOP, estimateLnDan, parseLnDan } from "./dan-estimator/ln.js";
-import { LN_EFFECTIVE_KEY_COUNTS, analyzeEffectiveLn, chartIsLn } from "./dan-estimator/ln-effective.js";
+import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn } from "./dan-estimator/ln-effective.js";
+import { resolveChartLnIdentity } from "./ln-identity.js";
 import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
@@ -68,6 +69,10 @@ export interface ChartClassification {
   /** Share of the chart that demands a release at this rate (dan-estimator/ln-effective.ts).
    * The LN identity input for the keymodes in LN_EFFECTIVE_KEY_COUNTS. */
   lnEffectiveRatio?: number;
+  /** True when the LN rating, not structure, put this chart on the LN side (dan/ln-identity.ts). */
+  lnRatingIdentity?: boolean;
+  /** The measured share behind a rating-lifted lnEffectiveRatio. */
+  lnStructuralRatio?: number;
   sunnySr: number | null;
   /** Raw LeoBlack Mixed verdict text ("RC || LN" for hybrids), if it ran. */
   verdictText: string | null;
@@ -107,7 +112,8 @@ export interface ClassifyChartInput extends DanEstimateInput {
    */
   companella?: CompanellaEstimate | null;
   /** Raw MSD at the requested rate, before LN-tail blending. The async
-   * adapter obtains it for marathon candidates before running Mixed. */
+   * adapter obtains it for marathon candidates before running Mixed, and for
+   * 4K charts whose LN identity the rating tiebreak can still decide. */
   marathonMsdValues?: Record<string, number> | null;
 }
 
@@ -529,12 +535,16 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   const verdictUsable = verdictText != null && verdictText.length > 0
     && !/^Invalid\b/i.test(verdictText) && !/^Unknown\b/i.test(verdictText);
   const lnRatio = mixed && Number.isFinite(Number(mixed.lnRatio)) ? Number(mixed.lnRatio) : features.metrics.holdRatio;
-  const lnEffectiveRatio = LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
-    ? analyzeEffectiveLn(map.notes, { rate, od: resolvePlayedOd(map.od, input.odFlag) }).effectiveLnRatio : undefined;
   // What "this chart is LN" reads: hold share plus the effective gate on 4K,
-  // hold share alone elsewhere (chartIsLn). The gate reads the played OD, so a
-  // Difficulty Adjust play is filed on the side of the chart it played rather
-  // than the side the file's own OD would have given it.
+  // hold share alone elsewhere (chartIsLn), then on 4K the rating tiebreak
+  // when the caller supplied MSD at this rate (dan/ln-identity.ts). The gate
+  // reads the played OD, so a Difficulty Adjust play is filed on the side of
+  // the chart it played rather than the side the file's own OD would have
+  // given it.
+  const lnIdentity = LN_EFFECTIVE_KEY_COUNTS.has(map.keyCount)
+    ? resolveChartLnIdentity(map, { rate, od: resolvePlayedOd(map.od, input.odFlag), holdRatio: lnRatio, overall: input.marathonMsdValues?.Overall })
+    : null;
+  const lnEffectiveRatio = lnIdentity?.lnEffectiveRatio;
   const chartReadsLn = chartIsLn(map.keyCount, { lnRatio, lnEffectiveRatio }) === true;
   const sunnySr = mixed && Number.isFinite(mixed.star) ? mixed.star : null;
 
@@ -641,6 +651,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     supported: primary != null,
     lnRatio,
     ...(lnEffectiveRatio != null ? { lnEffectiveRatio } : {}),
+    ...(lnIdentity?.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lnIdentity.lnStructuralRatio } : {}),
     sunnySr,
     verdictText,
     rc,

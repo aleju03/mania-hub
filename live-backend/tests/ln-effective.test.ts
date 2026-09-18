@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { parseManiaBeatmap } from "../src/dan/beatmap-parser.js";
 import {
+  LN_CHAINED_MIN_RATIO,
   LN_EFFECTIVE_MIN_RATIO,
   LN_EFFECTIVE_MODEL_VERSION,
   analyzeEffectiveLn,
@@ -105,23 +106,46 @@ describe("analyzeEffectiveLn", () => {
     expect(effectiveHoldMask(chain(57, -1), { od: 8.5 }).some(Boolean)).toBe(false);
   });
 
-  it.each([4, 400])("does not promote %s tap-covered repeated holds into LN identity", (count) => {
+  it.each([4, 400])("keeps %s tap-covered repeated holds LN when the whole window is release work", (count) => {
     // Repeated half-duty holds: 67.5ms bodies become 45ms at DT. Unlike
     // a four-column roll, these have short enough same-lane gaps to qualify
-    // for chain difficulty. Both short-chart fallback and windowed identity
-    // must still require long tails.
+    // as a chain, and a window made entirely of chained holds is inverse:
+    // no body clears the window, but every note is a release and a repress.
+    // Both the short-chart fallback and windowed identity read it that way.
     const notes = Array.from({ length: count }, (_, i) => ({
       column: 0, time: i * 135, endTime: i * 135 + 67.5, isHold: true,
     }));
     const nomod = analyzeEffectiveLn(notes, { rate: 1, od: 7.5 });
     expect(chartIsLn(4, { lnRatio: nomod.holdRatio, lnEffectiveRatio: nomod.effectiveLnRatio })).toBe(true);
     const dt = analyzeEffectiveLn(notes, { rate: 1.5, od: 7.5 });
-    expect(dt).toMatchObject({ holdRatio: 1, longTails: 0, chainedShortHolds: count - 1, effectiveLnRatio: 0 });
-    expect(chartIsLn(4, { lnRatio: dt.holdRatio, lnEffectiveRatio: dt.effectiveLnRatio })).toBe(false);
+    expect(dt).toMatchObject({ holdRatio: 1, longTails: 0, chainedShortHolds: count - 1 });
+    // Chart-wide fallback for the short chart, windowed median for the long one; both read the chain share on the 0.4 line.
+    expect(dt.effectiveLnRatio).toBeGreaterThanOrEqual(LN_EFFECTIVE_MIN_RATIO);
+    expect(dt.effectiveLnRatio).toBeLessThanOrEqual(LN_EFFECTIVE_MIN_RATIO / LN_CHAINED_MIN_RATIO);
+    expect(chartIsLn(4, { lnRatio: dt.holdRatio, lnEffectiveRatio: dt.effectiveLnRatio })).toBe(true);
     const baked = notes.map(note => ({ ...note, time: note.time / 1.5, endTime: note.endTime / 1.5 }));
     expect(analyzeEffectiveLn(baked, { od: 7.5 })).toEqual(dt);
     const mirrored = notes.map(note => ({ ...note, column: 3, time: note.time - 3000, endTime: note.endTime - 3000 })).reverse();
     expect(analyzeEffectiveLn(mirrored, { rate: 1.5, od: 7.5 })).toEqual(dt);
+  });
+
+  it("needs 60% of a window's notes in chains when no body clears the window", () => {
+    // The same DT chain, diluted with taps in another column. Hold share
+    // stays past the 45% line either way; only the release-work share moves.
+    const chain = Array.from({ length: 400 }, (_, i) => ({ column: 0, time: i * 135, endTime: i * 135 + 67.5, isHold: true }));
+    const span = 400 * 135;
+    const taps = (count: number) => Array.from({ length: count }, (_, i) => {
+      const time = Math.round((i * span) / count) + 30;
+      return { column: 1 + (i % 3), time, endTime: time, isHold: false };
+    });
+    const dense = analyzeEffectiveLn([...chain, ...taps(250)], { rate: 1.5, od: 7.5 });
+    expect(dense.longTails).toBe(0);
+    expect(dense.holdRatio).toBeCloseTo(400 / 650, 3);
+    expect(chartIsLn(4, { lnRatio: dense.holdRatio, lnEffectiveRatio: dense.effectiveLnRatio })).toBe(true);
+    const diluted = analyzeEffectiveLn([...chain, ...taps(350)], { rate: 1.5, od: 7.5 });
+    expect(diluted.holdRatio).toBeCloseTo(400 / 750, 3);
+    expect(diluted.effectiveLnRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
+    expect(chartIsLn(4, { lnRatio: diluted.holdRatio, lnEffectiveRatio: diluted.effectiveLnRatio })).toBe(false);
   });
 
   it("keeps incidental short chains in rice behind both LN identity gates", () => {
@@ -486,21 +510,23 @@ describe("recomputeLnEffectiveChunk", () => {
     db.close();
   });
 
-  it("removes v3 chain-only LN identity across base and DT while preserving HT and native MSD", async () => {
+  it("re-reads a chain-dense chart as LN at 1.0x and HT while DT, under the chain floor, stays rice", async () => {
     const db = await makeDb();
-    const notes = Array.from({ length: 200 }, (_, i) => ({ column: i % 2, time: i * 57, end: i * 57 + 57 }));
-    await storeCachedBeatmapFile(db, 735, osuText(notes, 8.5), { source: "test" });
-    await insertReady(db, 735, "ln", {
-      danDt: { primaryFamily: "ln", lnEffectiveRatio: 1, lnEffectiveVersion: 3 },
-      danHt: { primaryFamily: "ln", lnEffectiveRatio: 1, lnEffectiveVersion: 3 },
+    // 56ms bodies on a 114ms grid at OD 8 (60ms window, 40ms chain floor):
+    // chained at 1.0x, long at 0.75x, free at 1.5x (37ms bodies).
+    const notes = Array.from({ length: 200 }, (_, i) => ({ column: i % 2, time: i * 57, end: i * 57 + 56 }));
+    await storeCachedBeatmapFile(db, 735, osuText(notes, 8), { source: "test" });
+    await insertReady(db, 735, "rc", {
+      danDt: { primaryFamily: "dan", lnEffectiveRatio: 0, lnEffectiveVersion: 4 },
+      danHt: { primaryFamily: "ln", lnEffectiveRatio: 1, lnEffectiveVersion: 4 },
     });
-    const stale = JSON.stringify({ values: { Overall: 20, LN: 25 }, lnSkill: { version: 6, eligible: true, rating: 25 } });
+    const stale = JSON.stringify({ values: { Overall: 20, LN: 0 }, lnSkill: { version: 7, eligible: false, rating: 25 } });
     await exec(db, `update beatmap_chart_analysis set
-      classification_json = json_set(classification_json, '$.lnRatio', 1, '$.lnEffectiveRatio', 1, '$.lnEffectiveVersion', 3),
+      classification_json = json_set(classification_json, '$.lnRatio', 1, '$.lnEffectiveRatio', 0, '$.lnEffectiveVersion', 4),
       msd_json = ?, msd_dt_json = ?, msd_ht_json = ? where beatmap_id = 735`, [stale, stale, stale]);
     expect((await recomputeLnEffectiveChunk(db, 0, 10)).patched).toBe(1);
     const row = (await exec(db, "select * from beatmap_chart_analysis where beatmap_id = 735")).rows[0];
-    expect(row.primary_family).toBe("dan");
+    expect(row.primary_family).toBe("ln");
     expect(JSON.parse(String(row.classification_json)).lnEffectiveVersion).toBe(LN_EFFECTIVE_MODEL_VERSION);
     expect(JSON.parse(String(row.dan_dt_json))).toMatchObject({ primaryFamily: "dan", lnEffectiveRatio: 0,
       lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION });
@@ -509,13 +535,44 @@ describe("recomputeLnEffectiveChunk", () => {
     for (const column of ["msd_json", "msd_dt_json", "msd_ht_json"]) {
       const artifact = JSON.parse(String(row[column]));
       expect(artifact.values.Overall).toBe(20);
-      expect(artifact.lnSkill.rating).toBeGreaterThan(0);
-      const eligible = column === "msd_ht_json";
-      expect(artifact.lnSkill).toMatchObject({ version: LN_SKILL_VERSION, eligible });
+      const eligible = column !== "msd_dt_json";
+      // Past the hold line the LN number is published at every rate that has
+      // LN work to rate; at DT the free bodies leave none, so nothing is rated.
+      expect(artifact.lnSkill).toMatchObject({ version: LN_SKILL_VERSION, eligible, rated: eligible });
       if (eligible) expect(artifact.values.LN).toBeGreaterThan(0);
       else expect(artifact.values.LN).toBe(0);
       expect(artifact.lnSkill).not.toHaveProperty("structure");
     }
+    expect((await recomputeLnEffectiveChunk(db, 0, 10)).scanned).toBe(0);
+    db.close();
+  });
+
+  it("lets the stored LN rating decide identity for a hold-heavy chart structure left rice", async () => {
+    const db = await makeDb();
+    // Sparse long holds plus free short holds: 55% holds, 9% long share.
+    const notes: ChartNote[] = [
+      ...Array.from({ length: 20 }, (_, i) => ({ column: 0, time: i * 2000, end: i * 2000 + 300 })),
+      ...Array.from({ length: 100 }, (_, i) => ({ column: 1, time: 50 + i * 400, end: 50 + i * 400 + 30 })),
+      ...Array.from({ length: 100 }, (_, i) => ({ column: 2 + (i % 2), time: 25 + i * 400 })),
+    ];
+    await storeCachedBeatmapFile(db, 736, osuText(notes, 8), { source: "test" });
+    await insertReady(db, 736, "rc", { danDt: { primaryFamily: "dan", lnEffectiveRatio: 0.09, lnEffectiveVersion: 4 } });
+    const lowOverall = JSON.stringify({ values: { Overall: 0.5, LN: 0 }, lnSkill: { version: 7, eligible: false, rating: 3 } });
+    const highOverall = JSON.stringify({ values: { Overall: 100, LN: 0 }, lnSkill: { version: 7, eligible: false, rating: 3 } });
+    await exec(db, `update beatmap_chart_analysis set
+      classification_json = json_set(classification_json, '$.lnRatio', 0.545, '$.lnEffectiveRatio', 0.09, '$.lnEffectiveVersion', 4),
+      msd_json = ?, msd_dt_json = ? where beatmap_id = 736`, [lowOverall, highOverall]);
+    expect((await recomputeLnEffectiveChunk(db, 0, 10)).repinned).toEqual([736]);
+    const row = (await exec(db, "select * from beatmap_chart_analysis where beatmap_id = 736")).rows[0];
+    expect(row.primary_family).toBe("ln");
+    const stored = JSON.parse(String(row.classification_json));
+    expect(stored).toMatchObject({ lnEffectiveRatio: LN_EFFECTIVE_MIN_RATIO, lnRatingIdentity: true, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION });
+    expect(stored.lnStructuralRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
+    // At DT the stored Overall is far above the LN rating: structure stands.
+    expect(JSON.parse(String(row.dan_dt_json))).toMatchObject({ primaryFamily: "dan", lnRatingIdentity: false });
+    expect(JSON.parse(String(row.dan_dt_json)).lnEffectiveRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
+    // The published LN number does not depend on identity.
+    expect(JSON.parse(String(row.msd_json)).values.LN).toBeGreaterThan(0);
     expect((await recomputeLnEffectiveChunk(db, 0, 10)).scanned).toBe(0);
     db.close();
   });

@@ -33,6 +33,11 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-17", text: "Inverse-style 4K maps count as LN maps now. A map made of short holds chained one after another in the same column used to rate as a regular map when each hold was shorter than the release window, even at 95% holds. Applies at the rate you played, so a map can still be LN at 1.0x and regular on DT", to: "/dan-estimates" },
+  { date: "2026-09-18", text: "A 4K map with 45% or more holds now counts as an LN map when its LN rating is higher than its Overall, even if the holds are too short for the usual LN check. This is per rate, so a map can be LN on DT because its LN rating is what is hard about it there", to: "/dan-estimates" },
+  { date: "2026-09-17", text: "4K LN ratings now scale with rate the same way MSD does. DT LN ratings were coming out too low and HT too high next to the map's Overall", to: "/my-stats" },
+  { date: "2026-09-17", text: "4K maps with 45% or more holds now show their LN rating in the map popup even when the map rates as a regular map. Overall stays the main rating unless the map is an LN map", to: "/maps" },
+  { date: "2026-09-17", text: "4K LN ratings and dans are being recalculated after these updates, so you may see a mix of old and new numbers until it's finished" },
   { date: "2026-09-17", text: "Plays still analyzing are now listed: click the count in the dan window to see them, and they show as in queue in MSD plays and Dan plays under Recent" },
   { date: "2026-09-16", text: "Clearing a dan's skillset map sets that skillset to its level, even with no overall dan yet. For example clearing Volcanic immediately sets your speed to delta, even if your other clears average lower. Supported skillsets: 4K Reform, 7K regular, 7K LN. 4K LN skillset support is planned", to: "/dan-estimates" },
   { date: "2026-09-16", text: "Only your two best rate plays on the same chart count toward dan now, both fully, instead of every rate adding a shrinking share. Verified rate reuploads share the limit", to: "/dan-estimates" },

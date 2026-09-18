@@ -20,15 +20,20 @@ describe("independent 4K LN skill", () => {
     }
   });
 
-  it("prices near-window hold chains while retaining the rice publication gate", () => {
+  it("prices near-window hold chains and files a chain-dense chart under LN", () => {
     const notes = Array.from({ length: 100 }, (_, i) => hold(0, i * 114, 57));
     const result = analyzeLnSkill(chart(notes, 8.5))!;
-    expect(result.eligible).toBe(false);
-    expect(result.effectiveRatio).toBe(0);
+    // Every note is a release and a repress: LN identity without a long body.
+    expect(result.eligible).toBe(true);
+    expect(result.rated).toBe(true);
+    expect(result.effectiveRatio).toBeCloseTo(2 / 3, 1);
     expect(result.rating).toBeGreaterThan(0);
     expect(result).not.toHaveProperty("calibration");
     const rice = Array.from({ length: 150 }, (_, i) => hold(1 + i % 3, i * 76, 0));
-    expect(analyzeLnSkill(chart([...notes, ...rice], 8.5))!.eligible).toBe(false);
+    const mixed40 = analyzeLnSkill(chart([...notes, ...rice], 8.5))!;
+    expect(mixed40.eligible).toBe(false);
+    // Under the 45% hold line there is no LN number to publish either.
+    expect(mixed40.rated).toBe(false);
     expect(analyzeLnSkill(chart(notes, 0))!.rating).toBe(0);
     // Chain work can still raise difficulty on a chart whose long tails
     // independently establish LN identity.

@@ -8,7 +8,8 @@ import { isLnSkillSupported } from "./ln-skill.js";
  * once the holds are cut off. The independent LN model's value was fitted to
  * native Overall on the 4K LN courses, so it sits on the same range; when it
  * is the chart's hardest axis it takes the headline, as Overall would if LN
- * were a native skillset. Rice charts carry LN 0 and read as before.
+ * were a native skillset. A rice chart past the hold line carries an LN
+ * number too, but only an LN identity can put it in the headline.
  *
  * Display only. The stored msd_overall column and every player rating keep
  * the native Overall.

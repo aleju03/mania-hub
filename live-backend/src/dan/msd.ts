@@ -116,6 +116,6 @@ export async function computeMsd(
   const lnSkill = msd && (keyCount == null || isLnSkillSupported(keyCount)) && !options.lnTailTaps && options.includeLnSkill !== false
     ? analyzeLnSkillFromText(osuText, { rate: options.rate, scoreGoal: options.scoreGoal }) : null;
   return msd ? { ...msd, vibroVersion: VIBRO_SECTION_VERSION, vibroAdjusted: options.adjustVibro === true,
-    ...(lnSkill ? { lnSkill, values: { ...msd.values, LN: lnSkill.eligible ? lnSkill.rating ?? 0 : 0 } } : {}),
+    ...(lnSkill ? { lnSkill, values: { ...msd.values, LN: lnSkill.rated ? lnSkill.rating ?? 0 : 0 } } : {}),
     ...(analysis ? { vibroAnalysis: analysis } : {}) } : null;
 }

@@ -10,15 +10,20 @@
  * A lone pair, a tiny body, or another column's interior head is insufficient.
  * All durations and gaps are measured at the played rate, exactly once.
  *
- * Chains contribute difficulty only: tap-covered rearticulation does not
- * establish LN identity. The chart-level share is the note-weighted median
- * of holds longer than the release window
- * across 10s windows, so a chart is LN when most of its playtime is, with
- * dense sections weighing more than sparse intros: short-LN filler between
- * real LN sections does not dilute them, and one LN wall in a rice chart does
- * not qualify it. On 4K this is an additional gate after the ordinary hold
- * share: the model may demote a nominal LN chart whose tails are free, but it
- * may not promote a chart that never reached the established 45% hold line.
+ * Identity reads two things per 10s window: the share of notes that are
+ * holds longer than the release window, and the share that are holds with
+ * release work of either kind (long, or in a same-lane chain). A window is
+ * LN when 40% of its notes need a real hold, or when 60% of them are release
+ * work even though the bodies themselves are tap-covered: an inverse chart at
+ * 264 bpm writes 57ms bodies under a 63ms window and never has a "long" hold,
+ * yet every finger is releasing and repressing on the grid. The chart-level
+ * share is the note-weighted median of the per-window reading, so a chart is
+ * LN when most of its playtime is, with dense sections weighing more than
+ * sparse intros: short-LN filler between real LN sections does not dilute
+ * them, and one LN wall in a rice chart does not qualify it. On 4K this is an
+ * additional gate after the ordinary hold share: the model may demote a
+ * nominal LN chart whose tails are free, but it may not promote a chart that
+ * never reached the established 45% hold line.
  *
  * The 17 cached courses are an offline evaluation set, never runtime inputs.
  * Everything here is structural (times, columns, OD); no chart identity.
@@ -48,7 +53,8 @@ export interface EffectiveLnAnalysis {
   holdRatio: number;
   /** Effective holds over all notes, chart-wide. Gates the tail-aware calc pass. */
   effectiveHoldRatio: number;
-  /** Note-weighted median of per-window long-tail share, excluding tap-covered chains. The second 4K LN identity gate. */
+  /** Note-weighted median of the per-window identity reading (long-tail share, or the
+   * chained-work share scaled to the same 0.4 line). The second 4K LN identity gate. */
   effectiveLnRatio: number;
   /** Tap-covered holds without an interior head. Not effective. */
   shortTails: number;
@@ -82,7 +88,10 @@ export const LN_EFFECTIVE_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 
 /** Stored beside the derived share so a model change can rescan every row,
  * including rows whose final LN/rice side happens not to move. */
-export const LN_EFFECTIVE_MODEL_VERSION = 4;
+// v5: a window whose notes are 60% release work (long or chained holds) reads
+// LN even when no body clears the window, so dense inverse charts at high
+// tempo keep their identity; v4 counted long tails only.
+export const LN_EFFECTIVE_MODEL_VERSION = 5;
 
 /**
  * The effective share at which a 4K chart's identity is LN.
@@ -104,6 +113,21 @@ export const LN_EFFECTIVE_MODEL_VERSION = 4;
  * read it as ordinary jumpstream, so the 45% first gate keeps it rice.
  */
 export const LN_EFFECTIVE_MIN_RATIO = 0.4;
+
+/**
+ * The share of a window's notes that must be release work (a long hold, or a
+ * hold in a same-lane release/repress chain) for the window to read LN when
+ * its bodies are tap-covered. Scaled onto the 0.4 line above so one stored
+ * share answers both readings.
+ *
+ * Fitted 2026-09-17 on charts the owner watched in game: an inverse
+ * handstream at 264 bpm (95% holds, 57ms bodies, chained share 0.80) and a
+ * pack chart at the same tempo (85% holds, 0.66) are LN; at 1.5x a 1/4-held
+ * jumpstream chart (0.53), FREEDOM DiVE [FULL DiMENSiONS] (0.48) and Le
+ * Porteur d'Ombre [Lightless] (0.27) stay rice, as the owner reads DT on
+ * such charts as jumpstream. The 0.53 / 0.66 pair bounds the line.
+ */
+export const LN_CHAINED_MIN_RATIO = 0.6;
 
 /**
  * The line an effective share is compared against for a keymode. Only for
@@ -260,24 +284,29 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
   const holdRatio = total > 0 ? counts.holds / total : 0;
   const effectiveHoldRatio = total > 0 ? counts.effectiveHolds / total : 0;
 
-  // Identity requires holds that exceed the release window. Near-window
-  // chains remain in the difficulty mask, but repeating tap-covered bodies
-  // cannot turn an otherwise rice chart into LN (including at faster rates).
-  // Per-window long-tail shares, then the note-weighted median.
-  let effectiveLnRatio = total > 0 ? counts.longTails / total : 0;
+  // Identity per window: the long-tail share, or the release-work share
+  // (long plus chained) scaled from its own 0.6 line onto the 0.4 line,
+  // whichever reads higher. A tap-covered chain alone needs 60% of the
+  // window's notes; isolated short bodies never count. Then the
+  // note-weighted median across windows.
+  const identityShare = (long: number, chained: number, count: number) => count > 0
+    ? Math.max(long / count, ((long + chained) / count) * (LN_EFFECTIVE_MIN_RATIO / LN_CHAINED_MIN_RATIO))
+    : 0;
+  let effectiveLnRatio = identityShare(counts.longTails, counts.chainedShortHolds, total);
   if (total > 0) {
     const firstTime = notes.reduce((first, note) => Math.min(first, note.time / rate), Infinity);
-    const windows = new Map<number, { notes: number; effective: number }>();
+    const windows = new Map<number, { notes: number; long: number; chained: number }>();
     notes.forEach((note, index) => {
       const slot = Math.floor((note.time / rate - firstTime) / WINDOW_MS);
-      const window = windows.get(slot) ?? { notes: 0, effective: 0 };
+      const window = windows.get(slot) ?? { notes: 0, long: 0, chained: 0 };
       window.notes += 1;
-      if (verdicts[index]?.reason === "long") window.effective += 1;
+      if (verdicts[index]?.reason === "long") window.long += 1;
+      else if (verdicts[index]?.reason === "chained") window.chained += 1;
       windows.set(slot, window);
     });
     const shares = [...windows.values()]
       .filter((window) => window.notes >= WINDOW_MIN_NOTES)
-      .map((window) => ({ share: window.effective / window.notes, weight: window.notes }))
+      .map((window) => ({ share: identityShare(window.long, window.chained, window.notes), weight: window.notes }))
       .sort((a, b) => a.share - b.share);
     const weightTotal = shares.reduce((sum, entry) => sum + entry.weight, 0);
     if (weightTotal > 0) {

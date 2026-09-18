@@ -1,5 +1,6 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 import { analyzeEffectiveLn, chartIsLn, effectiveHoldMask, LN_SAME_MOTION_TOLERANCE_MS } from "./dan-estimator/ln-effective.js";
+import { lnPrimaryMinRatioFor } from "./dan-estimator/ln.js";
 import { analyzeLnTimeline4K, lnAnalysisCacheKey, summarizeLnStructure4K, type LnStructureSummary4K } from "./ln-analysis/index.js";
 import { buildLnTimeline4K } from "./ln-analysis/timeline.js";
 
@@ -10,7 +11,10 @@ import { buildLnTimeline4K } from "./ln-analysis/timeline.js";
 // separate release-aware performance goal. v3 scoped v2 artifacts to 4K.
 // v5: tap-covered geometric overlaps are not mandatory hold/release work.
 // v6: recurring near-window same-lane holds retain rearticulation work.
-export const LN_SKILL_VERSION = 7;
+// v7: identity excludes tap-covered chains (effective model v4).
+// v8: the rating follows rate the way native MSD does, and every chart past
+// the 45% hold line carries its LN number whether or not its identity is LN.
+export const LN_SKILL_VERSION = 8;
 export const LN_SKILL_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 export function isLnSkillSupported(keyCount: number): boolean {
   return LN_SKILL_KEY_COUNTS.has(keyCount);
@@ -25,6 +29,17 @@ const RECOVERY_MS = 180;
 // Overall-on-LN axis and must never receive independent LN artifacts.
 export const LN_SKILL_SCALE = 4.818919597751967;
 export const LN_SKILL_EXPONENT = 0.5277221146076253;
+/**
+ * How the rating responds to playback rate on a chart whose holds all keep
+ * their work: rating ~ rate^0.77. Strain itself grows linearly with rate
+ * (the same impulses land 1.5x as often under a fixed half-life), so the
+ * scale fit alone answers as rate^0.53, which priced HT LN plays at 90% of
+ * their NM chart and DT plays at 88-105%. Native 4K Overall on the 150
+ * local LN charts with cached DT/HT artifacts moves as rate^0.75 at 1.5x and
+ * rate^0.80 at 0.75x (2026-09-17); LN sits on that scale, so it follows the
+ * same curve. 1.0x ratings, and so the 17-course fit, are untouched.
+ */
+export const LN_SKILL_RATE_RESPONSE = 0.77;
 
 export function lnSkillCalibrationFor(keyCount: number): { scale: number; exponent: number } {
   if (!isLnSkillSupported(keyCount)) throw new Error("Independent LN skill is only supported for 4K");
@@ -40,7 +55,11 @@ export interface LnSkillResult {
   structure?: LnStructureSummary4K;
   /** Unscaled LN strain; exposed for reproducible calibration diagnostics. */
   strain: number;
+  /** LN identity at this rate: the play files under the LN axis and the LN dan. */
   eligible: boolean;
+  /** The chart carries enough holds (the 45% line) for its LN number to be published. */
+  rated: boolean;
+  holdRatio: number;
   effectiveRatio: number;
   effectiveHolds: number;
   rate: number;
@@ -92,7 +111,7 @@ export function analyzeLnSkill(
   const structure = options.includeStructure === true
     ? summarizeLnStructure4K(analyzeLnTimeline4K(timeline)) : undefined;
   if (!timeline.valid) return {
-    version: LN_SKILL_VERSION, keyCount, rating: null, strain: 0, eligible: false,
+    version: LN_SKILL_VERSION, keyCount, rating: null, strain: 0, eligible: false, rated: false, holdRatio: 0,
     effectiveRatio: 0, effectiveHolds: 0, rate, od, scoreGoal, structureKey, ...(structure ? { structure } : {}),
   };
   // Deduplicate stacked objects before measuring effort; a simultaneous copy
@@ -113,6 +132,10 @@ export function analyzeLnSkill(
     // Keep each keymode's established identity rule. The effective mask
     // measures work everywhere; a completely free chart never earns LN credit.
     eligible: effective.effectiveHolds > 0 && chartIsLn(keyCount, { lnRatio: effective.holdRatio, lnEffectiveRatio: effective.effectiveLnRatio }) === true,
+    // A hold-heavy chart whose bodies are free at this rate is still worth an
+    // LN number next to its native values; identity alone decides the axis.
+    rated: effective.effectiveHolds > 0 && effective.holdRatio >= lnPrimaryMinRatioFor(keyCount),
+    holdRatio: effective.holdRatio,
     effectiveRatio: effective.effectiveLnRatio, effectiveHolds: effective.effectiveHolds,
     rate, od, scoreGoal,
   };
@@ -139,7 +162,8 @@ export function analyzeLnSkill(
   const splits = [...new Set([Math.floor(keyCount / 2), Math.ceil(keyCount / 2)])];
   result.strain = Math.min(...splits.map(split => strainAtSplit(events, keyCount, split, scoreGoal)));
   const calibration = lnSkillCalibrationFor(keyCount);
-  result.rating = calibration.scale * Math.pow(result.strain, calibration.exponent);
+  result.rating = calibration.scale * Math.pow(result.strain, calibration.exponent)
+    * Math.pow(rate, LN_SKILL_RATE_RESPONSE - calibration.exponent);
   return result;
 }
 
