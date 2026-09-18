@@ -252,6 +252,21 @@ describe("pack wallets", () => {
     // The filter stacks with the rest: a first pull of another tier is not here.
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, mark: "first", tier: "common" })).total).toBe(0);
   });
+
+  it("recycles only the cards wearing the filtered mark", async () => {
+    // Two holdings, one of them a serial 1 nobody else ever pulled.
+    for (const cardUserId of [1, 2]) await seedCollectionCard(db, USER_ID, cardUserId);
+    await exec(
+      db,
+      "insert into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at) values (?, ?, ?, 1, 1000)",
+      [packCardKey(1, "rare"), 1, USER_ID],
+    );
+
+    const result = await recyclePackCollectionCards(db, USER_ID, { mode: "whole_matching", mark: "only" }, 3000);
+    expect(result.gained).toBe(4);
+    const remaining = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(remaining.cards.map((card) => card.userId)).toEqual([2]);
+  });
 });
 
 /* A collection card is (player, GOAT-or-not), not just player. Several

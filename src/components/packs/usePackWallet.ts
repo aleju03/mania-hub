@@ -19,6 +19,7 @@ import {
   spendCharge,
   spendShards,
   writePackWallet,
+  type PackCardMark,
   type PackWallet,
   type PulledCard,
 } from "#/lib/pack-collection";
@@ -121,6 +122,7 @@ export interface PackCollectionFilter {
   tier: ManiaCardTier | "all" | "unrated" | "untracked";
   query: string;
   duplicatesOnly?: boolean;
+  mark?: PackCardMark | null;
 }
 
 function collectionCardMatchesFilter(
@@ -130,6 +132,9 @@ function collectionCardMatchesFilter(
   const query = filter.query.trim().toLowerCase();
   if (query && !card.username.toLowerCase().includes(query)) return false;
   if (filter.duplicatesOnly && card.copies <= 1) return false;
+  // Which serial a card was minted at is server knowledge, so a local wallet
+  // cannot resolve a mark; the chips only render on a synced collection.
+  if (filter.mark) return false;
   if (filter.tier === "all") return true;
   if (filter.tier === "unrated") return card.tier === null;
   // Pool membership is server knowledge; a local wallet can't resolve it, and
@@ -248,6 +253,7 @@ export function usePackWallet(): PackWalletApi {
           tier: filter?.tier,
           query: filter?.query,
           duplicatesOnly: filter?.duplicatesOnly === true,
+          mark: filter?.mark ?? null,
         },
       });
       if (!result) {

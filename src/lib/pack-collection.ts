@@ -734,3 +734,7 @@ export function loadWalletForViewer(viewerId: number | null, now: number): PackW
    being a serial 1 nobody ever followed, and the collector's own card. */
 export const PACK_CARD_MARKS = ["only", "first", "second", "third", "self"] as const;
 export type PackCardMark = (typeof PACK_CARD_MARKS)[number];
+
+export function isPackCardMark(value: unknown): value is PackCardMark {
+  return typeof value === "string" && (PACK_CARD_MARKS as readonly string[]).includes(value);
+}

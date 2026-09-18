@@ -2931,6 +2931,10 @@ export async function recyclePackCollectionCards(
     /* Same duplicates filter listPackCollectionCards takes, so "recycle
        everything shown" under it leaves the single-copy cards alone. */
     duplicatesOnly?: boolean;
+    /* Same mark filter listPackCollectionCards takes. Without it a shelf
+       narrowed to the 1/1 chip would hand "recycle everything shown" the
+       whole collection. */
+    mark?: PackCardMark | null;
     /* Same restriction listPackCollectionCards takes, so "recycle everything
        shown" under the "not tracked" filter recycles exactly what it showed. */
     restrictToCardUserIds?: readonly number[];
@@ -2952,6 +2956,9 @@ export async function recyclePackCollectionCards(
     }
     if (options.duplicatesOnly) {
       where.push("copies > 1");
+    }
+    if (options.mark) {
+      where.push(packCardMarkSql(options.mark));
     }
     if (options.restrictToCardUserIds) {
       where.push(cardUserIdRestrictionSql(options.restrictToCardUserIds));

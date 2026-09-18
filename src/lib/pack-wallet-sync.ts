@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 import { liveBridgeToken } from "./live-backend-tokens";
+import { isPackCardMark, PACK_CARD_MARKS, type PackCardMark } from "./pack-collection";
 import { PACK_SHOWCASE_MAX_CARDS } from "./pack-showcase";
 
 // Server functions bridging the browser to the server's pack_wallets store.
@@ -74,6 +75,9 @@ export interface ServerPackCollectionPage {
   duplicateCardCount: number;
   duplicateShardTotal: number;
   filteredShardTotal: number;
+  /* How many cards of the whole collection wear each mark, so the mark chips
+     can label themselves while they are off. */
+  markCounts?: Record<PackCardMark, number>;
   poolProgress: ServerPackCollectionPoolProgress | null;
   /** Honorary GOAT variants the collection still lacks. They are separate
       collectible slots from the ordinary player pool. */
@@ -198,6 +202,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     query?: unknown;
     sort?: unknown;
     duplicatesOnly?: unknown;
+    mark?: unknown;
   }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
@@ -206,7 +211,8 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     const sort =
       input?.sort === "newest" ? ("newest" as const) : input?.sort === "copies" ? ("copies" as const) : ("rarity" as const);
     const duplicatesOnly = input?.duplicatesOnly === true;
-    return { page, pageSize, tier, query, sort, duplicatesOnly };
+    const mark = isPackCardMark(input?.mark) ? input.mark : null;
+    return { page, pageSize, tier, query, sort, duplicatesOnly, mark };
   })
   .handler(async ({ data }): Promise<ServerPackCollectionPage | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -220,6 +226,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     if (data.query) url.searchParams.set("q", data.query);
     if (data.sort !== "rarity") url.searchParams.set("sort", data.sort);
     if (data.duplicatesOnly) url.searchParams.set("dupes", "1");
+    if (data.mark) url.searchParams.set("mark", data.mark);
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection fetch failed (${response.status}).`);
     const body = (await response.json()) as ServerPackCollectionPage;
@@ -238,6 +245,13 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       duplicateCardCount: Math.max(0, Math.floor(Number(body.duplicateCardCount) || 0)),
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
       filteredShardTotal: Number(body.filteredShardTotal) || 0,
+      ...(body.markCounts && typeof body.markCounts === "object"
+        ? {
+            markCounts: Object.fromEntries(
+              PACK_CARD_MARKS.map((mark) => [mark, Math.max(0, Math.floor(Number(body.markCounts?.[mark]) || 0))]),
+            ) as Record<PackCardMark, number>,
+          }
+        : {}),
       poolProgress,
       goatMissing: Math.max(0, Math.floor(Number(body.goatMissing) || 0)),
     };
@@ -520,6 +534,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
     tier?: unknown;
     query?: unknown;
     duplicatesOnly?: unknown;
+    mark?: unknown;
   }) => {
     const mode =
       input?.mode === "duplicates" ||
@@ -574,6 +589,9 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       // Carries the duplicates filter, so "recycle everything shown" under it
       // takes the same rows the grid was showing.
       duplicatesOnly: input?.duplicatesOnly === true,
+      // Same for the mark chips: under one of them "everything shown" is the
+      // handful of cards wearing that seal, not the whole collection.
+      mark: isPackCardMark(input?.mark) ? input.mark : null,
     };
   })
   .handler(async ({ data }): Promise<{ gained: number; payload: string; rev: number } | null> => {

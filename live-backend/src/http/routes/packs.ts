@@ -1069,6 +1069,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         tier: recycleUntracked ? "all" : recycleTier,
         query: typeof body.query === "string" ? body.query.slice(0, 120) : "",
         duplicatesOnly: body.duplicatesOnly === true,
+        mark: isPackCardMark(body.mark) ? body.mark : null,
         restrictToCardUserIds: untrackedIds,
       });
       sendJson(req, res, ctx, 200, { gained: result.gained, payload: result.wallet.payload, rev: result.wallet.rev });
@@ -1123,6 +1124,7 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
     // "untracked" is not a tier: it lists the owned players who left the draw
     // pool. With no pool to compare against the filter honestly shows nothing.
     const untracked = tier === "untracked";
+    const mark = url.searchParams.get("mark");
     const collectionPage = await listPackCollectionCards(ctx.db, walletUserId, {
       page,
       pageSize,
@@ -1130,6 +1132,10 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
       query,
       sort,
       duplicatesOnly,
+      mark: isPackCardMark(mark) ? mark : null,
+      // The owner's own grid wears the same chips as a collector's shelf, so
+      // it pays for the counts the same way that read does.
+      withMarkCounts: true,
       restrictToCardUserIds: untracked ? progress?.offPoolUserIds ?? [] : undefined,
     });
     sendJson(req, res, ctx, 200, {

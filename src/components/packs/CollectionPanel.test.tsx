@@ -234,5 +234,5 @@ it("filters the grid to the cards held more than once, and carries that into a b
   fireEvent.click(screen.getByRole("button", { name: "select all" }));
   fireEvent.click(screen.getByRole("button", { name: /^Recycle \+/ }));
   fireEvent.click(screen.getByRole("button", { name: /Sure\?/ }));
-  expect(onRecycleWholeMatching).toHaveBeenCalledWith({ tier: "all", query: "", duplicatesOnly: true });
+  expect(onRecycleWholeMatching).toHaveBeenCalledWith({ tier: "all", query: "", duplicatesOnly: true, mark: null });
 });

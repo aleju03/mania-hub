@@ -17,6 +17,7 @@ import {
   tierRank,
   wholeCardShardValue,
   type CollectedCard,
+  type PackCardMark,
   type PackWallet,
 } from "#/lib/pack-collection";
 import { honoraryAvatarUrl, HONORARY_PLAYERS, type HonoraryPlayer } from "#/lib/honorary-players";
@@ -33,6 +34,8 @@ import { CollectionCardPlaceholder, CollectionCardTile, type CardMint } from "./
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
 import { useCardThumbnails } from "./useCardThumbnails";
 import { playRecycleClink } from "./packSfx";
+import { MarkFilters } from "./collections/MarkFilters";
+import { useAuth } from "#/lib/auth-context";
 
 export type { CardMint };
 
@@ -98,6 +101,7 @@ interface CollectionPanelProps {
     tier: CollectionTierFilter;
     query: string;
     duplicatesOnly: boolean;
+    mark: PackCardMark | null;
   }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
@@ -120,6 +124,12 @@ interface LoadedServerCollectionPage {
   filterKey: string;
   page: ServerPackCollectionPage;
 }
+
+/* The chips that are not a rarity: one shape for the mark seals, the
+   duplicates and the players who left the pool, so the row under the rarity
+   filters reads as one group. Borderless on purpose - see the rarity row. */
+const lensChipClass =
+  "flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors";
 
 const COLLECTION_PAGE_SIZE = 15;
 /* Long enough that no ordinary click reaches it, short enough that someone who
@@ -187,6 +197,7 @@ function serverCollectionCacheKey({
   query,
   sort,
   duplicatesOnly,
+  mark,
 }: {
   page: number;
   pageSize: number;
@@ -194,8 +205,9 @@ function serverCollectionCacheKey({
   query: string;
   sort: CollectionSortMode;
   duplicatesOnly: boolean;
+  mark: PackCardMark | null;
 }) {
-  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${query}`;
+  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${query}`;
 }
 
 /* Which rows the filter selects, not the order they come back in: totals,
@@ -208,13 +220,15 @@ function serverCollectionFilterKey({
   tier,
   query,
   duplicatesOnly,
+  mark,
 }: {
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
   duplicatesOnly: boolean;
+  mark: PackCardMark | null;
 }) {
-  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${query}`;
+  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${query}`;
 }
 
 function CollectionPager({
@@ -401,6 +415,8 @@ export function CollectionPanel({
   wishlist,
 }: CollectionPanelProps) {
   const { t, i18n } = useLingui();
+  // Only for the self chip's badge, which wears the collector's own face.
+  const viewer = useAuth().viewer;
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -410,6 +426,11 @@ export function CollectionPanel({
      like the rarity chips, not a lens: every bulk action over "everything
      matching" carries it too. */
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
+  /* Which mark the grid is narrowed to, or none. A chip is a toggle rather
+     than a row with an "all" because none of them is the resting state. Like
+     the duplicates chip it cuts across every tier, and every bulk action over
+     "everything matching" carries it. */
+  const [mark, setMark] = useState<PackCardMark | null>(null);
   // Safe to read storage in the initializer: the panel renders null until the
   // wallet hydrates, so its first real render is already client-side.
   const [sortMode, setSortMode] = useState<CollectionSortMode>(readStoredCollectionSort);
@@ -484,6 +505,7 @@ export function CollectionPanel({
       // the way back to /packs instead of always missing it.
       sort: readStoredCollectionSort(),
       duplicatesOnly: false,
+      mark: null,
     };
     const cacheKey = serverCollectionCacheKey(initialRequest);
     const page = serverCollectionPageCache.get(cacheKey) ?? null;
@@ -728,6 +750,7 @@ export function CollectionPanel({
     query: activeQuery.trim().toLowerCase(),
     sort: sortMode,
     duplicatesOnly,
+    mark,
   };
   const serverCacheKey = serverCollectionCacheKey(serverRequest);
   const serverFilterKey = serverCollectionFilterKey(serverRequest);
@@ -787,8 +810,12 @@ export function CollectionPanel({
       setTierFilter("all");
     }
   }, [tierFilter, useServerCollection, serverPoolProgress]);
-  /* Like tierCounts, a whole-collection figure: it labels the chip while the
-     chip is off, so it cannot come from the filtered page. */
+  /* Whole-collection figures like tierCounts: they label a chip while the
+     chip is off, so they cannot come from the filtered page. The backend
+     counts every mark over the shelf whatever the page was narrowed to. */
+  const markCounts = useServerCollection
+    ? serverMetaPage?.markCounts ?? serverPage?.page.markCounts ?? null
+    : null;
   const duplicateCardCount = useServerCollection
     ? serverMetaPage?.duplicateCardCount ?? serverPage?.page.duplicateCardCount ?? 0
     : localCards.reduce((count, card) => count + (card.copies > 1 ? 1 : 0), 0);
@@ -897,7 +924,9 @@ export function CollectionPanel({
   const expectedFilterTotal =
     filteredTotal > 0
       ? filteredTotal
-      : duplicatesOnly
+      : mark
+        ? markCounts?.[mark] ?? 0
+        : duplicatesOnly
         ? duplicateCardCount
         : tierFilter === "all"
         ? collectionTotal
@@ -906,7 +935,7 @@ export function CollectionPanel({
           : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
-    ? (sortMode !== "rarity" || duplicatesOnly) && tierFilter === "all"
+    ? (sortMode !== "rarity" || duplicatesOnly || mark !== null) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
       // skeletons take a rarity-less face rather than claiming a page of
       // commons that the loaded cards then contradict.
@@ -939,7 +968,7 @@ export function CollectionPanel({
     setSelected(new Set());
     setSelectionScope("manual");
     setConfirmBulk(false);
-  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly]);
+  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly, mark]);
 
   useEffect(() => {
     if (selectionScope !== "all") setSelected(new Set());
@@ -990,6 +1019,7 @@ export function CollectionPanel({
         query: trimmedQuery,
         sort: sortMode,
         duplicatesOnly,
+        mark,
       },
     })
       .then((page) => {
@@ -1011,7 +1041,7 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
+  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
   /* The missing list, read only while it is on screen. Not cached across
      opens like the collection pages are: the point of the list is which
@@ -1246,88 +1276,6 @@ export function CollectionPanel({
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/40 py-1.5 pl-8 pr-3 text-[12px] text-white placeholder:text-osu-f1/70 outline-none transition-colors focus:border-osu-pink/40"
             />
           </div>
-          {/* Rarity is a property of a minted card, so the chips have nothing
-              to say about players nobody has dealt this collector yet. */}
-          {ownedTiers.length > 1 && !missingOpen && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(["all", ...ownedTiers] as Array<ManiaCardTier | "all" | null>).map((tier) => {
-                const value = tier === null ? "unrated" : tier;
-                const selected = tierFilter === value;
-                // Tier names themselves stay English: the same label is
-                // printed onto the card faces.
-                const label = tier === "all" ? t`All` : tier === null ? t`Unrated` : MANIA_TIER_STYLES[tier].label;
-                const count = tier === "all" ? collectionTotal : tierCounts.get(tier ?? "unrated") ?? 0;
-                const rgb = tier === "all" || tier === null ? null : tierChipRgb(tier);
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setTierFilter(selected ? "all" : (value as CollectionTierFilter))}
-                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-[filter] cursor-pointer ${
-                      rgb
-                        ? selected
-                          ? ""
-                          : "hover:brightness-125"
-                        : selected
-                          ? "border-osu-pink/50 bg-osu-b4 text-white"
-                          : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
-                    }`}
-                    style={
-                      rgb
-                        ? {
-                            color: `rgb(${rgb})`,
-                            borderColor: `rgba(${rgb}, ${selected ? 0.65 : 0.22})`,
-                            backgroundColor: `rgba(${rgb}, ${selected ? 0.14 : 0.05})`,
-                          }
-                        : undefined
-                    }
-                    aria-pressed={selected}
-                  >
-                    {label}
-                    {/* GOAT is a fixed, finite set, so the count reads as
-                        progress against the roster rather than a bare total. */}
-                    <span className="font-semibold tabular-nums opacity-65">
-                      {tier === "goat" ? `${count}/${HONORARY_PLAYERS.length}` : count}
-                    </span>
-                  </button>
-                );
-              })}
-              {useServerCollection && retiredOwned > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setTierFilter(tierFilter === "untracked" ? "all" : "untracked")}
-                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-[filter] cursor-pointer ${
-                    tierFilter === "untracked"
-                      ? "border-osu-pink/50 bg-osu-b4 text-white"
-                      : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
-                  }`}
-                  title={t`Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back.`}
-                  aria-pressed={tierFilter === "untracked"}
-                >
-                  <Trans>Not tracked</Trans>
-                  <span className="font-semibold tabular-nums opacity-65">{retiredOwned}</span>
-                </button>
-              )}
-            </div>
-          )}
-          {/* Rides beside the rarity chips rather than inside them: it cuts
-              across every tier, so it stays on whichever rarity is picked. */}
-          {duplicateCardCount > 0 && !missingOpen && (
-            <button
-              type="button"
-              onClick={() => setDuplicatesOnly((on) => !on)}
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors cursor-pointer ${
-                duplicatesOnly
-                  ? "border-osu-pink/50 bg-osu-b4 text-white"
-                  : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
-              }`}
-              title={t`Cards you hold more than one copy of.`}
-              aria-pressed={duplicatesOnly}
-            >
-              <Trans>Duplicates</Trans>
-              <span className="font-semibold tabular-nums opacity-65">{duplicateCardCount}</span>
-            </button>
-          )}
           {import.meta.env.DEV && (
             <button
               type="button"
@@ -1347,6 +1295,83 @@ export function CollectionPanel({
             </button>
           )}
         </div>
+
+        {/* Rarity is a property of a minted card, so the row has nothing to
+            say about players nobody has dealt this collector yet. Bare text in
+            each tier's own colour rather than a bordered pill each: a dozen
+            owned tiers filled three rows of chrome, and the tier name is
+            already the loudest thing a chip could say. */}
+        {ownedTiers.length > 1 && !missingOpen && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-select-keep="">
+            {(["all", ...ownedTiers] as Array<ManiaCardTier | "all" | null>).map((tier) => {
+              const value = tier === null ? "unrated" : tier;
+              const selected = tierFilter === value;
+              // Tier names themselves stay English: the same label is
+              // printed onto the card faces.
+              const label = tier === "all" ? t`All` : tier === null ? t`Unrated` : MANIA_TIER_STYLES[tier].label;
+              const count = tier === "all" ? collectionTotal : tierCounts.get(tier ?? "unrated") ?? 0;
+              const rgb = tier === "all" || tier === null ? null : tierChipRgb(tier);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTierFilter(selected ? "all" : (value as CollectionTierFilter))}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                    rgb
+                      ? selected
+                        ? ""
+                        : "opacity-65 hover:opacity-100"
+                      : selected
+                        ? "bg-osu-b4 text-white"
+                        : "text-osu-f1 hover:text-white"
+                  }`}
+                  style={rgb ? { color: `rgb(${rgb})`, backgroundColor: selected ? `rgba(${rgb}, 0.16)` : undefined } : undefined}
+                  aria-pressed={selected}
+                >
+                  {label}
+                  {/* GOAT is a fixed, finite set, so the count reads as
+                      progress against the roster rather than a bare total. */}
+                  <span translate="no" className="font-semibold tabular-nums opacity-60">
+                    {tier === "goat" ? `${count}/${HONORARY_PLAYERS.length}` : count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* The lenses that cut across every rarity, under it rather than
+            over it: which rarity you are looking at is the bigger choice, and
+            these stay on whichever one is picked. */}
+        {!missingOpen && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1" data-select-keep="">
+            <MarkFilters value={mark} counts={markCounts} onChange={setMark} selfFace={viewer?.avatarUrl} />
+            {duplicateCardCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setDuplicatesOnly((on) => !on)}
+                className={`${lensChipClass} ${duplicatesOnly ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
+                title={t`Cards you hold more than one copy of.`}
+                aria-pressed={duplicatesOnly}
+              >
+                <Trans>Duplicates</Trans>
+                <span translate="no" className="tabular-nums opacity-60">{duplicateCardCount}</span>
+              </button>
+            )}
+            {useServerCollection && retiredOwned > 0 && (
+              <button
+                type="button"
+                onClick={() => setTierFilter(tierFilter === "untracked" ? "all" : "untracked")}
+                className={`${lensChipClass} ${tierFilter === "untracked" ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
+                title={t`Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back.`}
+                aria-pressed={tierFilter === "untracked"}
+              >
+                <Trans>Not tracked</Trans>
+                <span translate="no" className="tabular-nums opacity-60">{retiredOwned}</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Ordering and paging, kept off the chip row above: chips change what
             is in the set, these change how it is presented. Plain text rather
@@ -1684,7 +1709,7 @@ export function CollectionPanel({
                 void (async () => {
                   try {
                     const gained = selectionScope === "all"
-                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly })
+                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly, mark })
                       : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
