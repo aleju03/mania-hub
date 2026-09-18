@@ -13,10 +13,10 @@ import { lnPrimaryMinRatioFor } from "../dan/dan-estimator/ln.js";
 import type { MotionFeatures } from "../dan/motion-features.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, msdChartErrorFallback, isMsdSupportedKeyCount } from "../dan/msd.js";
 import { JobQueue } from "../jobs/queue.js";
-import { observedScoreChecksum, queueRevisionCheck, readBeatmapRevisionStates, scoreMatchesRevision } from "../osu/beatmap-revisions.js";
+import { BEATMAP_REVISION_JOB, observedScoreChecksum, queueRevisionCheck, readBeatmapRevisionStates, scoreMatchesRevision } from "../osu/beatmap-revisions.js";
 import { readConfig } from "../config.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
-import { CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LN_EFFECTIVE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { CHART_ANALYSIS_JOB, CHART_ANALYSIS_VERSION, HT_RATE_ANALYSIS_META_KEY, JACK_DEMAND_RECOMPUTE_META_KEY, JACK_TAG_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LN_EFFECTIVE_META_KEY, MOTION_FEATURES_RECOMPUTE_META_KEY, SUNNY_REPIN_DT_META_KEY, VIBRO_RECOMPUTE_META_KEY, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { INVERSE_MOD_VARIANT, VIBRO_ADJUSTED_VARIANT, MAX_RATE_PERCENT, MIN_RATE_PERCENT, computeAndStoreRateDanVerdictFromText, enqueueRateDanEstimate, loadStoredRateDanVerdicts, normalizeDanOdFlag, rateDanVerdictKey } from "./dan-estimates.js";
 import type { RateDanVerdictPair } from "./dan-estimates.js";
 import { invertManiaOsuText } from "../dan/invert-mod.js";
@@ -667,12 +667,44 @@ export interface PlayerSkillModeBreakdown {
   dan?: PlayerSkillModeDan;
 }
 
+// What a ready row's pending plays are waiting on, as the compute that wrote
+// the row saw it, plus the live size of the line they sit in. The chart
+// re-check line is what parks plays for hours on prod: the beatmap-revisions
+// lane sits at thousands of deferred verifies for days, and every play on an
+// unverified chart waits for its verify, then its re-analysis, then the next
+// rating pass. Without this the profile says "20 still analyzing" for seven
+// hours and nothing else.
+export interface PlayerSkillPendingWaits {
+  // Plays parked on charts whose file changed on osu! and has not been
+  // re-verified and re-analyzed yet.
+  revisions: number;
+  // Distinct charts those plays wait on that are still unverified right now.
+  charts: number;
+  // Rows waiting in the chart re-check line (revision verifies plus chart
+  // analyses), across every player.
+  backlog: number;
+  // Plays past the last pass's calculator budget: the next pass takes them.
+  calcBudget: number;
+  // Plays waiting on a rate vibro check pass.
+  rateVibro: number;
+  // Everything else the compute could not rate yet (chart file or OD not
+  // fetched, calibration facts missing, verdict pending).
+  other: number;
+}
+
 export interface PlayerSkillQueueStatus {
-  state: "queued" | "running";
+  // queued: a due job is waiting in the analyzer lane; running: it holds a
+  // worker slot; scheduled: the next pass has a run_after in the future
+  // (session debounce, revision-retry backoff, or the pending-play retry TTL).
+  state: "queued" | "running" | "scheduled";
   // 1-based position among jobs waiting in the MinaCalc worker lane (shared
-  // with dan estimates and other players' skill computes); null while running.
+  // with dan estimates and other players' skill computes); null unless queued.
   position: number | null;
   waiting: number;
+  // scheduled only: when the next pass becomes claimable (ISO).
+  nextRunAt?: string | null;
+  // Ready rows with pending plays only.
+  pending?: PlayerSkillPendingWaits;
 }
 
 export interface PlayerSkillBreakdown {
@@ -708,6 +740,8 @@ export const PLAYER_SKILL_PATTERN_AXES = [
 ] as const;
 
 export interface PlayerSkillPlay {
+  /** Why a pending_calibration play waits; absent on rows stored before reasons existed. */
+  pendingReason?: StoredPendingReason;
   score: PlayerSkillScoreDetails | null;
   skillRatings: Record<string, number>;
   vibroAdjustment?: StoredPlaySsr["vibroAdjustment"];
@@ -794,6 +828,9 @@ export interface StoredPlaySsr {
   /** File that produced the computed values, never evidence of what was played. */
   fileChecksum?: string;
   revisionPending?: boolean;
+  /** Why this play is waiting when calibrationPending: the modal names the
+   *  wait per play. Absent on rows written before it shipped. */
+  pendingReason?: StoredPendingReason;
   /** Preserve plays that span a map upload without relabelling them later. */
   startedAt?: string | null;
   score?: PlayerSkillScoreDetails | null;
@@ -894,13 +931,34 @@ export interface StoredPlaySsr {
   calibrationPending?: boolean;
 }
 
+// Why the compute left plays pending, so a later read can name the wait
+// instead of the count alone (getSkillQueueStatus). Absent on rows written
+// before it shipped: those read as "waiting for the next pass".
+interface StoredPendingSummary {
+  // Plays parked on charts still awaiting a revision verify / re-analysis.
+  revisions: number;
+  // The charts those plays wait on (bounded), re-checked live on read.
+  revisionBeatmapIds: number[];
+  // Plays past this pass's calculator budget.
+  calcBudget: number;
+  // Plays waiting on a rate vibro check pass.
+  rateVibro: number;
+}
+
 interface StoredModesSummary {
   totalPlays: number;
   analyzedPlays: number;
   pendingPlays: number;
   unsupportedPlays: number;
   modes: PlayerSkillModeBreakdown[];
+  pending?: StoredPendingSummary;
 }
+
+// Enough to re-check every chart a grinder's parked plays sit on without
+// letting modes_json grow with the corpus.
+const MAX_STORED_PENDING_REVISION_CHARTS = 100;
+
+export type StoredPendingReason = "revision" | "calc_budget" | "file" | "facts" | "rate_vibro" | "calc";
 
 export interface StoredVibroExclusion {
   play: StoredPlaySsr;
@@ -3340,12 +3398,20 @@ export async function computePlayerSkillRatings(
   result.danOnly.push(...waiting);
   result.summary.pendingPlays += waiting.length;
   result.summary.totalPlays += waiting.length;
+  if (result.summary.pendingPlays > 0) {
+    result.summary.pending = {
+      revisions: waiting.length,
+      revisionBeatmapIds: [...new Set(waiting.map(play => play.beatmapId))].slice(0, MAX_STORED_PENDING_REVISION_CHARTS),
+      calcBudget: result.deferredCalibration,
+      rateVibro: result.pendingRateVibroChecks,
+    };
+  }
   return result;
 }
 
 /** Keep sole-source score evidence while discarding every file-derived fact. */
 export function invalidateStoredPlayRevision(play: StoredPlaySsr): StoredPlaySsr {
-  return { ...play, values: {}, patterns: [], ratingExcluded: true, calibrationPending: true, revisionPending: true,
+  return { ...play, values: {}, patterns: [], ratingExcluded: true, calibrationPending: true, revisionPending: true, pendingReason: "revision",
     fileChecksum: undefined, wifeCalibration: null, tapWifeOd: undefined, tapWifeFileVersion: undefined,
     lnGoal: undefined, lnTailPass: undefined, lnSkill: undefined, chartFamily: null,
     rateVibroChecked: undefined, vibroAdjustment: undefined,
@@ -3510,7 +3576,7 @@ async function computeVerifiedPlayerSkillRatings(
             ezWindows: score.mods == null ? previous.ezWindows : ezWindowScale(score) > 1,
             wifeScoring: wifeScoringFor(score), odOverride, inverse,
             rateMod: getRateModAcronym(score.mods),
-            calibrationPending: true,
+            calibrationPending: true, pendingReason: "facts",
           };
           if (carry && sameScore && previous.goal > SSR_GOAL_MIN && !previous.ratingExcluded && Number(previous.values?.Overall) > 0) {
             carriedForward.add(playSlotKey(previous.beatmapId, previous.rate, previous.inverse));
@@ -3755,15 +3821,26 @@ async function computeVerifiedPlayerSkillRatings(
       && sameCalibrationMods(previous, score)
       && (hasJudgments || previous.accuracy === clearEvidence.accuracy)
       && JSON.stringify(readWifeCounts(previous.score?.statistics ?? {})) === JSON.stringify(readWifeCounts(score.statistics ?? {}));
-    const deferCandidate = (keyCount: number) => {
+    const deferCandidate = (keyCount: number, pendingReason: StoredPendingReason) => {
       if (!previous) return;
       if (sameEvidence && !previous.ratingExcluded && goal > SSR_GOAL_MIN && Number(previous.values?.Overall) > 0) {
         carriedForward.add(key);
-        analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence, calibrationPending: true });
+        analyzedByKey.set(key, { ...previous, pp: score.pp ?? previous.pp, ...clearEvidence, calibrationPending: true, pendingReason });
         return;
       }
       analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {},
-        ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
+        ratingExcluded: true, calibrationPending: true, pendingReason, lnSkill: previous.lnSkill });
+    };
+    // A play this pass never reached and has no last rating for still gets a
+    // row: an unrated placeholder, so the dan modal can list what is waiting
+    // rather than only count it. Filed under the chart's keymode when any
+    // source knows it; a chart nobody has parsed yet stays a bare count.
+    const parkCandidate = (pendingReason: StoredPendingReason) => {
+      if (previous) { deferCandidate(previous.keyCount, pendingReason); return; }
+      const keyCount = infoByBeatmap.get(beatmapId)?.keyCount || goalFactsByBeatmap.get(beatmapId)?.keyCount
+        || Math.round(Number(score.beatmap?.cs ?? 0)) || 0;
+      if (!isMsdSupportedKeyCount(keyCount)) return;
+      analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {}, ratingExcluded: true, calibrationPending: true, pendingReason });
     };
     const chartInfo = infoByBeatmap.get(beatmapId);
     const chartVibro = chartInfo?.vibro && !ppBackedChartIds.has(beatmapId);
@@ -3803,14 +3880,14 @@ async function computeVerifiedPlayerSkillRatings(
     if (calcRunsTotal + (goal > SSR_CALC_GOAL_CAP ? 4 : 2) > MAX_CALC_RUNS_PER_COMPUTE) {
       pendingPlays += 1;
       deferredCalibration += 1;
-      if (previous) deferCandidate(previous.keyCount);
+      parkCandidate("calc_budget");
       continue;
     }
 
     const osuText = await loadOsuText(db, osu, beatmapId);
     if (osuText == null) {
       pendingPlays += 1;
-      if (previous) deferCandidate(previous.keyCount);
+      parkCandidate("file");
       continue;
     }
     // Converts serve the std .osu under the mania beatmap id; the calc would
@@ -3851,7 +3928,7 @@ async function computeVerifiedPlayerSkillRatings(
     if (shouldCheckRateVibro(keyCount, rate, ppBackedChartIds.has(beatmapId))) {
       if (rateVibroChecks >= MAX_RATE_VIBRO_CHECKS_PER_COMPUTE) {
         pendingRateVibroKeys.add(key);
-        if (previous) deferCandidate(keyCount);
+        parkCandidate("rate_vibro");
         continue;
       }
       rateVibroChecks += 1;
@@ -3867,6 +3944,7 @@ async function computeVerifiedPlayerSkillRatings(
         vibroClearEvidence = check.clearEvidence;
       } else {
         pendingPlays += 1;
+        parkCandidate("rate_vibro");
         continue;
       }
     }
@@ -3894,7 +3972,7 @@ async function computeVerifiedPlayerSkillRatings(
       if (previous) {
         pendingPlays += 1;
         analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {},
-          ratingExcluded: true, calibrationPending: true, lnSkill: previous.lnSkill });
+          ratingExcluded: true, calibrationPending: true, pendingReason: "calc", lnSkill: previous.lnSkill });
       }
       continue;
     }
@@ -4521,15 +4599,91 @@ async function loadTopPlaysSnapshot(
 // player's queue position counts jobs of both kinds ahead of theirs, matching
 // the lane's claim order (priority desc, run_after asc).
 const SKILL_LANE_JOB_TYPES = ["compute_dan_estimate", PLAYER_SKILLS_JOB];
+// The line a changed chart waits in before its plays can be rated again:
+// the verify fetches the file, then the analysis re-reads it.
+const CHART_RECHECK_JOB_TYPES = [BEATMAP_REVISION_JOB, CHART_ANALYSIS_JOB];
+const WAITING_JOB_STATUSES = "('queued', 'failed', 'deferred_pressure')";
 
-async function getSkillQueueStatus(db: Db, userId: number): Promise<PlayerSkillQueueStatus | null> {
-  const job = (await exec(
+interface PlayerSkillJobRow {
+  id: number;
+  status: string;
+  priority: number;
+  runAfter: string;
+}
+
+/**
+ * The job that will next rate this player, if any: a running one, else the
+ * due one the lane claims first, else the earliest appointment. Every key
+ * shape a skill compute is enqueued under is covered (profile view, session
+ * wakeup, continuation, LN/Wife migration, rate-vibro pass, revision retry);
+ * the ranges walk the unique dedupe index.
+ */
+async function findPlayerSkillJob(db: Db, userId: number): Promise<PlayerSkillJobRow | null> {
+  const prefixes = [
+    `player-skills:${PLAYER_SKILLS_VERSION}:${userId}:`,
+    `player-skills:revision:${userId}:`,
+    `player-skills-rate-vibro:${RATE_VIBRO_CHECK_VERSION}:${userId}:`,
+  ];
+  const rows = (await exec(
     db,
-    "select id, status, priority, run_after from jobs where dedupe_key = ?",
-    [`player-skills:${PLAYER_SKILLS_VERSION}:${userId}`],
-  )).rows[0];
-  if (!job) return null;
-  const jobStatus = String(job.status);
+    `select id, status, priority, run_after from jobs
+     where type = ? and status in ('queued', 'failed', 'deferred_pressure', 'running')
+       and (dedupe_key = ? or ${prefixes.map(() => "(dedupe_key >= ? and dedupe_key < ?)").join(" or ")})`,
+    [PLAYER_SKILLS_JOB, `player-skills:${PLAYER_SKILLS_VERSION}:${userId}`, ...prefixes.flatMap((value) => [value, value + "\uffff"])],
+  )).rows.map((row) => ({
+    id: Number(row.id), status: String(row.status), priority: Number(row.priority), runAfter: String(row.run_after),
+  }));
+  if (rows.length === 0) return null;
+  const running = rows.find((row) => row.status === "running");
+  if (running) return running;
+  const nowIsoStamp = new Date().toISOString();
+  const claimOrder = (a: PlayerSkillJobRow, b: PlayerSkillJobRow) =>
+    b.priority - a.priority || a.runAfter.localeCompare(b.runAfter) || a.id - b.id;
+  const due = rows.filter((row) => row.runAfter <= nowIsoStamp).sort(claimOrder);
+  if (due.length > 0) return due[0];
+  return rows.sort((a, b) => a.runAfter.localeCompare(b.runAfter) || a.id - b.id)[0];
+}
+
+async function countWaitingJobs(db: Db, types: string[]): Promise<number> {
+  return Number((await exec(
+    db,
+    `select count(*) as cnt from jobs where status in ${WAITING_JOB_STATUSES} and type in (${types.map(() => "?").join(", ")})`,
+    types,
+  )).rows[0]?.cnt ?? 0);
+}
+
+async function readPendingWaits(db: Db, summary: Partial<StoredModesSummary>): Promise<PlayerSkillPendingWaits> {
+  const stored = summary.pending;
+  const pendingPlays = Math.max(0, Number(summary.pendingPlays ?? 0));
+  const revisions = Math.max(0, Number(stored?.revisions ?? 0));
+  const calcBudget = Math.max(0, Number(stored?.calcBudget ?? 0));
+  const rateVibro = Math.max(0, Number(stored?.rateVibro ?? 0));
+  const ids = Array.isArray(stored?.revisionBeatmapIds)
+    ? stored.revisionBeatmapIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0)
+    : [];
+  // Re-read the charts rather than trusting the compute's count: verifies
+  // land between passes, and the number that matters is how many still wait.
+  const charts = ids.length > 0
+    ? [...(await readBeatmapRevisionStates(db, ids)).values()].filter((state) => !state.ready).length
+    : 0;
+  return {
+    revisions: charts > 0 ? revisions : 0,
+    charts,
+    backlog: charts > 0 ? await countWaitingJobs(db, CHART_RECHECK_JOB_TYPES) : 0,
+    calcBudget,
+    rateVibro,
+    other: Math.max(0, pendingPlays - (charts > 0 ? revisions : 0) - calcBudget - rateVibro),
+  };
+}
+
+async function getSkillQueueStatus(
+  db: Db,
+  userId: number,
+  ready?: { summary: Partial<StoredModesSummary>; computedAt: string | null } | null,
+): Promise<PlayerSkillQueueStatus | null> {
+  const pending = ready && Number(ready.summary.pendingPlays ?? 0) > 0 ? await readPendingWaits(db, ready.summary) : undefined;
+  const withPending = (status: PlayerSkillQueueStatus): PlayerSkillQueueStatus => pending ? { ...status, pending } : status;
+  const job = await findPlayerSkillJob(db, userId);
   // Due jobs only: session-debounced recomputes with a future run_after are
   // not claimable yet and would inflate the queue position shown to viewers.
   const nowIsoStamp = new Date().toISOString();
@@ -4539,16 +4693,24 @@ async function getSkillQueueStatus(db: Db, userId: number): Promise<PlayerSkillQ
     `select count(*) as cnt from jobs where ${waitingSql}`,
     [...SKILL_LANE_JOB_TYPES, nowIsoStamp],
   )).rows[0]?.cnt ?? 0);
-  if (jobStatus === "running") return { state: "running", position: null, waiting };
-  if (jobStatus !== "queued" && jobStatus !== "failed") return null;
+  if (!job) {
+    // Pending plays with no job on file: the read path re-enqueues once the
+    // row is PENDING_RETRY_TTL_MS old, so that is the appointment.
+    if (!pending) return null;
+    const computedAtMs = Date.parse(String(ready?.computedAt ?? ""));
+    const nextRunAt = Number.isFinite(computedAtMs) ? new Date(computedAtMs + PENDING_RETRY_TTL_MS).toISOString() : null;
+    return withPending({ state: "scheduled", position: null, waiting, nextRunAt });
+  }
+  if (job.status === "running") return withPending({ state: "running", position: null, waiting });
+  if (job.runAfter > nowIsoStamp) return withPending({ state: "scheduled", position: null, waiting, nextRunAt: job.runAfter });
   const ahead = Number((await exec(
     db,
     `select count(*) as cnt from jobs
      where ${waitingSql}
        and (priority > ? or (priority = ? and (run_after < ? or (run_after = ? and id < ?))))`,
-    [...SKILL_LANE_JOB_TYPES, nowIsoStamp, Number(job.priority), Number(job.priority), String(job.run_after), String(job.run_after), Number(job.id)],
+    [...SKILL_LANE_JOB_TYPES, nowIsoStamp, job.priority, job.priority, job.runAfter, job.runAfter, job.id],
   )).rows[0]?.cnt ?? 0);
-  return { state: "queued", position: ahead + 1, waiting };
+  return withPending({ state: "queued", position: ahead + 1, waiting });
 }
 
 export async function enqueuePlayerSkills(
@@ -4680,16 +4842,21 @@ export async function getPlayerSkillBreakdown(
   // one. Keep serving that payload during the refresh (and after a failed
   // refresh) instead of briefly blanking every skill surface.
   if ((status === "ready" || status === "running" || status === "failed") && summary) {
+    const computedAt = typeof row?.computed_at === "string" ? row.computed_at : null;
+    const pendingPlays = Math.max(0, Number(summary.pendingPlays ?? 0));
     return {
       status: "ready",
       version: PLAYER_SKILLS_VERSION,
-      computedAt: typeof row?.computed_at === "string" ? row.computed_at : null,
+      computedAt,
       totalPlays: Math.max(0, Number(summary.totalPlays ?? 0)),
       analyzedPlays: Math.max(0, Number(summary.analyzedPlays ?? 0)),
-      pendingPlays: Math.max(0, Number(summary.pendingPlays ?? 0)),
+      pendingPlays,
       unsupportedPlays: Math.max(0, Number(summary.unsupportedPlays ?? 0)),
       modes: Array.isArray(summary.modes) ? summary.modes.filter(isValidMode).map(normalizeMode) : [],
       ...(status !== "ready" || shouldEnqueue ? { stale: true } : {}),
+      // Plays still analyzing get the line they wait in and the next pass,
+      // looked up after the enqueue above so a first read sees its job.
+      ...(pendingPlays > 0 ? { queue: await getSkillQueueStatus(db, userId, { summary, computedAt }) } : {}),
     };
   }
   // A version bump must not blank a profile that has a rating: until this
@@ -5008,6 +5175,7 @@ export function buildPlayerSkillPlay(
     beatmapStatus: map?.status ?? null,
     keyCount,
     ...(play.ratingExcluded ? { ratingExcluded: true, ratingExclusionReason: play.calibrationPending ? "pending_calibration" as const : "msd_floor" as const } : {}),
+    ...(play.calibrationPending && play.pendingReason ? { pendingReason: play.pendingReason } : {}),
     ...(play.vibroAdjustment ? { vibroAdjustment: play.vibroAdjustment } : {}),
     ...(play.vibroClearEvidence ? { vibroClearEvidence: summarizeVibroClear(play.vibroClearEvidence) } : {}),
     rating: Math.round(rating * 100) / 100,
@@ -5141,6 +5309,16 @@ export interface PlayerSkillDanRejectedPlay {
   skillsets: string[];
 }
 
+/** A play on this keymode the rating has not reached yet: it sits in the
+ *  modal's "still analyzing" list with the reason it waits. */
+export interface PlayerSkillDanPendingPlay {
+  play: PlayerSkillPlay;
+  /** "revision": the chart changed on osu! and waits for a fresh check;
+   *  "rate_vibro": waits for a vibro check pass; the rest wait for the next
+   *  rating pass. "next_pass" covers rows stored before reasons existed. */
+  reason: StoredPendingReason | "next_pass";
+}
+
 export interface PlayerSkillDanEvidence {
   /** Effective evidence in the side-wide clear pool (not the tile headline). */
   weightedClears: number;
@@ -5159,6 +5337,8 @@ export interface PlayerSkillDanEvidence {
    *  still rated on their last vector or waiting unrated, so the numbers here
    *  can still move without a new play. */
   pendingPlays: number;
+  /** The plays behind pendingPlays, newest first, capped at DAN_EVIDENCE_MAX_PENDING. */
+  pending: PlayerSkillDanPendingPlay[];
   clears: PlayerSkillDanEvidencePlay[];
   skillsets: PlayerSkillDanSkillsetEvidence[];
   /** The tile the headline follows (DanSkillsetBucket.anchor), null on sides that average. */
@@ -5181,6 +5361,9 @@ export const DAN_EVIDENCE_MAX_REJECTED = 200;
 
 // The all-clears list is paginated. Skillset lists ship their entire weighted
 // window, which can include more than twenty plays when rate variants overlap.
+// A grinder's first pass can park hundreds of plays; the list answers "is my
+// play in there", not "show me all of them".
+const DAN_EVIDENCE_MAX_PENDING = 100;
 const DAN_EVIDENCE_MAX_CLEARS = DAN_CLEAR_AVERAGE_WINDOW;
 // Per-request ceiling for a read that pages the "all clears" list. Bounds the
 // payload and the metadata read for the all-clears page, not the average.
@@ -5782,7 +5965,16 @@ export async function getPlayerSkillDanEvidence(
     && (dan.courseClear != null || Math.round(bestCourse.rawDan) >= Math.round(dan.rawDan))
     ? bestCourse
     : null;
+  // Newest first: a player opening this list is asking about the play they
+  // just set. A revision wait has no rating of its own; the row prints the
+  // play and the reason, never a stale vector.
+  const pendingPlays = plays.filter((play) => play.calibrationPending === true);
+  const pendingPage = [...pendingPlays]
+    .sort((left, right) => String(right.endedAt ?? "").localeCompare(String(left.endedAt ?? ""))
+      || left.beatmapId - right.beatmapId)
+    .slice(0, DAN_EVIDENCE_MAX_PENDING);
   const evidenceBeatmapIds = [
+    ...pendingPage.map((play) => play.beatmapId),
     ...courseClears.filter((clear) => clear.skillset && clear.keyCount === keyCount && clear.side === side).map((clear) => clear.beatmapId),
     ...(courseSource ? [courseSource.beatmapId] : []),
     ...topClears.map((clear) => clear.play.beatmapId),
@@ -5791,6 +5983,7 @@ export async function getPlayerSkillDanEvidence(
   ];
   const metadata = await readPlayerSkillPlayMetadata(db, evidenceBeatmapIds);
   const scoreDetails = await loadPlayerSkillScoreDetails(db, userId, [
+    ...pendingPage,
     ...topClears.map((clear) => clear.play),
     ...rejectedPage.map((entry) => entry.play),
     ...buckets.flatMap((bucket) => windows.get(bucket.id)!.window.map(({ clear }) => clear.play)),
@@ -5860,7 +6053,11 @@ export async function getPlayerSkillDanEvidence(
     averageWindow: danClearAverageWindowFor(side, keyCount),
     dan: dan?.skillsetsOnly ? null : dan,
     totalClears: clears.length,
-    pendingPlays: plays.filter((play) => play.calibrationPending === true).length,
+    pendingPlays: pendingPlays.length,
+    pending: pendingPage.map((play): PlayerSkillDanPendingPlay => ({
+      play: buildPlayerSkillPlay(play, 0, keyCount, metadata, scoreDetails),
+      reason: play.pendingReason ?? (play.revisionPending ? "revision" : "next_pass"),
+    })),
     weightedClears: windows.get(ALL_CLEARS_SECTION)!.have,
     clears: topClears.map((clear) => toEvidencePlay(clear)),
     skillsets,

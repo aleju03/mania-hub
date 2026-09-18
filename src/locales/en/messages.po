@@ -118,6 +118,11 @@ msgstr "(uploaded by {0})"
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, one {{1} play} other {{2} plays}}"
 
+#. placeholder {0}: onCharts.charts
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0, plural, one {# chart} other {# charts}}"
+msgstr "{0, plural, one {# chart} other {# charts}}"
+
 #. placeholder {0}: report.distinctOwners
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# collector} other {# collectors}}"
@@ -588,6 +593,34 @@ msgstr "{0} of {maxCards} chosen"
 msgid "{0} of {usageSampleSize}"
 msgstr "{0} of {usageSampleSize}"
 
+#. placeholder {0}: onCharts.revisions
+#. placeholder {1}: import { useEffect, useMemo, useRef, useState, type ReactElement } from "react"; import { AnimatePresence, motion } from "framer-motion"; import type { I18n, MessageDescriptor } from "@lingui/core"; import { msg, plural } from "@lingui/core/macro"; import { Trans, useLingui } from "@lingui/react/macro"; import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillQueue } from "../../lib/my-data"; import { danBareLabel } from "../../lib/dan-images"; import { formatAccuracy } from "../../lib/format"; import { useNoDans } from "../../store"; import { DanLevelBadge } from "./DanLevelBadge"; import { SkillHistoryButton } from "./SkillHistoryButton"; import { lnPlayShare, radarAnchor, radarLabelDy, radarPoints, ringPolygon, RADAR_RINGS, skillModeEntries, SKILL_RADAR_PROFILE, topSharePercent, type SkillAxisEntry, } from "../../lib/skill-axes"; // Shared renderer for the Etterna-style skill ratings: the My Data "Skill // rating" card (compact bars) and the public profile Skills tab (radar + // interactive bars) draw from the same breakdown shape. The axis metadata, // entry selection and radar geometry live in lib/skill-axes.ts so the // server-rendered dynamic-render images draw the same chart from the same // numbers; this file is only the React presentation of them. // Stale-snapshot marker: the backend is recomputing and the numbers on // screen may adjust in a moment - showing that beats a silent swap on the // next visit. function RefreshingChip({ skills }: { skills: MyDataSkillBreakdown }) { const { t } = useLingui(); if (!skills.stale) return null; return ( <span className="inline-flex items-center gap-1 rounded-md border border-osu-b3/40 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-osu-l3" title={t`A fresh rating is being computed from the latest plays; these numbers may adjust shortly`} > <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-osu-pink-light" /> <Trans>updating</Trans> </span> ); } // Thin-evidence marker: the backend shrinks these ratings toward the // population median, so the number is an estimate, not a standing. function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) { const { t } = useLingui(); if (!mode.provisional) return null; const plays = mode.analyzedPlays; const keyCount = mode.keyCount; return ( <span className="inline-flex items-center rounded-md border border-osu-b3/40 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-osu-l3" title={t`Rated from only ${plays} plays - treat as a rough estimate until more ${keyCount}K plays are rated`} > <Trans>provisional</Trans> </span> ); } // The independent LN model still needs evidence: retain the cohort size // beside the axis so readers can see how much LN work supports the rating. function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; className?: string }) { const share = lnPlayShare(mode); if (share == null) return null; const percent = Math.round(share * 100); const lnPlays = (mode.patterns ?? []).find((entry) => entry.id === "ln")?.plays ?? 0; const total = mode.analyzedPlays; return ( <div className={`text-[11px] text-osu-l2 ${className}`}> <Trans><span className="font-semibold text-white tabular-nums">{percent}%</span> of the rated plays are LN charts ({lnPlays} of {total})</Trans> </div> ); } function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18n): string | undefined { const model = mode.keyCount === 4 && entry.key === "ln" ? i18n._(msg`Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.`) : undefined; const percentile = mode.percentiles?.[entry.axis]; if (!percentile) return model; const label = i18n._(entry.labelMsg); const share = i18n._(msg`top ${topSharePercent(percentile)}%`); const population = percentile.population.toLocaleString("en-US"); const keyCount = mode.keyCount; const ranking = i18n._(msg`${label}: ${share} of ${population} tracked ${keyCount}K mains`); return model ? `${model}\n${ranking}` : ranking; } function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side: "rc" | "ln") => void }) { const { t, i18n } = useLingui(); const noDans = useNoDans(); const dan = mode.dan; if (noDans || !dan) return null; // A numbered course reads as a level, not a name, so it needs the word; // named ladders (greek letters and the like) already read as one. const formatDanChip = (label: string): string => (/^\d/.test(label) ? t`${label} dan` : label); // Non-4K LN sides label on the numbered/greek ladder backend-side (the 7K // LN dan series is named like the regular one), so every keymode shows its // LN chip. const sides: Array<{ id: "rc" | "ln"; label: MessageDescriptor; side: { skillsetsOnly?: boolean; rawDan: number; label: string; clears: number; beyondTable?: boolean; courseClear?: { courseName: string; accuracy: number }; clearWindow?: { have: number; need: number; skills?: { full: number; total: number } }; } | null; }> = [ { id: "rc", label: msg`Regular`, side: dan.rc }, { id: "ln", label: msg`LN`, side: dan.ln }, ]; const visible = sides.filter((entry) => entry.side != null); if (visible.length === 0) return null; return ( <div className="flex flex-wrap items-center gap-x-4 gap-y-2"> {visible.map((entry) => { // Past the ladder's last level the backend has nothing left to // measure with, so the chip reads "> 9th" instead of dressing the // ceiling up as a tier ("9++") the estimate never actually earned. const beyond = entry.side!.beyondTable === true; const label = beyond ? danBareLabel(entry.side!.label) : entry.side!.label; const sideLabel = i18n._(entry.label); const chip = formatDanChip(label); const clears = entry.side!.clears; // A course clear can floor the estimate above every rated pass the // player has, which leaves `clears` at 0 - true, and unreadable next // to an 8th dan chip. When a course set the level, the tooltip names // the course instead of counting passes that are not what backs it. const courseClear = entry.side!.courseClear ?? null; const courseName = courseClear?.courseName ?? ""; const courseAccuracy = courseClear ? formatAccuracy(courseClear.accuracy) : ""; const body = ( <> <span className="text-[10px] font-semibold uppercase tracking-wide text-osu-f1">{sideLabel}</span> {entry.side!.skillsetsOnly ? ( <span className="text-xs font-semibold text-osu-l2"><Trans>Skillset clears</Trans></span> ) : ( <DanLevelBadge label={entry.side!.label} keyCount={mode.keyCount} side={entry.id} beyondTable={beyond} clearWindow={entry.side!.clearWindow} formatLabel={formatDanChip} /> )} </> ); const keys = mode.keyCount; /* `clears` is NOT the player's qualifying total: it counts the clears that reach the estimate, which is a small number by construction. Phrased as "backed by N qualifying clears" it read as "this player has only 4", when the evidence modal right behind it shows 151. Say what the number actually measures - passes at or above this level - and leave the total to the modal, which re-derives it. */ const title = entry.side!.skillsetsOnly ? t`View verified skillset clears` : courseClear ? onSelect ? t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy} · click for the clears behind it` : t`${sideLabel} dan estimate: ~${chip}, set by their clear of ${courseName} at ${courseAccuracy}` : beyond ? onSelect ? t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} clears credited at or above it · click for the clears behind it` : t`${sideLabel} dan estimate: above ${chip}, where the ${keys}K ${sideLabel} course ladder ends, with ${clears} clears credited at or above it` : onSelect ? t`${sideLabel} dan estimate: ~${chip}, with ${clears} clears credited at or above this level · click for the clears behind it` : t`${sideLabel} dan estimate: ~${chip}, with ${clears} clears credited at or above this level`; return onSelect ? ( <button type="button" key={entry.id} className="inline-flex cursor-pointer items-center gap-1.5 rounded-md transition-opacity hover:opacity-80" title={title} onClick={() => onSelect(entry.id)} > {body} </button> ) : ( <span key={entry.id} className="inline-flex items-center gap-1.5" title={title}> {body} </span> ); })} </div> ); } // The two `own` variants spell the whole sentence out rather than swapping a // "your"/"the" fragment into one: possessives do not slot into other // languages the way they do into English. function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: boolean, i18n: I18n): string { const plays = mode.analyzedPlays; // An untracked player has no tracked history to cite: the rating saw the // osu! top plays and whatever was added by score link, nothing else. const parts = [ skills.tracked === false ? own ? i18n._(msg`rated from ${plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`) : i18n._(msg`rated from ${plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`) : own ? i18n._(msg`rated from ${plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`) : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`), ]; const pending = skills.pendingPlays; if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`)); if (skills.baseline) parts.push(i18n._(msg`percentiles are among tracked players`)); return parts.join(" · "); } const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen"; // --- Compact card body (My Data) --- export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, userId }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void; userId?: number }) { const { i18n } = useLingui(); // Surface the scale warning at the moment it matters: right after the // viewer flips to another keymode tab and is about to compare numbers. // It fades back out, and once someone has seen it we assume the point // landed - a localStorage flag keeps it from nagging on every tab flip. const modeKey = mode?.keyCount ?? null; const prevModeKey = useRef<number | null>(null); const [showScaleHint, setShowScaleHint] = useState(false); useEffect(() => { const prev = prevModeKey.current; prevModeKey.current = modeKey; if (prev == null || modeKey == null || modeKey === prev) return; try { if (localStorage.getItem(SCALE_HINT_SEEN_KEY)) return; localStorage.setItem(SCALE_HINT_SEEN_KEY, "1"); } catch { // Storage unavailable (private mode quirks): fall back to showing it. } setShowScaleHint(true); const timer = setTimeout(() => setShowScaleHint(false), 8000); return () => clearTimeout(timer); }, [modeKey]); const empty = skillEmptyState(skills, mode, own); if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty; const entries = skillModeEntries(mode!); const overall = Number(mode!.ratings.Overall ?? 0); const overallPercentile = mode!.percentiles?.Overall; const max = entries[0]?.value ?? 1; return ( <div> {entries[0] ? ( <div className="mb-2.5 text-[12px] text-osu-l2"> {own ? ( <Trans>You're strongest in <span className="font-semibold text-white">{i18n._(entries[0].labelMsg)}</span></Trans> ) : ( <Trans>Strongest in <span className="font-semibold text-white">{i18n._(entries[0].labelMsg)}</span></Trans> )} </div> ) : null} <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1"> <span className="text-[26px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span> <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>overall</Trans></span> <ProvisionalChip mode={mode!} /> <RefreshingChip skills={skills!} /> {userId ? <span className="ml-auto self-center"><SkillHistoryButton userId={userId} keyCount={mode!.keyCount} /></span> : null} </div> {overallPercentile ? ( <div className="mb-2.5 text-[11px] text-osu-l2"> <Trans> <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile)}%</span> {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode!.keyCount}K mains </Trans> </div> ) : ( <div className="mb-2.5" /> )} <AnimatePresence initial={false}> {showScaleHint ? ( <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden" > <div className="pb-2.5 text-[11px] text-osu-l2"> <Trans> <span className="font-semibold text-white">{mode!.keyCount}K has its own rating scale.</span>{" "} A lower number than another keymode doesn't mean you're worse at it. </Trans> </div> </motion.div> ) : null} </AnimatePresence> <div className="mb-3"> <DanChips mode={mode!} onSelect={onSelectDan} /> </div> <div className="space-y-2"> {entries.map((entry) => ( <div key={entry.key} className="flex items-center gap-2" title={percentileTitle(entry, mode!, i18n)}> <span className="w-[74px] shrink-0 text-[11px] font-semibold text-osu-l2">{i18n._(entry.labelMsg)}</span> <span className="h-1.5 min-w-0 flex-1 rounded-full bg-osu-b3/35"> <span className="block h-full rounded-full" style={{ width: `${Math.max(4, (entry.value / max) * 100)}%`, backgroundColor: entry.color }} /> </span> <span className="w-[42px] shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">{entry.value.toFixed(2)}</span> </div> ))} </div> <LnShareNote mode={mode!} className="mt-2" /> <div className="mt-3 text-[10px] text-osu-f1">{footnote(skills!, mode!, own, i18n)}</div> <SkillQueueNote skills={skills!} className="mt-1" /> </div> ); } // "in 25 min" / "in 3 h" for an appointment the backend named. Read off the // browser clock after mount only: the skills payload arrives client-side, but // the My Data card can be handed a server-rendered one, and a countdown // computed during SSR would not match the one hydration computes. function NextPassTime({ at }: { at: string | null }) { const [nowMs, setNowMs] = useState<number | null>(null); useEffect(() => { setNowMs(Date.now()); const tick = window.setInterval(() => setNowMs(Date.now()), 30_000); return () => window.clearInterval(tick); }, []); const atMs = Date.parse(at ?? ""); if (nowMs == null || !Number.isFinite(atMs)) return <Trans>soon</Trans>; const minutes = Math.ceil((atMs - nowMs) / 60_000); if (minutes <= 1) return <Trans>within a minute</Trans>; if (minutes < 60) return <Trans>in {minutes} min</Trans>; const hours = Math.round(minutes / 60); return <>{plural(hours, { one: "in # hour", other: "in # hours" })}</>; } function NextPass({ queue }: { queue: MyDataSkillQueue }) { if (queue.state === "running") return <Trans>The next rating pass is running now.</Trans>; if (queue.state === "queued" && queue.position != null) { const position = <span className="text-osu-l2 tabular-nums">{queue.position}</span>; const waiting = <span className="tabular-nums">{queue.waiting}</span>; return queue.waiting > 1 ? <Trans>The next rating pass is queued, position {position} of {waiting}.</Trans> : <Trans>The next rating pass is queued, position {position}.</Trans>; } const when = <NextPassTime at={queue.nextRunAt ?? null} />; return <Trans>The next rating pass runs {when}.</Trans>; } // Ready row with plays still analyzing: what they wait on and when the next // pass runs. "20 still analyzing" alone read as a stall when those plays sat // seven hours behind the chart re-check line. function SkillQueueNote({ skills, className = "" }: { skills: MyDataSkillBreakdown; className?: string }) { const queue = skills.queue; if (!queue || skills.status !== "ready" || skills.pendingPlays <= 0) return null; const waits = queue.pending; const onCharts = waits && waits.charts > 0 && waits.revisions > 0 ? waits : null; const forNextPass = onCharts ? Math.max(0, skills.pendingPlays - onCharts.revisions) : skills.pendingPlays; return ( <div className={`text-[10px] text-osu-f1 ${className}`}> {onCharts ? ( <span> <Trans> {onCharts.revisions} of them are on {plural(onCharts.charts, { one: "# chart", other: "# charts" })} that changed on osu! and are waiting for a fresh check, with {onCharts.backlog} charts in that line. </Trans>{" "} </span> ) : null} {forNextPass > 0 && onCharts ? ( <span><Trans>{forNextPass} wait for the next rating pass.</Trans>{" "}</span> ) : null} <NextPass queue={queue} /> </div> ); } function skillEmptyState(skills: MyDataSkillBreakdown | null, mode: MyDataSkillMode | null, own: boolean): ReactElement | null { if (!skills || skills.status === "pending") { const queue = skills?.queue; if (queue?.state === "running") { return ( <div className="text-[12px] text-osu-f1"> {own ? ( <Trans>The chart analyzer is rating your top plays right now.</Trans> ) : ( <Trans>The chart analyzer is rating the top plays right now.</Trans> )} </div> ); } if (queue?.state === "scheduled") { const when = <NextPassTime at={queue.nextRunAt ?? null} />; return ( <div className="text-[12px] text-osu-f1"> {own ? ( <Trans>Your top plays are booked for the chart analyzer. The next pass runs {when}.</Trans> ) : ( <Trans>The top plays are booked for the chart analyzer. The next pass runs {when}.</Trans> )} </div> ); } if (queue?.state === "queued" && queue.position != null) { const position = <span className="text-osu-l2 tabular-nums">{queue.position}</span>; const rest = queue.waiting > 1 ? <span className="text-osu-f1"> <Trans>of {queue.waiting}</Trans></span> : null; return ( <div className="text-[12px] text-osu-f1"> {own ? ( <Trans>Your top plays are waiting for the chart analyzer. Position in queue: {position}</Trans> ) : ( <Trans>The top plays are waiting for the chart analyzer. Position in queue: {position}</Trans> )} {rest}. </div> ); } return ( <div className="text-[12px] text-osu-f1"> {own ? ( <Trans>Your top plays are being rated by the chart analyzer. The first pass takes a minute or two.</Trans> ) : ( <Trans>The top plays are being rated by the chart analyzer. The first pass takes a minute or two.</Trans> )} </div> ); } if (skills.status === "failed") { return ( <div className="text-[12px] text-osu-f1"> {own ? ( <Trans>Rating your plays failed. It retries automatically, check back in a bit.</Trans> ) : ( <Trans>Rating the plays failed. It retries automatically, check back in a bit.</Trans> )} </div> ); } if (!mode || mode.analyzedPlays === 0) { return ( <div className="text-[12px] text-osu-f1"> {own ? ( <Trans>None of your plays could be rated yet. Converts and unusual keymodes are skipped.</Trans> ) : ( <Trans>None of the plays could be rated yet. Converts and unusual keymodes are skipped.</Trans> )} </div> ); } return null; } // --- Full panel (profile Skills tab): radar + interactive bars --- const RADAR = SKILL_RADAR_PROFILE; const RADAR_W = RADAR.width; const RADAR_H = RADAR.height; const RADAR_CX = RADAR.cx; const RADAR_CY = RADAR.cy; const RADAR_MAX_R = RADAR.maxR; function SkillRadar({ entries, accent, hovered, onHover, }: { entries: SkillAxisEntry[]; accent: string; hovered: string | null; onHover: (key: string | null) => void; }) { const { t, i18n } = useLingui(); const max = entries.reduce((best, entry) => Math.max(best, entry.value), 1); const points = useMemo(() => radarPoints(entries, max, RADAR), [entries, max]); const hoveredPoint = points.find((point) => point.entry.key === hovered) ?? null; const shape = entries.map((entry) => `${i18n._(entry.labelMsg)} ${entry.value.toFixed(1)}`).join(", "); return ( <svg viewBox={`0 0 ${RADAR_W} ${RADAR_H}`} className="mx-auto block w-full max-w-[320px]" role="img" aria-label={t`Skill shape: ${shape}`} onMouseLeave={() => onHover(null)} > {RADAR_RINGS.map((fraction) => ( <polygon key={fraction} points={ringPolygon(entries.length, fraction, RADAR)} fill="none" className="stroke-osu-b3/30" strokeWidth={1} /> ))} {points.map((point) => ( <line key={`spoke-${point.entry.key}`} x1={RADAR_CX} y1={RADAR_CY} x2={RADAR_CX + Math.cos(point.angle) * RADAR_MAX_R} y2={RADAR_CY + Math.sin(point.angle) * RADAR_MAX_R} className={point.entry.key === hovered ? "stroke-osu-l3/60" : "stroke-osu-b3/30"} strokeWidth={1} /> ))} <polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill={accent} fillOpacity={0.14} stroke={accent} strokeWidth={2} strokeLinejoin="round" /> {points.map((point) => ( <circle key={`dot-${point.entry.key}`} cx={point.x} cy={point.y} r={point.entry.key === hovered ? 5 : 3} fill={point.entry.color} className="stroke-osu-b4" strokeWidth={2} /> ))} {points.map((point) => ( <text key={`label-${point.entry.key}`} x={point.labelX} y={point.labelY} dy={radarLabelDy(point.angle)} textAnchor={radarAnchor(point.angle)} className={`text-[10px] font-semibold ${point.entry.key === hovered ? "fill-white" : "fill-osu-f1"}`} > {i18n._(point.entry.labelMsg)} </text> ))} {/* Center readout: hovered axis value + population position. */} {hoveredPoint ? ( <g pointerEvents="none"> <text x={RADAR_CX} y={RADAR_CY - 4} textAnchor="middle" className="fill-white text-[15px] font-bold tabular-nums"> {hoveredPoint.entry.value.toFixed(2)} </text> <text x={RADAR_CX} y={RADAR_CY + 12} textAnchor="middle" className="fill-osu-f1 text-[9px] font-semibold uppercase tracking-wide"> {i18n._(hoveredPoint.entry.labelMsg)} </text> </g> ) : null} {/* Oversized invisible hit targets, last so they sit on top. */} {points.map((point) => ( <circle key={`hit-${point.entry.key}`} cx={point.x} cy={point.y} r={14} fill="transparent" onMouseEnter={() => onHover(point.entry.key)} /> ))} </svg> ); } export function SkillModePanel({ skills, mode, onSelectEntry, onSelectDan, userId, }: { skills: MyDataSkillBreakdown; mode: MyDataSkillMode; onSelectEntry?: (entry: SkillAxisEntry, mode: MyDataSkillMode) => void; onSelectDan?: (side: "rc" | "ln", mode: MyDataSkillMode) => void; userId?: number; }) { const { t, i18n } = useLingui(); const [hovered, setHovered] = useState<string | null>(null); const entries = skillModeEntries(mode); const accent = entries[0]?.color ?? "#8f6bd8"; const overall = Number(mode.ratings.Overall ?? 0); const overallPercentile = mode.percentiles?.Overall; const max = entries[0]?.value ?? 1; return ( <div className="flex h-full flex-col rounded-xl border border-osu-b3/20 bg-osu-b4 p-4"> <div className="relative flex flex-wrap items-start justify-between gap-3"> <div className="pr-10 sm:pr-0"> <div className="mb-1 flex items-center gap-2"> <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} /> <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span> </div> <div className="flex items-baseline gap-2"> <span className="text-[30px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span> <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>overall</Trans></span> <ProvisionalChip mode={mode} /> <RefreshingChip skills={skills} /> </div> {overallPercentile ? ( <div className="mt-1 text-[11px] text-osu-l2"> <Trans> <span className="font-semibold text-osu-pink-light">top {topSharePercent(overallPercentile)}%</span> {" "}of {overallPercentile.population.toLocaleString("en-US")} tracked {mode.keyCount}K mains </Trans> </div> ) : null} </div> <div className="ml-auto flex items-center gap-3"> <DanChips mode={mode} onSelect={onSelectDan ? (side) => onSelectDan(side, mode) : undefined} /> {userId ? ( <span className="absolute right-0 top-2 sm:static"> <SkillHistoryButton userId={userId} keyCount={mode.keyCount} /> </span> ) : null} </div> </div> <div className={`mt-3 grid flex-1 content-center grid-cols-1 items-center gap-4 ${ entries.length >= 3 ? "sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "" }`} > {entries.length >= 3 ? ( <SkillRadar entries={entries} accent={accent} hovered={hovered} onHover={setHovered} /> ) : null} <div className="space-y-0.5" onMouseLeave={() => setHovered(null)}> {entries.map((entry) => { const percentile = mode.percentiles?.[entry.axis]; const entryLabel = i18n._(entry.labelMsg); const row = ( <> <span className={`w-[84px] shrink-0 text-[11px] font-semibold ${hovered === entry.key ? "text-white" : "text-osu-l2"}`}>{entryLabel}</span> <span className="h-1.5 min-w-0 flex-1 rounded-full bg-osu-b3/35"> <span className="block h-full rounded-full" style={{ width: `${Math.max(4, (entry.value / max) * 100)}%`, backgroundColor: entry.color }} /> </span> <span className="w-[44px] shrink-0 text-right text-[11px] text-osu-l2 tabular-nums">{entry.value.toFixed(2)}</span> <span className="w-[52px] shrink-0 text-right text-[10px] text-osu-f1 tabular-nums"> {percentile ? t`top ${topSharePercent(percentile)}%` : ""} </span> </> ); const rowClass = `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-[80ms] ${ hovered === entry.key ? "bg-osu-b3/30" : "" }`; // The public profile turns every axis into an explanation of the // rating: the strongest plays behind it open in place. const share = percentileTitle(entry, mode, i18n); return onSelectEntry ? ( <button type="button" key={entry.key} className={rowClass} title={`${share ? `${share} · ` : ""}${t`View top ${entryLabel} plays`}`} onMouseEnter={() => setHovered(entry.key)} onClick={() => onSelectEntry(entry, mode)} > {row} </button> ) : ( <div key={entry.key} className={rowClass} title={share} onMouseEnter={() => setHovered(entry.key)}> {row} </div> ); })} <LnShareNote mode={mode} className="px-2 pt-1.5" /> </div> </div> <div className="mt-auto pt-3 text-[10px] text-osu-f1"> {footnote(skills, mode, false, i18n)} <SkillQueueNote skills={skills} className="mt-1" /> </div> </div> ); } /** * One keymode in the row that picks which panel is open. * * Drawn as the rating itself, not as a button: nine bordered cards above a * bordered panel read as a control panel rather than a page of numbers, and * the row is the profile's ratings at a glance before it is anything to click. * Selection is the accent rule under the one that is open. */ export function SkillModeOption({ mode, selected, onSelect }: { mode: MyDataSkillMode; selected: boolean; onSelect: () => void; }) { return ( <button type="button" onClick={onSelect} aria-pressed={selected} className="group flex flex-col gap-1 text-left transition-colors cursor-pointer" > <span className={`text-[10px] font-semibold uppercase tracking-wide transition-colors ${ selected ? "text-osu-pink-light" : "text-osu-f1 group-hover:text-osu-l2" }`}> {mode.keyCount}K </span> <span className={`text-[22px] font-bold leading-none tabular-nums transition-colors ${ selected ? "text-white" : "text-osu-l3 group-hover:text-osu-l1" }`}> {Number(mode.ratings.Overall ?? 0).toFixed(2)} </span> <span className={`h-[2px] w-full rounded-full transition-colors ${selected ? "bg-osu-pink" : "bg-transparent"}`} /> </button> ); }
+#. placeholder {2}: onCharts.backlog
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{0} of them are on {1} that changed on osu! and are waiting for a fresh check, with {2} charts in that line."
+#~ msgstr "{0} of them are on {1} that changed on osu! and are waiting for a fresh check, with {2} charts in that line."
+
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts."
+msgstr "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts."
+
+#. placeholder {0}: onCharts.revisions
+#. placeholder {1}: onCharts.backlog
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, with {1} charts in that line."
+#~ msgstr "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, with {1} charts in that line."
+
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, with {backlog} charts in that line."
+#~ msgstr "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, with {backlog} charts in that line."
+
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
+msgstr "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
+
 #. placeholder {0}: [...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} on their own"
@@ -666,8 +699,8 @@ msgstr "{0} plays since {1}"
 
 #. placeholder {0}: evidence.pendingPlays
 #: src/components/player/DanEvidenceModal.tsx
-msgid "{0} plays still analyzing, so this estimate can still move."
-msgstr "{0} plays still analyzing, so this estimate can still move."
+#~ msgid "{0} plays still analyzing, so this estimate can still move."
+#~ msgstr "{0} plays still analyzing, so this estimate can still move."
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
@@ -1002,6 +1035,10 @@ msgstr "{count} replay views"
 msgid "{count} screenshots"
 msgstr "{count} screenshots"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{count} still analyzing, so this estimate can still move."
+msgstr "{count} still analyzing, so this estimate can still move."
+
 #: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
 msgstr "{countryName} mania dan leaderboards"
@@ -1095,6 +1132,10 @@ msgstr "{firstName} and {secondName}"
 msgid "{firstName} only"
 msgstr "{firstName} only"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "{forNextPass} wait for the next rating pass."
+msgstr "{forNextPass} wait for the next rating pass."
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "{from} to {to}"
 msgstr "{from} to {to}"
@@ -1122,6 +1163,10 @@ msgstr "{hiddenCount, plural, one {Show # more map} other {Show # more maps}}"
 #: src/routes/snipes.tsx
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, one {# hour} other {# hours}}"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{hours, plural, one {in # hour} other {in # hours}}"
+msgstr "{hours, plural, one {in # hour} other {in # hours}}"
 
 #: src/lib/streak-game.ts
 msgid "{hours} hours"
@@ -1370,6 +1415,14 @@ msgstr "{pending} still analyzing"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 msgstr "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{pendingPlays} plays"
+msgstr "{pendingPlays} plays"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{pendingPlays} plays still analyzing, so this estimate can still move."
+msgstr "{pendingPlays} plays still analyzing, so this estimate can still move."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -2750,6 +2803,10 @@ msgstr "Analytics And Logs"
 msgid "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
 msgstr "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "analyzing"
+#~ msgstr "analyzing"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "analyzing…"
 msgstr "analyzing…"
@@ -3009,6 +3066,7 @@ msgid "Avoid repeats"
 msgstr "Avoid repeats"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back"
@@ -3618,6 +3676,10 @@ msgstr "Changing who can see this skin failed. Try again."
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "Chart"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "chart changed on osu!, waiting for a fresh check"
+msgstr "chart changed on osu!, waiting for a fresh check"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -6972,6 +7034,10 @@ msgstr "in {days}d {restHours}h"
 msgid "in {hours}h"
 msgstr "in {hours}h"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "in {minutes} min"
+msgstr "in {minutes} min"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {minutes}m"
 msgstr "in {minutes}m"
@@ -6987,6 +7053,10 @@ msgstr "in 90d"
 #: src/components/me/GoalsPanel.tsx
 msgid "in flight"
 msgstr "in flight"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "in queue"
+msgstr "in queue"
 
 #: src/components/communities/field-options.tsx
 msgid "In server discovery"
@@ -8901,6 +8971,10 @@ msgstr "New scores stream in live over this connection."
 #: src/components/packs/SetsView.tsx
 msgid "New set"
 msgstr "New set"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "New top plays will show up here as players set them."
+msgstr "New top plays will show up here as players set them."
 
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -12490,6 +12564,10 @@ msgstr "See the score"
 msgid "See this play judged with {otherLabel} windows and LN rules"
 msgstr "See this play judged with {otherLabel} windows and LN rules"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "See which plays are waiting"
+msgstr "See which plays are waiting"
+
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
 msgid "See who voted on {0}"
@@ -13008,6 +13086,11 @@ msgstr "Showing full combos (0 misses) - left click for FC chokes, right click t
 msgid "Showing only {label}"
 msgstr "Showing only {label}"
 
+#. placeholder {0}: pending.length
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Showing the newest {0}."
+msgstr "Showing the newest {0}."
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "shuffle"
@@ -13380,6 +13463,10 @@ msgstr "Something went wrong. Try again."
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
 msgstr "Song, artist or mapper"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "soon"
+msgstr "soon"
 
 #: src/routes/farm-helper.tsx
 msgid "sort"
@@ -14239,6 +14326,10 @@ msgstr "The chart analyzer is rating the top plays right now."
 msgid "The chart analyzer is rating your top plays right now."
 msgstr "The chart analyzer is rating your top plays right now."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
+msgstr "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
+
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "The chart file isn't available, so only the replay will load."
@@ -14634,6 +14725,34 @@ msgstr "The new file has no {0} block, so those previews are dropped from the sk
 msgid "The new GOAT"
 msgstr "The new GOAT"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is next up in the analyzer queue."
+msgstr "The next rating pass is next up in the analyzer queue."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued behind {others} other analyzer job."
+msgstr "The next rating pass is queued behind {others} other analyzer job."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued behind {others} other analyzer jobs."
+msgstr "The next rating pass is queued behind {others} other analyzer jobs."
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "The next rating pass is queued, position {position} of {waiting}."
+#~ msgstr "The next rating pass is queued, position {position} of {waiting}."
+
+#: src/components/player/SkillBreakdown.tsx
+#~ msgid "The next rating pass is queued, position {position}."
+#~ msgstr "The next rating pass is queued, position {position}."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is running now."
+msgstr "The next rating pass is running now."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass runs {when}."
+msgstr "The next rating pass runs {when}."
+
 #: src/routes/dan-estimates.tsx
 msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
 msgstr "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
@@ -14871,6 +14990,10 @@ msgid "The top plays are being rated by the chart analyzer. The first pass takes
 msgstr "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "The top plays are booked for the chart analyzer. The next pass runs {when}."
+msgstr "The top plays are booked for the chart analyzer. The next pass runs {when}."
+
+#: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are waiting for the chart analyzer. Position in queue: {position}"
 msgstr "The top plays are waiting for the chart analyzer. Position in queue: {position}"
 
@@ -15019,6 +15142,10 @@ msgstr "This chart is not in the map catalog, so there is nothing to show beyond
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "This chart isn't analyzed yet."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
+msgstr "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
@@ -16172,6 +16299,14 @@ msgstr "vs"
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "Wait for the image resize to finish, then copy again."
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "waiting for a vibro check"
+msgstr "waiting for a vibro check"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Waiting for a vibro check pass. The play is rated right after."
+msgstr "Waiting for a vibro check pass. The play is rated right after."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "waiting for another {want}pp+ play"
@@ -16187,6 +16322,14 @@ msgstr "Waiting for audio to load..."
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "Waiting for new scores"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "waiting for the next rating pass"
+msgstr "waiting for the next rating pass"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
+msgstr "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Warm copper foil and drifting sparks."
@@ -16433,6 +16576,10 @@ msgstr "With fewer than 20 eligible clears the average is over the evidence you 
 #: src/routes/farm-helper.tsx
 msgid "with no mods"
 msgstr "with no mods"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "within a minute"
+msgstr "within a minute"
 
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
@@ -16892,6 +17039,10 @@ msgstr "Your skin"
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
 msgstr "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Your top plays are booked for the chart analyzer. The next pass runs {when}."
+msgstr "Your top plays are booked for the chart analyzer. The next pass runs {when}."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are waiting for the chart analyzer. Position in queue: {position}"

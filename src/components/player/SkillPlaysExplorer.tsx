@@ -22,7 +22,7 @@ import { skillPlaySharePath } from "../../lib/skill-play-share";
 // 50 rows at a time. Controls that only rearrange or narrow it never wait on a
 // round trip; changing the actual subject (keymode/skill/side) loads a new one.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Ban, ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Ban, ChevronDown, Clock, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -33,6 +33,7 @@ import {
   type LiveMapSearchEntry,
   type LivePlayerDanEvidencePlay,
   fetchLivePlayerUnratedPlaysDirect,
+  type LivePlayerDanPendingPlay,
   type LivePlayerDanRejectedPlay,
   type LivePlayerSkillPlay,
   type LivePlayerUnratedPlay,
@@ -73,10 +74,12 @@ export type SkillPlaysExplorerView = "msd" | "dan" | "unrated";
 /** Which of the unrated list's three numbers "Best" ranks by. */
 export type UnratedSortKey = "pp" | "msd" | "dan";
 
-/** A clear and a turned-away play share a row shape; only the tail differs. */
+/** A clear, a turned-away play and a play still in line share a row shape;
+ *  only the tail differs. */
 type DanRow =
   | { kind: "clear"; play: LivePlayerSkillPlay; dan: number | null; clear: LivePlayerDanEvidencePlay }
-  | { kind: "rejected"; play: LivePlayerSkillPlay; dan: number | null; rejected: LivePlayerDanRejectedPlay };
+  | { kind: "rejected"; play: LivePlayerSkillPlay; dan: number | null; rejected: LivePlayerDanRejectedPlay }
+  | { kind: "pending"; play: LivePlayerSkillPlay; dan: null; pending: LivePlayerDanPendingPlay };
 
 interface CohortCacheEntry<T> {
   expiresAt: number;
@@ -210,6 +213,14 @@ function loadDanCohort(
         play: rejected.play,
         dan: rejected.chartDan,
         rejected,
+      })),
+      // Recent is where a player looks for the play they just set. A play the
+      // rating has not reached yet shows there as waiting, not as missing.
+      ...(sort === "recent" ? payload.pending ?? [] : []).map((pending): DanRow => ({
+        kind: "pending",
+        play: pending.play,
+        dan: null,
+        pending,
       })),
     ];
     return rows.sort((left, right) => compareDanRows(sort, left, right)).slice(0, PLAYS_COHORT_SIZE);
@@ -808,7 +819,9 @@ function MsdPlaysList({
   const filtered = useMemo(() => {
     const seenPerChart = new Map<number, number>();
     return cohort.filter((play) => {
-      if (!showRejected && play.ratingExcluded) return false;
+      // A play still analyzing is waiting, not turned away: the toggle that
+      // hides refusals leaves it in place.
+      if (!showRejected && play.ratingExcluded && play.ratingExclusionReason !== "pending_calibration") return false;
       if (hideRanked && isRankedStatus(play.beatmapStatus ?? null)) return false;
       if (!matchesPlayModFilter(play, modFilter)) return false;
       if (maxPerChart > 0) {
@@ -839,7 +852,18 @@ function MsdPlaysList({
           : null}
         loadingMore={false}
       >
-        {items.map((play, index) => play.ratingExcluded ? (
+        {items.map((play, index) => play.ratingExcluded && play.ratingExclusionReason === "pending_calibration" ? (
+          <PendingPlayRow
+            key={rowKey(play, index)}
+            play={play}
+            reason={play.pendingReason ?? "next_pass"}
+            position={index + 1}
+            expanded={openReason === rowKey(play, index)}
+            onToggle={() => setOpenReason((current) => (current === rowKey(play, index) ? null : rowKey(play, index)))}
+            onOpen={() => onOpen(play, { label: axisLabel, color: axisMeta.color })}
+            onPrefetch={() => prefetchLiveMapSearchEntry(play.beatmapId)}
+          />
+        ) : play.ratingExcluded ? (
           <UnratedPlayRow
             key={rowKey(play, index)}
             play={play}
@@ -1057,7 +1081,9 @@ function DanPlaysList({
           const open = () => onOpen(row.play, {
             label: overallLabel,
             color: OVERALL_AXIS_META.color,
-            dan: row.kind === "clear" ? {
+            // A play still analyzing has no dan marks: the card says so where
+            // the rating would print, off the play's own exclusion reason.
+            dan: row.kind === "pending" ? undefined : row.kind === "clear" ? {
               chartRating: row.clear.chartDan,
               chartLabel: row.clear.chartDanLabel,
               creditedRating: row.clear.creditedDan,
@@ -1080,6 +1106,17 @@ function DanPlaysList({
               key={key}
               rejected={row.rejected}
               keyCount={keyCount}
+              position={index + 1}
+              expanded={openReason === key}
+              onToggle={() => setOpenReason((current) => (current === key ? null : key))}
+              onOpen={open}
+              onPrefetch={prefetch}
+            />
+          ) : row.kind === "pending" ? (
+            <PendingPlayRow
+              key={key}
+              play={row.play}
+              reason={row.pending.reason}
               position={index + 1}
               expanded={openReason === key}
               onToggle={() => setOpenReason((current) => (current === key ? null : key))}
@@ -1301,6 +1338,66 @@ function DanRejectedRow({
           </span>
           <span className={`text-[8px] font-semibold uppercase tracking-wide ${expanded ? "text-osu-l2" : "text-osu-f1"}`}>
             <Trans>does not count</Trans>
+          </span>
+        </button>
+      )}
+      footer={expanded ? (
+        <p className="border-t border-osu-b3/20 px-3 py-2 text-[11px] leading-relaxed text-osu-f1">{reason}</p>
+      ) : null}
+    />
+  );
+}
+
+/**
+ * A play the rating has not reached yet, in either list's Recent order: the
+ * row is there, undimmed, with "in queue" where the number will go. The tail
+ * opens the reason the same way a turned-away row does, so a phone can read it.
+ */
+function PendingPlayRow({
+  play,
+  reason: reasonKey,
+  position,
+  expanded,
+  onToggle,
+  onOpen,
+  onPrefetch,
+}: {
+  play: LivePlayerSkillPlay;
+  reason: LivePlayerDanPendingPlay["reason"];
+  position: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+  onPrefetch: () => void;
+}) {
+  const { t } = useLingui();
+  const reason = reasonKey === "revision"
+    ? t`The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands.`
+    : reasonKey === "rate_vibro"
+      ? t`Waiting for a vibro check pass. The play is rated right after.`
+      : t`Waiting for the next rating pass. The play is rated then, and this list updates on its own.`;
+  return (
+    <PlayRow
+      play={play}
+      position={position}
+      onOpen={onOpen}
+      onPrefetch={onPrefetch}
+      trailing={(
+        <button
+          type="button"
+          onClick={(event) => { event.stopPropagation(); onToggle(); }}
+          aria-expanded={expanded}
+          title={reason}
+          className="flex w-20 shrink-0 cursor-pointer flex-col items-end gap-1 rounded-md py-0.5 text-right sm:w-24"
+        >
+          {/* A still icon on purpose: a spinner promises a result in seconds,
+              and this line can sit for hours behind the chart re-check queue. */}
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-osu-l2">
+            <Clock className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />
+            <Trans>in queue</Trans>
+          </span>
+          <span className="text-[8px] font-semibold uppercase tracking-wide tabular-nums text-osu-f1">
+            {play.accuracy != null ? formatAccuracy(play.accuracy) : ""}
           </span>
         </button>
       )}

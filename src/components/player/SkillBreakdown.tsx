@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { I18n, MessageDescriptor } from "@lingui/core";
-import { msg } from "@lingui/core/macro";
+import { msg, plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../lib/my-data";
+import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillQueue } from "../../lib/my-data";
 import { danBareLabel } from "../../lib/dan-images";
-import { formatAccuracy } from "../../lib/format";
+import { formatAccuracy, formatNumber } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
 import { useNoDans } from "../../store";
 import { DanLevelBadge } from "./DanLevelBadge";
 import { SkillHistoryButton } from "./SkillHistoryButton";
@@ -313,6 +314,82 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, use
       </div>
       <LnShareNote mode={mode!} className="mt-2" />
       <div className="mt-3 text-[10px] text-osu-f1">{footnote(skills!, mode!, own, i18n)}</div>
+      <SkillQueueNote skills={skills!} className="mt-1" />
+    </div>
+  );
+}
+
+// "in 25 min" / "in 3 h" for an appointment the backend named. Read off the
+// browser clock after mount only: the skills payload arrives client-side, but
+// the My Data card can be handed a server-rendered one, and a countdown
+// computed during SSR would not match the one hydration computes.
+function NextPassTime({ at }: { at: string | null }) {
+  const { t } = useLingui();
+  const [nowMs, setNowMs] = useState<number | null>(null);
+  useEffect(() => {
+    setNowMs(Date.now());
+    const tick = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(tick);
+  }, []);
+  const atMs = Date.parse(at ?? "");
+  if (nowMs == null || !Number.isFinite(atMs)) return <Trans>soon</Trans>;
+  const minutes = Math.ceil((atMs - nowMs) / 60_000);
+  if (minutes <= 1) return <Trans>within a minute</Trans>;
+  if (minutes < 60) return <Trans>in {minutes} min</Trans>;
+  const hours = Math.round(minutes / 60);
+  return <>{t`${plural(hours, { one: "in # hour", other: "in # hours" })}`}</>;
+}
+
+function NextPass({ queue }: { queue: MyDataSkillQueue }) {
+  const locale = useLocale();
+  if (queue.state === "running") return <Trans>The next rating pass is running now.</Trans>;
+  if (queue.state === "queued" && queue.position != null) {
+    // "position 1 of 17" read as either 17 plays or 17 players. The lane is
+    // shared with other players' passes and dan estimates, so say what is
+    // ahead in it and nothing else.
+    const ahead = queue.position - 1;
+    if (ahead <= 0) return <Trans>The next rating pass is next up in the analyzer queue.</Trans>;
+    const others = <span className="text-osu-l2 tabular-nums">{formatNumber(ahead, locale)}</span>;
+    return ahead === 1
+      ? <Trans>The next rating pass is queued behind {others} other analyzer job.</Trans>
+      : <Trans>The next rating pass is queued behind {others} other analyzer jobs.</Trans>;
+  }
+  const when = <NextPassTime at={queue.nextRunAt ?? null} />;
+  return <Trans>The next rating pass runs {when}.</Trans>;
+}
+
+// Ready row with plays still analyzing: what they wait on and when the next
+// pass runs. "20 still analyzing" alone read as a stall when those plays sat
+// seven hours behind the chart re-check line.
+function SkillQueueNote({ skills, className = "" }: { skills: MyDataSkillBreakdown; className?: string }) {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const queue = skills.queue;
+  if (!queue || skills.status !== "ready" || skills.pendingPlays <= 0) return null;
+  const waits = queue.pending;
+  const onCharts = waits && waits.charts > 0 && waits.revisions > 0 ? waits : null;
+  const forNextPass = onCharts ? Math.max(0, skills.pendingPlays - onCharts.revisions) : skills.pendingPlays;
+  const charts = onCharts ? t`${plural(onCharts.charts, { one: "# chart", other: "# charts" })}` : "";
+  const backlog = onCharts ? formatNumber(onCharts.backlog, locale) : "";
+  return (
+    <div className={`text-[10px] text-osu-f1 ${className}`}>
+      {onCharts ? (
+        <span>
+          {onCharts.backlog > 0 ? (
+            <Trans>
+              {onCharts.revisions} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts.
+            </Trans>
+          ) : (
+            <Trans>
+              {onCharts.revisions} of them are on {charts} that changed on osu! and are waiting for a fresh check.
+            </Trans>
+          )}{" "}
+        </span>
+      ) : null}
+      {forNextPass > 0 && onCharts ? (
+        <span><Trans>{forNextPass} wait for the next rating pass.</Trans>{" "}</span>
+      ) : null}
+      <NextPass queue={queue} />
     </div>
   );
 }
@@ -327,6 +404,18 @@ function skillEmptyState(skills: MyDataSkillBreakdown | null, mode: MyDataSkillM
             <Trans>The chart analyzer is rating your top plays right now.</Trans>
           ) : (
             <Trans>The chart analyzer is rating the top plays right now.</Trans>
+          )}
+        </div>
+      );
+    }
+    if (queue?.state === "scheduled") {
+      const when = <NextPassTime at={queue.nextRunAt ?? null} />;
+      return (
+        <div className="text-[12px] text-osu-f1">
+          {own ? (
+            <Trans>Your top plays are booked for the chart analyzer. The next pass runs {when}.</Trans>
+          ) : (
+            <Trans>The top plays are booked for the chart analyzer. The next pass runs {when}.</Trans>
           )}
         </div>
       );
@@ -591,7 +680,10 @@ export function SkillModePanel({
         </div>
       </div>
 
-      <div className="mt-auto pt-3 text-[10px] text-osu-f1">{footnote(skills, mode, false, i18n)}</div>
+      <div className="mt-auto pt-3 text-[10px] text-osu-f1">
+        {footnote(skills, mode, false, i18n)}
+        <SkillQueueNote skills={skills} className="mt-1" />
+      </div>
     </div>
   );
 }

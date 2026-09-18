@@ -6346,7 +6346,12 @@ function ScoreRow({
 function ScoreDetailStat({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
   return (
     <div>
-      <div className={`text-base font-bold leading-none tabular-nums ${color ?? "text-white"}`}>{value}</div>
+      {/* The MAX gradient draws as an inline-block, which would otherwise sit
+          on this line's default strut baseline and hang a few pixels below the
+          plain judgement numbers. Matching leading here keeps the row level. */}
+      <div className="leading-none">
+        <div className={`text-base font-bold leading-none tabular-nums ${color ?? "text-white"}`}>{value}</div>
+      </div>
       <div className="mt-1 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
     </div>
   );

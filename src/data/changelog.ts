@@ -33,6 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-17", text: "Plays still analyzing are now listed: click the count in the dan window to see them, and they show as in queue in MSD plays and Dan plays under Recent" },
   { date: "2026-09-16", text: "Clearing a dan's skillset map sets that skillset to its level, even with no overall dan yet. For example clearing Volcanic immediately sets your speed to delta, even if your other clears average lower. Supported skillsets: 4K Reform, 7K regular, 7K LN. 4K LN skillset support is planned", to: "/dan-estimates" },
   { date: "2026-09-16", text: "Only your two best rate plays on the same chart count toward dan now, both fully, instead of every rate adding a shrinking share. Verified rate reuploads share the limit", to: "/dan-estimates" },
   { date: "2026-09-16", text: "Dan estimates now use the OD you actually played. HR, EZ and Difficulty Adjust plays get their own rating for the chart instead of being rated at the file's OD", to: "/dan-estimates" },

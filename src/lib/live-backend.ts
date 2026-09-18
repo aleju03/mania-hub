@@ -47,6 +47,8 @@ export interface LivePlayerSkillPlay {
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
   ratingExclusionReason?: "msd_floor" | "pending_calibration";
+  /** Why a pending_calibration play waits; absent on older payloads. */
+  pendingReason?: LivePlayerDanPendingPlay["reason"];
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -197,6 +199,14 @@ export interface LivePlayerDanCourseEvidence extends LivePlayerDanCourseClear {
   isLazer: boolean | null;
 }
 
+/** A play on this keymode the rating has not reached yet, with why it waits:
+ *  "revision" is a chart that changed on osu! awaiting a fresh check,
+ *  "rate_vibro" a vibro check pass, everything else the next rating pass. */
+export interface LivePlayerDanPendingPlay {
+  play: LivePlayerSkillPlay;
+  reason: "revision" | "calc_budget" | "file" | "facts" | "rate_vibro" | "calc" | "next_pass";
+}
+
 export interface LivePlayerDanEvidence {
   weightedClears?: number;
   side: "rc" | "ln";
@@ -214,6 +224,9 @@ export interface LivePlayerDanEvidence {
   /** Plays on this keymode the compute has not reached yet; optional until
    *  the backend that ships it is deployed. */
   pendingPlays?: number;
+  /** The plays behind pendingPlays, newest first, capped server-side. Absent
+   *  until the backend that ships it is deployed. */
+  pending?: LivePlayerDanPendingPlay[];
   clears: LivePlayerDanEvidencePlay[];
   skillsets: LivePlayerDanSkillsetEvidence[];
   /** The skillset the headline follows (7K LN: General); null or absent on

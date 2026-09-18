@@ -41,7 +41,9 @@ export function LiveDataEmptyState({
     ? t`The live feed is connected. New plays will start showing up as players submit them.`
     : kind === "scores"
       ? t`The rankings are here, but this country was added recently. New plays will start showing up once players submit them.`
-      : t`Try a wider range or check back later.`;
+      : compact
+        ? t`New top plays will show up here as players set them.`
+        : t`Try a wider range or check back later.`;
 
   return (
     <div className={`mx-auto max-w-md text-center ${compact ? "px-4 py-6" : "px-4 py-16"}`}>

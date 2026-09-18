@@ -170,8 +170,13 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     await screen.findByText("Best 101");
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     await screen.findByText("Recent 103");
-    fireEvent.click(screen.getByText("not rated"));
-    expect(screen.getByText("Skill rating recalculation pending")).toBeTruthy();
+    // Waiting, not turned away: the analyzing tail, and the toggle that hides
+    // refusals leaves the row alone.
+    expect(screen.queryByText("not rated")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "not counted" }));
+    expect(screen.getByText("Recent 103")).toBeTruthy();
+    fireEvent.click(screen.getByText("in queue"));
+    expect(screen.getByText("Waiting for the next rating pass. The play is rated then, and this list updates on its own.")).toBeTruthy();
     expect(screen.queryByText(/Vibro detected/)).toBeNull();
     fireEvent.click(screen.getByText("Recent 103"));
     expect(within(screen.getByTestId("map-rating-state")).getByText("Skill rating recalculation pending")).toBeTruthy();
@@ -199,6 +204,39 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(popup.getByText("Chart estimate")).toBeTruthy();
     expect(screen.queryByText("No MSD rating")).toBeNull();
     expect(screen.queryByText("Accuracy below skill rating range")).toBeNull();
+  });
+
+  it("lists a play still analyzing in the Dan Recent order as waiting, with its reason on tap", async () => {
+    fetchDanEvidence.mockResolvedValue({
+      clears: [{
+        play: play(102, "Recent"), chartDan: 5, chartDanLabel: "5", creditedDan: 5, creditedDanLabel: "5",
+        clearAccuracy: 0.97, skillsets: ["jack"], countsTowardDan: true,
+      }],
+      rejected: [],
+      pendingPlays: 1,
+      pending: [{
+        play: { ...play(104, "Recent"), rating: 0, overallRating: 0, ratingExcluded: true, ratingExclusionReason: "pending_calibration",
+          playedAt: new Date(Date.UTC(2026, 0, 3)).toISOString() },
+        reason: "revision",
+      }],
+    });
+    render(<I18nProvider i18n={getI18n("en")}>
+      <SkillPlaysExplorer userId={41012} username="player" modes={[mode]} view="dan" />
+    </I18nProvider>);
+    await screen.findByText("Recent 102");
+    // Best is the credited list only; the waiting play belongs to Recent.
+    expect(screen.queryByText("Recent 104")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    await screen.findByText("Recent 104");
+    // Newest first, and the row is not hidden by the "not counted" toggle.
+    const titles = screen.getAllByText(/^Recent 10[24]$/).map((node) => node.textContent);
+    expect(titles).toEqual(["Recent 104", "Recent 102"]);
+    fireEvent.click(screen.getByRole("button", { name: "not counted" }));
+    expect(screen.getByText("Recent 104")).toBeTruthy();
+    fireEvent.click(screen.getByText("in queue"));
+    expect(screen.getByText("The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands.")).toBeTruthy();
+    fireEvent.click(screen.getByText("Recent 104"));
+    expect(within(screen.getByTestId("map-rating-state")).getByText("Skill rating recalculation pending")).toBeTruthy();
   });
 
   it("keeps eligible Dan-only clears in Best and shows their Dan credit", async () => {

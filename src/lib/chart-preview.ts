@@ -120,15 +120,30 @@ export function isLikelyTimedRateVariantSet(beatmaps: ChartPreviewDifficulty[]):
   return isLikelyRateVariantSet(meaningfulBeatmaps) || isLikelyBracketBpmVariantSet(meaningfulBeatmaps);
 }
 
+// The rate a difficulty's name claims against the song at 1.0x.
+function parseAbsoluteDifficultyRate(
+  beatmap: ChartPreviewDifficulty,
+  beatmaps: ChartPreviewDifficulty[],
+): number {
+  const bracketBpm = parseBracketBpm(beatmap.version);
+  const baseBpm = isLikelyBracketBpmVariantSet(beatmaps) ? getBracketBpmBase(beatmaps) : null;
+  if (bracketBpm && baseBpm) return bracketBpm / baseBpm;
+  return parseDifficultyRate(beatmap.version);
+}
+
+// The rate to play the set's reference difficulty (and its audio) at so it
+// sounds and scrolls like the selected one. That is the selected rate itself
+// when the set ships a 1.0x member; a set of only rate edits (x0.85 and x0.9,
+// or [1.4] and [1.45]) has no such member, and its reference is already rated,
+// so re-timing it by the selected rate outright would rate it twice.
 export function parseSelectedDifficultyRate(
   selected: ChartPreviewDifficulty | null,
   beatmaps: ChartPreviewDifficulty[],
 ): number {
   if (!selected) return 1;
-  const bracketBpm = parseBracketBpm(selected.version);
-  const baseBpm = isLikelyBracketBpmVariantSet(beatmaps) ? getBracketBpmBase(beatmaps) : null;
-  if (bracketBpm && baseBpm) return bracketBpm / baseBpm;
-  return parseDifficultyRate(selected.version);
+  const reference = getSetPreviewReferenceBeatmap(beatmaps);
+  const referenceRate = reference ? parseAbsoluteDifficultyRate(reference, beatmaps) : 1;
+  return parseAbsoluteDifficultyRate(selected, beatmaps) / referenceRate;
 }
 
 // The diff whose audio the set preview clip actually corresponds to: the 1.0x
@@ -143,7 +158,18 @@ export function getSetPreviewReferenceBeatmap<T extends ChartPreviewDifficulty>(
   }
 
   if (isLikelyRateVariantSet(meaningfulBeatmaps)) {
-    return meaningfulBeatmaps.find((beatmap) => parseDifficultyRate(beatmap.version) === 1) ?? meaningfulBeatmaps.at(-1) ?? null;
+    // With no 1.0x member, the member nearest 1.0x is the least re-timed
+    // stand-in for the others.
+    let reference: T | null = null;
+    let referenceDistance = Number.POSITIVE_INFINITY;
+    for (const beatmap of meaningfulBeatmaps) {
+      const distance = Math.abs(parseDifficultyRate(beatmap.version) - 1);
+      if (distance < referenceDistance) {
+        reference = beatmap;
+        referenceDistance = distance;
+      }
+    }
+    return reference;
   }
 
   return null;

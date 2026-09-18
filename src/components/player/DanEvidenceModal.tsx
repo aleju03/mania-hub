@@ -2,7 +2,7 @@ import { skillPlaySharePath } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
-import { CircleHelp, X } from "lucide-react";
+import { ArrowLeft, CircleHelp, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -13,6 +13,8 @@ import {
   type LivePlayerDanCourseEvidence,
   type LivePlayerDanEvidence,
   type LivePlayerDanEvidencePlay,
+  type LivePlayerDanPendingPlay,
+  type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo } from "../../lib/format";
 import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
@@ -52,11 +54,15 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // the breakdown is a handful of dan numbers, and the plays behind each one
   // are the follow-up question, not the answer.
   const [openSection, setOpenSection] = useState<string | null>(null);
+  // The "still analyzing" list takes the breakdown's place while it is open:
+  // one modal, one question at a time, and a way back at the top.
+  const [pendingOpen, setPendingOpen] = useState(false);
   // The map-detail view for a clicked clear, stacked on top of this list,
   // same pattern as SkillPlaysModal: opens on the click with what the row
   // knows and upgrades in place when the catalog entry lands.
+  // `clear` is null for a play still analyzing: it has no dan marks to draw.
   const [detail, setDetail] = useState<
-    { clear: LivePlayerDanEvidencePlay; entry: LiveMapSearchEntry; status: "ready" | "pending" | "missing" | "error" } | null
+    { play: LivePlayerSkillPlay; clear: LivePlayerDanEvidencePlay | null; entry: LiveMapSearchEntry; status: "ready" | "pending" | "missing" | "error" } | null
   >(null);
   // The "all clears" list opens on the window the average reads; the rest
   // pages in a batch at a time, appended under the first twenty.
@@ -103,26 +109,26 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
     return () => controller.abort();
   }, [keyCount, reloadKey, side, userId]);
 
-  const openDetail = (clear: LivePlayerDanEvidencePlay) => {
-    const cached = peekLiveMapSearchEntry(clear.play.beatmapId);
+  const openDetail = (play: LivePlayerSkillPlay, clear: LivePlayerDanEvidencePlay | null) => {
+    const cached = peekLiveMapSearchEntry(play.beatmapId);
     if (cached !== undefined) {
-      setDetail({ clear, entry: cached ?? stubEntry(clear.play), status: cached ? "ready" : "missing" });
+      setDetail({ play, clear, entry: cached ?? stubEntry(play), status: cached ? "ready" : "missing" });
       return;
     }
-    setDetail({ clear, entry: stubEntry(clear.play), status: "pending" });
-    loadLiveMapSearchEntry(clear.play.beatmapId)
+    setDetail({ play, clear, entry: stubEntry(play), status: "pending" });
+    loadLiveMapSearchEntry(play.beatmapId)
       .then((entry) => {
         if (!mountedRef.current) return;
         setDetail((current) => (
-          current && current.clear.play.beatmapId === clear.play.beatmapId && current.status === "pending"
-            ? { clear, entry: entry ?? current.entry, status: entry ? "ready" : "missing" }
+          current && current.play.beatmapId === play.beatmapId && current.status === "pending"
+            ? { play, clear, entry: entry ?? current.entry, status: entry ? "ready" : "missing" }
             : current
         ));
       })
       .catch(() => {
         if (!mountedRef.current) return;
         setDetail((current) => (
-          current && current.clear.play.beatmapId === clear.play.beatmapId && current.status === "pending"
+          current && current.play.beatmapId === play.beatmapId && current.status === "pending"
             ? { ...current, status: "error" }
             : current
         ));
@@ -364,6 +370,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     </div>
                   ))}
                 </div>
+              ) : pendingOpen && evidence?.pending && evidence.pending.length > 0 ? (
+                <PendingPlaysView evidence={evidence} onBack={() => setPendingOpen(false)} onOpen={(play) => openDetail(play, null)} />
               ) : !evidence || (evidence.clears.length === 0 && !evidence.skillsets.some((skill) => skill.skillsetClear)) ? (
                 <div className="px-4 py-14 text-center">
                   <div className="text-sm font-semibold text-osu-l2">
@@ -380,6 +388,13 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     >
                       <Trans>Try again</Trans>
                     </button>
+                  ) : null}
+                  {/* A profile with nothing rated yet is exactly the one
+                      whose plays are all still in line. */}
+                  {evidence ? (
+                    <div className="mt-4">
+                      <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
+                    </div>
                   ) : null}
                 </div>
               ) : (
@@ -473,11 +488,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   ) : null}
                   {/* A pass that ran out of budget publishes what it has; say
                       so here, where the dan is read, not only on the card. */}
-                  {(evidence.pendingPlays ?? 0) > 0 ? (
-                    <div className="px-2 pt-2 text-[11px] text-osu-f1">
-                      <Trans>{evidence.pendingPlays} plays still analyzing, so this estimate can still move.</Trans>
-                    </div>
-                  ) : null}
+                  <PendingPlaysNote evidence={evidence} onOpen={() => setPendingOpen(true)} />
                   <AnimatePresence initial={false}>
                     {openedSection ? (
                       <motion.div
@@ -508,7 +519,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                               position={index + 1}
                               color={openedSection.color}
                               formatDan={formatDan}
-                              onOpen={() => openDetail(clear)}
+                              onOpen={() => openDetail(clear.play, clear)}
                               onPrefetch={() => prefetchLiveMapSearchEntry(clear.play.beatmapId)}
                             />
                           ))}
@@ -556,37 +567,165 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
           status={detail.status}
           onClose={() => setDetail(null)}
           play={{
-            beatmapId: detail.clear.play.beatmapId,
+            beatmapId: detail.play.beatmapId,
             username,
-            accuracy: detail.clear.play.accuracy,
-            pp: detail.clear.play.pp,
-            rateMod: rateModFor(detail.clear.play.rate, detail.clear.play.rateMod),
-            playedAt: detail.clear.play.playedAt,
-            source: detail.clear.play.source,
-            mods: detail.clear.play.mods ?? null,
-            daOd: detail.clear.play.daOd ?? null,
-            scoreId: detail.clear.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.clear.play.scoreId, detail.clear.play.keyCount, detail.clear.play.beatmapId, `dan:${side}`),
-            score: detail.clear.play.score,
-            skillRatings: detail.clear.play.skillRatings,
-            rating: detail.clear.chartDan,
+            accuracy: detail.play.accuracy,
+            pp: detail.play.pp,
+            rateMod: rateModFor(detail.play.rate, detail.play.rateMod),
+            playedAt: detail.play.playedAt,
+            source: detail.play.source,
+            mods: detail.play.mods ?? null,
+            daOd: detail.play.daOd ?? null,
+            scoreId: detail.play.scoreId,
+            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, `dan:${side}`),
+            score: detail.play.score,
+            skillRatings: detail.play.skillRatings,
+            rating: detail.clear?.chartDan ?? 0,
             ratingLabel: t`chart dan`,
             ratingColor: color,
-            // The chart's dan and the level this clear credited are the rail's
-            // two marks, so the score screen reads them as dan rather than as a
-            // generic rating pair.
-            dan: {
-              chartRating: detail.clear.chartDan,
-              chartLabel: detail.clear.chartDanLabel,
-              creditedRating: detail.clear.creditedDan,
-              creditedLabel: detail.clear.creditedDanLabel,
-              accuracy: detail.clear.clearAccuracy,
-              family: side,
-            },
+            // A play still analyzing has no dan marks yet: the card says so
+            // where the rating would print, the same way an unrated skill
+            // play does, and the rail stays empty until it is rated.
+            ...(detail.clear ? {
+              // The chart's dan and the level this clear credited are the rail's
+              // two marks, so the score screen reads them as dan rather than as a
+              // generic rating pair.
+              dan: {
+                chartRating: detail.clear.chartDan,
+                chartLabel: detail.clear.chartDanLabel,
+                creditedRating: detail.clear.creditedDan,
+                creditedLabel: detail.clear.creditedDanLabel,
+                accuracy: detail.clear.clearAccuracy,
+                family: side,
+              },
+            } : { ratingExcluded: true, ratingExclusionReason: "pending_calibration" as const }),
           }}
         />
       ) : null}
     </>
+  );
+}
+
+// The "still analyzing" line. Only the count is the link: it swaps the whole
+// breakdown for the list of waiting plays (PendingPlaysView), the way a
+// column opens its clears, but one level deeper. Older backends send the
+// count alone, and then it stays a plain line.
+function PendingPlaysNote({ evidence, onOpen }: { evidence: LivePlayerDanEvidence; onOpen: () => void }) {
+  const { t } = useLingui();
+  const pendingPlays = evidence.pendingPlays ?? 0;
+  if (pendingPlays <= 0) return null;
+  const count = evidence.pending && evidence.pending.length > 0
+    ? (
+      <button
+        type="button"
+        onClick={onOpen}
+        title={t`See which plays are waiting`}
+        className="cursor-pointer rounded-sm font-semibold text-osu-l2 transition-colors hover:text-white"
+      >
+        {t`${pendingPlays} plays`}
+      </button>
+    )
+    : <span>{t`${pendingPlays} plays`}</span>;
+  return (
+    <div className="px-2 pt-2 text-[11px] text-osu-f1">
+      <Trans>{count} still analyzing, so this estimate can still move.</Trans>
+    </div>
+  );
+}
+
+// The waiting plays, in the breakdown's place: a back link where the columns
+// were, then one row per play with why it waits.
+function PendingPlaysView({
+  evidence,
+  onBack,
+  onOpen,
+}: {
+  evidence: LivePlayerDanEvidence;
+  onBack: () => void;
+  onOpen: (play: LivePlayerSkillPlay) => void;
+}) {
+  const { t } = useLingui();
+  const pendingPlays = evidence.pendingPlays ?? 0;
+  const pending = evidence.pending ?? [];
+  return (
+    <div>
+      <div className="flex items-center gap-2 px-2 pb-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex cursor-pointer items-center gap-1 rounded-md py-1 pr-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-white"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <Trans>Back</Trans>
+        </button>
+        <span className="text-[11px] text-osu-f1">
+          <Trans>{pendingPlays} plays still analyzing, so this estimate can still move.</Trans>
+        </span>
+      </div>
+      {pending.map((entry, index) => (
+        <PendingRow
+          key={`pending:${entry.play.beatmapId}:${entry.play.rate}:${entry.play.scoreId ?? index}`}
+          entry={entry}
+          position={index + 1}
+          onOpen={() => onOpen(entry.play)}
+          onPrefetch={() => prefetchLiveMapSearchEntry(entry.play.beatmapId)}
+        />
+      ))}
+      {pending.length < pendingPlays ? (
+        <div className="px-2 pt-1 text-[10px] text-osu-f1">{t`Showing the newest ${pending.length}.`}</div>
+      ) : null}
+    </div>
+  );
+}
+
+// A play the rating has not reached yet, in the clear rows' grammar minus the
+// dan column: the reason it waits sits where the credit would.
+function PendingRow({
+  entry,
+  position,
+  onOpen,
+  onPrefetch,
+}: {
+  entry: LivePlayerDanPendingPlay;
+  position: number;
+  onOpen: () => void;
+  onPrefetch: () => void;
+}) {
+  const { t } = useLingui();
+  const locale = useLocale();
+  const play = entry.play;
+  const rateMod = rateModFor(play.rate, play.rateMod);
+  const played = play.playedAt ? formatTimeAgo(play.playedAt, locale) : null;
+  const reason = entry.reason === "revision"
+    ? t`chart changed on osu!, waiting for a fresh check`
+    : entry.reason === "rate_vibro"
+      ? t`waiting for a vibro check`
+      : t`waiting for the next rating pass`;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      onPointerEnter={onPrefetch}
+      onFocus={onPrefetch}
+      className="group flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-osu-b4"
+      title={`${play.artist} - ${play.title} [${play.version}]${played ? ` · ${played}` : ""} · ${reason} · ${t`view map details`}`}
+    >
+      <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-osu-f1">{position}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
+          {play.title}
+          <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{play.version}]</span>
+        </span>
+        {/* A phone has no hover for the title tooltip and no room for a
+            reason column, so the reason takes a second line under the chart. */}
+        <span className="block truncate text-[10px] text-osu-f1 sm:hidden">{reason}</span>
+      </span>
+      {rateMod ? <ModBadge mod={rateMod.acronym} rate={rateMod.rate} size={0.75} /> : null}
+      <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-osu-l2">
+        {play.accuracy != null ? formatAccuracy(play.accuracy) : ""}
+      </span>
+      <span className="hidden shrink-0 text-right text-[10px] text-osu-f1 sm:block">{reason}</span>
+    </button>
   );
 }
 

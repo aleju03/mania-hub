@@ -837,8 +837,10 @@ describe("computePlayerSkillRatings", () => {
       const pending = await computePlayerSkillRatings(db, failingOsu, [newScore], first.plays);
       expect(pending.plays).toEqual([]);
       expect(pending.danOnly).toHaveLength(1);
-      expect(pending.danOnly[0]).toMatchObject({ values: {}, revisionPending: true, calibrationPending: true });
+      expect(pending.danOnly[0]).toMatchObject({ values: {}, revisionPending: true, calibrationPending: true, pendingReason: "revision" });
       expect(pending.summary.pendingPlays).toBe(1);
+      // The read path names this wait from the stored reasons.
+      expect(pending.summary.pending).toEqual({ revisions: 1, revisionBeatmapIds: [101], calcBudget: 0, rateVibro: 0 });
       expect((await exec(db, "select type from jobs")).rows).toEqual([{ type: "verify_beatmap_revision" }]);
       // The matching file is insufficient until chart derivatives catch up.
       await storeCachedBeatmapFile(db, 101, newText);
@@ -3044,6 +3046,50 @@ describe("computePlayerSkillRatings", () => {
   });
 });
 
+describe("pending play placeholders", () => {
+  it("parks new plays past the calc budget as unrated rows the dan modal lists, then rates them next pass", async () => {
+    await withDb(async (db) => {
+      // Four charts at fifty rates each: 200 slots against a 150-run calc
+      // budget, with the chart-fact reads (one per chart) nowhere near theirs.
+      const text = buildStreamBeatmapFile();
+      const scores: OscScore[] = [];
+      for (let index = 0; index < 200; index += 1) {
+        const beatmapId = 2000 + (index % 4);
+        if (index < 4) await storeCachedBeatmapFile(db, beatmapId, text, { source: "test" });
+        scores.push(play({ id: 5000 + index, beatmap_id: beatmapId, accuracy: 0.95, pp: 100 - index * 0.25,
+          mods: [{ acronym: "DT", settings: { speed_change: Math.round((1.01 + Math.floor(index / 4) * 0.01) * 100) / 100 } }],
+          ended_at: new Date(Date.UTC(2026, 6, 1, 0, index)).toISOString() }));
+      }
+      const first = await computePlayerSkillRatings(db, failingOsu, scores, [], {});
+      const parked = first.danOnly.filter((entry) => entry.calibrationPending && entry.pendingReason === "calc_budget");
+      expect(first.deferredCalibration).toBeGreaterThan(0);
+      expect(parked).toHaveLength(first.deferredCalibration);
+      expect(first.summary.pendingPlays).toBe(first.deferredCalibration);
+      expect(parked.every((entry) => entry.ratingExcluded && entry.keyCount === 4 && entry.source === "top")).toBe(true);
+      // The placeholders are not top-play "unsupported" rows.
+      expect(first.summary.unsupportedPlays).toBe(0);
+
+      const now = new Date().toISOString();
+      await exec(db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (99, ?, 'ready', ?, ?, ?, ?)`,
+        [PLAYER_SKILLS_VERSION, JSON.stringify(first.summary), JSON.stringify({ plays: first.plays, danOnly: first.danOnly }), now, now]);
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc");
+      expect(evidence?.pendingPlays).toBe(parked.length);
+      expect(evidence?.pending).toHaveLength(parked.length);
+      expect(evidence?.pending.every((entry) => entry.reason === "calc_budget" && entry.play.ratingExclusionReason === "pending_calibration")).toBe(true);
+      // Newest first: the play just set is the one being asked about.
+      const playedAt = evidence!.pending.map((entry) => String(entry.play.playedAt));
+      expect(playedAt).toEqual([...playedAt].sort().reverse());
+
+      const second = await computePlayerSkillRatings(db, failingOsu, scores, [...first.plays, ...first.danOnly], {});
+      expect(second.summary.pendingPlays).toBe(0);
+      expect(second.plays).toHaveLength(200);
+      expect(second.plays.some((entry) => entry.calibrationPending)).toBe(false);
+    });
+  });
+});
+
 describe("getPlayerSkillBreakdown", () => {
   it("enqueues a compute for unknown players and reports pending", async () => {
     await withDb(async (db) => {
@@ -3205,6 +3251,84 @@ describe("getPlayerSkillBreakdown", () => {
       // The 4K LN ladder runs to 17 (Yeehee), so a 16.2 is a real LN 16+
       // rather than something folded onto the old 15 ceiling.
       expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("16+");
+    });
+  });
+
+  it("names the line pending plays wait in and the next scheduled pass on a ready row", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const computedAt = new Date(Date.now() - 60_000).toISOString();
+      // Chart 101 has a checksum on file and no cached .osu: unverified.
+      await exec(db, `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, version, metadata_json, updated_at)
+        values (101, 1, 'mania', 'wip', 4, 'Chart', ?, ?)`,
+      [JSON.stringify({ checksum: "a".repeat(32), last_updated: "2026-09-16T09:00:00Z" }), computedAt]);
+      const summary = {
+        totalPlays: 12,
+        analyzedPlays: 9,
+        pendingPlays: 3,
+        unsupportedPlays: 0,
+        modes: [{ keyCount: 4, analyzedPlays: 9, ratings: { Overall: 21.5 } }],
+        pending: { revisions: 2, revisionBeatmapIds: [101], calcBudget: 1, rateVibro: 0 },
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, computed_at, updated_at)
+         values (?, ?, 'ready', ?, ?, ?)`,
+        [99, PLAYER_SKILLS_VERSION, JSON.stringify(summary), computedAt, computedAt],
+      );
+      await queue.enqueue("verify_beatmap_revision", `beatmap-revision:101:${"a".repeat(32)}`, { beatmapId: 101 }, { priority: 80 });
+
+      // No job on file yet: the appointment is the pending-play retry TTL.
+      const unbooked = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(unbooked.status).toBe("ready");
+      expect(unbooked.queue?.state).toBe("scheduled");
+      expect(Date.parse(String(unbooked.queue?.nextRunAt))).toBe(Date.parse(computedAt) + 30 * 60_000);
+      expect(unbooked.queue?.pending).toEqual({ revisions: 2, charts: 1, backlog: 1, calcBudget: 1, rateVibro: 0, other: 0 });
+
+      // A backed-off revision retry is the next pass, at its own run_after.
+      const retryAt = new Date(Date.now() + 2 * 60 * 60_000);
+      await queue.enqueue("compute_player_skills", `player-skills:revision:99:${Math.floor(retryAt.getTime() / 60_000)}`,
+        { userId: 99, revisionRetries: 3 }, { priority: -5, runAfter: retryAt });
+      const booked = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(booked.queue?.state).toBe("scheduled");
+      expect(booked.queue?.nextRunAt).toBe(retryAt.toISOString());
+      expect(booked.queue?.position).toBeNull();
+
+      // A due job outranks the appointment and gets a lane position.
+      await queue.enqueue("compute_dan_estimate", "dan:1", {}, { priority: 10 });
+      await queue.enqueue("compute_player_skills", `player-skills:${PLAYER_SKILLS_VERSION}:99:continue:x:1:0`, { userId: 99 }, { priority: -5 });
+      const due = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(due.queue?.state).toBe("queued");
+      expect(due.queue?.position).toBe(2);
+      expect(due.queue?.waiting).toBe(2);
+      expect(due.queue?.pending?.charts).toBe(1);
+
+      // Once the chart verifies, the plays on it are counted as next-pass work.
+      await exec(db, "update beatmaps set status = 'ranked', metadata_json = ? where beatmap_id = 101",
+        [JSON.stringify({ checksum: "a".repeat(32) })]);
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile());
+      await exec(db, "update beatmap_osu_files set content_md5 = ? where beatmap_id = 101", ["a".repeat(32)]);
+      await exec(db, `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, source_file_md5, computed_at, updated_at)
+        values (101, 1, 'ready', 4, ?, ?, ?)`, ["a".repeat(32), new Date().toISOString(), new Date().toISOString()]);
+      const verified = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(verified.queue?.pending).toEqual({ revisions: 0, charts: 0, backlog: 0, calcBudget: 1, rateVibro: 0, other: 2 });
+    });
+  });
+
+  it("reports a debounced compute as scheduled rather than at a queue position", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const runAfter = new Date(Date.now() + 10 * 60_000);
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, computed_at, updated_at)
+         values (?, ?, 'running', '', null, ?)`,
+        [99, PLAYER_SKILLS_VERSION, new Date().toISOString()],
+      );
+      await queue.enqueue("compute_player_skills", `player-skills:${PLAYER_SKILLS_VERSION}:99:continue:x:2:0`, { userId: 99 }, { priority: -5, runAfter });
+      const breakdown = await getPlayerSkillBreakdown(db, queue, 99);
+      expect(breakdown.status).toBe("pending");
+      expect(breakdown.queue).toEqual({ state: "scheduled", position: null, waiting: 0, nextRunAt: runAfter.toISOString() });
     });
   });
 

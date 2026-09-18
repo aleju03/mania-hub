@@ -356,6 +356,18 @@ describe("rate variant parsing", () => {
     const beatmaps = [difficulty("[4K] Macabre 1.2x", 100), difficulty("[4K] Macabre", 120)];
     expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] Macabre");
   });
+
+  it("rates a set of only rate edits against its member nearest 1.0x, not against 1.0x", () => {
+    const slow = [difficulty("[4K] x0.85", 259), difficulty("[4K] x0.9", 244)];
+    expect(getSetPreviewReferenceBeatmap(slow)?.version).toBe("[4K] x0.9");
+    expect(parseSelectedDifficultyRate(slow[1], slow)).toBe(1);
+    expect(parseSelectedDifficultyRate(slow[0], slow)).toBeCloseTo(0.85 / 0.9, 5);
+
+    const fast = [difficulty("[4K] HOMICIDE [1.45]", 61), difficulty("[4K] HOMICIDE [1.4]", 63)];
+    expect(getSetPreviewReferenceBeatmap(fast)?.version).toBe("[4K] HOMICIDE [1.4]");
+    expect(parseSelectedDifficultyRate(fast[1], fast)).toBe(1);
+    expect(parseSelectedDifficultyRate(fast[0], fast)).toBeCloseTo(1.45 / 1.4, 5);
+  });
 });
 
 describe("createClockStallWatch", () => {

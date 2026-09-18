@@ -127,6 +127,11 @@ msgstr "(由 {0} 上传)"
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, other {{2} 次游玩}}"
 
+#. placeholder {0}: onCharts.charts
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0, plural, one {# chart} other {# charts}}"
+msgstr "{0, plural, other {# 张谱面}}"
+
 #. placeholder {0}: report.distinctOwners
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# collector} other {# collectors}}"
@@ -597,6 +602,18 @@ msgstr "已选 {0}/{maxCards}"
 msgid "{0} of {usageSampleSize}"
 msgstr "{usageSampleSize} 次中的 {0} 次"
 
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts."
+msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等待重新检查，前面还有 {backlog} 张谱面。"
+
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
+msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等待重新检查。"
+
 #. placeholder {0}: [...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} on their own"
@@ -672,11 +689,6 @@ msgstr "{selectedYear} 年游玩 {0} 次"
 #: src/components/me/MyStatsInsights.tsx
 msgid "{0} plays since {1}"
 msgstr "自 {1} 起 {0} 次游玩"
-
-#. placeholder {0}: evidence.pendingPlays
-#: src/components/player/DanEvidenceModal.tsx
-msgid "{0} plays still analyzing, so this estimate can still move."
-msgstr "还有 {0} 次游玩正在分析，此段位估算仍可能变动。"
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
@@ -1011,6 +1023,10 @@ msgstr "{count} 次回放观看"
 msgid "{count} screenshots"
 msgstr "{count} 张截图"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{count} still analyzing, so this estimate can still move."
+msgstr "{count}仍在分析中，因此这个估计仍可能变动。"
+
 #: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
 msgstr "{countryName} mania 段位排行榜"
@@ -1104,6 +1120,10 @@ msgstr "{firstName} 和 {secondName}"
 msgid "{firstName} only"
 msgstr "仅 {firstName}"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "{forNextPass} wait for the next rating pass."
+msgstr "{forNextPass} 个成绩等待下一轮评分。"
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "{from} to {to}"
 msgstr "{from} 至 {to}"
@@ -1131,6 +1151,10 @@ msgstr "{hiddenCount, plural, other {再显示 # 张谱面}}"
 #: src/routes/snipes.tsx
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, other {# 小时}}"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{hours, plural, one {in # hour} other {in # hours}}"
+msgstr "{hours, plural, other {# 小时后}}"
 
 #: src/lib/streak-game.ts
 msgid "{hours} hours"
@@ -1379,6 +1403,14 @@ msgstr "还有 {pending} 个正在分析"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 msgstr "{pendingImageCount, plural, other {# 张图片将在复制时上传}}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{pendingPlays} plays"
+msgstr "{pendingPlays} 个成绩"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{pendingPlays} plays still analyzing, so this estimate can still move."
+msgstr "{pendingPlays} 个成绩仍在分析中，因此这个估计仍可能变动。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -2755,6 +2787,10 @@ msgstr "分析与日志"
 msgid "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
 msgstr "分析会用一个存在 localStorage 里的随机访客 ID，把同一浏览器的页面访问归到一起。这个 ID 不来自你的 osu! 账号、也不与之关联，清除站点数据即可移除它。分析里显示的国家/地区是在托管边缘节点根据请求推断的；IP 地址本身和浏览器 user agent 都不会被存储。分析事件不会发送给任何第三方服务。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "analyzing"
+#~ msgstr "分析中"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "analyzing…"
 msgstr "分析中…"
@@ -3014,6 +3050,7 @@ msgid "Avoid repeats"
 msgstr "避免重复"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back"
@@ -3623,6 +3660,10 @@ msgstr "修改皮肤可见范围失败。请重试。"
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "谱面"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "chart changed on osu!, waiting for a fresh check"
+msgstr "谱面在 osu! 上有改动，等待重新检查"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -6969,6 +7010,10 @@ msgstr "{days} 天 {restHours} 小时后"
 msgid "in {hours}h"
 msgstr "{hours} 小时后"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "in {minutes} min"
+msgstr "{minutes} 分钟后"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {minutes}m"
 msgstr "{minutes} 分钟后"
@@ -6984,6 +7029,10 @@ msgstr "90 天内"
 #: src/components/me/GoalsPanel.tsx
 msgid "in flight"
 msgstr "进行中"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "in queue"
+msgstr "排队中"
 
 #: src/components/communities/field-options.tsx
 msgid "In server discovery"
@@ -8898,6 +8947,10 @@ msgstr "新成绩会通过此连接实时推送。"
 #: src/components/packs/SetsView.tsx
 msgid "New set"
 msgstr "新建卡组"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "New top plays will show up here as players set them."
+msgstr "玩家打出新的顶级成绩后会显示在这里。"
 
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -12487,6 +12540,10 @@ msgstr "查看这次成绩"
 msgid "See this play judged with {otherLabel} windows and LN rules"
 msgstr "看看这个成绩按 {otherLabel} 的判定窗口和长条规则会是什么样"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "See which plays are waiting"
+msgstr "查看哪些成绩在等待"
+
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
 msgid "See who voted on {0}"
@@ -13005,6 +13062,11 @@ msgstr "正在显示全连（0 miss）- 左键切换为 FC 断连，右键清除
 msgid "Showing only {label}"
 msgstr "只显示 {label}"
 
+#. placeholder {0}: pending.length
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Showing the newest {0}."
+msgstr "显示最新的 {0} 个。"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "换一批"
@@ -13377,6 +13439,10 @@ msgstr "出错了。请重试。"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
 msgstr "歌曲、艺术家或谱师"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "soon"
+msgstr "很快"
 
 #: src/routes/farm-helper.tsx
 msgid "sort"
@@ -14236,6 +14302,10 @@ msgstr "谱面分析器正在为这些最佳成绩评分。"
 msgid "The chart analyzer is rating your top plays right now."
 msgstr "谱面分析器正在为你的最佳成绩评分。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
+msgstr "谱面在 osu! 上有改动，正在等待重新检查。检查完成后即会评分。"
+
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "谱面文件不可用，所以只会加载回放。"
@@ -14631,6 +14701,28 @@ msgstr "新文件没有 {0} 部分，所以皮肤页面上的这些预览图会�
 msgid "The new GOAT"
 msgstr "新的 GOAT"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is next up in the analyzer queue."
+msgstr "下一轮评分在分析器队列中排在最前。"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued behind {others} other analyzer job."
+msgstr "下一轮评分排在另外 {others} 个分析任务之后。"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued behind {others} other analyzer jobs."
+msgstr "下一轮评分排在另外 {others} 个分析任务之后。"
+
+#: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is running now."
+msgstr "下一轮评分正在进行。"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass runs {when}."
+msgstr "下一轮评分将在{when}进行。"
+
 #: src/routes/dan-estimates.tsx
 msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
 msgstr "OD 也一样。谱面按你实际打的 OD 来评：<0/> 直接设定它，<1/> 会把它提高，谱面就按那个 OD 的难度来算。在 4K 上它还可能决定这次通过算进哪个段位系统，因为在低 OD 的宽判定窗里可以随手松开的长条，不再算作 LN 的工作量。"
@@ -14868,6 +14960,10 @@ msgid "The top plays are being rated by the chart analyzer. The first pass takes
 msgstr "谱面分析器正在为这些最佳成绩评分。第一轮需要一两分钟。"
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "The top plays are booked for the chart analyzer. The next pass runs {when}."
+msgstr "最佳成绩已预约谱面分析器。下一轮将在{when}进行。"
+
+#: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are waiting for the chart analyzer. Position in queue: {position}"
 msgstr "这些最佳成绩正在等待谱面分析器。队列位置：{position}"
 
@@ -15016,6 +15112,10 @@ msgstr "这张谱面不在谱面库里，所以除了成绩本身没有别的可
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "这张谱面还没有被分析。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
+msgstr ""
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
@@ -16169,6 +16269,14 @@ msgstr "vs"
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "请等图片缩放完成后再复制。"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "waiting for a vibro check"
+msgstr "等待 vibro 检查"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Waiting for a vibro check pass. The play is rated right after."
+msgstr "等待 vibro 检查。检查后随即评分。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "等待下一个 {want}pp+ 的成绩"
@@ -16184,6 +16292,14 @@ msgstr "等待音频加载…"
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "等待新成绩"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "waiting for the next rating pass"
+msgstr "等待下一轮评分"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
+msgstr "等待下一轮评分。届时会评分，此列表会自动更新。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Warm copper foil and drifting sparks."
@@ -16430,6 +16546,10 @@ msgstr ""
 #: src/routes/farm-helper.tsx
 msgid "with no mods"
 msgstr "不使用 Mod"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "within a minute"
+msgstr "一分钟内"
 
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
@@ -16889,6 +17009,10 @@ msgstr "你的皮肤"
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
 msgstr "谱面分析器正在为你的最佳成绩评分。第一轮需要一两分钟。"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Your top plays are booked for the chart analyzer. The next pass runs {when}."
+msgstr "你的最佳成绩已预约谱面分析器。下一轮将在{when}进行。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are waiting for the chart analyzer. Position in queue: {position}"

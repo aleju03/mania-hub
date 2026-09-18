@@ -99,6 +99,30 @@ export interface MyDataSkillMode {
   provisional?: boolean;
 }
 
+// What a ready row's pending plays wait on, as the backend's last pass saw it
+// (play counts), with the chart re-check line re-read live.
+export interface MyDataSkillPendingWaits {
+  // Plays parked on charts that changed on osu! and await a fresh check.
+  revisions: number;
+  // Those charts, still unchecked right now.
+  charts: number;
+  // Rows in the chart re-check line across every player.
+  backlog: number;
+  // Plays the next rating pass takes: past the last pass's calculator budget,
+  // waiting on a vibro check, or missing an input the pass fetches.
+  calcBudget: number;
+  rateVibro: number;
+  other: number;
+}
+
+export interface MyDataSkillQueue {
+  state: "queued" | "running" | "scheduled";
+  position: number | null;
+  waiting: number;
+  nextRunAt?: string | null;
+  pending?: MyDataSkillPendingWaits;
+}
+
 // Etterna-style skillset ratings aggregated from the player's top plays by the
 // live backend's chart analyzer (MinaCalc SSRs at the played rate).
 export interface MyDataSkillBreakdown {
@@ -113,9 +137,11 @@ export interface MyDataSkillBreakdown {
   // Present when the population baseline has been computed; users counts the
   // tracked players behind each keymode's percentile curves.
   baseline?: { computedAt: string; users: Record<string, number> } | null;
-  // Non-ready only: where the compute sits in the backend's analyzer lane.
-  // position is 1-based among waiting jobs; null while the job is running.
-  queue?: { state: "queued" | "running"; position: number | null; waiting: number } | null;
+  // Where the next compute sits in the backend's analyzer lane: on non-ready
+  // rows always, on ready rows while plays are still analyzing. position is
+  // 1-based among waiting jobs, null unless queued; scheduled carries the
+  // time the next pass becomes claimable.
+  queue?: MyDataSkillQueue | null;
   // Ready only: the served snapshot is known-superseded and a recompute is on
   // its way; present the numbers as refreshing, not final.
   stale?: boolean;

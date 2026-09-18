@@ -40,3 +40,36 @@ it("shows and opens a certified skillset when there are no algorithmic clears", 
   fireEvent.click(row);
   expect(onOpenCourseScore).toHaveBeenCalledWith(credential);
 });
+
+it("unfolds the plays still analyzing from the count line, with why each waits", async () => {
+  const play = (beatmapId: number, title: string, playedAt: string) => ({
+    beatmapId, beatmapsetId: null, title, artist: "Artist", creator: null, version: "Hard", coverUrl: null, beatmapStatus: "ranked",
+    keyCount: 4, rating: 0, overallRating: 0, ratingExcluded: true, ratingExclusionReason: "pending_calibration" as const,
+    pp: 50, accuracy: 0.97, rate: 1, mods: [], source: "top" as const, playedAt, scoreId: beatmapId, soloScoreId: null,
+    legacyScoreId: null, isLazer: false, hasReplay: false, patterns: [],
+  });
+  fetchEvidence.mockResolvedValue({ side: "rc", keyCount: 4, quorum: 4, minAccuracy: 0.91, barAccuracy: 0.96,
+    averageWindow: 20, dan: null, totalClears: 0, weightedClears: 0, pendingPlays: 3, clears: [], courseClear: null,
+    anchorSkillset: null, skillsets: [],
+    pending: [
+      { play: play(11, "Fresh Check", "2026-09-17T10:00:00Z"), reason: "revision" },
+      { play: play(12, "Next Pass", "2026-09-17T09:00:00Z"), reason: "calc_budget" },
+    ] });
+  const { DanEvidenceModal } = await import("./DanEvidenceModal");
+  render(<I18nProvider i18n={getI18n("en")}><DanEvidenceModal userId={42} username="Player" keyCount={4} side="rc"
+    onClose={() => {}} onOpenCourseScore={() => {}} /></I18nProvider>);
+  // Only the count is the link, not the whole sentence.
+  const link = await screen.findByRole("button", { name: "3 plays" });
+  expect(screen.queryByText("Fresh Check")).toBeNull();
+  fireEvent.click(link);
+  const fresh = await screen.findByRole("button", { name: /Fresh Check.*chart changed on osu!, waiting for a fresh check/i });
+  expect(fresh).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Next Pass.*waiting for the next rating pass/i })).toBeTruthy();
+  // Two of three listed: the cap is said out loud.
+  expect(screen.getByText("Showing the newest 2.")).toBeTruthy();
+  // The list took the breakdown's place; Back restores it.
+  expect(screen.queryByText("No qualifying clears yet")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+  expect(await screen.findByText("No qualifying clears yet")).toBeTruthy();
+  expect(screen.queryByText("Fresh Check")).toBeNull();
+});

@@ -104,7 +104,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 
 function HighlightStat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) {
   return (
-    <div className="min-w-0 rounded-lg border border-osu-b3/20 bg-osu-b4 px-2.5 py-2.5 sm:px-3">
+    <div className="min-w-0 px-3 py-2.5 sm:px-4">
       <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-osu-l3">{label}</div>
       <div className="mt-0.5 truncate text-[15px] font-bold leading-tight tabular-nums sm:text-[18px]" style={{ color: accent }} title={value}>{value}</div>
       {/* Two lines, not one truncated one: a map name is the whole point of
@@ -445,11 +445,14 @@ export function MyDataPanel() {
     }
     return stats;
   }, [summary, insights]);
+  // One card with separators instead of four floating boxes. The divider rules
+  // have to know the column count, since a wrapped 2-column layout needs a rule
+  // on top of the second row and no left border where a row starts.
   const highlightGridClass = highlightStats.length >= 4
-    ? "grid-cols-2 lg:grid-cols-4"
+    ? "grid-cols-2 lg:grid-cols-4 [&>*:nth-child(even)]:border-l [&>*:nth-child(n+3)]:border-t lg:[&>*:not(:first-child)]:border-l lg:[&>*:nth-child(n+3)]:border-t-0"
     : highlightStats.length === 3
-      ? "grid-cols-3"
-      : highlightStats.length === 2 ? "grid-cols-2" : "grid-cols-1";
+      ? "grid-cols-3 [&>*:not(:first-child)]:border-l"
+      : highlightStats.length === 2 ? "grid-cols-2 [&>*:not(:first-child)]:border-l" : "grid-cols-1";
 
   if (!viewer) {
     const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
@@ -526,6 +529,13 @@ export function MyDataPanel() {
           <HeaderStat label={t`active days`} value={compact(summary?.activeDays ?? 0)} />
           <HeaderStat label={t`top plays`} value={compact(summary?.topPlayCount ?? 0)} />
         </div>
+        {tracked && highlightStats.length > 0 ? (
+          <div className={`relative grid border-t border-osu-b3/25 [&>*]:border-osu-b3/20 ${highlightGridClass}`}>
+            {highlightStats.map((stat) => (
+              <HighlightStat key={stat.key} label={stat.label} value={stat.value} sub={stat.sub} accent={stat.accent} />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {!tracked ? (
@@ -535,14 +545,6 @@ export function MyDataPanel() {
         />
       ) : (
         <>
-          {highlightStats.length > 0 ? (
-            <div className={`grid gap-2 sm:gap-2.5 ${highlightGridClass}`}>
-              {highlightStats.map((stat) => (
-                <HighlightStat key={stat.key} label={stat.label} value={stat.value} sub={stat.sub} accent={stat.accent} />
-              ))}
-            </div>
-          ) : null}
-
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="lg:col-span-2">
               <div className="mb-2 space-y-2">

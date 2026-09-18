@@ -118,6 +118,11 @@ msgstr "(subido por {0})"
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, one {{1} play} other {{2} plays}}"
 
+#. placeholder {0}: onCharts.charts
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0, plural, one {# chart} other {# charts}}"
+msgstr "{0, plural, one {# chart} other {# charts}}"
+
 #. placeholder {0}: report.distinctOwners
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {# collector} other {# collectors}}"
@@ -588,6 +593,18 @@ msgstr "{0} de {maxCards} elegidas"
 msgid "{0} of {usageSampleSize}"
 msgstr "{0} de {usageSampleSize}"
 
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check, behind {backlog} other charts."
+msgstr "{0} de ellos están en {charts} que cambiaron en osu! y esperan una nueva revisión, detrás de {backlog} charts más."
+
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+#. placeholder {0}: onCharts.revisions
+#: src/components/player/SkillBreakdown.tsx
+msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
+msgstr "{0} de ellos están en {charts} que cambiaron en osu! y esperan una nueva revisión."
+
 #. placeholder {0}: [...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} on their own"
@@ -663,11 +680,6 @@ msgstr "{0} plays en {selectedYear}"
 #: src/components/me/MyStatsInsights.tsx
 msgid "{0} plays since {1}"
 msgstr "{0} plays desde {1}"
-
-#. placeholder {0}: evidence.pendingPlays
-#: src/components/player/DanEvidenceModal.tsx
-msgid "{0} plays still analyzing, so this estimate can still move."
-msgstr "Todavía se están analizando {0} plays, así que esta estimación aún puede cambiar."
 
 #. placeholder {0}: formatNumber(randomPickCount, locale)
 #. placeholder {1}: formatNumber(randomDraw?.uniqueSets ?? 0, locale)
@@ -1002,6 +1014,10 @@ msgstr "{count} vistas de replays"
 msgid "{count} screenshots"
 msgstr "{count} capturas"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{count} still analyzing, so this estimate can still move."
+msgstr "{count} aún en análisis, así que esta estimación todavía puede cambiar."
+
 #: src/routes/rankings.tsx
 msgid "{countryName} mania dan leaderboards"
 msgstr "Rankings de dan de mania de {countryName}"
@@ -1095,6 +1111,10 @@ msgstr "{firstName} y {secondName}"
 msgid "{firstName} only"
 msgstr "Solo {firstName}"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "{forNextPass} wait for the next rating pass."
+msgstr "{forNextPass} esperan el próximo cálculo."
+
 #: src/components/maps/MapSearchSection.tsx
 msgid "{from} to {to}"
 msgstr "{from} a {to}"
@@ -1122,6 +1142,10 @@ msgstr "{hiddenCount, plural, one {Mostrar # mapa más} other {Mostrar # mapas m
 #: src/routes/snipes.tsx
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, one {# hora} other {# horas}}"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "{hours, plural, one {in # hour} other {in # hours}}"
+msgstr "{hours, plural, one {en # hora} other {en # horas}}"
 
 #: src/lib/streak-game.ts
 msgid "{hours} hours"
@@ -1370,6 +1394,14 @@ msgstr "{pending} aún en análisis"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 msgstr "{pendingImageCount, plural, one {# imagen se sube al copiar} other {# imágenes se suben al copiar}}"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{pendingPlays} plays"
+msgstr "{pendingPlays} plays"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "{pendingPlays} plays still analyzing, so this estimate can still move."
+msgstr "{pendingPlays} plays aún en análisis, así que esta estimación todavía puede cambiar."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -2746,6 +2778,10 @@ msgstr "Analítica y registros"
 msgid "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
 msgstr "La analítica agrupa las vistas de página del mismo navegador mediante un ID de visitante aleatorio guardado en localStorage. El ID no se deriva de tu cuenta de osu! ni está vinculado a ella, y borrar los datos del sitio lo elimina. El país que aparece en la analítica se deduce de la petición en el borde del alojamiento; la dirección IP en sí y el user agent del navegador no se almacenan. Los eventos de analítica no se envían a ningún servicio de terceros."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+#~ msgid "analyzing"
+#~ msgstr "analizando"
+
 #: src/components/maps/MapDetailModal.tsx
 msgid "analyzing…"
 msgstr "analizando…"
@@ -3005,6 +3041,7 @@ msgid "Avoid repeats"
 msgstr "Evitar repeticiones"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back"
@@ -3614,6 +3651,10 @@ msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "Chart"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "chart changed on osu!, waiting for a fresh check"
+msgstr "el chart cambió en osu!, esperando una nueva revisión"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -6960,6 +7001,10 @@ msgstr "en {days}d {restHours}h"
 msgid "in {hours}h"
 msgstr "en {hours}h"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "in {minutes} min"
+msgstr "en {minutes} min"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "in {minutes}m"
 msgstr "en {minutes}m"
@@ -6975,6 +7020,10 @@ msgstr "en 90d"
 #: src/components/me/GoalsPanel.tsx
 msgid "in flight"
 msgstr "en curso"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "in queue"
+msgstr "en cola"
 
 #: src/components/communities/field-options.tsx
 msgid "In server discovery"
@@ -8889,6 +8938,10 @@ msgstr "Los scores nuevos llegan en vivo por esta conexión."
 #: src/components/packs/SetsView.tsx
 msgid "New set"
 msgstr "Nuevo set"
+
+#: src/components/LiveDataEmptyState.tsx
+msgid "New top plays will show up here as players set them."
+msgstr "Las nuevas top plays aparecerán aquí cuando los jugadores las consigan."
 
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -12478,6 +12531,10 @@ msgstr "Ver el score"
 msgid "See this play judged with {otherLabel} windows and LN rules"
 msgstr "Mira esta play juzgada con las ventanas de {otherLabel} y las reglas de LN"
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "See which plays are waiting"
+msgstr "Ver qué plays están esperando"
+
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
 msgid "See who voted on {0}"
@@ -12996,6 +13053,11 @@ msgstr "Mostrando full combos (0 misses) - clic izquierdo para ver los chokes de
 msgid "Showing only {label}"
 msgstr "Mostrando solo {label}"
 
+#. placeholder {0}: pending.length
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Showing the newest {0}."
+msgstr "Mostrando los {0} más recientes."
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
 msgstr "aleatorio"
@@ -13368,6 +13430,10 @@ msgstr "Algo salió mal. Inténtalo de nuevo."
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Song, artist or mapper"
 msgstr "Canción, artista o mapper"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "soon"
+msgstr "pronto"
 
 #: src/routes/farm-helper.tsx
 msgid "sort"
@@ -14227,6 +14293,10 @@ msgstr "El analizador de mapas está calificando los top plays ahora mismo."
 msgid "The chart analyzer is rating your top plays right now."
 msgstr "El analizador de mapas está calificando tus top plays ahora mismo."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
+msgstr "El chart cambió en osu! y espera una nueva revisión. El play se calcula cuando esa termine."
+
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "El archivo del mapa no está disponible, así que solo cargará el replay."
@@ -14622,6 +14692,28 @@ msgstr "El nuevo archivo no tiene bloque {0}, así que esas vistas previas se qu
 msgid "The new GOAT"
 msgstr "El nuevo GOAT"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is next up in the analyzer queue."
+msgstr "El próximo cálculo es el siguiente en la cola del analizador."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued behind {others} other analyzer job."
+msgstr "El próximo cálculo está en cola, con {others} tarea del analizador por delante."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued behind {others} other analyzer jobs."
+msgstr "El próximo cálculo está en cola, con {others} tareas del analizador por delante."
+
+#: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillBreakdown.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is running now."
+msgstr "El próximo cálculo está en marcha ahora mismo."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass runs {when}."
+msgstr "El próximo cálculo empieza {when}."
+
 #: src/routes/dan-estimates.tsx
 msgid "The OD counts the same way. A chart is rated at the OD you actually played it at: <0/> sets it outright and <1/> raises it, and the chart is then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on, because holds you can release inside a wide low-OD window stop counting as LN work."
 msgstr "El OD cuenta igual. Un mapa se califica con el OD con el que realmente lo jugaste: <0/> lo fija y <1/> lo sube, y el mapa vale lo que vale con ese OD. En 4K también puede decidir en qué ladder cae el pase, porque los holds que puedes soltar dentro de una ventana amplia de OD bajo dejan de contar como trabajo de LN."
@@ -14859,6 +14951,10 @@ msgid "The top plays are being rated by the chart analyzer. The first pass takes
 msgstr "El analizador de mapas está calificando los top plays. El primer pase tarda uno o dos minutos."
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "The top plays are booked for the chart analyzer. The next pass runs {when}."
+msgstr "Los top plays ya tienen turno en el analizador de charts. El próximo cálculo empieza {when}."
+
+#: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are waiting for the chart analyzer. Position in queue: {position}"
 msgstr "Los top plays están esperando al analizador de mapas. Posición en la fila: {position}"
 
@@ -15007,6 +15103,10 @@ msgstr "Este mapa no está en el catálogo de mapas, así que no hay nada más q
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "Este mapa aún no está analizado."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
+msgstr ""
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"
@@ -16160,6 +16260,14 @@ msgstr "vs"
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "Espera a que termine el cambio de tamaño de la imagen y copia de nuevo."
 
+#: src/components/player/DanEvidenceModal.tsx
+msgid "waiting for a vibro check"
+msgstr "esperando una revisión de vibro"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Waiting for a vibro check pass. The play is rated right after."
+msgstr "Esperando la revisión de vibro. El play se calcula justo después."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "waiting for another {want}pp+ play"
 msgstr "esperando otro play de {want}pp o más"
@@ -16175,6 +16283,14 @@ msgstr "Esperando a que cargue el audio..."
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "Esperando nuevos scores"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "waiting for the next rating pass"
+msgstr "esperando el próximo cálculo"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
+msgstr "Esperando el próximo cálculo. El play se calcula entonces y esta lista se actualiza sola."
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Warm copper foil and drifting sparks."
@@ -16421,6 +16537,10 @@ msgstr ""
 #: src/routes/farm-helper.tsx
 msgid "with no mods"
 msgstr "sin mods"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "within a minute"
+msgstr "en menos de un minuto"
 
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
@@ -16879,7 +16999,11 @@ msgstr "Tu skin"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."
-msgstr "Se están calificando tus top plays con el analizador de charts. La primera pasada tarda uno o dos minutos."
+msgstr "Se están calificando tus top plays con el analizador de charts. El primer cálculo tarda uno o dos minutos."
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "Your top plays are booked for the chart analyzer. The next pass runs {when}."
+msgstr "Tus top plays ya tienen turno en el analizador de charts. El próximo cálculo empieza {when}."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are waiting for the chart analyzer. Position in queue: {position}"
