@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
-import { ArrowDown, Eye, EyeOff, Loader2, Pin, PinOff, Plug, PlugZap, Users, Volume2, VolumeX, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { ArrowDown, Eye, EyeOff, Loader2, MessageCircle, Pin, PinOff, Plug, PlugZap, Users, Volume2, VolumeX, X } from "lucide-react";
 import { GHOST_PREVIEW_HASH } from "../../components/ghost/GhostLayer";
 import { GhostAtlasFrame, GhostBubbleBox } from "../../components/ghost/GhostSprite";
 import { useAuth } from "../../lib/auth-context";
@@ -89,6 +89,19 @@ const NAME_COLORS = ["#ff7ab8", "#7cc4ff", "#8ce99a", "#ffd479", "#c9a4ff", "#ff
 /* The backend drops a session after ten idle minutes; re-mint well before the
    ticket itself lapses. */
 const TICKET_REFRESH_MS = 40 * 60_000;
+/* Below this the page is one column with a thumb stick under the stage instead
+   of two columns and a keyboard. Same number as Tailwind's lg, which is where
+   the grid stops fitting. */
+const MOBILE_QUERY = "(max-width: 1023px)";
+/* How much of a phone's screen the stage may take. The rest is the controls,
+   and a stage that pushed them under the fold would make the page a scroll
+   between looking and doing. */
+const MOBILE_STAGE_VH = 50;
+/* The stick's travel in CSS pixels, and the two rings inside it: a thumb resting
+   near the middle is not a direction, and the rim is the run key. */
+const STICK_RADIUS = 46;
+const STICK_DEADZONE = 0.22;
+const STICK_SPRINT = 0.82;
 
 const KEY_DIRECTIONS: Record<string, GhostFacing> = {
   w: "up",
@@ -183,6 +196,11 @@ function GhostAdminPage() {
      moves through a ref so walking does not re-render the page 60 times a
      second. */
   const [look, setLook] = useState<{ facing: GhostFacing; moving: boolean }>({ facing: "down", moving: false });
+  /* On a phone the panel is one column with a thumb stick under the stage: the
+     cast, the roster and the conversation are each a tab rather than three
+     screens of scrolling, and every control that was a hover is a tap. */
+  const mobile = useIsMobileLayout();
+  const [tab, setTab] = useState<"chat" | "cast" | "who">("chat");
 
   const stageRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
@@ -200,6 +218,9 @@ function GhostAdminPage() {
      not undo the size it was tuned to. */
   const scaleMemoryRef = useRef<Record<string, number>>({});
   const keysRef = useRef(new Set<string>());
+  /* The stick writes here rather than into state: at 60 frames a second a
+     rendered stick would be the one part of this page that stutters. */
+  const stickRef = useRef({ dx: 0, dy: 0, sprint: false });
   const speechRef = useRef<GhostVisual["speech"]>(null);
   const actionRef = useRef<GhostVisual["action"]>(null);
   const eventIdRef = useRef(1);
@@ -450,12 +471,18 @@ function GhostAdminPage() {
         if (direction === "up") dy -= 1;
         if (direction === "down") dy += 1;
       }
+      /* The stick is another pair of axes, so touch and keys go through the
+         same integration: pushed to the rim it is the run key. */
+      const stick = stickRef.current;
+      dx += stick.dx;
+      dy += stick.dy;
+      const sprinting = keysRef.current.has("shift") || stick.sprint;
       const moving = dx !== 0 || dy !== 0;
       const state = driveRef.current;
       if (moving) {
         const page = pageMetricsRef.current;
         const step = ghostMoveStep({ dx, dy }, {
-          sprinting: keysRef.current.has("shift"),
+          sprinting,
           dt,
           viewWidth: page.viewW,
           // A screen-anchored step covers a screen, not a whole document.
@@ -464,9 +491,12 @@ function GhostAdminPage() {
         // Sideways he wraps; up and down he stops at the ends of the page.
         const nextX = wrapGhostX(state.x + step.dx);
         const nextY = clamp01(state.y + step.dy);
-        /* Horizontal input wins the facing, so a diagonal keeps the side view
-           instead of flickering between two clips. */
-        const facing: GhostFacing = dx !== 0 ? (dx < 0 ? "left" : "right") : dy < 0 ? "up" : "down";
+        /* The longer axis wins the facing, so an analog push that is mostly
+           sideways keeps the side view instead of flickering between two clips,
+           and a key-held diagonal (both axes equal) still reads as sideways. */
+        const facing: GhostFacing = Math.abs(dx) >= Math.abs(dy)
+          ? (dx < 0 ? "left" : "right")
+          : dy < 0 ? "up" : "down";
         driveRef.current = { x: nextX, y: nextY, facing, moving: true };
         placeMarker();
         if (state.facing !== facing || !state.moving) setLook({ facing, moving: true });
@@ -788,14 +818,22 @@ function GhostAdminPage() {
      a floor so a heavily shrunk stage still shows a readable line. */
   const stageSpriteScale = Math.max(0.75, fitGhostScale(character, scale, viewport.w) * (previewScale || 0.6));
   const bubbleScale = Math.max(0.6, previewScale || 0.6);
+  /* The row under the stage is hover-sized text on a desktop and a row of tap
+     targets on a phone, where there is no hover to explain a bare icon. */
+  const toggleClass = mobile
+    ? "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-osu-b3/60 px-2.5 py-1.5 text-[11px] font-semibold text-osu-f1"
+    : "inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-osu-f1 transition-colors hover:text-white";
+  /* One column on a phone, so the three panels under the stage take turns
+     instead of stacking into a page you have to scroll to talk. */
+  const hidden = (owner: "chat" | "cast" | "who") => (mobile && tab !== owner ? "hidden" : "");
 
   return (
-    <div className="mx-auto w-full max-w-[100rem] px-4 py-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mx-auto w-full max-w-[100rem] px-3 py-4 sm:px-4 lg:py-8">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 lg:mb-6 lg:gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Ralsei</h1>
+          <h1 className="text-xl font-bold text-white lg:text-2xl">Ralsei</h1>
           <p className="text-xs text-osu-f1">
-            Appear on a page as {character.name}. WASD moves him, everything is live for whoever is in the audience.
+            Appear on a page as {character.name}. {mobile ? "The stick walks him" : "WASD moves him"}, everything is live for whoever is in the audience.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -827,7 +865,7 @@ function GhostAdminPage() {
               }}
               placeholder="/player/jakads"
               list="ghost-live-routes"
-              className="min-w-[220px] flex-1 rounded-md bg-osu-b3/60 px-3 py-2 text-sm text-white outline-none placeholder:text-osu-f1/60"
+              className="min-w-[220px] flex-1 rounded-md bg-osu-b3/60 px-3 py-2 text-sm text-white outline-none placeholder:text-osu-f1/60 max-lg:text-base"
             />
             <datalist id="ghost-live-routes">
               {presence.routes.map((entry) => <option key={entry.route} value={entry.route} />)}
@@ -847,8 +885,14 @@ function GhostAdminPage() {
             <div
               ref={stageRef}
               onClick={placeAt}
-              style={{ aspectRatio: `${viewport.w} / ${viewport.h}` }}
-              className="relative w-full cursor-crosshair overflow-hidden rounded-lg bg-osu-b5"
+              style={{
+                aspectRatio: `${viewport.w} / ${viewport.h}`,
+                /* On a phone the stage is sized off the height it may take and
+                   only then clamped by the width, so framing somebody's laptop
+                   from a phone still leaves room for the controls under it. */
+                width: mobile ? `min(100%, ${((MOBILE_STAGE_VH * viewport.w) / viewport.h).toFixed(2)}vh)` : undefined,
+              }}
+              className={`relative mx-auto cursor-crosshair overflow-hidden rounded-lg bg-osu-b5 ${mobile ? "" : "w-full"}`}
             >
               {preview && canPreview && previewScale > 0 ? (
                 /* The real page at exactly the viewer's viewport size, scaled to
@@ -869,7 +913,7 @@ function GhostAdminPage() {
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
               )}
               <div ref={markerRef} className="absolute">
-                {composing ? (
+                {composing && !mobile ? (
                   /* Where the bubble is about to be, in the same black box the
                      viewers read it in, so talking happens where you are
                      looking instead of at the bottom of the page. Kept at a
@@ -932,12 +976,79 @@ function GhostAdminPage() {
                 </div>
               ) : null}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-osu-f1">
-              <span>WASD to walk, shift to run, 1-{GHOST_CHARACTER_LIST.length} to swap character, click the stage to place him, enter or T to talk, esc to close it</span>
+            {/* The phone's controls sit under the stage rather than over it:
+                aiming at somebody on a phone makes the stage narrow, and a thumb
+                parked on it covers the part being aimed at. */}
+            {mobile && connected ? (
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <TouchStick stick={stickRef} />
+                <div className="flex min-w-0 flex-1 flex-col items-stretch gap-2">
+                  {composing ? (
+                    /* The line goes out from here rather than from a box over
+                       his head: on a phone the stage is narrow enough that a
+                       bubble-shaped composer would be cut off by its own edge. */
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={stageComposerRef}
+                        value={message}
+                        onChange={(event) => setMessage(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            say();
+                            setComposing(false);
+                          }
+                          if (event.key === "Escape") setComposing(false);
+                        }}
+                        maxLength={240}
+                        placeholder="say something"
+                        aria-label={`Say something as ${character.name}`}
+                        className="min-w-0 flex-1 rounded-md bg-osu-b3/60 px-3 py-3 text-base text-white outline-none placeholder:text-osu-f1/60"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          say();
+                          setComposing(false);
+                        }}
+                        disabled={!message.trim()}
+                        className="cursor-pointer rounded-md bg-osu-pink/25 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        Say
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setComposing(true)}
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-md bg-osu-pink/25 px-4 py-3 text-sm font-semibold text-white"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Talk
+                    </button>
+                  )}
+                  {bubble ? (
+                    <button
+                      type="button"
+                      onClick={clearSpeech}
+                      className="flex cursor-pointer items-center justify-center gap-2 rounded-md bg-osu-b3/60 px-4 py-3 text-sm font-semibold text-osu-f1"
+                    >
+                      <X className="h-4 w-4" />
+                      Clear bubble
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-osu-f1 lg:gap-3">
+              <span className={mobile ? "w-full" : undefined}>
+                {mobile
+                  ? "Drag the stick to walk, push it to the rim to run, tap the stage to place him, Talk to say something"
+                  : `WASD to walk, shift to run, 1-${GHOST_CHARACTER_LIST.length} to swap character, click the stage to place him, enter or T to talk, esc to close it`}
+              </span>
               <button
                 type="button"
                 onClick={() => setPreview((value) => !value)}
-                className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-osu-f1 transition-colors hover:text-white"
+                className={toggleClass}
               >
                 {preview ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                 {preview ? "hide the page" : "show the page"}
@@ -949,7 +1060,7 @@ function GhostAdminPage() {
                   dirtyRef.current = true;
                 }}
                 title="page: he stands in the document and scrolls with it. screen: same spot for everyone, whatever their layout"
-                className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-osu-f1 transition-colors hover:text-white"
+                className={toggleClass}
               >
                 {anchor === "screen" ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
                 {anchor === "screen" ? "stuck to the screen" : "standing in the page"}
@@ -958,7 +1069,7 @@ function GhostAdminPage() {
                 type="button"
                 onClick={() => setSound((value) => !value)}
                 title="only mutes this panel, not the audience"
-                className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-osu-f1 transition-colors hover:text-white"
+                className={toggleClass}
               >
                 {sound ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
                 {sound ? "sound on" : "muted here"}
@@ -971,7 +1082,7 @@ function GhostAdminPage() {
                     : "wildcard route, no preview"}
                 {targetViewer ? ` (${targetViewer.username}'s screen)` : " (your screen)"}
               </span>
-              <label className="ml-auto flex items-center gap-2">
+              <label className={`flex items-center gap-2 ${mobile ? "w-full" : "ml-auto"}`}>
                 size
                 <input
                   type="range"
@@ -985,19 +1096,27 @@ function GhostAdminPage() {
                     setScale(Number(event.target.value));
                     dirtyRef.current = true;
                   }}
-                  className="w-28 accent-osu-pink"
+                  className={`accent-osu-pink ${mobile ? "h-6 flex-1" : "w-28"}`}
                 />
                 {scale}x
               </label>
             </div>
           </div>
 
+          {mobile ? (
+            <div className="mb-3 grid grid-cols-3 gap-1.5">
+              <TabButton active={tab === "chat"} onClick={() => setTab("chat")} label="Talk" />
+              <TabButton active={tab === "cast"} onClick={() => setTab("cast")} label="Cast" />
+              <TabButton active={tab === "who"} onClick={() => setTab("who")} label={`Who (${presence.totals.viewers})`} />
+            </div>
+          ) : null}
+
           {/* Who to be, how he stands, what he does: one bar of sprites rather
               than three rows of names. A pixel character is the one thing that
               reads faster as a picture than as the word for it, and the line
               underneath names whatever is under the cursor, so nothing is
               clicked blind. */}
-          <div className="mb-1 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className={`mb-1 flex flex-wrap items-center gap-x-4 gap-y-2 ${hidden("cast")}`}>
             <div className="flex flex-wrap gap-1.5">
               {GHOST_CHARACTER_LIST.map((entry) => (
                 <CharacterChip
@@ -1020,6 +1139,7 @@ function GhostAdminPage() {
                   // one, so it shows him walking.
                   clip={entry.clip ?? walkClipFor(character, "down")}
                   label={entry.label}
+                  caption={mobile}
                   active={pose === entry.kind}
                   onClick={() => {
                     // Clicking the pose he is already holding drops it and puts
@@ -1054,11 +1174,11 @@ function GhostAdminPage() {
               </div>
             ) : null}
           </div>
-          <div className="mb-6 h-4 truncate text-[11px] text-osu-f1">
+          <div className={`mb-6 h-4 truncate text-[11px] text-osu-f1 ${hidden("cast")}`}>
             {hint ?? `holding: ${findGhostPose(character, pose)?.label ?? "Walk"}`}
           </div>
 
-          <div>
+          <div className={hidden("who")}>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-osu-f1">
               Who is where
               <span className="font-normal text-osu-f1/70">
@@ -1071,7 +1191,7 @@ function GhostAdminPage() {
                   if (event.key === "Escape") setViewerQuery("");
                 }}
                 placeholder="is someone here?"
-                className="ml-auto w-44 rounded-md bg-osu-b3/60 px-2.5 py-1 font-normal text-white outline-none placeholder:text-osu-f1/60"
+                className={`rounded-md bg-osu-b3/60 px-2.5 py-1.5 font-normal text-white outline-none placeholder:text-osu-f1/60 ${mobile ? "w-full" : "ml-auto w-44 py-1"}`}
               />
             </div>
             {trimmedViewerQuery ? (
@@ -1095,7 +1215,7 @@ function GhostAdminPage() {
                             type="button"
                             onClick={() => aim({ mode: "user", userId: viewer.userId! }, viewer.route)}
                             title={viewer.viewport ? `${viewer.viewport.w}x${viewer.viewport.h}` : "unknown viewport"}
-                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors max-lg:px-2.5 max-lg:py-1.5 max-lg:text-xs ${
                               viewer.showing ? "bg-osu-pink/25 text-osu-pink-light" : "bg-osu-b3/60 text-white hover:bg-osu-b3"
                             }`}
                           >
@@ -1139,7 +1259,7 @@ function GhostAdminPage() {
                               if (viewer.userId != null) aim({ mode: "user", userId: viewer.userId }, viewer.route);
                             }}
                             title={viewer.viewport ? `${viewer.viewport.w}x${viewer.viewport.h}` : "unknown viewport"}
-                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors max-lg:px-2.5 max-lg:py-1.5 max-lg:text-xs ${
                               viewer.showing ? "bg-osu-pink/25 text-osu-pink-light" : "bg-osu-b3/60 text-white hover:bg-osu-b3"
                             }`}
                           >
@@ -1173,7 +1293,7 @@ function GhostAdminPage() {
           </div>
         </div>
 
-        <aside className="flex h-[30rem] min-w-0 flex-col overflow-hidden rounded-lg bg-osu-b4/60 lg:sticky lg:top-4 lg:h-[calc(100vh-6rem)]">
+        <aside className={`flex h-[30rem] min-w-0 flex-col overflow-hidden rounded-lg bg-osu-b4/60 max-lg:h-[24rem] lg:sticky lg:top-4 lg:h-[calc(100vh-6rem)] ${hidden("chat")}`}>
           <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 text-xs">
             <span className="text-osu-f1">Seen by</span>
             {/* Two clicks, and the second one says how many people it is about
@@ -1236,7 +1356,7 @@ function GhostAdminPage() {
                       key={viewer.id}
                       type="button"
                       onClick={() => aim({ mode: "user", userId: viewer.userId! }, viewer.route)}
-                      className="flex cursor-pointer items-baseline gap-2 rounded px-1 py-1 text-left transition-colors hover:bg-osu-b3/60"
+                      className="flex cursor-pointer items-baseline gap-2 rounded px-1 py-1 text-left transition-colors hover:bg-osu-b3/60 max-lg:py-2"
                     >
                       <span className="font-semibold text-white">{viewer.username}</span>
                       <span className="truncate text-[11px] text-osu-f1">{viewer.route}</span>
@@ -1312,7 +1432,7 @@ function GhostAdminPage() {
                 }}
                 maxLength={240}
                 placeholder={targetViewer ? `say something to ${targetViewer.username}` : "say something"}
-                className="min-w-0 flex-1 rounded-md bg-osu-b3/60 px-3 py-2 text-sm text-white outline-none placeholder:text-osu-f1/60"
+                className="min-w-0 flex-1 rounded-md bg-osu-b3/60 px-3 py-2 text-sm text-white outline-none placeholder:text-osu-f1/60 max-lg:text-base"
               />
               <button
                 type="button"
@@ -1494,7 +1614,7 @@ function Segment({ active, label, onClick, tone }: {
     <button
       type="button"
       onClick={onClick}
-      className={`cursor-pointer rounded-md px-2.5 py-1 font-semibold transition-colors ${
+      className={`cursor-pointer rounded-md px-2.5 py-1 font-semibold transition-colors max-lg:px-3 max-lg:py-1.5 ${
         tone === "warn"
           ? "bg-osu-red/25 text-white"
           : active
@@ -1509,6 +1629,109 @@ function Segment({ active, label, onClick, tone }: {
 
 function Notice({ text }: { text: string }) {
   return <div className="mb-3 rounded-md bg-osu-red/15 px-3 py-2 text-xs text-osu-red-light">{text}</div>;
+}
+
+/* The phone's WASD: a thumb stick drawn over the stage. It writes into the
+   movement loop's ref rather than into state, so walking costs the page nothing,
+   and it is analog only in direction: the rim is the run key, the middle is a
+   thumb resting rather than a direction. */
+function TouchStick({ stick }: { stick: RefObject<{ dx: number; dy: number; sprint: boolean }> }) {
+  const padRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<number | null>(null);
+  /* Only the knob is rendered, and only while a thumb is on it. */
+  const [knob, setKnob] = useState<{ x: number; y: number; sprint: boolean } | null>(null);
+
+  const read = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const pad = padRef.current;
+    if (!pad) return;
+    const box = pad.getBoundingClientRect();
+    let dx = event.clientX - (box.left + box.width / 2);
+    let dy = event.clientY - (box.top + box.height / 2);
+    const length = Math.hypot(dx, dy);
+    if (length > STICK_RADIUS) {
+      dx = (dx / length) * STICK_RADIUS;
+      dy = (dy / length) * STICK_RADIUS;
+    }
+    const reach = Math.min(1, length / STICK_RADIUS);
+    const sprint = reach > STICK_SPRINT;
+    stick.current = reach > STICK_DEADZONE
+      ? { dx: dx / STICK_RADIUS, dy: dy / STICK_RADIUS, sprint }
+      : { dx: 0, dy: 0, sprint: false };
+    setKnob({ x: dx, y: dy, sprint });
+  };
+
+  const release = () => {
+    pointerRef.current = null;
+    stick.current = { dx: 0, dy: 0, sprint: false };
+    setKnob(null);
+  };
+
+  return (
+    <div
+      ref={padRef}
+      /* Everything the pad sees is the pad's: a drag that reached the stage
+         would place him wherever the thumb happened to lift. */
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        pointerRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        read(event);
+      }}
+      onPointerMove={(event) => {
+        if (pointerRef.current !== event.pointerId) return;
+        event.stopPropagation();
+        read(event);
+      }}
+      onPointerUp={(event) => {
+        event.stopPropagation();
+        release();
+      }}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+      style={{ width: STICK_RADIUS * 2 + 24, height: STICK_RADIUS * 2 + 24 }}
+      className="relative shrink-0 touch-none select-none rounded-full border border-white/15 bg-osu-b4/70"
+    >
+      <div
+        style={{ transform: `translate(calc(-50% + ${knob?.x ?? 0}px), calc(-50% + ${knob?.y ?? 0}px))` }}
+        className={`absolute left-1/2 top-1/2 h-12 w-12 rounded-full border ${
+          knob?.sprint ? "border-osu-pink bg-osu-pink/50" : "border-white/30 bg-white/25"
+        }`}
+      />
+    </div>
+  );
+}
+
+/* One of the three panels under the stage on a phone. */
+function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`cursor-pointer rounded-md px-2 py-2 text-xs font-semibold transition-colors ${
+        active ? "bg-osu-pink/25 text-white" : "bg-osu-b3/60 text-osu-f1"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* Whether the panel is being driven from a phone. Narrow enough that the two
+   columns stop fitting is the same line where a keyboard stops being there. */
+function useIsMobileLayout(): boolean {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(MOBILE_QUERY);
+    const read = () => setMobile(query.matches);
+    read();
+    query.addEventListener("change", read);
+    return () => query.removeEventListener("change", read);
+  }, []);
+  return mobile;
 }
 
 /* This browser's own window, which is what the stage is shaped like whenever it
