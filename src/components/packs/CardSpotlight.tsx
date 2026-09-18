@@ -278,7 +278,7 @@ export function CardSpotlight({
   const tier = card ? spotlightCardTier(card) : null;
   const tierLabel = card?.tierLabel ?? (card?.tier ? MANIA_TIER_STYLES[card.tier].label : null);
   const baseImage =
-    target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600) : null);
+    target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600, card?.motif ?? null) : null);
 
   return createPortal(
     <AnimatePresence onExitComplete={onExitComplete}>

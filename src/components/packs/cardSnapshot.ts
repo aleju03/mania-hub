@@ -1,4 +1,5 @@
-import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
+import { MANIA_TIER_STYLES, resolveManiaTierStyle, type ManiaCardTier } from "#/lib/maniacard";
+import type { CardMotifPalette } from "#/lib/card-motif";
 import { createCardTextures, getCosmicTierPalette } from "../player/maniacard3d/cardTexture";
 import { drawManiaGlyph } from "../player/maniacard3d/cardTexture";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "../player/maniacard3d/layout";
@@ -84,11 +85,20 @@ export async function renderCardThumbnail(data: ManiaCardReadyData, width = 280)
 const NEUTRAL_SKELETON_GRADIENT = "linear-gradient(142deg, #282a31 0%, #212329 46%, #171a1e 100%)";
 const NEUTRAL_SKELETON_ALPHA = 0.3;
 
-function skeletonGradient(tier: ManiaCardTier | null): string {
-  return tier ? MANIA_TIER_STYLES[tier].badgeGradient : NEUTRAL_SKELETON_GRADIENT;
+/* A holding whose motif names a palette paints in that palette, not in its
+   tier's. The skeleton has to know, or a card that is about to draw itself
+   gold spends its first frames in the violet its tier would have been. */
+export type SkeletonPalette = { palette?: CardMotifPalette } | null;
+
+function skeletonGradient(tier: ManiaCardTier | null, motif: SkeletonPalette): string {
+  return tier ? resolveManiaTierStyle(tier, motif).badgeGradient : NEUTRAL_SKELETON_GRADIENT;
 }
 
-export function renderCardSkeletonThumbnail(tier: ManiaCardTier | null, width = 240): string | null {
+export function renderCardSkeletonThumbnail(
+  tier: ManiaCardTier | null,
+  width = 240,
+  motif: SkeletonPalette = null,
+): string | null {
   if (typeof document === "undefined") return null;
 
   const source = document.createElement("canvas");
@@ -97,7 +107,7 @@ export function renderCardSkeletonThumbnail(tier: ManiaCardTier | null, width = 
   const context = source.getContext("2d");
   if (!context) return null;
 
-  drawSkeletonFront(context, tier);
+  drawSkeletonFront(context, tier, motif);
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -108,16 +118,16 @@ export function renderCardSkeletonThumbnail(tier: ManiaCardTier | null, width = 
   return canvas.toDataURL("image/webp", CARD_THUMBNAIL_QUALITY);
 }
 
-function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTier | null) {
+function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTier | null, motif: SkeletonPalette = null) {
   context.save();
   roundedRect(context, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT, 58);
   context.clip();
-  drawSkeletonTierBackground(context, tier);
-  if (tier && getCosmicTierPalette(tier)) drawSkeletonCosmicAccents(context, tier);
+  drawSkeletonTierBackground(context, tier, motif);
+  if (tier && getCosmicTierPalette(tier, motif)) drawSkeletonCosmicAccents(context, tier, motif);
   else drawSkeletonTrianglePattern(context, tier ? 0.18 : 0.07);
   context.save();
   if (!tier) context.globalAlpha = NEUTRAL_SKELETON_ALPHA;
-  drawSkeletonModeBadge(context, tier);
+  drawSkeletonModeBadge(context, tier, motif);
   drawSkeletonNamePlate(context);
   if (tier) drawSkeletonTierLabel(context, tier);
   drawSkeletonAvatar(context);
@@ -126,8 +136,8 @@ function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTie
   context.restore();
 }
 
-function drawSkeletonTierBackground(context: CanvasRenderingContext2D, tier: ManiaCardTier | null) {
-  const cosmic = tier ? getCosmicTierPalette(tier) : null;
+function drawSkeletonTierBackground(context: CanvasRenderingContext2D, tier: ManiaCardTier | null, motif: SkeletonPalette = null) {
+  const cosmic = tier ? getCosmicTierPalette(tier, motif) : null;
   if (cosmic) {
     const base = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
     for (const [offset, color] of cosmic.base) base.addColorStop(offset, color);
@@ -155,7 +165,7 @@ function drawSkeletonTierBackground(context: CanvasRenderingContext2D, tier: Man
   }
 
   const gradient = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
-  const stops = parseGradientStops(skeletonGradient(tier));
+  const stops = parseGradientStops(skeletonGradient(tier, motif));
   for (const stop of stops.length > 0 ? stops : [{ color: "#7c3aed", offset: 0 }, { color: "#1e1b4b", offset: 1 }]) {
     gradient.addColorStop(stop.offset, stop.color);
   }
@@ -163,8 +173,8 @@ function drawSkeletonTierBackground(context: CanvasRenderingContext2D, tier: Man
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 }
 
-function drawSkeletonCosmicAccents(context: CanvasRenderingContext2D, tier: ManiaCardTier) {
-  const cosmic = getCosmicTierPalette(tier);
+function drawSkeletonCosmicAccents(context: CanvasRenderingContext2D, tier: ManiaCardTier, motif: SkeletonPalette = null) {
+  const cosmic = getCosmicTierPalette(tier, motif);
   if (!cosmic) return;
 
   const rim = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
@@ -182,12 +192,12 @@ function drawSkeletonCosmicAccents(context: CanvasRenderingContext2D, tier: Mani
   drawSkeletonSparkle(context, 808, 1010, 36, 0.32);
 }
 
-function drawSkeletonModeBadge(context: CanvasRenderingContext2D, tier: ManiaCardTier | null) {
+function drawSkeletonModeBadge(context: CanvasRenderingContext2D, tier: ManiaCardTier | null, motif: SkeletonPalette = null) {
   const boxX = 38;
   const boxY = 38;
   const boxSize = 132;
   const boxRadius = 30;
-  const stops = parseGradientStops(skeletonGradient(tier));
+  const stops = parseGradientStops(skeletonGradient(tier, motif));
 
   context.save();
   roundedRect(context, boxX, boxY, boxSize, boxSize, boxRadius);

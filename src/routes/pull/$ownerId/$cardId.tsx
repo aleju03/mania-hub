@@ -121,7 +121,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
     setStaticImage(null);
     const skills = shared.card.skills as ManiaSkills | null;
     if (!skills || !Number.isFinite(skills.cardPower)) {
-      setStaticImage(renderCardSkeletonThumbnail(tier, 600));
+      setStaticImage(renderCardSkeletonThumbnail(tier, 600, shared.card.motif ?? null));
       return;
     }
     const data = buildManiaCardRenderDataFromSkills({

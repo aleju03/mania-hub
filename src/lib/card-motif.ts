@@ -93,6 +93,29 @@ export function serializeCardMotif(motif: CardMotif | null): string | null {
   return motif ? JSON.stringify(motif) : null;
 }
 
+/* Hosts whose files this site ships itself. A motif can name one: the
+   milestone card's emblem is our own art on our own domain, not somebody's
+   image an admin pinned. */
+const SITE_ASSET_HOSTS = new Set(["mania-tracker.com", "www.mania-tracker.com"]);
+
+/* The site-relative path of a motif that is one of our own images, else null.
+
+   Server-side only, for inlining into a share image off this deployment
+   rather than off the public domain. The browser deliberately does NOT use
+   this: everything under /images/ belongs to the service worker, which serves
+   it cache-first and keeps it until its version string is bumped by hand, so
+   our own art on that path would be frozen in every returning browser. The
+   proxy is not under /images/, which is what keeps a motif updatable. */
+export function siteAssetMotifPath(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!SITE_ASSET_HOSTS.has(parsed.host)) return null;
+    return parsed.pathname.startsWith("/images/") ? parsed.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
 /* Where the browser actually loads the image from.
 
    Never the stored URL directly: the card is painted into a 2D canvas and read

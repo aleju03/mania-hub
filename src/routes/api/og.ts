@@ -1648,7 +1648,7 @@ async function renderPulledCardOg(
      numbers drive how large each copy is drawn. A motif whose image cannot be
      fetched simply leaves the tier's own pattern in place. */
   const motif = parseCardMotif(card.motif);
-  const inlinedMotif = motif ? await cardMotifDataUrl(motif) : null;
+  const inlinedMotif = motif ? await cardMotifDataUrl(motif, request) : null;
   // The palette rides the motif and applies whether or not the image could
   // be fetched; the sprites need the image (maniaTierCardElement checks both).
   if (motif) art.motif = motif;

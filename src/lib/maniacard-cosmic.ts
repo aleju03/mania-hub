@@ -22,6 +22,17 @@ export interface CosmicTierPalette {
   glint: string;
   // Draws a large faint laurel + star behind the avatar, echoing the card back.
   laurelWatermark?: boolean;
+  /* A fan of rays behind the avatar. The commemorative counterpart to the
+     laurel: GOAT wears the wreath, the milestone card wears the burst, so a
+     glance never confuses the two. */
+  sunburst?: boolean;
+  /* Keeps the star layer under a floating motif. A motif normally replaces
+     whatever pattern its tier would have drawn, which is right for granted
+     art: a picture somebody was given should not have to share the card with
+     a starfield. A palette motif is not that. It is a designed one-off whose
+     emblem is sparse by nature, and without the stars behind it the card is
+     mostly bare wash. */
+  starfieldUnderMotif?: boolean;
 }
 
 export const COSMIC_TIERS: Partial<Record<ManiaCardTier, CosmicTierPalette>> = {
@@ -135,20 +146,25 @@ export const COSMIC_PALETTES: Record<CardMotifPalette, CosmicTierPalette> = {
     rim: [[0, "rgba(255,255,255,0.8)"], [0.25, "rgba(251,146,60,0.95)"], [0.5, "rgba(251,113,133,0.8)"], [0.8, "rgba(251,146,60,0.9)"], [1, "rgba(255,255,255,0.7)"]],
     rimGlow: "rgba(251,146,60,0.6)", glint: "rgba(255,255,255,0.95)",
   },
+  /* Deliberately the warmest, brightest wash on the ladder. Every other
+     palette here is a colour lifted off near-black, because a rarity should
+     read as deep space. This one is a struck coin: the metal is the subject,
+     so the wash is lit amber rather than a tint over black, and the two foil
+     pools are strong enough to read as light falling across it. */
   gold: {
-    base: [[0, "#0d0903"], [0.38, "#1c1305"], [0.72, "#140d03"], [1, "#000000"]],
-    foilA: ["rgba(246, 195, 67, 0.34)", "rgba(184, 134, 11, 0.16)"],
-    foilB: ["rgba(255, 243, 176, 0.2)", "rgba(202, 138, 4, 0.1)"],
+    base: [[0, "#241706"], [0.34, "#4a300a"], [0.68, "#2a1a06"], [1, "#0b0702"]],
+    foilA: ["rgba(255, 226, 138, 0.5)", "rgba(202, 146, 18, 0.24)"],
+    foilB: ["rgba(255, 249, 214, 0.34)", "rgba(202, 138, 4, 0.16)"],
     aurora: [
       "rgba(133, 77, 14, 0)",
-      "rgba(246, 195, 67, 0.15)",
-      "rgba(255, 243, 176, 0.09)",
-      "rgba(184, 134, 11, 0.12)",
+      "rgba(255, 213, 102, 0.24)",
+      "rgba(255, 249, 214, 0.16)",
+      "rgba(197, 144, 14, 0.2)",
       "rgba(133, 77, 14, 0)",
     ],
     stars: ["255, 243, 176", "246, 195, 67", "255, 255, 255", "253, 224, 71"],
     starTint: [1.0, 0.86, 0.45],
-    rainbow: 0.2,
+    rainbow: 0.34,
     rim: [
       [0, "rgba(255,243,176,0.8)"],
       [0.18, "rgba(246,195,67,0.95)"],
@@ -158,8 +174,18 @@ export const COSMIC_PALETTES: Record<CardMotifPalette, CosmicTierPalette> = {
     ],
     rimGlow: "rgba(246,195,67,0.58)",
     glint: "rgba(255,250,220,0.95)",
+    sunburst: true,
+    starfieldUnderMotif: true,
   },
 };
+
+/* Whether a card keeps its star layer while floating a motif. */
+export function motifKeepsStarfield(
+  tier: ManiaCardTier,
+  motif?: { palette?: CardMotifPalette } | null,
+): boolean {
+  return getCosmicTierPalette(tier, motif)?.starfieldUnderMotif === true;
+}
 
 /* The palette a card paints with: the holding's own when its motif names
    one, else its tier's, else none (a tier below the cosmic ladder). */

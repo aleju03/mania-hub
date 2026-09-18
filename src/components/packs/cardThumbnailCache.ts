@@ -390,7 +390,7 @@ function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
      thumbnail in the pool changes address over a field that is empty for all
      but a handful of cards. The leading token is the scatter's own version:
      bump it when drawMotifPattern changes, and only cards with art re-render. */
-  if (data.motif) parts.push(`motif2:${cardMotifSignature(data.motif)}`);
+  if (data.motif) parts.push(`motif4:${cardMotifSignature(data.motif)}`);
   const avatarRepair = AVATAR_REPAIR_REVISIONS[data.user.id];
   if (avatarRepair) parts.push(`avatar-repair:${avatarRepair}`);
   return parts.join("|");

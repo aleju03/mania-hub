@@ -4,7 +4,7 @@ import { buildFaceLayout } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 import { cardMotifImageSrc, type CardMotif } from "#/lib/card-motif";
-import { getCosmicTierPalette as cosmicPaletteFor } from "#/lib/maniacard-cosmic";
+import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
 
 const FONT = "Torus, Arial, sans-serif";
@@ -224,12 +224,13 @@ function drawFront(
   const withMotif = data.motif !== null && motif !== null;
   context.save();
   clipCard(context);
-  drawTierBackground(context, data, { starfield: !withMotif });
+  drawTierBackground(context, data, { starfield: !withMotif || motifKeepsStarfield(data.tier, data.motif) });
   // Cosmic tiers skip the triangle flecks entirely - their front is a clean
   // starfield (static here, drifting/twinkling in the overlay shader).
   const cosmic = cosmicPaletteFor(data.tier, data.motif);
   if (cosmic) {
     if (cosmic.laurelWatermark) drawLaurelWatermark(context, data, laurel);
+    if (cosmic.sunburst) drawSunburstWatermark(context, data);
     drawCosmicFoilAccents(context, cosmic);
   }
   if (withMotif) {
@@ -887,6 +888,45 @@ function drawCosmicFoilAccents(context: CanvasRenderingContext2D, tier: CosmicTi
     drawSparkle(context, x, y, size, opacity);
   }
 
+  context.restore();
+}
+
+/* The ray fan behind the avatar. Rays are struck from a point above the
+   portrait rather than from its middle, so they fan down and outward across
+   the card the way light falls on a medal in a case, instead of radiating
+   from the face like a halo.
+
+   Every second ray is a hair wider and brighter, which is what keeps a fan of
+   flat triangles from reading as a moire pattern once the card is small. */
+function drawSunburstWatermark(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
+  const { r, g, b } = data.glowColor;
+  const cx = 500;
+  const cy = 470;
+  const reach = 1500;
+  const rays = 22;
+
+  context.save();
+  for (let index = 0; index < rays; index += 1) {
+    const major = index % 2 === 0;
+    const angle = (index / rays) * Math.PI * 2 + 0.16;
+    const spread = (major ? 0.052 : 0.03) * Math.PI;
+    context.beginPath();
+    context.moveTo(cx, cy);
+    context.lineTo(cx + Math.cos(angle - spread) * reach, cy + Math.sin(angle - spread) * reach);
+    context.lineTo(cx + Math.cos(angle + spread) * reach, cy + Math.sin(angle + spread) * reach);
+    context.closePath();
+    context.fillStyle = `rgba(${r}, ${g}, ${b}, ${major ? 0.052 : 0.03})`;
+    context.fill();
+  }
+
+  // A soft core, so the rays look struck from something rather than from a
+  // hole in the card.
+  const core = context.createRadialGradient(cx, cy, 0, cx, cy, 430);
+  core.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.2)`);
+  core.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.06)`);
+  core.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+  context.fillStyle = core;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
   context.restore();
 }
 

@@ -198,8 +198,11 @@ void main() {
   float drift1 = sin(uTime * 0.35) * 0.18;
   float drift2 = cos(uTime * 0.27 + 1.3) * 0.18;
 
-  // A motif replaces the tier's own drifting layer rather than joining it, so
-  // both of those fade out by exactly as much as it fades in.
+  /* A motif replaces the tier's own drifting layer rather than joining it, so
+     both of those fade out by exactly as much as it fades in. That holds even
+     for a palette card that keeps its stars: the ones it keeps are painted
+     into the texture, and this layer on top of them read as blooming bubbles
+     around every copy of the emblem rather than as dust behind it. */
   float patternGain = 1.0 - uMotifOn;
 
 #if MC_MEDIUM

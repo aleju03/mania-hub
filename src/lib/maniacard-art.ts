@@ -21,7 +21,7 @@ import { getAssetOrigin } from "./origin";
 import { MANIA_TIER_STYLES, resolveManiaTierStyle } from "./maniacard";
 import type { ManiaCardTier } from "./maniacard";
 import { packFinishSvg } from "./card-finish-art";
-import type { CardMotif } from "./card-motif";
+import { siteAssetMotifPath, type CardMotif } from "./card-motif";
 import { readImageSize, sniffImageMime } from "./image-sniff";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
 import type { CosmicTierPalette } from "./maniacard-cosmic";
@@ -105,16 +105,21 @@ interface InlinedMotif {
 
 const motifDataUrlCache = new Map<string, Promise<InlinedMotif | null>>();
 
-export function cardMotifDataUrl(motif: CardMotif): Promise<InlinedMotif | null> {
+export function cardMotifDataUrl(motif: CardMotif, request?: Request): Promise<InlinedMotif | null> {
   const svg = packFinishSvg(motif.url);
   if (svg) return Promise.resolve({ dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`, aspect: 1 });
-  const cached = motifDataUrlCache.get(motif.url);
+  /* One of our own images is read off this deployment rather than off the
+     public domain, the way the laurel already is, so a local card and a local
+     embed draw the file in this checkout. */
+  const ownPath = siteAssetMotifPath(motif.url);
+  const source = ownPath && request ? new URL(ownPath, getAssetOrigin(request)).toString() : motif.url;
+  const cached = motifDataUrlCache.get(source);
   if (cached) return cached;
   const pending = (async () => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), MOTIF_OG_TIMEOUT_MS);
     try {
-      const response = await fetch(motif.url, { redirect: "follow", signal: controller.signal });
+      const response = await fetch(source, { redirect: "follow", signal: controller.signal });
       if (!response.ok) return null;
       const buffer = Buffer.from(await response.arrayBuffer());
       if (buffer.length === 0 || buffer.length > MOTIF_OG_MAX_BYTES) return null;
@@ -131,7 +136,7 @@ export function cardMotifDataUrl(motif: CardMotif): Promise<InlinedMotif | null>
       clearTimeout(timeout);
     }
   })();
-  motifDataUrlCache.set(motif.url, pending);
+  motifDataUrlCache.set(source, pending);
   return pending;
 }
 
@@ -226,6 +231,29 @@ export function cosmicBackgroundDataUrl(palette: CosmicTierPalette, starfield = 
     return true;
   };
 
+  /* The ray fan, on drawSunburstWatermark's own numbers. Its soft core is a
+     radial stop rather than the canvas gradient, which resvg renders the
+     same. */
+  let rays = "";
+  if (palette.sunburst) {
+    const { fill } = svgColorParts(palette.rimGlow);
+    const cx = 500;
+    const cy = 470;
+    const reach = 1500;
+    const count = 22;
+    for (let index = 0; index < count; index += 1) {
+      const major = index % 2 === 0;
+      const angle = (index / count) * Math.PI * 2 + 0.16;
+      const spread = (major ? 0.052 : 0.03) * Math.PI;
+      const ax = (cx + Math.cos(angle - spread) * reach).toFixed(1);
+      const ay = (cy + Math.sin(angle - spread) * reach).toFixed(1);
+      const bx = (cx + Math.cos(angle + spread) * reach).toFixed(1);
+      const by = (cy + Math.sin(angle + spread) * reach).toFixed(1);
+      rays += `<polygon points="${cx},${cy} ${ax},${ay} ${bx},${by}" fill="${fill}" fill-opacity="${major ? 0.052 : 0.03}"/>`;
+    }
+    rays += `<circle cx="${cx}" cy="${cy}" r="430" fill="url(#burst)"/>`;
+  }
+
   let stars = "";
   for (let index = 0; index < 130; index += 1) {
     const x = rand(index * 19.43 + 2.1) * W;
@@ -289,11 +317,17 @@ export function cosmicBackgroundDataUrl(palette: CosmicTierPalette, starfield = 
       [1, palette.aurora[4]],
     ])}</linearGradient>` +
     `<linearGradient id="rim" x1="0" y1="0" x2="${W}" y2="${H}" gradientUnits="userSpaceOnUse">${svgGradientStops(palette.rim)}</linearGradient>` +
+    (palette.sunburst
+      ? `<radialGradient id="burst"><stop offset="0" stop-color="${svgColorParts(palette.rimGlow).fill}" stop-opacity="0.2"/>` +
+        `<stop offset="0.45" stop-color="${svgColorParts(palette.rimGlow).fill}" stop-opacity="0.06"/>` +
+        `<stop offset="1" stop-color="${svgColorParts(palette.rimGlow).fill}" stop-opacity="0"/></radialGradient>`
+      : "") +
     `</defs>` +
     `<rect width="${W}" height="${H}" fill="url(#base)"/>` +
     `<rect width="${W}" height="${H}" fill="url(#foilA)"/>` +
     `<rect width="${W}" height="${H}" fill="url(#foilB)"/>` +
     `<rect width="${W}" height="${H}" fill="url(#aurora)"/>` +
+    rays +
     // Dropped when the holding floats a motif: that image takes the place of
     // this field, exactly as it does on the canvas card.
     (starfield ? stars : "") +
@@ -416,7 +450,7 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
           : h("img", {
               key: "tris",
               src: cosmic
-                ? cosmicBackgroundDataUrl(cosmic, !motifSprites)
+                ? cosmicBackgroundDataUrl(cosmic, !motifSprites || cosmic.starfieldUnderMotif === true)
                 : triangleOverlayDataUrl(CARD_W, CARD_H),
               style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%" },
             }),

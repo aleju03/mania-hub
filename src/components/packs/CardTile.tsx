@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useLingui } from "@lingui/react/macro";
-import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
+import { resolveManiaTierStyle, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores } from "#/lib/packs";
 import {
@@ -33,7 +33,9 @@ export interface CardMint {
   tierLabel: string | null;
 }
 
-const skeletonThumbnailCache = new Map<ManiaCardTier | "neutral", string>();
+/* Keyed by the palette the sketch actually paints in, not by tier alone: a
+   holding whose motif carries one is a different sketch from its tier's. */
+const skeletonThumbnailCache = new Map<string, string>();
 
 const noopSubscribe = () => () => {};
 // False during SSR and the hydration render, true from the post-mount render
@@ -157,10 +159,12 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
      it: turning a page used to paint a frame of bare gradient first, which read
      as a third state between the old page and the new one. */
   const hydrated = useHydrated();
-  let thumbnail = hydrated ? skeletonThumbnailCache.get(tier ?? "neutral") ?? null : null;
+  const palette = card?.motif?.palette;
+  const skeletonKey = `${tier ?? "neutral"}:${palette ?? ""}`;
+  let thumbnail = hydrated ? skeletonThumbnailCache.get(skeletonKey) ?? null : null;
   if (hydrated && !thumbnail) {
-    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH);
-    if (thumbnail) skeletonThumbnailCache.set(tier ?? "neutral", thumbnail);
+    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, card?.motif ?? null);
+    if (thumbnail) skeletonThumbnailCache.set(skeletonKey, thumbnail);
   }
   if (thumbnail) {
     return (
@@ -177,7 +181,7 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
      only thing left that ever precedes the sketch. It borrows the tier's wash
      but not the tier's border: that one is a near-white rim, far louder than
      anything on the sketch it hands over to. */
-  const style = tier ? MANIA_TIER_STYLES[tier] : null;
+  const style = tier ? resolveManiaTierStyle(tier, card?.motif ?? null) : null;
   return (
     <div
       className={`relative overflow-hidden rounded-[10px] border border-white/8 bg-gradient-to-br ${
