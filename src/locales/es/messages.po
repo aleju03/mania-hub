@@ -600,8 +600,6 @@ msgstr "{0} de ellos están en {charts} que cambiaron en osu! y esperan una nuev
 
 #. placeholder {0}: onCharts.revisions
 #: src/components/player/SkillBreakdown.tsx
-#. placeholder {0}: onCharts.revisions
-#: src/components/player/SkillBreakdown.tsx
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
 msgstr "{0} de ellos están en {charts} que cambiaron en osu! y esperan una nueva revisión."
 
@@ -3664,6 +3662,10 @@ msgstr "dan del chart"
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Chart Dan"
 #~ msgstr "Dan del mapa"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chart edited after this play"
+msgstr "Chart editado después de este play"
 
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate"
@@ -14705,7 +14707,9 @@ msgid "The next rating pass is queued behind {others} other analyzer jobs."
 msgstr "El próximo cálculo está en cola, con {others} tareas del analizador por delante."
 
 #: src/components/player/SkillBreakdown.tsx
-#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued. A new play moves it up."
+msgstr "El próximo cálculo está en cola. Un play nuevo lo adelanta."
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "The next rating pass is running now."
 msgstr "El próximo cálculo está en marcha ahora mismo."
@@ -15107,6 +15111,10 @@ msgstr "Este mapa aún no está analizado."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
 msgstr ""
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
+msgstr "Este chart se editó después de este play, así que el play no se puede comparar con las notas actuales del chart y no cuenta."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"

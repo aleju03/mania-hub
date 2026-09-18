@@ -923,7 +923,9 @@ function UnratedPlayRow({
     ? t`Accuracy below skill rating range, so this play has no MSD rating on any skillset.`
     : play.ratingExclusionReason === "pending_calibration"
       ? t`Skill rating recalculation pending`
-      : t`Vibro detected. This play does not count toward skill or dan ratings.`;
+      : play.ratingExclusionReason === "unverifiable_revision"
+        ? t`This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count.`
+        : t`Vibro detected. This play does not count toward skill or dan ratings.`;
   return (
     <PlayRow
       play={play}

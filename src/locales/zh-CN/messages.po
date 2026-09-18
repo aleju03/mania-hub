@@ -609,8 +609,6 @@ msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等
 
 #. placeholder {0}: onCharts.revisions
 #: src/components/player/SkillBreakdown.tsx
-#. placeholder {0}: onCharts.revisions
-#: src/components/player/SkillBreakdown.tsx
 msgid "{0} of them are on {charts} that changed on osu! and are waiting for a fresh check."
 msgstr "其中 {0} 个成绩所在的 {charts} 在 osu! 上有改动，正在等待重新检查。"
 
@@ -3673,6 +3671,10 @@ msgstr "谱面段位"
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Chart Dan"
 #~ msgstr "谱面段位"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chart edited after this play"
+msgstr "谱面在此成绩之后被修改"
 
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate"
@@ -14714,7 +14716,9 @@ msgid "The next rating pass is queued behind {others} other analyzer jobs."
 msgstr "下一轮评分排在另外 {others} 个分析任务之后。"
 
 #: src/components/player/SkillBreakdown.tsx
-#: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued. A new play moves it up."
+msgstr "下一轮评分已排队。新的成绩会让它提前。"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "The next rating pass is running now."
 msgstr "下一轮评分正在进行。"
@@ -15116,6 +15120,10 @@ msgstr "这张谱面还没有被分析。"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
 msgstr ""
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
+msgstr "该谱面在此成绩之后被修改，成绩无法与谱面当前的音符对应，因此不计入。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"

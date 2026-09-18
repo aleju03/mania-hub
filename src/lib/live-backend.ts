@@ -46,7 +46,7 @@ export interface LivePlayerSkillPlay {
   overallRating: number;
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor" | "pending_calibration";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
   /** Why a pending_calibration play waits; absent on older payloads. */
   pendingReason?: LivePlayerDanPendingPlay["reason"];
   pp: number | null;

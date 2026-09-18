@@ -763,7 +763,9 @@ export interface PlayerSkillPlay {
   overallRating: number;
   /** No skill rating exists; Dan credit is evaluated independently. */
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor" | "pending_calibration";
+  /** unverifiable_revision: the chart was edited after the play and no verify
+   *  can settle it; the play is turned away rather than waiting. */
+  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
   pp: number | null;
   accuracy: number | null;
   rate: number;
@@ -831,6 +833,9 @@ export interface StoredPlaySsr {
   /** Why this play is waiting when calibrationPending: the modal names the
    *  wait per play. Absent on rows written before it shipped. */
   pendingReason?: StoredPendingReason;
+  /** A placeholder for a play no pass has rated yet (parkCandidate): listed as
+   *  waiting, but never credited, since its vibro check has not run either. */
+  neverRated?: boolean;
   /** Preserve plays that span a map upload without relabelling them later. */
   startedAt?: string | null;
   score?: PlayerSkillScoreDetails | null;
@@ -2605,6 +2610,10 @@ function collectDanClears(
     rejects.push({ play, reason, side: null, chartDan: null, chartDanLabel: null, accuracy: null, bar: null, minAccuracy: null, currency: null, od: null, ...extra });
   };
   for (const play of plays) {
+    // A placeholder for a play no pass has reached is neither a clear nor a
+    // refusal: it is listed as waiting, and its rate-vibro check has not run,
+    // so crediting it here would count a shake before the detector saw it.
+    if (play.neverRated) continue;
     const info = infoByBeatmap.get(play.beatmapId);
     if (!info) {
       reject(play, "chart_unanalyzed");
@@ -3840,7 +3849,7 @@ async function computeVerifiedPlayerSkillRatings(
       const keyCount = infoByBeatmap.get(beatmapId)?.keyCount || goalFactsByBeatmap.get(beatmapId)?.keyCount
         || Math.round(Number(score.beatmap?.cs ?? 0)) || 0;
       if (!isMsdSupportedKeyCount(keyCount)) return;
-      analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {}, ratingExcluded: true, calibrationPending: true, pendingReason });
+      analyzedByKey.set(key, { ...exclusionPlay(keyCount), values: {}, ratingExcluded: true, calibrationPending: true, pendingReason, neverRated: true });
     };
     const chartInfo = infoByBeatmap.get(beatmapId);
     const chartVibro = chartInfo?.vibro && !ppBackedChartIds.has(beatmapId);
@@ -4994,10 +5003,22 @@ export async function getPlayerSkillPlays(
   const metadata = await readPlayerSkillPlayMetadata(db, [...page, ...rejected].map(({ play }) => play.beatmapId));
   const scoreDetails = await loadPlayerSkillScoreDetails(db, userId, [...page, ...rejected].map(({ play }) => play));
   const items = page.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata, scoreDetails));
+  // A parked play whose chart was edited after it was set is not waiting on
+  // anything: no verify can match it to the current notes. It reads as turned
+  // away here, the same as the dan rules file it, instead of "in queue" forever.
+  const revisionInfo = rejected.some(({ play }) => play.revisionPending)
+    ? await loadChartSkillInfo(db, rejected.filter(({ play }) => play.revisionPending).map(({ play }) => play.beatmapId))
+    : new Map<number, ChartSkillInfo>();
   return {
     items, total: matches.length, unfilteredTotal: cohort.length, limit, offset,
     ...(options.includeRejected
-      ? { rejected: rejected.map(({ play, rating }) => buildPlayerSkillPlay(play, rating, keyCount, metadata, scoreDetails)) }
+      ? { rejected: rejected.map(({ play, rating }) => {
+        const built = buildPlayerSkillPlay(play, rating, keyCount, metadata, scoreDetails);
+        const info = revisionInfo.get(play.beatmapId);
+        return info && isUnverifiableRevision(play, info)
+          ? { ...built, ratingExclusionReason: "unverifiable_revision" as const, pendingReason: undefined }
+          : built;
+      }) }
       : {}),
   };
 }
@@ -5968,7 +5989,11 @@ export async function getPlayerSkillDanEvidence(
   // Newest first: a player opening this list is asking about the play they
   // just set. A revision wait has no rating of its own; the row prints the
   // play and the reason, never a stale vector.
-  const pendingPlays = plays.filter((play) => play.calibrationPending === true);
+  // A play whose chart was edited after it was set is turned away by
+  // collectDanClears (unverifiable_revision), so it belongs to `rejected`,
+  // not to the waiting list: nothing is coming for it.
+  const pendingPlays = plays.filter((play) => play.calibrationPending === true
+    && !(play.revisionPending && infoByBeatmap.get(play.beatmapId) && isUnverifiableRevision(play, infoByBeatmap.get(play.beatmapId)!)));
   const pendingPage = [...pendingPlays]
     .sort((left, right) => String(right.endedAt ?? "").localeCompare(String(left.endedAt ?? ""))
       || left.beatmapId - right.beatmapId)

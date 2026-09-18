@@ -3690,6 +3690,10 @@ msgstr "chart dan"
 #~ msgid "Chart Dan"
 #~ msgstr "Chart Dan"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "Chart edited after this play"
+msgstr "Chart edited after this play"
+
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate"
 msgstr "Chart estimate"
@@ -14746,6 +14750,10 @@ msgstr "The next rating pass is queued behind {others} other analyzer jobs."
 #~ msgstr "The next rating pass is queued, position {position}."
 
 #: src/components/player/SkillBreakdown.tsx
+msgid "The next rating pass is queued. A new play moves it up."
+msgstr "The next rating pass is queued. A new play moves it up."
+
+#: src/components/player/SkillBreakdown.tsx
 msgid "The next rating pass is running now."
 msgstr "The next rating pass is running now."
 
@@ -15146,6 +15154,10 @@ msgstr "This chart isn't analyzed yet."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
 msgstr "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
+msgstr "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "This clear backs the estimate"

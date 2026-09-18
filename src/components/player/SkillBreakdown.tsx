@@ -218,6 +218,8 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
 }
 
 const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen";
+// Past this many jobs ahead, the queue line stops printing the number.
+const QUEUE_AHEAD_SHOWN_MAX = 100;
 
 // --- Compact card body (My Data) ---
 
@@ -349,6 +351,10 @@ function NextPass({ queue }: { queue: MyDataSkillQueue }) {
     // ahead in it and nothing else.
     const ahead = queue.position - 1;
     if (ahead <= 0) return <Trans>The next rating pass is next up in the analyzer queue.</Trans>;
+    // Thousands ahead means a background retry parked behind the whole lane
+    // (6,787 on prod, 2026-09-17): a number nobody can act on, and one a new
+    // play or a profile visit supersedes with a higher-priority job anyway.
+    if (ahead >= QUEUE_AHEAD_SHOWN_MAX) return <Trans>The next rating pass is queued. A new play moves it up.</Trans>;
     const others = <span className="text-osu-l2 tabular-nums">{formatNumber(ahead, locale)}</span>;
     return ahead === 1
       ? <Trans>The next rating pass is queued behind {others} other analyzer job.</Trans>

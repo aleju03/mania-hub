@@ -3065,7 +3065,7 @@ describe("pending play placeholders", () => {
       expect(first.deferredCalibration).toBeGreaterThan(0);
       expect(parked).toHaveLength(first.deferredCalibration);
       expect(first.summary.pendingPlays).toBe(first.deferredCalibration);
-      expect(parked.every((entry) => entry.ratingExcluded && entry.keyCount === 4 && entry.source === "top")).toBe(true);
+      expect(parked.every((entry) => entry.ratingExcluded && entry.neverRated && entry.keyCount === 4 && entry.source === "top")).toBe(true);
       // The placeholders are not top-play "unsupported" rows.
       expect(first.summary.unsupportedPlays).toBe(0);
 
@@ -3074,9 +3074,16 @@ describe("pending play placeholders", () => {
         `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
          values (99, ?, 'ready', ?, ?, ?, ?)`,
         [PLAYER_SKILLS_VERSION, JSON.stringify(first.summary), JSON.stringify({ plays: first.plays, danOnly: first.danOnly }), now, now]);
-      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc");
+      const evidence = await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true });
       expect(evidence?.pendingPlays).toBe(parked.length);
       expect(evidence?.pending).toHaveLength(parked.length);
+      // Listed as waiting, credited nowhere: neither a clear nor a refusal
+      // names a placeholder (the charts here are unanalyzed, so every rated
+      // play is a chart_unanalyzed refusal and the placeholders would be too).
+      const parkedIdentities = new Set(parked.map((entry) => entry.identity));
+      expect(evidence?.clears.some((clear) => clear.play.ratingExclusionReason === "pending_calibration")).toBe(false);
+      expect(evidence?.totalRejected).toBe(first.plays.length);
+      expect(evidence?.rejected?.some((entry) => parkedIdentities.has(`official:${entry.play.scoreId}`))).toBe(false);
       expect(evidence?.pending.every((entry) => entry.reason === "calc_budget" && entry.play.ratingExclusionReason === "pending_calibration")).toBe(true);
       // Newest first: the play just set is the one being asked about.
       const playedAt = evidence!.pending.map((entry) => String(entry.play.playedAt));
@@ -3457,7 +3464,8 @@ describe("computePlayerSkillsJob", () => {
       await computePlayerSkillsJob(db, jobOsu, queue, { userId: 99 });
       const after = await getPlayerSkillDanEvidence(db, 99, 4, "rc", null, { includeRejected: true });
       expect(after?.rejected).toEqual(before?.rejected);
-      expect(after?.clears).toEqual(before?.clears);
+      // Without the file the carried play waits on chart facts, and says so.
+      expect(after?.clears).toEqual(before?.clears.map((clear) => ({ ...clear, play: { ...clear.play, pendingReason: "facts" } })));
 
       // A newer eligible play on that slot replaces its obsolete explanation.
       await storeCachedBeatmapFile(db, 108, buildStreamBeatmapFile(), { source: "test" });

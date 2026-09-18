@@ -102,7 +102,7 @@ export interface MapDetailPlayContext {
   source: "top" | "tracked";
   rating: number;
   ratingExcluded?: boolean;
-  ratingExclusionReason?: "msd_floor" | "pending_calibration";
+  ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
   ratingLabel: string;
   ratingColor: string;
   // Dan evidence has two distinct values: the chart's base rating and the
@@ -278,6 +278,7 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
       </div>
       {play.ratingExcluded ? (
         <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "pending_calibration" ? t`Skill rating recalculation pending`
+          : play.ratingExclusionReason === "unverifiable_revision" ? t`Chart edited after this play`
           : play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : t`Vibro detected`}</p>
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
