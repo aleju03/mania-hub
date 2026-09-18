@@ -1,7 +1,6 @@
 # Independent 4K LN analysis and skill
 
-`live-backend/src/dan/ln-analysis/` implements the structural contract in the
-[4K LN handoff](osu_mania_4k_ln_minacalc_agent_handoff.md).
+`live-backend/src/dan/ln-analysis/` implements the structural 4K LN model.
 `ln-skill.ts` supplies the independent LN scalar alongside native MinaCalc,
 validated against the 17-course checks described below.
 Neither reads chart/player identity, title, dan verdict, pp or MinaCalc output
