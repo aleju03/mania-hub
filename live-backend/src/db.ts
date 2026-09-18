@@ -3154,6 +3154,25 @@ async function migrateAdminTodos(db: Db): Promise<void> {
     `);
   }
 
+  // group_id: the owner's own buckets ("LN work", "before release"), on top of the fixed
+  // categories. Nullable and free-form: a task belongs to at most one group, and a deleted group
+  // leaves its members ungrouped rather than taking them with it.
+  if (!columns.includes("group_id")) {
+    await db.execute("alter table admin_todos add column group_id text");
+  }
+
+  // The groups themselves. `color` is one of a fixed palette (the UI paints chips from it), and
+  // `position` is the order the chips are listed in. Durable alongside the todos.
+  await db.execute(`
+    create table if not exists admin_todo_groups (
+      id text primary key,
+      name text not null,
+      color text not null default 'pink',
+      created_at integer not null,
+      position real not null default 0
+    )
+  `);
+
   // Seed the allocator's high-water mark from the rows that exist. Without this the counter stays
   // absent until the first todo is *created*, and until then allocateTodoSeq falls back to
   // max(seq) — so deleting the newest task in that window would hand its id straight to the next

@@ -15,6 +15,12 @@ export type TodoPriority = "low" | "normal" | "high";
 // not a completed task (nothing scores it, "Clear results" leaves it alone) and not an open one
 // (it does not sit in a lane or the queue).
 export type TodoStatus = "open" | "hold" | "done";
+// Groups are the owner's own buckets ("LN work", "before the release") laid over the fixed
+// categories: a task belongs to at most one, and the colour is what makes a group readable at a
+// glance on the board. The palette is fixed so both sides paint the same chip.
+export type TodoGroupColor = "pink" | "blue" | "green" | "yellow" | "purple" | "red" | "orange";
+
+export const TODO_GROUP_COLORS: readonly TodoGroupColor[] = ["pink", "blue", "green", "yellow", "purple", "red", "orange"];
 
 export const TODO_CATEGORIES: readonly TodoCategory[] = ["bug", "feature", "idea", "chore", "task"];
 export const TODO_PRIORITIES: readonly TodoPriority[] = ["low", "normal", "high"];
@@ -39,7 +45,20 @@ export interface AdminTodo {
   // Short handle the owner quotes to point at a task ("#7"). Allocated once, never reused: a
   // deleted task leaves a gap so an id always refers to the same thing.
   seq: number;
+  // Owner-defined group, or null for ungrouped. Deleting a group ungroups its members.
+  groupId: string | null;
 }
+
+export interface AdminTodoGroup {
+  id: string;
+  name: string;
+  color: TodoGroupColor;
+  createdAt: number;
+  // Order the chips are listed in; new groups land at the end.
+  position: number;
+}
+
+const GROUP_NAME_MAX = 60;
 
 const POSITION_STEP = 1000;
 
@@ -71,6 +90,7 @@ export interface CreateTodoInput {
   notes?: unknown;
   category?: unknown;
   priority?: unknown;
+  groupId?: unknown;
 }
 
 export interface UpdateTodoInput {
@@ -81,6 +101,8 @@ export interface UpdateTodoInput {
   priority?: unknown;
   status?: unknown;
   position?: unknown;
+  // null clears the group; undefined leaves it alone (partial update, like every other field).
+  groupId?: unknown;
 }
 
 function normalizeCategory(value: unknown): TodoCategory {
@@ -109,7 +131,20 @@ function normalizePosition(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-const SELECT_COLUMNS = "id, title, notes, category, priority, status, created_at, updated_at, done_at, position, seq";
+function normalizeGroupColor(value: unknown): TodoGroupColor {
+  return TODO_GROUP_COLORS.includes(value as TodoGroupColor) ? (value as TodoGroupColor) : "pink";
+}
+
+function normalizeGroupName(value: unknown): string {
+  return typeof value === "string" ? value.trim().slice(0, GROUP_NAME_MAX) : "";
+}
+
+/** A group id, or null for "no group". An unknown id is not rejected here; the caller checks. */
+function normalizeGroupId(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+const SELECT_COLUMNS = "id, title, notes, category, priority, status, created_at, updated_at, done_at, position, seq, group_id";
 
 function rowToTodo(row: Record<string, unknown>): AdminTodo {
   return {
@@ -124,6 +159,17 @@ function rowToTodo(row: Record<string, unknown>): AdminTodo {
     doneAt: row.done_at == null ? null : Number(row.done_at),
     position: Number(row.position ?? 0),
     seq: Number(row.seq ?? 0),
+    groupId: row.group_id == null ? null : String(row.group_id),
+  };
+}
+
+function rowToGroup(row: Record<string, unknown>): AdminTodoGroup {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    color: normalizeGroupColor(row.color),
+    createdAt: Number(row.created_at ?? 0),
+    position: Number(row.position ?? 0),
   };
 }
 
@@ -179,11 +225,12 @@ export async function createAdminTodo(db: Db, input: CreateTodoInput): Promise<A
     doneAt: null,
     position,
     seq,
+    groupId: normalizeGroupId(input.groupId),
   };
   await exec(
     db,
-    `insert into admin_todos (${SELECT_COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [todo.id, todo.title, todo.notes, todo.category, todo.priority, todo.status, todo.createdAt, todo.updatedAt, todo.doneAt, todo.position, todo.seq],
+    `insert into admin_todos (${SELECT_COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [todo.id, todo.title, todo.notes, todo.category, todo.priority, todo.status, todo.createdAt, todo.updatedAt, todo.doneAt, todo.position, todo.seq, todo.groupId],
   );
   return todo;
 }
@@ -203,6 +250,7 @@ export async function updateAdminTodo(db: Db, input: UpdateTodoInput): Promise<A
   const priority = input.priority === undefined ? existing.priority : normalizePriority(input.priority);
   const status = input.status === undefined ? existing.status : normalizeStatus(input.status);
   const position = input.position === undefined ? existing.position : normalizePosition(input.position, existing.position);
+  const groupId = input.groupId === undefined ? existing.groupId : normalizeGroupId(input.groupId);
   // A held task keeps its position, so resuming it drops it back where it was in the order.
   let doneAt = existing.doneAt;
   if (status === "done") {
@@ -214,11 +262,11 @@ export async function updateAdminTodo(db: Db, input: UpdateTodoInput): Promise<A
   await exec(
     db,
     `update admin_todos
-        set title = ?, notes = ?, category = ?, priority = ?, status = ?, updated_at = ?, done_at = ?, position = ?
+        set title = ?, notes = ?, category = ?, priority = ?, status = ?, updated_at = ?, done_at = ?, position = ?, group_id = ?
       where id = ?`,
-    [title, notes, category, priority, status, now, doneAt, position, id],
+    [title, notes, category, priority, status, now, doneAt, position, groupId, id],
   );
-  return { ...existing, title, notes, category, priority, status, updatedAt: now, doneAt, position };
+  return { ...existing, title, notes, category, priority, status, updatedAt: now, doneAt, position, groupId };
 }
 
 export async function deleteAdminTodo(db: Db, id: string): Promise<boolean> {
@@ -230,4 +278,83 @@ export async function deleteAdminTodo(db: Db, id: string): Promise<boolean> {
 export async function clearDoneAdminTodos(db: Db): Promise<number> {
   const result = await exec(db, "delete from admin_todos where status = 'done'");
   return result.rowsAffected ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Groups
+// ---------------------------------------------------------------------------
+
+export async function listAdminTodoGroups(db: Db): Promise<AdminTodoGroup[]> {
+  const result = await exec(db, "select id, name, color, created_at, position from admin_todo_groups order by position asc, created_at asc");
+  return result.rows.map((row) => rowToGroup(row as Record<string, unknown>));
+}
+
+export interface SaveTodoGroupInput {
+  id?: unknown;
+  name?: unknown;
+  color?: unknown;
+}
+
+/** Creates a group, or renames/recolors an existing one when `id` names one. Null on an empty name. */
+export async function saveAdminTodoGroup(db: Db, input: SaveTodoGroupInput): Promise<AdminTodoGroup | null> {
+  const name = normalizeGroupName(input.name);
+  if (!name) return null;
+  const color = normalizeGroupColor(input.color);
+  const id = typeof input.id === "string" && input.id ? input.id : null;
+
+  if (id) {
+    const existing = (await exec(db, "select id, name, color, created_at, position from admin_todo_groups where id = ? limit 1", [id])).rows[0];
+    if (!existing) return null;
+    await exec(db, "update admin_todo_groups set name = ?, color = ? where id = ?", [name, color, id]);
+    return { ...rowToGroup(existing as Record<string, unknown>), name, color };
+  }
+
+  const maxRow = await exec(db, "select max(position) as max_pos from admin_todo_groups");
+  const maxPos = maxRow.rows[0]?.max_pos;
+  const group: AdminTodoGroup = {
+    id: randomUUID(),
+    name,
+    color,
+    createdAt: Date.now(),
+    position: maxPos == null ? 0 : Number(maxPos) + 1,
+  };
+  await exec(
+    db,
+    "insert into admin_todo_groups (id, name, color, created_at, position) values (?, ?, ?, ?, ?)",
+    [group.id, group.name, group.color, group.createdAt, group.position],
+  );
+  return group;
+}
+
+/** Deleting a group ungroups its tasks; it never deletes the tasks themselves. */
+export async function deleteAdminTodoGroup(db: Db, id: string): Promise<boolean> {
+  if (!id) return false;
+  const result = await exec(db, "delete from admin_todo_groups where id = ?", [id]);
+  if ((result.rowsAffected ?? 0) === 0) return false;
+  await exec(db, "update admin_todos set group_id = null, updated_at = ? where group_id = ?", [Date.now(), id]);
+  return true;
+}
+
+/**
+ * Puts every named task in `groupId` (null = ungroup) in one go, which is what a marquee selection
+ * on the board turns into. Unknown ids are skipped; an unknown group id is treated as ungroup so a
+ * group deleted in another tab can't strand rows pointing at nothing.
+ */
+export async function assignAdminTodosToGroup(db: Db, ids: unknown, groupId: unknown): Promise<AdminTodo[]> {
+  const list = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+  if (list.length === 0) return [];
+  let target = normalizeGroupId(groupId);
+  if (target) {
+    const known = (await exec(db, "select id from admin_todo_groups where id = ? limit 1", [target])).rows[0];
+    if (!known) target = null;
+  }
+  const now = Date.now();
+  const placeholders = list.map(() => "?").join(", ");
+  await exec(
+    db,
+    `update admin_todos set group_id = ?, updated_at = ? where id in (${placeholders})`,
+    [target, now, ...list],
+  );
+  const result = await exec(db, `select ${SELECT_COLUMNS} from admin_todos where id in (${placeholders})`, list);
+  return result.rows.map((row) => rowToTodo(row as Record<string, unknown>));
 }

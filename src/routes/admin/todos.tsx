@@ -14,11 +14,13 @@ import {
   ListOrdered,
   Loader2,
   Pause,
+  Pencil,
   Play,
   Plus,
   RotateCcw,
   Search,
   Sparkles,
+  Tag,
   Trash2,
   Wrench,
   X,
@@ -26,13 +28,18 @@ import {
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { SelectMenu, type SelectMenuOption } from "../../components/ui/SelectMenu";
 import {
+  assignAdminTodosToGroup,
   clearDoneAdminTodos,
   createAdminTodo,
   deleteAdminTodo,
+  deleteAdminTodoGroup,
   listAdminTodos,
+  saveAdminTodoGroup,
   updateAdminTodo,
   type AdminTodo,
+  type AdminTodoGroup,
   type TodoCategory,
+  type TodoGroupColor,
   type TodoPriority,
   type TodoStatus,
 } from "../../lib/admin-todos";
@@ -84,6 +91,43 @@ const CATEGORY_OPTIONS: SelectMenuOption<TodoCategory>[] = CATEGORY_ORDER.map((k
   icon: CATEGORY_META[key].Icon,
   colorClass: CATEGORY_META[key].text,
 }));
+
+// Groups are the owner's own buckets ("LN work", "before the release") laid over the fixed
+// categories: a task belongs to at most one, and the colour is what makes it readable at a glance.
+// Spelled out in full for the same reason the lane accents are - Tailwind only emits classes it can
+// see literally in the source.
+const GROUP_COLOR_META: Record<TodoGroupColor, { label: string; dot: string; text: string; chip: string }> = {
+  pink: { label: "Pink", dot: "bg-osu-pink", text: "text-osu-pink", chip: "border-osu-pink/50 bg-osu-pink/10 text-osu-pink" },
+  blue: { label: "Blue", dot: "bg-osu-blue", text: "text-osu-blue", chip: "border-osu-blue/50 bg-osu-blue/10 text-osu-blue" },
+  green: { label: "Green", dot: "bg-osu-green-light", text: "text-osu-green-light", chip: "border-osu-green-light/50 bg-osu-green-light/10 text-osu-green-light" },
+  yellow: { label: "Yellow", dot: "bg-osu-yellow", text: "text-osu-yellow", chip: "border-osu-yellow/50 bg-osu-yellow/10 text-osu-yellow" },
+  purple: { label: "Purple", dot: "bg-osu-purple-light", text: "text-osu-purple-light", chip: "border-osu-purple-light/50 bg-osu-purple-light/10 text-osu-purple-light" },
+  red: { label: "Red", dot: "bg-osu-red-light", text: "text-osu-red-light", chip: "border-osu-red-light/50 bg-osu-red-light/10 text-osu-red-light" },
+  orange: { label: "Orange", dot: "bg-osu-orange", text: "text-osu-orange", chip: "border-osu-orange/50 bg-osu-orange/10 text-osu-orange" },
+};
+const GROUP_COLOR_ORDER: TodoGroupColor[] = ["pink", "blue", "green", "yellow", "purple", "red", "orange"];
+
+// The group picker is the category picker's twin, with "No group" as the empty value. The
+// selection bar adds one more entry, which names a new group instead of picking an existing one.
+const NO_GROUP = "";
+const NEW_GROUP = "\u0000new";
+
+/** First unused colour, so a board of groups reads as different colours without picking each one. */
+export function nextGroupColor(used: readonly TodoGroupColor[]): TodoGroupColor {
+  return GROUP_COLOR_ORDER.find((color) => !used.includes(color)) ?? GROUP_COLOR_ORDER[used.length % GROUP_COLOR_ORDER.length];
+}
+
+function groupOptions(groups: AdminTodoGroup[]): SelectMenuOption<string>[] {
+  return [
+    { value: NO_GROUP, label: "No group", icon: Tag },
+    ...groups.map((group) => ({
+      value: group.id,
+      label: group.name,
+      icon: Tag,
+      colorClass: GROUP_COLOR_META[group.color].text,
+    })),
+  ];
+}
 
 const PRIORITY_META: Record<TodoPriority, { label: string; dot: string }> = {
   high: { label: "High", dot: "bg-osu-red-light" },
@@ -247,6 +291,54 @@ function dropPoint(event: MouseEvent | TouchEvent | PointerEvent, info: { point:
   return info.point;
 }
 
+// ---------------------------------------------------------------------------
+// Marquee selection (drag a box over the board, like picking files on a desktop)
+// ---------------------------------------------------------------------------
+
+/** Viewport-space box. Marquee and note rects are both read from getBoundingClientRect. */
+export interface SelectRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** A press this small is a click on the board, not a box drawn over it. */
+const MARQUEE_MIN_DRAG_PX = 4;
+
+/** The box between where the drag started and where the pointer is now, either direction. */
+export function marqueeRect(ax: number, ay: number, bx: number, by: number): SelectRect {
+  return {
+    left: Math.min(ax, bx),
+    top: Math.min(ay, by),
+    right: Math.max(ax, bx),
+    bottom: Math.max(ay, by),
+  };
+}
+
+export function rectsOverlap(a: SelectRect, b: SelectRect): boolean {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+/** Notes the box touches. Grazing one is enough to take it, the way a file manager does it. */
+export function idsInMarquee(notes: { id: string; rect: SelectRect }[], box: SelectRect): string[] {
+  return notes.filter((note) => rectsOverlap(note.rect, box)).map((note) => note.id);
+}
+
+/**
+ * What the selection becomes as a box is dragged. A plain drag replaces the selection; holding a
+ * modifier adds to whatever was already picked (`base` is the selection as it stood when the drag
+ * started, so shrinking the box back gives those notes up again rather than keeping them).
+ */
+export function mergeSelection(base: readonly string[], hits: readonly string[], additive: boolean): string[] {
+  if (!additive) return [...hits];
+  const merged = [...base];
+  for (const id of hits) {
+    if (!merged.includes(id)) merged.push(id);
+  }
+  return merged;
+}
+
 // Completing a todo scores it like a mania hit: the judgement is how long the note sat on the
 // field before it was cleared. Weights follow mania accuracy (x/300).
 type Judgement = "MAX" | "300" | "200" | "100" | "50";
@@ -373,10 +465,12 @@ interface EditPatch {
   notes: string;
   category: TodoCategory;
   priority: TodoPriority;
+  groupId: string | null;
 }
 
 function TodosPage() {
   const [todos, setTodos] = useState<AdminTodo[]>([]);
+  const [groups, setGroups] = useState<AdminTodoGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -398,6 +492,24 @@ function TodosPage() {
   const [showHold, setShowHold] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [editing, setEditing] = useState<AdminTodo | null>(null);
+  // Chip row filter: show only one group's tasks. null = everything.
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [groupsOpen, setGroupsOpen] = useState(false);
+
+  // Marquee selection: drag a box across the board to take several notes at once, then act on the
+  // lot of them (group them, clear them, park them, drop them). Mouse only - a finger dragging over
+  // the board is scrolling it.
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [marquee, setMarquee] = useState<SelectRect | null>(null);
+  const marqueeRef = useRef<{ x: number; y: number; additive: boolean; base: string[]; moved: boolean } | null>(null);
+  // Holding ctrl/cmd/shift puts the board in selection mode: notes stop being draggable, so a press
+  // picks one instead of picking it up.
+  const [selectMode, setSelectMode] = useState(false);
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
 
   // Per-lane judgement popups; keyed so a fresh hit replaces the previous popup and an older
   // clear timer can't wipe a newer popup.
@@ -415,6 +527,7 @@ function TodosPage() {
     try {
       const result = await listAdminTodos();
       setTodos(sortTodos(result.todos));
+      setGroups(result.groups);
     } catch {
       // the error that triggered the refetch already surfaces on the page.
     }
@@ -437,7 +550,10 @@ function TodosPage() {
     (async () => {
       try {
         const result = await listAdminTodos();
-        if (alive) setTodos(sortTodos(result.todos));
+        if (alive) {
+          setTodos(sortTodos(result.todos));
+          setGroups(result.groups);
+        }
       } catch (caught) {
         if (alive) setError(errMessage(caught));
       } finally {
@@ -456,9 +572,28 @@ function TodosPage() {
     [query],
   );
 
-  const openFiltered = useMemo(() => todos.filter((t) => t.status === "open" && matchesSearch(t)), [todos, matchesSearch]);
-  const doneFiltered = useMemo(() => todos.filter((t) => t.status === "done" && matchesSearch(t)), [todos, matchesSearch]);
-  const holdFiltered = useMemo(() => todos.filter((t) => t.status === "hold" && matchesSearch(t)), [todos, matchesSearch]);
+  // The chip row narrows the board to one group; it filters the shelf and the results screen too,
+  // so a filtered board never contradicts what is listed under it.
+  const matchesFilters = useCallback(
+    (t: AdminTodo) => matchesSearch(t) && (groupFilter === null || t.groupId === groupFilter),
+    [groupFilter, matchesSearch],
+  );
+
+  const openFiltered = useMemo(() => todos.filter((t) => t.status === "open" && matchesFilters(t)), [todos, matchesFilters]);
+  const doneFiltered = useMemo(() => todos.filter((t) => t.status === "done" && matchesFilters(t)), [todos, matchesFilters]);
+  const holdFiltered = useMemo(() => todos.filter((t) => t.status === "hold" && matchesFilters(t)), [todos, matchesFilters]);
+
+  const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
+  // Chip counts are the live list: tasks still to do, parked ones included, cleared ones not.
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of todos) {
+      if (t.status === "done" || !t.groupId) continue;
+      counts.set(t.groupId, (counts.get(t.groupId) ?? 0) + 1);
+    }
+    return counts;
+  }, [todos]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   // Lane contents: open todos split by category, position asc (first = next up, closest to the line).
   const lanes = useMemo(() => {
@@ -480,6 +615,110 @@ function TodosPage() {
   const holdCount = useMemo(() => todos.filter((t) => t.status === "hold").length, [todos]);
   const acc = accuracyOf(doneAll);
   const grade = gradeOf(acc);
+
+  // A selected note that got cleared, parked or deleted (here or in another tab) leaves the
+  // selection rather than sitting in it invisibly.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const alive = prev.filter((id) => todos.some((t) => t.id === id && t.status === "open"));
+      return alive.length === prev.length ? prev : alive;
+    });
+  }, [todos]);
+
+  useEffect(() => {
+    const sync = (event: KeyboardEvent) => setSelectMode(event.ctrlKey || event.metaKey || event.shiftKey);
+    // A modifier released while the window was in the background never fires keyup here, and the
+    // board would stay undraggable.
+    const reset = () => setSelectMode(false);
+    window.addEventListener("keydown", sync);
+    window.addEventListener("keyup", sync);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", sync);
+      window.removeEventListener("keyup", sync);
+      window.removeEventListener("blur", reset);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedIds([]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedIds.length]);
+
+  /** Every note currently on the board, with where it is on screen. Read fresh on each move. */
+  const collectNoteRects = useCallback((): { id: string; rect: SelectRect }[] => {
+    const board = boardRef.current;
+    if (!board) return [];
+    return Array.from(board.querySelectorAll<HTMLElement>("[data-todo-id]"))
+      .map((el) => {
+        const rect = el.getBoundingClientRect();
+        return { id: el.dataset.todoId ?? "", rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } };
+      })
+      .filter((note) => note.id);
+  }, []);
+
+  const handleBoardPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    // The tick button and the search box own their own presses, and so does anything floating over
+    // the page (the selection bar, a modal).
+    if (target.closest("button, a, input, textarea, [data-no-marquee]")) return;
+    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+    const row = target.closest("[data-todo-id]") as HTMLElement | null;
+    if (row) {
+      // A plain press on a note drags it or opens it; only a modifier press picks it.
+      if (!additive) return;
+      const id = row.dataset.todoId ?? "";
+      if (!id) return;
+      event.preventDefault();
+      setSelectedIds((prev) => (prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id]));
+      return;
+    }
+    marqueeRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      additive,
+      base: additive ? selectedIdsRef.current : [],
+      moved: false,
+    };
+  }, []);
+
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const start = marqueeRef.current;
+      if (!start) return;
+      if (
+        !start.moved
+        && Math.abs(event.clientX - start.x) < MARQUEE_MIN_DRAG_PX
+        && Math.abs(event.clientY - start.y) < MARQUEE_MIN_DRAG_PX
+      ) {
+        return;
+      }
+      start.moved = true;
+      const box = marqueeRect(start.x, start.y, event.clientX, event.clientY);
+      setMarquee(box);
+      setSelectedIds(mergeSelection(start.base, idsInMarquee(collectNoteRects(), box), start.additive));
+    };
+    const onUp = () => {
+      const start = marqueeRef.current;
+      marqueeRef.current = null;
+      setMarquee(null);
+      // A press on bare board that never became a box is a click on nothing: drop the selection.
+      if (start && !start.moved && !start.additive) setSelectedIds([]);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [collectNoteRects]);
 
   const handleAdd = useCallback(async () => {
     const trimmed = title.trim();
@@ -562,6 +801,7 @@ function TodosPage() {
           notes: patch.notes,
           category: patch.category,
           priority: patch.priority,
+          groupId: patch.groupId,
         },
       });
       setTodos((prev) => upsertTodo(prev, result.todo));
@@ -645,8 +885,138 @@ function TodosPage() {
     [refetch],
   );
 
+  // ---------------------------------------------------------------------
+  // Bulk actions on a marquee selection
+  // ---------------------------------------------------------------------
+
+  const applyTodos = useCallback((updated: AdminTodo[]) => {
+    setTodos((prev) => updated.reduce((acc, todo) => upsertTodo(acc, todo), prev));
+  }, []);
+
+  const handleBulkGroup = useCallback(
+    async (groupId: string | null) => {
+      const ids = selectedIdsRef.current;
+      if (ids.length === 0) return;
+      setTodos((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, groupId } : t)));
+      playTodoDropTick();
+      setError(null);
+      try {
+        // One request for the whole selection rather than one per note.
+        const result = await assignAdminTodosToGroup({ data: { ids, groupId } });
+        applyTodos(result.todos);
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [applyTodos, refetch],
+  );
+
+  const handleBulkStatus = useCallback(
+    async (next: "done" | "hold") => {
+      const ids = selectedIdsRef.current;
+      const picked = todosRef.current.filter((t) => ids.includes(t.id) && t.status === "open");
+      if (picked.length === 0) return;
+      const now = Date.now();
+      setTodos((prev) =>
+        picked.reduce(
+          (acc, todo) => upsertTodo(acc, { ...todo, status: next, doneAt: next === "done" ? now : null, updatedAt: now }),
+          prev,
+        ),
+      );
+      setSelectedIds([]);
+      if (next === "done") {
+        // One judgement for the batch, taken from the note that sat on the field longest: clearing
+        // a stack of old tasks at once should not read as a MAX.
+        const oldest = Math.min(...picked.map((t) => t.createdAt));
+        const judgement = judgeTodo(oldest, now);
+        punch(picked[0].category, judgement);
+        playTodoHit(judgement);
+      } else {
+        setShowHold(true);
+        playTodoDropTick();
+      }
+      setError(null);
+      try {
+        const results = await Promise.all(picked.map((todo) => updateAdminTodo({ data: { id: todo.id, status: next } })));
+        applyTodos(results.map((result) => result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [applyTodos, punch, refetch],
+  );
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = selectedIdsRef.current;
+    const picked = todosRef.current.filter((t) => ids.includes(t.id));
+    if (picked.length === 0) return;
+    setTodos((prev) => prev.filter((t) => !ids.includes(t.id)));
+    setSelectedIds([]);
+    punch(picked[0].category, "MISS");
+    playTodoMiss();
+    setError(null);
+    try {
+      await Promise.all(picked.map((todo) => deleteAdminTodo({ data: { id: todo.id } })));
+    } catch (caught) {
+      setError(errMessage(caught));
+      void refetch();
+    }
+  }, [punch, refetch]);
+
+  // ---------------------------------------------------------------------
+  // Groups
+  // ---------------------------------------------------------------------
+
+  const handleSaveGroup = useCallback(async (input: { id?: string; name: string; color: TodoGroupColor }) => {
+    setError(null);
+    try {
+      const result = await saveAdminTodoGroup({ data: input });
+      setGroups((prev) =>
+        prev
+          .filter((group) => group.id !== result.group.id)
+          .concat(result.group)
+          .sort((a, b) => a.position - b.position || a.createdAt - b.createdAt),
+      );
+      return result.group;
+    } catch (caught) {
+      setError(errMessage(caught));
+      return null;
+    }
+  }, []);
+
+  // Naming a group in the selection bar creates it and puts the selection in it in one go.
+  const handleCreateGroupForSelection = useCallback(
+    async (name: string) => {
+      const group = await handleSaveGroup({ name, color: nextGroupColor(groups.map((g) => g.color)) });
+      if (group) await handleBulkGroup(group.id);
+    },
+    [groups, handleBulkGroup, handleSaveGroup],
+  );
+
+  const handleDeleteGroup = useCallback(async (id: string) => {
+    // Deleting a group ungroups its tasks; it never takes them with it.
+    setGroups((prev) => prev.filter((group) => group.id !== id));
+    setTodos((prev) => prev.map((t) => (t.groupId === id ? { ...t, groupId: null } : t)));
+    setGroupFilter((current) => (current === id ? null : current));
+    setError(null);
+    try {
+      await deleteAdminTodoGroup({ data: { id } });
+    } catch (caught) {
+      setError(errMessage(caught));
+      void refetch();
+    }
+  }, [refetch]);
+
   return (
-    <div className="flex-1 bg-osu-b5 min-h-[calc(100vh-60px)]">
+    <div
+      ref={boardRef}
+      onPointerDown={handleBoardPointerDown}
+      className={`flex-1 bg-osu-b5 min-h-[calc(100vh-60px)] ${marquee ? "select-none" : ""} ${
+        selectMode ? "cursor-crosshair" : ""
+      }`}
+    >
       <div className="mx-auto max-w-[1000px] space-y-4 px-4 py-6 sm:px-5">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -761,6 +1131,39 @@ function TodosPage() {
           )}
         </div>
 
+        {/* Groups: the owner's own buckets over the board. A chip filters to one of them. */}
+        {!loading && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {groups.map((group) => {
+              const meta = GROUP_COLOR_META[group.color];
+              const active = groupFilter === group.id;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => setGroupFilter(active ? null : group.id)}
+                  aria-pressed={active}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                    active ? meta.chip : "border-osu-b3/40 bg-osu-b4/30 text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                  {group.name}
+                  <span className="tabular-nums text-osu-f1/60">{groupCounts.get(group.id) ?? 0}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setGroupsOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-l2 cursor-pointer"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {groups.length ? "Edit groups" : "New group"}
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="flex items-center gap-2 rounded-lg border border-osu-red/40 bg-osu-red/10 px-3 py-2 text-xs text-osu-red">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -798,6 +1201,9 @@ function TodosPage() {
                         onMoveToLane={handleMoveToLane}
                         onDragHoverLane={setHoveredLane}
                         hovered={hoveredLane === key}
+                        groupById={groupById}
+                        selectedIds={selectedSet}
+                        selectMode={selectMode}
                       />
                     ))}
                     {openFiltered.length === 0 && (
@@ -805,8 +1211,8 @@ function TodosPage() {
                         <p className="rounded-md bg-osu-b6/70 px-3 py-1.5 text-xs text-osu-f1">
                           {todos.length === 0
                             ? "No notes on the field. Add the first one above."
-                            : query
-                              ? "Nothing on the field matches this search."
+                            : query || groupFilter
+                              ? "Nothing on the field matches this filter."
                               : "All clear. Nothing left on the field."}
                         </p>
                       </div>
@@ -822,8 +1228,8 @@ function TodosPage() {
                   <p className="py-20 text-center text-xs text-osu-f1">
                     {todos.length === 0
                       ? "Nothing queued. Add the first task above."
-                      : query
-                        ? "Nothing queued matches this search."
+                      : query || groupFilter
+                        ? "Nothing queued matches this filter."
                         : "All clear. Nothing left to do."}
                   </p>
                 ) : (
@@ -833,6 +1239,9 @@ function TodosPage() {
                     onHit={handleToggle}
                     onOpen={setEditing}
                     onReorderEnd={handleReorderEnd}
+                    groupById={groupById}
+                    selectedIds={selectedSet}
+                    selectMode={selectMode}
                   />
                 )}
               </div>
@@ -936,6 +1345,7 @@ function TodosPage() {
         {editing && (
           <NoteModal
             todo={editing}
+            groups={groups}
             onClose={() => setEditing(null)}
             onSave={handleSave}
             onDelete={handleDelete}
@@ -943,6 +1353,46 @@ function TodosPage() {
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedIds.length > 0 && (
+          <SelectionBar
+            count={selectedIds.length}
+            groups={groups}
+            onGroup={(groupId) => void handleBulkGroup(groupId)}
+            onCreateGroup={(name) => void handleCreateGroupForSelection(name)}
+            onDone={() => void handleBulkStatus("done")}
+            onHold={() => void handleBulkStatus("hold")}
+            onDelete={() => void handleBulkDelete()}
+            onClear={() => setSelectedIds([])}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {groupsOpen && (
+          <GroupsModal
+            groups={groups}
+            counts={groupCounts}
+            onClose={() => setGroupsOpen(false)}
+            onSave={handleSaveGroup}
+            onDelete={handleDeleteGroup}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* The box itself, in viewport coordinates so no scroll offset has to be tracked. */}
+      {marquee && (
+        <div
+          className="pointer-events-none fixed z-[80] rounded-[2px] border border-osu-blue/80 bg-osu-blue/20"
+          style={{
+            left: marquee.left,
+            top: marquee.top,
+            width: marquee.right - marquee.left,
+            height: marquee.bottom - marquee.top,
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -969,9 +1419,14 @@ interface LaneProps {
   onMoveToLane: (id: string, category: TodoCategory, position: number) => void;
   onDragHoverLane: (category: TodoCategory | null) => void;
   hovered: boolean;
+  groupById: Map<string, AdminTodoGroup>;
+  // Ids currently picked by the marquee, and whether a modifier is down (which suspends dragging so
+  // a press picks a note rather than lifting it).
+  selectedIds: Set<string>;
+  selectMode: boolean;
 }
 
-function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, positionPeers, onMoveToLane, onDragHoverLane, hovered }: LaneProps) {
+function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, positionPeers, onMoveToLane, onDragHoverLane, hovered, groupById, selectedIds, selectMode }: LaneProps) {
   const meta = CATEGORY_META[category];
   const Icon = meta.Icon;
 
@@ -1079,6 +1534,9 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
             <LaneNote
               key={todo.id}
               todo={todo}
+              group={todo.groupId ? groupById.get(todo.groupId) ?? null : null}
+              selected={selectedIds.has(todo.id)}
+              selectMode={selectMode}
               onHit={onHit}
               onOpen={onOpen}
               onDragStart={handleDragStart}
@@ -1115,6 +1573,9 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
 
 function LaneNote({
   todo,
+  group,
+  selected,
+  selectMode,
   onHit,
   onOpen,
   onDragStart,
@@ -1122,6 +1583,9 @@ function LaneNote({
   onDragEnd,
 }: {
   todo: AdminTodo;
+  group: AdminTodoGroup | null;
+  selected: boolean;
+  selectMode: boolean;
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onDragStart: () => void;
@@ -1141,6 +1605,8 @@ function LaneNote({
       // thrown sideways onto another lane. Reorder.Item forces dragSnapToOrigin, so it springs back
       // and re-renders from the committed data either way.
       drag
+      // With a modifier down the press belongs to the selection, not to a drag.
+      dragListener={!selectMode}
       onDragStart={() => {
         dragging.current = true;
         onDragStart();
@@ -1161,9 +1627,9 @@ function LaneNote({
       exit={{ opacity: 0, y: 12, scale: 0.9, transition: { duration: 0.14 } }}
       transition={{ duration: 0.18, ease: "easeOut" }}
       style={{ touchAction: "pan-y" }}
-      className={`group relative cursor-grab select-none rounded-md border border-osu-b3/50 border-t-2 bg-osu-b4/60 transition-colors hover:border-osu-b3 active:cursor-grabbing ${meta.edge} ${
-        todo.priority === "low" ? "opacity-70" : ""
-      }`}
+      className={`group relative select-none rounded-md border border-osu-b3/50 border-t-2 bg-osu-b4/60 transition-colors hover:border-osu-b3 ${
+        selectMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"
+      } ${meta.edge} ${selected ? "ring-1 ring-osu-blue/80" : ""} ${todo.priority === "low" ? "opacity-70" : ""}`}
     >
       <div className="flex items-start gap-1.5 p-1.5 pl-2">
         <div className="min-w-0 flex-1">
@@ -1178,6 +1644,12 @@ function LaneNote({
             )}
             {todo.notes && <AlignLeft className="h-2.5 w-2.5" />}
             <span>{formatShortDate(todo.createdAt)}</span>
+            {group && (
+              <span className={`inline-flex min-w-0 items-center gap-1 ${GROUP_COLOR_META[group.color].text}`}>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${GROUP_COLOR_META[group.color].dot}`} />
+                <span className="truncate">{group.name}</span>
+              </span>
+            )}
           </div>
         </div>
         {/* Hover reveals the tick on desktop; touch has no hover, so it stays visible there. */}
@@ -1208,6 +1680,9 @@ function Queue({
   onHit,
   onOpen,
   onReorderEnd,
+  groupById,
+  selectedIds,
+  selectMode,
 }: {
   // Position asc: first row is the next thing to do.
   items: AdminTodo[];
@@ -1217,6 +1692,9 @@ function Queue({
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onReorderEnd: (id: string, position: number) => void;
+  groupById: Map<string, AdminTodoGroup>;
+  selectedIds: Set<string>;
+  selectMode: boolean;
 }) {
   const [order, setOrder] = useState<AdminTodo[]>(items);
   const dragging = useRef(false);
@@ -1272,6 +1750,9 @@ function Queue({
             key={todo.id}
             todo={todo}
             rank={index + 1}
+            group={todo.groupId ? groupById.get(todo.groupId) ?? null : null}
+            selected={selectedIds.has(todo.id)}
+            selectMode={selectMode}
             onHit={onHit}
             onOpen={onOpen}
             onDragStart={handleDragStart}
@@ -1286,6 +1767,9 @@ function Queue({
 function QueueRow({
   todo,
   rank,
+  group,
+  selected,
+  selectMode,
   onHit,
   onOpen,
   onDragStart,
@@ -1293,6 +1777,9 @@ function QueueRow({
 }: {
   todo: AdminTodo;
   rank: number;
+  group: AdminTodoGroup | null;
+  selected: boolean;
+  selectMode: boolean;
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onDragStart: () => void;
@@ -1306,6 +1793,8 @@ function QueueRow({
     <Reorder.Item
       value={todo}
       layout
+      data-todo-id={todo.id}
+      dragListener={!selectMode}
       onDragStart={() => {
         dragging.current = true;
         onDragStart();
@@ -1325,9 +1814,9 @@ function QueueRow({
       exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.14 } }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       style={{ touchAction: "pan-y" }}
-      className={`group flex cursor-grab select-none items-center gap-2 rounded-md border border-osu-b3/40 border-l-2 bg-osu-b4/40 px-2 py-2 transition-colors hover:border-osu-b3 active:cursor-grabbing sm:py-1.5 ${meta.edgeLeft} ${
-        todo.priority === "low" ? "opacity-70" : ""
-      }`}
+      className={`group flex select-none items-center gap-2 rounded-md border border-osu-b3/40 border-l-2 bg-osu-b4/40 px-2 py-2 transition-colors hover:border-osu-b3 sm:py-1.5 ${
+        selectMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"
+      } ${meta.edgeLeft} ${selected ? "ring-1 ring-osu-blue/80" : ""} ${todo.priority === "low" ? "opacity-70" : ""}`}
     >
       {/* The whole row is the drag handle, so the grip is decoration - drop it before the title. */}
       <GripVertical className="hidden h-3.5 w-3.5 shrink-0 text-osu-f1/30 group-hover:text-osu-f1/60 sm:block" />
@@ -1335,6 +1824,12 @@ function QueueRow({
       <TodoSeq seq={todo.seq} className="shrink-0 text-[10px] sm:w-8" />
       <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
       <span className="min-w-0 flex-1 truncate text-xs text-osu-l1">{todo.title}</span>
+      {group && (
+        <span className={`hidden max-w-[120px] shrink-0 items-center gap-1 text-[10px] font-semibold sm:inline-flex ${GROUP_COLOR_META[group.color].text}`}>
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${GROUP_COLOR_META[group.color].dot}`} />
+          <span className="truncate">{group.name}</span>
+        </span>
+      )}
       {todo.priority === "high" && (
         <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-osu-red-light" title="High priority" />
       )}
@@ -1507,12 +2002,14 @@ function DoneRow({
 
 function NoteModal({
   todo,
+  groups,
   onClose,
   onSave,
   onDelete,
   onHold,
 }: {
   todo: AdminTodo;
+  groups: AdminTodoGroup[];
   onClose: () => void;
   onSave: (id: string, patch: EditPatch) => Promise<void>;
   onDelete: (todo: AdminTodo) => void;
@@ -1523,6 +2020,7 @@ function NoteModal({
     notes: todo.notes ?? "",
     category: todo.category,
     priority: todo.priority,
+    groupId: todo.groupId,
   });
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1561,6 +2059,7 @@ function NoteModal({
       exit={{ opacity: 0, transition: { duration: 0.1 } }}
       transition={{ duration: 0.12 }}
       onClick={onClose}
+      data-no-marquee
       className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
     >
       <motion.div
@@ -1614,6 +2113,14 @@ function NoteModal({
             ariaLabel="Category"
           />
           <PrioritySegmented value={draft.priority} onChange={(priority) => setDraft((d) => ({ ...d, priority }))} />
+          {groups.length > 0 && (
+            <SelectMenu
+              value={draft.groupId ?? NO_GROUP}
+              options={groupOptions(groups)}
+              onChange={(groupId) => setDraft((d) => ({ ...d, groupId: groupId === NO_GROUP ? null : groupId }))}
+              ariaLabel="Group"
+            />
+          )}
         </div>
         <div className="mt-3 flex items-center gap-1.5">
           {confirmDelete ? (
@@ -1673,6 +2180,377 @@ function NoteModal({
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Selection bar (what a marquee selection can be done to)
+// ---------------------------------------------------------------------------
+
+function SelectionBar({
+  count,
+  groups,
+  onGroup,
+  onCreateGroup,
+  onDone,
+  onHold,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  groups: AdminTodoGroup[];
+  onGroup: (groupId: string | null) => void;
+  onCreateGroup: (name: string) => void;
+  onDone: () => void;
+  onHold: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(() => setArmed(false), 4_000);
+    return () => window.clearTimeout(id);
+  }, [armed]);
+  // A picker whose value is the action: it never shows the selection's current group, because a
+  // selection can span several. Reset to "No group" after each pick so the label reads the same.
+  const [picker, setPicker] = useState<string>(NO_GROUP);
+  // Naming a new group happens in the bar itself: the selection is already made, and sending it to
+  // the groups modal would mean picking the same notes again afterwards.
+  const [naming, setNaming] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const commitNewGroup = () => {
+    const name = draftName.trim();
+    if (!name) return;
+    setNaming(false);
+    setDraftName("");
+    onCreateGroup(name);
+  };
+
+  return (
+    <motion.div
+      data-no-marquee
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12, transition: { duration: 0.1 } }}
+      transition={{ duration: 0.14, ease: "easeOut" }}
+      className="fixed inset-x-0 bottom-4 z-[70] mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-lg border border-osu-blue/40 bg-osu-b5/95 px-2.5 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+    >
+      <span className="text-[11px] font-semibold text-osu-blue">
+        {count} selected
+      </span>
+      {naming ? (
+        <div className="flex items-center gap-1.5">
+          <input
+            value={draftName}
+            onChange={(event) => setDraftName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitNewGroup();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                // Stop here rather than letting Escape reach the page and drop the selection.
+                event.stopPropagation();
+                setNaming(false);
+                setDraftName("");
+              }
+            }}
+            maxLength={60}
+            autoFocus
+            placeholder="Group name..."
+            className="w-[150px] rounded-md border border-osu-b3/50 bg-osu-b6/70 px-2 py-1 text-xs text-osu-l1 placeholder:text-osu-f1/60 focus:border-osu-c2/60 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={commitNewGroup}
+            disabled={!draftName.trim()}
+            aria-label="Create the group and put the selection in it"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-green disabled:opacity-40 cursor-pointer"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setNaming(false);
+              setDraftName("");
+            }}
+            aria-label="Cancel"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <SelectMenu
+          value={picker}
+          options={[...groupOptions(groups), { value: NEW_GROUP, label: "New group...", icon: Plus }]}
+          onChange={(groupId) => {
+            setPicker(NO_GROUP);
+            if (groupId === NEW_GROUP) {
+              setNaming(true);
+              return;
+            }
+            onGroup(groupId === NO_GROUP ? null : groupId);
+          }}
+          ariaLabel="Put the selection in a group"
+        />
+      )}
+      <button
+        type="button"
+        onClick={onDone}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-green cursor-pointer"
+      >
+        <Check className="h-3.5 w-3.5" />
+        Hit
+      </button>
+      <button
+        type="button"
+        onClick={onHold}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-l1 cursor-pointer"
+      >
+        <Pause className="h-3.5 w-3.5" />
+        Hold
+      </button>
+      {armed ? (
+        <button
+          type="button"
+          onClick={() => {
+            setArmed(false);
+            onDelete();
+          }}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-2 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete {count}?
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setArmed(true)}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-red cursor-pointer"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onClear}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-l1 cursor-pointer"
+      >
+        <X className="h-3.5 w-3.5" />
+        Clear
+      </button>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Groups modal (name them, colour them, delete them)
+// ---------------------------------------------------------------------------
+
+function GroupsModal({
+  groups,
+  counts,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  groups: AdminTodoGroup[];
+  counts: Map<string, number>;
+  onClose: () => void;
+  onSave: (input: { id?: string; name: string; color: TodoGroupColor }) => Promise<AdminTodoGroup | null>;
+  onDelete: (id: string) => void;
+}) {
+  const [draftName, setDraftName] = useState("");
+  const [draftColor, setDraftColor] = useState<TodoGroupColor>(() => nextGroupColor(groups.map((group) => group.color)));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const addGroup = async () => {
+    const name = draftName.trim();
+    if (!name || saving) return;
+    setSaving(true);
+    await onSave({ name, color: draftColor });
+    setSaving(false);
+    setDraftName("");
+    // The next one offers the next unused colour, so a board of groups reads as different colours
+    // without anyone picking them one at a time.
+    setDraftColor(nextGroupColor([...groups.map((group) => group.color), draftColor]));
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.1 } }}
+      transition={{ duration: 0.12 }}
+      onClick={onClose}
+      data-no-marquee
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.96, y: 8 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.96, y: 8 }}
+        transition={{ duration: 0.12 }}
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-md rounded-xl border border-osu-b3/50 bg-osu-b5 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.55)]"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">Groups</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          {groups.map((group) => (
+            <GroupEditRow
+              key={group.id}
+              group={group}
+              count={counts.get(group.id) ?? 0}
+              onSave={onSave}
+              onDelete={onDelete}
+            />
+          ))}
+          {groups.length === 0 && (
+            <p className="py-3 text-center text-xs text-osu-f1">No groups yet. Name the first one below.</p>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <ColorDots value={draftColor} onChange={setDraftColor} />
+          <input
+            value={draftName}
+            onChange={(event) => setDraftName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void addGroup();
+              }
+            }}
+            maxLength={60}
+            placeholder="New group..."
+            className="min-w-0 flex-1 rounded-md border border-osu-b3/50 bg-osu-b6/70 px-2.5 py-1.5 text-xs text-osu-l1 placeholder:text-osu-f1/60 focus:border-osu-c2/60 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => void addGroup()}
+            disabled={!draftName.trim() || saving}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-osu-yellow/40 bg-osu-yellow/15 px-2.5 text-[11px] font-semibold text-osu-yellow transition-colors hover:bg-osu-yellow/25 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Add
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function GroupEditRow({
+  group,
+  count,
+  onSave,
+  onDelete,
+}: {
+  group: AdminTodoGroup;
+  count: number;
+  onSave: (input: { id?: string; name: string; color: TodoGroupColor }) => Promise<AdminTodoGroup | null>;
+  onDelete: (id: string) => void;
+}) {
+  const [name, setName] = useState(group.name);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = window.setTimeout(() => setConfirmDelete(false), 4_000);
+    return () => window.clearTimeout(id);
+  }, [confirmDelete]);
+  // The row saves as you leave it rather than behind a per-row save button.
+  const commitName = () => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === group.name) {
+      setName(group.name);
+      return;
+    }
+    void onSave({ id: group.id, name: trimmed, color: group.color });
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-osu-b3/30 bg-osu-b4/20 px-2 py-1.5">
+      <ColorDots value={group.color} onChange={(color) => void onSave({ id: group.id, name: group.name, color })} />
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        onBlur={commitName}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") setName(group.name);
+        }}
+        maxLength={60}
+        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs text-osu-l1 focus:border-osu-b3/50 focus:bg-osu-b6/60 focus:outline-none"
+      />
+      <span className="shrink-0 text-[10px] tabular-nums text-osu-f1/60">{count}</span>
+      {confirmDelete ? (
+        <button
+          type="button"
+          onClick={() => {
+            setConfirmDelete(false);
+            onDelete(group.id);
+          }}
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer"
+          title="The tasks stay; they just lose the group"
+        >
+          <Trash2 className="h-3 w-3" />
+          Sure?
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          aria-label={`Delete group ${group.name}`}
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-osu-f1 transition hover:bg-osu-red/15 hover:text-osu-red cursor-pointer"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The palette, as dots. Seven colours is the whole set, so they fit on one row. */
+function ColorDots({ value, onChange }: { value: TodoGroupColor; onChange: (color: TodoGroupColor) => void }) {
+  return (
+    <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Group color">
+      {GROUP_COLOR_ORDER.map((color) => (
+        <button
+          key={color}
+          type="button"
+          onClick={() => onChange(color)}
+          aria-label={GROUP_COLOR_META[color].label}
+          aria-pressed={color === value}
+          className={`h-3 w-3 rounded-full transition-transform cursor-pointer ${GROUP_COLOR_META[color].dot} ${
+            color === value ? "scale-125 ring-1 ring-osu-c1/70" : "opacity-50 hover:opacity-100"
+          }`}
+        />
+      ))}
+    </div>
   );
 }
 

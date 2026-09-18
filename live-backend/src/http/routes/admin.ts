@@ -4,7 +4,7 @@ import { exec, parseJson, type Db } from "../../db.js";
 import { JOURNAL_TABLES } from "../../journal.js";
 import { countUserLinks } from "../../discord/identity.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../../discord/subscriptions.js";
-import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../../features/admin-todos.js";
+import { assignAdminTodosToGroup, clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, deleteAdminTodoGroup, listAdminTodoGroups, listAdminTodos, saveAdminTodoGroup, updateAdminTodo, type CreateTodoInput, type SaveTodoGroupInput, type UpdateTodoInput } from "../../features/admin-todos.js";
 import { clearReviewedTranslationReports, deleteTranslationReport, listTranslationReports, updateTranslationReport, type UpdateTranslationReportInput } from "../../features/translation-reports.js";
 import { addAdminBugReportMessage, clearClosedBugReports, countUnseenBugReports, deleteBugReport, editAdminBugReportMessage, getBugReport, listBugReports, markBugReportsSeen, promoteBugReportToTodo, updateBugReport, type UpdateBugReportInput } from "../../features/bug-reports.js";
 import { cancelBeatmapOsuFileBackfill, startBeatmapOsuFileBackfill } from "../../features/beatmap-osu-file-backfill.js";
@@ -794,7 +794,10 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { todos: await listAdminTodos(ctx.db) });
+    sendJson(req, res, ctx, 200, {
+      todos: await listAdminTodos(ctx.db),
+      groups: await listAdminTodoGroups(ctx.db),
+    });
     return true;
   }
   if (url.pathname === "/api/admin/todos/create") {
@@ -849,6 +852,57 @@ export async function handleAdminRoutes(req: IncomingMessage, res: ServerRespons
       return true;
     }
     sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/group-save") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<SaveTodoGroupInput>((await readBody(req)) || "{}", {});
+    const group = await saveAdminTodoGroup(ctx.serveWriteDb ?? ctx.db, body);
+    if (!group) {
+      sendJson(req, res, ctx, 400, { error: "invalid_group" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, group });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/group-delete") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
+    const removed = await deleteAdminTodoGroup(ctx.serveWriteDb ?? ctx.db, typeof body.id === "string" ? body.id : "");
+    if (!removed) {
+      sendJson(req, res, ctx, 404, { error: "group_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/assign-group") {
+    // Bulk: one marquee selection on the board, one write.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ ids?: unknown; groupId?: unknown }>((await readBody(req)) || "{}", {});
+    const todos = await assignAdminTodosToGroup(ctx.serveWriteDb ?? ctx.db, body.ids, body.groupId);
+    sendJson(req, res, ctx, 200, { ok: true, todos });
     return true;
   }
   if (url.pathname === "/api/admin/todos/clear-done") {

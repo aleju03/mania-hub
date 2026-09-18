@@ -138,7 +138,7 @@ describe("admin authorization fails closed", () => {
     for (const nodeEnv of ["development", "production"]) {
       const result = await call(PROTECTED, { authorization: `Bearer ${TOKEN}` }, { nodeEnv, liveAdminToken: TOKEN });
       expect(result.status, `nodeEnv: ${nodeEnv}`).toBe(200);
-      expect(result.body).toEqual({ todos: [] });
+      expect(result.body).toEqual({ todos: [], groups: [] });
     }
   });
 

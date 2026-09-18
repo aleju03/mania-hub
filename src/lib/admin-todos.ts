@@ -10,6 +10,8 @@ export type TodoCategory = "bug" | "feature" | "idea" | "chore" | "task";
 export type TodoPriority = "low" | "normal" | "high";
 // "hold" is a parked task: still on the list, off the board, never scored.
 export type TodoStatus = "open" | "hold" | "done";
+// Owner-defined buckets laid over the fixed categories, each painted in one of a fixed palette.
+export type TodoGroupColor = "pink" | "blue" | "green" | "yellow" | "purple" | "red" | "orange";
 
 export interface AdminTodo {
   id: string;
@@ -25,6 +27,16 @@ export interface AdminTodo {
   position: number;
   // Short handle shown on the card ("#7") so a task can be named in conversation. Never reused.
   seq: number;
+  // The group this task was put in, or null. Deleting a group ungroups its tasks.
+  groupId: string | null;
+}
+
+export interface AdminTodoGroup {
+  id: string;
+  name: string;
+  color: TodoGroupColor;
+  createdAt: number;
+  position: number;
 }
 
 function liveBackendHeaders(): HeadersInit {
@@ -63,12 +75,13 @@ async function postAdminTodos(path: string, payload: unknown): Promise<Response>
   });
 }
 
-export const listAdminTodos = createServerFn({ method: "GET" }).handler(async (): Promise<{ todos: AdminTodo[] }> => {
+export const listAdminTodos = createServerFn({ method: "GET" }).handler(async (): Promise<{ todos: AdminTodo[]; groups: AdminTodoGroup[] }> => {
   await requireAdminAccess("Admin todos list");
   const base = requireLiveBackendBase();
   const response = await fetchLiveBackend(`${base}/api/admin/todos`, { headers: liveBackendHeaders() });
   if (!response.ok) throw new Error(`Todos list failed (${response.status}).`);
-  return await response.json() as { todos: AdminTodo[] };
+  const body = await response.json() as { todos: AdminTodo[]; groups?: AdminTodoGroup[] };
+  return { todos: body.todos, groups: body.groups ?? [] };
 });
 
 export const createAdminTodo = createServerFn({ method: "POST" })
@@ -86,7 +99,7 @@ export const createAdminTodo = createServerFn({ method: "POST" })
   });
 
 export const updateAdminTodo = createServerFn({ method: "POST" })
-  .validator((data: { id?: unknown; title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; status?: unknown; position?: unknown }) => {
+  .validator((data: { id?: unknown; title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; status?: unknown; position?: unknown; groupId?: unknown }) => {
     // Only forward keys that were actually provided, so a "toggle done" ({ id, status }) never
     // overwrites the title/notes/etc. the backend applies a partial update from exactly these keys.
     const patch: Record<string, unknown> = { id: typeof data?.id === "string" ? data.id : "" };
@@ -96,6 +109,8 @@ export const updateAdminTodo = createServerFn({ method: "POST" })
     if (data && "priority" in data) patch.priority = data.priority;
     if (data && "status" in data) patch.status = data.status;
     if (data && "position" in data) patch.position = typeof data.position === "number" ? data.position : undefined;
+    // null is meaningful here (ungroup), so the key is forwarded as-is once it was provided.
+    if (data && "groupId" in data) patch.groupId = typeof data.groupId === "string" ? data.groupId : null;
     return patch;
   })
   .handler(async ({ data }): Promise<{ todo: AdminTodo }> => {
@@ -120,3 +135,40 @@ export const clearDoneAdminTodos = createServerFn({ method: "POST" }).handler(as
   if (!response.ok) throw new Error(`Todos clear failed (${response.status}).`);
   return await response.json() as { ok: boolean; cleared: number };
 });
+
+// Groups: the owner's own buckets over the board. Saving with an id renames/recolors, without one
+// creates; assigning takes a whole marquee selection at once so one bulk edit is one request.
+
+export const saveAdminTodoGroup = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; name?: unknown; color?: unknown }) => ({
+    id: typeof data?.id === "string" ? data.id : undefined,
+    name: typeof data?.name === "string" ? data.name : "",
+    color: typeof data?.color === "string" ? data.color : "pink",
+  }))
+  .handler(async ({ data }): Promise<{ group: AdminTodoGroup }> => {
+    await requireAdminAccess("Admin todo group save");
+    const response = await postAdminTodos("/api/admin/todos/group-save", data);
+    if (!response.ok) throw new Error(`Group save failed (${response.status}).`);
+    return await response.json() as { group: AdminTodoGroup };
+  });
+
+export const deleteAdminTodoGroup = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => ({ id: typeof data?.id === "string" ? data.id : "" }))
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    await requireAdminAccess("Admin todo group delete");
+    const response = await postAdminTodos("/api/admin/todos/group-delete", data);
+    if (!response.ok) throw new Error(`Group delete failed (${response.status}).`);
+    return await response.json() as { ok: boolean };
+  });
+
+export const assignAdminTodosToGroup = createServerFn({ method: "POST" })
+  .validator((data: { ids?: unknown; groupId?: unknown }) => ({
+    ids: Array.isArray(data?.ids) ? data.ids.filter((id): id is string => typeof id === "string") : [],
+    groupId: typeof data?.groupId === "string" ? data.groupId : null,
+  }))
+  .handler(async ({ data }): Promise<{ todos: AdminTodo[] }> => {
+    await requireAdminAccess("Admin todos assign group");
+    const response = await postAdminTodos("/api/admin/todos/assign-group", data);
+    if (!response.ok) throw new Error(`Group assign failed (${response.status}).`);
+    return await response.json() as { todos: AdminTodo[] };
+  });

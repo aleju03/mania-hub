@@ -46,9 +46,13 @@ Removing an Eternal has one extra effect: when it was the collector's last Etern
 
 ## Admin todos
 
-`/admin/todos` is the owner's private todo list, backed by `features/admin-todos.ts` (durable `admin_todos` table, single user, no per-user scoping) over `GET /api/admin/todos` + `POST /api/admin/todos/{create,update,delete,clear-done}`. Frontend server fns in `src/lib/admin-todos.ts` proxy with the shared admin token; the nav entry and page are `canUseAdminFeatures`-gated.
+`/admin/todos` is the owner's private todo list, backed by `features/admin-todos.ts` (durable `admin_todos` table, single user, no per-user scoping) over `GET /api/admin/todos` + `POST /api/admin/todos/{create,update,delete,clear-done,group-save,group-delete,assign-group}`. Frontend server fns in `src/lib/admin-todos.ts` proxy with the shared admin token; the nav entry and page are `canUseAdminFeatures`-gated.
 
 A task is `open`, `hold` or `done`. `hold` is the shelf for something kept on the list but not planned right now: it leaves the lanes and the queue, is not a completion (nothing scores it, `done_at` is cleared, "Clear results" leaves it alone), and it keeps its `position` while parked so resuming puts it back where it was - which is why both the new-task position and the drag collision set count held rows, not just open ones. Held rows sort between open and done, most recently parked first, and the board shows them in a collapsible shelf below the playfield; the hold/resume control lives in the note's edit modal. The status column is plain text, so the value needed no migration.
+
+Selection and groups. Dragging a box anywhere on the page picks every note it touches (mouse only; a finger on the board is scrolling it), and the resulting selection can be grouped, hit, held or deleted from a bar that floats over the bottom of the viewport rather than sitting in the page flow - a bar that reflowed the board mid-drag would move notes out from under the pointer and change what was picked. Holding ctrl/cmd/shift puts the board in selection mode: notes stop being draggable, so a press picks one instead of lifting it, and a box drawn with a modifier down adds to the selection it started with. Clicking bare page clears it, as does Escape. The geometry is pure and tested in `src/routes/-todos-select.test.ts`.
+
+Groups (`admin_todo_groups`, `admin_todos.group_id`) are the owner's own buckets laid over the fixed categories: a task belongs to at most one, the colour comes from a fixed seven-entry palette so Tailwind can see the classes literally, and deleting a group ungroups its tasks rather than deleting them. The chip row above the board filters to one group; the pencil beside it opens the rename/recolour/delete modal. `assign-group` takes a whole selection in one request, and treats an unknown group id as ungroup so a group deleted in another tab cannot strand rows pointing at nothing.
 
 ## Translation reports
 

@@ -20,6 +20,7 @@ const todo = (id: string, position: number): AdminTodo => ({
   doneAt: null,
   position,
   seq: 1,
+  groupId: null,
 });
 
 describe("laneDropPosition", () => {

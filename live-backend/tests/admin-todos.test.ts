@@ -4,11 +4,15 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, migrate, type Db } from "../src/db.js";
 import {
+  assignAdminTodosToGroup,
   clearDoneAdminTodos,
   createAdminTodo,
   deleteAdminTodo,
+  deleteAdminTodoGroup,
   getAdminTodo,
+  listAdminTodoGroups,
   listAdminTodos,
+  saveAdminTodoGroup,
   updateAdminTodo,
 } from "../src/features/admin-todos.js";
 
@@ -203,5 +207,64 @@ describe("admin todos", () => {
     expect(await clearDoneAdminTodos(db)).toBe(1);
     const remaining = await listAdminTodos(db);
     expect(remaining.map((t) => t.title)).toEqual(["b"]);
+  });
+});
+
+describe("admin todo groups", () => {
+  it("creates a group, renames it, and keeps the palette honest", async () => {
+    const group = await saveAdminTodoGroup(db, { name: "  LN work  ", color: "not-a-color" });
+    expect(group).not.toBeNull();
+    expect(group!.name).toBe("LN work");
+    expect(group!.color).toBe("pink");
+
+    const renamed = await saveAdminTodoGroup(db, { id: group!.id, name: "LN axis", color: "blue" });
+    expect(renamed?.id).toBe(group!.id);
+    expect(await listAdminTodoGroups(db)).toEqual([expect.objectContaining({ name: "LN axis", color: "blue" })]);
+  });
+
+  it("rejects an empty name and an unknown id", async () => {
+    expect(await saveAdminTodoGroup(db, { name: "   " })).toBeNull();
+    expect(await saveAdminTodoGroup(db, { id: "nope", name: "ghost" })).toBeNull();
+  });
+
+  it("assigns a batch of todos in one call and ungroups on null", async () => {
+    const group = await saveAdminTodoGroup(db, { name: "before release", color: "green" });
+    const a = await createAdminTodo(db, { title: "a" });
+    const b = await createAdminTodo(db, { title: "b" });
+    const c = await createAdminTodo(db, { title: "c" });
+
+    const assigned = await assignAdminTodosToGroup(db, [a!.id, b!.id, "unknown-id"], group!.id);
+    expect(assigned.map((t) => t.groupId)).toEqual([group!.id, group!.id]);
+    expect((await getAdminTodo(db, c!.id))?.groupId).toBeNull();
+
+    await assignAdminTodosToGroup(db, [a!.id], null);
+    expect((await getAdminTodo(db, a!.id))?.groupId).toBeNull();
+  });
+
+  it("treats an unknown group id as ungroup rather than stranding the rows", async () => {
+    const todo = await createAdminTodo(db, { title: "a" });
+    const assigned = await assignAdminTodosToGroup(db, [todo!.id], "gone");
+    expect(assigned[0]?.groupId).toBeNull();
+  });
+
+  it("deleting a group ungroups its tasks instead of deleting them", async () => {
+    const group = await saveAdminTodoGroup(db, { name: "temp", color: "purple" });
+    const todo = await createAdminTodo(db, { title: "a" });
+    await assignAdminTodosToGroup(db, [todo!.id], group!.id);
+
+    expect(await deleteAdminTodoGroup(db, group!.id)).toBe(true);
+    expect(await deleteAdminTodoGroup(db, group!.id)).toBe(false);
+    const stored = await getAdminTodo(db, todo!.id);
+    expect(stored).not.toBeNull();
+    expect(stored!.groupId).toBeNull();
+  });
+
+  it("keeps the group through an unrelated partial update", async () => {
+    const group = await saveAdminTodoGroup(db, { name: "keep", color: "yellow" });
+    const todo = await createAdminTodo(db, { title: "a" });
+    await assignAdminTodosToGroup(db, [todo!.id], group!.id);
+
+    const updated = await updateAdminTodo(db, { id: todo!.id, status: "done" });
+    expect(updated?.groupId).toBe(group!.id);
   });
 });
