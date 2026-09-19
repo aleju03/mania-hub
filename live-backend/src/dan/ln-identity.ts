@@ -35,6 +35,8 @@ export interface LnIdentityResolution {
   lnRatingIdentity: boolean;
   /** The measured share when the rating lifted it; absent otherwise. */
   lnStructuralRatio?: number;
+  /** Holds carrying identity work over all holds (ln-effective.ts). */
+  lnWorkShare?: number;
 }
 
 /** Whether the rating tiebreak can still change this chart's identity. */
@@ -73,12 +75,13 @@ export function resolveChartLnIdentity(
   options: { rate: number; od?: number | null; holdRatio?: number | null; overall: number | null | undefined },
 ): LnIdentityResolution & { holdRatio: number } {
   const od = options.od ?? map.od;
-  const analysis = analyzeEffectiveLn(map.notes, { rate: options.rate, od });
+  const analysis = analyzeEffectiveLn(map.notes, { rate: options.rate, od, keyCount: map.keyCount });
   const holdRatio = options.holdRatio != null && Number.isFinite(Number(options.holdRatio)) ? Number(options.holdRatio) : analysis.holdRatio;
   const shares = { lnRatio: holdRatio, lnEffectiveRatio: analysis.effectiveLnRatio };
+  const lnWorkShare = analysis.identityWorkShare;
   if (!lnRatingIdentityUndecided(map.keyCount, shares) || options.overall == null) {
-    return { holdRatio, lnEffectiveRatio: analysis.effectiveLnRatio, lnRatingIdentity: false };
+    return { holdRatio, lnEffectiveRatio: analysis.effectiveLnRatio, lnRatingIdentity: false, lnWorkShare };
   }
   const skill = analyzeLnSkill(map, { rate: options.rate, od });
-  return { holdRatio, ...resolveLnIdentityShare(map.keyCount, shares, { lnRating: skill?.rating, rated: skill?.rated === true, overall: options.overall }) };
+  return { holdRatio, lnWorkShare, ...resolveLnIdentityShare(map.keyCount, shares, { lnRating: skill?.rating, rated: skill?.rated === true, overall: options.overall }) };
 }

@@ -9,7 +9,7 @@ import { storeChartFamily } from "./chart-families.js";
 import { analyzeLnSkill, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION } from "../dan/ln-skill.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
-import { LN_EFFECTIVE_KEY_COUNTS, LN_EFFECTIVE_MIN_RATIO, LN_EFFECTIVE_MODEL_VERSION, analyzeEffectiveLn, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
+import { LN_EFFECTIVE_KEY_COUNTS, LN_EFFECTIVE_MIN_RATIO, LN_EFFECTIVE_MODEL_VERSION, LN_MIN_WORK_SHARE, analyzeEffectiveLn, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
 import { resolveChartLnIdentity } from "../dan/ln-identity.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
@@ -67,6 +67,8 @@ interface LeanChartClassification {
   /** The LN rating, not structure, decided identity (dan/ln-identity.ts). */
   lnRatingIdentity?: boolean;
   lnStructuralRatio?: number;
+  /** Holds carrying identity work over all holds at 1.0x (ln-effective.ts). */
+  lnWorkShare?: number;
   sunnySr: number | null;
   vibro: boolean;
   vibroAnalysis?: VibroAnalysis;
@@ -89,6 +91,48 @@ interface LeanChartClassification {
   // Wrist-versus-roll shares read off the notes (dan/motion-features.ts), 4K
   // only and null everywhere else. Read by the player-dan speed/tech split.
   motion?: MotionFeatures | null;
+}
+
+/**
+ * The hold-share band a 4K chart is a hybrid in: rice and LN in one file,
+ * the tournament "tiebreaker" shape, worth a dan per side. Chart-wide hold
+ * share is the proxy: under a quarter the LN half is a footnote, past three
+ * quarters the chart is an LN chart whose rice half is. Measured 2026-09-18
+ * over the cached 4K charts with both halves: 13,614 sit in the band (4,481
+ * filed LN, 9,133 rice) against 25,691 with any LN verdict at all; the 45%
+ * identity line alone would have called 9,742 charts hybrid, 8,278 of them
+ * plain LN charts. 4K only: LeoBlack's two halves are what the reading
+ * means here, and 7K's hybrid mapping culture wants its own look.
+ */
+export const HYBRID_HOLD_SHARE_MIN = 0.25;
+export const HYBRID_HOLD_SHARE_MAX = 0.75;
+/**
+ * Hold share alone cannot tell a hybrid from a chart whose holds are
+ * notation: an LN vibro pack chart is 70% holds of 43ms and has no LN
+ * section at all. Its holds carry no identity work (`lnWorkShare`, long or
+ * chained at the identity OD, over all holds), so a hybrid also needs a
+ * tenth of its holds to be work. Rows the v13 sweep has not reached yet
+ * carry no share and keep the hold-band reading until it does.
+ */
+export const HYBRID_MIN_WORK_SHARE = LN_MIN_WORK_SHARE;
+const HYBRID_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
+
+/**
+ * The half of a LeoBlack verdict that identity did not pick, on a chart in
+ * the hybrid band: the primary names the side identity filed it on, this
+ * names the other. Null outside the band, or when the other half never ran.
+ */
+export function secondaryDanFor(
+  classification: Pick<LeanChartClassification, "keyCount" | "lnRatio" | "primary" | "rc" | "ln" | "lnWorkShare"> | null | undefined,
+): { label: string; family: string; rawDan: number } | null {
+  if (!classification?.primary || !HYBRID_KEY_COUNTS.has(Number(classification.keyCount))) return null;
+  const lnRatio = Number(classification.lnRatio);
+  if (!Number.isFinite(lnRatio) || lnRatio < HYBRID_HOLD_SHARE_MIN || lnRatio > HYBRID_HOLD_SHARE_MAX) return null;
+  const workShare = classification.lnWorkShare;
+  if (workShare != null && Number.isFinite(Number(workShare)) && Number(workShare) < HYBRID_MIN_WORK_SHARE) return null;
+  const other = classification.primary.kind === "ln" ? classification.rc : classification.ln;
+  if (!other || !Number.isFinite(Number(other.rawDan)) || !other.displayName) return null;
+  return { label: other.displayName, family: other.kind === "ln" ? "ln" : "dan", rawDan: Number(other.rawDan) };
 }
 
 function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
@@ -127,6 +171,7 @@ export function leanClassification(
     ...(classification.lnEffectiveRatio != null ? {
       lnEffectiveRatio: classification.lnEffectiveRatio, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION,
     } : {}),
+    ...(classification.lnWorkShare != null ? { lnWorkShare: classification.lnWorkShare } : {}),
     ...(classification.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: classification.lnStructuralRatio } : {}),
     sunnySr: classification.sunnySr,
     vibro: classification.vibro,
@@ -1327,9 +1372,15 @@ async function enqueueDanFloorPinRecompute(queue: JobQueue, cursor: number): Pro
 // and lnrelease's dense leg was lowered plus a release-wall leg added for the
 // Zenith-style dan diffs. Roughly 3k stored 7K verdicts lose the general
 // co-tag and a few hundred gain inverse or release.
+//
+// v5 (2026-09-18) adds 4K, but only the rows that carry lninverse: the 4K
+// inverse leg gained a held-time gate (the chart's columns held 40-55% of the
+// time), which can only remove the tag, so the 2.2k tagged 4K rows are the
+// whole candidate set and the other 61k cached 4K charts stay unparsed.
 export const LN_SUBTYPE_RECOMPUTE_JOB = "recompute_ln_subtype_sweep";
-const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v4";
-const LN_SUBTYPE_SWEEP_KEY_COUNTS = [7];
+const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v5";
+const LN_SUBTYPE_SWEEP_KEY_COUNTS = [4, 7];
+const LN_SUBTYPE_4K_TAG_FILTER = `(key_count <> 4 or classification_json like '%"lninverse"%')`;
 const LN_SUBTYPE_CHUNK = 50;
 // Subtype scores are gated on the composite LN score, which needs some hold
 // presence; charts with near-zero LN share can't change tags.
@@ -1353,6 +1404,7 @@ export async function recomputeLnSubtypeChunk(
      from beatmap_chart_analysis
      where analysis_version = ? and status = 'ready'
        and key_count in (${LN_SUBTYPE_SWEEP_KEY_COUNTS.join(", ")})
+       and ${LN_SUBTYPE_4K_TAG_FILTER}
        and json_extract(classification_json, '$.lnRatio') >= ?
        and beatmap_id > ?
      order by beatmap_id
@@ -3011,6 +3063,7 @@ export async function recomputeLnSourceChunk(
           ...(classification.lnEffectiveRatio != null ? {
             lnEffectiveRatio: classification.lnEffectiveRatio, lnEffectiveVersion: LN_EFFECTIVE_MODEL_VERSION,
           } : {}),
+          ...(classification.lnWorkShare != null ? { lnWorkShare: classification.lnWorkShare } : {}),
           ...(classification.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: classification.lnStructuralRatio } : {}),
         };
         await exec(
@@ -4955,7 +5008,9 @@ export const LN_EFFECTIVE_RECOMPUTE_JOB = "recompute_ln_effective_sweep";
 // LN rating native MSD's rate response and publishes it on every chart past
 // the hold line (LN v8), and lets that rating decide identity when it beats
 // Overall by a point on a chart structure left rice (dan/ln-identity.ts).
-export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v12";
+// v13 reads identity at OD 5 or the file's, whichever is higher (effective
+// v6), so hold-heavy charts uploaded at OD 0 stop filing as rice.
+export const LN_EFFECTIVE_META_KEY = "ln_effective_recompute_done:v13";
 const LN_EFFECTIVE_CHUNK = 60;
 
 export interface LnEffectiveChunkResult {
@@ -5224,7 +5279,7 @@ export async function recomputeLnEffectiveChunk(
         db,
         `update beatmap_chart_analysis
          set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?,
-               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?), '$.primary', json(?)),
+               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?), '$.lnWorkShare', json(?), '$.primary', json(?)),
              primary_label = ?, primary_family = ?, raw_dan = ?
          where beatmap_id = ? and analysis_version = ?`,
         [
@@ -5232,6 +5287,7 @@ export async function recomputeLnEffectiveChunk(
           LN_EFFECTIVE_MODEL_VERSION,
           identityJson(identity)[1] ? "true" : "false",
           JSON.stringify(identityJson(identity)[2]),
+          JSON.stringify(identity.lnWorkShare ?? 0),
           json(nextPrimary),
           typeof nextPrimary.displayName === "string" ? nextPrimary.displayName : null,
           family,
@@ -5246,10 +5302,10 @@ export async function recomputeLnEffectiveChunk(
         db,
         `update beatmap_chart_analysis
          set classification_json = json_set(classification_json, '$.lnEffectiveRatio', json(?), '$.lnEffectiveVersion', ?,
-               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?))
+               '$.lnRatingIdentity', json(?), '$.lnStructuralRatio', json(?), '$.lnWorkShare', json(?))
          where beatmap_id = ? and analysis_version = ?`,
         [identityJson(identity)[0], LN_EFFECTIVE_MODEL_VERSION, identityJson(identity)[1] ? "true" : "false",
-          JSON.stringify(identityJson(identity)[2]), beatmapId, CHART_ANALYSIS_VERSION],
+          JSON.stringify(identityJson(identity)[2]), JSON.stringify(identity.lnWorkShare ?? 0), beatmapId, CHART_ANALYSIS_VERSION],
       );
     }
     patched += 1;

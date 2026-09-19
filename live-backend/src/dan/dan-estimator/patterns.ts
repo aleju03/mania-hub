@@ -90,6 +90,9 @@ interface LnPatternStats {
   // Sections carry the inverse tag where the whole-chart ratio would average
   // them away under rice.
   inverseWindowCoverage: number;
+  // Share of column-time (chart span x columns) spent inside a hold body:
+  // how much of the chart the hands are holding down at all.
+  heldTimeShare: number;
 }
 
 // Windowed inverse: the whole-chart inverseReleaseRatio averages an inverse
@@ -425,6 +428,18 @@ function getLnPatternStats(
   const releaseRowCount = releaseRows.size;
   const holdCount = Math.max(1, holdDurations.length);
 
+  let heldMs = 0;
+  for (const hold of holdSpans) heldMs += hold.endTime - hold.time;
+  let firstTime = Infinity;
+  let lastTime = -Infinity;
+  for (const note of notes) {
+    if (note.time < firstTime) firstTime = note.time;
+    const end = note.isHold ? Math.max(note.time, note.endTime) : note.time;
+    if (end > lastTime) lastTime = end;
+  }
+  const chartSpanMs = lastTime > firstTime ? lastTime - firstTime : 0;
+  const heldTimeShare = chartSpanMs > 0 ? clamp01(heldMs / (chartSpanMs * Math.max(1, keyCount))) : 0;
+
   let judgedWindows = 0;
   let inverseWindows = 0;
   for (const window of windowPairs.values()) {
@@ -445,6 +460,7 @@ function getLnPatternStats(
     heldWhileReleaseRatio: heldWhileReleaseHolds / holdCount,
     holdDurationP50: quantile(holdDurations, 0.5),
     inverseWindowCoverage: judgedWindows >= INVERSE_WINDOW_MIN_WINDOWS ? inverseWindows / judgedWindows : 0,
+    heldTimeShare,
   };
 }
 
@@ -550,6 +566,18 @@ export function analyzeManiaPatterns(
       ? pressure(lnStats.inverseWindowCoverage, 0.35, 0.75) * clamp01((0.45 - lnStats.mixedRowRatio) / 0.25)
       : 0,
   );
+  // 4K inverse is also a matter of how much of the chart is held down. The
+  // per-pair rule above cannot tell a short-hold LN burst inside a rice chart
+  // from a chart played holding keys the whole way: three charts with the
+  // same 0.98 gap-to-hold ratio and the same 86-127ms median hold split only
+  // on column-time held (0.34 against 0.47 and 0.53), and players call the
+  // first one tech with LN, not inverse. Measured 2026-09-18 over the 15k
+  // cached 4K charts with 30%+ holds against the 47 whose pack or diff name
+  // says inverse: the 0.40-0.55 ramp keeps every one of the 26 the tag
+  // already reached (their held share starts at 0.467) and removes it from
+  // 697 of the 2,228 unlabelled charts, 351 of them rice by identity. 7K
+  // keeps its own fit.
+  const lnInverseHeldGate = metrics.keyCount === 4 ? pressure(lnStats.heldTimeShare, 0.4, 0.55) : 1;
   const lnInverseScore = lnSubtypeGate * minGate(
     lnInverseShape,
     pressure(metrics.lnDensity, 0.12, 0.5),
@@ -557,6 +585,7 @@ export function analyzeManiaPatterns(
       pressure(metrics.lnOverlapPressure, 1.1, 3.1),
       pressure(metrics.lnHoldDurationP90, 260, 520),
     ),
+    lnInverseHeldGate,
   );
   // Release is about where the release lands, not how many of them there are.
   // The old gate asked for isolated release rows (no note head at the same
@@ -696,7 +725,7 @@ export function analyzeManiaPatterns(
   if (lnSubtypeKeys) {
     candidates.push(
       hit("lngeneral", lnGeneralScore, dataConfidence, `${compactPercent(metrics.lnChordPressure)} LN chord rows, ${compactPercent(lnStats.headTailSwitchRatio)} head/tail switches`),
-      hit("lninverse", lnInverseScore, dataConfidence, `${compactPercent(lnStats.inverseReleaseRatio)} short same-column release gaps, p50 gap ${Math.round(lnStats.sameColumnReleaseGapP50)}ms, ${compactPercent(lnStats.inverseWindowCoverage)} of the chart in inverse sections`),
+      hit("lninverse", lnInverseScore, dataConfidence, `${compactPercent(lnStats.inverseReleaseRatio)} short same-column release gaps, p50 gap ${Math.round(lnStats.sameColumnReleaseGapP50)}ms, ${compactPercent(lnStats.inverseWindowCoverage)} of the chart in inverse sections, columns held ${compactPercent(lnStats.heldTimeShare)} of the time`),
       hit("lntech", lnTechScore, dataConfidence, `${compactPercent(lnStats.tapWhileHoldingRatio)} tap-with-hold rows, burst pressure ${metrics.rowBurstPressure.toFixed(1)}`),
     );
     if (metrics.keyCount === 7) {

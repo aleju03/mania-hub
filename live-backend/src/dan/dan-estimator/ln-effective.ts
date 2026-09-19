@@ -29,6 +29,8 @@
  * Everything here is structural (times, columns, OD); no chart identity.
  */
 
+import type { ManiaBeatmap } from "../beatmap-parser.js";
+import { detectLnVibro } from "../vibro-detection.js";
 import { lnPrimaryMinRatioFor } from "./ln.js";
 
 export interface EffectiveLnNote {
@@ -43,6 +45,8 @@ export interface EffectiveLnOptions {
   rate?: number;
   /** Chart OD; null/undefined falls back to the OD8 the wife model assumes. */
   od?: number | null;
+  /** Column count, for the LN vibro check; derived from the notes when absent. */
+  keyCount?: number;
 }
 
 export interface EffectiveLnAnalysis {
@@ -64,6 +68,13 @@ export interface EffectiveLnAnalysis {
   longTails: number;
   /** Near-window short holds in a recurring same-lane release/repress chain. */
   chainedShortHolds: number;
+  /** Holds that carry identity work (long or chained) at the identity OD, over
+   * all holds. What a hold-heavy chart's holds are worth as holds: near zero
+   * on a chart whose holds are vibro notation or all under the window. */
+  identityWorkShare: number;
+  /** The chart is LN vibro (dan/vibro-detection.ts) at this rate: staggered
+   * hold spam played by shaking. Its chains establish nothing. */
+  lnVibro: boolean;
 }
 
 // ScoreV2 (and lazer's split-tail judgement) gives releases windows 1.5x the
@@ -73,6 +84,30 @@ const RELEASE_WINDOW_MULTIPLIER = 1.5;
 const GREAT_WINDOW_BASE_MS = 64;
 const OD_WINDOW_STEP_MS = 3;
 const ASSUMED_OD = 8;
+/**
+ * Identity never reads an OD under this. The release window widens as OD
+ * falls (96ms at OD 0 against 73.5ms at OD 5), so on a low-OD file most 1/8
+ * holds at any tempo count as free and a hold-heavy chart files as rice for
+ * the OD its mapper left, not for what its notes ask. Measured 2026-09-18
+ * over the cached 4K charts past the hold line: 923 sit at OD 0 and 580 of
+ * them read rice at 1.0x; read at OD 5, 441 of those are LN. Over the 1,481
+ * charts under the floor, 496 join LN at 1.0x, 210 at 1.5x and 124 at 0.75x,
+ * and nothing crosses the other way (a floor of 5.5 sends one chart to rice,
+ * so 5 it is). Everything that prices the chart, the LN rating, the tail pass
+ * and the effective-hold counts, keeps the OD it was played at; only the
+ * LN-or-rice question reads the floor.
+ */
+export const LN_IDENTITY_MIN_OD = 5;
+/**
+ * The share of a chart's holds that must carry identity work (long or
+ * chained at the identity OD) before its holds count as an LN side at all:
+ * for publishing an LN number and for the hybrid badge. A vibro pack chart
+ * with 74% holds of 43ms and one long hold otherwise published LN 4 beside
+ * its rice values. Real hybrids sit at 0.68 or above at the 5th percentile
+ * of the 25-75% hold band (2026-09-18); the 80 charts under this line are
+ * vibro packs.
+ */
+export const LN_MIN_WORK_SHARE = 0.1;
 // A head this close to the hold's own head or release is the same chord, not
 // something pressed under the hold. osu! quantizes to whole ms, and 1/4 grids
 // at any playable tempo sit well outside it.
@@ -91,7 +126,13 @@ export const LN_EFFECTIVE_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 // v5: a window whose notes are 60% release work (long or chained holds) reads
 // LN even when no body clears the window, so dense inverse charts at high
 // tempo keep their identity; v4 counted long tails only.
-export const LN_EFFECTIVE_MODEL_VERSION = 5;
+// v6: identity reads the release window at OD LN_IDENTITY_MIN_OD or the
+// file's, whichever is higher; the effective-hold counts keep the played OD.
+// An LN vibro chart (staggered hold spam, dan/vibro-detection.ts) forms no
+// chains: its 43ms holds are notation for a shake, and at 0.75x their bodies
+// reached the OD 5 window and read as an inverse chart. Long holds still
+// count. The identity work share is stored beside the share.
+export const LN_EFFECTIVE_MODEL_VERSION = 6;
 
 /**
  * The effective share at which a 4K chart's identity is LN.
@@ -211,10 +252,19 @@ interface HoldVerdict {
   reason: "short" | "shortSpanning" | "long" | "chained";
 }
 
+/** LN vibro at the played rate: dense staggered hold spam. Its same-lane
+ * chains are a shake, not release work, so they never form. */
+export function isLnVibroChart(notes: EffectiveLnNote[], options: EffectiveLnOptions): boolean {
+  const rate = Number.isFinite(Number(options.rate)) && Number(options.rate) > 0 ? Number(options.rate) : 1;
+  const keyCount = options.keyCount ?? notes.reduce((max, note) => Math.max(max, note.column + 1), 0);
+  return detectLnVibro({ keyCount, notes } as unknown as ManiaBeatmap, rate);
+}
+
 function judgeHolds(notes: EffectiveLnNote[], options: EffectiveLnOptions): Array<HoldVerdict | null> {
   const rate = Number.isFinite(Number(options.rate)) && Number(options.rate) > 0 ? Number(options.rate) : 1;
   const tapCovered = releaseGreatWindowMs(options.od);
   const tolerance = LN_SAME_MOTION_TOLERANCE_MS;
+  const lnVibro = isLnVibroChart(notes, options);
   // Heads in played time, sorted, with their columns alongside for the span check.
   const order = notes.map((_, index) => index).sort((a, b) => notes[a].time - notes[b].time);
   const headTimes = order.map((index) => notes[index].time / rate);
@@ -230,6 +280,7 @@ function judgeHolds(notes: EffectiveLnNote[], options: EffectiveLnOptions): Arra
     lanes.set(notes[index].column, lane);
   }
   for (const lane of lanes.values()) {
+    if (lnVibro) break;
     let run: number[] = [];
     const flush = () => {
       // Two consecutive links (three hold heads), not an isolated double.
@@ -284,6 +335,19 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
   const holdRatio = total > 0 ? counts.holds / total : 0;
   const effectiveHoldRatio = total > 0 ? counts.effectiveHolds / total : 0;
 
+  // Identity judges the same holds at no less than LN_IDENTITY_MIN_OD; the
+  // counts above stay at the played OD for the rating and the tail pass.
+  const playedOd = options.od != null && Number.isFinite(Number(options.od)) ? Number(options.od) : null;
+  const identityVerdicts = playedOd != null && playedOd < LN_IDENTITY_MIN_OD
+    ? judgeHolds(notes, { ...options, od: LN_IDENTITY_MIN_OD })
+    : verdicts;
+  const identityCounts = { long: 0, chained: 0 };
+  for (const verdict of identityVerdicts) {
+    if (verdict?.reason === "long") identityCounts.long += 1;
+    else if (verdict?.reason === "chained") identityCounts.chained += 1;
+  }
+  const identityWorkShare = counts.holds > 0 ? (identityCounts.long + identityCounts.chained) / counts.holds : 0;
+
   // Identity per window: the long-tail share, or the release-work share
   // (long plus chained) scaled from its own 0.6 line onto the 0.4 line,
   // whichever reads higher. A tap-covered chain alone needs 60% of the
@@ -292,7 +356,7 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
   const identityShare = (long: number, chained: number, count: number) => count > 0
     ? Math.max(long / count, ((long + chained) / count) * (LN_EFFECTIVE_MIN_RATIO / LN_CHAINED_MIN_RATIO))
     : 0;
-  let effectiveLnRatio = identityShare(counts.longTails, counts.chainedShortHolds, total);
+  let effectiveLnRatio = identityShare(identityCounts.long, identityCounts.chained, total);
   if (total > 0) {
     const firstTime = notes.reduce((first, note) => Math.min(first, note.time / rate), Infinity);
     const windows = new Map<number, { notes: number; long: number; chained: number }>();
@@ -300,8 +364,8 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
       const slot = Math.floor((note.time / rate - firstTime) / WINDOW_MS);
       const window = windows.get(slot) ?? { notes: 0, long: 0, chained: 0 };
       window.notes += 1;
-      if (verdicts[index]?.reason === "long") window.long += 1;
-      else if (verdicts[index]?.reason === "chained") window.chained += 1;
+      if (identityVerdicts[index]?.reason === "long") window.long += 1;
+      else if (identityVerdicts[index]?.reason === "chained") window.chained += 1;
       windows.set(slot, window);
     });
     const shares = [...windows.values()]
@@ -332,6 +396,8 @@ export function analyzeEffectiveLn(notes: EffectiveLnNote[], options: EffectiveL
     shortSpanning: counts.shortSpanning,
     longTails: counts.longTails,
     chainedShortHolds: counts.chainedShortHolds,
+    identityWorkShare,
+    lnVibro: isLnVibroChart(notes, options),
   };
 }
 

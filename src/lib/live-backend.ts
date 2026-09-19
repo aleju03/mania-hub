@@ -2499,6 +2499,9 @@ export interface LiveChartAnalysisDetail {
   // Share of the chart that demands a release at 1.0x (4K identity input);
   // null until the effective-LN sweep patches the row.
   lnEffectiveRatio?: number | null;
+  // The dan for the side identity did not file the chart on, present on a
+  // chart past the hold line (a rice-and-LN hybrid); null elsewhere.
+  secondaryDan?: { label: string; family: string; rawDan: number } | null;
   // LN-adjusted (tail-aware, keymode-blended) MSD; null when the chart has no
   // eligible tail pass or until the LN MSD sweep covers it.
   msdLn?: Record<string, number> | null;

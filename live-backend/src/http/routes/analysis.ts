@@ -4,7 +4,7 @@ import type { MsdResult } from "../../dan/msd.js";
 import { LN_SKILL_VERSION } from "../../dan/ln-skill.js";
 import { exec, parseJson } from "../../db.js";
 import { lookupAvatarAccents } from "../../features/avatar-accents.js";
-import { CHART_ANALYSIS_VERSION } from "../../features/chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, secondaryDanFor } from "../../features/chart-analysis.js";
 import { getDanEstimateBatch, getRateAdjustedChartAnalysis, type RateAdjustedChartAnalysis } from "../../features/dan-estimates.js";
 import { parseDtRateVerdict } from "../../features/map-search.js";
 import type { HttpContext } from "../context.js";
@@ -154,6 +154,9 @@ export async function handleAnalysisRoutes(req: IncomingMessage, res: ServerResp
       // (dan/dan-estimator/ln-effective.ts); null on rows the effective-LN
       // sweep has not patched yet.
       lnEffectiveRatio: Number.isFinite(Number(classification?.lnEffectiveRatio)) ? Number(classification?.lnEffectiveRatio) : null,
+      // The other half of the verdict on a chart past the hold line, so a
+      // rice-and-LN hybrid shows a dan per side; null elsewhere.
+      secondaryDan: secondaryDanFor(classification as Parameters<typeof secondaryDanFor>[0]),
       // LN-adjusted (tail-aware, keymode-blended) MSD; null when the chart has
       // no eligible tail pass or until the LN MSD sweep covers it.
       msdLn,

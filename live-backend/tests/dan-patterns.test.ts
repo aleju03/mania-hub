@@ -208,6 +208,22 @@ describe("analyzeManiaPatterns", () => {
     expect(analyzeManiaPatterns(makeMixedMap(7, techRows, 55)).primary?.id).toBe("lntech");
   });
 
+  it("needs a 4K chart held down, not only short re-press gaps, for LN Inverse", () => {
+    // 420ms holds on a 520ms lane period: every same-lane pair is an inverse
+    // re-press. Across four lanes the columns are held 81% of the time; the
+    // same lane shape on two lanes with the other two empty holds them 40%
+    // of the time, which is a short-hold LN passage, not an inverse chart.
+    const fourLanes = Array.from({ length: 4 * 36 }, (_, index) => [{ column: index % 4, holdMs: 420 }]);
+    const twoLanes = Array.from({ length: 2 * 36 }, (_, index) => [{ column: index % 2, holdMs: 420 }]);
+    const dense = analyzeManiaPatterns(makeMixedMap(4, fourLanes, 130));
+    const sparse = analyzeManiaPatterns(makeMixedMap(4, twoLanes, 260));
+    expect(dense.patterns.map((pattern) => pattern.id)).toContain("lninverse");
+    const sparseInverse = sparse.allPatterns.find((pattern) => pattern.id === "lninverse");
+    expect(sparseInverse?.evidence).toContain("100% short same-column release gaps");
+    expect(sparseInverse?.evidence).toContain("columns held 40% of the time");
+    expect(sparse.patterns.map((pattern) => pattern.id)).not.toContain("lninverse");
+  });
+
   it("detects 4K LN subtypes, minus release", () => {
     // Column period 520ms against a 420ms hold: a short same-column release gap
     // repeated across all four columns, which is what 4K inverse looks like.

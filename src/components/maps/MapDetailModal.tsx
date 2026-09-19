@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
@@ -10,7 +10,7 @@ import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
-import { danBareLabel, danScaleContextFor, getDanImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, danTierColor, getDanImageSrc } from "../../lib/dan-images";
 import { DanProgressRail } from "./DanProgressRail";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -37,6 +37,28 @@ import {
   StarRatingBadge,
   starRatingColor,
 } from "./SearchCard";
+
+// The banner art lands after the modal does, so it fades in rather than
+// snapping over the header. The ref check is for a cover already in the browser
+// cache (the play row showed the same set): its load event fires before React
+// attaches onLoad, and without it the banner would sit at zero opacity.
+function BannerCover({ src }: { src: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const markLoaded = useCallback((node: HTMLImageElement | null) => {
+    if (node?.complete && node.naturalWidth > 0) setLoaded(true);
+  }, []);
+  return (
+    <img
+      key={src}
+      ref={markLoaded}
+      src={src}
+      alt=""
+      onLoad={() => setLoaded(true)}
+      onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+    />
+  );
+}
 
 // A minimal beatmapset built from the search entry alone, enough for the chart
 // preview: the .osu loads from mirrors and the audio preview URL is derivable, so
@@ -425,12 +447,58 @@ function danSuffix(label: string): string {
 // Sorted by value with the top skillset tinted; no bars, the numbers carry it.
 // The skillset names are MinaCalc's 4K taxonomy for every keymode; the
 // ClustersBlock below is where charts speak their own keymode's language.
+type DanBadgeVerdict = { label: string; family: string };
+
+// A rice-and-LN hybrid is one chart with two faces, so it is one badge: the
+// side identity filed it on at full size, the other side riding top-right
+// after the tier suffix, small, the way an exponent does. Nothing overlaps
+// the big glyph.
+function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdict; other?: DanBadgeVerdict | null; keyCount: number }) {
+  const { t } = useLingui();
+  const image = getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, keyCount);
+  const otherImage = other ? getDanImageSrc(danBareLabel(other.label), other.family === "ln" ? "ln" : undefined, keyCount) : null;
+  const sideName = (verdict: DanBadgeVerdict) => verdict.family === "ln" ? t`LN ${verdict.label}` : t`regular ${verdict.label}`;
+  return (
+    <div className="flex flex-col items-center" title={other ? t`Hybrid chart: ${sideName(dan)}, ${sideName(other)}` : undefined}>
+      <span className="flex items-start gap-[2px] leading-none">
+        {image ? (
+          <img src={image} alt={dan.label} className="h-10 w-10 object-contain" />
+        ) : (
+          <span className="text-[16px] font-bold leading-none text-osu-l1">{dan.label}</span>
+        )}
+        {/* The glyph art carries about a quarter of its box as transparent
+            margin on each side, so the suffix and the hybrid chip pull back
+            over that margin to sit against the visible strokes. */}
+        {image && danSuffix(dan.label) ? (
+          <span className="-ml-2 mt-0.5 text-[13px] font-bold leading-none text-osu-l1" style={{ color: danTierColor(danSuffix(dan.label)) ?? undefined }}>{danSuffix(dan.label)}</span>
+        ) : null}
+        {other ? (
+          <span className={`flex items-start ${image && danSuffix(dan.label) ? "-ml-0.5" : "-ml-2"}`}>
+            {otherImage ? (
+              <img src={otherImage} alt={other.label} className="-mt-1 h-6 w-6 object-contain" />
+            ) : (
+              <span className="text-[11px] font-bold leading-none text-osu-l1">{other.label}</span>
+            )}
+            {otherImage && danSuffix(other.label) ? (
+              <span className="-ml-1 text-[9px] font-bold leading-none text-osu-l1" style={{ color: danTierColor(danSuffix(other.label)) ?? undefined }}>{danSuffix(other.label)}</span>
+            ) : null}
+          </span>
+        ) : null}
+      </span>
+      <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
+        {other ? t`hybrid` : dan.family === "ln" ? t`LN dan est.` : t`dan est.`}
+      </span>
+    </div>
+  );
+}
+
 export function MsdBlock({
   entry,
   msdLn,
   rate = 1,
   rateMsd = null,
   rateDan = null,
+  secondaryDan = null,
   vibroAnalysis,
 }: {
   entry: LiveMapSearchEntry;
@@ -440,6 +508,9 @@ export function MsdBlock({
   rate?: number;
   rateMsd?: Record<string, number> | null;
   rateDan?: { label: string; family: string; rawDan: number } | null;
+  // The chart's other-side dan on a rice-and-LN hybrid (past the hold line),
+  // from the 1.0x analysis; a rate-adjusted view has only its own primary.
+  secondaryDan?: { label: string; family: string; rawDan: number } | null;
   vibroAnalysis?: VibroAnalysis;
 }) {
   const { t, i18n } = useLingui();
@@ -484,9 +555,7 @@ export function MsdBlock({
   const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
   const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
-  const danImage = dan
-    ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry.keyCount)
-    : null;
+  const otherDan = dan && !rateAdjusted && secondaryDan && secondaryDan.family !== dan.family ? secondaryDan : null;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -515,24 +584,7 @@ export function MsdBlock({
             min-h keeps the row the badge's height even on diffs that have no
             dan verdict, so switching diffs doesn't resize the MSD box. */}
         <div className="flex min-h-10 items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
-          {dan && (
-            <div className="flex flex-col items-center">
-              {/* The logo IS the number; the +/- tier suffix rides top-right like an exponent. */}
-              <span className="flex items-start gap-[2px] leading-none">
-                {danImage ? (
-                  <img src={danImage} alt={dan.label} className="h-10 w-10 object-contain" />
-                ) : (
-                  <span className="text-[16px] font-bold leading-none text-osu-l1">{dan.label}</span>
-                )}
-                {danImage && danSuffix(dan.label) ? (
-                  <span className="mt-0.5 text-[13px] font-bold leading-none text-osu-l1">{danSuffix(dan.label)}</span>
-                ) : null}
-              </span>
-              <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
-                {dan.family === "ln" ? t`LN dan est.` : t`dan est.`}
-              </span>
-            </div>
-          )}
+          {dan && <DanEstimateBadge dan={dan} other={otherDan} keyCount={entry.keyCount} />}
           <div className="flex flex-col">
             <span className="text-[18px] font-bold tabular-nums leading-none text-osu-l1">{overall.toFixed(2)}</span>
             <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">{t`Overall`}</span>
@@ -812,12 +864,7 @@ export function MapDetailModal({
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               {/* Header banner */}
               <div className="relative h-[92px] shrink-0">
-                <img
-                  src={mapCoverUrl(entry)}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                  onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
-                />
+                <BannerCover src={mapCoverUrl(entry)} />
                 <div className="absolute inset-0 bg-gradient-to-t from-osu-b5 via-osu-b5/70 to-black/40" />
                 <button
                   type="button"
@@ -967,6 +1014,7 @@ export function MapDetailModal({
                       rate={playRate}
                       rateMsd={rateMsd}
                       rateDan={rateDan}
+                      secondaryDan={activeAnalysis?.secondaryDan ?? null}
                       vibroAnalysis={playRate === 1 ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
                   )

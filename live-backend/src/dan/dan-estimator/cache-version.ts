@@ -41,4 +41,6 @@
 // as rotating chords and jumptrills.
 // v28: 4K LN identity admits chain-dense windows (effective v5) and the LN
 // rating follows rate like native MSD (LN v8); rate estimates carry both.
-export const DAN_ESTIMATE_CACHE_VERSION = 28;
+// v29: 4K LN identity reads its release window at OD 5 or higher (effective
+// v6), so rate verdicts on low-OD charts can change side.
+export const DAN_ESTIMATE_CACHE_VERSION = 29;

@@ -1,4 +1,4 @@
-import { CHART_FAMILY_META_KEY } from "../src/features/chart-families.js";
+import { CHART_FAMILY_META_KEY, DAN_SKILLSET_REGISTRY_META_KEY } from "../src/features/chart-families.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -122,6 +122,8 @@ describe("HT rate analysis", () => {
     );
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, '{}', ?)",
       [CHART_FAMILY_META_KEY, "2026-08-19T00:00:00.000Z"]);
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, '{}', ?)",
+      [DAN_SKILLSET_REGISTRY_META_KEY, "2026-08-19T00:00:00.000Z"]);
     await ensurePlayerSkillDanSweepSeeded(db, queue);
     expect(Number((await exec(db, "select count(*) c from jobs where type = ?", [PLAYER_SKILL_DAN_SWEEP_JOB])).rows[0].c)).toBe(0);
 

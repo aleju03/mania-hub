@@ -160,28 +160,39 @@ describe("played OD in LeoBlack dan estimates", () => {
     });
   });
 
-  it("reads 4K LN identity at the played OD, so DA credits the side it played", () => {
+  it("reads 4K LN identity at the played OD, no lower than the identity floor, so DA credits the side it played", () => {
+    // File at OD 0: 80ms holds sit inside the 96ms window the file's OD gives,
+    // but identity reads no lower than OD 5 (73.5ms), where every hold is
+    // long. The file is LN, and so is a play at any lower OD (EZ); only the
+    // pricing side (effective holds, the tail pass) sees the free bodies.
     const text = shortHoldLnChart();
     const map = parseManiaBeatmap(text);
     expect(map.od).toBe(0);
-    // Every hold is free inside the OD0 release window, so the file is rice.
-    expect(analyzeEffectiveLn(map.notes, { rate: 1, od: 0 }).effectiveLnRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
-    expect(classifyChart(map, text, {}).primary?.kind).toBe("rc");
-    // The same holds demand a release at the OD the play set: LN, both halves
-    // computed there too, exactly as the same chart uploaded at that OD reads.
-    expect(analyzeEffectiveLn(map.notes, { rate: 1, od: 8 }).effectiveLnRatio).toBeGreaterThanOrEqual(LN_EFFECTIVE_MIN_RATIO);
-    for (const odFlag of [8, "HR"] satisfies LeoBlackOdFlag[]) {
+    const atFile = analyzeEffectiveLn(map.notes, { rate: 1, od: 0 });
+    expect(atFile.effectiveHoldRatio).toBe(0);
+    expect(atFile.effectiveLnRatio).toBeGreaterThanOrEqual(LN_EFFECTIVE_MIN_RATIO);
+    expect(classifyChart(map, text, {}).primary?.kind).toBe("ln");
+    for (const odFlag of [8, "HR", "EZ"] satisfies LeoBlackOdFlag[]) {
       expect(classifyChart(map, text, { odFlag }).primary?.kind).toBe("ln");
     }
-    // EZ only widens the window further; the chart stays as free as the file.
-    expect(classifyChart(map, text, { odFlag: "EZ" }).primary?.kind).toBe("rc");
+    // Above the floor the played OD still decides the side: 66ms holds are
+    // free at OD 6 (70.5ms window) and demand a release at OD 8 (60ms), so a
+    // DA play is filed on the side of the chart it played.
+    const text66 = shortHoldLnChart(66);
+    const map66 = parseManiaBeatmap(text66);
+    expect(analyzeEffectiveLn(map66.notes, { rate: 1, od: 0 }).effectiveLnRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
+    expect(analyzeEffectiveLn(map66.notes, { rate: 1, od: 6 }).effectiveLnRatio).toBeLessThan(LN_EFFECTIVE_MIN_RATIO);
+    expect(analyzeEffectiveLn(map66.notes, { rate: 1, od: 8 }).effectiveLnRatio).toBeGreaterThanOrEqual(LN_EFFECTIVE_MIN_RATIO);
+    expect(classifyChart(map66, text66, {}).primary?.kind).toBe("rc");
+    expect(classifyChart(map66, text66, { odFlag: 6 }).primary?.kind).toBe("rc");
+    expect(classifyChart(map66, text66, { odFlag: 8 }).primary?.kind).toBe("ln");
     // preferFamily still overrides the gate for the callers that pin a side.
-    expect(classifyChart(map, text, { preferFamily: "rc", odFlag: 8 }).primary?.kind).toBe("rc");
+    expect(classifyChart(map66, text66, { preferFamily: "rc", odFlag: 8 }).primary?.kind).toBe("rc");
     expect(resolvePlayedOd(4, undefined)).toBe(4);
     expect(resolvePlayedOd(4, 0)).toBe(0);
     expect(resolvePlayedOd(0, "HR")).toBeCloseTo(6.462, 3);
     expect(resolvePlayedOd(8, "EZ")).toBeCloseTo(-0.233, 3);
-  }, 30_000);
+  }, 60_000);
 
   it("uses played OD instead of ordinary normal/DT/HT columns and preserves DA precedence", async () => {
     await withDb(async db => {

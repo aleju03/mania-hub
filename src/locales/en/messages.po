@@ -6973,9 +6973,19 @@ msgstr "HUD"
 msgid "Hungarian"
 msgstr "Hungarian"
 
+#: src/components/maps/MapDetailModal.tsx
+msgid "hybrid"
+msgstr "hybrid"
+
 #: src/routes/player/$username.tsx
 msgid "Hybrid"
 msgstr "Hybrid"
+
+#. placeholder {0}: sideName(dan)
+#. placeholder {1}: sideName(other)
+#: src/components/maps/MapDetailModal.tsx
+msgid "Hybrid chart: {0}, {1}"
+msgstr "Hybrid chart: {0}, {1}"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
@@ -7809,6 +7819,11 @@ msgstr "Live updates on"
 #: src/routes/player/$username.tsx
 msgid "LN"
 msgstr "LN"
+
+#. placeholder {0}: verdict.label
+#: src/components/maps/MapDetailModal.tsx
+msgid "LN {0}"
+msgstr "LN {0}"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "LN Anchors"
@@ -11766,6 +11781,11 @@ msgstr "Regions"
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "Regular"
 msgstr "Regular"
+
+#. placeholder {0}: verdict.label
+#: src/components/maps/MapDetailModal.tsx
+msgid "regular {0}"
+msgstr "regular {0}"
 
 #: src/routes/dan-estimates.tsx
 msgid "Regular 4K/6K/7K"

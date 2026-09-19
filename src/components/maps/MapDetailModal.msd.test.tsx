@@ -36,3 +36,22 @@ it("follows the rate-adjusted values when a play used a rate mod", () => {
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} /></I18nProvider>);
   expect(headline()).toBe("27.10");
 });
+
+it("shows the other side's dan beside the primary on a rice-and-LN hybrid", () => {
+  const entry = { ...LN_ENTRY, primaryPattern: "tech", patterns: { tech: 1, ln: 0.9 }, dan: { rawDan: 18.1, label: "delta-", family: "dan" } };
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={entry} secondaryDan={{ label: "15--", family: "ln", rawDan: 14.6 }} /></I18nProvider>);
+  // One badge: the primary at full size with the other side's chip on its
+  // corner, labelled as a hybrid rather than as two estimates.
+  expect(screen.getByAltText("delta-")).toBeTruthy();
+  expect(screen.getByAltText("15--")).toBeTruthy();
+  expect(screen.getByText("hybrid")).toBeTruthy();
+  expect(screen.queryByText("dan est.")).toBeNull();
+  expect(screen.queryByText("LN dan est.")).toBeNull();
+  expect(screen.getByTitle("Hybrid chart: regular delta-, LN 15--")).toBeTruthy();
+});
+
+it("keeps one badge under a rate mod, whose analysis carries only its own primary", () => {
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} secondaryDan={{ label: "theta", family: "dan", rawDan: 18 }} /></I18nProvider>);
+  expect(screen.getByText("LN dan est.")).toBeTruthy();
+  expect(screen.queryByText("hybrid")).toBeNull();
+});

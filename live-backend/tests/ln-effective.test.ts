@@ -8,6 +8,7 @@ import {
   LN_CHAINED_MIN_RATIO,
   LN_EFFECTIVE_MIN_RATIO,
   LN_EFFECTIVE_MODEL_VERSION,
+  LN_IDENTITY_MIN_OD,
   analyzeEffectiveLn,
   chartIsLn,
   chartLnShareFor,
@@ -163,6 +164,65 @@ describe("analyzeEffectiveLn", () => {
     expect(chartIsLn(4, { lnRatio: 1, lnEffectiveRatio: mostlyFree.effectiveLnRatio })).toBe(false);
   });
 
+  it("reads identity at OD 5 when the file's OD is lower, and prices the holds at the file's OD", () => {
+    // 80ms holds with 120ms clear before the next same-lane head, all four
+    // lanes: past the 73.5ms window at OD 5, free inside the 96ms one at OD 0
+    // and too far apart to chain there.
+    const notes = Array.from({ length: 400 }, (_, i) => {
+      const time = Math.floor(i / 4) * 200;
+      return { column: i % 4, time, endTime: time + 80, isHold: true };
+    });
+    const lowOd = analyzeEffectiveLn(notes, { od: 0 });
+    expect(lowOd.holdRatio).toBe(1);
+    // Priced at OD 0: no hold outlasts the window, so the rating and the tail
+    // pass see nothing effective.
+    expect(lowOd.longTails).toBe(0);
+    expect(lowOd.effectiveHoldRatio).toBe(0);
+    // Identity read at the floor: every hold is long.
+    expect(lowOd.effectiveLnRatio).toBeGreaterThanOrEqual(LN_EFFECTIVE_MIN_RATIO);
+    expect(chartIsLn(4, { lnRatio: lowOd.holdRatio, lnEffectiveRatio: lowOd.effectiveLnRatio })).toBe(true);
+    const atFloor = analyzeEffectiveLn(notes, { od: LN_IDENTITY_MIN_OD });
+    expect(atFloor.effectiveLnRatio).toBe(lowOd.effectiveLnRatio);
+    expect(atFloor.longTails).toBe(400);
+    // The floor lifts the OD, it does not shorten the window further: 60ms
+    // bodies sit inside the OD 5 window too and stay rice at OD 0.
+    const shorter = notes.map((note) => ({ ...note, endTime: note.time + 60 }));
+    expect(analyzeEffectiveLn(shorter, { od: 0 }).effectiveLnRatio).toBe(0);
+    // Above the floor the file's OD reads as before.
+    expect(analyzeEffectiveLn(notes, { od: 8 }).effectiveLnRatio).toBe(atFloor.effectiveLnRatio);
+  });
+
+  it("lets no LN vibro chart establish identity through its chains, at any rate or OD", () => {
+    // Staggered hold spam: 43ms holds, rows 22ms apart cycling four lanes,
+    // 600 notes. At 0.75x the 58ms bodies sit within 20ms of the OD 5 window
+    // with 58ms of recovery, exactly the shape an inverse chain has, but the
+    // chart is LN vibro (dan/vibro-detection.ts) and a shake forms no chain.
+    const notes = Array.from({ length: 600 }, (_, i) => {
+      const time = Math.round(1000 + i * 22);
+      return { column: i % 4, time, endTime: time + 43, isHold: true };
+    });
+    for (const rate of [0.75, 1, 1.5]) for (const od of [0, LN_IDENTITY_MIN_OD, 8]) {
+      const analysis = analyzeEffectiveLn(notes, { rate, od, keyCount: 4 });
+      expect(analysis.lnVibro, `rate ${rate} od ${od}`).toBe(true);
+      expect(analysis.chainedShortHolds, `rate ${rate} od ${od}`).toBe(0);
+      expect(analysis.identityWorkShare, `rate ${rate} od ${od}`).toBe(0);
+      expect(chartIsLn(4, { lnRatio: analysis.holdRatio, lnEffectiveRatio: analysis.effectiveLnRatio }), `rate ${rate} od ${od}`).toBe(false);
+    }
+    // The same per-lane shape as chords, 114ms apart, is an inverse chart:
+    // not vibro, chained, and its holds are all work.
+    const chords = Array.from({ length: 300 }, (_, i) => {
+      const time = 1000 + i * 114;
+      return [0, 1, 2].map((offset) => ({ column: (i + offset) % 4, time, endTime: time + 57, isHold: true }));
+    }).flat();
+    const inverse = analyzeEffectiveLn(chords, { rate: 1, od: 8, keyCount: 4 });
+    // Three of four lanes per row, so a lane skips every fourth row and
+    // that link (171ms of recovery) breaks the chain: 596 of 900 chain.
+    expect(inverse.lnVibro).toBe(false);
+    expect(inverse.chainedShortHolds).toBeGreaterThan(500);
+    expect(inverse.identityWorkShare).toBeGreaterThan(0.6);
+    expect(chartIsLn(4, { lnRatio: inverse.holdRatio, lnEffectiveRatio: inverse.effectiveLnRatio })).toBe(true);
+  });
+
   it("reads a 1/4-held stream as LN at 1.0x and rice at 1.5x", () => {
     const notes = parseManiaBeatmap(osuText(fullLnStream(), 7.5)).notes;
     const nomod = analyzeEffectiveLn(notes, { rate: 1, od: 7.5 });
@@ -179,27 +239,37 @@ describe("analyzeEffectiveLn", () => {
   });
 
   it("does not turn a tap-covered hold into mandatory coordination just because it spans a head", () => {
-    // 80ms holds at OD 0 (96ms window) with a head 40ms in on another column.
+    // 60ms holds at OD 5 (73.5ms window, the identity floor) with a head 30ms
+    // in on another column, and 140ms of recovery so nothing chains.
     const notes: ChartNote[] = [];
     for (let i = 0; i < 200; i += 1) {
       const time = 1000 + i * 200;
-      notes.push({ column: i % 2, time, end: time + 80 });
-      notes.push({ column: 2 + (i % 2), time: time + 40 });
+      notes.push({ column: i % 2, time, end: time + 60 });
+      notes.push({ column: 2 + (i % 2), time: time + 30 });
     }
-    const analysis = analyzeEffectiveLn(parseManiaBeatmap(osuText(notes, 0)).notes, { rate: 1, od: 0 });
+    const analysis = analyzeEffectiveLn(parseManiaBeatmap(osuText(notes, 5)).notes, { rate: 1, od: 5 });
     expect(analysis.shortSpanning).toBe(analysis.holds);
     expect(analysis.shortTails).toBe(0);
     expect(analysis.effectiveHoldRatio).toBe(0);
     expect(analysis.effectiveLnRatio).toBe(0);
-    expect(effectiveHoldMask(parseManiaBeatmap(osuText(notes, 0)).notes, { od: 0 }).some(Boolean)).toBe(false);
+    expect(effectiveHoldMask(parseManiaBeatmap(osuText(notes, 5)).notes, { od: 5 }).some(Boolean)).toBe(false);
+    // The same file at OD 0 reads identity at the floor, so the answer holds.
+    expect(analyzeEffectiveLn(parseManiaBeatmap(osuText(notes, 0)).notes, { rate: 1, od: 0 }).effectiveLnRatio).toBe(0);
   });
 
   it.each([0.75, 1, 1.5])("keeps dense overlapping short rolls tap-like at %sx", (rate) => {
+    // 43ms holds every 21.67ms across four lanes: LN vibro. At OD 0 nothing
+    // is effective, and identity, read at the OD 5 floor, cannot lean on
+    // chains either, since a vibro chart forms none: at 0.75x the 58ms bodies
+    // would otherwise sit within 20ms of the 73.5ms window and chain.
     const notes = Array.from({ length: 400 }, (_, i) => ({
       column: i % 4, time: Math.round(1000 + i * 21.67), end: Math.round(1000 + i * 21.67 + 43.34),
     }));
-    const analysis = analyzeEffectiveLn(parseManiaBeatmap(osuText(notes, 0)).notes, { rate, od: 0 });
+    const parsed = parseManiaBeatmap(osuText(notes, 0)).notes;
+    const analysis = analyzeEffectiveLn(parsed, { rate, od: 0, keyCount: 4 });
+    expect(analysis.lnVibro).toBe(true);
     expect(analysis.effectiveHolds).toBe(0);
+    expect(analysis.effectiveLnRatio).toBe(0);
     expect(chartIsLn(4, { lnRatio: analysis.holdRatio, lnEffectiveRatio: analysis.effectiveLnRatio })).toBe(false);
   });
 

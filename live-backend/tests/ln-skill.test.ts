@@ -109,8 +109,23 @@ describe("independent 4K LN skill", () => {
     for (const keyCount of [1, 2, 3, ...Array.from({ length: 14 }, (_, i) => i + 5), 19, 7.5, NaN]) expect(analyzeLnSkill({ ...chart(notes), keyCount })).toBeNull();
   });
 
-  it("preserves the v1 4K calculation", () => {
-    expect(analyzeLnSkill(chart(stream()))!.rating).toBeCloseTo(11.883534397502766, 10);
+  it("preserves the v9 4K calculation", () => {
+    // v1 through v8 pinned 11.883534397502766 on this fixture; v9 rates the
+    // geometric mean of goal skill and peak section demand on the refit
+    // constants (LN_SKILL_PEAK_WEIGHT), so the number moved once, here.
+    expect(analyzeLnSkill(chart(stream()))!.rating).toBeCloseTo(10.15419425388294, 10);
+  });
+
+  it("rates a chart with one hard section above the same average spread evenly", () => {
+    // Same total release work over the same span: one chart concentrates
+    // it in a 20-second drop, the other spreads it thin. The goal skill
+    // alone nearly equates them; the peak half of the rating does not.
+    const spread = Array.from({ length: 300 }, (_, i) => hold(i % 4, i * 400, 300));
+    const drop = [
+      ...Array.from({ length: 150 }, (_, i) => hold(i % 4, i * 640, 300)),
+      ...Array.from({ length: 150 }, (_, i) => hold(i % 4, 96_000 + i * 160, 100)),
+    ];
+    expect(analyzeLnSkill(chart(drop))!.rating).toBeGreaterThan(analyzeLnSkill(chart(spread))!.rating! * 1.15);
   });
 });
 

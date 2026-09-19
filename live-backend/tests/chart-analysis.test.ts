@@ -11,8 +11,12 @@ import {
   computeBeatmapChartAnalysis,
   enqueueChartAnalysisBackfill,
   getChartAnalysisBackfillStatus,
+  HYBRID_HOLD_SHARE_MAX,
+  HYBRID_HOLD_SHARE_MIN,
+  HYBRID_MIN_WORK_SHARE,
   recomputeDanEligibilityChunk,
   runChartAnalysisBackfillJob,
+  secondaryDanFor,
   startChartAnalysisBackfill,
 } from "../src/features/chart-analysis.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
@@ -291,5 +295,39 @@ describe("chart analysis backfill run", () => {
       const after = await getChartAnalysisBackfillStatus(db);
       expect(after.status).toBe("cancelled");
     });
+  });
+});
+
+describe("secondaryDanFor", () => {
+  const half = (kind: "rc" | "ln", displayName: string, rawDan: number) => ({
+    kind, source: "test", label: displayName, variant: null, displayName, rawDan, estimatedSr: 5, confidence: 0.7,
+  });
+
+  it("names the other half of the verdict on a 4K chart in the hybrid band", () => {
+    const rc = half("rc", "delta-", 18.1);
+    const ln = half("ln", "15--", 14.6);
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.556, primary: rc, rc, ln })).toEqual({ label: "15--", family: "ln", rawDan: 14.6 });
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.556, primary: ln, rc, ln })).toEqual({ label: "delta-", family: "dan", rawDan: 18.1 });
+    // A mostly-rice chart with a real LN share is in the band; an LN chart is not.
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: HYBRID_HOLD_SHARE_MIN, primary: rc, rc, ln })).not.toBeNull();
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: HYBRID_HOLD_SHARE_MAX, primary: ln, rc, ln })).not.toBeNull();
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.96, primary: ln, rc, ln })).toBeNull();
+    // Holds that are vibro notation carry no work; a chart whose holds are
+    // mostly free is not a hybrid however many it has. Unswept rows (no
+    // share yet) keep the hold-band reading.
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.7, primary: rc, rc, ln, lnWorkShare: 0.03 })).toBeNull();
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.7, primary: rc, rc, ln, lnWorkShare: HYBRID_MIN_WORK_SHARE })).not.toBeNull();
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.7, primary: rc, rc, ln, lnWorkShare: undefined })).not.toBeNull();
+    // 7K's hybrid culture is not read this way yet.
+    expect(secondaryDanFor({ keyCount: 7, lnRatio: 0.5, primary: rc, rc, ln })).toBeNull();
+  });
+
+  it("stays silent under the band or when the other half never ran", () => {
+    const rc = half("rc", "9", 9.1);
+    const ln = half("ln", "9--", 8.6);
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.2, primary: rc, rc, ln })).toBeNull();
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.6, primary: rc, rc, ln: null })).toBeNull();
+    expect(secondaryDanFor({ keyCount: 4, lnRatio: 0.6, primary: null, rc, ln })).toBeNull();
+    expect(secondaryDanFor(null)).toBeNull();
   });
 });

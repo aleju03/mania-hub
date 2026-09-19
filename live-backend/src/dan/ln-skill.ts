@@ -1,5 +1,5 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
-import { analyzeEffectiveLn, chartIsLn, effectiveHoldMask, LN_SAME_MOTION_TOLERANCE_MS } from "./dan-estimator/ln-effective.js";
+import { analyzeEffectiveLn, chartIsLn, effectiveHoldMask, LN_MIN_WORK_SHARE, LN_SAME_MOTION_TOLERANCE_MS } from "./dan-estimator/ln-effective.js";
 import { lnPrimaryMinRatioFor } from "./dan-estimator/ln.js";
 import { analyzeLnTimeline4K, lnAnalysisCacheKey, summarizeLnStructure4K, type LnStructureSummary4K } from "./ln-analysis/index.js";
 import { buildLnTimeline4K } from "./ln-analysis/timeline.js";
@@ -14,7 +14,11 @@ import { buildLnTimeline4K } from "./ln-analysis/timeline.js";
 // v7: identity excludes tap-covered chains (effective model v4).
 // v8: the rating follows rate the way native MSD does, and every chart past
 // the 45% hold line carries its LN number whether or not its identity is LN.
-export const LN_SKILL_VERSION = 8;
+// v9: eligibility reads identity at OD 5 or the file's, whichever is higher
+// (effective model v6), and the rating is the geometric mean of the goal
+// skill and the peak section demand (LN_SKILL_PEAK_WEIGHT) on refit
+// constants, so a long chart with one hard drop reads as its drop.
+export const LN_SKILL_VERSION = 9;
 export const LN_SKILL_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 export function isLnSkillSupported(keyCount: number): boolean {
   return LN_SKILL_KEY_COUNTS.has(keyCount);
@@ -27,8 +31,10 @@ const CHORD_TOLERANCE_MS = 5;
 const RECOVERY_MS = 180;
 // Only 4K has a course-validated scale fit. Other keymodes retain the legacy
 // Overall-on-LN axis and must never receive independent LN artifacts.
-export const LN_SKILL_SCALE = 4.818919597751967;
-export const LN_SKILL_EXPONENT = 0.5277221146076253;
+// Refit 2026-09-18 on the nine odd 4K LN courses for the peak-blended strain
+// (previously 4.818919597751967 and 0.5277221146076253).
+export const LN_SKILL_SCALE = 3.9707727589870347;
+export const LN_SKILL_EXPONENT = 0.548325895663114;
 /**
  * How the rating responds to playback rate on a chart whose holds all keep
  * their work: rating ~ rate^0.77. Strain itself grows linearly with rate
@@ -40,6 +46,20 @@ export const LN_SKILL_EXPONENT = 0.5277221146076253;
  * same curve. 1.0x ratings, and so the 17-course fit, are untouched.
  */
 export const LN_SKILL_RATE_RESPONSE = 0.77;
+/**
+ * How much of the rating is the chart's hardest half-second against the
+ * skill that reaches the score goal over the whole chart: the geometric mean
+ * of the two. The goal skill alone averages the 93% over everything, so a
+ * long chart with one brutal drop reads like its five moderate minutes: a
+ * 5:38 chart whose drop peaks at demand 36 solved to 21.3 while a 1:30 chart
+ * peaking at 31 solved to 20.3 (2026-09-18). With the peak at half weight
+ * the held-out even courses fit better (mean error 1.42 to 1.35 MSD), course
+ * order is unchanged (Spearman 0.990) and the 1.0x LN corpus moves down 0.7
+ * at the median after refit while long charts with one hard section gain up
+ * to 3.6. Rating only the hardest 30-90 seconds instead put course 16 under
+ * course 15, so it stays a blend.
+ */
+export const LN_SKILL_PEAK_WEIGHT = 0.5;
 
 export function lnSkillCalibrationFor(keyCount: number): { scale: number; exponent: number } {
   if (!isLnSkillSupported(keyCount)) throw new Error("Independent LN skill is only supported for 4K");
@@ -125,7 +145,7 @@ export function analyzeLnSkill(
     if (!previous || note.endTime > previous.endTime) unique.set(key, note);
   }
   const notes = [...unique.values()].sort((a, b) => a.time - b.time || a.column - b.column);
-  const effective = analyzeEffectiveLn(notes, { rate, od });
+  const effective = analyzeEffectiveLn(notes, { rate, od, keyCount });
   const result: LnSkillResult = {
     version: LN_SKILL_VERSION, keyCount, rating: 0, strain: 0,
     structureKey, ...(structure ? { structure } : {}),
@@ -134,13 +154,16 @@ export function analyzeLnSkill(
     eligible: effective.effectiveHolds > 0 && chartIsLn(keyCount, { lnRatio: effective.holdRatio, lnEffectiveRatio: effective.effectiveLnRatio }) === true,
     // A hold-heavy chart whose bodies are free at this rate is still worth an
     // LN number next to its native values; identity alone decides the axis.
-    rated: effective.effectiveHolds > 0 && effective.holdRatio >= lnPrimaryMinRatioFor(keyCount),
+    // Holds that are notation (vibro spam, one long hold in a thousand) are
+    // not: a tenth of them have to be work (LN_MIN_WORK_SHARE).
+    rated: effective.effectiveHolds > 0 && effective.holdRatio >= lnPrimaryMinRatioFor(keyCount)
+      && effective.identityWorkShare >= LN_MIN_WORK_SHARE,
     holdRatio: effective.holdRatio,
     effectiveRatio: effective.effectiveLnRatio, effectiveHolds: effective.effectiveHolds,
     rate, od, scoreGoal,
   };
   if (!effective.effectiveHolds || scoreGoal === 0) return result;
-  const mask = effectiveHoldMask(notes, { rate, od });
+  const mask = effectiveHoldMask(notes, { rate, od, keyCount });
   const effectiveNotes = new Set(notes.filter((_note, index) => mask[index]));
   const events: Event[] = [];
   for (const row of timeline.rows) {
@@ -245,7 +268,9 @@ function strainAtSplit(events: Event[], keyCount: number, split: number, scoreGo
     i = j;
   }
   const endurance = 1 + Math.min(0.18, 0.04 * Math.log1p(sections.size * SECTION_MS / 30_000));
-  return ratingAtGoal([...sections.values()], scoreGoal) * endurance;
+  const demands = [...sections.values()];
+  const peak = demands.reduce((max, section) => Math.max(max, section.demand), 0);
+  return Math.pow(ratingAtGoal(demands, scoreGoal), 1 - LN_SKILL_PEAK_WEIGHT) * Math.pow(peak, LN_SKILL_PEAK_WEIGHT) * endurance;
 }
 
 export function analyzeLnSkillFromText(osuText: string, options: Parameters<typeof analyzeLnSkill>[1] = {}): LnSkillResult | null {

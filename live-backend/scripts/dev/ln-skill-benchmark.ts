@@ -83,6 +83,10 @@ const coverage = [...LN_SKILL_KEY_COUNTS].map(keyCount => {
 });
 // Regression controls are offline evaluation fixtures only. No runtime model
 // branches on their identities. Also inspect the nearest sub-45% cached charts.
+// The first control is an OD 0 LN vibro pack chart with 74% holds of 43ms:
+// once identity read the release window at OD 5 (LN_IDENTITY_MIN_OD) its
+// bodies reached the window at 0.75x and chained into an inverse reading,
+// which is why LN vibro charts form no chains (ln-effective.ts).
 const controlIds = [1146279, 992512];
 const incidental = db.prepare(`select beatmap_id from beatmap_chart_analysis
   where analysis_version = ? and key_count = 4 and status = 'ready'

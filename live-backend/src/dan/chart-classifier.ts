@@ -73,6 +73,9 @@ export interface ChartClassification {
   lnRatingIdentity?: boolean;
   /** The measured share behind a rating-lifted lnEffectiveRatio. */
   lnStructuralRatio?: number;
+  /** Holds carrying identity work over all holds at 1.0x (ln-effective.ts):
+   * what separates a hybrid from a chart whose holds are vibro notation. */
+  lnWorkShare?: number;
   sunnySr: number | null;
   /** Raw LeoBlack Mixed verdict text ("RC || LN" for hybrids), if it ran. */
   verdictText: string | null;
@@ -651,6 +654,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     supported: primary != null,
     lnRatio,
     ...(lnEffectiveRatio != null ? { lnEffectiveRatio } : {}),
+    ...(lnIdentity?.lnWorkShare != null ? { lnWorkShare: lnIdentity.lnWorkShare } : {}),
     ...(lnIdentity?.lnRatingIdentity ? { lnRatingIdentity: true, lnStructuralRatio: lnIdentity.lnStructuralRatio } : {}),
     sunnySr,
     verdictText,

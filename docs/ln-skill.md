@@ -70,6 +70,27 @@ minus the existing 20 ms shared-motion tolerance, and a nonnegative
 tail-to-next-head gap no greater than that window. A chain's final hold needs
 its own qualifying outgoing link or a genuinely long body to count.
 `chainedShortHolds` reports these additions separately from `longTails`.
+
+Identity reads that window at no less than OD 5 (`LN_IDENTITY_MIN_OD`,
+effective model v6, 2026-09-18). At OD 0 the release window is 96 ms, so on
+a low-OD file most 1/8 holds at any tempo count as free and a hold-heavy
+chart files as rice for the OD its mapper left rather than for its notes: of
+the 923 cached 4K charts at OD 0 past the hold line, 580 read rice at 1.0x,
+and 441 of those are LN once the window is read at OD 5. Over the 1,481
+charts under the floor, 496 join LN at 1.0x, 210 at 1.5x and 124 at 0.75x,
+and none cross the other way (a floor of 5.5 would send one chart to rice).
+Only the LN-or-rice question reads the floor: `effectiveHoldMask`, the
+effective-hold counts, the LN rating and the tail pass keep the played OD,
+and the 4K LN dan credit floor stays at OD 7. An LN vibro chart
+(`detectLnVibro`: 50%+ holds with a p75 row gap of 40 ms or less at the
+played rate) forms no chains at all, because a vibro pack's 43 ms holds
+became 58 ms bodies at 0.75x, within 20 ms of the OD 5 window with 58 ms of
+recovery, and chained into an inverse reading; its long holds still count.
+`identityWorkShare` (holds carrying long or chained work at the identity OD,
+over all holds) is stored as `lnWorkShare` and separates a hybrid from a
+chart whose holds are notation; the LN number is published (`rated`) only
+when it reaches `LN_MIN_WORK_SHARE` (0.1), the same line the hybrid badge
+uses.
 Identity (effective model v5) reads each 10s section two ways and takes the
 higher: the **long-tail** share against the 40% line, or the release-work
 share (long plus chained holds) against a 60% line, scaled onto the same
@@ -125,8 +146,19 @@ higher goal extrapolates the cap-to-0.93 slope (`analyzeLnSsr`); solved
 directly, a perfect play priced a 24.8 chart at 38.7.
 This is an empirical response model, not measured per-player release error.
 
-The inherited scale is `4.818919597751967 * strain^0.5277221146076253`,
-multiplied by `rate^(0.77 - 0.5277)` (`LN_SKILL_RATE_RESPONSE`, v8). Strain
+The strain a chart hands to the scale is, since v9 (2026-09-18), the
+geometric mean of two numbers (`LN_SKILL_PEAK_WEIGHT` 0.5): the skill at
+which the whole chart's LN sections reach the 93% goal, and the single
+hardest half-second's demand. The goal skill alone averages the 93% over
+everything, so a 5:38 chart whose drop peaks at demand 36 solved to 21.3
+while a 1:30 chart peaking at 31 solved to 20.3; the blend lets a long chart
+with one brutal section read as its section. Rating only the hardest 30-90
+seconds instead put course 16 under course 15, so it stays a blend.
+
+The scale is `3.9707727589870347 * strain^0.548325895663114` (refit for the
+blended strain on the nine odd courses; the pre-v9 fit was
+`4.818919597751967 * strain^0.5277221146076253`),
+multiplied by `rate^(0.77 - 0.5483)` (`LN_SKILL_RATE_RESPONSE`, v8). Strain
 grows linearly with rate on a chart whose holds keep their work, so the fit
 alone answers as `rate^0.53`: HT LN plays priced at about 90% of their NM
 chart and DT plays at 88-105%, against native Overall's `rate^0.75` at 1.5x
@@ -137,19 +169,20 @@ makes free are still stripped first, so a DT rating can stay under Overall
 when the chart's short holds become taps.
 Its historical fit used nine odd-level 4K LN courses against native MSD, with
 eight even-level courses as diagnostics. This only aligns a numerical range.
-The 17-course evaluation now gives Spearman 0.9902 (previously 0.9510), with
-levels 16 and 17 above level 15 and all 17 still LN-eligible. The shipped
-scale/exponent are unchanged. An unconstrained refit on the same nine odd
-courses yields scale 5.004177787074106 and exponent 0.5104758442838657.
-Scale and exponent covary in this log fit, so stability is checked in rating
-space: every course must differ by **less than 1.0 MSD** between shipped and
-refitted constants at the same measured strain. All 17 pass. The maximum
-difference is **0.8043503803792191 MSD**, at level 17 (shipped 32.728934347429984,
-refitted 31.924583967050765). The eight diagnostic courses' mean absolute
-error against cached native Overall is 1.4064630384488246 with shipped
-constants versus 1.4220278052486786 with the refit. These are numerical-scale
-diagnostics, not human difficulty errors. The shipped constants are retained;
-the scalar no longer emits a provisional calibration marker or tooltip label.
+The 17-course evaluation gives Spearman 0.9902 under the v9 blend, the same
+as before it, with levels 16 and 17 above level 15 and all 17 still
+LN-eligible. The shipped scale/exponent are the refit itself, so the
+rating-space stability check (every course within **1.0 MSD** of the
+refitted curve at the same strain) passes at zero difference. The eight
+diagnostic courses' mean absolute error against cached native Overall is
+1.3499059647053777 with the v9 constants, against 1.4064630384488246 for the
+pre-v9 curve on the pre-v9 strain. The course ratings themselves rose by
+1.9 to 3.8 (level 1 11.56 to 13.41, level 17 32.73 to 36.57), since a course
+is a marathon of sections at its level and the peak half now counts; across
+the 9,665 cached 1.0x LN charts the median rating moved down 0.7 after the
+refit, and long charts with one hard section gained up to 3.6. These are
+numerical-scale diagnostics, not human difficulty errors; the scalar emits
+no provisional calibration marker or tooltip label.
 The eight even courses remain diagnostics, and using this ladder to inspect
 the fix makes these course-order results an in-sample check, not independent
 player-outcome validation. No scale transfers to other keycounts.
