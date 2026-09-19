@@ -610,6 +610,8 @@ export class ManiaReplayRenderer {
   private lastRenderTime = 0;
   private audioClockAnchorTime: number | null = null;
   private audioClockAnchorNow = 0;
+  // Whether the song's clock has been seen moving since the last anchor.
+  private audioClockRunning = false;
   private fpsSampleStartedAt = 0;
   private fpsMaxObserved = 0;
   private fpsFrameCount = 0;
@@ -2927,6 +2929,20 @@ export class ManiaReplayRenderer {
       return audioTime;
     }
 
+    // A freshly anchored song has not proven it is running. After a seek,
+    // phones report the element playable, unpaused and no longer seeking
+    // while the decoder is still spinning up and currentTime sits still, so
+    // predicting from the wall clock ran the notes ahead of a silent song
+    // and snapped them back at every 80ms of drift. Hold at the song's own
+    // time until it moves.
+    if (!this.audioClockRunning) {
+      if (audioTime === this.audioClockAnchorTime) return audioTime;
+      this.audioClockAnchorTime = audioTime;
+      this.audioClockAnchorNow = now;
+      this.audioClockRunning = true;
+      return audioTime;
+    }
+
     const predicted = this.audioClockAnchorTime + (now - this.audioClockAnchorNow) * this.playbackSpeed * this.modRate;
     const drift = audioTime - predicted;
 
@@ -2948,6 +2964,7 @@ export class ManiaReplayRenderer {
   private resetAudioClockSmoothing(time: number | null = null, now = performance.now()) {
     this.audioClockAnchorTime = time;
     this.audioClockAnchorNow = now;
+    this.audioClockRunning = false;
   }
 
   private resetFpsCounter(now = performance.now()) {

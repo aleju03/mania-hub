@@ -13,6 +13,7 @@ function createPlayback(readClock: () => { time: number; stalled: boolean }) {
     modRate: 1.5,
     audioClockAnchorTime: null,
     audioClockAnchorNow: 0,
+    audioClockRunning: false,
     externalClock: readClock,
     advanceStats: vi.fn(),
     fireHitsounds: vi.fn(),
@@ -114,6 +115,28 @@ describe("replay pause/resume timing", () => {
     now += 16;
     drawFrame();
     expect(renderer.currentTime).toBe(clock.time);
+  });
+
+  it("waits for a seeked song to move before running ahead of it", () => {
+    // Phones report a seeked song playable and unpaused while its clock still
+    // sits at the seek target; the notes must not leave that spot early.
+    const clock = { time: 10_000, stalled: false };
+    const renderer = createPlayback(() => clock);
+    renderer.play();
+    for (let i = 0; i < 20; i++) {
+      now += 16;
+      drawFrame();
+      expect(renderer.currentTime).toBe(10_000);
+    }
+    clock.time = 10_030;
+    now += 16;
+    drawFrame();
+    expect(renderer.currentTime).toBe(10_030);
+    // Once it moves, the smoothed clock predicts between its updates.
+    now += 16;
+    drawFrame();
+    expect(renderer.currentTime).toBeGreaterThan(10_030);
+    expect(renderer.currentTime).toBeLessThanOrEqual(10_054);
   });
 
   it("draws the next frame after a transient render failure without waiting for recovery", () => {
