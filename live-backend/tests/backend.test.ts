@@ -1758,6 +1758,17 @@ describe("live backend", () => {
     expect(enrichLane?.jobTypes).toEqual(["enrich_user"]);
   });
 
+  // Same shape for beatmap enrichment: in the fast lane it sat at priority 90
+  // under the reconcile reserve at 150 and drained about one a minute.
+  it("gives enrich_beatmap a lane of its own, since the fast lane never reaches it under reconcile load", async () => {
+    const { db, queue, events, ingestor } = await setup();
+
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+    const lane = worker.status().lanes.find((entry) => entry.name === "enrich-beatmaps");
+
+    expect(lane?.jobTypes).toEqual(["enrich_beatmap"]);
+  });
+
   it("keeps a top-play confirmation backlog out of shared depth and drains it from its own lane", async () => {
     const { db, queue, events, ingestor } = await setup();
     const reserve = (await queue.pressure()).reservedLanes.refresh_user_top_scores;

@@ -153,6 +153,20 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 2_000,
   },
   {
+    // enrich_beatmap only rode the fast lane, at priority 90 under the
+    // priority-150 reconciles that keep a ten-deep reserve waiting there, so
+    // it drained at ~1/min against ~7/min of ingest and 3.8k sat queued on
+    // prod (2026-09-19). The job is not idle work: a score that arrives
+    // without beatmap objects (the recent-scores poller) waits on it for its
+    // tracker event and snipe update, so the backlog was hours of tracker
+    // delay. Mostly local: a fresh row skips the /beatmaps call entirely, and
+    // the osu! token bucket paces the rest.
+    name: "enrich-beatmaps",
+    jobTypes: ["enrich_beatmap"],
+    claimLimit: 2,
+    intervalMs: 1_000,
+  },
+  {
     // Same story as the enrich lane, one priority tier down. Top-play
     // confirmations sit at priority 50 and lose every fast-lane slot to profile
     // refreshes (80/120), so their queue reserve keeps them out of the shared
