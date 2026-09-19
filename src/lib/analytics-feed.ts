@@ -469,6 +469,8 @@ function describeNamedAnalyticsEvent(
   switch (row.event) {
     case "changelog_open":
       return { kind: "visit", verb: "opened", subject: "the changelog", detail: null };
+    case "support_open":
+      return { kind: "visit", verb: "opened", subject: "the support box", detail: null };
     /* The dan explainer fires both: the open, and the read once the end of the
        article has been on screen. A visitor who bounced has only the first. */
     case "dan_estimates_view":

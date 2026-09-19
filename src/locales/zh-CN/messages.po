@@ -6961,6 +6961,10 @@ msgstr "混合"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
 
+#: src/routes/__root.tsx
+msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
+msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支付服务器费用，并让开发得以继续。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 #~ msgstr "如果本站看到你通过了一个段位课题，你在那一侧的估算<0>就不会低于那个课题</0>，不管技能平均下来是多少。打过 EXTRA-EPSILON，你就读作 epsilon，哪怕你的技能平均下来只到 delta。这一页其它部分都是从你的成绩里算出一个数字，而课题直接把数字给你，所以它说了算。"
@@ -13874,6 +13878,14 @@ msgstr "日"
 #: src/components/me/MyDataPanel.tsx
 msgid "Sundays"
 msgstr "周日"
+
+#: src/routes/__root.tsx
+msgid "support"
+msgstr "支持"
+
+#: src/routes/__root.tsx
+msgid "Support mania-tracker"
+msgstr "支持 mania-tracker"
 
 #: src/routes/player/$username.tsx
 msgid "Supporter"

@@ -208,6 +208,7 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   skin_upload_failed: "Skin upload failed",
   skin_upload_published: "Skin published",
   streak_run: "Streak run",
+  support_open: "Support box opened",
 };
 
 export function formatAnalyticsEventLabel(event: string): string {

@@ -6952,6 +6952,10 @@ msgstr "Híbrido"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Mapa híbrido: {0}, {1}"
 
+#: src/routes/__root.tsx
+msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
+msgstr "Si el sitio te ha sido útil, considera apoyarlo. Las donaciones ayudan a cubrir el hosting y a mantener el desarrollo."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "If the site sees you pass a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 #~ msgstr "Si el sitio te ve superar un curso de dan, tu estimación de ese lado <0>no puede quedar por debajo de ese curso</0>, promedien lo que promedien tus skills. Supera EXTRA-EPSILON y se te lee como epsilon aunque tus skills promedien delta. El resto de esta página saca un número a partir de tus plays. Un curso te lo da directamente, así que gana."
@@ -13865,6 +13869,14 @@ msgstr "dom"
 #: src/components/me/MyDataPanel.tsx
 msgid "Sundays"
 msgstr "domingos"
+
+#: src/routes/__root.tsx
+msgid "support"
+msgstr "apoyar"
+
+#: src/routes/__root.tsx
+msgid "Support mania-tracker"
+msgstr "Apoya a mania-tracker"
 
 #: src/routes/player/$username.tsx
 msgid "Supporter"

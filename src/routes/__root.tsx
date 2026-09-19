@@ -1,7 +1,7 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Coffee, X } from "lucide-react";
+import { Coffee, Heart, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
@@ -565,9 +565,9 @@ function KofiSupportButton() {
           >
             <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
               <div className="text-left">
-                <div className="text-sm font-bold text-white">Support mania-tracker</div>
+                <div className="text-sm font-bold text-white">{i._(msg`Support mania-tracker`)}</div>
                 <div className="text-[11px] text-osu-f1">
-                  This site costs about €10 a month to keep running. If it&apos;s been useful to you, you can help keep it up here.
+                  {i._(msg`If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going.`)} <Heart className="inline h-3 w-3 align-[-1px] text-osu-pink" aria-hidden="true" />
                 </div>
               </div>
               <button
@@ -602,11 +602,12 @@ function KofiSupportButton() {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           setOpen(true);
+          track("support_open");
         }}
         className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
       >
         <Coffee className="h-3 w-3" />
-        support
+        {i._(msg`support`)}
       </a>
       {modal}
     </>
