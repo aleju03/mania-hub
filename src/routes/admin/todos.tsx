@@ -173,6 +173,12 @@ const LANE_DROP_Y_SLACK = 48;
 
 type LaneElements = Partial<Record<TodoCategory, HTMLDivElement | null>>;
 
+/** One note of a dragged selection and where it landed; `category` only when the lane changed. */
+type BlockMove = { id: string; position: number; category?: TodoCategory };
+
+/** The note under the pointer and the size of the selection it is carrying, while a drag is on. */
+type BlockDrag = { leader: string; count: number } | null;
+
 /** Which lane the pointer was over when the drag ended, or null if it was off the playfield. */
 export function findLaneAtPoint(lanes: LaneElements, x: number, y: number): TodoCategory | null {
   for (const key of CATEGORY_ORDER) {
@@ -250,10 +256,50 @@ export function queueDropPosition(order: AdminTodo[], index: number, occupied: n
   return positionBetween(occupied, above?.position ?? null, below?.position ?? null);
 }
 
+/**
+ * `count` free positions, ascending, all strictly between `lo` and `hi`: where a whole selection
+ * lands when one of its notes is dragged. Each one is measured against the one before it, so the
+ * block stays contiguous, in order, and off every position another row already owns. null when the
+ * gap can't hold them (nothing to sit between, or floats out of room).
+ */
+export function blockPositions(occupied: number[], lo: number | null, hi: number | null, count: number): number[] | null {
+  const taken = occupied.slice();
+  const out: number[] = [];
+  let low = lo;
+  for (let i = 0; i < count; i++) {
+    const position = positionBetween(taken, low, hi);
+    if (position === null) return null;
+    out.push(position);
+    taken.push(position);
+    low = position;
+  }
+  return out;
+}
+
 /** Where in a lane's visual (top-to-bottom) order a note released at `dropY` slots in. */
 export function laneInsertionIndex(middles: number[], dropY: number): number {
   const index = middles.findIndex((middle) => dropY <= middle);
   return index === -1 ? middles.length : index;
+}
+
+/** A lane's notes top to bottom with their vertical centres, read off the DOM. */
+function laneVisualOrder(
+  laneEl: HTMLElement,
+  laneItems: AdminTodo[],
+  skip?: Set<string>,
+): { visual: AdminTodo[]; middles: number[] } {
+  const byId = new Map(laneItems.map((todo) => [todo.id, todo]));
+  const visual: AdminTodo[] = [];
+  const middles: number[] = [];
+  // DOM order is the visual order, top to bottom.
+  laneEl.querySelectorAll<HTMLElement>("[data-todo-id]").forEach((el) => {
+    const todo = byId.get(el.dataset.todoId ?? "");
+    if (!todo || skip?.has(todo.id)) return;
+    const rect = el.getBoundingClientRect();
+    visual.push(todo);
+    middles.push(rect.top + rect.height / 2);
+  });
+  return { visual, middles };
 }
 
 /** Where a note dropped at `dropY` belongs in a lane it didn't come from. */
@@ -264,23 +310,32 @@ function crossLaneDropPosition(
   dropY: number,
   occupied: number[],
 ): number {
-  const byId = new Map(laneItems.map((todo) => [todo.id, todo]));
-  const visual: AdminTodo[] = [];
-  const middles: number[] = [];
-  // DOM order is the visual order, top to bottom.
-  laneEl.querySelectorAll<HTMLElement>("[data-todo-id]").forEach((el) => {
-    const todo = byId.get(el.dataset.todoId ?? "");
-    if (!todo) return;
-    const rect = el.getBoundingClientRect();
-    visual.push(todo);
-    middles.push(rect.top + rect.height / 2);
-  });
-
+  const { visual, middles } = laneVisualOrder(laneEl, laneItems);
   const index = laneInsertionIndex(middles, dropY);
   visual.splice(index, 0, moved);
   // An empty target lane leaves the note where it already sat in the global order; only its
   // category changes.
   return laneDropPosition(visual, index, occupied) ?? moved.position;
+}
+
+/**
+ * Positions for a whole selection dropped at `dropY` in `laneEl`, ascending. The block's own notes
+ * are skipped when the gap is measured - they are the ones moving, so wherever they sit now must
+ * not bound where they land. null = the lane has no pair of neighbours to sit between (it is
+ * empty, or holds nothing but the block), so the caller keeps their positions and moves the lane.
+ */
+function laneBlockDropPositions(
+  laneEl: HTMLElement,
+  laneItems: AdminTodo[],
+  blockIds: Set<string>,
+  dropY: number,
+  occupied: number[],
+  count: number,
+): number[] | null {
+  const { visual, middles } = laneVisualOrder(laneEl, laneItems, blockIds);
+  const index = laneInsertionIndex(middles, dropY);
+  // Lanes render reversed: the note above the gap holds the larger position.
+  return blockPositions(occupied, visual[index]?.position ?? null, visual[index - 1]?.position ?? null, count);
 }
 
 /** Viewport coords for a drag end, preferring the real event over framer's own point. */
@@ -506,6 +561,9 @@ function TodosPage() {
   // Holding ctrl/cmd/shift puts the board in selection mode: notes stop being draggable, so a press
   // picks one instead of picking it up.
   const [selectMode, setSelectMode] = useState(false);
+  // The note being dragged while it carries the rest of the selection with it, and how many are
+  // coming along. The board holds this rather than the lane, because they can sit in any lane.
+  const [blockDrag, setBlockDrag] = useState<{ leader: string; count: number } | null>(null);
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
   const todosRef = useRef(todos);
@@ -893,6 +951,39 @@ function TodosPage() {
     setTodos((prev) => updated.reduce((acc, todo) => upsertTodo(acc, todo), prev));
   }, []);
 
+  // Dragging one note of a selection carries the whole selection: every picked note lands as one
+  // block at the drop point, in the order it already had, and (in the lanes view) takes the lane it
+  // was dropped on. One write per note, since position is per-row.
+  const handleBlockMove = useCallback(
+    async (moves: BlockMove[]) => {
+      if (moves.length === 0) return;
+      setTodos((prev) =>
+        moves.reduce((acc, move) => {
+          const current = acc.find((t) => t.id === move.id);
+          return current ? upsertTodo(acc, { ...current, position: move.position, category: move.category ?? current.category }) : acc;
+        }, prev),
+      );
+      playTodoDropTick();
+      setError(null);
+      try {
+        const results = await Promise.all(
+          moves.map((move) =>
+            updateAdminTodo({
+              data: move.category
+                ? { id: move.id, position: move.position, category: move.category }
+                : { id: move.id, position: move.position },
+            }),
+          ),
+        );
+        applyTodos(results.map((result) => result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [applyTodos, refetch],
+  );
+
   const handleBulkGroup = useCallback(
     async (groupId: string | null) => {
       const ids = selectedIdsRef.current;
@@ -1204,6 +1295,9 @@ function TodosPage() {
                         groupById={groupById}
                         selectedIds={selectedSet}
                         selectMode={selectMode}
+                        onBlockMove={handleBlockMove}
+                        blockDrag={blockDrag}
+                        onBlockDrag={setBlockDrag}
                       />
                     ))}
                     {openFiltered.length === 0 && (
@@ -1242,6 +1336,9 @@ function TodosPage() {
                     groupById={groupById}
                     selectedIds={selectedSet}
                     selectMode={selectMode}
+                    onBlockMove={handleBlockMove}
+                    blockDrag={blockDrag}
+                    onBlockDrag={setBlockDrag}
                   />
                 )}
               </div>
@@ -1424,9 +1521,14 @@ interface LaneProps {
   // a press picks a note rather than lifting it).
   selectedIds: Set<string>;
   selectMode: boolean;
+  // Dragging a picked note drags every picked note. The board owns the leader's id so the notes
+  // riding along in other lanes can show it too.
+  onBlockMove: (moves: BlockMove[]) => void;
+  blockDrag: BlockDrag;
+  onBlockDrag: (drag: BlockDrag) => void;
 }
 
-function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, positionPeers, onMoveToLane, onDragHoverLane, hovered, groupById, selectedIds, selectMode }: LaneProps) {
+function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, positionPeers, onMoveToLane, onDragHoverLane, hovered, groupById, selectedIds, selectMode, onBlockMove, blockDrag, onBlockDrag }: LaneProps) {
   const meta = CATEGORY_META[category];
   const Icon = meta.Icon;
 
@@ -1451,10 +1553,24 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
   lanesRef.current = lanes;
   const positionPeersRef = useRef(positionPeers);
   positionPeersRef.current = positionPeers;
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  // The notes travelling with the one under the pointer, fixed at the start of the drag so a
+  // selection change mid-flight can't split the block.
+  const block = useRef<{ leader: string; members: AdminTodo[] } | null>(null);
 
-  const handleDragStart = useCallback(() => {
-    dragging.current = true;
-  }, []);
+  const handleDragStart = useCallback(
+    (id: string) => {
+      dragging.current = true;
+      // Position asc, across every lane: the selection keeps the order it already reads in.
+      const members = CATEGORY_ORDER.flatMap((key) => lanesRef.current[key])
+        .filter((t) => selectedIdsRef.current.has(t.id))
+        .sort((a, b) => a.position - b.position);
+      block.current = selectedIdsRef.current.has(id) && members.length > 1 ? { leader: id, members } : null;
+      onBlockDrag(block.current ? { leader: id, count: members.length } : null);
+    },
+    [onBlockDrag],
+  );
 
   const handleDrag = useCallback(
     (point: { x: number; y: number }) => {
@@ -1468,9 +1584,39 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
     (id: string, point: { x: number; y: number }) => {
       dragging.current = false;
       onDragHoverLane(null);
+      const carried = block.current;
+      block.current = null;
+      onBlockDrag(null);
       const occupied = positionPeersRef.current.filter((t) => t.id !== id).map((t) => t.position);
       // Whatever happens next, the local order must stop diverging from the data.
       const resync = () => setOrder([...itemsRef.current].reverse());
+
+      // A dragged selection lands whole, in the lane it was released over: the block is gathered
+      // together at the drop point even if it started spread across lanes.
+      if (carried && carried.leader === id) {
+        const target = findLaneAtPoint(laneRefs.current, point.x, point.y) ?? category;
+        const targetEl = laneRefs.current[target];
+        if (!targetEl) {
+          resync();
+          return;
+        }
+        const blockIds = new Set(carried.members.map((t) => t.id));
+        const free = positionPeersRef.current.filter((t) => !blockIds.has(t.id)).map((t) => t.position);
+        const positions = laneBlockDropPositions(targetEl, lanesRef.current[target], blockIds, point.y, free, carried.members.length);
+        const moves = carried.members.map((todo, i) => ({
+          id: todo.id,
+          position: positions?.[i] ?? todo.position,
+          ...(todo.category === target ? {} : { category: target }),
+        }));
+        // An empty lane with nothing to sit between, dropped on by notes already in it: nothing to
+        // write, so put the local order back rather than waiting on data that will not change.
+        if (moves.every((move, i) => move.position === carried.members[i].position && move.category === undefined)) {
+          resync();
+          return;
+        }
+        onBlockMove(moves);
+        return;
+      }
 
       // A sideways drop retypes the note; only a drop that stayed home is a plain reorder.
       const target = findLaneAtPoint(laneRefs.current, point.x, point.y);
@@ -1504,8 +1650,13 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
       }
       onReorderEnd(id, position);
     },
-    [category, laneRefs, onDragHoverLane, onMoveToLane, onReorderEnd],
+    [category, laneRefs, onBlockDrag, onBlockMove, onDragHoverLane, onMoveToLane, onReorderEnd],
   );
+
+  // The notes riding along leave the lane for the length of the drag (they animate out, the lane
+  // closes up), so the note in hand visibly carries the whole selection instead of moving alone.
+  // They are not part of the drop maths either way: it reads the lane under the pointer.
+  const shown = blockDrag ? order.filter((t) => t.id === blockDrag.leader || !selectedIds.has(t.id)) : order;
 
   const popupMeta = popup ? JUDGEMENT_META[popup.judgement] : null;
 
@@ -1525,18 +1676,19 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
       </div>
       <Reorder.Group
         axis="y"
-        values={order}
+        values={shown}
         onReorder={setOrder}
         className="flex min-h-[260px] flex-1 flex-col justify-end gap-1.5 px-1.5 py-2"
       >
         <AnimatePresence initial={false}>
-          {order.map((todo) => (
+          {shown.map((todo) => (
             <LaneNote
               key={todo.id}
               todo={todo}
               group={todo.groupId ? groupById.get(todo.groupId) ?? null : null}
               selected={selectedIds.has(todo.id)}
               selectMode={selectMode}
+              carrying={blockDrag?.leader === todo.id ? blockDrag.count - 1 : 0}
               onHit={onHit}
               onOpen={onOpen}
               onDragStart={handleDragStart}
@@ -1576,6 +1728,7 @@ function LaneNote({
   group,
   selected,
   selectMode,
+  carrying,
   onHit,
   onOpen,
   onDragStart,
@@ -1586,9 +1739,11 @@ function LaneNote({
   group: AdminTodoGroup | null;
   selected: boolean;
   selectMode: boolean;
+  // How many other notes this one is carrying, when it is the one in hand.
+  carrying: number;
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
-  onDragStart: () => void;
+  onDragStart: (id: string) => void;
   onDrag: (point: { x: number; y: number }) => void;
   onDragEnd: (id: string, point: { x: number; y: number }) => void;
 }) {
@@ -1609,7 +1764,7 @@ function LaneNote({
       dragListener={!selectMode}
       onDragStart={() => {
         dragging.current = true;
-        onDragStart();
+        onDragStart(todo.id);
       }}
       onDrag={(event, info) => onDrag(dropPoint(event, info))}
       onDragEnd={(event, info) => {
@@ -1644,6 +1799,7 @@ function LaneNote({
             )}
             {todo.notes && <AlignLeft className="h-2.5 w-2.5" />}
             <span>{formatShortDate(todo.createdAt)}</span>
+            {carrying > 0 && <span className="font-semibold text-osu-blue">+{carrying}</span>}
             {group && (
               <span className={`inline-flex min-w-0 items-center gap-1 ${GROUP_COLOR_META[group.color].text}`}>
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${GROUP_COLOR_META[group.color].dot}`} />
@@ -1683,6 +1839,9 @@ function Queue({
   groupById,
   selectedIds,
   selectMode,
+  onBlockMove,
+  blockDrag,
+  onBlockDrag,
 }: {
   // Position asc: first row is the next thing to do.
   items: AdminTodo[];
@@ -1695,6 +1854,10 @@ function Queue({
   groupById: Map<string, AdminTodoGroup>;
   selectedIds: Set<string>;
   selectMode: boolean;
+  // Dragging a picked row drags every picked row; the board owns which one is leading.
+  onBlockMove: (moves: BlockMove[]) => void;
+  blockDrag: BlockDrag;
+  onBlockDrag: (drag: BlockDrag) => void;
 }) {
   const [order, setOrder] = useState<AdminTodo[]>(items);
   const dragging = useRef(false);
@@ -1710,17 +1873,61 @@ function Queue({
   itemsRef.current = items;
   const positionPeersRef = useRef(positionPeers);
   positionPeersRef.current = positionPeers;
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  // The rows travelling with the one under the pointer, fixed at the start of the drag so a
+  // selection change mid-flight can't split the block.
+  const block = useRef<{ leader: string; ids: Set<string> } | null>(null);
 
-  const handleDragStart = useCallback(() => {
-    dragging.current = true;
-  }, []);
+  const handleDragStart = useCallback(
+    (id: string) => {
+      dragging.current = true;
+      const picked = itemsRef.current.filter((t) => selectedIdsRef.current.has(t.id));
+      block.current = selectedIdsRef.current.has(id) && picked.length > 1
+        ? { leader: id, ids: new Set(picked.map((t) => t.id)) }
+        : null;
+      onBlockDrag(block.current ? { leader: id, count: picked.length } : null);
+    },
+    [onBlockDrag],
+  );
 
   const handleDragEnd = useCallback(
     (id: string) => {
       dragging.current = false;
+      const carried = block.current;
+      block.current = null;
+      onBlockDrag(null);
       const current = orderRef.current;
       const committed = itemsRef.current;
       const resync = () => setOrder(itemsRef.current);
+
+      // A dragged selection lands whole: the rows it left behind close up, and the block slots in
+      // where the dragged row was dropped, keeping the order it already read in.
+      if (carried && carried.leader === id) {
+        const members = committed.filter((t) => carried.ids.has(t.id));
+        // The dragged row keeps its live slot; the rest of the block is lifted out of the list, so
+        // the gap it drops into is measured against the rows that are actually staying put.
+        const rest = current.filter((t) => t.id === id || !carried.ids.has(t.id));
+        const index = rest.findIndex((t) => t.id === id);
+        if (members.length < 2 || index === -1) {
+          resync();
+          return;
+        }
+        const landed = [...rest.slice(0, index), ...members, ...rest.slice(index + 1)];
+        if (landed.length === committed.length && landed.every((t, i) => t.id === committed[i].id)) {
+          resync();
+          return; // no net move
+        }
+        const free = positionPeersRef.current.filter((t) => !carried.ids.has(t.id)).map((t) => t.position);
+        const positions = blockPositions(free, rest[index - 1]?.position ?? null, rest[index + 1]?.position ?? null, members.length);
+        if (!positions) {
+          resync();
+          return;
+        }
+        onBlockMove(members.map((todo, i) => ({ id: todo.id, position: positions[i] })));
+        return;
+      }
+
       if (current.length === committed.length && current.every((t, i) => t.id === committed[i].id)) {
         resync();
         return; // no net move
@@ -1739,13 +1946,19 @@ function Queue({
       }
       onReorderEnd(id, position);
     },
-    [onReorderEnd],
+    [onBlockDrag, onBlockMove, onReorderEnd],
   );
 
+  // The rows riding along leave the list for the length of the drag (they animate out, the queue
+  // closes up), so the row in hand visibly carries the whole selection instead of moving alone.
+  // Dropping them from `order` is safe: the drop reads the rows that stayed, and the block is
+  // rebuilt from the committed data.
+  const shown = blockDrag ? order.filter((t) => t.id === blockDrag.leader || !selectedIds.has(t.id)) : order;
+
   return (
-    <Reorder.Group axis="y" values={order} onReorder={setOrder} className="flex flex-col gap-1 p-2">
+    <Reorder.Group axis="y" values={shown} onReorder={setOrder} className="flex flex-col gap-1 p-2">
       <AnimatePresence initial={false}>
-        {order.map((todo, index) => (
+        {shown.map((todo, index) => (
           <QueueRow
             key={todo.id}
             todo={todo}
@@ -1753,6 +1966,7 @@ function Queue({
             group={todo.groupId ? groupById.get(todo.groupId) ?? null : null}
             selected={selectedIds.has(todo.id)}
             selectMode={selectMode}
+            carrying={blockDrag?.leader === todo.id ? blockDrag.count - 1 : 0}
             onHit={onHit}
             onOpen={onOpen}
             onDragStart={handleDragStart}
@@ -1770,6 +1984,7 @@ function QueueRow({
   group,
   selected,
   selectMode,
+  carrying,
   onHit,
   onOpen,
   onDragStart,
@@ -1780,9 +1995,11 @@ function QueueRow({
   group: AdminTodoGroup | null;
   selected: boolean;
   selectMode: boolean;
+  // How many other rows this one is carrying, when it is the one in hand.
+  carrying: number;
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
-  onDragStart: () => void;
+  onDragStart: (id: string) => void;
   onDragEnd: (id: string) => void;
 }) {
   const meta = CATEGORY_META[todo.category];
@@ -1797,7 +2014,7 @@ function QueueRow({
       dragListener={!selectMode}
       onDragStart={() => {
         dragging.current = true;
-        onDragStart();
+        onDragStart(todo.id);
       }}
       onDragEnd={() => {
         onDragEnd(todo.id);
@@ -1820,7 +2037,9 @@ function QueueRow({
     >
       {/* The whole row is the drag handle, so the grip is decoration - drop it before the title. */}
       <GripVertical className="hidden h-3.5 w-3.5 shrink-0 text-osu-f1/30 group-hover:text-osu-f1/60 sm:block" />
-      <span className="w-5 shrink-0 text-right text-[10px] font-bold tabular-nums text-osu-f1/50">{rank}</span>
+      <span className="w-5 shrink-0 text-right text-[10px] font-bold tabular-nums text-osu-f1/50">
+        {carrying > 0 ? <span className="text-osu-blue">+{carrying}</span> : rank}
+      </span>
       <TodoSeq seq={todo.seq} className="shrink-0 text-[10px] sm:w-8" />
       <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
       <span className="min-w-0 flex-1 truncate text-xs text-osu-l1">{todo.title}</span>

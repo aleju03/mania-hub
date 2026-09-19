@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AdminTodo } from "../lib/admin-todos";
-import { findLaneAtPoint, laneDropPosition, laneInsertionIndex, positionBetween, queueDropPosition } from "./admin/todos";
+import { blockPositions, findLaneAtPoint, laneDropPosition, laneInsertionIndex, positionBetween, queueDropPosition } from "./admin/todos";
 
 // The todo board persists manual order as a sparse `position` key, so every drag has to work out a
 // number that lands the note between its two new neighbours. Lanes render bottom-up (next-up sits on
@@ -142,6 +142,42 @@ describe("queueDropPosition", () => {
     const dropped = [todo("c", 3000), todo("a", 1000), todo("b", 2000)];
     expect(queueDropPosition(dropped, 0, [])).toBeLessThan(1000);
     expect(laneDropPosition(dropped, 0, [])).toBeGreaterThan(1000);
+  });
+});
+
+describe("blockPositions", () => {
+  // Dragging one note of a selection drags the whole selection, so a drop has to find room for
+  // several notes in the one gap instead of one.
+
+  it("spaces a block through an empty gap in order", () => {
+    const positions = blockPositions([0, 4000], 0, 4000, 3);
+    expect(positions).not.toBeNull();
+    expect(positions!).toHaveLength(3);
+    for (let i = 1; i < positions!.length; i++) expect(positions![i]).toBeGreaterThan(positions![i - 1]);
+    expect(positions![0]).toBeGreaterThan(0);
+    expect(positions![2]).toBeLessThan(4000);
+  });
+
+  it("steps past an unbounded side one slot at a time", () => {
+    expect(blockPositions([1000], 1000, null, 3)).toEqual([2000, 3000, 4000]);
+  });
+
+  it("dodges every position another row already owns", () => {
+    const occupied = [0, 1000, 2000, 3000, 4000];
+    const positions = blockPositions(occupied, 0, 4000, 4);
+    expect(positions).not.toBeNull();
+    for (const position of positions!) expect(occupied).not.toContain(position);
+  });
+
+  it("has nothing to say with no bounds at all", () => {
+    // Nothing to sit between: the whole list is the block, so there is nowhere for it to land.
+    expect(blockPositions([], null, null, 2)).toBeNull();
+  });
+
+  it("gives up rather than crowd a gap that floats can no longer split", () => {
+    const lo = 1;
+    const hi = lo + Number.EPSILON * 4;
+    expect(blockPositions([lo, hi], lo, hi, 5)).toBeNull();
   });
 });
 
