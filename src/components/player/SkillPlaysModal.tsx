@@ -76,11 +76,22 @@ export function PlayModBadges({ play, size = 0.8 }: { play: LivePlayerSkillPlay;
   );
 }
 
+// The row's thumbnail is a `list@2x` cover; the detail modal's banner asks for
+// `card@2x`. Every size of a set's art shares one URL shape and one cache-busting
+// query, so the banner's URL is a filename swap away - handing it over on the stub
+// means the banner loads the image it will keep instead of stretching the list
+// thumbnail and then fetching the card again once the catalog entry lands.
+function bannerCoverUrl(coverUrl: string): string | null {
+  const swapped = coverUrl.replace(/\/covers\/[^/?]+\.jpg/, "/covers/card@2x.jpg");
+  return swapped === coverUrl ? null : swapped;
+}
+
 // What the play row already knows, shaped as a map entry so the detail modal
 // can mount on the click instead of after the catalog round trip. Everything
 // the row does not carry (stars, bpm, the set's other diffs, MSD) stays at its
 // empty value and renders as pending until the real entry replaces this.
 export function stubEntry(play: LivePlayerSkillPlay): LiveMapSearchEntry {
+  const banner = play.coverUrl ? bannerCoverUrl(play.coverUrl) : null;
   return {
     beatmapId: play.beatmapId,
     beatmapsetId: play.beatmapsetId ?? 0,
@@ -97,7 +108,7 @@ export function stubEntry(play: LivePlayerSkillPlay): LiveMapSearchEntry {
     lnCount: 0,
     primaryPattern: "",
     patterns: {},
-    covers: play.coverUrl ? { card: play.coverUrl } : null,
+    covers: play.coverUrl ? { list: play.coverUrl, ...(banner ? { "card@2x": banner } : {}) } : null,
   };
 }
 
