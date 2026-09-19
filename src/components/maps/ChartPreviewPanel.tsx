@@ -437,18 +437,17 @@ export function ChartPreviewPanel({
           seekSettleTimeoutMs: SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS,
         }
         : undefined);
-      if (!isCurrentRequest()) {
-        resetAudioElement(audio);
-        return;
-      }
+      // A superseded request must not touch the element: whoever bumped the
+      // token (a seek, a restart, the end of the preview) has already put it
+      // where it wants it, and the newer request may be playing on it by now.
+      // Resetting here paused that playback at 0:00 and the stall watchdog
+      // then resumed it from there under the newer request's clock anchor.
+      if (!isCurrentRequest()) return;
       if (audioStartSeconds > 0.25 && Math.abs(audio.currentTime - audioStartSeconds) > 1) {
         throw new Error("Chart preview audio seek failed");
       }
       await audio.play();
-      if (!isCurrentRequest()) {
-        resetAudioElement(audio);
-        return;
-      }
+      if (!isCurrentRequest()) return;
       resetReplayAudioClockSample(audioClockSampleRef, audio.currentTime);
       audioClockAnchorRef.current = {
         mediaSeconds: audio.currentTime,

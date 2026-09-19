@@ -4649,26 +4649,17 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (isSelectedFileAudio && replayAudioSizeBytes == null) {
         try {
           const sizeResponse = await fetch(replayAudioUrl, { method: "HEAD" });
-          if (!isCurrentRequest()) {
-            resetAudioElement(audio);
-            return;
-          }
+          if (!isCurrentRequest()) return;
           if (sizeResponse.ok) {
             const sizeRaw = sizeResponse.headers.get("x-audio-size-bytes") ?? sizeResponse.headers.get("content-length");
             const size = sizeRaw ? Number(sizeRaw) : NaN;
             if (Number.isFinite(size) && size > 0) setReplayAudioSizeBytes(size);
           }
         } catch {
-          if (!isCurrentRequest()) {
-            resetAudioElement(audio);
-            return;
-          }
+          if (!isCurrentRequest()) return;
         }
       }
-      if (!isCurrentRequest()) {
-        resetAudioElement(audio);
-        return;
-      }
+      if (!isCurrentRequest()) return;
       if (isSelectedFileAudio) {
         audio.preload = "auto";
         try {
@@ -4689,18 +4680,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           seekSettleTimeoutMs: SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS,
         }
         : undefined);
-      if (!isCurrentRequest()) {
-        resetAudioElement(audio);
-        return;
-      }
+      // A superseded request leaves the element alone: every token bump
+      // resets or re-seeks it itself, and the newer request may already be
+      // playing on it (see ChartPreviewPanel for the 0:00 restart this caused).
+      if (!isCurrentRequest()) return;
       if (replayPreviewStartSeconds > 0.25 && Math.abs(audio.currentTime - replayPreviewStartSeconds) > 1) {
         throw new Error("Chart preview audio seek failed");
       }
       await audio.play();
-      if (!isCurrentRequest()) {
-        resetAudioElement(audio);
-        return;
-      }
+      if (!isCurrentRequest()) return;
       resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
       replayAudioClockAnchorRef.current = {
         mediaSeconds: audio.currentTime,
