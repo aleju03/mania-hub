@@ -36,7 +36,9 @@
     "bench:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-benchmark.ts",
     "golden:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-golden.ts",
     "compact:ln-artifacts": "node --env-file-if-exists=.env --import tsx src/maintenance/compact-ln-artifacts.ts",
-    "compact:ln-artifacts:dist": "node --env-file-if-exists=.env dist/maintenance/compact-ln-artifacts.js"
+    "compact:ln-artifacts:dist": "node --env-file-if-exists=.env dist/maintenance/compact-ln-artifacts.js",
+    "compact:score-json": "node --max-old-space-size=768 --env-file-if-exists=.env --import tsx src/maintenance/compact-score-json.ts",
+    "compact:score-json:dist": "node --max-old-space-size=768 --env-file-if-exists=.env dist/maintenance/compact-score-json.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

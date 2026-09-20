@@ -1,3 +1,5 @@
+import { encodeScoreJson, userTopScoreColumns } from "./score-json-storage.js";
+import { unpackJson } from "./compressed-json.js";
 import type { InValue } from "@libsql/client";
 import type { DbStatement, Db } from "../db.js";
 import { exec, execBatch, json, parseJson } from "../db.js";
@@ -28,18 +30,22 @@ export async function replaceUserTopScores(db: Db, userId: number, bestScores: O
   bestScores.forEach((score, index) => {
     if (!Number.isSafeInteger(score.id) || score.id <= 0) return;
     const pp = typeof score.pp === "number" && Number.isFinite(score.pp) ? score.pp : null;
+    const stored = compactScoreForStorage(score);
+    const columns = userTopScoreColumns(stored);
     statements.push({
-      sql: `insert or replace into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
-            values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `insert or replace into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at, beatmap_id, has_dt)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         userId,
         score.id,
         index + 1,
-        json(compactScoreForStorage(score)),
+        encodeScoreJson(stored),
         pp,
         pp == null ? null : pp * 0.95 ** index,
         score.ended_at ?? score.created_at ?? null,
         refreshedAt,
+        columns.beatmapId,
+        columns.hasDt,
       ],
     });
   });
@@ -49,7 +55,7 @@ export async function replaceUserTopScores(db: Db, userId: number, bestScores: O
 export async function readStoredUserTopScores(db: Db, userId: number): Promise<OscScore[]> {
   const rows = (await exec(db, "select score_json from user_top_scores where user_id = ? order by position asc", [userId])).rows;
   return rows.flatMap((row) => {
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     return score && Number.isSafeInteger(score.id) && score.id > 0 ? [score] : [];
   });
 }

@@ -4463,7 +4463,7 @@ async function loadTrackedScores(db: Db, userId: number): Promise<OscScore[]> {
   )).rows;
   const scores: OscScore[] = [];
   for (const row of rows) {
-    const score = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (score) scores.push(score);
   }
   return scores;

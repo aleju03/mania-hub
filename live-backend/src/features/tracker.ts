@@ -1,3 +1,4 @@
+import { unpackJson } from "../shared/compressed-json.js";
 import { getServingReadThread } from "../serving-read-thread.js";
 import { ReadCache } from "../shared/read-cache.js";
 import { countryScopeSql, resolveCountryScope, type CountryScope } from "../countries.js";
@@ -118,7 +119,7 @@ export async function readTrackerSnapshot(
       [...args, HYDRATED_SNAPSHOT_SCAN_LIMIT],
     )).rows;
     const allScores = rows
-      .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
+      .map((row) => hydrateScoreMetadata(row, unpackJson<OscScore | null>(row.score_json, null)))
       .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
       .map(toLeanTrackerScore)
       .filter((score) => scoreMatchesTrackerSnapshotFilters(score, options.filters))
@@ -169,7 +170,7 @@ export async function readTrackerSnapshot(
     [...args, limit, offset],
   )).rows;
   const scores = rows
-    .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
+    .map((row) => hydrateScoreMetadata(row, unpackJson<OscScore | null>(row.score_json, null)))
     .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
     .map(toLeanTrackerScore);
   const gains = await getTrackerScoreGains(db, scope, scores);
@@ -259,7 +260,7 @@ export async function getTrackerScoreById(db: Db, scoreId: number): Promise<{ co
     [scoreId],
   )).rows[0];
   if (!row) return null;
-  const score = hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null));
+  const score = hydrateScoreMetadata(row, unpackJson<OscScore | null>(row.score_json, null));
   if (!score?.beatmap || !score.beatmapset || !score.user || row.country == null) return null;
   return { country: String(row.country), score: toLeanTrackerScore(score) };
 }
@@ -278,7 +279,7 @@ export async function getHydratedScoreByIdentity(db: Db, country: string, scoreI
     [country, scoreIdentity],
   )).rows[0];
   if (!row) return null;
-  const score = hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null));
+  const score = hydrateScoreMetadata(row, unpackJson<OscScore | null>(row.score_json, null));
   if (!score?.beatmap || !score.beatmapset || !score.user || row.country == null) return null;
   return { country: String(row.country), score };
 }
@@ -315,7 +316,7 @@ export async function getHydratedScoresForMetadata(
     [...args, limit, Math.max(0, Math.floor(offset))],
   )).rows;
   return rows.flatMap((row) => {
-    const score = hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null));
+    const score = hydrateScoreMetadata(row, unpackJson<OscScore | null>(row.score_json, null));
     if (!score?.beatmap || !score.beatmapset || !score.user || row.country == null) return [];
     return [{ country: String(row.country), score }];
   });

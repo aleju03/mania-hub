@@ -55,6 +55,24 @@ export function isLazerScore(score: ScoreLike): boolean {
   return !isLegacySubmittedScore(score);
 }
 
+/** Same rate and stable-scale accuracy used by the frontend score helpers. */
+export function getScoreRate(mods: OsuMod[] | undefined): number {
+  const defaults: Record<string, number> = { DT: 1.5, NC: 1.5, HT: 0.75, DC: 0.75 };
+  for (const mod of mods ?? []) {
+    const acronym = typeof mod === "string" ? mod : mod?.acronym ?? "";
+    const defaultRate = defaults[acronym];
+    if (defaultRate === undefined) continue;
+    const rate = typeof mod === "object" ? Number(mod.settings?.speed_change) : NaN;
+    return Number.isFinite(rate) && rate > 0 ? rate : defaultRate;
+  }
+  return 1;
+}
+
+export function getStableScaleManiaAccuracy(score: ScoreLike): number {
+  const stableAccuracy = calculateStableAccuracy(score.statistics);
+  return stableAccuracy > 0 ? stableAccuracy : getDisplayedAccuracy(score);
+}
+
 function getHitCounts(stats: OsuScoreStatistics | null | undefined) {
   const safe = stats ?? {};
   return {

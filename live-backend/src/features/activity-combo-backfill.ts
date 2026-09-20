@@ -1,3 +1,4 @@
+import { userTopBeatmapIdSql } from "../shared/score-json-storage.js";
 /**
  * One-time sweep that refills combo on archived day-best rows.
  *
@@ -190,8 +191,8 @@ async function buildWindowPlaysTable(db: Db): Promise<void> {
   await exec(
     db,
     `insert into ${WINDOW_TABLE} (user_id, beatmap_id)
-     select user_id, json_extract(score_json, '$.beatmap_id') from user_top_scores
-     where json_extract(score_json, '$.beatmap_id') is not null`,
+     select user_id, ${userTopBeatmapIdSql("u")} from user_top_scores u
+     where ${userTopBeatmapIdSql("u")} is not null`,
   );
   await exec(db, `create index ${WINDOW_TABLE}_lookup on ${WINDOW_TABLE}(user_id, beatmap_id)`);
 }

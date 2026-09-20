@@ -10,6 +10,11 @@ export function defaultJournalDatabaseUrl(databaseUrl: string): string {
   return `file:${resolve(dirname(raw), "mania-hub-journal.db")}`;
 }
 
+/** Enable only after every serving/worker process supports dictionary score cells. */
+export function scoreJsonCompressionEnabled(): boolean {
+  return readBool("SCORE_JSON_COMPRESSION_ENABLED", false);
+}
+
 export interface Config {
   port: number;
   nodeEnv: string;

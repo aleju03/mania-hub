@@ -1,3 +1,4 @@
+import { scoreCellSql, userTopBeatmapIdSql } from "../shared/score-json-storage.js";
 import { getServingReadThread } from "../serving-read-thread.js";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
@@ -224,20 +225,16 @@ export async function getStreakPlayerMetrics(
 
   const rows = new Map(missing.map((id) => [id, emptyStreakMetrics(id)]));
 
-  /* One grouped pass over the stored top plays. score_json is plain TEXT here
-     (unlike the packed profile snapshot), so the beatmap id comes out in SQL
-     and the mods check is a substring match against the exact shape
-     JSON.stringify writes ("acronym":"DT"), which never appears outside a mod
-     list. NC counts as DT because it is DT with a different sound. A top play
-     whose beatmap row is missing counts as not-7K rather than unknown. */
+  /* One grouped pass, using promoted values for compressed cells and the
+     original JSON predicates for legacy text (including old-writer updates). */
   const topRows = await selectRowsByIntegerSet(
     db,
     `select uts.user_id,
             min(uts.ended_at) as oldest_top,
-            sum(case when uts.score_json like '%"acronym":"DT"%' or uts.score_json like '%"acronym":"NC"%' then 1 else 0 end) as dt_top,
+            sum(${scoreCellSql("uts.score_json", `case when uts.score_json like '%"acronym":"DT"%' or uts.score_json like '%"acronym":"NC"%' then 1 else 0 end`, "uts.has_dt")}) as dt_top,
             sum(case when b.cs = 7 then 1 else 0 end) as k7_top
      from user_top_scores uts
-     left join beatmaps b on b.beatmap_id = cast(json_extract(uts.score_json, '$.beatmap_id') as integer)
+     left join beatmaps b on b.beatmap_id = cast(${userTopBeatmapIdSql("uts")} as integer)
      where uts.user_id in`,
     missing,
     "group by uts.user_id",

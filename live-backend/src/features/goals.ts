@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
-import { exec, parseJson } from "../db.js";
+import { exec } from "../db.js";
 import { unpackJson } from "../shared/compressed-json.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
@@ -206,7 +206,7 @@ async function reopenInvalidMapGoalCompletions(db: Db, userId: number): Promise<
   )).rows;
   const invalidGoalIds = new Set<string>();
   for (const row of rows) {
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     const targetSpeed = normalizeGoalSpeedBucket(row.speed_bucket) ?? "normal";
     if (score && scoreSpeedBucket(score) !== targetSpeed) invalidGoalIds.add(String(row.goal_id));
   }
@@ -299,7 +299,7 @@ async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number, sp
     [userId, beatmapId],
   )).rows;
   for (const row of scoreRows) {
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score || scoreSpeedBucket(score) !== speedBucket) continue;
     const accuracy = getDisplayedAccuracy(score);
     const rank = getDisplayedRank(score);
@@ -356,7 +356,7 @@ async function bestSinglePpPlay(db: Db, userId: number): Promise<{ pp: number; s
     });
   }
   if (topRow) {
-    const score = parseJson<OscScore | null>(topRow.score_json, null);
+    const score = unpackJson<OscScore | null>(topRow.score_json, null);
     const scoreId = Number(topRow.score_id);
     candidates.push({
       pp: Number(topRow.pp),
@@ -427,7 +427,7 @@ async function ppPlayCountSummary(db: Db, userId: number, threshold: number, ext
   )).rows;
   topRows.forEach((row, index) => {
     const pp = positivePp(row.pp);
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     const scoreId = Number(row.score_id);
     const key = score
       ? scoreKey(score, Number.isFinite(scoreId) && scoreId > 0 ? `official:${scoreId}` : `top:${userId}:${index}`)
@@ -460,7 +460,7 @@ async function ppPlayCountSummary(db: Db, userId: number, threshold: number, ext
   )).rows;
   eventRows.forEach((row, index) => {
     const pp = positivePp(row.pp);
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     const storedIdentity = row.score_identity == null ? null : String(row.score_identity);
     const key = storedIdentity ?? (score ? scoreKey(score, `event:${userId}:${index}`) : `event:${userId}:${index}`);
     add(key, pp, {

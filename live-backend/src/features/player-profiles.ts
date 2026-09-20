@@ -608,7 +608,7 @@ async function applyPackCardScoreOverlays(db: Db, sources: PackCardSource[]): Pr
   )).rows;
   const eventsByUser = new Map<number, OscScore[]>();
   for (const row of topPlayRows) {
-    const score = parseJson<{ score?: OscScore }>(row.payload_json, {}).score;
+    const score = unpackJson<{ score?: OscScore }>(row.payload_json, {}).score;
     if (!score) continue;
     const userId = Number(row.user_id);
     const existing = eventsByUser.get(userId);
@@ -631,7 +631,7 @@ async function applyPackCardScoreOverlays(db: Db, sources: PackCardSource[]): Pr
     const kept = recentByUser.get(userId) ?? [];
     // Same window the profile overlay takes: newest first, distinct plays only.
     if (kept.length >= PROFILE_TRACKED_OVERLAY_LIMIT) continue;
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
     const seen = seenByUser.get(userId) ?? new Set<string>();
     const identity = getScoreIdentity(score);
@@ -676,7 +676,7 @@ async function readStoredTopScoresByUser(db: Db, userIds: number[]): Promise<Map
   );
   for (const row of rows) {
     const userId = Number(row.user_id);
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score || !Number.isSafeInteger(userId) || userId <= 0) continue;
     const existing = byUser.get(userId);
     if (existing) existing.push(score);
@@ -816,7 +816,7 @@ export async function getPlayerReplayScores(
     [userId, safeLimit, safeOffset],
   )).rows;
   const scores = rows.flatMap((row) => {
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     return score ? [score] : [];
   });
   return {
@@ -983,7 +983,7 @@ async function getTrackedProfileRecentScores(
   const scores: OscScore[] = [];
   const identities = new Set<string>();
   for (const row of rows) {
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
     const identity = getScoreIdentity(score);
     if (identities.has(identity)) continue;
@@ -1032,7 +1032,7 @@ async function getStoredUserTopScores(db: Db, userId: number): Promise<OscScore[
     [userId, PROFILE_BEST_SCORES_LIMIT],
   )).rows;
   return hydrateScoresDisplayMetadata(db, rows
-    .map((row) => parseJson<OscScore | null>(row.score_json, null))
+    .map((row) => unpackJson<OscScore | null>(row.score_json, null))
     .filter((score): score is OscScore => !!score));
 }
 
@@ -1498,7 +1498,7 @@ async function projectTopPlays(
   for (const score of scores) provenanceByScoreId[score.id] = "osu_snapshot";
   let appliedTopPlayEvents = 0;
   let appliedRecentScores = 0;
-  const rawTopPlayScores = rows.map((row) => parseJson<{ score?: OscScore }>(row.payload_json, {}).score ?? null);
+  const rawTopPlayScores = rows.map((row) => unpackJson<{ score?: OscScore }>(row.payload_json, {}).score ?? null);
   const topPlayScores = await hydrateScoresDisplayMetadata(db, rawTopPlayScores.filter((score): score is OscScore => !!score));
   let topPlayScoreIndex = 0;
 

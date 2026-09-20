@@ -44,7 +44,9 @@
  * What no local source has stays null, and a null still reads as unknown
  * rather than as zero, so a row with no combo shows a dash instead of "0x".
  */
-import { exec, type Db } from "../db.js";
+import { unpackJson } from "../shared/compressed-json.js";
+import type { OscScore } from "../shared/types.js";
+import { exec, execBatch, type Db, type DbStatement } from "../db.js";
 import { nowIso } from "../shared/score.js";
 import { activityMapNotBestRowSql } from "./keymode-pp.js";
 
@@ -155,33 +157,8 @@ async function buildLookupTable(db: Db): Promise<number> {
       priority integer not null
     )
   `);
-  // Mania only (ruleset 3): the activity rows this fills are mania rows.
-  await exec(db, `
-    insert into ${HELPER_TABLE} (user_id, beatmap_id, match_id, max_combo, has_replay, solo_score_id, total_score, ended_at, priority)
-    select user_id, beatmap_id,
-           coalesce(nullif(legacy_score_id, 0), score_id),
-           json_extract(score_json, '$.max_combo'),
-           case when has_replay then 1 else 0 end,
-           json_extract(score_json, '$.id'),
-           coalesce(json_extract(score_json, '$.classic_total_score'), json_extract(score_json, '$.total_score'), total_score),
-           ended_at,
-           1
-    from score_events
-    where ruleset_id = 3 and pp is not null and pp > 0
-  `);
-  await exec(db, `
-    insert into ${HELPER_TABLE} (user_id, beatmap_id, match_id, max_combo, has_replay, solo_score_id, total_score, ended_at, priority)
-    select user_id, coalesce(score_beatmap_id, json_extract(payload_json, '$.score.beatmap_id')),
-           coalesce(nullif(json_extract(payload_json, '$.score.legacy_score_id'), 0), json_extract(payload_json, '$.score.id')),
-           json_extract(payload_json, '$.score.max_combo'),
-           case when json_extract(payload_json, '$.score.has_replay') then 1 else 0 end,
-           json_extract(payload_json, '$.score.id'),
-           coalesce(json_extract(payload_json, '$.score.classic_total_score'), json_extract(payload_json, '$.score.total_score')),
-           coalesce(json_extract(payload_json, '$.score.ended_at'), score_time),
-           2
-    from top_play_events
-    where pp > 0 and coalesce(score_beatmap_id, json_extract(payload_json, '$.score.beatmap_id')) is not null
-  `);
+  await insertScoreLookupRows(db, "score_events");
+  await insertScoreLookupRows(db, "top_play_events");
   // A snipe payload keeps the play's own id and replay flag but no combo.
   await exec(db, `
     insert into ${HELPER_TABLE} (user_id, beatmap_id, match_id, max_combo, has_replay, solo_score_id, total_score, ended_at, priority)
@@ -207,6 +184,43 @@ async function buildLookupTable(db: Db): Promise<number> {
   await exec(db, `delete from ${HELPER_TABLE} where match_id is null or match_id <= 0`);
   await exec(db, `create index ${HELPER_TABLE}_lookup on ${HELPER_TABLE}(user_id, beatmap_id, match_id, priority)`);
   return Number((await exec(db, `select count(*) as n from ${HELPER_TABLE}`)).rows[0]?.n ?? 0);
+}
+
+/** Cold backfill: decode bounded pages in JS rather than applying SQLite JSON
+ * functions to compressed cells. The helper still matches each play's own id. */
+async function insertScoreLookupRows(db: Db, table: "score_events" | "top_play_events"): Promise<void> {
+  const tracker = table === "score_events";
+  let after = 0;
+  while (true) {
+    const rows = (await exec(db, `select rowid as cursor, * from ${table}
+      where rowid > ? and pp > 0 ${tracker ? "and ruleset_id = 3" : ""}
+      order by rowid limit 500`, [after])).rows;
+    if (!rows.length) break;
+    const statements: DbStatement[] = [];
+    for (const row of rows) {
+      after = Number(row.cursor);
+      const score = tracker
+        ? unpackJson<OscScore | null>(row.score_json, null)
+        : unpackJson<{ score?: OscScore }>(row.payload_json, {}).score;
+      if (!score) continue;
+      const beatmapId = tracker ? row.beatmap_id : row.score_beatmap_id ?? score.beatmap_id;
+      if (beatmapId == null) continue;
+      const legacyId = tracker ? row.legacy_score_id : score.legacy_score_id;
+      const matchId = (legacyId == null || Number(legacyId) === 0 ? null : Number(legacyId))
+        ?? (tracker ? row.score_id : score.id);
+      statements.push({
+        sql: `insert into ${HELPER_TABLE}
+          (user_id, beatmap_id, match_id, max_combo, has_replay, solo_score_id, total_score, ended_at, priority)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [row.user_id, beatmapId, matchId ?? null, score.max_combo ?? null,
+          (tracker ? row.has_replay : score.has_replay) ? 1 : 0, score.id ?? null,
+          score.classic_total_score ?? score.total_score ?? (tracker ? row.total_score : null),
+          tracker ? row.ended_at : score.ended_at ?? row.score_time, tracker ? 1 : 2],
+      });
+    }
+    if (statements.length) await execBatch(db, statements);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
 }
 
 /* Take details off the rows that should not be holding them: every row that is

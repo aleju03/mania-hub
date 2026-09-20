@@ -1,3 +1,4 @@
+import { userTopBeatmapIdSql } from "../shared/score-json-storage.js";
 /**
  * View-driven completion of archived play details.
  *
@@ -60,7 +61,7 @@ const CANDIDATE_SQL = `
     -- the beatmap id lives inside the stored payload, and a correlated
     -- json_extract over their whole window costs 770ms on a heavy profile
     -- where this costs 1ms.
-    select json_extract(u.score_json, '$.beatmap_id') beatmap_id
+    select ${userTopBeatmapIdSql("u")} beatmap_id
     from user_top_scores u where u.user_id = ?
   ),
   per_map as (

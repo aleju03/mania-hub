@@ -111,6 +111,46 @@ Two further prunes run on the same hourly tick: `profile_section_cache` rows old
 
 Large JSON columns are stored as gzip blobs through `shared/compressed-json.ts` (`packJson` on write, `unpackJson` on read, which still accepts the plain-text rows written before each column switched): `profile_snapshots.user_json`/`best_scores_json`, `player_skill_ratings.plays_json` (the single largest column, about 5x smaller compressed), `country_maps_snapshots.payload_json` and `profile_section_cache.payload_json`. The trade is that SQLite cannot see inside those cells, so nothing may run `json_each`/`json_extract`/`like` over them: the player-skill repair sweeps page rows out with `scanStoredPlayerSkillRows` and filter in JS, the maps purge and compaction read every country row, and a new write site must go through `packStoredPlays`/`packJson` rather than `json()`. `npm run compact:storage` compresses the backlog of text rows in place (the `player_skill_ratings (gzip)` and `country_maps_snapshots` passes) and frees pages inside the file; only `--vacuum` gives the space back to the disk, and that is a stop-the-world run with its own procedure (next paragraph). The analytics store strips every property the insert already promotes to a column (`$host`, `$pathname`, `$referring_domain`, `$screen_width`, `$viewport_width`, `selected_country`, `viewer_username`, plus `$lib`) and every reader puts them back from the columns; the one-time `compactStoredProps` pass at boot applies the same strip to older rows in id batches and stamps its version in `analytics_rollup_state`.
 
+Individual score cells use a separate frozen dictionary codec (`shared/dict-json.ts`):
+`user_top_scores.score_json`, `top_play_events.payload_json` and
+`score_events.score_json`. Its envelope is a zero byte, dictionary version, then
+zlib-wrapped DEFLATE with a dictionary identifier and Adler-32 checksum. Dictionary
+bytes and their pinned SHA-256 are stored in `codec_dictionaries` as well as the
+code, so a database backup contains what an offline decoder needs. Never modify a
+shipped dictionary: add a new version and keep the old decoder. The synthetic
+fixture generator is `scripts/generate-score-dictionary.mjs`; it refuses to change
+v1. New-format corruption throws rather than becoming a fallback score.
+
+Score compression rollout:
+
+1. Deploy the compatible readers/schema/writers to **every** server and worker
+   with `SCORE_JSON_COMPRESSION_ENABLED=false` (the default). Boot only adds nullable
+   projection columns and the dictionary; it does not scan/compress the backlog.
+   SQL uses guarded text predicates for legacy cells and promoted columns for
+   packed cells, so partially converted databases and text writes remain readable.
+2. Once all old processes are gone, set `SCORE_JSON_COMPRESSION_ENABLED=true` for
+   the application processes and restart them. New windows/events now write packed
+   JSON and their promoted columns together. Do not roll back to a binary lacking
+   these readers once packed cells exist; disabling the flag only changes future
+   writes, not the decoding requirement for existing data.
+3. With the same flag set, run `npm run compact:score-json:dist` (or the source
+   command `npm run compact:score-json` locally). This is a dedicated, online,
+   resumable, lossless pass: it keeps original JSON text bytes, fills columns,
+   verifies every round-trip and compares the original cell before writing.
+   Concurrent replacements are reported as skipped and picked up by a later pass.
+   Corruption aborts the pass without replacing the failed cell. Progress is
+   structured JSON. It touches no other data and does not vacuum or swap files.
+4. To return freed pages to disk, follow the offline `VACUUM INTO` procedure below.
+   `compact:storage` includes the same score pass when the flag is true. Its older
+   score metadata-stripping passes have been replaced by this lossless pass; the
+   other existing storage cleanups still run. Keep the original backup until the
+   upgraded application has served and verified the rebuilt database.
+
+The promoted values cover best-score beatmap/DT queries, top-play accuracy/mod
+filters and embedded metadata search fallbacks, and recent-score mod counts,
+JSON score identities and the custom-rate overwrite guard. Activity play-detail
+backfill decodes bounded pages instead of querying inside compressed cells.
+
 LN artifacts store scalar ratings and small metadata only. Offline diagnostics are opt-in; the experimental shield/reverse-shield tags are retired. `npm run compact:ln-artifacts` (or `compact:ln-artifacts:dist`) strips the old `lnSkill.structure` previews and retired search tags in bounded online writes, preserving all other JSON fields, rows and timestamps. Deploy the new writers first. The pass is restartable and is also included in `compact:storage`; it frees reusable pages, but only the offline rebuild below reduces the file on disk.
 
 `--vacuum` rebuilds the file with `VACUUM INTO` and swaps the copy in (`maintenance/vacuum-into.ts`; the old file stays beside it as `mania-hub-live.db.pre-vacuum` until someone deletes it). A plain `VACUUM` is not an option here: the bundled libsql is compiled with `SQLITE_TEMP_STORE=2`, which keeps VACUUM's transient database in RAM no matter what `SQLITE_TMPDIR` says, and the 2026-09-12 attempt on the 17 GB production file was OOM-killed at 7 GB. The rebuild needs the file's size free again in `data/` (checked up front at 1.15x; `--force` overrides) and nothing else holding the database. Procedure on the VPS: deploy first, so `dist/` carries the script you mean to run; stop the worker, the server **and `mania-hub-live-server.socket`** (with the socket left up, systemd starts the server again on the first incoming request, mid-rebuild); from `live-backend/` run `SQLITE_TMPDIR="$PWD/data" npm run compact:storage:dist -- --vacuum` detached (`setsid nohup ... > log 2>&1 &`), since the passes plus the copy run well past any terminal or tool timeout; vacuum the analytics file while still stopped if wanted (`sqlite3 ./data/mania-hub-analytics.db vacuum`); start the same three units and check `/healthz`; delete the `.pre-vacuum` file once the backend has been serving from the new one. The passes took about 6 minutes on the September 2026 data set; the rebuild itself is one sequential copy of the compacted content.

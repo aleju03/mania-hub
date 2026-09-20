@@ -222,12 +222,7 @@ async function readGroundTruth(db: Db, userId: number, cutIso: string): Promise<
   const beatmaps = new Set<number>();
   const actualPp = new Map<number, number>();
   for (const row of rows) {
-    let payload: { pp?: unknown; score?: { beatmap_id?: unknown; pp?: unknown } };
-    try {
-      payload = JSON.parse(String(row.payload_json));
-    } catch {
-      continue;
-    }
+    const payload = unpackJson<{ pp?: unknown; score?: { beatmap_id?: unknown; pp?: unknown } }>(row.payload_json, {});
     const beatmapId = Number(payload.score?.beatmap_id);
     if (!Number.isInteger(beatmapId) || beatmapId <= 0) continue;
     beatmaps.add(beatmapId);

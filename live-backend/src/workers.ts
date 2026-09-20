@@ -1,4 +1,5 @@
 import { COMPANELLA_INPUTS_JOB, runCompanellaInputsJob } from "./features/companella-inputs.js";
+import { unpackJson } from "./shared/compressed-json.js";
 import { BEATMAP_REVISION_JOB, BEATMAP_REVISION_AUDIT_JOB, verifyBeatmapRevision, auditBeatmapRevisions } from "./osu/beatmap-revisions.js";
 import { BEATMAP_FILE_CHANGE_JOB } from "./osu/beatmap-file-cache.js";
 import { runChangedBeatmapFileRepairJob, type ChangedBeatmapFileRepairPayload } from "./features/chart-analysis.js";
@@ -8,7 +9,7 @@ import { CHART_FAMILY_SWEEP_JOB, runChartFamilySweepJob } from "./features/chart
 import type { Db } from "./db.js";
 import { readConfig, type Config } from "./config.js";
 import { canSeedSnipesForCountry, isCountryRosterConfirmedEmpty, retireCountry } from "./countries.js";
-import { exec, json, parseJson } from "./db.js";
+import { exec, json } from "./db.js";
 import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { ACTIVITY_BACKFILL_JOB, computeBeatmapActivitySkillVector, runPlayerActivityBackfillJob } from "./features/activity.js";
@@ -1617,7 +1618,7 @@ export class WorkerRunner {
     )).rows;
     const identities = new Set<string>();
     for (const row of rows) {
-      const score = parseJson<OscScore | null>(row.score_json, null);
+      const score = unpackJson<OscScore | null>(row.score_json, null);
       if (!score) continue;
       const laneKey = getBoardLaneKey(getModAcronyms(score.mods), isLazerScore(score));
       if (laneKey !== payload.laneKey) continue;

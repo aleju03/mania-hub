@@ -1,3 +1,4 @@
+import { unpackJson } from "../shared/compressed-json.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
@@ -486,7 +487,7 @@ export async function runPlayerActivityBackfillJob(
   const touchedDays = new Set(parseJson<string[]>(batch?.days_json, []));
   for (const row of rows) {
     signal?.throwIfAborted();
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
     const recorded = await recordPlayerActivity(db, queue, country, score, String(row.score_identity), {
       deferSessionRecompute: true,

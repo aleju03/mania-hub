@@ -2,6 +2,7 @@ import { createClient, type Client, type InValue, type ResultSet, type Transacti
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { migrateScoreJsonStorage } from "./maintenance/score-json-schema.js";
 import type { Config } from "./config.js";
 import { logInfo, logWarn, errorContext } from "./logger.js";
 import { extractManiaVariantPps, getScoreSpeedBucket, normalizeStoredMods } from "./shared/score.js";
@@ -413,6 +414,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateChartAnalysisDtRate(target);
   await migrateDanEstimateMsd(target);
   await migrateTopPlayEventsHotColumns(target);
+  await migrateScoreJsonStorage(target);
   await migratePlayerSkillBaseline(target);
   await migratePlayerSkillAccModel(target);
   await migrateActivityMapsBestPayload(target);

@@ -1,16 +1,17 @@
+import { logInfo } from "../logger.js";
+import { compressScoreJson } from "./score-json-compaction.js";
 import { stat, statfs } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { readConfig } from "../config.js";
+import { readConfig, scoreJsonCompressionEnabled } from "../config.js";
 import { createDb, exec, json, migrate } from "../db.js";
 import { ensureJournalSchema } from "../journal.js";
 import { compactCountryMapsSnapshots } from "../features/maps.js";
-import { toStoredScoreEvent } from "../ingest/score-ingestor.js";
 import { compactLiveEventLogPayloadForStorage } from "../live/event-log.js";
 import { nowIso } from "../shared/score.js";
-import { compactScoreForStorage, compactScoresForStorage, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import { compactScoresForStorage, persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
-import type { CountryTopPlay, OscScore } from "../shared/types.js";
+import type { OscScore } from "../shared/types.js";
 import { compactMapsFarmedOverlay } from "./maps-farmed-compaction.js";
 import { compactLnArtifacts } from "./ln-artifact-compaction.js";
 import { compressPlayerSkillPlays } from "./player-skill-compaction.js";
@@ -68,13 +69,11 @@ const skillPlays = await compressPlayerSkillPlays(db, options.batchSize, release
 console.log(`player_skill_ratings (gzip): compressed ${skillPlays.compressed}, failed ${skillPlays.failed}, scanned ${skillPlays.scanned}`);
 await releaseMemory();
 
-const topPlays = await compactTopPlayEvents(options.batchSize);
-console.log(`top_play_events: compacted ${topPlays.compacted}, failed ${topPlays.failed}, scanned ${topPlays.scanned}`);
-await releaseMemory();
-
-const scoreEvents = await compactScoreEvents(options.batchSize);
-console.log(`score_events: compacted ${scoreEvents.compacted}, failed ${scoreEvents.failed}, scanned ${scoreEvents.scanned}`);
-await releaseMemory();
+if (scoreJsonCompressionEnabled()) {
+  const scores = await compressScoreJson(db, { batchSize: Math.min(options.batchSize, 2000), betweenBatches: releaseMemory });
+  logInfo("score_json_compaction_complete", { results: scores });
+  await releaseMemory();
+}
 
 const events = await compactLiveEventLog(options.batchSize);
 console.log(`live_event_log: compacted ${events.compacted}, skipped ${events.skipped}, scanned ${events.scanned}`);
@@ -152,60 +151,6 @@ async function compactProfileSnapshots(batchSize: number): Promise<{ scanned: nu
   return result;
 }
 
-async function compactTopPlayEvents(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
-  const result = { scanned: 0, compacted: 0, failed: 0 };
-  let afterRowid = 0;
-
-  while (true) {
-    const rows = (await exec(
-      db,
-      `select rowid, detected_at
-       from top_play_events
-       where rowid > ?
-         and json_valid(payload_json)
-         and (
-           payload_json like '%"user"%'
-           or payload_json like '%"beatmap"%'
-           or payload_json like '%"beatmapset"%'
-         )
-       order by rowid asc
-       limit ?`,
-      [afterRowid, batchSize],
-    )).rows;
-
-    if (rows.length === 0) break;
-    result.scanned += rows.length;
-
-    for (const row of rows) {
-      afterRowid = Math.max(afterRowid, Number(row.rowid));
-      const eventRow = (await exec(
-        db,
-        "select payload_json from top_play_events where rowid = ?",
-        [Number(row.rowid)],
-      )).rows[0];
-      const event = parseUnknownJson(eventRow?.payload_json) as Partial<CountryTopPlay> | null;
-      if (!event?.score) {
-        result.failed++;
-        continue;
-      }
-      const updatedAt = String(row.detected_at ?? nowIso());
-      await persistScoresDisplayMetadata(db, [event.score], updatedAt);
-      await exec(
-        db,
-        "update top_play_events set payload_json = ? where rowid = ?",
-        [json(compactTopPlayPayload(event)), Number(row.rowid)],
-      );
-      result.compacted++;
-      await releaseMemory();
-    }
-
-    await releaseMemory();
-    if (rows.length < batchSize) break;
-  }
-
-  return result;
-}
-
 async function compactLiveEventLog(batchSize: number): Promise<{ scanned: number; compacted: number; skipped: number }> {
   let scanned = 0;
   let compacted = 0;
@@ -252,50 +197,6 @@ async function compactLiveEventLog(batchSize: number): Promise<{ scanned: number
   }
 
   return { scanned, compacted, skipped };
-}
-
-async function compactScoreEvents(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
-  const result = { scanned: 0, compacted: 0, failed: 0 };
-  let afterId = 0;
-
-  while (true) {
-    const rows = (await exec(
-      db,
-      `select id, score_json, received_at
-       from score_events
-       where id > ?
-         and json_valid(score_json)
-         and (score_json like '%"user"%' or score_json like '%"beatmap"%' or score_json like '%"beatmapset"%')
-       order by id asc
-       limit ?`,
-      [afterId, batchSize],
-    )).rows;
-
-    if (rows.length === 0) break;
-    result.scanned += rows.length;
-
-    for (const row of rows) {
-      afterId = Math.max(afterId, Number(row.id));
-      const score = parseScore(row.score_json);
-      if (!score) {
-        result.failed++;
-        continue;
-      }
-
-      await persistScoresDisplayMetadata(db, [score], String(row.received_at ?? nowIso()));
-      await exec(
-        db,
-        "update score_events set score_json = ? where id = ?",
-        [json(toStoredScoreEvent(score)), Number(row.id)],
-      );
-      result.compacted++;
-    }
-
-    await releaseMemory();
-    if (rows.length < batchSize) break;
-  }
-
-  return result;
 }
 
 async function releaseMemory(): Promise<void> {
@@ -373,12 +274,6 @@ async function pruneOrphanApiCallTargets(): Promise<{ pruned: number }> {
   return { pruned };
 }
 
-function parseScore(value: unknown): OscScore | null {
-  const parsed = parseUnknownJson(value) as Partial<OscScore> | null;
-  if (!parsed || !Number.isFinite(parsed.id) || !Number.isFinite(parsed.user_id)) return null;
-  return parsed as OscScore;
-}
-
 // Rewrites legacy plain-text user_json / best_scores_json cells as gzipped
 // blobs (the write path compresses new rows; this migrates the backlog).
 async function compressProfileSnapshots(batchSize: number): Promise<{ scanned: number; compressed: number; failed: number }> {
@@ -433,14 +328,6 @@ function parseScores(value: unknown): OscScore[] | null {
     return !!candidate && Number.isFinite(candidate.id) && Number.isFinite(candidate.user_id);
   });
   return scores.length === parsed.length ? scores : null;
-}
-
-function compactTopPlayPayload(event: Partial<CountryTopPlay>): Partial<CountryTopPlay> {
-  const { user: _user, score, ...rest } = event;
-  return {
-    ...rest,
-    score: score ? compactScoreForStorage(score) : score,
-  };
 }
 
 function parseUnknownJson(value: unknown): unknown | null {

@@ -1,3 +1,5 @@
+import { scoreCellSql, scoreModCountSql, topPlayModCountSql, topPlayBeatmapIdSql, topPlaySearchJsonSql } from "../shared/score-json-storage.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { getCountryTimezone } from "../shared/country-timezones.js";
@@ -208,7 +210,7 @@ function officialVariantKeyStats(profile: Record<string, unknown>, fallbackRows:
 }
 
 function topPlayBeatmapId(payloadJson: unknown): number | null {
-  const payload = parseJson<{ score?: { beatmap_id?: number; beatmap?: { id?: number } } }>(String(payloadJson ?? ""), {});
+  const payload = unpackJson<{ score?: { beatmap_id?: number; beatmap?: { id?: number } } }>(payloadJson, {});
   const id = payload.score?.beatmap_id ?? payload.score?.beatmap?.id;
   return id != null && Number.isFinite(Number(id)) ? Number(id) : null;
 }
@@ -282,7 +284,7 @@ async function computeMods(db: Db, userId: number) {
   let noMod = 0;
   let sample = 0;
   for (const row of rows) {
-    const score = parseJson<OscScore>(String(row.score_json ?? ""), {} as OscScore);
+    const score = unpackJson<OscScore>(row.score_json, {} as OscScore);
     const acronyms = getModAcronyms(score.mods).filter((m) => m !== "CL");
     sample += 1;
     if (acronyms.length === 0) {
@@ -466,7 +468,7 @@ function topPlayOrderBy(sort: string | null | undefined): string {
     case "gain_desc":
       return "t.pp_gain desc, t.pp desc, t.detected_at desc";
     case "accuracy_desc":
-      return "coalesce(cast(json_extract(t.payload_json, '$.score.accuracy') as real), 0) desc, t.pp desc, t.detected_at desc";
+      return `coalesce(cast(${scoreCellSql("t.payload_json", "json_extract(t.payload_json, '$.score.accuracy')", "t.accuracy")} as real), 0) desc, t.pp desc, t.detected_at desc`;
     case "pp_desc":
     default:
       return "t.pp desc, t.detected_at desc, t.score_id desc";
@@ -493,8 +495,8 @@ function buildTrackedFeedSql(userId: number, query: MyDataTrackedFeedQuery = {})
     args.push(key);
   }
   const mods = normalizeModFilter(query.mods);
-  if (mods === "nomod") where.push("coalesce(json_array_length(se.score_json, '$.mods'), 0) = 0");
-  if (mods === "modded") where.push("coalesce(json_array_length(se.score_json, '$.mods'), 0) > 0");
+  if (mods === "nomod") where.push(`${scoreModCountSql("se")} = 0`);
+  if (mods === "modded") where.push(`${scoreModCountSql("se")} > 0`);
   const archive = normalizeArchiveFilter(query.archive);
   if (archive === "current") where.push("se.score_json is not null");
   if (archive === "archived") where.push("se.score_json is null");
@@ -564,7 +566,7 @@ export async function getUserTrackedFeed(db: Db, userId: number, limit = 30, off
 }
 
 function activityRefRowToTrackedPlay(row: Record<string, unknown>): MyDataTrackedPlay[] {
-  const storedScore = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
+  const storedScore = unpackJson<OscScore | null>(row.score_json, null);
   if (storedScore) {
     const score = {
       ...storedScore,
@@ -667,7 +669,7 @@ function activityRowBeatmapset(row: Record<string, unknown>): OsuBeatmapset | un
  * UI plus the pp the play added. Stored scores are compacted, so beatmap/user metadata is
  * re-hydrated at read time (preserving order).
  */
-const TOP_PLAY_BEATMAP_ID_SQL = "coalesce(cast(json_extract(t.payload_json, '$.score.beatmap.id') as integer), cast(json_extract(t.payload_json, '$.score.beatmap_id') as integer))";
+const TOP_PLAY_BEATMAP_ID_SQL = topPlayBeatmapIdSql("t");
 
 function buildTopPlaysSql(userId: number, query: MyDataTopPlaysQuery = {}): { fromSql: string; whereSql: string; args: SqlArg[] } {
   const where = ["t.user_id = ?"];
@@ -676,9 +678,9 @@ function buildTopPlaysSql(userId: number, query: MyDataTopPlaysQuery = {}): { fr
   if (search) {
     const like = `%${search}%`;
     where.push(`(
-      lower(coalesce(bs.title, json_extract(t.payload_json, '$.score.beatmapset.title'), '')) like ?
-      or lower(coalesce(bs.artist, json_extract(t.payload_json, '$.score.beatmapset.artist'), '')) like ?
-      or lower(coalesce(b.version, json_extract(t.payload_json, '$.score.beatmap.version'), '')) like ?
+      lower(coalesce(bs.title, json_extract(${topPlaySearchJsonSql("t")}, '$.score.beatmapset.title'), '')) like ?
+      or lower(coalesce(bs.artist, json_extract(${topPlaySearchJsonSql("t")}, '$.score.beatmapset.artist'), '')) like ?
+      or lower(coalesce(b.version, json_extract(${topPlaySearchJsonSql("t")}, '$.score.beatmap.version'), '')) like ?
       or cast(t.score_id as text) like ?
       or cast(${TOP_PLAY_BEATMAP_ID_SQL} as text) like ?
     )`);
@@ -686,12 +688,12 @@ function buildTopPlaysSql(userId: number, query: MyDataTopPlaysQuery = {}): { fr
   }
   const key = normalizeKeyFilter(query.key);
   if (key != null) {
-    where.push("cast(round(coalesce(cast(json_extract(t.payload_json, '$.score.beatmap.cs') as real), b.cs, 0)) as integer) = ?");
+    where.push(`cast(round(coalesce(cast(json_extract(${topPlaySearchJsonSql("t")}, '$.score.beatmap.cs') as real), b.cs, 0)) as integer) = ?`);
     args.push(key);
   }
   const mods = normalizeModFilter(query.mods);
-  if (mods === "nomod") where.push("coalesce(json_array_length(t.payload_json, '$.score.mods'), 0) = 0");
-  if (mods === "modded") where.push("coalesce(json_array_length(t.payload_json, '$.score.mods'), 0) > 0");
+  if (mods === "nomod") where.push(`${topPlayModCountSql("t")} = 0`);
+  if (mods === "modded") where.push(`${topPlayModCountSql("t")} > 0`);
   return {
     fromSql: `from top_play_events t
      left join beatmaps b on b.beatmap_id = ${TOP_PLAY_BEATMAP_ID_SQL}
@@ -720,7 +722,7 @@ export async function getUserTopPlaysFeed(db: Db, userId: number, limit = 40, of
     [...built.args, safeLimit, safeOffset],
   )).rows;
   const entries = rows
-    .map((r) => ({ event: parseJson<CountryTopPlay>(String(r.payload_json ?? ""), {} as CountryTopPlay), ppGain: Number(r.pp_gain ?? 0) }))
+    .map((r) => ({ event: unpackJson<CountryTopPlay>(r.payload_json, {} as CountryTopPlay), ppGain: Number(r.pp_gain ?? 0) }))
     .filter((e): e is { event: CountryTopPlay & { score: OscScore }; ppGain: number } => !!e.event.score);
   const hydrated = await hydrateScoresDisplayMetadata(db, entries.map((e) => e.event.score));
   return {

@@ -336,7 +336,7 @@ async function findTrackedScoreById(
     [targetUserId, ...idArgs],
   )).rows;
   if (rows.length === 0) return null;
-  const storedScore = parseJson<OscScore | null>(String(rows[0].score_json ?? ""), null);
+  const storedScore = unpackJson<OscScore | null>(rows[0].score_json, null);
   const play = storedScore ? toPlaySummary(storedScore) : null;
   // score_json is stored stripped of beatmap/beatmapset; the row's summary
   // gets its labels from the metadata tables the same ingest populated.

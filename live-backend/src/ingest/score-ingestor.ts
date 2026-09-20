@@ -1,3 +1,4 @@
+import { encodeScoreJson, scoreEventColumns, scoreCellSql } from "../shared/score-json-storage.js";
 import type { Config } from "../config.js";
 import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, json } from "../db.js";
@@ -115,17 +116,23 @@ export class ScoreIngestor {
     // fetch is worth the budget.
     const totalScore = getDisplayedTotalScore(score);
     const scoreIdentity = getScoreIdentity(score);
+    const storedScore = toStoredScoreEvent(score);
+    const storedColumns = scoreEventColumns(storedScore);
+    const scoreCell = encodeScoreJson(storedScore);
     let inserted = 0;
     const hydratedScoresByCountry = new Map<string, OscScore>();
     for (const country of countries) {
       const result = await exec(
         this.db,
         `insert into score_events
-         (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source, custom_rate, mod_count, payload_score_id)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict(country, score_identity) do update set
            legacy_score_id = excluded.legacy_score_id,
            score_json = excluded.score_json,
+           custom_rate = excluded.custom_rate,
+           mod_count = excluded.mod_count,
+           payload_score_id = excluded.payload_score_id,
            pp = excluded.pp,
            total_score = excluded.total_score,
            accuracy = excluded.accuracy,
@@ -137,8 +144,8 @@ export class ScoreIngestor {
            ended_at = excluded.ended_at,
            received_at = excluded.received_at,
            source = excluded.source
-         where not (score_events.score_json like '%"speed_change"%'
-                    and excluded.score_json not like '%"speed_change"%')
+         where not (${scoreCellSql("score_events.score_json", `score_events.score_json like '%"speed_change"%'`, "score_events.custom_rate")} = 1
+                    and excluded.custom_rate = 0)
            and (
              score_events.score_json <> excluded.score_json
              or score_events.pp is not excluded.pp
@@ -159,7 +166,7 @@ export class ScoreIngestor {
           country,
           beatmapId,
           3,
-          json(toStoredScoreEvent(score)),
+          scoreCell,
           score.pp,
           totalScore,
           getDisplayedAccuracy(score),
@@ -171,6 +178,9 @@ export class ScoreIngestor {
           score.ended_at ?? score.created_at ?? receivedAt,
           receivedAt,
           source,
+          storedColumns.customRate,
+          storedColumns.modCount,
+          storedColumns.payloadScoreId,
         ],
       );
       if (result.rowsAffected === 0) continue;

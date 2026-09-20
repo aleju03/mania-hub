@@ -520,7 +520,7 @@ export async function runSkillBaselineChunk(
     )).rows;
     const plays: ApproxPlay[] = [];
     for (const row of scoreRows) {
-      const score = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
+      const score = unpackJson<OscScore | null>(row.score_json, null);
       if (!score) continue;
       const play = scoreToApproxPlay(score, map);
       if (play) plays.push(play);

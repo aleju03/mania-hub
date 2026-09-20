@@ -1,3 +1,4 @@
+import { unpackJson } from "../shared/compressed-json.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { danTableLevelForLabel } from "../dan/chart-classifier.js";
@@ -524,7 +525,7 @@ async function loadRegisteredDanClears(db: Db, userId: number, options: DanCours
     [userId],
   )).rows;
   for (const row of scoreRows) {
-    const score = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
     const course = courses.get(Number(score.beatmap_id));
     if (!course || !registeredModsAllowed(course, score.mods)) continue;

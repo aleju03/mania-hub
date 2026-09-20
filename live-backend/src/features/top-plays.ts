@@ -1,6 +1,8 @@
+import { encodeScoreJson, topPlayColumns, scoreCellSql } from "../shared/score-json-storage.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import { countryScopeSql, resolveCountryScope } from "../countries.js";
 import type { Db } from "../db.js";
-import { exec, json, parseJson } from "../db.js";
+import { exec, json } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, calculateWeightedPpTotal, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { evaluatePpGoals } from "./goals.js";
@@ -163,11 +165,13 @@ async function confirmTopPlayAgainstWindow(
   };
   const scoreBeatmapId = readPositiveIntegerField(score.beatmap_id ?? score.beatmap?.id);
   const scoreKeyCount = readPositiveNumberField(score.beatmap?.cs);
+  const storedEvent = toStoredTopPlayEvent(event);
+  const columns = topPlayColumns(storedEvent);
   const inserted = await exec(
     db,
-    `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, score_beatmap_id, key_count)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(toStoredTopPlayEvent(event)), refreshedAt, event.time, scoreBeatmapId, scoreKeyCount],
+    `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, score_beatmap_id, key_count, accuracy, mod_count, payload_beatmap_id, score_search_json)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, encodeScoreJson(storedEvent), refreshedAt, event.time, scoreBeatmapId, scoreKeyCount, columns.accuracy, columns.modCount, columns.payloadBeatmapId, columns.searchJson],
   );
   if (inserted.rowsAffected === 0) return "unconfirmed";
   // A fresh top play is what moves overall pp, so this is the natural moment to settle "reach N pp"
@@ -360,16 +364,16 @@ async function getTopPlayConfirmationScoreIdCandidates(
     db,
     `select score_id, legacy_score_id, score_json, received_at from score_events
      where (country = ? and user_id = ? and (score_id = ? or legacy_score_id = ?))
-        or (country = ? and user_id = ? and score_json like ?)
+        or (country = ? and user_id = ? and ${scoreCellSql("score_json", "json_extract(score_json, '$.id')", "payload_score_id")} = ?)
      limit 5`,
-    [payload.country, payload.userId, payload.scoreId, payload.scoreId, payload.country, payload.userId, `%"id":${payload.scoreId}%`],
+    [payload.country, payload.userId, payload.scoreId, payload.scoreId, payload.country, payload.userId, payload.scoreId],
   )).rows;
   for (const row of rows) {
     const scoreId = Number(row.score_id);
     const legacyScoreId = Number(row.legacy_score_id);
     if (Number.isFinite(scoreId) && scoreId > 0) ids.add(scoreId);
     if (Number.isFinite(legacyScoreId) && legacyScoreId > 0) ids.add(legacyScoreId);
-    const score = parseJson<Partial<OscScore> & { best_id?: number | null } | null>(row.score_json, null);
+    const score = unpackJson<Partial<OscScore> & { best_id?: number | null } | null>(row.score_json, null);
     const jsonScoreId = Number(score?.id);
     const bestScoreId = Number(score?.best_id);
     if (Number.isFinite(jsonScoreId) && jsonScoreId > 0) ids.add(jsonScoreId);
@@ -641,7 +645,7 @@ function toStoredTopPlayEvent(event: CountryTopPlay): CountryTopPlay {
 }
 
 async function hydrateTopPlayEvents(db: Db, rows: Record<string, unknown>[]): Promise<CountryTopPlay[]> {
-  const parsed = rows.map((row) => parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay));
+  const parsed = rows.map((row) => unpackJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay));
   const rawScores = parsed.map((event) => event.score ?? null);
   const hydratedScores = await hydrateScoresDisplayMetadata(db, rawScores.filter((score): score is OscScore => !!score));
   let scoreIndex = 0;

@@ -1,3 +1,4 @@
+import { unpackJson } from "../shared/compressed-json.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { getDisplayedRank, getDisplayedTotalScore, getScoreIdentity } from "../shared/score.js";
@@ -56,7 +57,7 @@ export async function loadPlayerSkillScoreDetails(db: Db, userId: number, plays:
       where user_id = ? and best_score_id in (select value from json_each(?))`, [userId, ids]),
   ]);
   for (const row of [...events.rows, ...tops.rows]) {
-    const score = parseJson<OscScore | null>(row.score_json, null);
+    const score = unpackJson<OscScore | null>(row.score_json, null);
     if (!score || score.user_id !== userId) continue;
     const identity = getScoreIdentity(score);
     const play = missing.get(identity);
