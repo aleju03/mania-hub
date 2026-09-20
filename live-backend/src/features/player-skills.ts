@@ -1,3 +1,4 @@
+import { COMPANELLA_INPUTS_META_KEY } from "./companella-inputs.js";
 import { MARATHON_CORRECTION_META_KEY } from "./marathon-correction.js";
 import { erf, wife3PointsAt, WIFE3_MISS_POINTS } from "./tap-wife-accuracy.js";
 import { estimateManiaWifeAccuracy, estimateManiaWifeAccuracyFromAccuracy, WIFE_CALIBRATION_VERSION, type WifeCalibrationOptions } from "./wife-calibration.js";
@@ -7544,7 +7545,7 @@ async function rateVerdictsLandedAfter(db: Db, doneJson: string): Promise<boolea
   const sweptAt = parseJson<{ finishedAt?: unknown }>(doneJson, {}).finishedAt;
   // The chart-family v3 sweep counts too: a pass started on registry-only
   // credentials must run once more when the corpus aliases are indexed.
-  for (const key of [HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY, LN_EFFECTIVE_META_KEY, CHART_FAMILY_META_KEY]) {
+  for (const key of [COMPANELLA_INPUTS_META_KEY, HT_RATE_ANALYSIS_META_KEY, SUNNY_REPIN_DT_META_KEY, LN7_PRIMARY_REPIN_META_KEY, LEOBLACK_FUSION_META_KEY, MARATHON_CORRECTION_META_KEY, LN_EFFECTIVE_META_KEY, CHART_FAMILY_META_KEY]) {
     const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [key])).rows[0];
     if (!row) continue;
     const landedAt = parseJson<{ finishedAt?: unknown }>(String(row.value_json ?? ""), {}).finishedAt;

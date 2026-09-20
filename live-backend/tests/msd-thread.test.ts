@@ -36,6 +36,7 @@ describe("MSD calculator thread", () => {
     const thread = makeThread();
     const options: MsdOptions[] = [
       { keyCount: 4 },
+      { keyCount: 4, etternaVersion: "0.74.0" },
       { keyCount: 7, rate: 1.5, scoreGoal: 0.965 },
       { keyCount: 4, rate: 0.75, scoreGoal: 0.8, lnTailTaps: true },
       { keyCount: 7, lnTailTaps: true },
@@ -49,6 +50,8 @@ describe("MSD calculator thread", () => {
     try {
       const actual = await Promise.all(options.map((option) => thread.compute(chart(option.keyCount!), option)));
       expect(actual).toEqual(expected);
+      expect(actual[0].etternaVersion).toBe("0.72.3");
+      expect(actual[1].etternaVersion).toBe("0.74.0");
       expect(ticks).toBeGreaterThan(0);
     } finally {
       clearInterval(timer);

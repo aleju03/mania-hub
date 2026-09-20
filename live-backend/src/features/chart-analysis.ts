@@ -2385,7 +2385,8 @@ export async function storeDtRateVerdict(db: Db, beatmapId: number): Promise<boo
     // The classifier and MinaCalc are the CPU bursts; yield between them and
     // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
     // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
-    // MSD leads so Companella can reuse it instead of running MinaCalc twice.
+    // Native MSD leads for marathon correction and LN identity. Companella
+    // uses a separate 0.74.0 pass, matching its upstream feature inputs.
     const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(msdChartErrorFallback);
     if (!msd) return false;
     await new Promise<void>((resolve) => setImmediate(resolve));

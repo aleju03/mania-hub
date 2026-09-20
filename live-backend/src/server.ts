@@ -1,3 +1,4 @@
+import { ensureCompanellaInputsSeeded } from "./features/companella-inputs.js";
 import { seedBeatmapRevisionAudit } from "./osu/beatmap-revisions.js";
 import { ensureMarathonCorrectionSeeded } from "./features/marathon-correction.js";
 import { ensureLeoblackFusionSeeded } from "./features/leoblack-fusion.js";
@@ -584,6 +585,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureSunnyRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin] seed failed", error));
       void ensureSunnyRepinDtRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[sunny-repin-dt] seed failed", error));
       void ensureMarathonCorrectionSeeded(app.db, app.queue).catch((error) => logWarn("marathon_correction_seed_failed", { error: String(error) }));
+      void ensureCompanellaInputsSeeded(app.db, app.queue).catch((error) => logWarn("companella_inputs_seed_failed", { error: String(error) }));
       void ensureLeoblackFusionSeeded(app.db, app.queue).catch((error) => logWarn("leoblack_fusion_seed_failed", { error: String(error) }));
       void ensureLeoblackRepinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[leoblack-repin] seed failed", error));
       void ensureLeoblackRepinDtRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[leoblack-repin-dt] seed failed", error));

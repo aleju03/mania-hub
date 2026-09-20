@@ -287,10 +287,14 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
 // precomputedDanielResult: Roxy canonicalizes the beatmap timing before running
 // its references, so an externally computed Daniel sees subtly different input
 // and shifts the meta numerics on charts with unusual timing (verified on the
-// dan corpus). Leave the calculation chain intact; only resolve fusion plans
-// that upstream's own apply step would decline.
+// dan corpus). Keep internal routing intact, normalize the public star like
+// upstream's pipeline, and resolve fusion plans its apply step would decline.
 export function runLeoBlackMixed(osuText: string, options: LeoBlackEstimatorOptions = {}): LeoBlackReworkResult {
-  const result = runMixedEstimatorFromText(osuText, options);
+  const mixed = runMixedEstimatorFromText(osuText, options);
+  // Match upstream's full pipeline: Azusa/Roxy return a star-shaped value
+  // derived from their dan prediction. Companella requires actual Sunny SR.
+  // Keep this outside Mixed so its internal routing/reference inputs stay intact.
+  const result = { ...mixed, star: runSunnyEstimatorFromText(osuText, options).star };
   const plan = result.mixedCompanellaPlan;
   // Upstream creates a plan before checking the Azusa < Alpha fusion scope.
   // Its apply step keeps Azusa outside that scope, but leaves the plan pending.

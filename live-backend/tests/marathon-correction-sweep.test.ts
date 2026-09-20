@@ -96,10 +96,14 @@ describe("targeted marathon correction rollout", () => {
       await rate(db, 1, 110, 19, "vibro-adjusted");
       await rate(db, 1, 120, 19);
       await rate(db, 1, 120, 20, undefined, 77);
-      const compute = vi.spyOn(msd, "computeMsd").mockRejectedValue(new Error("MSD must be reused"));
+      const realCompute = msd.computeMsd;
+      const compute = vi.spyOn(msd, "computeMsd").mockImplementation((text, options) => {
+        if (options?.etternaVersion === "0.74.0") return realCompute(text, options);
+        throw new Error("stored native MSD must be reused");
+      });
       const result = await recomputeMarathonCorrectionChunk(db, 0);
       expect(result).toMatchObject({ candidates: 2, rewritten: 1, ratesRewritten: 6, done: true });
-      expect(compute).not.toHaveBeenCalled();
+      expect(compute.mock.calls.every(([, options]) => options?.etternaVersion === "0.74.0")).toBe(true);
       const rows = (await exec(db, "select beatmap_id, raw_dan, classification_json, msd_json, dan_dt_json, dan_ht_json, computed_at from beatmap_chart_analysis order by beatmap_id")).rows;
       expect(rows[0].raw_dan).not.toBe(99);
       expect(rows[1].raw_dan).toBe(99);

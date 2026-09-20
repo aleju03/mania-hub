@@ -493,6 +493,26 @@ CommonJS globals the glue reads, so the same files serve the browser and the bac
 
 ## Updating
 
+### Companella input parity repair (2026-09-19)
+
+The facades now reproduce two upstream orchestration steps missed by the port:
+`runLeoBlackMixed` replaces the selected estimator's `star` with actual Sunny
+SR before exposing it to Companella, and both async adapters compute separate
+raw MinaCalc 0.74.0 features for that model. Azusa's returned `star` is
+`3.4 + 0.38 * finalNumeric`, not Sunny SR. The upstream pipeline already
+normalized it at our pin; calling Mixed directly had skipped that step.
+The separate Companella 0.74.0 default dates to upstream `f497dad` (April 5),
+including 4K. Main MSD/SSR and marathon correction retain their 0.72.3 default.
+
+Real full-pipeline comparisons of the ten REFORM marathons at 1.0x now match
+upstream `4c2d0b6` exactly, including 10th at Alpha low / 10.51. Tests cover
+synthetic rice/hybrid files at multiple rates and played OD, with real WASM
+and ONNX. Cache v30 plus `companella_inputs_done:v1` repairs stored verdicts
+without changing native MSD or hiding ready analyses. Earlier benchmark
+measurements above describe the old integration, not corrected parity.
+
+### Re-copy procedure
+
 Re-copy the same directories from upstream `js/`, skip every file in the ours or
 ours-modified list at the top (overwriting `ett/index.js` in particular breaks the
 backend LN-tail SSR blend), and re-check the facade against upstream changes to

@@ -19,6 +19,8 @@ export interface MsdResult {
 }
 
 export interface MsdOptions {
+  /** Companella uses 0.74.0 independently of the ordinary 4K MSD default. */
+  etternaVersion?: string;
   /** Explicitly opt player SSRs into localized vibro removal. */
   adjustVibro?: boolean;
   rate?: number;

@@ -88,7 +88,7 @@ function storedDanVariant(modVariant?: DanChartVariant, odFlag?: LeoBlackOdFlag)
   return odFlag == null ? modVariant : `${modVariant ? `${modVariant}:` : ""}OD:${odFlag}`;
 }
 
-function parseStoredDanVariant(value: unknown): Pick<RateDanVerdictPair, "modVariant" | "odFlag"> | null {
+export function parseStoredDanVariant(value: unknown): Pick<RateDanVerdictPair, "modVariant" | "odFlag"> | null {
   if (isDanChartVariant(value)) return { modVariant: value };
   if (typeof value !== "string") return null;
   const match = /^(?:(IN|vibro-adjusted):)?OD:(.+)$/.exec(value);

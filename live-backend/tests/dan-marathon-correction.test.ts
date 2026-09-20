@@ -119,17 +119,18 @@ describe("marathon duration correction", () => {
     const mixed = vi.spyOn(leo, "runLeoBlackMixed");
     const compute = vi.spyOn(msd, "computeMsd").mockResolvedValue({ etternaVersion: "test", values: BALANCED_MSD });
     await classifyChartWithCompanella(map, MARATHON_TEXT, { rate: 2 });
-    expect(compute).toHaveBeenCalledTimes(1);
+    expect(compute.mock.calls.filter(([, options]) => !options?.etternaVersion)).toHaveLength(1);
     expect(compute).toHaveBeenCalledWith(MARATHON_TEXT, { rate: 2, keyCount: 4 });
     expect(mixed.mock.calls.every(([, options]) => options?.marathonCorrection?.durationS === chartNoteSpanSeconds(map)))
       .toBe(true);
   });
 
-  it("reuses supplied MSD and applies Companella after the corrected star is available", async () => {
+  it("reuses marathon MSD but acquires separate 0.74.0 inputs for Companella", async () => {
     const map = parseManiaBeatmap(MARATHON_TEXT);
     const compute = vi.spyOn(msd, "computeMsd");
     const result = await classifyChartWithCompanella(map, MARATHON_TEXT, {}, { msdValues: BALANCED_MSD });
-    expect(compute).not.toHaveBeenCalled();
+    expect(compute).toHaveBeenCalledExactlyOnceWith(MARATHON_TEXT,
+      { rate: 1, keyCount: 4, etternaVersion: "0.74.0", includeLnSkill: false });
     expect(result.companellaPending).toBe(false);
     expect(result.primary).not.toBeNull();
   });

@@ -10,6 +10,7 @@ const loggedFallbackReasons = new Set<string>();
 export async function calculateMsd(osuText: string, options: MsdOptions): Promise<MsdResult> {
   const ett = await (ettModulePromise ??= import("../../vendor/leoblack/ett/index.js"));
   const result = await ett.analyzeEtternaFromText(osuText, {
+    etternaVersion: options.etternaVersion,
     musicRate: options.rate ?? 1,
     scoreGoal: options.scoreGoal,
     keyOverride: options.keyCount ?? null,

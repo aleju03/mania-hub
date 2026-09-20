@@ -22,11 +22,6 @@ export interface CompanellaFeatureInput {
   rate: number;
   keyCount: number;
   sunnyStar: number;
-  /**
-   * Raw (not LN-tail-blended) MinaCalc values, when the caller already has
-   * them. Saves a second MinaCalc pass; chart-analysis stores MSD anyway.
-   */
-  msdValues?: Record<string, number> | null;
 }
 
 /** Companella only ever runs on the 4K path Mixed gates it behind. */
@@ -53,12 +48,11 @@ export async function computeCompanellaEstimate(
       import("../../vendor/leoblack/estimator/companellaEstimator.js"),
     ]);
 
-    // computeMsd defaults to lnTailTaps:false, i.e. the raw MinaCalc values
-    // rather than our LN-tail blend. That is deliberate: the model was trained
-    // against stock MSD, so the blend would shift every hold-heavy chart off
-    // the distribution it learned.
+    // Upstream has a separate 0.74.0 setting for Companella. Never reuse the
+    // caller's ordinary 0.72.3 MSD (also used by the marathon correction).
     const [msdValues, interludeStar] = await Promise.all([
-      input.msdValues ?? computeMsd(osuText, { rate, keyCount }).then((msd) => msd?.values ?? null),
+      computeMsd(osuText, { rate, keyCount, etternaVersion: "0.74.0", includeLnSkill: false })
+        .then((msd) => msd?.values ?? null),
       calculateInterludeStar(osuText, rate),
     ]);
     if (!msdValues) return null;
@@ -117,7 +111,6 @@ export async function classifyChartWithCompanella(
     rate,
     keyCount: map.keyCount,
     sunnyStar: first.sunnySr,
-    msdValues,
   });
   if (!companella) return first;
 

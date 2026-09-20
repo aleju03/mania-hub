@@ -3,10 +3,12 @@ import { analyzeEtternaFromText } from "#leoblack/ett/index.js";
 import { parseManiaBeatmap } from "./beatmap-parser";
 import { classifyChartWithCompanella } from "./companella";
 import * as leo from "#dan/leoblack-estimator";
+import { classifyCompanellaDifficulty } from "#leoblack/estimator/companellaEstimator.js";
 
 const values = { Overall: 20, Stream: 20, Jumpstream: 19, Handstream: 18,
   Stamina: 20, JackSpeed: 19, Chordjack: 18, Technical: 19 };
 vi.mock("#leoblack/ett/index.js", () => ({ analyzeEtternaFromText: vi.fn() }));
+vi.mock("#leoblack/estimator/companellaEstimator.js", () => ({ classifyCompanellaDifficulty: vi.fn() }));
 
 function chart(span: number, keys = 4): string {
   return ["osu file format v14", "[General]", "Mode:3", "[Difficulty]", `CircleSize:${keys}`,
@@ -18,6 +20,20 @@ function chart(span: number, keys = 4): string {
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 describe("browser marathon MSD preparation", () => {
+  it("uses Sunny SR and a separate 0.74.0 pass even when native MSD is supplied", async () => {
+    const text = chart(115);
+    const modelValues = { ...values, Overall: 17, Stream: 16 };
+    vi.mocked(analyzeEtternaFromText).mockResolvedValue({ keycount: 4, lnRatio: 0, metadata: {}, values: modelValues });
+    vi.mocked(classifyCompanellaDifficulty).mockResolvedValue({ estDiff: "Reform 6 mid", numericDifficulty: 6,
+      numericDifficultyHint: null, danLabel: "6", variant: "", confidence: 1, rawModelOutput: 6 });
+    await classifyChartWithCompanella(parseManiaBeatmap(text), text, { rate: 0.75 }, { msdValues: values });
+    expect(analyzeEtternaFromText).toHaveBeenCalledExactlyOnceWith(text,
+      { musicRate: 0.75, keyOverride: 4, etternaVersion: "0.74.0" });
+    expect(classifyCompanellaDifficulty).toHaveBeenCalledWith(expect.objectContaining({
+      msdValues: modelValues, sunnyStar: leo.runLeoBlackSunny(text, { speedRate: 0.75 }).star,
+    }));
+  });
+
   it("loads rate-specific raw MSD before Mixed even when Companella is skipped", async () => {
     vi.mocked(analyzeEtternaFromText).mockResolvedValue({ keycount: 4, lnRatio: 0, metadata: {}, values });
     const mixed = vi.spyOn(leo, "runLeoBlackMixed");

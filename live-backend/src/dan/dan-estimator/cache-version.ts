@@ -43,4 +43,6 @@
 // rating follows rate like native MSD (LN v8); rate estimates carry both.
 // v29: 4K LN identity reads its release window at OD 5 or higher (effective
 // v6), so rate verdicts on low-OD charts can change side.
-export const DAN_ESTIMATE_CACHE_VERSION = 29;
+// v30: Companella receives actual Sunny SR and its separate MinaCalc 0.74.0
+// features, matching upstream. Native MSD/SSR defaults remain unchanged.
+export const DAN_ESTIMATE_CACHE_VERSION = 30;
