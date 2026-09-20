@@ -75,9 +75,13 @@ export async function recomputeCompanellaInputsChunk(
       const classification = await classifyChartWithCompanella(map, osuText, {
         rate: ratePercent / 100, version: map.version, starRating: Number(row.difficulty_rating) || undefined,
       }, { msdValues: msd?.values });
-      if (!classification.primary || classification.companellaPending) {
+      if (classification.companellaPending) {
         throw new Error(`Companella input repair incomplete for ${beatmapId}@${ratePercent}`);
       }
+      // No verdict to repair: LeoBlack refuses the chart (a one-note
+      // placeholder diff, say). The stored row already says unsupported;
+      // failing the chunk here pinned the whole sweep on one such map.
+      if (!classification.primary) continue;
       const lean = leanClassification(classification);
       const primary = lean.primary!;
       const previous = parseJson<Record<string, unknown>>(row[verdictColumn], {});

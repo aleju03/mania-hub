@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
-import { OsuApiClient } from "../src/osu/client.js";
+import { OsuApiClient, OsuApiError } from "../src/osu/client.js";
+import { isUnverifiableRevision } from "../src/features/player-skills.js";
 import { getCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { toStoredScoreEvent } from "../src/ingest/score-ingestor.js";
@@ -70,6 +71,49 @@ describe("beatmap revision jobs", () => {
       expect(osu.getBeatmapFile).toHaveBeenCalledOnce();
       expect((await exec(db, "select type from jobs where type = 'repair_changed_beatmap_file'")).rows).toHaveLength(1);
       expect((await readBeatmapRevisionStates(db, [10])).get(10)).toMatchObject({ fileChecksum: beatmapFileMd5(current), ready: false });
+    });
+  });
+
+  it("marks a beatmap deleted when osu! 404s it, and stops fetching or waiting for it", async () => {
+    await withDb(async db => {
+      // The diff was edited (new checksum), then deleted and re-uploaded under
+      // a new id: osu! serves an empty file for the old id and 404s its metadata.
+      await seed(db, 10, "graveyard", "d".repeat(32));
+      await storeCachedBeatmapFile(db, 10, "old");
+      await exec(db, "update beatmap_osu_files set fetched_at = '2020-01-01T00:00:00Z' where beatmap_id = 10");
+      const queue = new JobQueue(db);
+      const osu = {
+        getBeatmapFile: vi.fn(async () => { throw new Error("invalid .osu file"); }),
+        getBeatmap: vi.fn(async () => { throw new OsuApiError(404, "/beatmaps/10"); }),
+      };
+      await verifyBeatmapRevision(db, osu, queue, 10);
+      expect(osu.getBeatmapFile).toHaveBeenCalledOnce();
+      expect(osu.getBeatmap).toHaveBeenCalledOnce();
+      const state = (await readBeatmapRevisionStates(db, [10])).get(10);
+      expect(state).toMatchObject({ ready: false, deleted: true });
+      expect(JSON.parse(String((await exec(db, "select metadata_json from beatmaps where beatmap_id = 10")).rows[0].metadata_json)))
+        .toMatchObject({ checksum: "d".repeat(32), deleted_at: expect.any(String) });
+      await verifyBeatmapRevision(db, osu, queue, 10);
+      expect(osu.getBeatmapFile).toHaveBeenCalledOnce();
+      // A play parked on it is turned away rather than left "analyzing".
+      const info = { revisionChecksum: "d".repeat(32), revisionUpdatedAt: "2026-09-16T09:00:00Z", revisionMutable: true, revisionDeleted: true };
+      expect(isUnverifiableRevision({ revisionPending: true, endedAt: "2026-09-17T00:00:00Z" }, info)).toBe(true);
+      expect(isUnverifiableRevision({ revisionPending: true, endedAt: "2026-09-17T00:00:00Z" }, { ...info, revisionDeleted: false })).toBe(false);
+      expect(isUnverifiableRevision({ revisionPending: undefined }, info)).toBe(false);
+    });
+  });
+
+  it("keeps retrying when the metadata lookup fails for another reason", async () => {
+    await withDb(async db => {
+      await seed(db, 10, "graveyard", "d".repeat(32));
+      await storeCachedBeatmapFile(db, 10, "old");
+      await exec(db, "update beatmap_osu_files set fetched_at = '2020-01-01T00:00:00Z' where beatmap_id = 10");
+      const osu = {
+        getBeatmapFile: vi.fn(async () => { throw new Error("invalid .osu file"); }),
+        getBeatmap: vi.fn(async () => { throw new OsuApiError(503, "/beatmaps/10"); }),
+      };
+      await expect(verifyBeatmapRevision(db, osu, new JobQueue(db), 10)).rejects.toThrow("pending checksum verification");
+      expect((await readBeatmapRevisionStates(db, [10])).get(10)).toMatchObject({ ready: false, deleted: false });
     });
   });
 

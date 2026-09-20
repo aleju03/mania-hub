@@ -2,7 +2,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { JobQueue } from "../jobs/queue.js";
 import type { OscScore } from "../shared/types.js";
-import type { OsuApiClient } from "./client.js";
+import { OsuApiError, type OsuApiClient } from "./client.js";
 import { beatmapFileMd5, getCachedBeatmapFile, normalizeBeatmapFileChecksum, readCachedBeatmapFile, restoreCachedBeatmapBom } from "./beatmap-file-cache.js";
 
 export const BEATMAP_REVISION_JOB = "verify_beatmap_revision";
@@ -17,6 +17,9 @@ export interface BeatmapRevisionState {
   updatedAt: string | null;
   mutable: boolean;
   ready: boolean;
+  /** osu! no longer serves this beatmap id (API 404). Its expected revision
+   * can never be fetched, so nothing waiting on it will settle. */
+  deleted: boolean;
 }
 
 /** Current metadata is a freshness hint, not the checksum of an older play. */
@@ -59,6 +62,7 @@ export async function readBeatmapRevisionStates(db: Db, ids: number[]): Promise<
       fetchedAt: row.fetched_at == null ? null : String(row.fetched_at),
       updatedAt: typeof meta.last_updated === "string" ? meta.last_updated : null,
       mutable: !["ranked", "approved", "loved"].includes(String(row.status)),
+      deleted: meta.deleted_at != null,
       ready: fileChecksum === checksum && (row.analysis_status === "unavailable"
         ? Date.parse(String(row.analysis_updated_at)) >= Date.parse(String(row.fetched_at))
         : row.source_file_md5 != null
@@ -94,10 +98,42 @@ export async function queueRevisionCheck(db: Db, queue: JobQueue, beatmapId: num
   if (!pending) await queue.enqueue(BEATMAP_REVISION_JOB, key, { beatmapId }, { priority: 80, replaceDone: true });
 }
 
-export async function verifyBeatmapRevision(db: Db, osu: Pick<OsuApiClient, "getBeatmapFile">, queue: JobQueue, beatmapId: number): Promise<void> {
+/** Record that osu! no longer has this beatmap id. Same field the osu! API
+ * uses; enrichment cannot overwrite it because the API 404s from now on. */
+export async function markBeatmapDeleted(db: Db, beatmapId: number): Promise<void> {
+  const now = new Date().toISOString();
+  await exec(db, `update beatmaps set metadata_json = json_set(coalesce(metadata_json, '{}'), '$.deleted_at', ?), updated_at = ?
+    where beatmap_id = ? and json_extract(metadata_json, '$.deleted_at') is null`, [now, now, beatmapId]);
+}
+
+export async function verifyBeatmapRevision(
+  db: Db,
+  osu: Pick<OsuApiClient, "getBeatmapFile"> & Partial<Pick<OsuApiClient, "getBeatmap">>,
+  queue: JobQueue,
+  beatmapId: number,
+): Promise<void> {
   // Read metadata when executing, never refresh backwards to an old job's hint.
-  await getCachedBeatmapFile(db, osu, beatmapId, `job:${BEATMAP_REVISION_JOB}`);
-  const state = (await readBeatmapRevisionStates(db, [beatmapId])).get(beatmapId);
+  let state = (await readBeatmapRevisionStates(db, [beatmapId])).get(beatmapId);
+  if (state?.deleted) return;
+  try {
+    await getCachedBeatmapFile(db, osu, beatmapId, `job:${BEATMAP_REVISION_JOB}`);
+  } catch (error) {
+    // A mapper who deletes a diff and re-uploads it under a new id leaves the
+    // old id 404ing on the API and serving an empty file. The revision osu!
+    // last reported for it is gone for good, so retrying is pointless: mark
+    // the map deleted and let the plays parked on it be turned away.
+    if (!osu.getBeatmap) throw error;
+    try {
+      await osu.getBeatmap(beatmapId, `job:${BEATMAP_REVISION_JOB}`);
+    } catch (metaError) {
+      if (metaError instanceof OsuApiError && metaError.status === 404) {
+        await markBeatmapDeleted(db, beatmapId);
+        return;
+      }
+    }
+    throw error;
+  }
+  state = (await readBeatmapRevisionStates(db, [beatmapId])).get(beatmapId);
   const { enqueueChartAnalysis, enqueueChartAnalysisIfNeeded } = await import("../features/chart-analysis.js");
   if (state && !state.ready) await enqueueChartAnalysis(queue, beatmapId, { repair: true });
   else await enqueueChartAnalysisIfNeeded(db, queue, beatmapId);

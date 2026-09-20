@@ -122,6 +122,25 @@ describe("Companella input repair", () => {
     });
   }, 30_000);
 
+  it("skips a chart LeoBlack refuses instead of pinning the sweep on it", async () => {
+    await withDb(async (db) => {
+      await seed(db, 1);
+      await seed(db, 2);
+      await exec(db, `update beatmap_chart_analysis set raw_dan = null, primary_label = null,
+        classification_json = '{"supported":false,"primary":null,"warnings":["LeoBlack estimator failed: Beatmap parse failed."]}'
+        where beatmap_id = 1`);
+      const original = companella.classifyChartWithCompanella;
+      vi.spyOn(companella, "classifyChartWithCompanella").mockImplementationOnce(async (...args) => ({
+        ...await original(...args), primary: null, rc: null, ln: null, companellaPending: false,
+      }));
+      const result = await recomputeCompanellaInputsChunk(db, 0);
+      expect(result).toMatchObject({ nextCursor: 2, scanned: 2, rewritten: 1, done: true });
+      const rows = (await exec(db, "select beatmap_id, raw_dan from beatmap_chart_analysis order by beatmap_id")).rows;
+      expect(rows[0]).toMatchObject({ beatmap_id: 1, raw_dan: null });
+      expect(rows[1].raw_dan).not.toBe(99);
+    });
+  }, 30_000);
+
   it("refuses to overwrite a concurrent chart refresh", async () => {
     await withDb(async (db) => {
       await seed(db, 1);

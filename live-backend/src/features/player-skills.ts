@@ -1682,6 +1682,8 @@ export interface ChartSkillInfo {
   revisionChecksum: string | null;
   revisionUpdatedAt: string | null;
   revisionMutable: boolean;
+  /** osu! 404s the beatmap id: no revision of it can be fetched any more. */
+  revisionDeleted: boolean;
   /** False when the chart's raw object structure makes its dan verdict unsafe
    * as player evidence. The chart may still display that verdict on /maps. */
   danEligible: boolean;
@@ -2051,6 +2053,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
               json_extract(b.metadata_json, '$.accuracy') as od,
               json_extract(b.metadata_json, '$.checksum') as revision_checksum,
               json_extract(b.metadata_json, '$.last_updated') as revision_updated_at,
+              json_extract(b.metadata_json, '$.deleted_at') as revision_deleted_at,
               b.status as beatmap_status,
               b.beatmapset_id, b.version, f.family_key
          from beatmap_chart_analysis a
@@ -2153,6 +2156,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         revisionChecksum: typeof row.revision_checksum === "string" && row.revision_checksum ? row.revision_checksum : null,
         revisionUpdatedAt: typeof row.revision_updated_at === "string" && row.revision_updated_at ? row.revision_updated_at : null,
         revisionMutable: !["ranked", "approved", "loved"].includes(String(row.beatmap_status ?? "")),
+        revisionDeleted: row.revision_deleted_at != null,
         // Legacy rows have no field and stay eligible until the targeted
         // cached-.osu sweep inspects them. Fresh analyses always store it.
         danEligible: parsed?.danEligibility?.eligible !== false,
@@ -2522,9 +2526,12 @@ export interface DanClearTarget {
  */
 export function isUnverifiableRevision(
   play: Pick<StoredPlaySsr, "revisionPending" | "beatmapChecksum" | "startedAt" | "endedAt">,
-  info: Pick<ChartSkillInfo, "revisionChecksum" | "revisionUpdatedAt" | "revisionMutable">,
+  info: Pick<ChartSkillInfo, "revisionChecksum" | "revisionUpdatedAt" | "revisionMutable" | "revisionDeleted">,
 ): boolean {
   if (play.revisionPending !== true) return false;
+  // The id is gone from osu! (diff deleted or re-uploaded under a new id):
+  // the file the play waits for cannot be fetched from anywhere.
+  if (info.revisionDeleted) return true;
   if (play.beatmapChecksum && info.revisionChecksum) return play.beatmapChecksum !== info.revisionChecksum;
   if (!info.revisionMutable || !info.revisionUpdatedAt) return false;
   const played = Date.parse(play.startedAt ?? play.endedAt ?? "");
@@ -3318,7 +3325,7 @@ export async function computePlayerSkillRatings(
   ]);
   const queue = new JobQueue(db);
   for (const [id, state] of states) {
-    if (!state.ready) await queueRevisionCheck(db, queue, id, state.checksum);
+    if (!state.ready && !state.deleted) await queueRevisionCheck(db, queue, id, state.checksum);
   }
   const previousById = new Map(allStored.map(play => [play.identity, play]));
   const pending = new Map<string, StoredPlaySsr>();
@@ -3392,7 +3399,8 @@ export async function computePlayerSkillRatings(
     pending.delete(playSlotKey(play.beatmapId, play.rate, play.inverse));
   }
   const waiting = [...pending.values()];
-  result.pendingRevisions = [...states.values()].filter(state => !state.ready).length;
+  // Deleted maps never become ready; nothing to retry for them.
+  result.pendingRevisions = [...states.values()].filter(state => !state.ready && !state.deleted).length;
   result.danOnly.push(...waiting);
   result.summary.pendingPlays += waiting.length;
   result.summary.totalPlays += waiting.length;
@@ -4662,7 +4670,7 @@ async function readPendingWaits(db: Db, summary: Partial<StoredModesSummary>): P
   // Re-read the charts rather than trusting the compute's count: verifies
   // land between passes, and the number that matters is how many still wait.
   const charts = ids.length > 0
-    ? [...(await readBeatmapRevisionStates(db, ids)).values()].filter((state) => !state.ready).length
+    ? [...(await readBeatmapRevisionStates(db, ids)).values()].filter((state) => !state.ready && !state.deleted).length
     : 0;
   return {
     revisions: charts > 0 ? revisions : 0,
