@@ -290,7 +290,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   col: "",
   cKey: 4,
   cAxis: "dan",
-  cSrc: "auto",
+  cSrc: "community",
   map: 0,
   country: undefined,
 };
@@ -721,7 +721,7 @@ export const Route = createFileRoute("/maps")({
       return Number.isInteger(n) && n >= 1 && n <= 10 ? n : DEFAULT_MAPS_SEARCH.cKey;
     })(),
     cAxis: search.cAxis === "msd" ? "msd" : DEFAULT_MAPS_SEARCH.cAxis,
-    cSrc: search.cSrc === "community" ? "community" : DEFAULT_MAPS_SEARCH.cSrc,
+    cSrc: search.cSrc === "auto" ? "auto" : DEFAULT_MAPS_SEARCH.cSrc,
     map: Math.max(0, Math.floor(Number(search.map) || 0)),
     country: parseCountrySearchParam(search.country),
   }),

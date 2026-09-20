@@ -524,10 +524,10 @@ export function MapCollectionsSection({
         {showSwitch && (
           <div className="flex">
             <SegmentedControl<CollectionSource>
-              options={["auto", "community"]}
+              options={["community", "auto"]}
               value={source}
               onChange={onSourceChange}
-              render={(option) => (option === "auto" ? t`Auto packs` : t`Community`)}
+              render={(option) => (option === "auto" ? t`Rotating packs` : t`Community`)}
             />
           </div>
         )}
