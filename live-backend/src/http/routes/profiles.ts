@@ -7,6 +7,7 @@ import { getPlayerKeymodePpKeyCounts, getPlayerKeymodePpTail } from "../../featu
 import { enqueueMissingPlayDetails } from "../../features/activity-detail-on-demand.js";
 import { DAN_EVIDENCE_MAX_REJECTED, DAN_EVIDENCE_PAGE_MAX_CLEARS, PLAYER_SKILL_PLAYS_MAX, getPlayerSkillBreakdown, getPlayerSkillDanEvidence, getPlayerSkillPlays, isPlayerSkillAxis } from "../../features/player-skills.js";
 import { getPlayerSkillHistory } from "../../features/player-skill-history.js";
+import { getManiacardHistory } from "../../features/maniacard-history.js";
 import { PLAYER_UNRATED_PLAYS_MAX, getPlayerUnratedPlays, isUnratedPlaysSort } from "../../features/unrated-plays.js";
 import { decoratePlayerSkillBreakdown } from "../../features/skill-baseline.js";
 import { errorContext, logInfo, logWarn } from "../../logger.js";
@@ -167,6 +168,17 @@ export async function handleProfileRoutes(req: IncomingMessage, res: ServerRespo
       sendJson(req, res, ctx, 200, { ...(await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown)), tracked });
       return true;
     }
+    if (profileRoute.kind === "maniacard-history") {
+      res.setHeader("cache-control", "private, no-store");
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      const before = url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined;
+      if (before != null && (!Number.isSafeInteger(before) || before <= 0)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_maniacard_history_params" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, await getManiacardHistory(ctx.db, userId, { before }));
+      return true;
+    }
     if (profileRoute.kind === "skill-history") {
       res.setHeader("cache-control", "private, no-store");
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
@@ -316,8 +328,8 @@ function isOsuNotFound(error: unknown): boolean {
   return error instanceof OsuApiError && error.status === 404;
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "dan-evidence" | "unrated-plays" | "keymode-pp"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-history|skill-plays|dan-evidence|unrated-plays|keymode-pp)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "maniacard-history" | "skill-plays" | "dan-evidence" | "unrated-plays" | "keymode-pp"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|replay-scores|about|activity|activity-day|activity-availability|skills|skill-history|maniacard-history|skill-plays|dan-evidence|unrated-plays|keymode-pp)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -327,7 +339,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "skill-plays" | "dan-evidence" | "unrated-plays" | "keymode-pp",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "replay-scores" | "about" | "activity" | "activity-day" | "activity-availability" | "skills" | "skill-history" | "maniacard-history" | "skill-plays" | "dan-evidence" | "unrated-plays" | "keymode-pp",
   };
 }
 

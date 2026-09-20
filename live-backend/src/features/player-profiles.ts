@@ -11,6 +11,7 @@ import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDis
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { readNoteBpms } from "./chart-analysis.js";
 import { getPlayerKeymodePpKeyCounts } from "./keymode-pp.js";
+import { writeProfileWithManiacardHistory } from "./maniacard-history.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 const PROFILE_SNAPSHOT_TTL_MS = 24 * 60 * 60_000;
@@ -1073,9 +1074,11 @@ export async function persistSessionProfileSnapshot(db: Db, userId: number): Pro
   const fetchedAt = nowIso();
   const userFetchedAt = existing?.user_fetched_at ?? fetchedAt;
   await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
-  await exec(
-    db,
-    `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
+  const cardUser = existing ? unpackJson<Record<string, unknown>>(existing.user_json, {}) : user;
+  await writeProfileWithManiacardHistory(db, userId, {
+    scores: bestScores, globalPp: readNumber(readRecord(cardUser.statistics)?.pp), recordedAt: fetchedAt,
+  }, "session", {
+    sql: `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
      values (?, ?, ?, ?, ?, ?, ?, ?, null)
      on conflict(user_id) do update set
        best_scores_json = excluded.best_scores_json,
@@ -1083,8 +1086,8 @@ export async function persistSessionProfileSnapshot(db: Db, userId: number): Pro
        fetched_at = excluded.fetched_at,
        updated_at = excluded.updated_at,
        refresh_error = null`,
-    [userId, usernameKey, packJson(user), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, userFetchedAt, fetchedAt],
-  );
+    args: [userId, usernameKey, packJson(user), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, userFetchedAt, fetchedAt],
+  });
   return "written";
 }
 
@@ -1173,9 +1176,10 @@ async function fetchAndStoreProfileSnapshot(
   const fetchedAt = nowIso();
   const usernameKey = normalizeProfileKey(username);
   await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
-  await exec(
-    db,
-    `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
+  await writeProfileWithManiacardHistory(db, userId, {
+    scores: bestScores, globalPp: readNumber(readRecord(storedUser.statistics)?.pp), recordedAt: fetchedAt,
+  }, "refresh", {
+    sql: `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
      values (?, ?, ?, ?, ?, ?, ?, ?, null)
      on conflict(user_id) do update set
        username_key = excluded.username_key,
@@ -1186,8 +1190,8 @@ async function fetchAndStoreProfileSnapshot(
        user_fetched_at = excluded.user_fetched_at,
        updated_at = excluded.updated_at,
        refresh_error = null`,
-    [userId, usernameKey, packJson(storedUser), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
-  );
+    args: [userId, usernameKey, packJson(storedUser), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
+  });
   await upsertDisplayUser(db, userId, username, storedUser, fetchedAt);
   await cacheProfileAbout(db, userId, user, fetchedAt);
   const row = await getStoredProfileSnapshot(db, usernameKey);
@@ -1242,13 +1246,15 @@ export async function runProfileUserRefreshJob(
 
     const storedUser = stripProfilePage(user);
     const fetchedAt = nowIso();
-    await exec(
-      db,
-      `update profile_snapshots
+    const bestScores = await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []));
+    await writeProfileWithManiacardHistory(db, row.user_id, {
+      scores: bestScores, globalPp: readNumber(readRecord(storedUser.statistics)?.pp), recordedAt: fetchedAt,
+    }, "refresh", {
+      sql: `update profile_snapshots
        set username_key = ?, user_json = ?, user_fetched_at = ?, updated_at = ?, refresh_error = null
        where user_id = ?`,
-      [normalizeProfileKey(username), packJson(storedUser), fetchedAt, fetchedAt, row.user_id],
-    );
+      args: [normalizeProfileKey(username), packJson(storedUser), fetchedAt, fetchedAt, row.user_id],
+    });
     await upsertDisplayUser(db, row.user_id, username, storedUser, fetchedAt);
     await cacheProfileAbout(db, row.user_id, user, fetchedAt);
   } catch (error) {

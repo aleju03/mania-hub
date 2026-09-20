@@ -422,12 +422,28 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateTranslationReports(target);
   await migrateBugReports(target);
   await migratePlayerSkillHistory(target);
+  await migrateManiacardHistory(target);
   await migratePackGiftMessage(target);
   await backfillPackGiftGivers(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
     completedAt: new Date().toISOString(),
   });
+}
+
+async function migrateManiacardHistory(db: Db): Promise<void> {
+  await db.execute(`create table if not exists player_maniacard_history (
+    id integer primary key autoincrement,
+    user_id integer not null,
+    recorded_at text not null,
+    model_version integer not null,
+    reason text not null,
+    snapshot_json text not null,
+    maps_json text not null default '[]',
+    other_rating_change integer not null default 0
+  )`);
+  await db.execute(`create index if not exists idx_player_maniacard_history_user
+    on player_maniacard_history (user_id, id desc)`);
 }
 
 async function migratePlayerSkillHistory(db: Db): Promise<void> {

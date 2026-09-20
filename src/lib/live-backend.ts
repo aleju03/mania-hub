@@ -1581,6 +1581,22 @@ export interface LivePlayerSkillHistorySnapshot {
   dan: Record<"rc" | "ln", { label: string; beyondTable: boolean } | null>;
 }
 
+export type {
+  ManiacardHistoryEntry as LiveManiacardHistoryEntry,
+  ManiacardHistoryPage as LiveManiacardHistoryPage,
+} from "../../live-backend/src/features/maniacard-history";
+
+export async function fetchLiveManiacardHistoryDirect(
+  userId: number,
+  options: { before?: number; signal?: AbortSignal } = {},
+): Promise<import("../../live-backend/src/features/maniacard-history").ManiacardHistoryPage> {
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (options.before != null && (!Number.isSafeInteger(options.before) || options.before <= 0)) throw new Error("Invalid history cursor.");
+  const query = new URLSearchParams();
+  if (options.before != null) query.set("before", String(options.before));
+  return fetchLiveJson(`/api/profiles/${userId}/maniacard-history?${query}`, { cache: "no-store", signal: options.signal });
+}
+
 export interface LivePlayerSkillHistoryEntry {
   id: number;
   recordedAt: string;
