@@ -19,6 +19,16 @@ Deep reference for `live-backend/`: module map, ingest flow, job queue, HTTP sur
 - `live-backend/src/maintenance/`: storage compaction and DB sync-from-VPS scripts.
 - `live-backend/migrations/001_initial.sql`: schema, applied at boot.
 
+The local DB sync checks free disk space before downloading, using the snapshot's
+SQLite header to account for its unpacked size as well as the archive, optional
+local safety copy and headroom. A failed decompression removes its partial output
+and preserves the download. To recover a retained archive without contacting the
+VPS, run from `live-backend/`:
+`npm run db:sync-from-vps -- --from-download data/.sync-from-vps/run-…/mania-hub-live.db.zst`.
+Use `--analytics-only` for an analytics archive. Recovery preserves the source
+archive; an ordinary sync cleans old temporary run folders. Stop the local backend
+before replacing its database.
+
 ## Architecture
 
 The live backend is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is configured. Browsers fetch a snapshot on page entry, then subscribe to SSE for deltas. SSE is one-way backend-to-browser; users never connect to oSC directly.

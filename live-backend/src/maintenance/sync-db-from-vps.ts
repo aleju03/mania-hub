@@ -1,15 +1,15 @@
 import { createClient } from "@libsql/client";
 import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
 import { access, chmod, copyFile, mkdir, mkdtemp, readdir, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { pipeline } from "node:stream/promises";
 import { readConfig } from "../config.js";
+import { assertSyncSpace, requiredSyncSpace, sqliteSizeFromHeader, streamCommandToFile } from "./sync-db-files.js";
 
 interface Options {
   remote: string;
   remoteDir: string;
   remoteBackup: string | null;
+  fromDownload: string | null;
   localDbPath: string | null;
   analyticsLocalDbPath: string | null;
   withAnalytics: boolean;
@@ -79,12 +79,20 @@ if (options.dryRun && options.fresh) {
   process.exit(0);
 }
 
-const remoteBackups = await resolveRemoteBackups(options, targets);
+if (!options.dryRun) await assertLocalDbNotOpen(localSidecars, options.force);
 
-console.log(`Remote: ${options.remote}`);
+const remoteBackups = options.fromDownload
+  ? new Map<TargetKey, RemoteCandidate>([[targets[0].key, {
+      path: options.fromDownload,
+      sizeBytes: (await stat(options.fromDownload)).size,
+      modifiedAtMs: (await stat(options.fromDownload)).mtimeMs,
+    }]])
+  : await resolveRemoteBackups(options, targets);
+
+console.log(options.fromDownload ? "Recovering an existing local download; no VPS access needed." : `Remote: ${options.remote}`);
 for (const target of targets) {
   const remoteBackup = remoteBackups.get(target.key)!;
-  console.log(`Remote ${target.label} backup: ${remoteBackup.path} (${formatBytes(remoteBackup.sizeBytes)}, ${new Date(remoteBackup.modifiedAtMs).toISOString()})`);
+  console.log(`${options.fromDownload ? "Downloaded" : "Remote"} ${target.label} backup: ${remoteBackup.path} (${formatBytes(remoteBackup.sizeBytes)}, ${new Date(remoteBackup.modifiedAtMs).toISOString()})`);
   console.log(`Local ${target.label}: ${target.localDbPath}`);
 }
 
@@ -93,11 +101,9 @@ if (options.dryRun) {
   process.exit(0);
 }
 
-await assertLocalDbNotOpen(localSidecars, options.force);
-
 const downloadRoot = join(dirname(targets[0].localDbPath), DOWNLOAD_DIR_NAME);
 await mkdir(downloadRoot, { recursive: true });
-await cleanupStaleRuns(downloadRoot);
+await cleanupStaleRuns(downloadRoot, options.fromDownload);
 const workDir = await mkdtemp(join(downloadRoot, "run-"));
 // One stamp for the whole run, so syncing both DBs leaves one backup folder
 // holding both instead of burning two slots of --keep-local.
@@ -106,14 +112,34 @@ const backupStamp = timestampForPath(new Date());
 try {
   for (const target of targets) {
     const remoteBackup = remoteBackups.get(target.key)!;
-    const downloadedPath = join(workDir, basename(remoteBackup.path));
+    const downloadedPath = options.fromDownload ?? join(workDir, basename(remoteBackup.path));
     const preparedPath = join(workDir, `prepared-${target.key}.db`);
 
-    console.log(`Downloading remote ${target.label} backup...`);
-    await downloadRemoteFile(options.remote, remoteBackup.path, downloadedPath);
-    const downloaded = await stat(downloadedPath);
-    console.log(`Downloaded ${formatBytes(downloaded.size)}.`);
+    const unpackedBytes = await unpackedDatabaseSize(remoteBackup.path, options.fromDownload ? null : options.remote);
+    await mkdir(dirname(target.localDbPath), { recursive: true });
+    if ((await stat(workDir)).dev !== (await stat(dirname(target.localDbPath))).dev) {
+      throw new Error("Sync targets must be on the same filesystem; sync this database separately with --analytics-only.");
+    }
+    let backupBytes = 0;
+    if (options.backupLocal) {
+      for (const path of sidecarsFor(target)) {
+        if (await exists(path)) backupBytes += (await stat(path)).size;
+      }
+    }
+    const requiredBytes = requiredSyncSpace(options.fromDownload ? 0 : remoteBackup.sizeBytes, unpackedBytes, backupBytes);
+    await assertSyncSpace(workDir, requiredBytes);
+    console.log(`Local space check passed: ${formatBytes(unpackedBytes)} unpacked; ${formatBytes(requiredBytes)} additional free space required including headroom.`);
 
+    if (!options.fromDownload) {
+      console.log(`Downloading remote ${target.label} backup...`);
+      await downloadRemoteFile(options.remote, remoteBackup.path, downloadedPath);
+      const downloaded = await stat(downloadedPath);
+      if (downloaded.size !== remoteBackup.sizeBytes) throw new Error("Downloaded backup size differs from the remote snapshot.");
+      console.log(`Downloaded ${formatBytes(downloaded.size)}.`);
+    }
+
+    // A long transfer gives other processes time to consume the initial reserve.
+    await assertSyncSpace(workDir, requiredSyncSpace(0, unpackedBytes, backupBytes));
     await prepareDownloadedDatabase(downloadedPath, preparedPath);
 
     if (options.quickCheck) {
@@ -131,6 +157,8 @@ try {
       }
     }
 
+    // The download and validation can take minutes; check again before swapping.
+    await assertLocalDbNotOpen(sidecarsFor(target), options.force);
     await replaceLocalDatabase(preparedPath, target.localDbPath);
     console.log(`Local ${target.label} updated.`);
   }
@@ -153,8 +181,12 @@ try {
     console.log(`Kept downloaded files in ${workDir}`);
   }
 } catch (error) {
-  console.error(`Sync failed; keeping downloaded files in ${workDir} (cleaned up automatically on the next run).`);
-  throw error;
+  for (const target of targets) {
+    await rm(join(workDir, `prepared-${target.key}.db`), { force: true });
+  }
+  console.error(`Sync failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`Downloads are preserved in ${options.fromDownload ? dirname(options.fromDownload) : workDir}. Retry with --from-download PATH to reuse an archive; an ordinary sync cleans old run folders.`);
+  process.exitCode = 1;
 }
 
 function parseOptions(args: string[]): Options {
@@ -162,6 +194,7 @@ function parseOptions(args: string[]): Options {
     remote: process.env.LIVE_DB_SYNC_REMOTE || DEFAULT_REMOTE,
     remoteDir: process.env.LIVE_DB_SYNC_REMOTE_DIR || DEFAULT_REMOTE_DIR,
     remoteBackup: process.env.LIVE_DB_SYNC_REMOTE_BACKUP || null,
+    fromDownload: null,
     localDbPath: process.env.LIVE_DB_SYNC_LOCAL_DB || null,
     analyticsLocalDbPath: process.env.LIVE_DB_SYNC_LOCAL_ANALYTICS_DB || null,
     withAnalytics: false,
@@ -189,6 +222,9 @@ function parseOptions(args: string[]): Options {
         break;
       case "--remote-backup":
         options.remoteBackup = readValue(args, ++index, arg);
+        break;
+      case "--from-download":
+        options.fromDownload = resolve(readValue(args, ++index, arg));
         break;
       case "--local-db":
         options.localDbPath = readValue(args, ++index, arg);
@@ -252,6 +288,9 @@ function parseOptions(args: string[]): Options {
     }
   }
 
+  if (options.fromDownload && (options.fresh || options.remoteBackup || (options.withAnalytics && !options.analyticsOnly))) {
+    throw new Error("--from-download restores one local archive; use it without --fresh, --remote-backup, or --with-analytics (use --analytics-only for an analytics archive).");
+  }
   return options;
 }
 
@@ -283,6 +322,8 @@ Options:
                          then download that instead of the newest pre-existing backup. Older
                          online-* snapshots are pruned before the new one is created, so a run that
                          fails cannot leave them piling up (see --keep-remote).
+  --from-download PATH   Restore an already downloaded archive without SSH or another download.
+                         Select analytics with --analytics-only. The source archive is preserved.
   --no-compress          With --fresh, skip zstd compression of the remote snapshot.
   --keep-remote N        With --fresh, how many online-* snapshots to keep on the VPS. Default: 2.
   --dry-run              Show the remote backup that would be used.
@@ -597,11 +638,13 @@ ${result.stdout.trim()}
 Stop the local live backend first, or rerun with --force if you are certain it is safe.`);
 }
 
-async function cleanupStaleRuns(downloadRoot: string): Promise<void> {
+async function cleanupStaleRuns(downloadRoot: string, preservedDownload: string | null): Promise<void> {
   const entries = await readdir(downloadRoot).catch(() => [] as string[]);
   for (const entry of entries) {
     if (entry.startsWith("run-")) {
-      await rm(join(downloadRoot, entry), { force: true, recursive: true }).catch(() => undefined);
+      const runDir = join(downloadRoot, entry);
+      if (preservedDownload?.startsWith(`${runDir}/`)) continue;
+      await rm(runDir, { force: true, recursive: true }).catch(() => undefined);
     }
   }
 }
@@ -631,18 +674,18 @@ async function prepareDownloadedDatabase(downloadedPath: string, preparedPath: s
   await chmod(preparedPath, 0o600);
 }
 
-async function streamCommandToFile(command: string, args: string[], outputPath: string): Promise<void> {
-  const child = spawn(command, args, {
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  if (!child.stdout) throw new Error(`Failed to read stdout from ${command}.`);
-  // Attach the exit listener before awaiting the stream: if the process has
-  // already exited by the time we start waiting, the close event never fires
-  // again and the promise would hang forever (silent "unsettled top-level await").
-  const exitCode = waitForExit(child);
-  await pipeline(child.stdout, createWriteStream(outputPath, { mode: 0o600 }));
-  const code = await exitCode;
-  if (code !== 0) throw new Error(`${command} exited with code ${code}.`);
+async function unpackedDatabaseSize(path: string, remote: string | null): Promise<number> {
+  const decoder = path.endsWith(".zst") ? "zstd" : path.endsWith(".gz") ? "gzip" : null;
+  if (decoder && !await commandExists(decoder)) throw new Error(`${decoder} is required to unpack this backup.`);
+  // Read only the SQLite header, including its 32-bit page count. gzip's trailer
+  // size wraps at 4 GiB and cannot be used for these databases. head closes the
+  // pipe after 100 bytes; the decoder's expected broken-pipe diagnostic is muted.
+  const source = decoder ? `${decoder} -dc ${shellPath(path)} 2>/dev/null` : `cat ${shellPath(path)}`;
+  const command = `${source} | head -c 100 | base64`;
+  const result = remote
+    ? await runCapture("ssh", [remote, command], [0])
+    : await runCapture("sh", ["-c", command], [0]);
+  return sqliteSizeFromHeader(Buffer.from(result.stdout.trim(), "base64"));
 }
 
 async function validateSqliteDatabase(path: string): Promise<void> {
@@ -680,7 +723,6 @@ async function replaceLocalDatabase(preparedPath: string, localDbPath: string): 
   await mkdir(dirname(localDbPath), { recursive: true });
   await rm(`${localDbPath}-wal`, { force: true });
   await rm(`${localDbPath}-shm`, { force: true });
-  await rm(localDbPath, { force: true });
   await rename(preparedPath, localDbPath);
   await chmod(localDbPath, 0o600);
 }
