@@ -33,6 +33,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-19", text: "Reworked the All uploads replay page with a thumbnail feed, search, key filters, sorting by date, accuracy or difficulty, and faster loading as you scroll.", to: "/replay/community" },
+  { date: "2026-09-19", text: "Track your Maniacard rating and tier changes in the new Progression tab, inside the (?) window." },
+  { date: "2026-09-19", text: "Fixed bugs in how 4K dan estimates are calculated that caused some estimates to appear higher than expected. Map and player estimates are being recalculated." },
   { date: "2026-09-18", text: "Hybrid 4K maps now show both their Reform and LN dan estimates on the map info screen", to: "/maps" },
   { date: "2026-09-17", text: "Plays still analyzing are now listed: click the count in the dan window to see them, and they show as in queue in MSD plays and Dan plays under Recent" },
   { date: "2026-09-16", text: "Clearing a dan's skillset map sets that skillset to its level, even with no overall dan yet. For example clearing Volcanic immediately sets your speed to delta, even if your other clears average lower. Supported skillsets: 4K Reform, 7K regular, 7K LN. 4K LN skillset support is planned", to: "/dan-estimates" },

@@ -1027,6 +1027,10 @@ msgstr "{count} 名关注者"
 msgid "{count} replay views"
 msgstr "{count} 次回放观看"
 
+#: src/routes/replay_.community.tsx
+msgid "{count} replays"
+msgstr "{count} 个回放"
+
 #: src/routes/report.tsx
 msgid "{count} screenshots"
 msgstr "{count} 张截图"
@@ -1074,6 +1078,10 @@ msgstr "{courseName} 上 {courseAccuracy}，低于其 {courseBar}。"
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{coverage}% of objects"
 #~ msgstr "覆盖 {coverage}% 的物件"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "{date}: {rating} points"
+msgstr "{date}：{rating} 点"
 
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
@@ -1237,6 +1245,10 @@ msgstr "还差 {left} 个 {at}pp+ 的成绩"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "还差 {left}%"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "{mapCount, plural, one {# top play} other {# top plays}}"
+msgstr "{mapCount, plural, other {# 条最佳成绩}}"
 
 #: src/routes/farm-helper.tsx
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
@@ -2690,7 +2702,7 @@ msgstr "全部键数"
 msgid "All keymodes"
 msgstr "全部键数"
 
-#: src/components/me/MyDataPanel.tsx
+#: src/routes/replay_.community.tsx
 msgid "All keys"
 msgstr "全部键数"
 
@@ -3014,8 +3026,8 @@ msgid "Auto"
 msgstr "自动"
 
 #: src/components/maps/MapCollectionsSection.tsx
-msgid "Auto packs"
-msgstr "自动谱包"
+#~ msgid "Auto packs"
+#~ msgstr "自动谱包"
 
 #: src/routes/dan-estimates.tsx
 msgid "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
@@ -3219,6 +3231,10 @@ msgstr "谱面卡片：星级、键数、状态、BPM 和长度。"
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
 msgstr "谱面卡片：星级、键数、状态、BPM、时长和段位。"
 
+#: src/components/replay/CommunityReplayCard.tsx
+msgid "Beatmap difficulty (without mods)"
+msgstr "谱面难度（无模组）"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Beatmap hitsounds"
@@ -3248,6 +3264,10 @@ msgstr "你的国家/地区玩过的谱面"
 #: src/routes/maps.tsx
 msgid "Beatmaps played in {countryName}"
 msgstr "{countryName} 玩过的谱面"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Beginning of recorded history"
+msgstr "历史记录起点"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "below 90%"
@@ -3575,7 +3595,7 @@ msgstr "卡片正面"
 msgid "Card Packs"
 msgstr "卡包"
 
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Card rank"
 msgstr "卡片等级"
 
@@ -3664,6 +3684,10 @@ msgstr "更新"
 #: src/components/player/SkillHistoryModal.tsx
 #~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
 #~ msgstr "每次重新计算评分时都会保存变化，包括评分系统更新带来的变化。更早的变化未被记录。"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Changes to total pp, existing plays, map data or the rating formula."
+#~ msgstr ""
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing the keymode label failed. Try again."
@@ -3830,12 +3854,7 @@ msgstr "CJ"
 msgid "clear"
 msgstr "清除"
 
-#: src/components/maps/RangePill.tsx
-#: src/components/maps/RangeSlider.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
-#: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Clear"
 msgstr "清除"
 
@@ -3853,7 +3872,7 @@ msgstr "通关尝试"
 msgid "Clear editor"
 msgstr "清空编辑器"
 
-#: src/routes/snipes.tsx
+#: src/routes/replay_.community.tsx
 msgid "Clear filters"
 msgstr "清除筛选"
 
@@ -3874,12 +3893,7 @@ msgstr "清除标记"
 msgid "Clear player filter"
 msgstr "清除玩家筛选"
 
-#: src/components/maps/MapSearchSection.tsx
-#: src/components/me/MyDataPanel.tsx
-#: src/components/replay/ReplayBrowseView.tsx
-#: src/components/settings/SettingsPanel.tsx
-#: src/routes/farm-helper.tsx
-#: src/routes/maps.tsx
+#: src/routes/replay_.community.tsx
 msgid "Clear search"
 msgstr "清除搜索"
 
@@ -4008,7 +4022,7 @@ msgstr "客户端"
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
@@ -4259,6 +4273,10 @@ msgstr "大洲"
 msgid "Continue with Discord"
 msgstr "用 Discord 继续"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Control"
+msgstr "控制"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Convert hits to notes"
 msgstr "把打击转成音符"
@@ -4345,6 +4363,10 @@ msgstr "无法开始闪电战。请稍后再试。"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Could not draw this one."
 msgstr "这张画不出来。"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Could not load Maniacard history."
+msgstr "无法加载 Maniacard 历史记录。"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load more plays."
@@ -4591,6 +4613,10 @@ msgstr "无法加载这个回放的歌曲音频。"
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
 msgstr "无法加载上传列表，刷新重试。"
+
+#: src/routes/replay_.community.tsx
+msgid "Couldn't load the uploads."
+msgstr "无法加载上传的回放。"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Couldn't load this beatmapset."
@@ -5126,6 +5152,11 @@ msgstr "开发预览"
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
 msgstr "{hidden} 加入 osu! 比 {shown} 更早还是更晚？"
 
+#. placeholder {0}: delta(entry.otherRatingChange, locale)
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Difference: {0}"
+msgstr "差额：{0}"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "difficulty"
 msgstr "难度"
@@ -5617,6 +5648,10 @@ msgstr "错误"
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "估算谱面的段位等级，并附上段位徽章。"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Estimated by adding each new top play in order. Gains depend on the rest of the card's top plays."
+#~ msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "Estimated dan"
 msgstr "段位估算"
@@ -5624,6 +5659,10 @@ msgstr "段位估算"
 #: src/routes/farm-helper.tsx
 msgid "estimated gain"
 msgstr "预计收益"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Estimated impact"
+msgstr "预估贡献"
 
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -6076,6 +6115,10 @@ msgstr "根据水平相近的玩家、没打过的谱面、可提升的成绩和
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "find player..."
 msgstr "查找玩家..."
+
+#: src/routes/replay_.community.tsx
+msgid "Finding more replays..."
+msgstr "正在查找更多回放..."
 
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -6743,6 +6786,14 @@ msgstr "数值越高，音符在游戏区内移动越快。"
 msgid "Higher values move receptors lower."
 msgstr "数值越大，判定线越靠下。"
 
+#: src/routes/replay_.community.tsx
+msgid "Highest accuracy"
+msgstr "准确率最高"
+
+#: src/routes/replay_.community.tsx
+msgid "Highest difficulty"
+msgstr "难度最高"
+
 #: src/routes/player/$username.tsx
 msgid "Highest PP first"
 msgstr "pp 从高到低"
@@ -6762,6 +6813,10 @@ msgstr "提示条"
 #: src/components/player/SkillHistoryModal.tsx
 msgid "History"
 msgstr "历程"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "History starts from the first saved card snapshot. Earlier ratings cannot be reconstructed."
+#~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Hit <0/> <1/>"
@@ -7101,6 +7156,10 @@ msgstr "包含"
 msgid "Includes"
 msgstr "包含"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Includes new top plays and PBs on existing maps. Per-play gains use estimated pp between updates. The session total is the recorded rating change."
+msgstr "包括新增的最佳成绩，以及已有谱面的个人最佳（PB）提升。单次成绩的贡献根据更新之间的估算 pp 计算；整场游玩的总变化则是实际记录的评分变化。"
+
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
 msgid "Including (click to exclude)"
@@ -7402,9 +7461,7 @@ msgstr "按键历史"
 msgid "Key hitsounds"
 msgstr "按键音效"
 
-#: src/components/rankings/LeaderboardControls.tsx
-#: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/replay_.community.tsx
 msgid "Key mode"
 msgstr "键数模式"
 
@@ -7926,7 +7983,6 @@ msgstr "加载某位玩家的 me! 页面"
 msgid "Load into editor"
 msgstr "载入编辑器"
 
-#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
 msgstr "加载更多"
@@ -7935,10 +7991,15 @@ msgstr "加载更多"
 msgid "Load more plays"
 msgstr "加载更多成绩"
 
+#: src/routes/replay_.community.tsx
+msgid "Load more replays"
+msgstr "加载更多回放"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Load my me! page"
 msgstr "加载我的 me! 页面"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Load older changes"
 msgstr "加载更早的变化"
@@ -8002,6 +8063,7 @@ msgstr "正在加载收藏册…"
 msgid "Loading goals..."
 msgstr "目标加载中…"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Loading history…"
 msgstr "正在加载历史…"
@@ -8026,6 +8088,10 @@ msgstr "正在加载成绩…"
 #: src/routes/rankings.tsx
 msgid "Loading rankings..."
 msgstr "正在加载排行榜..."
+
+#: src/routes/replay_.community.tsx
+msgid "Loading replays..."
+msgstr "正在加载回放..."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Loading scores..."
@@ -8071,16 +8137,7 @@ msgstr "正在加载你的数据…"
 msgid "loading..."
 msgstr "加载中…"
 
-#: src/components/packs/CardCollectors.tsx
-#: src/components/packs/GoatHoldersButton.tsx
-#: src/components/packs/SetsView.tsx
-#: src/components/replay/ReplayBufferingIndicator.tsx
-#: src/components/replay/ReplaySideBySideView.tsx
-#: src/components/skins/SkinAssetExplorer.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
-#: src/routes/replay_.uploads.tsx
-#: src/routes/snipes.tsx
 msgid "Loading..."
 msgstr "加载中..."
 
@@ -8365,6 +8422,7 @@ msgid "maniabot - Mania Hub for Discord"
 msgstr "maniabot，Discord 上的 Mania Hub"
 
 #: src/components/packs/RevealStage.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/routes/player/$username.tsx
 msgid "Maniacard"
 msgstr "Maniacard"
@@ -8376,6 +8434,10 @@ msgstr "ManiaCard"
 #: src/routes/packs_.collections.tsx
 msgid "Maniacard collections and pack stats."
 msgstr "Maniacard 收藏册与卡包统计。"
+
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
+msgid "Maniacard details"
+msgstr "Maniacard 详情"
 
 #: src/routes/packs.tsx
 msgid "Maniacard packs"
@@ -8414,6 +8476,10 @@ msgstr "由 osu!mania 玩家自己做的谱面收藏册。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Map completion percentage."
 msgstr "谱面完成度百分比。"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Map contributions · estimated"
+#~ msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Map info"
@@ -9024,7 +9090,7 @@ msgstr "最新"
 msgid "Newest"
 msgstr "最新"
 
-#: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 msgid "Newest first"
 msgstr "从新到旧"
 
@@ -9279,6 +9345,10 @@ msgstr "未选择 mania 难度"
 msgid "No mania maps found."
 msgstr "没有找到 mania 谱面。"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "No Maniacard history has been recorded yet."
+msgstr "暂无 Maniacard 历史记录。"
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "no maps match"
 msgstr "没有匹配的谱面"
@@ -9331,6 +9401,10 @@ msgstr "最佳成绩里没有 Mod"
 #: src/components/farm-helper/FarmersList.tsx
 msgid "No nearby players have farmed this yet."
 msgstr "还没有水平相近的玩家刷过这张。"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "No new top-play maps in this update."
+#~ msgstr ""
 
 #: src/components/ui/SearchInput.tsx
 msgid "No osu! player named \"{trimmedQuery}\""
@@ -9445,6 +9519,10 @@ msgstr "这名玩家没有可用的回放"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replays available from {countryCode} players on this difficulty"
 msgstr "这个难度上没有来自 {countryCode} 玩家的可用回放"
+
+#: src/routes/replay_.community.tsx
+msgid "No replays match your search."
+msgstr "没有符合搜索条件的回放。"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "No roster member above you yet."
@@ -9970,7 +10048,7 @@ msgstr "最早"
 msgid "Oldest"
 msgstr "最早"
 
-#: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 msgid "Oldest first"
 msgstr "从旧到新"
 
@@ -10317,8 +10395,8 @@ msgid "osu! score link"
 msgstr "osu! 成绩链接"
 
 #: src/routes/player/$username.tsx
-msgid "osu! Supporter"
-msgstr "osu! Supporter"
+#~ msgid "osu! Supporter"
+#~ msgstr "osu! Supporter"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -10373,6 +10451,14 @@ msgstr "其他"
 #: src/routes/player/$username.tsx
 #~ msgid "Other keymodes"
 #~ msgstr "其他键数"
+
+#: src/routes/replay_.community.tsx
+msgid "Other keys"
+msgstr "其他键数"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Other rating updates"
+#~ msgstr ""
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -10927,6 +11013,10 @@ msgstr "请不要滥用本站、使公开接口过载、试图绕过访问控制
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "请稍等一分钟再开下一个卡包。本次开包未扣费。"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "points"
+msgstr "点"
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "波兰语"
@@ -11050,6 +11140,10 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Practice chart for this skillset: the clear certifies {0}, whatever the estimator reads the file as"
 #~ msgstr ""
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Precision"
+msgstr "精度"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
@@ -11209,6 +11303,10 @@ msgstr "个人资料数据"
 msgid "profile top play"
 msgstr "个人最佳成绩"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Profile update"
+#~ msgstr ""
+
 #. placeholder {0}: nextTier.label
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Progress from {currentLabel} to {0}"
@@ -11222,9 +11320,21 @@ msgstr "进度列表"
 msgid "Progress pie"
 msgstr "进度饼图"
 
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
+msgid "Progression"
+msgstr "成长记录"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Promoted to {tierLabel}"
+msgstr "晋升至 {tierLabel}"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "provisional"
 msgstr "暂定"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "pts"
+msgstr "点"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "public"
@@ -11351,7 +11461,7 @@ msgid "Rank by"
 msgstr "排序依据"
 
 #. placeholder {0}: isOwnProfile ? t`your` : t`the player's`
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，同时结合控制、速度、精度和耐力特征。"
 
@@ -11483,9 +11593,21 @@ msgstr "每张谱面的倍速数"
 msgid "Rating"
 msgstr "评分"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Rating and tier changes saved after play sessions and profile updates. Expand an update to see its maps."
+#~ msgstr ""
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Rating history chart"
+msgstr "评分历史图表"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
 msgstr "成绩评分失败。系统会自动重试，请稍后再来看。"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Rating update"
+msgstr "评分更新"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
@@ -11615,9 +11737,12 @@ msgid "Recent plays"
 msgstr "最近游玩"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/player/$username.tsx
 msgid "Recent Plays"
 msgstr "最近成绩"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Recent progression"
+msgstr "近期变化"
 
 #: src/routes/index.tsx
 msgid "Recent Scores"
@@ -11988,7 +12113,6 @@ msgid "Replay video export options"
 msgstr "回放视频导出选项"
 
 #: src/routes/replay_.community.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Replays"
 msgstr "回放"
 
@@ -12201,6 +12325,10 @@ msgstr "向右旋转"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rotate your phone to watch both"
 msgstr "把手机横过来同时观看两份回放"
+
+#: src/components/maps/MapCollectionsSection.tsx
+msgid "Rotating packs"
+msgstr "轮换谱包"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "rough estimate, may be off"
@@ -12533,6 +12661,10 @@ msgstr "搜索谱面"
 msgid "Search maps for a backdrop"
 msgstr "搜索谱面作为背景"
 
+#: src/routes/replay_.community.tsx
+msgid "Search maps, players, uploaders or mods..."
+msgstr "搜索谱面、玩家、上传者或模组..."
+
 #: src/components/me/MyDataPanel.tsx
 msgid "search maps..."
 msgstr "搜索谱面…"
@@ -12560,6 +12692,10 @@ msgstr "搜索玩家…或成绩 ID"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Search players by username"
 msgstr "按用户名搜索玩家"
+
+#: src/routes/replay_.community.tsx
+msgid "Search replays"
+msgstr "搜索回放"
 
 #: src/routes/communities.tsx
 msgid "Search servers"
@@ -12762,6 +12898,10 @@ msgstr "第 {0} 场"
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Session shape"
 #~ msgstr "游玩场次"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Session update"
+#~ msgstr ""
 
 #: src/components/me/MyStatsInsights.tsx
 #: src/routes/player/$username.tsx
@@ -13554,6 +13694,10 @@ msgstr "排序方式"
 msgid "Sort plays"
 msgstr "成绩排序"
 
+#: src/routes/replay_.community.tsx
+msgid "Sort replays"
+msgstr "回放排序"
+
 #: src/routes/tracker.tsx
 msgid "Sorting highest star rating first - left click for ascending, right click to clear"
 msgstr "按星级从高到低排序 - 左键切换升序，右键清除"
@@ -13575,6 +13719,11 @@ msgid "Spectators"
 msgstr "观众"
 
 #: src/lib/skill-axes.ts
+msgid "Speed"
+msgstr "速度"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgctxt "Maniacard stat"
 msgid "Speed"
 msgstr "速度"
 
@@ -13698,6 +13847,7 @@ msgstr "在此开始"
 msgid "Start tracking your plays"
 msgstr "开始追踪你的成绩"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Starting rating"
 msgstr "初始评分"
@@ -13888,8 +14038,8 @@ msgid "Support mania-tracker"
 msgstr "支持 mania-tracker"
 
 #: src/routes/player/$username.tsx
-msgid "Supporter"
-msgstr "Supporter"
+#~ msgid "Supporter"
+#~ msgstr "Supporter"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -14838,7 +14988,7 @@ msgstr "页面遇到意外错误，未能完成渲染。重新加载通常可以
 msgid "The player panel can stay here, but this view did not return fresh map data."
 msgstr "玩家面板可以留在这里，但这个视图没有返回新的谱面数据。"
 
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "the player's"
 msgstr "该玩家的"
 
@@ -14971,6 +15121,12 @@ msgstr "服务器列表加载失败。"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "The servers you are in, so we can show you the ones you can post"
 msgstr "你所在的服务器列表，好让我们列出你能发布的那些"
+
+#. placeholder {0}: delta(change, locale)
+#. placeholder {1}: delta(mapTotal, locale)
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
+msgstr "本次游玩的评分变化为 {0} 点，谱面贡献的估算合计为 {1} 点。这里显示的是两者的差额，并非额外加分。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
@@ -15289,7 +15445,6 @@ msgid "This is not available yet. Check back soon."
 msgstr "这个功能还不可用。请稍后再来。"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "this map"
 msgstr "这张谱面"
 
@@ -15435,6 +15590,10 @@ msgstr "四"
 msgid "Thursdays"
 msgstr "周四"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Tier changed to {tierLabel}"
+msgstr "等级变更为 {tierLabel}"
+
 #: src/routes/player/$username.tsx
 msgid "Time played"
 msgstr "游玩时长"
@@ -15467,6 +15626,7 @@ msgstr "标题"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "至"
@@ -15615,6 +15775,11 @@ msgstr "最佳成绩"
 msgid "Top plays"
 msgstr "最佳成绩"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgctxt "Maniacard history"
+msgid "Top plays"
+msgstr "最佳成绩"
+
 #: src/routes/player/$username.tsx
 msgid "top pp"
 msgstr "最高 pp"
@@ -15714,9 +15879,11 @@ msgstr "试试更大的范围，或稍后再来。"
 #: src/components/BackendOfflineScreen.tsx
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/routes/replay_.community.tsx
 msgid "Try again"
 msgstr "重试"
 
@@ -15846,12 +16013,7 @@ msgstr "取消隐藏"
 #~ msgid "Unique cards"
 #~ msgstr "不同卡片"
 
-#: src/components/packs/collections/CollectorDirectory.tsx
-#: src/components/packs/collections/CollectorShelf.tsx
-#: src/components/packs/collections/RecordBoards.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
-#: src/components/skins/SkinUpdateModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "unknown"
 msgstr "未知"
 
@@ -15865,9 +16027,7 @@ msgstr "未知"
 msgid "unknown artist"
 msgstr "未知艺术家"
 
-#: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/replay_.community.tsx
-#: src/routes/replay.tsx
+#: src/components/replay/CommunityReplayCard.tsx
 msgid "Unknown beatmap"
 msgstr "未知谱面"
 
@@ -15984,12 +16144,10 @@ msgid "updating"
 msgstr "更新中"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Upload"
 msgstr "上传"
 
 #: src/routes/replay_.community.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
 msgstr "上传回放"
 
@@ -16022,18 +16180,23 @@ msgstr "上传于"
 msgid "uploaded by"
 msgstr "上传者"
 
+#. placeholder {0}: uploader.username || String(uploader.userId)
+#: src/components/replay/CommunityReplayCard.tsx
+msgid "Uploaded by {0}"
+msgstr "由 {0} 上传"
+
 #. placeholder {0}: skin.ownerUsername
 #: src/components/skins/SkinCard.tsx
 msgid "uploaded by <0>{0}</0>"
 msgstr "由 <0>{0}</0> 上传"
 
 #: src/routes/replay_.community.tsx
-msgid "Uploaded by the Community"
-msgstr "社区上传"
+#~ msgid "Uploaded by the Community"
+#~ msgstr "社区上传"
 
 #: src/routes/replay_.community.tsx
-msgid "Uploaded by the Community ({total})"
-msgstr "社区上传（{total}）"
+#~ msgid "Uploaded by the Community ({total})"
+#~ msgstr "社区上传（{total}）"
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -16715,7 +16878,7 @@ msgid "you"
 msgstr "你"
 
 #: src/components/discord/CommandShowcase.tsx
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "You"
 msgstr "你"
@@ -16857,6 +17020,10 @@ msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以�
 msgid "You stopped at {streak} in a row."
 msgstr "你在连对 {streak} 次后收手了。"
 
+#: src/routes/replay_.community.tsx
+msgid "You're all caught up."
+msgstr "已浏览全部回放。"
+
 #. placeholder {0}: nf(reachTargetNum)
 #: src/components/me/GoalsPanel.tsx
 msgid "you're already past {0}"
@@ -16897,7 +17064,7 @@ msgstr "你现在的总 pp 是 {0}"
 msgid "You're strongest in <0>{0}</0>"
 msgstr "你最强的是 <0>{0}</0>"
 
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
 msgstr "你的"
 
@@ -17130,7 +17297,6 @@ msgid "Your top plays are waiting for the chart analyzer. Position in queue: {po
 msgstr "你的最佳成绩正在等待谱面分析器。队列位置：{position}"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Your uploads"
 msgstr "你的上传"
 

@@ -1041,6 +1041,10 @@ msgstr "{count} followers"
 msgid "{count} replay views"
 msgstr "{count} replay views"
 
+#: src/routes/replay_.community.tsx
+msgid "{count} replays"
+msgstr "{count} replays"
+
 #: src/routes/report.tsx
 msgid "{count} screenshots"
 msgstr "{count} screenshots"
@@ -1088,6 +1092,10 @@ msgstr "{courseAccuracy} on {courseName}, under its {courseBar}."
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{coverage}% of objects"
 #~ msgstr "{coverage}% of objects"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "{date}: {rating} points"
+msgstr "{date}: {rating} points"
 
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
@@ -1251,6 +1259,10 @@ msgstr "{left} to go at {at}pp+"
 #: src/components/me/GoalsPanel.tsx
 msgid "{left}% to go"
 msgstr "{left}% to go"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "{mapCount, plural, one {# top play} other {# top plays}}"
+msgstr "{mapCount, plural, one {# top play} other {# top plays}}"
 
 #: src/routes/farm-helper.tsx
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
@@ -2708,7 +2720,7 @@ msgstr "all keymodes"
 msgid "All keymodes"
 msgstr "All keymodes"
 
-#: src/components/me/MyDataPanel.tsx
+#: src/routes/replay_.community.tsx
 msgid "All keys"
 msgstr "All keys"
 
@@ -3032,8 +3044,8 @@ msgid "Auto"
 msgstr "Auto"
 
 #: src/components/maps/MapCollectionsSection.tsx
-msgid "Auto packs"
-msgstr "Auto packs"
+#~ msgid "Auto packs"
+#~ msgstr "Auto packs"
 
 #: src/routes/dan-estimates.tsx
 msgid "Automatic tracking only began on June 9, 2026. Older scores are included when they are still in your osu! top plays, and any missing passed mania score with an osu! score link can be added from your profile's Skills tab."
@@ -3237,6 +3249,10 @@ msgstr "Beatmap card: stars, keys, status, BPM and length."
 msgid "Beatmap card: stars, keys, status, BPM, length and dan."
 msgstr "Beatmap card: stars, keys, status, BPM, length and dan."
 
+#: src/components/replay/CommunityReplayCard.tsx
+msgid "Beatmap difficulty (without mods)"
+msgstr "Beatmap difficulty (without mods)"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Beatmap hitsounds"
@@ -3266,6 +3282,10 @@ msgstr "Beatmaps played by your country"
 #: src/routes/maps.tsx
 msgid "Beatmaps played in {countryName}"
 msgstr "Beatmaps played in {countryName}"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Beginning of recorded history"
+msgstr "Beginning of recorded history"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "below 90%"
@@ -3593,7 +3613,7 @@ msgstr "Card front"
 msgid "Card Packs"
 msgstr "Card Packs"
 
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Card rank"
 msgstr "Card rank"
 
@@ -3682,6 +3702,10 @@ msgstr "Changes"
 #: src/components/player/SkillHistoryModal.tsx
 #~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
 #~ msgstr "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Changes to total pp, existing plays, map data or the rating formula."
+#~ msgstr "Changes to total pp, existing plays, map data or the rating formula."
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Changing the keymode label failed. Try again."
@@ -3848,12 +3872,7 @@ msgstr "CJ"
 msgid "clear"
 msgstr "clear"
 
-#: src/components/maps/RangePill.tsx
-#: src/components/maps/RangeSlider.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
-#: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Clear"
 msgstr "Clear"
 
@@ -3871,7 +3890,7 @@ msgstr "clear attempt"
 msgid "Clear editor"
 msgstr "Clear editor"
 
-#: src/routes/snipes.tsx
+#: src/routes/replay_.community.tsx
 msgid "Clear filters"
 msgstr "Clear filters"
 
@@ -3892,12 +3911,7 @@ msgstr "Clear marks"
 msgid "Clear player filter"
 msgstr "Clear player filter"
 
-#: src/components/maps/MapSearchSection.tsx
-#: src/components/me/MyDataPanel.tsx
-#: src/components/replay/ReplayBrowseView.tsx
-#: src/components/settings/SettingsPanel.tsx
-#: src/routes/farm-helper.tsx
-#: src/routes/maps.tsx
+#: src/routes/replay_.community.tsx
 msgid "Clear search"
 msgstr "Clear search"
 
@@ -4026,7 +4040,7 @@ msgstr "Client"
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
@@ -4277,6 +4291,10 @@ msgstr "Continents"
 msgid "Continue with Discord"
 msgstr "Continue with Discord"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Control"
+msgstr "Control"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Convert hits to notes"
 msgstr "Convert hits to notes"
@@ -4363,6 +4381,10 @@ msgstr "Could not deal a blitz run. Try again in a moment."
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Could not draw this one."
 msgstr "Could not draw this one."
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Could not load Maniacard history."
+msgstr "Could not load Maniacard history."
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Could not load more plays."
@@ -4609,6 +4631,10 @@ msgstr "Couldn't load the song audio for this replay."
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
 msgstr "Couldn't load the uploads; refresh to retry."
+
+#: src/routes/replay_.community.tsx
+msgid "Couldn't load the uploads."
+msgstr "Couldn't load the uploads."
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Couldn't load this beatmapset."
@@ -5144,6 +5170,11 @@ msgstr "dev preview"
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
 msgstr "Did {hidden} join osu! earlier or later than {shown}?"
 
+#. placeholder {0}: delta(entry.otherRatingChange, locale)
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Difference: {0}"
+msgstr "Difference: {0}"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "difficulty"
 msgstr "difficulty"
@@ -5635,6 +5666,10 @@ msgstr "error"
 msgid "Estimate a chart's dan level, with its dan emblem."
 msgstr "Estimate a chart's dan level, with its dan emblem."
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Estimated by adding each new top play in order. Gains depend on the rest of the card's top plays."
+#~ msgstr "Estimated by adding each new top play in order. Gains depend on the rest of the card's top plays."
+
 #: src/routes/dan-estimates.tsx
 msgid "Estimated dan"
 msgstr "Estimated dan"
@@ -5642,6 +5677,10 @@ msgstr "Estimated dan"
 #: src/routes/farm-helper.tsx
 msgid "estimated gain"
 msgstr "estimated gain"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Estimated impact"
+msgstr "Estimated impact"
 
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -6098,6 +6137,10 @@ msgstr "Find osu!mania farm maps worth playing, based on nearby players, missing
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "find player..."
 msgstr "find player..."
+
+#: src/routes/replay_.community.tsx
+msgid "Finding more replays..."
+msgstr "Finding more replays..."
 
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -6765,6 +6808,14 @@ msgstr "Higher values make notes travel faster across the playfield."
 msgid "Higher values move receptors lower."
 msgstr "Higher values move receptors lower."
 
+#: src/routes/replay_.community.tsx
+msgid "Highest accuracy"
+msgstr "Highest accuracy"
+
+#: src/routes/replay_.community.tsx
+msgid "Highest difficulty"
+msgstr "Highest difficulty"
+
 #: src/routes/player/$username.tsx
 msgid "Highest PP first"
 msgstr "Highest PP first"
@@ -6784,6 +6835,10 @@ msgstr "Hint"
 #: src/components/player/SkillHistoryModal.tsx
 msgid "History"
 msgstr "History"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "History starts from the first saved card snapshot. Earlier ratings cannot be reconstructed."
+#~ msgstr "History starts from the first saved card snapshot. Earlier ratings cannot be reconstructed."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Hit <0/> <1/>"
@@ -7127,6 +7182,10 @@ msgstr "includes"
 msgid "Includes"
 msgstr "Includes"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Includes new top plays and PBs on existing maps. Per-play gains use estimated pp between updates. The session total is the recorded rating change."
+msgstr "Includes new top plays and PBs on existing maps. Per-play gains use estimated pp between updates. The session total is the recorded rating change."
+
 #: src/components/maps/FilterChips.tsx
 #: src/components/maps/PatternPicker.tsx
 msgid "Including (click to exclude)"
@@ -7428,9 +7487,7 @@ msgstr "Key history"
 msgid "Key hitsounds"
 msgstr "Key hitsounds"
 
-#: src/components/rankings/LeaderboardControls.tsx
-#: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/replay_.community.tsx
 msgid "Key mode"
 msgstr "Key mode"
 
@@ -7952,7 +8009,6 @@ msgstr "Load a player's me! page"
 msgid "Load into editor"
 msgstr "Load into editor"
 
-#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
 msgstr "Load more"
@@ -7961,10 +8017,15 @@ msgstr "Load more"
 msgid "Load more plays"
 msgstr "Load more plays"
 
+#: src/routes/replay_.community.tsx
+msgid "Load more replays"
+msgstr "Load more replays"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Load my me! page"
 msgstr "Load my me! page"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Load older changes"
 msgstr "Load older changes"
@@ -8028,6 +8089,7 @@ msgstr "Loading collections..."
 msgid "Loading goals..."
 msgstr "Loading goals..."
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Loading history…"
 msgstr "Loading history…"
@@ -8052,6 +8114,10 @@ msgstr "Loading plays..."
 #: src/routes/rankings.tsx
 msgid "Loading rankings..."
 msgstr "Loading rankings..."
+
+#: src/routes/replay_.community.tsx
+msgid "Loading replays..."
+msgstr "Loading replays..."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Loading scores..."
@@ -8097,16 +8163,7 @@ msgstr "Loading your data…"
 msgid "loading..."
 msgstr "loading..."
 
-#: src/components/packs/CardCollectors.tsx
-#: src/components/packs/GoatHoldersButton.tsx
-#: src/components/packs/SetsView.tsx
-#: src/components/replay/ReplayBufferingIndicator.tsx
-#: src/components/replay/ReplaySideBySideView.tsx
-#: src/components/skins/SkinAssetExplorer.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
-#: src/routes/replay_.uploads.tsx
-#: src/routes/snipes.tsx
 msgid "Loading..."
 msgstr "Loading..."
 
@@ -8391,6 +8448,7 @@ msgid "maniabot - Mania Hub for Discord"
 msgstr "maniabot - Mania Hub for Discord"
 
 #: src/components/packs/RevealStage.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/routes/player/$username.tsx
 msgid "Maniacard"
 msgstr "Maniacard"
@@ -8402,6 +8460,10 @@ msgstr "ManiaCard"
 #: src/routes/packs_.collections.tsx
 msgid "Maniacard collections and pack stats."
 msgstr "Maniacard collections and pack stats."
+
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
+msgid "Maniacard details"
+msgstr "Maniacard details"
 
 #: src/routes/packs.tsx
 msgid "Maniacard packs"
@@ -8440,6 +8502,10 @@ msgstr "Map collections built by osu!mania players."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Map completion percentage."
 msgstr "Map completion percentage."
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Map contributions · estimated"
+#~ msgstr "Map contributions · estimated"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Map info"
@@ -9050,7 +9116,7 @@ msgstr "newest"
 msgid "Newest"
 msgstr "Newest"
 
-#: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 msgid "Newest first"
 msgstr "Newest first"
 
@@ -9305,6 +9371,10 @@ msgstr "No mania difficulty selected"
 msgid "No mania maps found."
 msgstr "No mania maps found."
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "No Maniacard history has been recorded yet."
+msgstr "No Maniacard history has been recorded yet."
+
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "no maps match"
 msgstr "no maps match"
@@ -9357,6 +9427,10 @@ msgstr "No mods in top plays"
 #: src/components/farm-helper/FarmersList.tsx
 msgid "No nearby players have farmed this yet."
 msgstr "No nearby players have farmed this yet."
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "No new top-play maps in this update."
+#~ msgstr "No new top-play maps in this update."
 
 #: src/components/ui/SearchInput.tsx
 msgid "No osu! player named \"{trimmedQuery}\""
@@ -9471,6 +9545,10 @@ msgstr "No replays available for this player"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No replays available from {countryCode} players on this difficulty"
 msgstr "No replays available from {countryCode} players on this difficulty"
+
+#: src/routes/replay_.community.tsx
+msgid "No replays match your search."
+msgstr "No replays match your search."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "No roster member above you yet."
@@ -9996,7 +10074,7 @@ msgstr "oldest"
 msgid "Oldest"
 msgstr "Oldest"
 
-#: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 msgid "Oldest first"
 msgstr "Oldest first"
 
@@ -10343,8 +10421,8 @@ msgid "osu! score link"
 msgstr "osu! score link"
 
 #: src/routes/player/$username.tsx
-msgid "osu! Supporter"
-msgstr "osu! Supporter"
+#~ msgid "osu! Supporter"
+#~ msgstr "osu! Supporter"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -10399,6 +10477,14 @@ msgstr "Other"
 #: src/routes/player/$username.tsx
 #~ msgid "Other keymodes"
 #~ msgstr "Other keymodes"
+
+#: src/routes/replay_.community.tsx
+msgid "Other keys"
+msgstr "Other keys"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Other rating updates"
+#~ msgstr "Other rating updates"
 
 #. placeholder {0}: shared.mintedTotal.toLocaleString("en-US")
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -10953,6 +11039,10 @@ msgstr "Please do not abuse the site, overload public endpoints, attempt to bypa
 msgid "Please wait a minute before opening another pack. This pack wasn't charged."
 msgstr "Please wait a minute before opening another pack. This pack wasn't charged."
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "points"
+msgstr "points"
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "Polish"
@@ -11076,6 +11166,10 @@ msgstr "PP-gain map recommendations tuned to a player."
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Practice chart for this skillset: the clear certifies {0}, whatever the estimator reads the file as"
 #~ msgstr "Practice chart for this skillset: the clear certifies {0}, whatever the estimator reads the file as"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Precision"
+msgstr "Precision"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
@@ -11235,6 +11329,10 @@ msgstr "Profile stats"
 msgid "profile top play"
 msgstr "profile top play"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Profile update"
+#~ msgstr "Profile update"
+
 #. placeholder {0}: nextTier.label
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "Progress from {currentLabel} to {0}"
@@ -11248,9 +11346,21 @@ msgstr "Progress list"
 msgid "Progress pie"
 msgstr "Progress pie"
 
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
+msgid "Progression"
+msgstr "Progression"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Promoted to {tierLabel}"
+msgstr "Promoted to {tierLabel}"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "provisional"
 msgstr "provisional"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "pts"
+msgstr "pts"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "public"
@@ -11377,7 +11487,7 @@ msgid "Rank by"
 msgstr "Rank by"
 
 #. placeholder {0}: isOwnProfile ? t`your` : t`the player's`
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 
@@ -11509,9 +11619,21 @@ msgstr "Rates per chart"
 msgid "Rating"
 msgstr "Rating"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Rating and tier changes saved after play sessions and profile updates. Expand an update to see its maps."
+#~ msgstr "Rating and tier changes saved after play sessions and profile updates. Expand an update to see its maps."
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Rating history chart"
+msgstr "Rating history chart"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating the plays failed. It retries automatically, check back in a bit."
 msgstr "Rating the plays failed. It retries automatically, check back in a bit."
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Rating update"
+msgstr "Rating update"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Rating your plays failed. It retries automatically, check back in a bit."
@@ -11641,9 +11763,12 @@ msgid "Recent plays"
 msgstr "Recent plays"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/player/$username.tsx
 msgid "Recent Plays"
 msgstr "Recent Plays"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Recent progression"
+msgstr "Recent progression"
 
 #: src/routes/index.tsx
 msgid "Recent Scores"
@@ -12014,7 +12139,6 @@ msgid "Replay video export options"
 msgstr "Replay video export options"
 
 #: src/routes/replay_.community.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Replays"
 msgstr "Replays"
 
@@ -12227,6 +12351,10 @@ msgstr "Rotate right"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Rotate your phone to watch both"
 msgstr "Rotate your phone to watch both"
+
+#: src/components/maps/MapCollectionsSection.tsx
+msgid "Rotating packs"
+msgstr "Rotating packs"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "rough estimate, may be off"
@@ -12559,6 +12687,10 @@ msgstr "Search maps"
 msgid "Search maps for a backdrop"
 msgstr "Search maps for a backdrop"
 
+#: src/routes/replay_.community.tsx
+msgid "Search maps, players, uploaders or mods..."
+msgstr "Search maps, players, uploaders or mods..."
+
 #: src/components/me/MyDataPanel.tsx
 msgid "search maps..."
 msgstr "search maps..."
@@ -12586,6 +12718,10 @@ msgstr "Search player... or score ID"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Search players by username"
 msgstr "Search players by username"
+
+#: src/routes/replay_.community.tsx
+msgid "Search replays"
+msgstr "Search replays"
 
 #: src/routes/communities.tsx
 msgid "Search servers"
@@ -12788,6 +12924,10 @@ msgstr "Session {0}"
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Session shape"
 #~ msgstr "Session shape"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+#~ msgid "Session update"
+#~ msgstr "Session update"
 
 #: src/components/me/MyStatsInsights.tsx
 #: src/routes/player/$username.tsx
@@ -13580,6 +13720,10 @@ msgstr "Sort by"
 msgid "Sort plays"
 msgstr "Sort plays"
 
+#: src/routes/replay_.community.tsx
+msgid "Sort replays"
+msgstr "Sort replays"
+
 #: src/routes/tracker.tsx
 msgid "Sorting highest star rating first - left click for ascending, right click to clear"
 msgstr "Sorting highest star rating first - left click for ascending, right click to clear"
@@ -13601,6 +13745,11 @@ msgid "Spectators"
 msgstr "Spectators"
 
 #: src/lib/skill-axes.ts
+msgid "Speed"
+msgstr "Speed"
+
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgctxt "Maniacard stat"
 msgid "Speed"
 msgstr "Speed"
 
@@ -13724,6 +13873,7 @@ msgstr "Start here"
 msgid "Start tracking your plays"
 msgstr "Start tracking your plays"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Starting rating"
 msgstr "Starting rating"
@@ -13914,8 +14064,8 @@ msgid "Support mania-tracker"
 msgstr "Support mania-tracker"
 
 #: src/routes/player/$username.tsx
-msgid "Supporter"
-msgstr "Supporter"
+#~ msgid "Supporter"
+#~ msgstr "Supporter"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -14872,7 +15022,7 @@ msgstr "The page hit an unexpected error and couldn't finish rendering. Reloadin
 msgid "The player panel can stay here, but this view did not return fresh map data."
 msgstr "The player panel can stay here, but this view did not return fresh map data."
 
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "the player's"
 msgstr "the player's"
 
@@ -15005,6 +15155,12 @@ msgstr "The servers could not be loaded."
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "The servers you are in, so we can show you the ones you can post"
 msgstr "The servers you are in, so we can show you the ones you can post"
+
+#. placeholder {0}: delta(change, locale)
+#. placeholder {1}: delta(mapTotal, locale)
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
+msgstr "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
@@ -15323,7 +15479,6 @@ msgid "This is not available yet. Check back soon."
 msgstr "This is not available yet. Check back soon."
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "this map"
 msgstr "this map"
 
@@ -15469,6 +15624,10 @@ msgstr "Thu"
 msgid "Thursdays"
 msgstr "Thursdays"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgid "Tier changed to {tierLabel}"
+msgstr "Tier changed to {tierLabel}"
+
 #: src/routes/player/$username.tsx
 msgid "Time played"
 msgstr "Time played"
@@ -15501,6 +15660,7 @@ msgstr "Title"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "to"
@@ -15649,6 +15809,11 @@ msgstr "top plays"
 msgid "Top plays"
 msgstr "Top plays"
 
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
+msgctxt "Maniacard history"
+msgid "Top plays"
+msgstr "Top plays"
+
 #: src/routes/player/$username.tsx
 msgid "top pp"
 msgstr "top pp"
@@ -15748,9 +15913,11 @@ msgstr "Try a wider range or check back later."
 #: src/components/BackendOfflineScreen.tsx
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/player/DanEvidenceModal.tsx
+#: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/routes/replay_.community.tsx
 msgid "Try again"
 msgstr "Try again"
 
@@ -15880,12 +16047,7 @@ msgstr "Unhide"
 #~ msgid "Unique cards"
 #~ msgstr "Unique cards"
 
-#: src/components/packs/collections/CollectorDirectory.tsx
-#: src/components/packs/collections/CollectorShelf.tsx
-#: src/components/packs/collections/RecordBoards.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
-#: src/components/skins/SkinUpdateModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "unknown"
 msgstr "unknown"
 
@@ -15899,9 +16061,7 @@ msgstr "Unknown"
 msgid "unknown artist"
 msgstr "unknown artist"
 
-#: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/replay_.community.tsx
-#: src/routes/replay.tsx
+#: src/components/replay/CommunityReplayCard.tsx
 msgid "Unknown beatmap"
 msgstr "Unknown beatmap"
 
@@ -16018,12 +16178,10 @@ msgid "updating"
 msgstr "updating"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Upload"
 msgstr "Upload"
 
 #: src/routes/replay_.community.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
 msgstr "Upload a replay"
 
@@ -16056,18 +16214,23 @@ msgstr "Uploaded"
 msgid "uploaded by"
 msgstr "uploaded by"
 
+#. placeholder {0}: uploader.username || String(uploader.userId)
+#: src/components/replay/CommunityReplayCard.tsx
+msgid "Uploaded by {0}"
+msgstr "Uploaded by {0}"
+
 #. placeholder {0}: skin.ownerUsername
 #: src/components/skins/SkinCard.tsx
 msgid "uploaded by <0>{0}</0>"
 msgstr "uploaded by <0>{0}</0>"
 
 #: src/routes/replay_.community.tsx
-msgid "Uploaded by the Community"
-msgstr "Uploaded by the Community"
+#~ msgid "Uploaded by the Community"
+#~ msgstr "Uploaded by the Community"
 
 #: src/routes/replay_.community.tsx
-msgid "Uploaded by the Community ({total})"
-msgstr "Uploaded by the Community ({total})"
+#~ msgid "Uploaded by the Community ({total})"
+#~ msgstr "Uploaded by the Community ({total})"
 
 #: src/routes/skins.tsx
 msgid "uploader"
@@ -16749,7 +16912,7 @@ msgid "you"
 msgstr "you"
 
 #: src/components/discord/CommandShowcase.tsx
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "You"
 msgstr "You"
@@ -16891,6 +17054,10 @@ msgstr "You sit at {yourPp}pp while players near you average {median}pp, so ther
 msgid "You stopped at {streak} in a row."
 msgstr "You stopped at {streak} in a row."
 
+#: src/routes/replay_.community.tsx
+msgid "You're all caught up."
+msgstr "You're all caught up."
+
 #. placeholder {0}: nf(reachTargetNum)
 #: src/components/me/GoalsPanel.tsx
 msgid "you're already past {0}"
@@ -16931,7 +17098,7 @@ msgstr "you're sitting at {0} right now"
 msgid "You're strongest in <0>{0}</0>"
 msgstr "You're strongest in <0>{0}</0>"
 
-#: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "your"
 msgstr "your"
 
@@ -17164,7 +17331,6 @@ msgid "Your top plays are waiting for the chart analyzer. Position in queue: {po
 msgstr "Your top plays are waiting for the chart analyzer. Position in queue: {position}"
 
 #: src/components/replay/ReplayBrowseView.tsx
-#: src/routes/replay_.uploads.tsx
 msgid "Your uploads"
 msgstr "Your uploads"
 
