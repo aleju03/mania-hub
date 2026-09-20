@@ -1,3 +1,4 @@
+import { getServingReadThread } from "../serving-read-thread.js";
 import { LN_SKILL_VERSION } from "../dan/ln-skill.js";
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
@@ -1018,6 +1019,16 @@ export async function shrinkPlayerSkillModes(db: Db, modes: PlayerSkillModeBreak
  * used, interpolated into the approximate curves.
  */
 export async function decoratePlayerSkillBreakdown(
+  db: Db,
+  userId: number,
+  breakdown: PlayerSkillBreakdown,
+): Promise<PublicPlayerSkillBreakdown> {
+  const reader = getServingReadThread(db, "skillDecoration");
+  return reader ? reader.run({ kind: "skillDecoration", userId, breakdown })
+    : readDecoratedPlayerSkillBreakdown(db, userId, breakdown);
+}
+
+export async function readDecoratedPlayerSkillBreakdown(
   db: Db,
   userId: number,
   breakdown: PlayerSkillBreakdown,

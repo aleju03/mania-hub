@@ -1,7 +1,8 @@
+import { analyzeLnSkillOnThread, AnalysisThreadUnavailableError } from "./analysis-thread.js";
 import { computeMsdOnThread, MsdThreadUnavailableError } from "./msd-thread.js";
 import { analyzeVibroSections, prepareVibroChart, usesSectionVibro, VIBRO_SECTION_VERSION, type VibroAnalysis } from "./vibro-sections.js";
 import { parseManiaBeatmap } from "./beatmap-parser.js";
-import { analyzeLnSkillFromText, isLnSkillSupported, type LnSkillResult } from "./ln-skill.js";
+import { isLnSkillSupported, type LnSkillResult } from "./ln-skill.js";
 
 // Thin backend facade over the vendored MinaCalc wasm harness
 // (vendor/leoblack/ett). calc.js handles the Node specifics itself (wasmBinary
@@ -34,7 +35,7 @@ export interface MsdOptions {
 // A broken worker is transient infrastructure failure: let the job retry
 // instead of saving empty/lower ratings or advancing a repair sweep past it.
 export function msdChartErrorFallback(error: unknown): null {
-  if (error instanceof MsdThreadUnavailableError) throw error;
+  if (error instanceof MsdThreadUnavailableError || error instanceof AnalysisThreadUnavailableError) throw error;
   return null;
 }
 
@@ -116,7 +117,7 @@ export async function computeMsd(
   const msd = await computeMsdOnThread(prepared?.osuText ?? osuText,
     { ...options, lnTailTaps: map.keyCount === 4 ? false : options.lnTailTaps });
   const lnSkill = msd && (keyCount == null || isLnSkillSupported(keyCount)) && !options.lnTailTaps && options.includeLnSkill !== false
-    ? analyzeLnSkillFromText(osuText, { rate: options.rate, scoreGoal: options.scoreGoal }) : null;
+    ? await analyzeLnSkillOnThread(osuText, { rate: options.rate, scoreGoal: options.scoreGoal }) : null;
   return msd ? { ...msd, vibroVersion: VIBRO_SECTION_VERSION, vibroAdjusted: options.adjustVibro === true,
     ...(lnSkill ? { lnSkill, values: { ...msd.values, LN: lnSkill.rated ? lnSkill.rating ?? 0 : 0 } } : {}),
     ...(analysis ? { vibroAnalysis: analysis } : {}) } : null;

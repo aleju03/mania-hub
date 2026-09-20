@@ -19,6 +19,26 @@ port.on("message", ({ id, request }: { id: number; request: ServingReadRequest }
       const db = await connection;
       let result: unknown;
       switch (request.kind) {
+        case "packCollection": {
+          const { readPackCollectionCards } = await import("./features/pack-wallets.js");
+          result = await readPackCollectionCards(db, request.userId, request.options);
+          break;
+        }
+        case "skillPlays": {
+          const { readPlayerSkillPlays } = await import("./features/player-skills.js");
+          result = await readPlayerSkillPlays(db, request.userId, request.keyCount, request.axis, request.options);
+          break;
+        }
+        case "danEvidence": {
+          const { readPlayerSkillDanEvidence } = await import("./features/player-skills.js");
+          result = await readPlayerSkillDanEvidence(db, request.userId, request.keyCount, request.side, request.options);
+          break;
+        }
+        case "skillDecoration": {
+          const { readDecoratedPlayerSkillBreakdown } = await import("./features/skill-baseline.js");
+          result = await readDecoratedPlayerSkillBreakdown(db, request.userId, request.breakdown);
+          break;
+        }
         case "tracker": {
           const { readTrackerSnapshot } = await import("./features/tracker.js");
           result = await readTrackerSnapshot(db, request.country, request.limit, request.offset, request.options);

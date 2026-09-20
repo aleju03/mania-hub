@@ -5,15 +5,26 @@ import { logWarn } from "./logger.js";
 import type { TrackerSnapshotOptions, getTrackerSnapshot } from "./features/tracker.js";
 import type { StreakPlayerMetrics } from "./features/pack-games.js";
 import type { StatusReadOptions, readStatusAggregates } from "./http/status-reads.js";
+import type { PackCollectionOptions, PackCollectionPage } from "./features/pack-wallets.js";
+import type { DanEvidenceOptions, PlayerSkillBreakdown, PlayerSkillPlaysOptions, PlayerSkillPlaysPage, readPlayerSkillDanEvidence } from "./features/player-skills.js";
+import type { PublicPlayerSkillBreakdown } from "./features/skill-baseline.js";
 
 export type ServingReadRequest =
   | { kind: "tracker"; country: string; limit: number; offset: number; options: TrackerSnapshotOptions }
   | { kind: "metrics"; userIds: number[]; now: number }
-  | { kind: "status"; options: StatusReadOptions };
+  | { kind: "status"; options: StatusReadOptions }
+  | { kind: "packCollection"; userId: number; options: PackCollectionOptions }
+  | { kind: "skillPlays"; userId: number; keyCount: number; axis: string; options: PlayerSkillPlaysOptions }
+  | { kind: "danEvidence"; userId: number; keyCount: number; side: "rc" | "ln"; options: DanEvidenceOptions }
+  | { kind: "skillDecoration"; userId: number; breakdown: PlayerSkillBreakdown };
 export interface ServingReadResults {
   tracker: Awaited<ReturnType<typeof getTrackerSnapshot>>;
   metrics: Record<number, StreakPlayerMetrics>;
   status: Awaited<ReturnType<typeof readStatusAggregates>>;
+  packCollection: PackCollectionPage;
+  skillPlays: PlayerSkillPlaysPage;
+  danEvidence: Awaited<ReturnType<typeof readPlayerSkillDanEvidence>>;
+  skillDecoration: PublicPlayerSkillBreakdown;
 }
 export type ServingReadResponse = { id: number; json: Uint8Array } | { id: number; error: string };
 export interface ServingReadConfig { databaseUrl: string; journalDatabaseUrl?: string }
@@ -26,8 +37,8 @@ interface PendingRead {
   reject: (error: Error) => void;
 }
 
-// Separate instances for tracker, status and arcade prevent an admin scan from
-// delaying player requests. Each has one active read and a bounded backlog.
+// Independent queues for tracker, status, arcade, shelves and profile skills.
+// Each has one active read and a bounded backlog; profile operations share one.
 export class ServingReadThread {
   private worker: Worker | null = null;
   private active: PendingRead | null = null;
@@ -112,7 +123,12 @@ export function registerServingReadThreads(db: Db, config: ServingReadConfig, al
   let readers = threads.get(db);
   if (!readers) {
     const init = { databaseUrl: config.databaseUrl, journalDatabaseUrl: config.journalDatabaseUrl };
-    readers = { tracker: new ServingReadThread(init), metrics: new ServingReadThread(init), status: new ServingReadThread(init) };
+    const profiles = new ServingReadThread(init);
+    readers = {
+      tracker: new ServingReadThread(init), metrics: new ServingReadThread(init), status: new ServingReadThread(init),
+      packCollection: new ServingReadThread(init),
+      skillPlays: profiles, danEvidence: profiles, skillDecoration: profiles,
+    };
     threads.set(db, readers);
   }
   for (const alias of aliases) threads.set(alias, readers);

@@ -1,9 +1,11 @@
 // Ported from src/lib/companella.ts (frontend). Keep the two copies in sync;
-// the backend routes MSD through msd.ts so MinaCalc runs stay serialized
-// against the job lanes rather than stacking CPU bursts on the event loop.
+// the backend threads MSD and synchronous classification separately. Only
+// the transport differs; estimator ordering and inputs stay the same.
+import { classifyChartOnThread } from "./analysis-thread.js";
+import type { ChartClassificationData } from "./chart-classification-data.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser.js";
 import { lnRatingIdentityUndecided } from "./ln-identity.js";
-import { classifyChart, isMarathonCorrectionCandidate, type ChartClassification, type ClassifyChartInput } from "./chart-classifier.js";
+import { isMarathonCorrectionCandidate, type ClassifyChartInput } from "./chart-classifier.js";
 import { getInputRate } from "./dan-estimator/labels.js";
 import { prepareVibroChart } from "./vibro-sections.js";
 import { computeMsd, msdChartErrorFallback } from "./msd.js";
@@ -78,7 +80,7 @@ export async function classifyChartWithCompanella(
   osuText: string,
   input: ClassifyChartInput = {},
   options: { msdValues?: Record<string, number> | null; skipCompanella?: boolean } = {},
-): Promise<ChartClassification> {
+): Promise<ChartClassificationData> {
   const rate = getInputRate(input);
   const prepared = input.adjustVibro ? prepareVibroChart(osuText, rate, map) : null;
   const effectiveText = prepared?.osuText ?? osuText;
@@ -90,7 +92,7 @@ export async function classifyChartWithCompanella(
         .then((msd) => msd?.values ?? null).catch(msdChartErrorFallback);
   }
   let classifyInput = { ...input, marathonMsdValues: msdValues };
-  let first = classifyChart(map, osuText, classifyInput);
+  let first = await classifyChartOnThread(map, osuText, classifyInput);
   // A 4K chart past the hold line but under the structural share needs
   // native Overall before its identity is settled (dan/ln-identity.ts).
   if (!msdValues && lnRatingIdentityUndecided(first.keyCount, first)) {
@@ -98,7 +100,7 @@ export async function classifyChartWithCompanella(
       .then((msd) => msd?.values ?? null).catch(msdChartErrorFallback);
     if (msdValues) {
       classifyInput = { ...input, marathonMsdValues: msdValues };
-      first = classifyChart(map, osuText, classifyInput);
+      first = await classifyChartOnThread(map, osuText, classifyInput);
     }
   }
   if (options.skipCompanella || !first.companellaPending || first.sunnySr == null) return first;
@@ -114,5 +116,5 @@ export async function classifyChartWithCompanella(
   });
   if (!companella) return first;
 
-  return classifyChart(map, osuText, { ...classifyInput, companella });
+  return classifyChartOnThread(map, osuText, { ...classifyInput, companella });
 }

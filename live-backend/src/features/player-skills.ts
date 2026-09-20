@@ -1,3 +1,6 @@
+import { analyzeLnSsrOnThread } from "../dan/analysis-thread.js";
+import { SSR_CALC_GOAL_CAP, SSR_EXTRAPOLATION_BASE_GOAL, SSR_EXTRAPOLATION_MAX_SLOPE, lnSsrSolverGoal } from "../dan/ln-ssr.js";
+import { getServingReadThread } from "../serving-read-thread.js";
 import { COMPANELLA_INPUTS_META_KEY } from "./companella-inputs.js";
 import { MARATHON_CORRECTION_META_KEY } from "./marathon-correction.js";
 import { erf, wife3PointsAt, WIFE3_MISS_POINTS } from "./tap-wife-accuracy.js";
@@ -33,7 +36,7 @@ import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { analyzeVibroSections, conservativeVibroAccuracy, usesSectionVibro, type VibroAnalysis } from "../dan/vibro-sections.js";
 import { assessVibroClear, hasOnlyClearEvidencePatterns, summarizeVibroClear, type VibroClearEvidence, type VibroClearEvidenceSummary, type VibroClearInput } from "../dan/vibro-clear-evidence.js";
 import { inspectChartDanEligibility } from "../dan/dan-eligibility.js";
-import { analyzeLnSkillFromText, isLnSkillSupported, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION, type LnSkillResult } from "../dan/ln-skill.js";
+import { isLnSkillSupported, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION, type LnSkillResult } from "../dan/ln-skill.js";
 import { creditedDanFor, danCreditBelowBarWindowFor } from "../dan/dan-credit.js";
 import { loadDanCourseClears, loadDanSkillsetClears } from "./dan-courses.js";
 import type { DanCourseClear, DanCourseCreditOptions } from "./dan-courses.js";
@@ -386,15 +389,11 @@ const SSR_GOAL_MIN = 0.8;
 // above it are served by extrapolating from the calc's slope between the MSD
 // baseline goal and the cap. Exported for the approximate-SSR baseline, which
 // anchors its accuracy derate on the same window.
-export const SSR_CALC_GOAL_CAP = 0.965;
-export const SSR_EXTRAPOLATION_BASE_GOAL = 0.93;
+export { SSR_CALC_GOAL_CAP, SSR_EXTRAPOLATION_BASE_GOAL, analyzeLnSsr, lnSsrSolverGoal } from "../dan/ln-ssr.js";
 // Ceiling for Wife-estimated goals: an all-MAX play estimates ~0.998, and the
 // log-linear extrapolation should not be trusted much further past the cap
 // than the width of the slope window it was measured on.
 const SSR_GOAL_CAP = 0.9975;
-// Safety bound on the per-chart 0.93->0.965 slope used for extrapolation
-// (measured ~1.07-1.11 on real charts).
-const SSR_EXTRAPOLATION_MAX_SLOPE = 1.2;
 // Expected normalized Wife3 points per osu!mania judgement: Etterna's wife3
 // curve (J4: full points inside 5ms, erf falloff with dev 22.7 crossing zero
 // at 65ms, linear to the -2.75 miss weight at 180ms, all normalized to
@@ -1493,36 +1492,6 @@ async function runMsdAtGoal(
   return { values, calcRuns: 2 };
 }
 
-/** The goal the LN solver actually runs at for a play. Same cap as the
- * MinaCalc SSR: the solver never sees a goal above SSR_CALC_GOAL_CAP. */
-export function lnSsrSolverGoal(goal: number): number {
-  return Math.min(SSR_CALC_GOAL_CAP, Math.max(0, Math.min(0.999, goal)));
-}
-
-/**
- * LN SSR for a play, on the same terms as the press SSR from runMsdAtGoal:
- * solve at most at SSR_CALC_GOAL_CAP and extrapolate the cap-to-base slope
- * above it. The LN solver's own response runs away toward 100% (a perfect
- * play on a 24.8 chart solved to 38.7, above the hardest 4K LN course),
- * which is not how the press axis prices an SS. The stored scoreGoal is the
- * solver goal, so playLnSkillCurrent can tell a capped result from an old
- * uncapped one without a model version bump.
- */
-export function analyzeLnSsr(
-  osuText: string,
-  options: { rate: number; od?: number | null; scoreGoal: number },
-): LnSkillResult | null {
-  const goal = Math.max(0, Math.min(0.999, options.scoreGoal));
-  const solverGoal = lnSsrSolverGoal(goal);
-  const capped = analyzeLnSkillFromText(osuText, { rate: options.rate, od: options.od, scoreGoal: solverGoal, includeStructure: false });
-  if (!capped || goal <= SSR_CALC_GOAL_CAP || !(capped.rating != null && capped.rating > 0)) return capped;
-  const base = analyzeLnSkillFromText(osuText, { rate: options.rate, od: options.od, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, includeStructure: false });
-  const atCap = capped.rating, atBase = base?.rating ?? 0;
-  if (!(atBase > 0) || atCap <= atBase) return capped;
-  const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
-  return { ...capped, rating: atCap * Math.pow(Math.min(atCap / atBase, SSR_EXTRAPOLATION_MAX_SLOPE), exponent) };
-}
-
 // The tail-pass model plays are stamped with (StoredPlaySsr.lnTailPass).
 // v3: 4K charts below the 45% hold-share identity gate skip the pass entirely.
 // v2: 4K free holds demoted before the pass (ln-effective.ts). v1 is the
@@ -1541,7 +1510,7 @@ export async function computePlaySsrValues(
   const { rate, keyCount, goal, od, lnRatio, adjustVibro } = options;
   const base = await runMsdAtGoal(osuText, { rate, keyCount, goal, adjustVibro });
   if (!base) return null;
-  const lnSkill = isLnSkillSupported(keyCount) ? analyzeLnSsr(osuText, { rate, od, scoreGoal: options.lnGoal ?? goal }) : null;
+  const lnSkill = isLnSkillSupported(keyCount) ? await analyzeLnSsrOnThread(osuText, { rate, od, scoreGoal: options.lnGoal ?? goal }) : null;
   const finish = (rated: { values: Record<string, number>; calcRuns: number }) => lnSkill
     ? { ...rated, values: { ...rated.values, LN: lnSkill.rated ? lnSkill.rating ?? 0 : 0 }, lnSkill }
     : rated;
@@ -1812,12 +1781,12 @@ async function refreshPlayLnSkill(
   let lnSkill: LnSkillResult | null = null;
   try {
     const ratedText = text == null ? null : ratedOsuTextFor(text, play.inverse);
-    if (ratedText != null) lnSkill = analyzeLnSsr(ratedText, {
+    if (ratedText != null) lnSkill = await analyzeLnSsrOnThread(ratedText, {
       rate: play.rate, od: play.odOverride ?? info?.od,
       scoreGoal: play.vibroAdjustment ? conservativeVibroAccuracy(play.lnGoal ?? play.goal, play.vibroAdjustment.judgementShare) : play.lnGoal ?? play.goal,
     });
     if (lnSkill?.keyCount !== play.keyCount) lnSkill = null;
-  } catch { /* A bad cached chart remains pending until its file is repaired. */ }
+  } catch (error) { msdChartErrorFallback(error); /* Bad charts stay pending; thread failures retry. */ }
   if (!lnSkill && play.lnSkill == null && play.values.LN === 0) return play;
   // Keep the expensive MinaCalc cache, but never publish a stale LN model as
   // a current value if a missing file prevents the cheap independent pass.
@@ -4965,6 +4934,18 @@ export async function getPlayerSkillPlays(
   axis: string,
   options: PlayerSkillPlaysOptions = {},
 ): Promise<PlayerSkillPlaysPage> {
+  const reader = getServingReadThread(db, "skillPlays");
+  return reader ? reader.run({ kind: "skillPlays", userId, keyCount, axis, options })
+    : readPlayerSkillPlays(db, userId, keyCount, axis, options);
+}
+
+export async function readPlayerSkillPlays(
+  db: Db,
+  userId: number,
+  keyCount: number,
+  axis: string,
+  options: PlayerSkillPlaysOptions = {},
+): Promise<PlayerSkillPlaysPage> {
   const limit = Math.max(1, Math.min(PLAYER_SKILL_PLAYS_MAX, Math.floor(Number(options.limit) || 50)));
   const offset = Math.max(0, Math.min(5_000, Math.floor(Number(options.offset) || 0)));
   const sort: PlayerSkillPlaysSort = options.sort === "recent" ? "recent" : "rating";
@@ -5847,25 +5828,46 @@ function groupDanClearsBySkillset(
 // a handful of dedupe-keyed inserts.
 const DAN_EVIDENCE_VERDICT_ENQUEUES = 16;
 
+export interface DanEvidenceOptions {
+  scoreId?: number;
+  /** Widens the evidence page; values below the default keep that default. */
+  maxClears?: number;
+  /** Pages the clears without changing the side-wide rating calculation. */
+  clearsOffset?: number;
+  includeRejected?: boolean;
+  rejectedLimit?: number;
+  /** Orders only the returned pages; the dan calculation stays best-first. */
+  sort?: PlayerSkillPlaysSort;
+}
+
 export async function getPlayerSkillDanEvidence(
-  db: Db,
-  userId: number,
-  keyCount: number,
-  side: "rc" | "ln",
-  queue: JobQueue | null = null,
-  // The modal's "load more" paging over the "all clears" list. `maxClears`
-  // under the default is ignored so a read can only widen the page the average
-  // already ships; `clearsOffset` starts the page partway down the same
-  // ordering, leaving every other field of the payload as the full read.
-  options: {
-    scoreId?: number;
-    maxClears?: number;
-    clearsOffset?: number;
-    includeRejected?: boolean;
-    rejectedLimit?: number;
-    /** Orders the returned play pages only; the dan calculation stays best-first. */
-    sort?: PlayerSkillPlaysSort;
-  } = {},
+  db: Db, userId: number, keyCount: number, side: "rc" | "ln",
+  queue: JobQueue | null = null, options: DanEvidenceOptions = {},
+): Promise<PlayerSkillDanEvidence | null> {
+  const reader = getServingReadThread(db, "danEvidence");
+  const result = reader ? await reader.run({ kind: "danEvidence", userId, keyCount, side, options })
+    : await readPlayerSkillDanEvidence(db, userId, keyCount, side, options);
+  // The query-only reader returns bounded repair intents. Writes retain the
+  // caller's existing queue, dedupe rules and admission checks.
+  if (queue) {
+    for (const pair of result.missingVerdicts) {
+      await enqueueRateDanEstimate(queue, pair.beatmapId, pair.ratePercent, pair.modVariant, pair.odFlag).catch(() => {});
+    }
+  }
+  return result.evidence;
+}
+
+export async function readPlayerSkillDanEvidence(
+  db: Db, userId: number, keyCount: number, side: "rc" | "ln", options: DanEvidenceOptions = {},
+): Promise<{ evidence: PlayerSkillDanEvidence | null; missingVerdicts: RateDanVerdictPair[] }> {
+  const missingVerdicts: RateDanVerdictPair[] = [];
+  const evidence = await buildPlayerSkillDanEvidence(db, userId, keyCount, side, options, missingVerdicts);
+  return { evidence, missingVerdicts };
+}
+
+async function buildPlayerSkillDanEvidence(
+  db: Db, userId: number, keyCount: number, side: "rc" | "ln", options: DanEvidenceOptions,
+  missingVerdicts: RateDanVerdictPair[],
 ): Promise<PlayerSkillDanEvidence | null> {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(keyCount) || keyCount <= 0) return null;
   const stored = await loadLatestStoredPlayerSkillPayload(db, userId);
@@ -5883,11 +5885,7 @@ export async function getPlayerSkillDanEvidence(
   // Verdicts missing for stored plays heal on view: the compute job fills its
   // own, but a player nobody recomputes (or plays rated before the credit
   // existed) would otherwise wait forever. The job key dedupes repeat opens.
-  if (queue) {
-    for (const pair of missingRateVerdictPairs(plays, infoByBeatmap, rateVerdicts).slice(0, DAN_EVIDENCE_VERDICT_ENQUEUES)) {
-      await enqueueRateDanEstimate(queue, pair.beatmapId, pair.ratePercent, pair.modVariant, pair.odFlag).catch(() => {});
-    }
-  }
+  missingVerdicts.push(...missingRateVerdictPairs(plays, infoByBeatmap, rateVerdicts).slice(0, DAN_EVIDENCE_VERDICT_ENQUEUES));
   // Collected in the same pass as the clears so the two lists cannot disagree
   // about which rule a play fell to. The array is only handed over when the
   // read asks for it; without it collectDanClears does no extra work.

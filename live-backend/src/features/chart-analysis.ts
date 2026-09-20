@@ -1,3 +1,5 @@
+import { analyzeLnMapOnThread, classifyChartOnThread, resolveLnIdentityOnThread, isSunnyFloorPinnedOnThread } from "../dan/analysis-thread.js";
+import type { ChartClassificationData } from "../dan/chart-classification-data.js";
 import { detectLnVibro, detectRiceVibro } from "../dan/vibro-detection.js";
 import { randomUUID } from "node:crypto";
 import type { Db, DbStatement } from "../db.js";
@@ -6,15 +8,13 @@ import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { beatmapFileMatchesVersion } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { storeChartFamily } from "./chart-families.js";
-import { analyzeLnSkill, LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION } from "../dan/ln-skill.js";
+import { LN_SKILL_KEY_COUNTS, LN_SKILL_VERSION } from "../dan/ln-skill.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { LN_PRIMARY_7K_MIN_RATIO, LN_PRIMARY_MIN_RATIO, estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { LN_EFFECTIVE_KEY_COUNTS, LN_EFFECTIVE_MIN_RATIO, LN_EFFECTIVE_MODEL_VERSION, LN_MIN_WORK_SHARE, analyzeEffectiveLn, chartIsLn, lnTailPassText } from "../dan/dan-estimator/ln-effective.js";
-import { resolveChartLnIdentity } from "../dan/ln-identity.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
-import { classifyChart, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
+import type { ChartClassification, DanVerdictHalf } from "../dan/chart-classifier.js";
 import { classifyChartWithCompanella } from "../dan/companella.js";
-import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
 import { LN_TAIL_MIN_RATIO, computeMsd, msdChartErrorFallback } from "../dan/msd.js";
 import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -150,12 +150,12 @@ function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
 }
 
 export function leanClassification(
-  classification: ChartClassification,
+  classification: ChartClassification | ChartClassificationData,
   noteBpm: number | null = null,
   motion: MotionFeatures | null = null,
 ): LeanChartClassification {
   const clusters = (classification.clusters?.topFiveClusters ?? []).map((cluster) => ({
-    label: cluster.format(1),
+    label: "label" in cluster ? cluster.label : cluster.format(1),
     pattern: cluster.Pattern,
     bpm: cluster.BPM,
     mixed: cluster.Mixed,
@@ -1290,8 +1290,9 @@ export async function recomputeDanFloorPinChunk(
       // Same predicate the classifier applies (pinned raw + Sunny agreeing the
       // chart is sub-Reform-1), so only charts whose verdict will actually
       // change re-analyze.
-      if (sunnyLowEndReroute(runLeoBlackMixed(osuText), osuText, 1) != null) pinned.push(beatmapId);
-    } catch {
+      if (await isSunnyFloorPinnedOnThread(osuText)) pinned.push(beatmapId);
+    } catch (error) {
+      msdChartErrorFallback(error);
       // A chart the estimator rejects keeps its stored verdict; the full
       // analysis job would fail the same way.
     }
@@ -3076,7 +3077,8 @@ export async function recomputeLnSourceChunk(
         );
       }
       changed.push(beatmapId);
-    } catch {
+    } catch (error) {
+      msdChartErrorFallback(error);
       // A chart the parser/estimator rejects keeps its stored verdict; the full
       // analysis job would fail the same way.
     }
@@ -3194,7 +3196,7 @@ export async function recomputeLnLeoblackChunk(
         totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
         version: map.version,
       };
-      const fresh = classifyChart(map, osuText, input).ln;
+      const fresh = (await classifyChartOnThread(map, osuText, input)).ln;
       // The label alone cannot tell a repaired verdict from a stale one: the
       // old kNN clamped labels at the old ladder top while its rawDan ran
       // free, so the same bare "15" can sit over 15.1 or 22.8. The credit
@@ -3236,7 +3238,8 @@ export async function recomputeLnLeoblackChunk(
         );
       }
       changed.push(beatmapId);
-    } catch {
+    } catch (error) {
+      msdChartErrorFallback(error);
       // A chart the parser/estimator rejects keeps its stored verdict; the full
       // analysis job would fail the same way.
     }
@@ -3778,7 +3781,8 @@ export async function recomputeLeoblackRepinDtChunk(
         [json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
       );
       computed.push(beatmapId);
-    } catch {
+    } catch (error) {
+      msdChartErrorFallback(error);
       // A chart the parser/estimator rejects keeps its stored verdict; the
       // DT-rate sweep would have failed the same way.
     }
@@ -5077,7 +5081,8 @@ async function rederiveRateVerdictFromStoredMsd(
       [json(verdict), beatmapId, CHART_ANALYSIS_VERSION],
     );
     return true;
-  } catch {
+  } catch (error) {
+    msdChartErrorFallback(error);
     return false;
   }
 }
@@ -5091,7 +5096,7 @@ async function refreshLnSkillArtifacts(
   for (const [column, rate] of [["msd_json", 1], ["msd_dt_json", DT_RATE], ["msd_ht_json", HT_RATE]] as const) {
     const artifact = parseJson<{ values?: Record<string, number>; lnSkill?: unknown } | null>(String(row[column] ?? ""), null);
     if (!artifact?.values) continue;
-    const lnSkill = analyzeLnSkill(map, { rate });
+    const lnSkill = await analyzeLnMapOnThread(map, { rate });
     if (!lnSkill) continue;
     await exec(db,
       `update beatmap_chart_analysis set ${column} = json(?) where beatmap_id = ? and analysis_version = ?`,
@@ -5261,7 +5266,7 @@ export async function recomputeLnEffectiveChunk(
     // Structure first, then the rating tiebreak against the stored native
     // Overall at the same rate (dan/ln-identity.ts); the lifted share is what
     // gets stored, beside the measured one.
-    const identity = resolveChartLnIdentity(map, { rate: 1, od: map.od, holdRatio: lnRatio, overall: storedOverall("msd_json") });
+    const identity = await resolveLnIdentityOnThread(map, { rate: 1, od: map.od, holdRatio: lnRatio, overall: storedOverall("msd_json") });
     const identityJson = (resolved: { lnEffectiveRatio: number | undefined; lnRatingIdentity: boolean; lnStructuralRatio?: number }) =>
       [JSON.stringify(resolved.lnEffectiveRatio ?? 0), resolved.lnRatingIdentity ? 1 : 0, resolved.lnStructuralRatio ?? null] as const;
     const readsLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: identity.lnEffectiveRatio }) === true;
@@ -5319,7 +5324,7 @@ export async function recomputeLnEffectiveChunk(
     ] as const) {
       const storedRate = parseJson<StoredRateDan | null>(String(row[column] ?? ""), null);
       if (!storedRate) continue;
-      const rateIdentity = resolveChartLnIdentity(map, { rate, od: map.od, holdRatio: lnRatio, overall: storedOverall(msdColumn) });
+      const rateIdentity = await resolveLnIdentityOnThread(map, { rate, od: map.od, holdRatio: lnRatio, overall: storedOverall(msdColumn) });
       const rateWantLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio: rateIdentity.lnEffectiveRatio }) === true && lnHalf != null;
       const rateIsLn = storedRate.primaryFamily === "ln";
       if (rateWantLn !== rateIsLn) {

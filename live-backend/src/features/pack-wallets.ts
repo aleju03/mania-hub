@@ -1,3 +1,4 @@
+import { getServingReadThread } from "../serving-read-thread.js";
 import type { InValue } from "@libsql/client";
 import { randomUUID } from "node:crypto";
 import type { Db, DbStatement } from "../db.js";
@@ -1434,30 +1435,33 @@ export function packCardMarkCountsFromRow(row: Record<string, unknown> | undefin
   return Object.fromEntries(PACK_CARD_MARKS.map((mark) => [mark, Number(row?.[mark]) || 0])) as Record<PackCardMark, number>;
 }
 
-export async function listPackCollectionCards(
-  db: Db,
-  userId: number,
-  options: {
-    page: number;
-    pageSize: number;
-    tier?: string | null;
-    query?: string | null;
-    /* Lists only the cards wearing this mark. */
-    mark?: PackCardMark | null;
-    /* Counts each mark over the whole shelf into markCounts. */
-    withMarkCounts?: boolean;
-    /* "newest" orders by when the card first joined the collection (a
-       duplicate pull does not resurface an old card); "copies" puts the most
-       duplicated cards first; anything else is the default rarity order. Legacy cards without a timestamp sink to the end,
-       still in rarity order among themselves. */
-    sort?: "newest" | "copies" | null;
-    /* Lists only the cards held at two copies or more. */
-    duplicatesOnly?: boolean;
-    /* When set, only cards of these players are listed (the "not tracked"
-       filter). Empty means match nothing. */
-    restrictToCardUserIds?: readonly number[];
-  },
-): Promise<PackCollectionPage> {
+export interface PackCollectionOptions {
+  page: number;
+  pageSize: number;
+  tier?: string | null;
+  query?: string | null;
+  /* Lists only the cards wearing this mark. */
+  mark?: PackCardMark | null;
+  /* Counts each mark over the whole shelf into markCounts. */
+  withMarkCounts?: boolean;
+  /* "newest" orders by when the card first joined the collection (a
+     duplicate pull does not resurface an old card); "copies" puts the most
+     duplicated cards first; anything else is the default rarity order. Legacy cards without a timestamp sink to the end,
+     still in rarity order among themselves. */
+  sort?: "newest" | "copies" | null;
+  /* Lists only the cards held at two copies or more. */
+  duplicatesOnly?: boolean;
+  /* When set, only cards of these players are listed (the "not tracked"
+     filter). Empty means match nothing. */
+  restrictToCardUserIds?: readonly number[];
+}
+
+export async function listPackCollectionCards(db: Db, userId: number, options: PackCollectionOptions): Promise<PackCollectionPage> {
+  const reader = getServingReadThread(db, "packCollection");
+  return reader ? reader.run({ kind: "packCollection", userId, options }) : readPackCollectionCards(db, userId, options);
+}
+
+export async function readPackCollectionCards(db: Db, userId: number, options: PackCollectionOptions): Promise<PackCollectionPage> {
   const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(options.pageSize)));
   const page = Math.max(0, Math.floor(options.page));
   // Table-qualified because the paged read joins the serial registry, which
