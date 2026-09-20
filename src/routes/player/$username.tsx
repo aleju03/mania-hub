@@ -2685,11 +2685,6 @@ export function PlayerProfilePage({
                     <CountryFlag code={profileCountryCode} size="md" decorative />
                   </Link>
                 ) : null}
-                {user.is_supporter && (
-                  <span className="inline-flex h-[22px] items-center justify-center rounded-full bg-osu-pink px-2" title={t`osu! Supporter`}>
-                    <img src="/images/icons/supporter.svg" alt={t`Supporter`} className="h-3 w-3 brightness-0 invert" />
-                  </span>
-                )}
                 {isOnlineNow ? (
                   <span
                     className="h-2 w-2 shrink-0 rounded-full bg-osu-green"
