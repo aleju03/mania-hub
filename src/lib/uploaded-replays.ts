@@ -9,6 +9,19 @@ import {
   recordUploadedReplayOwner,
 } from "./uploaded-replay-index";
 import { listRecentUploadedReplays, normalizeUploadedReplayId } from "./uploaded-replay-store";
+import { normalizeCommunityUploadsQuery } from "./uploaded-replay-feed";
+
+export const getRecentCommunityUploads = createServerFn({ method: "GET" }).handler(async () => {
+  const { getUploadsSlice } = await import("./uploaded-replay-community-server");
+  return getUploadsSlice(0, 9);
+});
+
+export const getCommunityUploadsPage = createServerFn({ method: "GET" })
+  .validator((data: Record<string, unknown> | undefined) => normalizeCommunityUploadsQuery(data))
+  .handler(async ({ data }) => {
+    const { getUploadsFeed } = await import("./uploaded-replay-community-server");
+    return getUploadsFeed(data);
+  });
 
 // "Your uploads" on /replay's Upload tab, and the delete behind it.
 //
@@ -176,7 +189,7 @@ async function forgetDeletedUpload(id: string): Promise<void> {
   const { invalidateCommunityUploads } = await import("./uploaded-replay-community-server");
   await invalidatePersistentCache(`uploaded-replay-desc:v${DESCRIPTION_VERSION}:${id}`);
   await invalidatePersistentCache(`uploaded-replay-packed:v${UPLOADED_REPLAY_PACKED_VERSION}:${id}`);
-  invalidateCommunityUploads();
+  invalidateCommunityUploads(id);
 }
 
 export interface UploadOwnerBackfillResult {

@@ -220,6 +220,16 @@ export async function describeUploadedReplayById(id: string): Promise<UploadedRe
   return description;
 }
 
+// Catalog hydration reads the existing summary without decoding a replay or
+// waiting on an osu! lookup. Old/unresolved summaries can be refreshed later.
+export async function readUploadedReplayDescription(id: string): Promise<UploadedReplayDescription | null> {
+  const normalized = normalizeUploadedReplayId(id);
+  if (!normalized) return null;
+  const cached = await getPersistentCacheEntry<UploadedReplayDescription>(descriptionCacheKey(normalized));
+  if (cached.hit) return cached.value;
+  return getJsonArtifact<UploadedReplayDescription>(getUploadedReplayDescStorageKey(normalized));
+}
+
 // Upload-time fast path: the upload handler already fully parsed the replay
 // during validation and usually resolved its map too, so the description
 // costs no lookup here and the community list never has to re-download and

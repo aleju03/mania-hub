@@ -300,20 +300,24 @@ function UploadReplayBrowser({
   useEffect(() => {
     if (communityUploadsCache && Date.now() - communityUploadsCache.fetchedAt < COMMUNITY_UPLOADS_CLIENT_TTL) return;
     let cancelled = false;
-    getRecentCommunityUploads()
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => getRecentCommunityUploads()
       .then((result) => {
+        if (cancelled) return;
         const entries = result.uploads.map((upload) => communityUploadToRecentEntry(upload, t`Unknown beatmap`));
-        communityUploadsCache = { entries, fetchedAt: Date.now() };
-        if (!cancelled) setCommunityUploads(entries);
+        if (!result.indexing) communityUploadsCache = { entries, fetchedAt: Date.now() };
+        setCommunityUploads(entries);
+        setCommunityUploadsLoading(result.indexing && entries.length === 0);
+        if (result.indexing) timer = setTimeout(load, 2000);
       })
       .catch(() => {
         // The drop zone is the tab's job; the community list is a bonus.
-      })
-      .finally(() => {
         if (!cancelled) setCommunityUploadsLoading(false);
       });
+    void load();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 

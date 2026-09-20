@@ -55,6 +55,7 @@ export function SelectMenu<T extends string>({
   const [search, setSearch] = useState("");
   const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const selected = options.find((option) => option.value === value) ?? options[0];
   const query = search.trim().toLowerCase();
   const visibleOptions = query
@@ -76,7 +77,10 @@ export function SelectMenu<T extends string>({
       if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -89,8 +93,35 @@ export function SelectMenu<T extends string>({
   const SelectedIcon = selected?.icon;
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div
+      ref={ref}
+      className={`relative ${className}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        const arrow = event.key === "ArrowDown" || event.key === "ArrowUp";
+        const edge = open && (event.key === "Home" || event.key === "End") && !(event.target instanceof HTMLInputElement);
+        if (!arrow && !edge) return;
+        event.preventDefault();
+        const key = event.key;
+        const focusOption = () => {
+          const buttons = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []);
+          if (!buttons.length) return;
+          const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
+          const selectedIndex = Math.max(0, buttons.findIndex((button) => button.getAttribute("aria-selected") === "true"));
+          const index = key === "Home" ? 0 : key === "End" ? buttons.length - 1 : focused < 0 ? selectedIndex
+            : (focused + (key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+          buttons[index].focus();
+        };
+        if (!open) {
+          setOpen(true);
+          requestAnimationFrame(focusOption);
+        } else focusOption();
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label={ariaLabel}
@@ -118,6 +149,7 @@ export function SelectMenu<T extends string>({
             exit={{ opacity: 0, y: dropUp ? 4 : -4, scale: 0.98 }}
             transition={{ duration: 0.12 }}
             role="listbox"
+            aria-label={ariaLabel}
             style={{ maxHeight: MENU_MAX_HEIGHT_PX }}
             className={`absolute z-[70] min-w-[9.5rem] overflow-y-auto rounded-lg border border-osu-b3/50 bg-osu-b5 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)] ${
               align === "right" ? "right-0" : "left-0"
@@ -147,11 +179,11 @@ export function SelectMenu<T extends string>({
                   type="button"
                   role="option"
                   aria-selected={active}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
+                  onClick={() => {
                     onChange(option.value);
                     setOpen(false);
                     setSearch("");
+                    triggerRef.current?.focus();
                   }}
                   className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors cursor-pointer ${
                     active ? "bg-osu-b3/50 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"

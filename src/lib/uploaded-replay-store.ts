@@ -145,8 +145,9 @@ async function listLocalUploadedReplays(): Promise<UploadedReplayListEntry[]> {
 // lists both, so the community pages look the way they do on the live site
 // with its uploads (reads fall through to R2 anyway, and nothing here writes),
 // with the local drops on top. Listing failures read as "nothing", never an
-// error.
-export async function listRecentUploadedReplays(limit: number): Promise<UploadedReplayListEntry[]> {
+// error, unless a catalog reconciliation requests strict mode so a storage
+// outage cannot be mistaken for an empty bucket.
+export async function listRecentUploadedReplays(limit: number, strict = false): Promise<UploadedReplayListEntry[]> {
   const entries: UploadedReplayListEntry[] = [];
   const seen = new Set<string>();
   const add = (list: UploadedReplayListEntry[]) => {
@@ -160,12 +161,16 @@ export async function listRecentUploadedReplays(limit: number): Promise<Uploaded
   if (uploadedReplaysUseR2()) {
     try {
       add(await listR2UploadedReplays());
-    } catch {
+    } catch (error) {
+      if (strict) throw error;
       return [];
     }
   } else {
     add(await listLocalUploadedReplays().catch(() => []));
-    if (isR2ReplayCacheConfigured()) add(await listR2UploadedReplays().catch(() => []));
+    if (isR2ReplayCacheConfigured()) add(await listR2UploadedReplays().catch((error) => {
+      if (strict) throw error;
+      return [];
+    }));
   }
 
   return entries.sort((a, b) => b.uploadedAt - a.uploadedAt).slice(0, Math.max(0, limit));

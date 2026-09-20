@@ -45,20 +45,20 @@ export function ReplayRecentlyViewed({
 
   return (
     <div className={`${sidebar ? "w-full" : "max-w-5xl mx-auto"} ${className}`}>
-      <div className={`relative mb-3 flex items-center ${sidebar ? "justify-between gap-3" : "justify-center"}`}>
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
+      <div className={`mb-3 flex items-center gap-3 ${showRemove || action ? "justify-between" : "justify-center"}`}>
+        <h4 className="min-w-0 text-xs font-semibold uppercase tracking-wider text-osu-f1">
           {heading}
         </h4>
         {showRemove ? (
           <button
             type="button"
             onClick={onClear}
-            className={`rounded-lg px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b4 hover:text-white ${sidebar ? "-mr-2" : "absolute right-0"}`}
+            className="-mr-2 shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b4 hover:text-white"
           >
             <Trans>Clear</Trans>
           </button>
         ) : action ? (
-          <div className={sidebar ? "-mr-2" : "absolute right-0"}>{action}</div>
+          <div className="-mr-2 shrink-0">{action}</div>
         ) : null}
       </div>
 
@@ -82,7 +82,7 @@ export function ReplayRecentlyViewed({
               key={entry.key}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.02 }}
+              transition={{ delay: Math.min(index, 8) * 0.02 }}
               className="group relative shrink-0 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4"
             >
               {entry.coverUrl && (

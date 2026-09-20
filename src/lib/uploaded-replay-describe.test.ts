@@ -36,7 +36,7 @@ vi.mock("./replay-upload", async (importActual) => {
 
 import type { OsuMod } from "./types";
 import type { UploadedReplayParseResult } from "./replay-upload";
-import { DESCRIPTION_VERSION, describeUploadedReplayById, persistUploadedReplayDescription, type UploadedReplayDescription } from "./uploaded-replay-describe";
+import { DESCRIPTION_VERSION, describeUploadedReplayById, readUploadedReplayDescription, persistUploadedReplayDescription, type UploadedReplayDescription } from "./uploaded-replay-describe";
 
 const VALID_ID = "abcdefghijklmnop"; // 16 chars, matches the id pattern
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,6 +102,16 @@ describe("describeUploadedReplayById caching", () => {
     expect(result).toBe(cached);
     expect(readUploadedReplay).not.toHaveBeenCalled();
     expect(setPersistentCache).not.toHaveBeenCalled();
+  });
+
+  it("reads an old gallery summary without decoding the replay or retrying osu!", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: false });
+    const stored = unresolvedStored({ version: 1, computedAt: 0 });
+    getJsonArtifact.mockResolvedValue(stored as never);
+    expect(await readUploadedReplayDescription(VALID_ID)).toEqual(stored);
+    expect(readUploadedReplay).not.toHaveBeenCalled();
+    expect(osuFetch).not.toHaveBeenCalled();
+    expect(putJsonArtifact).not.toHaveBeenCalled();
   });
 
   it("does not cache a null description so a transient miss isn't pinned", async () => {
