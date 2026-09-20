@@ -561,14 +561,12 @@ function KofiSupportButton() {
           <div
             role="dialog"
             aria-modal="true"
+            aria-label={i._(msg`Support mania-tracker`)}
             className="relative z-10 w-[min(400px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl pointer-events-auto"
           >
             <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
-              <div className="text-left">
-                <div className="text-sm font-bold text-white">{i._(msg`Support mania-tracker`)}</div>
-                <div className="text-[11px] text-osu-f1">
-                  {i._(msg`If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going.`)} <Heart className="inline h-3 w-3 align-[-1px] text-osu-pink" aria-hidden="true" />
-                </div>
+              <div className="text-left text-[11px] text-osu-f1">
+                {i._(msg`If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going.`)} <Heart className="inline h-3 w-3 align-[-1px] text-osu-pink" aria-hidden="true" />
               </div>
               <button
                 type="button"
@@ -581,7 +579,7 @@ function KofiSupportButton() {
             </div>
             <iframe
               src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
-              title="Support aleju03 on Ko-fi"
+              title="Support Mania Tracker on Ko-fi"
               loading="eager"
               scrolling="yes"
               allow="payment *"
