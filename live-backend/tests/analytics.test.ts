@@ -94,6 +94,18 @@ describe("deviceKindFor", () => {
 });
 
 describe("AnalyticsStore capture + monitor", () => {
+  it("keeps passive load measurements out of both the live and polled activity feeds", async () => {
+    store.capture(pageview({ event: "replay_load_result", properties: { success: true, duration_ms: 1200 } }));
+    store.capture(pageview({ event: "page_load_result", properties: { success: true, duration_ms: 400 } }));
+    store.capture(pageview());
+    await store.flush();
+    const data = await store.getMonitorData({ rangeHours: 24, now: NOW });
+    expect(data.recentEvents.map((row) => row.event)).toEqual(["$pageview"]);
+    expect(data.eventsInRange).toBe(3);
+    for (const name of ["page_load_result", "replay_load_result"]) {
+      expect(store.feedFilterAccepts(normalizeAnalyticsEvent(pageview({ event: name }), {})!)).toBe(false);
+    }
+  });
   it("persists captured events and answers the overview", async () => {
     store.capture(pageview({ distinctId: "a" }), {});
     store.capture(pageview({ distinctId: "b", path: "/maps" }), { geoCountry: "CR" });

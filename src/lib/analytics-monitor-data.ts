@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
 import { getServerLiveBackendUrl } from "./live-backend";
+import type { AnalyticsProductResponse } from "../../live-backend/src/shared/analytics-insights";
 import {
   ANALYTICS_COLD_RESPONSE_BUDGET_MS,
   ANALYTICS_DEFAULT_RANGE_HOURS,
@@ -212,6 +213,20 @@ export const getAnalyticsEventCatalog = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error(`Analytics event catalog failed (${response.status}).`);
     const payload = await response.json() as { events?: AnalyticsEventCatalogEntry[] };
     return payload.events ?? [];
+  });
+
+export const getAnalyticsProductInsights = createServerFn({ method: "POST" })
+  .handler(async (): Promise<AnalyticsProductResponse> => {
+    await requireAdminAccess("Analytics audience and reliability");
+    const base = getServerLiveBackendUrl();
+    const token = process.env.LIVE_ADMIN_TOKEN;
+    if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN to use analytics.");
+    const response = await fetch(`${base}/api/admin/analytics/product`, {
+      headers: { authorization: `Bearer ${token}`, connection: "close" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error(`Analytics insights failed (${response.status}).`);
+    return await response.json() as AnalyticsProductResponse;
   });
 
 /* Who fired one event. The mirror of getAnalyticsViewerEvents: that one starts

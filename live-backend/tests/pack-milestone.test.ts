@@ -7,7 +7,7 @@ import {
   claimPackMilestoneOnce,
   countPacksOpened,
   getPackMilestoneStatus,
-  PACK_MILESTONE,
+  PACK_MILESTONES,
   resetPackMilestoneStatusCache,
 } from "../src/features/pack-milestone.js";
 import {
@@ -21,10 +21,13 @@ import {
   spendPackOpen,
 } from "../src/features/pack-wallets.js";
 
-/* The pack-count milestone: the golden card for the open that makes the
-   number. Everything here is server-decided (the sum, the unique claim and
-   the variant key), and the golden card must not collide with the completion
-   reward or the Eternal pull. */
+/* The pack-count milestones: the golden card for the open that makes each
+   number, one per million from 1M to 9M. Everything here is server-decided
+   (the sum, the unique claim and the variant key), and a golden card must not
+   collide with the completion reward or the Eternal pull. */
+
+const FIRST = PACK_MILESTONES[0];
+const SECOND = PACK_MILESTONES[1];
 
 let dir = "";
 let db: Db;
@@ -44,11 +47,11 @@ async function seedUser(userId: number, username = `player${userId}`): Promise<v
 }
 
 /* Puts the site-wide total at `target - short` through one filler wallet. */
-async function seedOpened(short: number): Promise<void> {
+async function seedOpened(short: number, target = FIRST.target): Promise<void> {
   await exec(
     db,
     "insert or replace into pack_wallets (user_id, payload, rev, updated_at) values (?, ?, 1, ?)",
-    [FILLER, JSON.stringify({ openedPacks: PACK_MILESTONE.target - short, shards: 0, charges: 0 }), NOW],
+    [FILLER, JSON.stringify({ openedPacks: target - short, shards: 0, charges: 0 }), NOW],
   );
 }
 
@@ -75,14 +78,14 @@ describe("the golden card", () => {
       return IDENTITY;
     }, NOW);
     expect(deal.dealt).toBe(false);
-    expect(deal.packsOpened).toBe(PACK_MILESTONE.target - 1);
+    expect(deal.packsOpened).toBe(FIRST.target - 1);
     expect(resolved).toBe(0);
   });
 
   it("is dealt once to the open that makes the number, as an Eternal variant with the badge and motif", async () => {
     await seedOpened(1);
     await spendPackOpen(db, OWNER, { kind: "charge" }, NOW);
-    expect(await countPacksOpened(db)).toBe(PACK_MILESTONE.target);
+    expect(await countPacksOpened(db)).toBe(FIRST.target);
     const deal = await claimPackMilestoneOnce(db, OWNER, async () => IDENTITY, NOW);
     expect(deal.dealt).toBe(true);
     expect(deal.cardKey).toBe(`${OWNER}:v1`);
@@ -90,8 +93,8 @@ describe("the golden card", () => {
 
     const card = await getPackCollectionCard(db, OWNER, deal.cardKey!);
     expect(card?.tier).toBe("eternal");
-    expect(card?.customLabel).toBe(PACK_MILESTONE.goldenLabel);
-    expect(card?.motif?.url).toBe(PACK_MILESTONE.goldenMotif.url);
+    expect(card?.customLabel).toBe(FIRST.goldenLabel);
+    expect(card?.motif?.url).toBe(FIRST.goldenMotif.url);
     expect(card?.motif?.palette).toBe("gold");
     expect(card?.copies).toBe(1);
     expect(card?.serial).toBe(1);
@@ -100,7 +103,7 @@ describe("the golden card", () => {
     const registry = (await exec(db, "select * from pack_milestones")).rows;
     expect(registry).toHaveLength(1);
     expect(registry[0].owner_user_id).toBe(OWNER);
-    expect(registry[0].packs_opened).toBe(PACK_MILESTONE.target);
+    expect(registry[0].packs_opened).toBe(FIRST.target);
 
     // The next open, from anyone, gets nothing: the milestone is claimed.
     await spendPackOpen(db, OTHER, { kind: "charge" }, NOW + 1);
@@ -158,16 +161,55 @@ describe("the golden card", () => {
     },
   );
 
+  it("moves on to the next number once one is claimed, with that number's badge and emblem", async () => {
+    await seedOpened(1);
+    await spendPackOpen(db, OWNER, { kind: "charge" }, NOW);
+    expect((await claimPackMilestoneOnce(db, OWNER, async () => IDENTITY, NOW)).dealt).toBe(true);
+
+    // Still short of the second number (the winner's own open counts too):
+    // nothing, however many packs are opened.
+    await seedOpened(2, SECOND.target);
+    const early = await claimPackMilestoneOnce(db, OTHER, async () => IDENTITY, NOW + 1);
+    expect(early.dealt).toBe(false);
+
+    await spendPackOpen(db, OTHER, { kind: "charge" }, NOW + 2);
+    const second = await claimPackMilestoneOnce(db, OTHER, async () => IDENTITY, NOW + 2);
+    expect(second.dealt).toBe(true);
+    expect(second.milestone?.id).toBe(SECOND.id);
+    const card = await getPackCollectionCard(db, OTHER, second.cardKey!);
+    expect(card?.customLabel).toBe("2,000,000th pack");
+    expect(card?.motif?.url).toBe(SECOND.goldenMotif.url);
+    expect(card?.motif?.url).toContain("milestone-2m.png");
+    // A number apiece: the first collector's card is untouched and the
+    // registry holds one row per milestone.
+    expect((await exec(db, "select milestone_id from pack_milestones order by target")).rows.map((row) => row.milestone_id))
+      .toEqual([FIRST.id, SECOND.id]);
+  });
+
+  it("deals at most one golden card per open when the site is already past several numbers", async () => {
+    await seedOpened(1, SECOND.target * 2);
+    await spendPackOpen(db, OWNER, { kind: "charge" }, NOW);
+    const first = await claimPackMilestoneOnce(db, OWNER, async () => IDENTITY, NOW);
+    expect(first.milestone?.id).toBe(FIRST.id);
+    const next = await claimPackMilestoneOnce(db, OWNER, async () => IDENTITY, NOW + 1);
+    expect(next.milestone?.id).toBe(SECOND.id);
+    expect(next.cardKey).toBe(`${OWNER}:v2`);
+  });
+
   it("reads back on the public status with the winner's name", async () => {
     await seedOpened(1);
     await spendPackOpen(db, OWNER, { kind: "charge" }, NOW);
     let status = await getPackMilestoneStatus(db, NOW);
-    expect(status?.opened).toBe(PACK_MILESTONE.target);
-    expect(status?.claim).toBeNull();
+    expect(status?.opened).toBe(FIRST.target);
+    expect(status?.pending?.id).toBe(FIRST.id);
+    expect(status?.claims).toEqual([]);
     await claimPackMilestoneOnce(db, OWNER, async () => IDENTITY, NOW);
     status = await getPackMilestoneStatus(db, NOW + 1);
-    expect(status?.claim?.ownerUserId).toBe(OWNER);
-    expect(status?.claim?.username).toBe("opener");
-    expect(status?.claim?.cardKey).toBe(`${OWNER}:v1`);
+    expect(status?.pending?.id).toBe(SECOND.id);
+    expect(status?.claims).toHaveLength(1);
+    expect(status?.claims[0].milestoneId).toBe(FIRST.id);
+    expect(status?.claims[0].ownerUserId).toBe(OWNER);
+    expect(status?.claims[0].username).toBe("opener");
+    expect(status?.claims[0].cardKey).toBe(`${OWNER}:v1`);
   });
 });

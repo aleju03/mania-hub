@@ -22,6 +22,11 @@ const dan = fileURLToPath(new URL("./live-backend/src/dan", import.meta.url));
 const leoblack = fileURLToPath(new URL("./live-backend/vendor/leoblack", import.meta.url));
 
 export default defineConfig({
+  // The backend has its own config, dependencies and working directory.
+  // Restrict discovery so gitignored investigation copies never run as tests.
+  test: {
+    include: ["{src,scripts}/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
+  },
   plugins: [viteReact({ babel: { plugins: ["@lingui/babel-plugin-lingui-macro"] } })],
   resolve: {
     alias: [

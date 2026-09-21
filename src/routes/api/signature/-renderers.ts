@@ -14,7 +14,6 @@ import type { ReactElement, ReactNode } from "react";
 import { getServerLiveBackendUrl } from "../../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../../lib/live-backend-tokens";
 import { clamp, loadOgFonts, ogAvatarUrl, ogFontList, ogRenderGate } from "../../../lib/og-render";
-import { getAssetOrigin } from "../../../lib/origin";
 import {
   cosmicLaurelDataUrl,
   maniaTierCardElement,
@@ -56,7 +55,12 @@ import type { SignatureTiming } from "../../../lib/signature-timing";
 import type { SignatureProfileSnapshot as ProfileSnapshot, ResolvedSignature } from "../../../lib/signature-resolve";
 import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "../../../lib/types";
-import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../../../components/ui/ModBadge";
+import {
+  loadRenderModBadges,
+  modGlyphColor,
+  renderModBadge,
+  type RenderModBadge,
+} from "../../../lib/og-mod-badge";
 import { starRatingColor } from "../../../components/ui/StarRating";
 
 const SURFACE = "#120d15";
@@ -1595,102 +1599,6 @@ function insightCells(
       false,
     ),
   ];
-}
-
-interface RenderModBadge {
-  acronym: string;
-  color: string;
-  shape: string | null;
-  glyph: string | null;
-}
-
-const recoloredModAssetCache = new Map<string, Promise<string | null>>();
-
-/* Browser badges tint two white SVG masks with CSS. Satori does not reliably
-   implement masks, so the dynamic render fetches those same assets once and
-   puts the colour into the SVG itself. Keeping them as two image layers also
-   preserves the site's exact shield and glyph instead of drawing a second
-   approximation for signatures. */
-async function recoloredModAsset(request: Request, path: string, color: string): Promise<string | null> {
-  const url = new URL(path, getAssetOrigin(request)).toString();
-  const key = `${url}|${color}`;
-  const cached = recoloredModAssetCache.get(key);
-  if (cached) return cached;
-
-  const promise = (async () => {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-      if (!response.ok) return null;
-      const svg = (await response.text())
-        .replaceAll('fill="white"', `fill="${color}"`)
-        .replaceAll('stroke="white"', `stroke="${color}"`);
-      return svgDataUrl(svg);
-    } catch {
-      return null;
-    }
-  })();
-  recoloredModAssetCache.set(key, promise);
-  promise.then((value) => {
-    if (value == null) recoloredModAssetCache.delete(key);
-  });
-  return promise;
-}
-
-function modGlyphColor(color: string): string {
-  const match = /^#([0-9a-f]{6})$/i.exec(color);
-  if (!match) return "#17121a";
-  const value = parseInt(match[1]!, 16);
-  const channel = (shift: number) => Math.round(((value >> shift) & 255) * 0.12).toString(16).padStart(2, "0");
-  return `#${channel(16)}${channel(8)}${channel(0)}`;
-}
-
-async function loadRenderModBadges(request: Request, mods: string[]): Promise<RenderModBadge[]> {
-  return Promise.all(mods.map(async (raw) => {
-    const acronym = raw.toUpperCase();
-    const color = MOD_BADGE_TYPE_COLORS[acronym] ?? "#ff6666";
-    const file = MOD_BADGE_FILE_NAMES[acronym];
-    const [shape, glyph] = await Promise.all([
-      recoloredModAsset(request, "/images/badges/mods/mod-icon.svg", color),
-      file
-        ? recoloredModAsset(request, `/images/badges/mods/mod-${file}.svg`, modGlyphColor(color))
-        : Promise.resolve(null),
-    ]);
-    return { acronym, color, shape, glyph };
-  }));
-}
-
-/* The browser badge is 36x24 with a 100:70 mask centred inside it. The default
-   is its 0.7x profile-card size, including the small transparent side gutters;
-   the stat cells pass a taller badge so it stands where the headline text did. */
-function renderModBadge(badge: RenderModBadge, index: number, height = 16.8): ReactNode {
-  const width = height * 1.5;
-  const artWidth = (height * 10) / 7;
-  const artLeft = (width - artWidth) / 2;
-  return h("div", {
-    key: `${badge.acronym}-${index}`,
-    style: {
-      display: "flex", alignItems: "center", justifyContent: "center", position: "relative",
-      width: `${width}px`, height: `${height}px`, flexShrink: 0,
-      background: badge.shape ? "transparent" : badge.color,
-      borderRadius: badge.shape ? "0" : "6px",
-    },
-  }, [
-    badge.shape
-      ? h("img", {
-        key: "shape", src: badge.shape, width: artWidth, height,
-        style: { position: "absolute", top: "0", left: `${artLeft}px`, width: `${artWidth}px`, height: `${height}px` },
-      })
-      : h("div", { key: "shape" }),
-    badge.glyph
-      ? h("img", {
-        key: "glyph", src: badge.glyph, width: artWidth, height,
-        style: { position: "absolute", top: "0", left: `${artLeft}px`, width: `${artWidth}px`, height: `${height}px` },
-      })
-      : h("div", {
-        key: "glyph",
-        style: { position: "relative", fontSize: `${Math.round(height * 0.48)}px`, lineHeight: 1, fontWeight: 900, color: modGlyphColor(badge.color) },
-      }, badge.acronym),
-  ]);
 }
 
 /* The star pill the site draws everywhere a map is named, in satori's terms:

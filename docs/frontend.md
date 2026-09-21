@@ -1,6 +1,6 @@
 # Frontend Reference
 
-Deep reference for the frontend: route/component map, live data flow, client state, OG images, the BBCode editor. The condensed guides are `AGENTS.md` / `CLAUDE.md` at the repo root.
+Deep reference for the frontend: route/component map, live data flow, client state, OG images, the BBCode editor. The condensed guide is `AGENTS.md` at the repo root.
 
 ## Route and component map
 
@@ -39,7 +39,9 @@ Client state uses Zustand in `src/store.ts`, persisted to localStorage under `ma
 
 Tracker, snipes and report pages serve `noindex` in their route heads and remain crawlable so search engines can read that directive. `/packs?view=streak` also serves `noindex`; the main `/packs` landing page stays indexable. The backend's streamed `.osk` downloads carry `X-Robots-Tag: noindex`, while public skin previews remain indexable.
 
-OG images are rendered by `src/routes/api/og.ts` (@vercel/og) and cached in R2 keyed by the `OG_IMAGE_VERSION` constant in `src/lib/seo.ts`; bump it there when changing OG layouts. Meta and OG URL builders also live in `src/lib/seo.ts`; the sitemap is `src/routes/api/sitemap.ts`. Shared uploaded replays use their public upload id to render the normal replay result card from the persisted uploaded-replay description, since a manually uploaded `.osr` has no guaranteed public score id.
+The unfiltered newest `/skins` catalogue server-renders every page, with router links for pagination and a canonical URL for each page (`/skins`, `/skins?page=1`, and so on; page numbers are zero-based). Pages past the catalogue's end return 404 when the backend answers. Filtered, sorted and viewer-specific listings remain client-fetched and serve `noindex`. The anonymous SSR fetch retains its short timeout and seeds the browser cache without an extra hydration fetch; the sitemap continues to list every public skin detail page.
+
+OG images are rendered by `src/routes/api/og.ts` (@vercel/og) and cached in R2 keyed by the `OG_IMAGE_VERSION` constant in `src/lib/seo.ts`; bump it there when changing OG layouts. Meta and OG URL builders also live in `src/lib/seo.ts`; the sitemap is `src/routes/sitemap[.]xml.ts`. Shared uploaded replays use their public upload id to render the normal replay result card from the persisted uploaded-replay description, since a manually uploaded `.osr` has no guaranteed public score id.
 
 The frontend-wide API/server-function/OG limiter trusts `cf-connecting-ip` only when `TRUST_PROXY_HEADERS` is explicitly enabled. That switch is valid only for a Cloudflare-only origin; otherwise it stays off and all requests use the conservative shared `unknown` bucket. OG rasterization is single-flight per key and guarded by a hard two-render semaphore, including the cold default-card fallback.
 

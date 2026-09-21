@@ -145,9 +145,10 @@ describe("AnalyticsViewersCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "PP" }));
     await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "pp", country: null } }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Rank" }));
-    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "rank", country: null } }));
-    expect(screen.getByRole("button", { name: "Rank" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Rank" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenLastCalledWith({ data: { sort: "recent", country: null } }));
+    expect(screen.getByRole("button", { name: "Recent" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "PP" }).getAttribute("aria-pressed")).toBe("false");
   });
 

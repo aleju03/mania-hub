@@ -68,7 +68,7 @@ export function AnalyticsPulse({
               <span className="ml-1.5 normal-case tracking-normal text-osu-l2/70">last 15m</span>
             </div>
             <div className="mt-0.5 truncate text-[10px] text-osu-l2/60">
-              {formatNumber(hereNow)} here now
+              {formatNumber(hereNow)} active in last 5m
               {onlineCountries > 0 ? ` from ${onlineCountries} ${onlineCountries === 1 ? "country" : "countries"}` : null}
             </div>
           </div>
@@ -77,10 +77,10 @@ export function AnalyticsPulse({
         <PulseStat label="Pageviews" value={formatNumber(data.pageviewsInRange)} hint={hint} />
         <PulseStat label="Events" value={formatNumber(data.eventsInRange)} hint={hint} />
         <PulseStat
-          label="Bounce"
+          label="Home single-view"
           value={bouncePct == null ? "—" : `${bouncePct}%`}
           hint={data.bounce.landers > 0
-            ? `${formatNumber(data.bounce.bounced)} of ${formatNumber(data.bounce.landers)} landers`
+            ? `${formatNumber(data.bounce.bounced)} of ${formatNumber(data.bounce.landers)} home visitors had exactly one pageview in this range`
             : `no landers ${hint}`}
         />
       </div>
@@ -169,7 +169,7 @@ function formatBucketWidth(bucketMs: number): string {
 
 function PulseStat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="flex flex-col justify-center bg-osu-b4/40 px-4 py-2.5 sm:flex-1 sm:py-3">
+    <div className="flex min-w-0 flex-col justify-center bg-osu-b4/40 px-4 py-2.5 sm:flex-1 sm:py-3">
       <div className="text-2xl font-bold leading-none text-white">{value}</div>
       <div className="mt-1 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
       <div className="mt-0.5 truncate text-[10px] text-osu-l2/60" title={hint}>{hint}</div>

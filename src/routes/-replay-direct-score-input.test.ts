@@ -27,6 +27,6 @@ describe("replay direct score input", () => {
     expect(routeSource).toContain("Downloading replay and beatmap");
     expect(routeSource).toContain("Still fetching the replay and chart");
     expect(routeSource).toContain("replay_load_slow");
-    expect(routeSource).toContain("loadReplay(scoreId, loaderData.score)");
+    expect(routeSource).toContain("loadReplay(scoreId, loaderData.score, controller.signal)");
   });
 });

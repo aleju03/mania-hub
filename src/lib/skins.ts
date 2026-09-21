@@ -352,14 +352,15 @@ const SKINS_SSR_TIMEOUT_MS = 800;
 
 // The server-render twin of fetchSkinsListDirect: same public list, fetched
 // over LIVE_BACKEND_URL (localhost on the VPS) rather than the public api host,
-// and only ever the default view - no filters, page 0, newest. That is the one
-// /skins URL in the sitemap and the only one a crawler lands on, and asking for
-// it anonymously keeps the response the shared-cacheable one.
-export async function fetchSkinsListSsr(): Promise<SkinsListResult | null> {
+// with only a page number: no filters or viewer identity. Asking anonymously
+// keeps every page of the catalogue public and shared-cacheable.
+export async function fetchSkinsListSsr(page = 0): Promise<SkinsListResult | null> {
   const base = getServerLiveBackendUrl();
   if (!base) return null;
+  const query = new URLSearchParams({ pageSize: String(SKINS_PAGE_SIZE) });
+  if (Number.isSafeInteger(page) && page > 0) query.set("page", String(page));
   try {
-    const response = await fetch(`${base}/api/skins/list?pageSize=${SKINS_PAGE_SIZE}`, {
+    const response = await fetch(`${base}/api/skins/list?${query}`, {
       signal: AbortSignal.timeout(SKINS_SSR_TIMEOUT_MS),
     });
     if (!response.ok) return null;
@@ -370,9 +371,7 @@ export async function fetchSkinsListSsr(): Promise<SkinsListResult | null> {
   }
 }
 
-// One sitemap row per public skin page. Nothing links to these in the
-// server-rendered HTML beyond the first page of /skins, so the sitemap is the
-// only crawl path the rest of them have.
+// One sitemap row per public skin page, alongside the crawlable browse pages.
 export interface SkinSitemapEntry {
   path: string;
   // ISO instant of the last change to the skin, or null when unknown; the

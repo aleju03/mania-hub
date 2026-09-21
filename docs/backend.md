@@ -1,6 +1,6 @@
 # Live Backend Reference
 
-Deep reference for `live-backend/`: module map, ingest flow, job queue, HTTP surface, replay video export, retention and storage. The condensed guides are `AGENTS.md` / `CLAUDE.md` at the repo root and `live-backend/CLAUDE.md`. Per-feature models live in `docs/features.md`, `docs/packs.md`, `docs/discord.md`.
+Deep reference for `live-backend/`: module map, ingest flow, job queue, HTTP surface, replay video export, retention and storage. The condensed guides are `AGENTS.md` at the repo root and `live-backend/AGENTS.md`. Per-feature models live in `docs/features.md`, `docs/packs.md`, `docs/discord.md`.
 
 ## Module map
 

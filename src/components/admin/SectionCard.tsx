@@ -5,11 +5,13 @@ export function SectionCard({
   title,
   subtitle,
   actions,
+  compactActions = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  compactActions?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -17,7 +19,7 @@ export function SectionCard({
       {/* Actions drop under the title on a phone: side by side they squeezed the
           heading down to one letter per line. */}
       <div className="px-3 pt-3 pb-2.5 border-b border-osu-b3/20 sm:px-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className={`flex gap-2 sm:gap-3 ${compactActions ? "flex-row items-start justify-between" : "flex-col sm:flex-row sm:items-start sm:justify-between"}`}>
           <div className="min-w-0">
             <div className="text-[11px] font-semibold text-osu-c2 uppercase tracking-wider">{title}</div>
             {subtitle ? <div className="text-[11px] text-osu-f1 mt-0.5">{subtitle}</div> : null}

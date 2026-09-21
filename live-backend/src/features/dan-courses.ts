@@ -18,7 +18,7 @@ import { DAN_SKILLSET_BY_FINGERPRINT } from "./dan-skillset-identity.js";
 // but an exam - the community says "clearing this map at this accuracy IS
 // gamma dan", and a player who has passed that exam should not read as beta
 // because the average of their skillset dans happens to land there. Chart
-// classification stays algorithmic; see the note in CLAUDE.md.
+// classification stays algorithmic; see the note in AGENTS.md.
 //
 // One upload per course, chosen rather than judged: several of these packs also
 // exist as re-uploads (Dan ~ REFORM ~ 2nd Pack sits under MrLanguage,

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import { exec, execBatch, json, parseJson, type Db, type DbStatement } from "../db.js";
 import { logInfo, logWarn, errorContext } from "../logger.js";
+import { ensureProductAnalyticsSchema } from "./analytics-product.js";
+import { AnalyticsProductService } from "./analytics-product-service.js";
 
 // In-house web analytics, the site's only analytics sink. The frontend capture
 // proxy (/api/sync) forwards every tracked event here; rows land in a SEPARATE
@@ -510,6 +512,8 @@ export const CLIENT_STITCH_WINDOW_MS = 30 * 60_000;
 const MAX_STITCH_ENTRIES = 5_000;
 
 export class AnalyticsStore {
+  private readonly product: AnalyticsProductService;
+  private productTimer: ReturnType<typeof setInterval> | null = null;
   private readonly db: Db;
   private readonly options: Required<AnalyticsStoreOptions>;
   private buffer: AnalyticsEventRecord[] = [];
@@ -542,6 +546,7 @@ export class AnalyticsStore {
       displayTimeZone: options.displayTimeZone ?? DEFAULT_DISPLAY_TIME_ZONE,
       databaseUrl: options.databaseUrl ?? null,
     };
+    this.product = new AnalyticsProductService(db, this.options.databaseUrl, this.options);
   }
 
   async ensureSchema(): Promise<void> {
@@ -675,6 +680,7 @@ export class AnalyticsStore {
     `);
 
     await this.backfillViewers();
+    await ensureProductAnalyticsSchema(this.db);
   }
 
   /* One-shot seed so the roster isn't empty on the first boot after deploy:
@@ -707,6 +713,10 @@ export class AnalyticsStore {
   }
 
   start(): void {
+    if (!this.productTimer) {
+      this.productTimer = setInterval(() => { this.product.read(); }, 60_000);
+      this.productTimer.unref();
+    }
     if (!this.flushTimer) {
       this.flushTimer = setInterval(() => {
         void this.flush();
@@ -735,6 +745,8 @@ export class AnalyticsStore {
   }
 
   stop(): void {
+    if (this.productTimer) clearInterval(this.productTimer);
+    this.productTimer = null;
     if (this.flushTimer) clearInterval(this.flushTimer);
     if (this.pruneTimer) clearInterval(this.pruneTimer);
     if (this.rollupTimer) clearInterval(this.rollupTimer);
@@ -842,6 +854,10 @@ export class AnalyticsStore {
     // Serialize flushes so two timers can't interleave inserts.
     this.flushing = this.flushing.then(() => this.flushNow());
     await this.flushing;
+  }
+
+  getProductInsights() {
+    return this.product.read();
   }
 
   private async flushNow(): Promise<void> {
@@ -1228,6 +1244,7 @@ export class AnalyticsStore {
      and the live SSE stream so both always agree. */
   feedFilterAccepts(event: Pick<AnalyticsEventRecord, "distinctId" | "host" | "viewerUsername" | "path" | "event" | "isBot">, recentCountry?: string | null, country?: string | null): boolean {
     if (event.isBot) return false;
+    if (event.event === "page_load_result" || event.event === "replay_load_result") return false;
     if (event.distinctId === "server") return false;
     if (this.options.feedHosts && (!event.host || !this.options.feedHosts.includes(event.host))) return false;
     const excludedViewer = this.options.feedExcludedViewer?.toLowerCase();
@@ -1667,6 +1684,7 @@ export async function computeMonitorSnapshot(
     select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
     from analytics_events
     where ts > ? and is_bot = 0 and distinct_id != 'server'${feedHostClause}${feedViewerClause}${recentCountry ? " and country = ?" : ""}
+      and event not in ('page_load_result', 'replay_load_result')
       and (path is null or path not like '/admin/%')
       and not (event = '$pageview' and path = '/')
     order by ts desc limit ?

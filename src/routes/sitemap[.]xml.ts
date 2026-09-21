@@ -56,8 +56,7 @@ export function buildSitemap(origin: string, skins: SkinSitemapEntry[]): string 
   const urls = [
     ...STATIC_PATHS.map(({ path, changefreq, priority }) =>
       urlEntry(`${origin}${path}`, changefreq, priority)),
-    // Every public skin page. The /skins grid only server-renders its first
-    // page, so for the rest of the catalogue this is the only crawl path.
+    // Every public skin page, also reachable through /skins pagination.
     ...skins.map((skin) =>
       urlEntry(`${origin}${skin.path}`, "monthly", "0.6", lastmodDate(skin.lastmod))),
   ].join("\n");

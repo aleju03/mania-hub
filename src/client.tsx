@@ -2,6 +2,7 @@ import { StrictMode, startTransition } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { StartClient } from "@tanstack/react-start/client";
 import { track } from "./lib/analytics";
+import { installAnalyticsReliability } from "./lib/analytics-reliability";
 import { installDomTranslateGuard } from "./lib/dom-translate-guard";
 import { loadLocaleCatalog } from "./lib/i18n";
 import { readLocaleCookieClient } from "./lib/locale-cookie";
@@ -11,6 +12,7 @@ import { reapplyThemeToDom } from "./store";
 // Must run before hydration so every React commit goes through the patched
 // removeChild/insertBefore (see dom-translate-guard.ts).
 installDomTranslateGuard();
+installAnalyticsReliability();
 
 // The visitor's catalog has to be registered before hydration: the server
 // rendered translated text, and hydrating over it with source strings would

@@ -51,6 +51,21 @@ afterEach(() => {
 });
 
 describe("server-rendered skins list", () => {
+  it("fetches the requested catalogue page without viewer or filter parameters", async () => {
+    const fetchMock = respondWithPages([
+      { skins: [skin(1)], total: 25 },
+      { skins: [skin(25)], total: 25 },
+    ]);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await fetchSkinsListSsr(1);
+
+    expect(result?.page).toBe(1);
+    expect(result?.skins.map((entry) => entry.slug)).toEqual(["skin-25"]);
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(Object.fromEntries(url.searchParams)).toEqual({ page: "1", pageSize: String(SKINS_PAGE_SIZE) });
+  });
+
   it("asks for one unfiltered page of the browse view", async () => {
     const fetchMock = respondWithPages([{ skins: [skin(1)], total: 1 }]);
     globalThis.fetch = fetchMock as unknown as typeof fetch;

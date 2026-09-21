@@ -30,9 +30,23 @@ afterEach(() => {
   // window, so a leftover "hidden" would make later tests flush unexpectedly.
   Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   window.localStorage.clear();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("analytics batching", () => {
+  test("preserves document campaign attribution through SPA URL changes", async () => {
+    window.history.replaceState({}, "", "/maps?utm_source=discord&utm_medium=community&utm_campaign=launch");
+    const { initializeAnalyticsEntry, track } = await loadAnalytics();
+    initializeAnalyticsEntry();
+    window.history.replaceState({}, "", "/packs");
+    track("pack_open");
+    await vi.advanceTimersByTimeAsync(500);
+    const [body] = await beaconBodies(beacon);
+    expect(JSON.parse(body).events[0].properties).toMatchObject({
+      entry_path: "/maps", utm_source: "discord", utm_medium: "community", utm_campaign: "launch",
+      $pathname: "/packs", app_version: expect.any(String),
+    });
+  });
   test("coalesces events fired in the same window into one request", async () => {
     const { track } = await loadAnalytics();
 

@@ -7,7 +7,7 @@ import { cashOutStreakRun, getStreakBoard, guessStreakRound, normalizeStreakGues
 import { applyPackCollectionCardMint, countMissingGoatCards, listMissingGoatCardUserIds, listPackCardMotifUrls, getPackCollectionPoolProgress, getPackShowcase, getPackUserIdentity, getPackWallet, getPullableEternalIdentity, isPackCardMark, listPackCollectionCards, listPackCollectionMissingPlayers, listPackCollectionOwnedCardKeys, mergeImportedPackWallet, mintDealtPackCards, mintEternalSelfCardOnce, mintPulledEternalCard, normalizeAvatarUrl, normalizeCountryCode, normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, packCardKey, recyclePackCollectionCards, setPackShowcase, spendPackOpen, type DealtPackCardSlot, type PackUserIdentity } from "../../features/pack-wallets.js";
 import { getPackCollectorProfile, getPackCommunityStats, getPackShowcaseCards, listPackCollectors, listPackShowcaseWall, normalizePackCollectorSort, PACK_COLLECTOR_PAGE_MAX_SIZE, resolvePackCollector } from "../../features/pack-community.js";
 import { drawPackHand, PACK_DRAW_TYPES, PackPoolUnavailableError, shouldDealEternalSelfCard } from "../../features/pack-draw.js";
-import { claimPackMilestoneOnce, PACK_MILESTONE } from "../../features/pack-milestone.js";
+import { claimPackMilestoneOnce, PACK_MILESTONES_ENABLED } from "../../features/pack-milestone.js";
 import { commitPackWishlistRoll, hasPackWishlistRows, settlePackWishlistOwned } from "../../features/pack-wishlist.js";
 import { logInfo, logWarn } from "../../logger.js";
 import { getPackPoolMembership, getPackPoolRoster } from "../../features/global-rankings.js";
@@ -376,36 +376,37 @@ export async function handlePacksRoutes(req: IncomingMessage, res: ServerRespons
         logWarn("pack_eternal_deal_failed", { userId: ownerUserId, error: String(error) });
       }
     }
-    /* The milestone's golden card (pack-milestone.ts): this open's spend is
+    /* A milestone's golden card (pack-milestone.ts): this open's spend is
        already banked, so the sum it reads includes this pack, and the pack
-       that makes the number is the pack that wins it. One row read while the
-       milestone is unclaimed and nothing at all once it is. Last of all, so
-       the millionth pack ends on it. */
-    if (PACK_MILESTONE.enabled) {
+       that makes the number is the pack that wins it. Cheap while the next
+       number is far off and nothing at all once all nine are gone. Last of
+       all, so the pack that made the number ends on it. */
+    if (PACK_MILESTONES_ENABLED) {
       try {
-        const milestone = await claimPackMilestoneOnce(
+        const deal = await claimPackMilestoneOnce(
           writeDb,
           ownerUserId,
           () => resolveSelfIdentity("api:pack_milestone"),
           Date.now(),
         );
-        if (milestone.dealt && milestone.cardKey) {
+        if (deal.dealt && deal.cardKey && deal.milestone) {
           const identity = await resolveSelfIdentity("api:pack_milestone");
           hand.players.push({
             eternal: true,
             milestone: true,
             userId: ownerUserId,
             ...identity,
-            cardKey: milestone.cardKey,
-            customLabel: PACK_MILESTONE.goldenLabel,
-            motif: PACK_MILESTONE.goldenMotif,
+            cardKey: deal.cardKey,
+            customLabel: deal.milestone.goldenLabel,
+            motif: deal.milestone.goldenMotif,
+            milestoneTarget: deal.milestone.target,
           });
-          isNewByCardKey.set(milestone.cardKey, true);
+          isNewByCardKey.set(deal.cardKey, true);
           logInfo("pack_milestone_claimed", {
-            milestoneId: PACK_MILESTONE.id,
+            milestoneId: deal.milestone.id,
             ownerUserId,
-            cardKey: milestone.cardKey,
-            packsOpened: milestone.packsOpened,
+            cardKey: deal.cardKey,
+            packsOpened: deal.packsOpened,
             packType,
           });
         }

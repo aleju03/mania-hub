@@ -158,7 +158,7 @@ export function AnalyticsStream({
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center rounded-md border border-osu-b3/30 bg-osu-b5/70 p-0.5">
               <ModeButton active={mode === "stream"} onClick={() => selectMode("stream")} icon={<List className="h-3 w-3" />} label="Stream" />
-              <ModeButton active={mode === "sessions"} onClick={() => selectMode("sessions")} icon={<LayoutGrid className="h-3 w-3" />} label="Sessions" />
+              <ModeButton active={mode === "sessions"} onClick={() => selectMode("sessions")} icon={<LayoutGrid className="h-3 w-3" />} label="Visitor trails" />
             </div>
             <AnalyticsCountryFilter country={country} options={countries} onChange={onCountryChange} />
           </div>
@@ -489,6 +489,7 @@ function SessionRows({
 
   return (
     <>
+      <p className="mb-2 text-[10px] text-osu-f1">Trails group the loaded events by browser and can span several visits. Durations show the observed event span, not active time.</p>
       <div className="max-h-[560px] space-y-1 overflow-y-auto pr-1">
         {shown.map((session) => {
           const open = toggled.has(session.distinctId) !== defaultOpen;
@@ -529,7 +530,7 @@ function SessionRows({
                 <span className="hidden flex-shrink-0 text-[10px] text-osu-f1 sm:inline">
                   {formatNumber(session.events.length)} step{session.events.length === 1 ? "" : "s"}
                 </span>
-                <span className="w-10 flex-shrink-0 text-right font-mono text-[10px] text-osu-f1 sm:w-12" title="session length">
+                <span className="w-10 flex-shrink-0 text-right font-mono text-[10px] text-osu-f1 sm:w-12" title="Time between the first and last events in this loaded trail; not active time or a complete session">
                   {formatAnalyticsDuration(session.durationMs)}
                 </span>
                 <ChevronDown className={`h-3 w-3 flex-shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />

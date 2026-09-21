@@ -39,7 +39,6 @@ const PAGE_SIZE = 100;
 const SORTS: Array<{ id: AnalyticsViewerSort; label: string; title: string }> = [
   { id: "recent", label: "Recent", title: "Newest visit first" },
   { id: "pp", label: "PP", title: "Highest pp first" },
-  { id: "rank", label: "Rank", title: "Best global rank first" },
 ];
 
 export function AnalyticsViewersCard() {

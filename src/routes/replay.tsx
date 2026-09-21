@@ -877,7 +877,7 @@ function ReplayPage() {
     };
   }, [replay, scoreUserId, scoreUserName, scoreUserAvatar]);
 
-  const loadReplay = useCallback(async (sid: number, initialScore?: OsuScore | null) => {
+  const loadReplay = useCallback(async (sid: number, initialScore: OsuScore | null | undefined, signal: AbortSignal) => {
     preloadReplayRenderer();
     const loadStartMs = performance.now();
     let scoreMs = 0;
@@ -904,6 +904,7 @@ function ReplayPage() {
       const score = initialScore?.id === sid
         ? initialScore
         : await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
+      if (signal.aborted) return;
       scoreMs = performance.now() - loadStartMs;
       if (score) {
         const availability = getReplayScoreAvailability(score);
@@ -939,13 +940,13 @@ function ReplayPage() {
           .then((result) => {
             beatmapFileMs = performance.now() - assetsStartMs;
             beatmapFileFinalStatus = result.cacheStatus === "hit" ? "cached" : "fetched";
-            setReplayBeatmapFileStatus(beatmapFileFinalStatus);
+            if (!signal.aborted) setReplayBeatmapFileStatus(beatmapFileFinalStatus);
             return result;
           })
           .catch(() => {
             beatmapFileMs = performance.now() - assetsStartMs;
             beatmapFileFinalStatus = "unavailable";
-            setReplayBeatmapFileStatus("unavailable");
+            if (!signal.aborted) setReplayBeatmapFileStatus("unavailable");
             return null;
           })
         : Promise.resolve(null);
@@ -957,6 +958,9 @@ function ReplayPage() {
           }),
         beatmapFilePromise,
       ]);
+      // Navigation can replace this load while its requests are in flight.
+      // An abandoned load neither updates the next viewer nor reports a result.
+      if (signal.aborted) return;
 
       setReplayLoadingStep("viewer");
       // Converts re-run the lazer conversion from the .osu file, so the parsed
@@ -981,6 +985,12 @@ function ReplayPage() {
       // went, so slow-load complaints are diagnosable from the analytics feed
       // instead of guesswork (score lookup vs replay fetch vs chart fetch vs parsing).
       const totalMs = performance.now() - loadStartMs;
+      track("replay_load_result", {
+        $pathname: "/replay",
+        replay_score_id: String(sid),
+        duration_ms: Math.round(totalMs),
+        success: parsedBeatmap != null,
+      });
       if (totalMs >= 5_000) {
         track("replay_load_slow", {
           replay_score_id: String(sid),
@@ -993,10 +1003,17 @@ function ReplayPage() {
         });
       }
     } catch (e) {
+      if (signal.aborted) return;
       if (isReplayFileMissingError(e)) setError(i18n._(replayFileMissingMessage));
       else setError(e instanceof Error ? e.message : t`Failed to load replay`);
+      track("replay_load_result", {
+        $pathname: "/replay",
+        replay_score_id: String(sid),
+        duration_ms: Math.round(performance.now() - loadStartMs),
+        success: false,
+      });
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -1008,8 +1025,9 @@ function ReplayPage() {
       playerScoreRequestRef.current += 1;
       setLoadingScores(false);
       setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
-      loadReplay(scoreId, loaderData.score);
-      return;
+      const controller = new AbortController();
+      void loadReplay(scoreId, loaderData.score, controller.signal);
+      return () => controller.abort();
     }
     if (uploadId) return;
 

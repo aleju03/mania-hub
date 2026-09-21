@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, Trophy, TriangleAlert, User, type LucideIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
@@ -143,6 +143,29 @@ export function InlineCountryFlag({ country }: { country: string | null }) {
 
 export function AnalyticsEmptyMessage({ text }: { text: string }) {
   return <div className="text-[11px] text-osu-f1 text-center py-6">{text}</div>;
+}
+
+export function AnalyticsBarRow({
+  children,
+  pct,
+  gradient,
+  className = "",
+}: {
+  children: ReactNode;
+  pct: number;
+  gradient: string;
+  className?: string;
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-lg bg-osu-b5/50 ${className}`}>
+      <div className={`absolute inset-y-0 left-0 ${gradient}`} style={{ width: `${pct}%` }} />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+export function analyticsBarPercent(value: number, max: number): number {
+  return value > 0 ? Math.max(3, Math.round((value / Math.max(1, max)) * 100)) : 0;
 }
 
 export function AnalyticsErrorBanner({ message }: { message: string }) {

@@ -32,8 +32,10 @@ import {
   getDisplayedRank,
   getDisplayedTotalScore,
   getManiaJudgementCounts,
-  getModAcronyms,
+  getModDisplayList,
+  withModRate,
 } from "../../lib/score";
+import { loadRenderModBadges, renderModBadge, type ModBadgeInput } from "../../lib/og-mod-badge";
 import { readCurrentAuth } from "../../lib/auth-server";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { countryTopPlaysTitle, OG_IMAGE_VERSION } from "../../lib/seo";
@@ -671,7 +673,7 @@ interface ReplayOgCardData {
   avatarUrl: string;
   avatarUserId?: number;
   countryCode: string;
-  modsLabel: string;
+  mods: ModBadgeInput[];
   rank: string;
   accuracy: number;
   totalScore: number | null;
@@ -694,7 +696,7 @@ function scoreReplayOgData(score: OsuScore): ReplayOgCardData {
     avatarUrl: score.user?.avatar_url ?? "",
     avatarUserId: score.user?.id,
     countryCode: score.user?.country_code ?? "",
-    modsLabel: getModAcronyms(score.mods).join(""),
+    mods: getModDisplayList(score.mods),
     rank: getDisplayedRank(score),
     // Stable plays are judged on the 300-weighted scale, but osu! reports the
     // 305-weighted (rainbow-MAX) accuracy for them too, so read the same
@@ -726,7 +728,7 @@ function uploadedReplayOgData(description: UploadedReplayDescription): ReplayOgC
     // into a second username lookup against osu!.
     avatarUrl: "https://osu.ppy.sh/images/layout/avatar-guest@2x.png",
     countryCode: "",
-    modsLabel: description.mods.join(""),
+    mods: withModRate(description.mods, description.modRate),
     rank: description.grade,
     accuracy: description.accuracy,
     totalScore: description.totalScore,
@@ -743,6 +745,15 @@ function uploadedReplayOgData(description: UploadedReplayDescription): ReplayOgC
     ],
   };
 }
+
+// Fixed parts of the replay hero row, shared by the layout and the one
+// measurement it has to make (how much room the username has left).
+const CONTENT_PAD_X = 60;
+const AVATAR_SIZE = 120;
+const HERO_GAP = 24;
+const MOD_BADGE_GAP = 8;
+const GRADE_W = 184;
+const GRADE_H = 92;
 
 /* Replay: an osu! result screen rebuilt for a 1200x630 embed. Reading
    order top to bottom is the same as the game's: which map, who played
@@ -763,7 +774,6 @@ async function renderReplayOgCard(
 ): Promise<Response> {
   const {
     cover,
-    modsLabel,
     rank: displayedRank,
     accuracy,
     judgements,
@@ -771,6 +781,37 @@ async function renderReplayOgCard(
     maxCombo,
     playDate,
   } = data;
+
+  // Keep room for the username, and disclose any mods beyond the four badges
+  // that fit instead of making a larger stack look like a four-mod play.
+  const modBadges = await loadRenderModBadges(request, data.mods.slice(0, 4));
+  const extraMods = Math.max(0, data.mods.length - modBadges.length);
+  const extraModsWidth = 40;
+
+  /* The hero row is one line of fixed parts (avatar, badges, grade) plus one
+     elastic part (the username), and satori has neither ellipsis nor a way to
+     shrink text to fit. So measure the fixed parts here and give the name
+     whatever is left: a four-mod play keeps its username whole, just set a
+     little smaller, instead of running under the badges. */
+  const modBadgeHeight = modBadges.length >= 3 ? 44 : 52;
+  const modsWidth = modBadges.reduce((total, badge) => {
+    const pill = modBadgeHeight * 1.5;
+    const tail = badge.tail ? Math.round(modBadgeHeight * 2.2) - Math.round(modBadgeHeight * 0.5) : 0;
+    return total + pill + tail;
+  }, 0) + Math.max(0, modBadges.length - 1) * MOD_BADGE_GAP
+    + (extraMods ? MOD_BADGE_GAP + extraModsWidth : 0);
+  const resultWidth = GRADE_W + (modsWidth > 0 ? modsWidth + HERO_GAP : 0);
+  const nameRoom = WIDTH - CONTENT_PAD_X * 2 - AVATAR_SIZE - HERO_GAP - resultWidth - 36;
+  // 0.62em per character is Torus Heavy's average advance, measured off the
+  // rendered card. The name gives up size first and characters only once the
+  // smallest size it may take still would not fit.
+  const NAME_CHAR_EM = 0.62;
+  const NAME_MIN_SIZE = 38;
+  const playerName = clamp(data.playerName, Math.max(8, Math.min(20, Math.floor(nameRoom / (NAME_MIN_SIZE * NAME_CHAR_EM)))));
+  const nameSize = Math.max(
+    NAME_MIN_SIZE,
+    Math.min(62, Math.floor(nameRoom / Math.max(1, playerName.length * NAME_CHAR_EM))),
+  );
 
   // Difficulty names routinely already carry the key count ("[7K] Dum
   // spiro,"), so only add the keymode chip when it isn't in there.
@@ -961,26 +1002,17 @@ async function renderReplayOgCard(
                       display: "flex",
                       flexDirection: "row",
                       alignItems: "center",
-                      marginTop: "12px",
+                      marginTop: "14px",
                       fontSize: "21px",
+                      // Wide gaps carry the line instead of dot separators:
+                      // every part already says what it is (a difficulty in
+                      // brackets, a star, "mapped by"), so the dots were only
+                      // adding grit between them.
+                      gap: "30px",
                       color: "#c7b8c1",
                     },
                   },
-                  metaParts.flatMap((part, i) =>
-                    i === 0
-                      ? [part]
-                      : [
-                          h(
-                            "div",
-                            {
-                              key: `sep-${i}`,
-                              style: { color: "#6b5a63", padding: "0 12px" },
-                            },
-                            "·",
-                          ),
-                          part,
-                        ],
-                  ),
+                  metaParts,
                 ),
               ],
             ),
@@ -1008,7 +1040,7 @@ async function renderReplayOgCard(
                       display: "flex",
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: "24px",
+                      gap: `${HERO_GAP}px`,
                       minWidth: "0",
                     },
                   },
@@ -1017,8 +1049,8 @@ async function renderReplayOgCard(
                       key: "avatar",
                       src: ogAvatarUrl(request, data.avatarUrl, data.avatarUserId),
                       style: {
-                        width: "120px",
-                        height: "120px",
+                        width: `${AVATAR_SIZE}px`,
+                        height: `${AVATAR_SIZE}px`,
                         borderRadius: "26px",
                         objectFit: "cover",
                         flexShrink: 0,
@@ -1036,7 +1068,7 @@ async function renderReplayOgCard(
                           {
                             key: "name",
                             style: {
-                              fontSize: "62px",
+                              fontSize: `${nameSize}px`,
                               fontWeight: 900,
                               // Same as the title: leave descender room so
                               // usernames like "Aleju03" keep the j's tail.
@@ -1044,7 +1076,7 @@ async function renderReplayOgCard(
                               overflow: "hidden",
                             },
                           },
-                          clamp(data.playerName, 20),
+                          playerName,
                         ),
                         data.countryCode
                           ? h(
@@ -1062,7 +1094,7 @@ async function renderReplayOgCard(
                               [
                                 h("img", {
                                   key: "flag",
-                                  src: `https://osu.ppy.sh/images/flags/${data.countryCode}.png`,
+                                  src: flagImageUrl(data.countryCode),
                                   style: {
                                     width: "32px",
                                     height: "22px",
@@ -1093,31 +1125,38 @@ async function renderReplayOgCard(
                       display: "flex",
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: "24px",
+                      gap: `${HERO_GAP}px`,
                       flexShrink: 0,
                     },
                   },
                   [
-                    modsLabel
+                    modBadges.length
                       ? h(
                           "div",
                           {
                             key: "mods",
                             style: {
-                              fontSize: "38px",
-                              fontWeight: 900,
-                              letterSpacing: "0.04em",
-                              color: "#ff8ec2",
+                              display: "flex",
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: `${MOD_BADGE_GAP}px`,
+                              flexShrink: 0,
                             },
                           },
-                          `+${modsLabel}`,
+                          [
+                            ...modBadges.map((badge, i) => renderModBadge(badge, i, modBadgeHeight)),
+                            extraMods ? h("div", {
+                              key: "more-mods",
+                              style: { width: `${extraModsWidth}px`, fontSize: "22px", color: "#c7b8c1", flexShrink: 0 },
+                            }, `+${extraMods}`) : null,
+                          ],
                         )
                       : null,
                     h("img", {
                       key: "grade",
                       src: gradeImgUrl(request, displayedRank),
                       // The grade artwork is 32x16, so keep that ratio.
-                      style: { width: "208px", height: "104px", flexShrink: 0 },
+                      style: { width: `${GRADE_W}px`, height: `${GRADE_H}px`, flexShrink: 0 },
                     }),
                   ],
                 ),

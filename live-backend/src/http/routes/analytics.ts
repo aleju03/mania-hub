@@ -53,6 +53,18 @@ export async function handleAnalyticsRoutes(req: IncomingMessage, res: ServerRes
     }));
     return true;
   }
+  if (url.pathname === "/api/admin/analytics/product") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, ctx.analytics.getProductInsights());
+    return true;
+  }
   if (url.pathname === "/api/admin/analytics/valley") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });

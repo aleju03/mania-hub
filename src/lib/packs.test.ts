@@ -838,7 +838,7 @@ describe("mapServerPackDraw", () => {
       poolTotal: 4200,
       players: [
         // The golden card: an Eternal slot on a variant key.
-        { userId: 22, isNew: true, eternal: true, milestone: true, cardKey: "22:v1", customLabel: "1,000,000th pack", motif, username: "bravo", avatarUrl: "", countryCode: "AR", pp: 4000, globalRank: 50 },
+        { userId: 22, isNew: true, eternal: true, milestone: true, milestoneTarget: 1_000_000, cardKey: "22:v1", customLabel: "1,000,000th pack", motif, username: "bravo", avatarUrl: "", countryCode: "AR", pp: 4000, globalRank: 50 },
         // A key naming another player, or a derived form, is not a variant this slot may claim.
         { userId: 33, isNew: false, cardKey: "11:v2", customLabel: "nope", username: "charlie", avatarUrl: "", countryCode: "CR", globalRank: 70, poolRank: 3, pp: 6000 },
         { userId: 44, isNew: false, cardKey: "44:goat", customLabel: "nope", username: "delta", avatarUrl: "", countryCode: "CR", globalRank: 80, poolRank: 4, pp: 6000 },
@@ -847,12 +847,29 @@ describe("mapServerPackDraw", () => {
       wallet: null,
     });
     const [golden, plain, derived] = mapped.draw.players;
-    expect(golden).toMatchObject({ eternal: true, milestone: true, cardKey: "22:v1", customLabel: "1,000,000th pack" });
+    expect(golden).toMatchObject({ eternal: true, milestone: true, cardKey: "22:v1", customLabel: "1,000,000th pack", milestoneTarget: 1_000_000 });
     expect(plain.cardKey).toBeUndefined();
     expect(plain.customLabel).toBeUndefined();
     expect(derived.cardKey).toBeUndefined();
     expect(mapped.isNewByCardKey.get("22:v1")).toBe(true);
     expect(mapped.isNewByCardKey.get("33")).toBe(false);
+  });
+
+  it("carries each number of the ladder, and keeps the tally's target off a slot that is not a milestone", () => {
+    const motif = { url: "https://mania-tracker.com/images/packs/milestone-4m.png", scale: 1.35, opacity: 0.9, palette: "gold" as const };
+    const mapped = mapServerPackDraw({
+      poolTotal: 4200,
+      players: [
+        { userId: 22, isNew: true, eternal: true, milestone: true, milestoneTarget: 4_000_000, cardKey: "22:v1", customLabel: "4,000,000th pack", motif, username: "bravo", avatarUrl: "", countryCode: "AR", pp: 4000, globalRank: 50 },
+        // An ordinary variant slot: the target belongs to the milestone flag.
+        { userId: 33, isNew: false, milestoneTarget: 9_000_000, cardKey: "33:v1", customLabel: "crafted", username: "charlie", avatarUrl: "", countryCode: "CR", globalRank: 70, poolRank: 3, pp: 6000 },
+      ],
+      cards: [],
+      wallet: null,
+    });
+    const [golden, plain] = mapped.draw.players;
+    expect(golden).toMatchObject({ milestone: true, milestoneTarget: 4_000_000, motif });
+    expect(plain.milestoneTarget).toBeUndefined();
   });
 
   it("maps ranked slots into pack players and seeds only non-empty stored windows", () => {

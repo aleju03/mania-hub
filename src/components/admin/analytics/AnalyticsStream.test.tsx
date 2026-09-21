@@ -202,7 +202,7 @@ describe("AnalyticsStream", () => {
 
   it("folds the same events back into per-visitor journeys", () => {
     renderStream();
-    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Visitor trails/ }));
     // Three visitors, each collapsed to its latest step.
     expect(screen.getAllByText(/^\d+ steps?$/)).toHaveLength(3);
     const visitorRow = screen.getByText("V1").closest("button")!;
@@ -217,14 +217,14 @@ describe("AnalyticsStream", () => {
       ROWS[0],
       row({ distinctId: "d", ts: NOW - 30_000, path: "/maps", viewerUsername: "Aleju03" }),
     ]);
-    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Visitor trails/ }));
     expect(within(screen.getByText("V1").closest("button")!).getByText("Guest")).toBeTruthy();
     expect(within(screen.getByText("V2").closest("button")!).getByText("Aleju03")).toBeTruthy();
   });
 
   it("comes back in the reading mode it was left in", () => {
     renderStream();
-    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Visitor trails/ }));
     expect(window.localStorage.getItem(ANALYTICS_STREAM_MODE_STORAGE_KEY)).toBe("sessions");
     cleanup();
     renderStream();
@@ -340,7 +340,7 @@ describe("AnalyticsPulse", () => {
     render(<AnalyticsPulse data={base} range={24} onlineCountries={3} />);
     expect(screen.getByText("12")).toBeTruthy();
     expect(screen.getByText("last 15m")).toBeTruthy();
-    expect(screen.getByText("7 here now from 3 countries")).toBeTruthy();
+    expect(screen.getByText("7 active in last 5m from 3 countries")).toBeTruthy();
     expect(screen.getByText("38%")).toBeTruthy();
     expect(screen.getByText("peak 40 events per 30m")).toBeTruthy();
   });
@@ -349,7 +349,7 @@ describe("AnalyticsPulse", () => {
     const legacy = { ...base, recentVisitors: undefined };
     render(<AnalyticsPulse data={legacy} range={24} onlineCountries={0} />);
     expect(screen.getByText("7")).toBeTruthy();
-    expect(screen.getByText("7 here now")).toBeTruthy();
+    expect(screen.getByText("7 active in last 5m")).toBeTruthy();
   });
 
   it("reads the hovered bucket out next to the title", () => {

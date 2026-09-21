@@ -1,4 +1,4 @@
-import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, ChevronDown, Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -147,37 +147,39 @@ export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   };
 }
 
-// Whether a /skins URL is the plain browse view the loader server-renders.
-// Anything filtered, paged or sorted paints from the effect the way it always
-// has: those URLs are not in the sitemap and no crawler lands on one.
-export function isDefaultSkinsView(search: SkinsSearch): boolean {
-  return !search.q && !search.page && !search.k && !search.mine
+// Every page of the unfiltered newest catalogue is crawlable. Filtered and
+// sorted views stay client-fetched and noindexed to avoid duplicate listings.
+export function isSkinsBrowseView(search: SkinsSearch): boolean {
+  return !search.q && !search.k && !search.mine
     && !search.cover && !search.stage && !search.shots && !search.lazer && !search.stable
     && !search.shape && !search.res
     && (search.sort ?? "newest") === "newest";
 }
 
 export const Route = createFileRoute("/skins")({
-  loaderDeps: ({ search }) => ({ isDefault: isDefaultSkinsView(search) }),
+  loaderDeps: ({ search }) => ({ isBrowse: isSkinsBrowseView(search), page: search.page ?? 0 }),
   loader: async ({ deps }): Promise<SkinsListResult | null> => {
     // SSR only: on client navigations the effect below owns the data, so the
     // loader skipping keeps navigation instant and avoids a duplicate fetch.
     if (typeof document !== "undefined") return null;
-    if (!deps.isDefault) return null;
-    // The grid ships inside the HTML so the page has its skins, and 24 links
-    // into their pages, before any JS runs. A null here is the old behaviour:
-    // skeletons until the effect lands.
-    return await fetchSkinsListSsr();
+    if (!deps.isBrowse) return null;
+    // Both the skins and the next-page link ship in HTML before any JS runs.
+    const list = await fetchSkinsListSsr(deps.page);
+    if (list && deps.page > 0 && deps.page * list.pageSize >= list.total) {
+      throw notFound();
+    }
+    return list;
   },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: i18n._(msg`osu!mania skins`),
       description: i18n._(msg`Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file.`),
-      path: "/skins",
+      path: match.search.page ? `/skins?page=${match.search.page}` : "/skins",
       origin: match.context.origin,
       imageKind: "skins",
       imageTitle: "osu!mania skins",
+      noindex: !isSkinsBrowseView(match.search),
     });
   },
   search: {
@@ -275,10 +277,10 @@ function SkinsPage() {
   const shapeParam = shape || undefined;
   const resParam = res || undefined;
 
-  // The server-rendered grid, present only on a cold load of the plain browse
-  // view; every other URL, and every client navigation, gets null here.
+  // Each unfiltered catalogue page can seed its grid on a cold load.
   const ssrList = Route.useLoaderData();
-  const ssrSeeded = ssrList != null && isDefaultSkinsView({ q, page, sort, k, mine, cover, stage, shots, lazer, stable, shape, res });
+  const isBrowse = isSkinsBrowseView({ q, sort, k, mine, cover, stage, shots, lazer, stable, shape, res });
+  const ssrSeeded = ssrList != null && ssrList.page === page && isBrowse;
 
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons. Failing that, the
@@ -763,7 +765,14 @@ function SkinsPage() {
                     <SkinCard key={skin.id} skin={skin} previewKeys={k >= 1 ? k : undefined} />
                   ))}
                 </div>
-                <Pagination page={page} totalPages={totalPages} onPageChange={(next) => applySearch({ page: next })} />
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={(next) => applySearch({ page: next })}
+                  renderPageLink={isBrowse ? (next, props) => (
+                    <Link {...props} to="/skins" search={{ page: next }} replace />
+                  ) : undefined}
+                />
               </div>
             )}
           </div>

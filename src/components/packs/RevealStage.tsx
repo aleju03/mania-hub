@@ -604,7 +604,9 @@ export function RevealStage({
      backend); after a few seconds the draw label says so instead of looking
      stuck. */
   const [slowDraw, setSlowDraw] = useState(false);
-  const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor; milestone?: boolean } | null>(null);
+  const [burst, setBurst] = useState<
+    { key: number; tier: ManiaCardTier; glowColor: RgbaColor; milestone?: boolean; milestoneTarget?: number } | null
+  >(null);
   /* This stage normally replaces ShuffleStage while its identical stack is
      already on screen. Starting at null and filling the cached URL in an
      effect left one painted frame with no cards between the two components,
@@ -625,7 +627,13 @@ export function RevealStage({
   /* The reveal-all finale: the Eternal card taken out of the dealt grid and
      given the whole screen. Non-null only while its ceremony runs. */
   const [eternalFinale, setEternalFinale] = useState<
-    { kind: "eternal" | "milestone"; thumbnail: string | null; glowColor: RgbaColor; username: string } | null
+    {
+      kind: "eternal" | "milestone";
+      thumbnail: string | null;
+      glowColor: RgbaColor;
+      username: string;
+      milestoneTarget?: number;
+    } | null
   >(null);
   const [flight, setFlight] = useState<CardFlight | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -850,7 +858,15 @@ export function RevealStage({
         void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
       }
       setPhase("shown");
-      if (!reducedMotion) setBurst({ key: position, tier: data.tier, glowColor: data.glowColor, milestone: card.player.milestone === true });
+      if (!reducedMotion) {
+        setBurst({
+          key: position,
+          tier: data.tier,
+          glowColor: data.glowColor,
+          milestone: card.player.milestone === true,
+          milestoneTarget: card.player.milestoneTarget,
+        });
+      }
       if (data.tier === "goat") playGoatFanfare();
       else if (card.player.milestone) playMilestoneFanfare();
       else if (data.tier === "eternal") playEternalFanfare();
@@ -1177,6 +1193,7 @@ export function RevealStage({
             thumbnail: entry.thumbnail,
             glowColor: entry.glowColor ?? (finaleKind === "milestone" ? { r: 246, g: 195, b: 67, a: 1 } : { r: 192, g: 132, b: 252, a: 1 }),
             username: entry.player.user.username,
+            milestoneTarget: entry.player.milestoneTarget,
           });
         }
       }
@@ -1258,7 +1275,7 @@ export function RevealStage({
           >
             <div className="relative w-[min(340px,80vw)]" style={{ aspectRatio: "5 / 7" }}>
               {eternalFinale.kind === "milestone"
-                ? <MilestoneBurst glowColor={eternalFinale.glowColor} layer="behind" />
+                ? <MilestoneBurst glowColor={eternalFinale.glowColor} layer="behind" target={eternalFinale.milestoneTarget} />
                 : <EternalBurst glowColor={eternalFinale.glowColor} layer="behind" />}
               {/* The card arrives on the impact, not before: it is pulled in
                   with the starlight the wind-up is gathering (or, for the
@@ -1299,7 +1316,7 @@ export function RevealStage({
                 )}
               </motion.div>
               {eternalFinale.kind === "milestone"
-                ? <MilestoneBurst glowColor={eternalFinale.glowColor} counter="center" />
+                ? <MilestoneBurst glowColor={eternalFinale.glowColor} counter="center" target={eternalFinale.milestoneTarget} />
                 : <EternalBurst glowColor={eternalFinale.glowColor} />}
             </div>
           </motion.div>
@@ -1542,14 +1559,14 @@ export function RevealStage({
             z-[5], under the canvas host at z-15, so the rays and the glow read
             as coming from behind the card instead of erasing it. */}
         {burst?.tier === "eternal" && (burst.milestone
-          ? <MilestoneBurst key={`behind-${burst.key}`} glowColor={burst.glowColor} layer="behind" />
+          ? <MilestoneBurst key={`behind-${burst.key}`} glowColor={burst.glowColor} layer="behind" target={burst.milestoneTarget} />
           : <EternalBurst key={`behind-${burst.key}`} glowColor={burst.glowColor} layer="behind" />)}
 
         {burst && (burst.tier === "goat"
           ? <GoatBurst key={burst.key} glowColor={burst.glowColor} />
           : burst.tier === "eternal"
             ? burst.milestone
-              ? <MilestoneBurst key={burst.key} glowColor={burst.glowColor} layer="front" counter="above" />
+              ? <MilestoneBurst key={burst.key} glowColor={burst.glowColor} layer="front" counter="above" target={burst.milestoneTarget} />
               : <EternalBurst key={burst.key} glowColor={burst.glowColor} layer="front" />
             : <TierBurst key={burst.key} tier={burst.tier} glowColor={burst.glowColor} />)}
       </motion.div>

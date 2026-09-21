@@ -34,6 +34,8 @@ export interface ServerPackDrawSlot {
      on a variant key the tier cannot derive, which is why the slot carries
      it, along with the badge text and motif the reveal draws. */
   milestone?: boolean;
+  /* Which of the nine numbers it was dealt for, for the reveal's tally. */
+  milestoneTarget?: number;
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;

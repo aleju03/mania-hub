@@ -213,30 +213,39 @@ function devForceEternalPull(): boolean {
   return new URLSearchParams(window.location.search).has("forceEternal");
 }
 
-/* Dev only, the milestone event's golden card on the same terms:
+/* Dev only, a milestone event's golden card on the same terms:
    `/packs?forceMilestone=1` marks the hand's final slot as the golden card
-   (Eternal plus the event's badge and motif). Display-only like
-   forceEternal: no variant key is claimed, so the
+   (Eternal plus the event's badge and motif), and the value picks the rung,
+   so `?forceMilestone=7` previews the 7,000,000th pack's card. Display-only
+   like forceEternal: no variant key is claimed, so the
    mint pass lands on the player's ordinary row and nothing is minted or
-   synced. The badge and motif mirror PACK_MILESTONE in
+   synced. The badge and motif mirror PACK_MILESTONES in
    live-backend/src/features/pack-milestone.ts. */
-function devForceMilestoneCard(): boolean {
-  if (!import.meta.env.DEV || typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).has("forceMilestone");
+function devForcedMilestoneRung(): number {
+  if (!import.meta.env.DEV || typeof window === "undefined") return 0;
+  const raw = new URLSearchParams(window.location.search).get("forceMilestone");
+  if (raw === null) return 0;
+  const rung = Math.floor(Number(raw));
+  return rung >= 1 && rung <= 9 ? rung : 1;
 }
-
-const DEV_MILESTONE_MOTIF_URL = "https://mania-tracker.com/images/packs/milestone-1m.png";
 
 /* Applies the dev forces above to a dealt hand, whoever dealt it. */
 function devApplyForcedEternal(players: PackPlayer[]): PackPlayer[] {
   if (players.length === 0) return players;
   const last = players.length - 1;
-  if (devForceMilestoneCard() && !players.some((player) => player.cardKey || player.eternal)) {
+  const forcedRung = devForcedMilestoneRung();
+  if (forcedRung > 0 && !players.some((player) => player.cardKey || player.eternal)) {
     const forced: Partial<PackPlayer> = {
       eternal: true,
       milestone: true,
-      customLabel: "1,000,000th pack",
-      motif: { url: DEV_MILESTONE_MOTIF_URL, scale: 1.35, opacity: 0.9, palette: "gold" as const },
+      milestoneTarget: forcedRung * 1_000_000,
+      customLabel: `${forcedRung},000,000th pack`,
+      motif: {
+        url: `https://mania-tracker.com/images/packs/milestone-${forcedRung}m.png`,
+        scale: 1.35,
+        opacity: 0.9,
+        palette: "gold" as const,
+      },
     };
     return players.map((player, index) => (index === last ? { ...player, ...forced } : player));
   }

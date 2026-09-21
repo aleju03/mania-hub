@@ -26,6 +26,28 @@ const ADMIN_ANALYTICS_INSPECT_PARAM = "mh_admin_inspect";
 
 let cachedVisitorId: string | null = null;
 let superProperties: Record<string, unknown> = {};
+let entryProperties: Record<string, unknown> | null = null;
+
+function getEntryProperties(): Record<string, unknown> {
+  if (entryProperties) return entryProperties;
+  const url = new URL(window.location.href);
+  let referrer = "$direct";
+  try { if (document.referrer) referrer = new URL(document.referrer).hostname; } catch { /* malformed referrer */ }
+  entryProperties = {
+    entry_path: url.pathname,
+    entry_referrer: referrer,
+    utm_source: url.searchParams.get("utm_source")?.slice(0, 120) ?? null,
+    utm_medium: url.searchParams.get("utm_medium")?.slice(0, 120) ?? null,
+    utm_campaign: url.searchParams.get("utm_campaign")?.slice(0, 120) ?? null,
+  };
+  return entryProperties;
+}
+
+// Called before hydration so redirects and SPA search normalization cannot
+// erase the document's campaign tags before the first pageview is captured.
+export function initializeAnalyticsEntry(): void {
+  if (typeof window !== "undefined") getEntryProperties();
+}
 
 function isAdminAnalyticsInspection(): boolean {
   if (typeof window === "undefined") return false;
@@ -68,6 +90,8 @@ function getBaseProperties(): Record<string, unknown> {
     }
   }
   return {
+    ...getEntryProperties(),
+    app_version: import.meta.env.VITE_APP_VERSION || (import.meta.env.DEV ? "development" : "unversioned"),
     $current_url: window.location.href,
     $host: window.location.host,
     $pathname: window.location.pathname,

@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 interface PaginationProps {
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  // Crawlable catalogue routes supply router links; other surfaces keep
+  // their existing buttons. Unavailable destinations always stay disabled.
+  renderPageLink?: (page: number, props: { className: string; title: string; children: ReactNode }) => ReactNode;
 }
 
-export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+export function Pagination({ page, totalPages, onPageChange, renderPageLink }: PaginationProps) {
   const { t } = useLingui();
   const [inputValue, setInputValue] = useState("");
   const [showInput, setShowInput] = useState(false);
@@ -23,27 +26,23 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
 
   if (totalPages <= 1) return null;
 
+  const pageControl = (target: number, disabled: boolean, title: string, children: ReactNode, compact = false) => {
+    const className = `${compact ? "px-2.5" : "px-3"} py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4`;
+    if (renderPageLink && !disabled) return renderPageLink(target, { className, title, children });
+    return (
+      <button type="button" onClick={() => onPageChange(target)} disabled={disabled} className={className} title={title}>
+        {children}
+      </button>
+    );
+  };
+
   return (
     <div className="flex items-center justify-center gap-1.5 mt-6">
       {/* First */}
-      <button
-        onClick={() => onPageChange(0)}
-        disabled={page === 0}
-        className="px-2.5 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title={t`First page`}
-      >
-        &laquo;
-      </button>
+      {pageControl(0, page === 0, t`First page`, "«", true)}
 
       {/* Prev */}
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page === 0}
-        className="px-3 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title={t`Previous page`}
-      >
-        <Trans>&larr; Prev</Trans>
-      </button>
+      {pageControl(page - 1, page === 0, t`Previous page`, <Trans>&larr; Prev</Trans>)}
 
       {/* Page indicator / input */}
       {showInput ? (
@@ -81,24 +80,10 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
       )}
 
       {/* Next */}
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page >= totalPages - 1}
-        className="px-3 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title={t`Next page`}
-      >
-        <Trans>Next &rarr;</Trans>
-      </button>
+      {pageControl(page + 1, page >= totalPages - 1, t`Next page`, <Trans>Next &rarr;</Trans>)}
 
       {/* Last */}
-      <button
-        onClick={() => onPageChange(totalPages - 1)}
-        disabled={page >= totalPages - 1}
-        className="px-2.5 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:bg-osu-b4"
-        title={t`Last page`}
-      >
-        &raquo;
-      </button>
+      {pageControl(totalPages - 1, page >= totalPages - 1, t`Last page`, "»", true)}
     </div>
   );
 }

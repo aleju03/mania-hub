@@ -66,6 +66,9 @@ export interface PackPlayer {
      the Eternal flag: the key is only believed server-side for a holding the
      collector already has. */
   milestone?: boolean;
+  /* Which number that card was dealt for, so the reveal's tally lands on it
+     rather than on a fixed one: the ladder runs 1M through 9M. */
+  milestoneTarget?: number;
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
@@ -84,21 +87,30 @@ export interface PackPlayer {
 export function packPlayerVariantFields(slot: {
   userId: number;
   milestone?: boolean;
+  milestoneTarget?: number;
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
   wished?: boolean;
-}): Pick<PackPlayer, "milestone" | "cardKey" | "customLabel" | "motif" | "wished"> {
+}): Pick<PackPlayer, "milestone" | "milestoneTarget" | "cardKey" | "customLabel" | "motif" | "wished"> {
   const wished = slot.wished === true ? { wished: true as const } : {};
   const parsed = typeof slot.cardKey === "string" ? parsePackCardKey(slot.cardKey) : null;
   const cardKey = parsed && parsed.userId === slot.userId && parsed.variant > 0 ? slot.cardKey : undefined;
   if (!cardKey) return wished;
   const customLabel = typeof slot.customLabel === "string" && slot.customLabel.trim() ? slot.customLabel.slice(0, 60) : null;
+  /* Display-only like the rest of this: it decides the number the reveal's
+     tally rolls up to and nothing else, so it is bounded rather than checked
+     against the ladder the server keeps. */
+  const milestoneTarget = Number.isFinite(slot.milestoneTarget)
+    ? Math.min(1e12, Math.max(0, Math.floor(slot.milestoneTarget as number)))
+    : 0;
   return {
     cardKey,
     customLabel,
     motif: parseCardMotif(slot.motif ?? null),
-    ...(slot.milestone === true ? { milestone: true as const } : {}),
+    ...(slot.milestone === true
+      ? { milestone: true as const, ...(milestoneTarget > 0 ? { milestoneTarget } : {}) }
+      : {}),
     ...wished,
   };
 }

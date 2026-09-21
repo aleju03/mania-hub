@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSitemap } from "./sitemap[.]xml";
-import { isDefaultSkinsView } from "./skins";
+import { isSkinsBrowseView } from "./skins";
 
 const ORIGIN = "https://mania-tracker.com";
 
@@ -40,19 +40,23 @@ describe("sitemap", () => {
   });
 });
 
-describe("skins default view", () => {
+describe("skins crawlable browse view", () => {
   it("is the plain browse URL", () => {
-    expect(isDefaultSkinsView({})).toBe(true);
-    expect(isDefaultSkinsView({ q: "", page: 0, sort: "newest", k: 0, mine: false })).toBe(true);
+    expect(isSkinsBrowseView({})).toBe(true);
+    expect(isSkinsBrowseView({ q: "", page: 0, sort: "newest", k: 0, mine: false })).toBe(true);
   });
 
-  it("is not any filtered, paged or sorted URL", () => {
-    expect(isDefaultSkinsView({ q: "rainbow" })).toBe(false);
-    expect(isDefaultSkinsView({ page: 1 })).toBe(false);
-    expect(isDefaultSkinsView({ sort: "downloads" })).toBe(false);
-    expect(isDefaultSkinsView({ k: 4 })).toBe(false);
+  it("includes later pages of the unfiltered catalogue", () => {
+    expect(isSkinsBrowseView({ page: 1 })).toBe(true);
+    expect(isSkinsBrowseView({ page: 9, sort: "newest" })).toBe(true);
+  });
+
+  it("is not a filtered or sorted URL", () => {
+    expect(isSkinsBrowseView({ q: "rainbow" })).toBe(false);
+    expect(isSkinsBrowseView({ sort: "downloads" })).toBe(false);
+    expect(isSkinsBrowseView({ k: 4 })).toBe(false);
     // "uploader: you" is viewer-scoped, so it must never be server-rendered
     // into a page a crawler or another visitor could be handed.
-    expect(isDefaultSkinsView({ mine: true })).toBe(false);
+    expect(isSkinsBrowseView({ mine: true })).toBe(false);
   });
 });

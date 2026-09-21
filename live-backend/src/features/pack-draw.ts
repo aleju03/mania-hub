@@ -112,6 +112,9 @@ export interface PackDrawSlotVariant {
   motif?: CardMotif | null;
   /* The milestone's golden card: an Eternal slot that is also this. */
   milestone?: boolean;
+  /* Which number it was dealt for, so the reveal's tally lands on the right
+     one (the ladder runs 1M through 9M, pack-milestone.ts). */
+  milestoneTarget?: number;
   /* This slot was dealt by the wishlist's pity roll (pack-wishlist.ts) rather
      than by the ordinary draw, so the reveal can say so. */
   wished?: boolean;

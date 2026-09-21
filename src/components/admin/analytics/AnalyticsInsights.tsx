@@ -19,7 +19,8 @@ import {
   type AnalyticsTopRouteRow,
 } from "../../../lib/analytics-monitor";
 import { AnalyticsViewersCard } from "./AnalyticsViewersCard";
-import { AnalyticsEmptyMessage, InlineCountryFlag } from "./shared";
+import { AnalyticsProductInsights } from "./AnalyticsProductInsights";
+import { AnalyticsBarRow as BarRow, analyticsBarPercent as barPct, AnalyticsEmptyMessage, InlineCountryFlag } from "./shared";
 
 /* The aggregate half of the analytics tab: what the range added up to, once the
    live feed has stopped being the interesting part. */
@@ -33,6 +34,7 @@ export const AnalyticsInsights = memo(function AnalyticsInsights({
 }) {
   return (
     <div className="space-y-4">
+      <AnalyticsProductInsights />
       <AnalyticsViewersCard />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="flex lg:col-span-3">
@@ -60,29 +62,6 @@ export const AnalyticsInsights = memo(function AnalyticsInsights({
    row sized against the biggest value in the list. The bar is the only frame a
    row gets - a border around each one on top of the card's own border read as
    boxes inside boxes. */
-function BarRow({
-  children,
-  pct,
-  gradient,
-  className = "",
-}: {
-  children: React.ReactNode;
-  pct: number;
-  gradient: string;
-  className?: string;
-}) {
-  return (
-    <div className={`relative overflow-hidden rounded-lg bg-osu-b5/50 ${className}`}>
-      <div className={`absolute inset-y-0 left-0 ${gradient}`} style={{ width: `${pct}%` }} />
-      <div className="relative">{children}</div>
-    </div>
-  );
-}
-
-function barPct(value: number, max: number): number {
-  return Math.max(3, Math.round((value / max) * 100));
-}
-
 /* The number a row is ranked by. Bigger than the label it sits next to: the
    count is the thing being read down the column. */
 function BarCount({ value }: { value: number }) {
@@ -304,11 +283,11 @@ function SharesCard({
   const max = Math.max(1, ...rows.map((row) => row.count));
   return (
     <SectionCard
-      title="Link-preview shares"
-      subtitle={`${formatNumber(total)} unfurl${total === 1 ? "" : "s"} by platform, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}
+      title="Link previews"
+      subtitle={`${formatNumber(total)} crawler requests, ${formatAnalyticsRangeLabel(range).toLowerCase()} · not confirmed human shares`}
     >
       {rows.length === 0 ? (
-        <AnalyticsEmptyMessage text="No shares detected yet." />
+        <AnalyticsEmptyMessage text="No link previews detected yet." />
       ) : (
         <div className="space-y-1">
           {rows.map((row) => (
@@ -353,9 +332,9 @@ function sharedPagePrimary(row: AnalyticsSharedPageRow): string {
 function TopSharedPagesCard({ rows, range }: { rows: AnalyticsSharedPageRow[]; range: AnalyticsRange }) {
   const max = Math.max(1, ...rows.map((row) => row.count));
   return (
-    <SectionCard title="Most shared pages" subtitle={`by unfurl count, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}>
+    <SectionCard title="Most previewed links" subtitle={`by crawler request count, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}>
       {rows.length === 0 ? (
-        <AnalyticsEmptyMessage text="No shared pages yet." />
+        <AnalyticsEmptyMessage text="No link previews yet." />
       ) : (
         <div className="space-y-1">
           {rows.map((row, index) => {

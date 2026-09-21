@@ -341,6 +341,9 @@ function asChartSkillInfo(chart: Chart, withMotion: boolean): ChartSkillInfo {
   const category = chart.clusterCategory;
   const labelled = category != null && category.trim() !== "";
   return {
+    revisionChecksum: null,
+    revisionUpdatedAt: null,
+    revisionMutable: false,
     patterns: [],
     jackDemand: chart.jackDemand,
     jackShare: chart.jackShare,

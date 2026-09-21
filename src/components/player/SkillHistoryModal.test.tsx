@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { I18nProvider } from "@lingui/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n, loadLocaleCatalog } from "../../lib/i18n";
 import type { LivePlayerSkillHistorySnapshot } from "../../lib/live-backend";
@@ -12,6 +13,11 @@ const authFlags = vi.hoisted(() => ({ canUseAdminFeatures: true, canUseDevFeatur
 vi.mock("../../lib/live-backend", () => ({ fetchLivePlayerSkillHistoryDirect: fetchHistory }));
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => authFlags }));
 vi.mock("../../store", () => ({ useNoDans: () => false }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, search, ...props }: ComponentProps<"a"> & { to: string; search?: Record<string, number> }) => (
+    <a {...props} href={to + (search ? `?${new URLSearchParams(Object.entries(search).map(([key, value]) => [key, String(value)]))}` : "")} />
+  ),
+}));
 
 beforeAll(async () => {
   await loadLocaleCatalog("en");
@@ -127,6 +133,7 @@ describe("skill history", () => {
     expect(view.queryByText(/Reduced the rice dan penalty/)).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Changes" }));
     expect(view.getByText(/Reduced the rice dan penalty/)).toBeTruthy();
+    expect(view.getAllByRole("link").every((link) => link.getAttribute("href")?.startsWith("/maps?map="))).toBe(true);
     expect(view.queryByText("25.70")).toBeNull();
     expect(view.queryByText(/Adjusted 4K vibro detection/)).toBeNull();
     const rows = [...view.baseElement.querySelectorAll("li")];

@@ -235,9 +235,9 @@ describe("structural chart families", () => {
     const evidence = (await getPlayerSkillDanEvidence(db, 7, 4, "rc", null, { includeRejected: true }))!;
     const counted = evidence.skillsets.flatMap((section) => section.plays.map((entry) => entry.play.beatmapId)).sort();
     expect(counted).toEqual([2, 3, 4]);
-    expect(evidence.rejected.map((entry) => [entry.play.beatmapId, entry.reason]))
+    expect(evidence.rejected?.map((entry) => [entry.play.beatmapId, entry.reason]))
       .toEqual([[1, "unverifiable_revision"], [5, "unverifiable_revision"]]);
-    expect(evidence.rejected[0]).toMatchObject({ chartDan: 18 });
+    expect(evidence.rejected?.[0]).toMatchObject({ chartDan: 18 });
   });
 
   it("caps verified rate reuploads in both the evidence and persisted Dan refold", async () => {
