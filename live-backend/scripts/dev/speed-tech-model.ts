@@ -344,6 +344,7 @@ function asChartSkillInfo(chart: Chart, withMotion: boolean): ChartSkillInfo {
     revisionChecksum: null,
     revisionUpdatedAt: null,
     revisionMutable: false,
+    revisionDeleted: false,
     patterns: [],
     jackDemand: chart.jackDemand,
     jackShare: chart.jackShare,

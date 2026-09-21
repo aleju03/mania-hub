@@ -49,6 +49,7 @@ const SPEEDJACK_CHART = {
   revisionChecksum: null,
   revisionUpdatedAt: null,
   revisionMutable: false,
+  revisionDeleted: false,
   patterns: ["speedjack"],
   jackShare: null,
   streamShare: null,
@@ -270,7 +271,7 @@ describe("pattern tag thresholds", () => {
     const { danTagBucketsForTest: buckets, patternTagMinScoreForTest } = await import("../src/features/player-skills.js");
     expect(0.334).toBeGreaterThanOrEqual(patternTagMinScoreForTest("delay"));
     expect(buckets(7, {
-      revisionChecksum: null, revisionUpdatedAt: null, revisionMutable: false,
+      revisionChecksum: null, revisionUpdatedAt: null, revisionMutable: false, revisionDeleted: false,
       patterns: ["delay"], jackShare: 0, streamShare: 1, techCategory: true, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, lnEffectiveRatio: null, dtLnEffectiveRatio: null, htLnEffectiveRatio: null, vibro: false,
       danEligible: true,
       rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
@@ -281,7 +282,7 @@ describe("pattern tag thresholds", () => {
 
 describe("6K/7K jack bucket (LeoBlack cluster share)", () => {
   const chart = (over: Partial<Parameters<typeof danTagBucketsForTest>[1]>) => ({
-    revisionChecksum: null, revisionUpdatedAt: null, revisionMutable: false,
+    revisionChecksum: null, revisionUpdatedAt: null, revisionMutable: false, revisionDeleted: false,
     patterns: [], jackShare: null, streamShare: null, techCategory: null, clusterTrill: null, handstreamCluster: null, jumpstreamCluster: null, techScore: 0, chordjackScore: 0, lnRatio: 0, lnEffectiveRatio: null, dtLnEffectiveRatio: null, htLnEffectiveRatio: null, vibro: false,
     danEligible: true,
     rcRawDan: 10, lnRawDan: null, rcDanLabel: null, lnDanLabel: null, dtRawDan: null, dtFamily: null, dtDanLabel: null, htRawDan: null, htFamily: null, htDanLabel: null,
