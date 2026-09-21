@@ -5543,7 +5543,7 @@ msgstr "偏早"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Early/late meter with the real hit windows."
-msgstr ""
+msgstr "显示偏早/偏晚的误差条，使用真实判定区间。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Earn <0/> <1/>"
@@ -6867,7 +6867,7 @@ msgstr "打击数与 UR。"
 
 #: src/lib/replay-overlays.ts
 msgid "Hit error bar"
-msgstr ""
+msgstr "打击误差条"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"

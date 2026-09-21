@@ -5534,7 +5534,7 @@ msgstr "Early"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Early/late meter with the real hit windows."
-msgstr ""
+msgstr "Medidor de early/late con las ventanas de acierto reales."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Earn <0/> <1/>"
@@ -6858,7 +6858,7 @@ msgstr "Conteos de hits y unstable rate."
 
 #: src/lib/replay-overlays.ts
 msgid "Hit error bar"
-msgstr ""
+msgstr "Barra de error"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"
