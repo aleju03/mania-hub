@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
 import { DEFAULT_REPLAY_SKIN_SETTINGS, getReplaySkinProfile } from "../../lib/replay-skin";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_STAGE_ART_MIN_COORD, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
@@ -10,6 +10,15 @@ type Bounds = { left: number; top: number; right: number; bottom: number };
 type StageArtRenderer = {
   cssWidth: number;
   cssHeight: number;
+  getLayout(): typeof LAYOUT;
+  invalidateLayoutCache(): void;
+  prepareOverlayLayout(): void;
+  getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings;
+  updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>): void;
+  resetOverlayPlacement(id: ReplayOverlayId): void;
+  getOverlayScale(layout: typeof LAYOUT, id: ReplayOverlayId): number;
+  getOverlayFrame(layout: typeof LAYOUT, id: ReplayOverlayId, width: number, height: number): Frame;
+  getStageArtLayout(layout: typeof LAYOUT, id: ReplayOverlayId): typeof LAYOUT;
   overlaySettings: ReplayOverlaySettings;
   overlayHitboxes: Box[];
   stageArtOverlayIds: Set<ReplayOverlayId>;
@@ -26,7 +35,7 @@ type StageArtRenderer = {
   listStageArtOverlayIds(): ReplayOverlayId[];
 };
 
-const LAYOUT = { w: 1600, h: 900 };
+const LAYOUT = { w: 1600, h: 900, playfieldX: 600, playfieldWidth: 400, layoutScale: 1.875 };
 // The stage frame in the reported skin: taller than wide, art only on one side
 // of a mostly transparent canvas.
 const FRAME_BASE: Frame = { x: 200, y: 0, width: 500, height: LAYOUT.h };
@@ -38,6 +47,8 @@ function stageArtRenderer(overrides: Partial<ReplayOverlaySettings> = {}): Stage
     skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4),
     skinSettings: DEFAULT_REPLAY_SKIN_SETTINGS,
     ruleset: { accuracyMode: "stable" },
+    fullHeightLayout: true, scrollSpeed: 20, modRate: 1,
+    selectedOverlayIds: new Set<ReplayOverlayId>(),
     overlaySettings: settings,
     overlaySettingsInputSignature: JSON.stringify(settings),
     overlayHitboxes: [] as Box[],
@@ -124,5 +135,112 @@ describe("skin stage art placement", () => {
     const renderer = stageArtRenderer();
 
     expect(renderer.clampOverlayPosition("judgements", -5, -5, 200, 100, LAYOUT)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+
+// A padded stage-left image with a portrait above its leaderboard frame.
+// The portrait makes the art's center differ from the board's center.
+function mockPaddedArt() {
+  vi.stubGlobal("Image", class {
+    naturalWidth = 10;
+    naturalHeight = 10;
+    onload?: () => void;
+    set src(_value: string) { this.onload?.(); }
+  });
+  vi.stubGlobal("document", {
+    createElement: () => ({ getContext: () => ({
+      drawImage: vi.fn(),
+      getImageData: () => {
+        const data = new Uint8ClampedArray(400);
+        for (let y = 1; y < 8; y++) {
+          for (let x = 1; x < 5; x++) data[(y * 10 + x) * 4 + 3] = 255;
+        }
+        return { data };
+      },
+    }) }),
+  });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("moved skin art across viewport sizes", () => {
+  it("keeps a padded frame aligned with its leaderboard through fitting, saving and export", () => {
+    mockPaddedArt();
+    const viewer = stageArtRenderer({
+      stageLeft: { enabled: true, x: -0.02, y: 0, scale: 1.2 },
+      leaderboard: { enabled: true, x: 0.02, y: 0.35, scale: 1 },
+      handAccuracy: { enabled: true, x: 0.25, y: 0.4, scale: 1 },
+    });
+    const art = { asset: { src: "padded-leaderboard-frame" } };
+    const draw = (renderer: StageArtRenderer) => {
+      renderer.overlayHitboxes = [];
+      const layout = renderer.getLayout();
+      const native = renderer.getStageArtLayout(layout, "stageLeft");
+      const frame = renderer.getStageArtFrame(layout, "stageLeft", {
+        x: 0, y: 0, width: 240 * native.layoutScale, height: native.h,
+      }, art)!;
+      const scale = renderer.getOverlayScale(layout, "leaderboard");
+      const board = renderer.getOverlayFrame(layout, "leaderboard", 112 * scale, 274 * scale);
+      // Another overlay beside it forces the whole group to fit on a narrow stage.
+      const handScale = renderer.getOverlayScale(layout, "handAccuracy");
+      renderer.getOverlayFrame(layout, "handAccuracy", 100 * handScale, 80 * handScale);
+      return { frame, board };
+    };
+    draw(viewer); // Alpha scan completes; the next frame has trimmed bounds.
+    const original = draw(viewer);
+    viewer.prepareOverlayLayout();
+    const saved = viewer.getOverlaySettingsSnapshot();
+    expect(saved.stageLeft.reference?.anchorY).toBeCloseTo((original.board.y + original.board.height / 2) / viewer.cssHeight);
+    expect(saved.stageLeft.x).toBeCloseTo(-0.02); // Full rect, not trimmed hitbox.
+    expect(saved.stageLeft.reference?.size?.groupExtent).toBe(saved.leaderboard.reference?.size?.groupExtent);
+
+    for (const [width, height] of [[1000, 1100], [1600, 900], [1600, 1200], [1600, 900]]) {
+      viewer.cssWidth = width;
+      viewer.cssHeight = height;
+      viewer.invalidateLayoutCache();
+      const { frame, board } = draw(viewer);
+      const ratio = board.width / original.board.width;
+      expect(frame.width / original.frame.width).toBeCloseTo(ratio);
+      expect(frame.height / original.frame.height).toBeCloseTo(ratio);
+      expect(frame.x - board.x).toBeCloseTo((original.frame.x - original.board.x) * ratio);
+      expect(frame.y - board.y).toBeCloseTo((original.frame.y - original.board.y) * ratio);
+    }
+
+    viewer.cssWidth = 1000;
+    viewer.cssHeight = 1100;
+    viewer.invalidateLayoutCache();
+    const narrow = draw(viewer);
+    viewer.updateOverlayPlacement("stageLeft", { ...viewer.getOverlayPlacementOrigin(viewer.overlayHitboxes[0]), scale: 1.8 });
+    expect(draw(viewer).frame.width).toBeCloseTo(narrow.frame.width * 1.5);
+    const capture = JSON.parse(JSON.stringify(viewer.getOverlaySettingsSnapshot({ resolveLayout: true })));
+    const reopened = stageArtRenderer(capture);
+    reopened.cssWidth = 1000;
+    reopened.cssHeight = 1100;
+    const restored = draw(reopened).frame;
+    const current = draw(viewer).frame;
+    for (const key of ["x", "y", "width", "height"] as const) expect(restored[key]).toBeCloseTo(current[key]);
+    reopened.cssWidth = 1600;
+    reopened.cssHeight = 900;
+    reopened.invalidateLayoutCache();
+    expect(draw(reopened).frame.width).toBeCloseTo(original.frame.width * 1.5);
+  });
+
+  it("authors the first move at the displayed size and can return to native skin positioning", () => {
+    const viewer = stageArtRenderer();
+    viewer.getLayout();
+    viewer.cssWidth = 1000;
+    viewer.cssHeight = 1100;
+    viewer.invalidateLayoutCache();
+    const layout = viewer.getLayout();
+    const base = { x: 20, y: 0, width: 150 * layout.layoutScale, height: layout.h };
+    const before = viewer.getStageArtFrame(layout, "stageLeft", base)!;
+    viewer.updateOverlayPlacement("stageLeft", { x: before.x / layout.w, y: before.y / layout.h });
+    const native = viewer.getStageArtLayout(layout, "stageLeft");
+    expect(native.h).toBe(layout.h);
+    expect(viewer.getStageArtFrame(layout, "stageLeft", base)).toEqual(before);
+    viewer.resetOverlayPlacement("stageLeft");
+    expect(viewer.getStageArtLayout(layout, "stageLeft")).toBe(layout);
+    expect(viewer.getStageArtFrame(layout, "stageLeft", base)).toEqual(before);
   });
 });

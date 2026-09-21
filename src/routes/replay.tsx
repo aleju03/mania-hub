@@ -2332,14 +2332,13 @@ function ReplayViewer({
     void Promise.all([
       loadReplaySkinSettingsModal(),
       applied ? hydrateAppliedCommunitySkin(applied) : Promise.resolve(null),
-    ]).then(([, full]) => {
+    ]).then(() => {
       if (requestId !== skinEditorRequestRef.current) return;
       const current = readAppliedCommunityReplaySkin();
       if ((current ? appliedCommunityReplaySkinKey(current) : null) !== (applied ? appliedCommunityReplaySkinKey(applied) : null)) return;
-      if (applied && !full) {
-        setSkinSettingsLoadFailed(true);
-        return;
-      }
+      // A deleted or unavailable catalog skin must not lock the viewer out
+      // of the editor they need to replace it. Keep the saved colors/layout
+      // when hydration fails; the modal can still select another preset.
       setSkinSettingsOpen(true);
     }).catch(() => {
       if (requestId === skinEditorRequestRef.current) setSkinSettingsLoadFailed(true);

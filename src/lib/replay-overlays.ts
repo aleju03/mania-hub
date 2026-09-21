@@ -222,6 +222,8 @@ export interface ReplayOverlayReference extends ReplayOverlaySizeReference {
   spacingScale?: number;
   /** Resolved side-group geometry shared by fullscreen and video export. */
   groupStart?: number;
+  /** Relative vertical anchor for art framing a leaderboard in the same side group. */
+  anchorY?: number;
   /** Authored size before temporary viewport fitting; independent of position edits. */
   size?: ReplayOverlaySizeReference;
 }
@@ -397,7 +399,7 @@ function normalizeOverlaySizeReference(value: unknown): ReplayOverlaySizeReferen
 
 function normalizeOverlayReference(value: unknown): ReplayOverlayReference | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale, region, groupExtent, groupStart, size } = value as ReplayOverlayReference;
+  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale, region, groupExtent, groupStart, anchorY, size } = value as ReplayOverlayReference;
   if (![width, height, playfieldX, playfieldWidth, hudScale].every((number) => typeof number === "number" && Number.isFinite(number))) return undefined;
   if (width <= 0 || height <= 0 || playfieldX < 0 || playfieldWidth <= 0
     || playfieldX + playfieldWidth > width + 0.001 || hudScale <= 0) return undefined;
@@ -407,6 +409,7 @@ function normalizeOverlayReference(value: unknown): ReplayOverlayReference | und
   return {
     width, height, playfieldX, playfieldWidth, hudScale,
     ...(normalizedSize ? { size: normalizedSize } : {}),
+    ...(typeof anchorY === "number" && Number.isFinite(anchorY) && anchorY >= 0 && anchorY <= 1 ? { anchorY } : {}),
     ...(spacingScale === undefined ? {} : { spacingScale }),
     ...(validRegion ? { region } : {}),
     ...(validRegion && typeof groupExtent === "number" && Number.isFinite(groupExtent) && groupExtent > 0 ? { groupExtent } : {}),

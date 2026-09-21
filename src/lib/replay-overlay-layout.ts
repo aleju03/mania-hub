@@ -78,6 +78,9 @@ export function replayOverlayCenteredY(
         playfieldX: reference.playfieldX, playfieldWidth: reference.playfieldWidth,
       })
     : replayOverlayLayoutScale(reference, stage);
+  if (reference.anchorY !== undefined) {
+    return reference.anchorY * stage.h + (y - reference.anchorY) * reference.height * sizeScale;
+  }
   const originalHeight = height / sizeScale;
   return (y + originalHeight / (2 * reference.height)) * stage.h - height / 2;
 }

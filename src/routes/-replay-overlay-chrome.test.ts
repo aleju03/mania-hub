@@ -38,7 +38,7 @@ describe("replay overlay editing vs bottom chrome", () => {
     );
     expect(canvasSource).toContain("if (!this.canEditOverlays()) return false;");
     expect(canvasSource).toContain(
-      "if (this.getOverlayCloseButtonAtPoint(x, y) != null || this.getOverlayAtPoint(x, y) != null) return true;",
+      "if (hovered && this.blocksChromeForOverlay(hovered.id)) return true;",
     );
   });
 

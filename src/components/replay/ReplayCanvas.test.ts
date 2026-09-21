@@ -469,7 +469,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     // already in the 480-unit playfield space. Shrinking it by 480/768 again
     // leaves a full-stage lane cover sitting over only the middle columns.
     expect(furniture?.[1]).toBeTruthy();
-    expect(furniture![1]).toContain("native.width * layout.layoutScale");
+    expect(furniture![1]).toContain("native.width * artLayout.layoutScale");
     expect(catalogPreview).toContain("nativeWidth * layout.scale");
     expect(settingsPreview).toContain("bottomNativeWidth * layoutScale");
   });

@@ -243,10 +243,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
         const currentApplied = readAppliedCommunityReplaySkin();
         const currentKey = currentApplied ? appliedCommunityReplaySkinKey(currentApplied) : null;
         if (currentKey !== appliedKey) return;
-        if (needsAssets && !full) {
-          setSkinSettingsLoadFailed(true);
-          return;
-        }
+        // Missing catalog art is recoverable: open with the saved settings
+        // so the viewer can replace a deleted skin or reset their layout.
         if (full && currentApplied && appliedCommunityReplaySkinKey(currentApplied) === appliedKey) {
           // Scroll direction remains editable in the lightweight panel. Keep
           // the latest click if it changed while the archive was loading; all

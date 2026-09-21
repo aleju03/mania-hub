@@ -2635,10 +2635,10 @@ export class ManiaReplayRenderer {
   getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings {
     const layout = this.cachedLayout ?? this.getLayout();
     const reference = this.getOverlayReference(layout);
-    // Stage art sits where the skin puts it and never joins the HUD's
-    // side-group fitting; a full-height frame would swallow every column.
+    // Only moved art joins HUD fitting, using its visible bounds rather than
+    // the transparent canvas. Untouched art still belongs to the skin layout.
     const boxes = options?.resolveLayout
-      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id))
+      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id))
       : [];
     // Scores arrive separately from the replay. Reserve an enabled board's
     // footprint even before that request finishes (or while Tab hides it),
@@ -2684,11 +2684,17 @@ export class ManiaReplayRenderer {
         const current = this.getCurrentOverlayReference(layout, id);
         const size = this.getOverlaySizeReference(layout, id);
         const sizeScale = replayOverlayLayoutScale(size, layout);
+        // A portrait and its leaderboard border can share one image. Anchor
+        // the whole image to the board, not to the portrait's visible center.
+        const board = isReplayStageArtOverlay(id) ? boxes.find((entry) => entry.id === "leaderboard"
+          && groups.get(entry.id)?.region === group.region
+          && entry.x < box.x + box.width && box.x < entry.x + entry.width
+          && entry.y < box.y + box.height && box.y < entry.y + entry.height) : undefined;
         settings = updateReplayOverlayPlacement(settings, id, {
-          x: box.x / layout.w,
-          y: box.y / layout.h,
+          ...this.getOverlayPlacementOrigin(box),
           reference: {
             ...current, region: group.region,
+            anchorY: board ? (board.y + board.height / 2) / layout.h : undefined,
             ...(group.region === "playfield" ? {} : { groupStart: group.groupStart, groupExtent: group.groupExtent }),
             // Group bounds are measured after fitting. Convert them back to
             // authored size units so this capture cannot freeze that shrink.
@@ -2803,11 +2809,16 @@ export class ManiaReplayRenderer {
     const scaleY = this.cssHeight / rect.height;
     const x = (clientX - rect.left) * (this.cssWidth / rect.width);
     const y = (clientY - rect.top) * scaleY;
-    if (this.getOverlayCloseButtonAtPoint(x, y) != null || this.getOverlayAtPoint(x, y) != null) return true;
+    // Always leave an escape strip for the toolbar, even if selected art
+    // extends below the canvas. An actual drag still takes precedence above.
+    if (chromeBandPx > 0 && y >= this.cssHeight - OVERLAY_APPROACH_EDGE_PX * scaleY) return false;
+    if (this.getOverlayCloseButtonAtPoint(x, y) != null) return true;
+    const hovered = this.getOverlayAtPoint(x, y);
+    if (hovered && this.blocksChromeForOverlay(hovered.id)) return true;
     if (chromeBandPx <= 0) return false;
-    if (y >= this.cssHeight - OVERLAY_APPROACH_EDGE_PX * scaleY) return false;
     const bandTop = this.cssHeight - chromeBandPx * scaleY;
     for (const box of this.overlayHitboxes) {
+      if (!this.blocksChromeForOverlay(box.id)) continue;
       const frame = this.getOverlayInteractionFrame(box);
       const bottom = frame.y + frame.height;
       // Only overlays below the pointer, in the column it is descending, and
@@ -2818,6 +2829,12 @@ export class ManiaReplayRenderer {
     return false;
   }
 
+  private blocksChromeForOverlay(id: ReplayOverlayId): boolean {
+    // Decorative art can cover the entire bottom of a skin. Hover alone is
+    // not editing intent; select or drag it to keep the toolbar out of the way.
+    return !isReplayStageArtOverlay(id) || this.selectedOverlayIds.has(id);
+  }
+
   private installOverlayPointerHandlers() {
     this.previousCanvasTouchAction = this.canvas.style.touchAction;
     this.canvas.style.touchAction = "none";
@@ -2826,11 +2843,15 @@ export class ManiaReplayRenderer {
     this.canvas.addEventListener("pointerdown", this.handleOverlayPointerDown);
     this.canvas.addEventListener("pointermove", this.handleOverlayPointerMove);
     this.canvas.addEventListener("pointerup", this.handleOverlayPointerEnd);
-    this.canvas.addEventListener("pointercancel", this.handleOverlayPointerEnd);
+    this.canvas.addEventListener("pointercancel", this.handleOverlayPointerCancel);
+    this.canvas.addEventListener("lostpointercapture", this.handleOverlayPointerCancel);
     this.canvas.addEventListener("pointerleave", this.handleOverlayPointerLeave);
     // Capture phase lets overlay nudges take precedence over page shortcuts;
     // focused controls and open dialogs are excluded by the key handler.
-    if (typeof window !== "undefined") window.addEventListener("keydown", this.handleOverlayKeyDown, true);
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", this.handleOverlayKeyDown, true);
+      window.addEventListener("blur", this.handleOverlayWindowBlur);
+    }
   }
 
   private removeOverlayPointerHandlers() {
@@ -2840,9 +2861,14 @@ export class ManiaReplayRenderer {
     this.canvas.removeEventListener("pointerdown", this.handleOverlayPointerDown);
     this.canvas.removeEventListener("pointermove", this.handleOverlayPointerMove);
     this.canvas.removeEventListener("pointerup", this.handleOverlayPointerEnd);
-    this.canvas.removeEventListener("pointercancel", this.handleOverlayPointerEnd);
+    this.canvas.removeEventListener("pointercancel", this.handleOverlayPointerCancel);
+    this.canvas.removeEventListener("lostpointercapture", this.handleOverlayPointerCancel);
     this.canvas.removeEventListener("pointerleave", this.handleOverlayPointerLeave);
-    if (typeof window !== "undefined") window.removeEventListener("keydown", this.handleOverlayKeyDown, true);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("keydown", this.handleOverlayKeyDown, true);
+      window.removeEventListener("blur", this.handleOverlayWindowBlur);
+    }
+    this.cancelOverlayInteractions();
   }
 
   private getCanvasPointerPoint(event: PointerEvent): { x: number; y: number } {
@@ -3143,6 +3169,9 @@ export class ManiaReplayRenderer {
   };
 
   private handleOverlayPointerMove = (event: PointerEvent) => {
+    // Recover even if the release happened outside the browser and no
+    // pointerup/cancel arrived. Never keep dragging on a plain mouse hover.
+    if (event.pointerType === "mouse" && event.buttons === 0) this.cancelOverlayInteractions();
     const layout = this.cachedLayout ?? this.getLayout();
     const point = this.getCanvasPointerPoint(event);
     const activePointer = this.activeOverlayPointers.get(event.pointerId);
@@ -3271,7 +3300,6 @@ export class ManiaReplayRenderer {
   };
 
   private handleOverlayPointerEnd = (event: PointerEvent) => {
-    this.activeOverlayPointers.delete(event.pointerId);
     const point = this.getCanvasPointerPoint(event);
     if (this.missThumbTagPress?.pointerId === event.pointerId) {
       const press = this.missThumbTagPress;
@@ -3287,21 +3315,41 @@ export class ManiaReplayRenderer {
       if (marquee && marquee.width < 4 && marquee.height < 4 && !this.selectingOverlays.additive) {
         this.selectedOverlayIds.clear();
       }
-      this.selectingOverlays = null;
-      if (!this._isPlaying) this.render();
     }
-    if (this.pinchingOverlay?.pointerIds.includes(event.pointerId)) {
-      this.pinchingOverlay = null;
-    }
-    if (this.resizingOverlay?.pointerId === event.pointerId) {
-      this.resizingOverlay = null;
-    }
-    if (this.draggingOverlay?.pointerId === event.pointerId) {
-      this.draggingOverlay = null;
-    }
-    if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
+    this.finishOverlayPointerInteraction(event.pointerId);
     this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
   };
+
+  // Cancellation only ends the gesture. It must not toggle a thumb tag or
+  // clear a selection as though a click had completed successfully.
+  private handleOverlayPointerCancel = (event: PointerEvent) => {
+    this.finishOverlayPointerInteraction(event.pointerId);
+  };
+
+  private handleOverlayWindowBlur = () => this.cancelOverlayInteractions();
+
+  private finishOverlayPointerInteraction(pointerId: number) {
+    const hadMarquee = this.selectingOverlays?.pointerId === pointerId;
+    this.activeOverlayPointers.delete(pointerId);
+    if (this.missThumbTagPress?.pointerId === pointerId) this.missThumbTagPress = null;
+    if (hadMarquee) this.selectingOverlays = null;
+    if (this.pinchingOverlay?.pointerIds.includes(pointerId)) this.pinchingOverlay = null;
+    if (this.resizingOverlay?.pointerId === pointerId) this.resizingOverlay = null;
+    if (this.draggingOverlay?.pointerId === pointerId) this.draggingOverlay = null;
+    if (this.canvas.hasPointerCapture(pointerId)) this.canvas.releasePointerCapture(pointerId);
+    this.canvas.style.cursor = "";
+    if (hadMarquee && !this._isPlaying && !this.destroyed) this.render();
+  }
+
+  private cancelOverlayInteractions() {
+    const pointers = new Set(this.activeOverlayPointers.keys());
+    // Marquee selection also captures the pointer, but has no overlay id.
+    for (const gesture of [this.selectingOverlays, this.draggingOverlay, this.resizingOverlay, this.missThumbTagPress]) {
+      if (gesture) pointers.add(gesture.pointerId);
+    }
+    for (const pointerId of this.pinchingOverlay?.pointerIds ?? []) pointers.add(pointerId);
+    for (const pointerId of pointers) this.finishOverlayPointerInteraction(pointerId);
+  }
 
   private handleOverlayPointerLeave = () => {
     this.setMissThumbTagHovered(false);
@@ -3776,13 +3824,27 @@ export class ManiaReplayRenderer {
     return Math.max(1, (native?.height ?? 0) * (480 / 768) * layout.layoutScale);
   }
 
+  private isStageArtPlaced(id: ReplayOverlayId): boolean {
+    const placement = this.getOverlayPlacement(id);
+    return placement.x !== REPLAY_OVERLAY_ANCHORED_COORD || placement.y !== REPLAY_OVERLAY_ANCHORED_COORD;
+  }
+
+  // Build a moved piece in its authored viewport first, then apply the HUD
+  // transform. Rebuilding it at the new stage height before fitting would
+  // enlarge it a second time and pull frames away from their HUD contents.
+  private getStageArtLayout(layout: Layout, id: ReplayOverlayId): Layout {
+    if (!this.isStageArtPlaced(id)) return layout;
+    const size = this.getOverlaySizeReference(layout, id);
+    return this.calculateLayout(size.width, size.height);
+  }
+
   // Stage art (the skin's frame, deck and health bar) is placed the way the
   // HUD overlays are, except the skin authors its default spot: the placement
   // stays anchored to the geometry below until someone drags or resizes the
   // piece, so a skin looks untouched until it is touched. The returned rect is
   // what gets drawn; the hitbox pushed for it is trimmed to the art's visible
-  // pixels, and `scale` is the placement's own multiplier for callers that
-  // draw several pieces off one frame.
+  // pixels, and `scale` combines the placement and viewport multipliers for
+  // callers that draw several pieces off one frame.
   private getStageArtFrame(
     layout: Layout,
     id: ReplayOverlayId,
@@ -3794,12 +3856,19 @@ export class ManiaReplayRenderer {
     if (!blank) this.stageArtOverlayIds.add(id);
     const placement = this.getOverlayPlacement(id);
     if (!placement.enabled) return null;
-    const scale = placement.scale;
+    const placed = this.isStageArtPlaced(id);
+    const reference = placement.reference ?? this.getOverlayReference(layout);
+    const scale = placement.scale * (placed ? replayOverlayLayoutScale(this.getOverlaySizeReference(layout, id), layout) : 1);
     const width = Math.max(1, base.width * scale);
     const height = Math.max(1, base.height * scale);
+    // The visible center follows the leaderboard's vertical-center rule.
+    // Transparent padding must not shift a decorative frame's anchor.
+    const centerY = bounds
+      ? art?.rotatedCcw ? 1 - (bounds.left + bounds.right) / 2 : (bounds.top + bounds.bottom) / 2
+      : 0.5;
     const frame = {
-      x: placement.x === REPLAY_OVERLAY_ANCHORED_COORD ? base.x : placement.x * layout.w,
-      y: placement.y === REPLAY_OVERLAY_ANCHORED_COORD ? base.y : placement.y * layout.h,
+      x: placement.x === REPLAY_OVERLAY_ANCHORED_COORD ? base.x : replayOverlayX(placement.x, width, reference, layout),
+      y: placement.y === REPLAY_OVERLAY_ANCHORED_COORD ? base.y : replayOverlayCenteredY(placement.y, height * centerY * 2, reference, layout),
       width,
       height,
       scale,
@@ -3880,10 +3949,11 @@ export class ManiaReplayRenderer {
     if (this.skinSettings.style !== "bars") return;
     const stage = this.skinProfile.assets.stage;
     if (!stage.bottom && !stage.left && !stage.right) return;
-    const { h, playfieldX, playfieldWidth } = layout;
     const upscroll = this.skinSettings.upscroll;
 
     if (stage.bottom) {
+      const artLayout = this.getStageArtLayout(layout, "stageBottom");
+      const { h, playfieldX, playfieldWidth } = artLayout;
       // Never stretched to the stage width. Both axes use the asset's native
       // size in the 480-unit playfield space: the wiki's 0.625 note describes
       // that space relative to osu!'s 768-unit screen, not an extra horizontal
@@ -3892,8 +3962,8 @@ export class ManiaReplayRenderer {
       // edge and clips, exactly as in game.
       const native = this.getStageAssetNativeSize(stage.bottom);
       if (native) {
-        const width = Math.max(1, native.width * layout.layoutScale);
-        const height = Math.max(1, native.height * layout.layoutScale);
+        const width = Math.max(1, native.width * artLayout.layoutScale);
+        const height = Math.max(1, native.height * artLayout.layoutScale);
         const frame = this.getStageArtFrame(layout, "stageBottom", {
           x: playfieldX + playfieldWidth / 2 - width / 2,
           y: upscroll ? 0 : h - height,
@@ -3912,7 +3982,9 @@ export class ManiaReplayRenderer {
       // the full stage the way stable scales it to the playfield height.
       const native = this.getStageAssetNativeSize(asset);
       if (!native) continue;
-      const width = Math.max(1, native.width * (480 / 768) * layout.layoutScale);
+      const artLayout = this.getStageArtLayout(layout, id);
+      const { h, playfieldX, playfieldWidth } = artLayout;
+      const width = Math.max(1, native.width * (480 / 768) * artLayout.layoutScale);
       const frame = this.getStageArtFrame(layout, id, {
         x: id === "stageLeft" ? playfieldX - width : playfieldX + playfieldWidth,
         y: 0,
@@ -3935,11 +4007,12 @@ export class ManiaReplayRenderer {
     // Textures still decoding: hold the frame rather than flashing the
     // default bar; the finished load re-renders.
     if (!colourNative) return true;
-    const { h, playfieldX, playfieldWidth } = layout;
+    const artLayout = this.getStageArtLayout(layout, "healthBar");
+    const { h, playfieldX, playfieldWidth } = artLayout;
     const bgNative = stage.scorebarBg ? this.getStageAssetNativeSize(stage.scorebarBg) : null;
     // One uniform scale for both pieces so the art keeps its proportions,
     // capped so a full-length bar stays within the stage height.
-    const unitScale = (480 / 768) * layout.layoutScale;
+    const unitScale = (480 / 768) * artLayout.layoutScale;
     const referenceLength = Math.max(bgNative?.width ?? 0, colourNative.width) * unitScale;
     const maxLength = h * 0.62;
     const pieceScale = referenceLength > maxLength ? (maxLength / referenceLength) * unitScale : unitScale;
@@ -3990,13 +4063,14 @@ export class ManiaReplayRenderer {
   private renderHealthBar(layout: Layout) {
     if (this.lifeBarFrames.length === 0) return;
 
-    const { h, playfieldX, playfieldWidth } = layout;
     const health = this.getHealthAtTime(this.currentTime);
     if (this.skinSettings.style === "bars" && this.renderSkinHealthBar(layout, health)) return;
+    const artLayout = this.getStageArtLayout(layout, "healthBar");
+    const { h, playfieldX, playfieldWidth } = artLayout;
     const isLazer = this.ruleset.accuracyMode === "lazer";
     const reference = this.overlaySettings.hitError.reference ?? this.getOverlayReference(layout);
     const spacing = (reference.spacingScale ?? 1) * h / reference.height;
-    const baseWidth = Math.max(7, Math.min(10, layout.laneWidth / spacing * 0.17)) * spacing;
+    const baseWidth = Math.max(7, Math.min(10, artLayout.laneWidth / spacing * 0.17)) * spacing;
     const baseHeight = Math.max(136 * spacing, h * 0.52);
     const frame = this.getStageArtFrame(layout, "healthBar", {
       x: playfieldX + playfieldWidth + 13 * spacing,
@@ -4747,6 +4821,13 @@ export class ManiaReplayRenderer {
   }
 
   private getCurrentOverlayReference(layout: Layout, id: ReplayOverlayId): ReplayOverlayReference {
+    if (isReplayStageArtOverlay(id) && !this.isStageArtPlaced(id)) {
+      return {
+        width: layout.w, height: layout.h,
+        playfieldX: layout.playfieldX, playfieldWidth: layout.playfieldWidth,
+        hudScale: 1, spacingScale: 1,
+      };
+    }
     const reference = this.getOverlayPlacement(id).reference ?? this.getOverlayReference(layout);
     return {
       width: layout.w, height: layout.h,
@@ -4755,6 +4836,7 @@ export class ManiaReplayRenderer {
       size: this.getOverlaySizeReference(layout, id),
       spacingScale: (reference.spacingScale ?? 1) * replayOverlayLayoutScale(reference, layout),
       region: reference.region ?? "playfield",
+      ...(reference.anchorY === undefined ? {} : { anchorY: reference.anchorY }),
     };
   }
 
