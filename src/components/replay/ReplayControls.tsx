@@ -6,6 +6,19 @@ import { Trans, useLingui } from "@lingui/react/macro";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
 import { withReplayShareTime } from "#/lib/replay-share";
+import { formatBytes } from "#/lib/format";
+import {
+  DEFAULT_EXPORT_CLIP_SECONDS,
+  DEFAULT_REPLAY_EXPORT_PRESET,
+  REPLAY_EXPORT_AUDIO_BITRATE,
+  REPLAY_EXPORT_PRESETS,
+  REPLAY_EXPORT_PRESET_ORDER,
+  checkExportAdmission,
+  exportVideoBitrate,
+  type ReplayExportPresetId,
+} from "#/lib/replay-export/limits";
+import { MIN_EXPORT_RANGE_MS } from "#/lib/replay-export/timeline";
+import { replayExportDimensions } from "#/lib/replay-export/composition";
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 
 interface ReplayControlsProps {
@@ -50,10 +63,10 @@ interface ReplayControlsProps {
   ownerSkinAvailable?: boolean;
   ownerSkinOn?: boolean;
   ownerSkinName?: string | null;
-  videoExporting?: boolean;
-  videoExportProgress?: number;
-  videoExportError?: string | null;
-  videoExportUrl?: string | null;
+  /** True while another local export holds the single job slot. */
+  videoExportBusy?: boolean;
+  /** False where this browser has no save dialog, so output is in-memory. */
+  videoExportCanSaveToFile?: boolean;
   /** Canonical link to this replay; the Share button hides without one. */
   shareUrl?: string | null;
   onTogglePlay: () => void;
@@ -84,11 +97,11 @@ interface ReplayControlsProps {
 
 export type ReplayVideoExportOptions = {
   kind: "clip" | "full" | "custom";
+  /** Output seconds for a clip; source span is this times the rate. */
   durationSeconds?: number;
   startTimeMs?: number;
   endTimeMs?: number;
-  resolution: "720p" | "1080p";
-  fps: 30 | 48 | 60;
+  preset: ReplayExportPresetId;
 };
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -150,10 +163,8 @@ export function ReplayControls({
   ownerSkinAvailable,
   ownerSkinOn,
   ownerSkinName,
-  videoExporting = false,
-  videoExportProgress = 0,
-  videoExportError = null,
-  videoExportUrl = null,
+  videoExportBusy = false,
+  videoExportCanSaveToFile = false,
   shareUrl: replayShareUrl = null,
   onTogglePlay,
   onToggleFullscreen,
@@ -193,17 +204,13 @@ export function ReplayControls({
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
   const [videoClipMode, setVideoClipMode] = useState(false);
-  const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("custom");
+  const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("clip");
   const [videoCustomStartMs, setVideoCustomStartMs] = useState<number | null>(null);
   const [videoCustomEndMs, setVideoCustomEndMs] = useState<number | null>(null);
-  const [videoResolution, setVideoResolution] = useState<ReplayVideoExportOptions["resolution"]>("1080p");
-  const [videoFps, setVideoFps] = useState<ReplayVideoExportOptions["fps"]>(48);
-  const [videoToast, setVideoToast] = useState<{ id: number; message: string; url?: string } | null>(null);
+  const [videoPreset, setVideoPreset] = useState<ReplayExportPresetId>(DEFAULT_REPLAY_EXPORT_PRESET);
   const [scrollSpeedInput, setScrollSpeedInput] = useState(String(scrollSpeed));
   const [editingScrollSpeed, setEditingScrollSpeed] = useState(false);
-  const videoToastIdRef = useRef(0);
   const cancelScrollSpeedCommitRef = useRef(false);
-  const wasVideoExportingRef = useRef(videoExporting);
   const videoMenuRef = useRef<HTMLDivElement>(null);
   const sharePanelRef = useRef<HTMLDivElement>(null);
   const volumeMixerRef = useRef<HTMLDivElement>(null);
@@ -326,21 +333,6 @@ export function ReplayControls({
     };
   }, [volumeMixerOpen]);
 
-  useEffect(() => {
-    const completedExport = wasVideoExportingRef.current && !videoExporting && Boolean(videoExportUrl);
-    wasVideoExportingRef.current = videoExporting;
-    if (!completedExport || !videoExportUrl) return;
-    videoToastIdRef.current += 1;
-    const toastId = videoToastIdRef.current;
-    const showToast = (message: string, url?: string) => {
-      setVideoToast({ id: toastId, message, url });
-      window.setTimeout(() => {
-        setVideoToast((current) => (current?.id === toastId ? null : current));
-      }, url ? 9000 : 3500);
-    };
-    showToast(t`Discord video ready`, videoExportUrl);
-  }, [videoExporting, videoExportUrl]);
-
   const handleProgressContextMenu = (timeMsGame: number, clientX: number, clientY: number) => {
     onContextMenu(timeMsGame, clientX, clientY);
     const wallMs = timeMsGame / modRate;
@@ -379,20 +371,47 @@ export function ReplayControls({
   };
   const customStart = Math.min(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
   const customEnd = Math.max(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
-  const hasCustomRange = videoCustomStartMs != null && videoCustomEndMs != null && customEnd > customStart;
-  const selectedExportLabel = videoExportKind === "full"
-    ? t`Full`
-    : videoCustomStartMs == null || videoCustomEndMs != null ? t`Set start` : t`Set end`;
+  const hasCustomRange = videoCustomStartMs != null
+    && videoCustomEndMs != null
+    && customEnd - customStart >= MIN_EXPORT_RANGE_MS;
+  // Everything the dialog needs to state the output before it is produced:
+  // how long the file will be, roughly how big, and where it will land.
+  const effectiveExportRate = Math.max(0.01, speed * modRate);
+  const exportPreset = REPLAY_EXPORT_PRESETS[videoPreset];
+  const exportDimensions = replayExportDimensions(rendererRef.current?.getViewportSnapshot?.() ?? exportPreset, exportPreset);
+  const replayDurationMs = rendererRef.current?.duration ?? 0;
+  const exportOutputSeconds = videoExportKind === "full"
+    ? replayDurationMs / (1000 * effectiveExportRate)
+    : videoExportKind === "clip"
+      ? Math.min(DEFAULT_EXPORT_CLIP_SECONDS, Math.max(0, replayDurationMs / (1000 * effectiveExportRate)))
+      : hasCustomRange
+        ? (customEnd - customStart) / (1000 * effectiveExportRate)
+        : 0;
+  const exportDestination = videoExportCanSaveToFile ? "file" : "buffer";
+  const exportAdmission = checkExportAdmission({
+    destination: exportDestination,
+    outputSeconds: exportOutputSeconds,
+    videoBitrate: exportVideoBitrate(exportPreset, exportDimensions),
+    audioBitrate: REPLAY_EXPORT_AUDIO_BITRATE,
+    // Resource preparation checks the input working set before encoding.
+    workingMemoryBytes: 0,
+  });
+  const exportEstimatedBytes = exportAdmission.estimatedBytes;
+  const exportOverLimit = !exportAdmission.ok;
+  const exportRangeReady = videoExportKind !== "custom" || hasCustomRange;
+  // Pink means "you are marking a range", which only Custom mode does.
+  const videoMarkingActive = videoExportKind === "custom" && videoClipMode;
 
-  const markCustomVideoPoint = () => {
-    const timeMs = currentReplayTimeMs();
-    setVideoClipMode(true);
-    if (videoCustomStartMs == null || videoCustomEndMs != null) {
-      setVideoCustomStartMs(timeMs);
-      setVideoCustomEndMs(null);
-      return;
+  const submitVideoExport = () => {
+    if (!onExportVideo || videoExportBusy || !exportRangeReady || exportOverLimit) return;
+    setVideoMenuOpen(false);
+    if (videoExportKind === "full") {
+      onExportVideo({ kind: "full", preset: videoPreset });
+    } else if (videoExportKind === "clip") {
+      onExportVideo({ kind: "clip", durationSeconds: DEFAULT_EXPORT_CLIP_SECONDS, preset: videoPreset });
+    } else {
+      onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, preset: videoPreset });
     }
-    setVideoCustomEndMs(timeMs);
   };
 
   const commitScrollSpeedInput = () => {
@@ -648,44 +667,20 @@ export function ReplayControls({
     <div ref={videoMenuRef} className={`${isOverlay ? "" : "order-9 sm:order-none "}relative inline-flex`}>
       <button
         type="button"
-        onClick={() => {
-          if (videoExportKind === "custom") {
-            markCustomVideoPoint();
-          } else {
-            setVideoClipMode((enabled) => !enabled);
-          }
-        }}
-        disabled={videoExporting}
-        aria-label={t`Generate replay video URL`}
-        className={`${isOverlay ? "h-9 text-[11px]" : "h-7 text-[10px]"} rounded-l px-2.5 font-semibold transition-colors flex items-center gap-1.5 ${
-          videoExporting
+        onClick={() => setVideoMenuOpen((open) => !open)}
+        disabled={videoExportBusy}
+        aria-label={t`Replay video export options`}
+        aria-expanded={videoMenuOpen}
+        className={`${isOverlay ? "h-9 text-[11px]" : "h-7 text-[10px]"} rounded px-2.5 font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 disabled:cursor-default disabled:opacity-60 ${
+          videoExportBusy
             ? "cursor-default bg-osu-b3/40 text-osu-f1"
-            : videoClipMode
+            : videoMarkingActive
               ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
               : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
         }`}
       >
         <Film className="h-3.5 w-3.5" strokeWidth={2.3} />
-        <span className="tabular-nums">
-          {videoExporting
-            ? `${Math.round(videoExportProgress * 100)}%`
-            : selectedExportLabel}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setVideoMenuOpen((open) => !open)}
-        disabled={videoExporting}
-        aria-label={t`Replay video export options`}
-        aria-expanded={videoMenuOpen}
-        className={`${isOverlay ? "h-9" : "h-7"} rounded-r border-l border-osu-b4/40 px-1 transition-colors flex items-center ${
-          videoExporting
-            ? "cursor-default bg-osu-b3/40 text-osu-f1"
-            : videoClipMode
-              ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
-              : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-        }`}
-      >
+        <span>{t`Export video`}</span>
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${videoMenuOpen ? "" : "rotate-180"}`} strokeWidth={2.3} />
       </button>
       <AnimatePresence>
@@ -695,12 +690,38 @@ export function ReplayControls({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.1 }}
-            className={`absolute bottom-full z-50 mb-1.5 w-36 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${isOverlay ? "right-0" : "left-0"}`}
+            className={`absolute bottom-full z-50 mb-1.5 w-52 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${isOverlay ? "right-0" : "left-0"}`}
           >
             <button
               type="button"
               onClick={() => {
-                if (videoExportKind === "custom" && videoClipMode) {
+                setVideoExportKind("clip");
+                setVideoClipMode(false);
+              }}
+              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                videoExportKind === "clip" ? "text-white" : "text-osu-f0"
+              }`}
+            >
+              <span>{t`${DEFAULT_EXPORT_CLIP_SECONDS}s from here`}</span>
+              <CheckMark on={videoExportKind === "clip"} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setVideoExportKind("full");
+                setVideoClipMode(false);
+              }}
+              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                videoExportKind === "full" ? "text-white" : "text-osu-f0"
+              }`}
+            >
+              <span>{t`Full play`}</span>
+              <CheckMark on={videoExportKind === "full"} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (videoMarkingActive) {
                   setVideoClipMode(false);
                   setVideoCustomStartMs(null);
                   setVideoCustomEndMs(null);
@@ -710,13 +731,13 @@ export function ReplayControls({
                 }
               }}
               className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                videoExportKind === "custom" && videoClipMode ? "text-white" : "text-osu-f0"
+                videoMarkingActive ? "text-white" : "text-osu-f0"
               }`}
             >
               <span>{t`Custom`}</span>
-              <CheckMark on={videoExportKind === "custom" && videoClipMode} />
+              <CheckMark on={videoMarkingActive} />
             </button>
-            {videoExportKind === "custom" && videoClipMode && (
+            {videoMarkingActive && (
               <div className="space-y-1.5 px-1 pb-1">
                 <div className="grid grid-cols-2 gap-1">
                   <button
@@ -777,70 +798,69 @@ export function ReplayControls({
               </div>
             )}
             <div className="my-1 h-px bg-osu-b2" />
-            <button
-              type="button"
-              onClick={() => {
-                setVideoExportKind("full");
-                setVideoClipMode(false);
-              }}
-              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                videoExportKind === "full" ? "text-white" : "text-osu-f0"
-              }`}
-            >
-              <span>{t`Full play`}</span>
-              <CheckMark on={videoExportKind === "full"} />
-            </button>
-            <div className="my-1 h-px bg-osu-b2" />
-            <button
-              type="button"
-              onClick={() => {
-                setVideoClipMode(true);
-                setVideoMenuOpen(false);
-                if (videoExportKind === "full") {
-                  onExportVideo({ kind: "full", resolution: videoResolution, fps: videoFps });
-                } else if (videoExportKind === "custom") {
-                  if (!hasCustomRange) return;
-                  onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution, fps: videoFps });
-                }
-              }}
-              disabled={videoExportKind === "custom" && !hasCustomRange}
-              className="flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
-            >
-              {t`Generate URL`}
-            </button>
-            <div className="px-1 py-1 text-center text-[10px] leading-tight text-osu-f1">
-              {t`For Discord embeds`}
-            </div>
-            <div className="my-1 h-px bg-osu-b2" />
             <div className="grid grid-cols-2 gap-1">
-              {(["720p", "1080p"] as const).map((resolution) => (
-                <button
-                  key={resolution}
-                  type="button"
-                  onClick={() => setVideoResolution(resolution)}
-                  className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
-                    videoResolution === resolution ? "bg-osu-pink text-white" : "text-osu-f0"
-                  }`}
-                >
-                  {resolution}
-                </button>
-              ))}
+              {REPLAY_EXPORT_PRESET_ORDER.map((presetId) => {
+                const preset = REPLAY_EXPORT_PRESETS[presetId];
+                return (
+                  <button
+                    key={presetId}
+                    type="button"
+                    onClick={() => setVideoPreset(presetId)}
+                    className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums hover:bg-osu-b4 ${
+                      videoPreset === presetId ? "bg-osu-pink text-white" : "text-osu-f0"
+                    }`}
+                  >
+                    {preset.height}p{preset.fps}
+                  </button>
+                );
+              })}
             </div>
             <div className="my-1 h-px bg-osu-b2" />
-            <div className="grid grid-cols-3 gap-1">
-              {([30, 48, 60] as const).map((fps) => (
-                <button
-                  key={fps}
-                  type="button"
-                  onClick={() => setVideoFps(fps)}
-                  className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
-                    videoFps === fps ? "bg-osu-pink text-white" : "text-osu-f0"
-                  }`}
-                >
-                  {fps}
-                </button>
-              ))}
+            <div className="px-1 text-[10px] leading-relaxed text-osu-f1">
+              <div className="flex justify-between gap-2">
+                <span>{t`Length`}</span>
+                <span className="tabular-nums text-white">
+                  {exportRangeReady ? formatReplayMs(exportOutputSeconds * 1000) : "--:--"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>{t`Estimated size`}</span>
+                <span className="tabular-nums text-white">
+                  {exportRangeReady ? formatBytes(exportEstimatedBytes) : "--"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                {/* Own context: the bare "Speed" id is the skillset axis,
+                    which stays English on purpose. */}
+                <span>{t({ context: "Replay export", message: "Speed" })}</span>
+                <span className="tabular-nums text-white">{effectiveExportRate.toFixed(2)}x</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>{t`Audio`}</span>
+                <span className="text-white">{audioEnabled ? t`On` : t`Off`}</span>
+              </div>
             </div>
+            {!videoExportCanSaveToFile && (
+              <div className="px-1 pt-1 text-[10px] leading-tight text-osu-f1">
+                {t`This browser can't save directly to a file, so the video is held in memory and downloaded when it finishes.`}
+              </div>
+            )}
+            {exportOverLimit && exportRangeReady && (
+              <div className="px-1 pt-1 text-[10px] leading-tight text-osu-yellow">
+                {t`That's longer than this browser can export in one go. Pick a shorter range or a lower preset.`}
+              </div>
+            )}
+            <div className="px-1 pt-1 text-[10px] leading-tight text-osu-f1">
+              {t`The video is created on your device. Keep this tab open while it exports.`}
+            </div>
+            <button
+              type="button"
+              onClick={submitVideoExport}
+              disabled={videoExportBusy || !exportRangeReady || exportOverLimit}
+              className="mt-1.5 flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
+            >
+              {t`Export video`}
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -860,38 +880,6 @@ export function ReplayControls({
           {audioError}
         </div>
       )}
-      {videoExportError && (
-        <div className="text-[11px] text-red-100 bg-red-500/10 border-b border-red-400/20 px-4 py-2 rounded-t-xl">
-          {videoExportError}
-        </div>
-      )}
-      <AnimatePresence>
-        {videoToast && (
-          <motion.div
-            key={videoToast.id}
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.14 }}
-            className="fixed right-4 top-4 z-[200] flex items-center gap-2 rounded-lg border border-osu-pink/30 bg-osu-b3 px-3 py-2 text-[12px] font-semibold text-white shadow-2xl"
-          >
-            <span>{videoToast.message}</span>
-            {videoToast.url && (
-              <button
-                type="button"
-                onClick={() => {
-                  void copyTextToClipboard(videoToast.url!).then((ok) => {
-                    if (ok) setVideoToast({ id: videoToast.id, message: t`Discord video URL copied` });
-                  });
-                }}
-                className="rounded bg-osu-pink px-2 py-1 text-[11px] font-bold text-white hover:bg-osu-pink-light"
-              >
-                {t`Copy`}
-              </button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* On phones the transport (play + scrubber) lives in the sticky strip
           under the canvas, so this card only shows it from sm up. */}
@@ -906,7 +894,7 @@ export function ReplayControls({
           className={isOverlay ? "!px-3 !pt-2 !pb-0" : ""}
           clipPreviewSeconds={null}
           clipPreviewRate={speed * modRate}
-          customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
+          customPreviewRange={onExportVideo && videoMarkingActive
             ? { startMs: videoCustomStartMs, endMs: videoCustomEndMs }
             : null}
           onPointerDown={onPointerDown}

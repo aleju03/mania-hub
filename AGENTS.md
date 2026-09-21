@@ -16,7 +16,7 @@ This file is the condensed guide. `docs/` holds the maintained reference; read t
 - `docs/packs.md`: card pack economy, streak/blitz arcade games, GOAT poll.
 - `docs/discord.md`: maniabot Discord bot, `/communities` server directory.
 - `docs/admin.md`: admin surfaces - ghost overlay, todos, analytics, BBCode image audit, `bugs:pull` setup.
-- `docs/frontend.md`: route/component map, live data flow (SSE client, cross-tab sharing), client state, OG images, BBCode editor.
+- `docs/frontend.md`: route/component map, live data flow (SSE client, cross-tab sharing), client state, on-device replay video export, OG images, BBCode editor.
 
 Keep one-off audits, investigation notes, and capture reports in `local-notes/` (gitignored), not in `docs/`. Do not commit them.
 
@@ -63,6 +63,7 @@ There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/`
 - Authenticated osu! API access stays server-side; never put osu! credentials or direct authenticated calls in client components. New backend osu! calls go through the token-bucket client in `live-backend/src/osu/client.ts` (~45/min target, 60/min hard limit).
 - New SSE event types must be added to `LIVE_EVENT_NAMES` in `src/lib/live-backend.ts` or follower tabs never see them.
 - Backend logs are structured JSON via `live-backend/src/logger.ts` (`logInfo`/`logWarn`), never `console.log`.
+- Replay video export is on-device only. The ordinary export path must not upload the video, queue a render job, or call `/api/replay-video-job`; the backend's `ENABLE_REPLAY_VIDEO` half stays off and is not a fallback for an unsupported browser. Details in `docs/frontend.md`.
 - Uploaded replays (`/replay` Upload tab) are unlisted, not private: the `.osr` sits in R2 and its share link is public by design. What is owned is the row in the backend's `uploaded_replays` index, consulted for both the `/replay/uploads` page and every delete; the file names no uploader, so any surface that lists or deletes one goes through `src/lib/uploaded-replays.ts`, never the R2 key. Deletes drop the index row before the objects; admins get the same page over every uploader's files.
 - Skins carry a `visibility` (`public`/`private`) alongside `status`. A private skin is off `/skins`, off the duplicate guard, has no counted download or view, and 404s for anyone but its uploader (a true admin can still read it, and their private shelf on `/skins` lists every uploader's via `allPrivate=1` on `/api/skins/list`). Its R2 objects live under a `p-<secret>` key segment, never get a public bucket URL, and only answer to `?t=<secret>`, which `toSkinSummary(row, { asOwner })` attaches for owner-scoped reads only; any endpoint that serves a skin goes through that serializer, not the row. Replay viewers never receive a private `.osk`: `/api/replay-skin/bundle` zips only the assets the player's stored settings draw (`live-backend/src/skins/replay-bundle.ts`). This protects the file and the page, not the pixels a replay puts on screen.
 - Some admin controls (reset-local-db, delete-country) are destructive; treat with care.
@@ -70,7 +71,7 @@ There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/`
 
 ## Config and admin
 
-- Frontend vars: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, R2 vars.
+- Frontend vars: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, `VITE_ENABLE_LOCAL_REPLAY_VIDEO_EXPORT`, R2 vars.
 - Backend (`live-backend/src/config.ts` has the full ~90-var list with defaults): osu!/oSC credentials and endpoints, `TRACKED_COUNTRIES`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, `LIVE_BRIDGE_TOKEN`, `LIVE_BACKEND_ROLE` (`all`/`server`/`worker`, opt-in two-process split), and feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`, `ENABLE_DISCORD_BOT`/`ENABLE_DISCORD_FEEDS`).
 - Admin UI is at `/admin/live-backend` (frontend) talking to backend `/api/admin/*`. `/admin/r2` browses both R2 buckets (private `mania-hub-replay-cache`, public `mania-hub-public`); their browsable roots and delete warnings are declared once in the `ADMIN_BUCKETS` registry in `src/lib/r2-cache.ts`.
 

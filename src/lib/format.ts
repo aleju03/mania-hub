@@ -219,3 +219,17 @@ export function formatDate(dateStr: string, timeZone = "UTC", locale: AppLocale 
     timeZone: zoned ? timeZone : "UTC",
   });
 }
+
+/* File sizes for download surfaces. Binary units, one decimal from MB up, so
+   a 45.9 MB export doesn't read as "46 MB" next to its own byte limit. */
+export function formatBytes(bytes: number, locale: AppLocale = "en"): string {
+  const value = Math.max(0, bytes);
+  if (value < 1024) return `${Math.round(value).toLocaleString(INTL_LOCALE[locale])} B`;
+  if (value < 1024 * 1024) {
+    return `${Math.round(value / 1024).toLocaleString(INTL_LOCALE[locale])} KB`;
+  }
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toLocaleString(INTL_LOCALE[locale], { maximumFractionDigits: 1 })} MB`;
+  }
+  return `${(value / (1024 * 1024 * 1024)).toLocaleString(INTL_LOCALE[locale], { maximumFractionDigits: 2 })} GB`;
+}

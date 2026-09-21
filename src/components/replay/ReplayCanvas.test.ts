@@ -88,7 +88,7 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("if (this.showHealthBar) this.renderHealthBar(layout);");
     expect(source).toContain("private getHealthAtTime(time: number)");
     expect(source).toContain("playfieldX + playfieldWidth + 13");
-    expect(source).toContain("const height = Math.max(136, h * 0.52);");
+    expect(source).toContain("const height = Math.max(136 * spacing, h * 0.52);");
     expect(source).toContain("const y = h - height;");
     expect(source).toContain("this.fillRect(x, fillY, barWidth, fillHeight");
     expect(source).toContain("private buildFallbackLifeBarFrames(events: ReplayJudgementEvent[])");
@@ -270,7 +270,7 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("renders the ingame leaderboard with seek-safe overtake flashes", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("setLeaderboard(entries: ReplayLeaderboardEntry[], playerName: string)");
+    expect(source).toContain("setLeaderboard(entries: ReplayLeaderboardEntry[], playerName: string, options: ReplayLeaderboardOptions = {})");
     expect(source).toContain("if (this.leaderboardPrevRank != null && rank < this.leaderboardPrevRank && !this.suppressOvertakeFlash)");
     expect(source).toContain('rows[playerRowIndex - 1].kind = "target";');
     // Seeks re-derive the rank from scratch; that jump must not flash.
@@ -827,7 +827,7 @@ describe("ManiaReplayRenderer per-hand accuracy overlay", () => {
     }
     // Both hand overlays name the same colours, so a glance ties L to L.
     expect(source).toContain('const HAND_COLORS = { left: "#5a8fff", right: "#de31ae" } as const;');
-    expect(source).toContain('{ hand: "left" as const, label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },');
+    expect(source).toContain('{ hand: "left" as const, label: "L", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },');
     // Digits and unit are separate glyphs, so the number keeps the size.
     expect(source).toContain("this.hudCachedLeftHandAccuracy = this.hudCachedLeftHandAccuracyValue.toFixed(2);");
   });

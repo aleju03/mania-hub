@@ -42,8 +42,7 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   replayMaster: msg`Mania Replay Master`,
 };
 
-// Per-hand accuracy is the one overlay with more than one worthwhile shape,
-// so it carries a style on its placement, picked from its right-click menu.
+// Hand overlays carry their selected shape with the saved placement.
 export const REPLAY_HAND_ACCURACY_STYLES = ["meters", "plain", "rings", "balance"] as const;
 
 export type ReplayHandAccuracyStyle = typeof REPLAY_HAND_ACCURACY_STYLES[number];
@@ -63,25 +62,90 @@ export function normalizeReplayHandAccuracyStyle(value: unknown): ReplayHandAccu
     : DEFAULT_REPLAY_HAND_ACCURACY_STYLE;
 }
 
+export const REPLAY_MISS_STYLES = ["compact", "stacked", "plain"] as const;
+export type ReplayMissStyle = typeof REPLAY_MISS_STYLES[number];
+export const DEFAULT_REPLAY_MISS_STYLE: ReplayMissStyle = "plain";
+export const REPLAY_MISS_STYLE_LABELS: Record<ReplayMissStyle, MessageDescriptor> = {
+  compact: msg`Hit circles`,
+  stacked: msg`Leaderboard`,
+  plain: msg`Classic`,
+};
+
+export function normalizeReplayMissStyle(value: unknown): ReplayMissStyle {
+  return REPLAY_MISS_STYLES.includes(value as ReplayMissStyle)
+    ? value as ReplayMissStyle
+    : DEFAULT_REPLAY_MISS_STYLE;
+}
+
 // An overlay whose default position is a computed anchor rather than a
 // fraction of the stage stores this in x/y until it is first dragged; the
 // stage then keeps drawing it where it always sat.
 export const REPLAY_OVERLAY_ANCHORED_COORD = -1;
+// Leave -1 reserved for anchored placements. The lazer leaderboard may cross the
+// left edge; keep a small visible strip available for dragging it back.
+export const REPLAY_LEADERBOARD_MIN_X = -0.95;
+
+export function getReplayOverlayMinX(id: ReplayOverlayId, width: number, stageWidth: number, isLazer: boolean): number {
+  if (!isLazer || id !== "leaderboard" || width <= 32) return 0;
+  return Math.max(REPLAY_LEADERBOARD_MIN_X, -Math.max(0, width - 32) / Math.max(1, stageWidth));
+}
 
 export interface ReplayOverlayPlacement {
   enabled: boolean;
   x: number;
   y: number;
   scale: number;
-  /** Only meaningful on the per-hand accuracy overlay. */
-  style?: ReplayHandAccuracyStyle;
+  /** Stage geometry when this placement was authored; keeps it stable across aspect ratios. */
+  reference?: ReplayOverlayReference;
+  /** Each hand overlay normalizes against its own set of styles. */
+  style?: ReplayHandAccuracyStyle | ReplayMissStyle;
   /** Mania Replay Master scroll multiplier; independent of replay playback. */
   scrollSpeed?: number;
   /** Show Replay Master's marks directly over the stage. */
   transparentBackground?: boolean;
 }
 
-export type ReplayOverlaySettings = Record<ReplayOverlayId, ReplayOverlayPlacement>;
+export interface ReplayOverlayReference {
+  width: number;
+  height: number;
+  playfieldX: number;
+  playfieldWidth: number;
+  hudScale: number;
+  /** Scale of fixed HUD spacing in this reference, independent of font scaling. */
+  spacingScale?: number;
+}
+
+export type ReplayOverlayPosition = Pick<ReplayOverlayPlacement, "x" | "y" | "scale" | "reference">;
+
+export type ReplayOverlaySettings = Record<ReplayOverlayId, ReplayOverlayPlacement> & {
+  leaderboard: ReplayOverlayPlacement & {
+    /** Stable uses the outer placement; lazer keeps its own geometry. Visibility is shared. */
+    lazerPosition?: ReplayOverlayPosition;
+  };
+};
+
+export function getReplayOverlayPlacement(settings: ReplayOverlaySettings, id: ReplayOverlayId, isLazer: boolean): ReplayOverlayPlacement {
+  const placement = settings[id];
+  const position = id === "leaderboard" && isLazer ? settings.leaderboard.lazerPosition : undefined;
+  return position ? { ...placement, ...position, reference: position.reference } : placement;
+}
+
+export function updateReplayOverlayPlacement(
+  settings: ReplayOverlaySettings,
+  id: ReplayOverlayId,
+  patch: Partial<ReplayOverlayPlacement>,
+  isLazer: boolean,
+): ReplayOverlaySettings {
+  if (id !== "leaderboard" || !isLazer) {
+    return { ...settings, [id]: { ...settings[id], ...patch } };
+  }
+  const { x, y, scale, reference } = { ...getReplayOverlayPlacement(settings, id, true), ...patch };
+  const { x: _x, y: _y, scale: _scale, reference: _reference, ...shared } = patch;
+  return {
+    ...settings,
+    leaderboard: { ...settings.leaderboard, ...shared, lazerPosition: { x, y, scale, reference } },
+  };
+}
 
 export const REPLAY_OVERLAY_MIN_SCALE = 0.5;
 export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
@@ -93,7 +157,7 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   replayMaster: { enabled: false, x: 0.72, y: 0.25, scale: 0.75, scrollSpeed: DEFAULT_REPLAY_MASTER_SCROLL_SPEED, transparentBackground: false },
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
-  misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
+  misses: { enabled: true, x: 0.085, y: 0.77, scale: 1, style: DEFAULT_REPLAY_MISS_STYLE },
   accuracy: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
   handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1, style: DEFAULT_REPLAY_HAND_ACCURACY_STYLE },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
@@ -181,25 +245,37 @@ function normalizeNumber(value: unknown, fallback: number, min: number, max: num
   return Math.max(min, Math.min(max, parsed));
 }
 
-function normalizeCoord(value: unknown, fallback: number): number {
+function normalizeCoord(value: unknown, fallback: number, min = 0): number {
   if (value === REPLAY_OVERLAY_ANCHORED_COORD) return REPLAY_OVERLAY_ANCHORED_COORD;
-  return normalizeNumber(value, fallback, 0, 1);
+  return normalizeNumber(value, fallback, min, 1);
 }
 
-function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement): ReplayOverlayPlacement {
+function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement, minX = 0): ReplayOverlayPlacement {
   const raw = value && typeof value === "object" && !Array.isArray(value)
     ? value as Partial<ReplayOverlayPlacement>
     : {};
+  const reference = normalizeOverlayReference(raw.reference);
   return {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : fallback.enabled,
-    x: normalizeCoord(raw.x, fallback.x),
+    x: normalizeCoord(raw.x, fallback.x, minX),
     y: normalizeCoord(raw.y, fallback.y),
     scale: normalizeNumber(raw.scale, fallback.scale, REPLAY_OVERLAY_MIN_SCALE, REPLAY_OVERLAY_MAX_SCALE),
+    ...(reference ? { reference } : {}),
   };
 }
 
+function normalizeOverlayReference(value: unknown): ReplayOverlayReference | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale } = value as ReplayOverlayReference;
+  if (![width, height, playfieldX, playfieldWidth, hudScale].every((number) => typeof number === "number" && Number.isFinite(number))) return undefined;
+  if (width <= 0 || height <= 0 || playfieldX < 0 || playfieldWidth <= 0
+    || playfieldX + playfieldWidth > width + 0.001 || hudScale <= 0) return undefined;
+  if (spacingScale !== undefined && (typeof spacingScale !== "number" || !Number.isFinite(spacingScale) || spacingScale <= 0)) return undefined;
+  return { width, height, playfieldX, playfieldWidth, hudScale, ...(spacingScale === undefined ? {} : { spacingScale }) };
+}
+
 function placementMatches(a: ReplayOverlayPlacement, b: ReplayOverlayPlacement | undefined): boolean {
-  return b !== undefined && a.enabled === b.enabled
+  return !a.reference && b !== undefined && a.enabled === b.enabled
     && Math.abs(a.x - b.x) < 0.0001
     && Math.abs(a.y - b.y) < 0.0001
     && Math.abs(a.scale - b.scale) < 0.0001;
@@ -215,6 +291,10 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
       placement.style = normalizeReplayHandAccuracyStyle(rawStyle);
     }
+    if (id === "misses") {
+      const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
+      placement.style = normalizeReplayMissStyle(rawStyle);
+    }
     if (id === "replayMaster") {
       const rawSpeed = raw[id] && typeof raw[id] === "object" ? (raw[id] as { scrollSpeed?: unknown }).scrollSpeed : undefined;
       placement.scrollSpeed = normalizeReplayMasterScrollSpeed(rawSpeed);
@@ -228,6 +308,14 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       || (id === "accuracy" && PREVIOUS_ACCURACY_OVERLAY_DEFAULTS.some((previous) => placementMatches(placement, previous)))
       ? { ...DEFAULT_REPLAY_OVERLAY_SETTINGS[id], ...(placement.style ? { style: placement.style } : {}) }
       : placement;
+    if (id === "leaderboard") {
+      // Old settings had one placement for both modes. Seed lazer from it
+      // before stable's left-edge clamp, then persist the two independently.
+      const legacy = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id], REPLAY_LEADERBOARD_MIN_X);
+      const savedLazer = (raw[id] as ReplayOverlaySettings["leaderboard"] | undefined)?.lazerPosition;
+      const { x, y, scale, reference } = normalizePlacement(savedLazer ?? legacy, legacy, REPLAY_LEADERBOARD_MIN_X);
+      settings.leaderboard.lazerPosition = { x, y, scale, ...(reference ? { reference } : {}) };
+    }
     return settings;
   }, {} as ReplayOverlaySettings);
 }

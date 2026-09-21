@@ -347,6 +347,53 @@ function jackVetoesTech(keyCount: number | null, chordjackScore: number, jackSco
     ? jackShare >= CLUSTER_SHARE_MIN
     : chordjackScore >= CHORDJACK_TAG_MIN_SCORE;
 }
+
+// The 6K/7K/8K tech tag follows LeoBlack's headline label, the same read the
+// dan Tech bucket already makes (chartBelongsToTagBucket): the in-house tech
+// score measures chord-size churn, direction changes and row variety, which
+// dense chordstream and minijack files carry without being technical, and the
+// jack veto above only strips the ones jack saturates. Measured 2026-09-20 on
+// the 41k analyzed 6K-8K charts against mapper-named 6K-8K packs (mostly 7K): the score tags
+// 89% of 227 stream-pack charts tech, the label 1%; on 65 tech-pack charts
+// the score reaches 57% and the label 52%. The one chart that opened this,
+// an 8K minijack file (tech 0.765, single-note jack 0.542, jack clusters at
+// 37%, labelled "Minijacks"), sat under the veto's 40% line and carried its
+// whole 21.9 Overall SSR into the player's Tech rating.
+//
+// The label is trusted outright, jack or not ("Jacky WC Tech", "Chordjacks
+// Tech" are LeoBlack calling the jack technical), and a chart with no label
+// (1% of the corpus) keeps the score-and-veto read rather than losing the
+// tag for missing evidence. A chart that reads LN by identity (chartIsLn)
+// keeps the score read too: LeoBlack labels hold charts "Inverse Tech" and
+// "Release Tech", and that is the LN side's lntech tag, not rice tech; read
+// as rice tech it put a 7K player's inverse and release clears on the Tech
+// list. 4K keeps its native analyzer tags: its tiles read MSD skillsets and
+// the motion model, not this tag.
+function chartIsTech(keyCount: number | null, techScore: number, vetoesTech: boolean, techCategory: boolean | null, chartReadsLn: boolean): boolean {
+  const byScore = techScore >= PATTERN_TAG_MIN_SCORE && !vetoesTech;
+  if (keyCount == null || !usesPatternSkillAxes(keyCount) || chartReadsLn) return byScore;
+  return techCategory ?? byScore;
+}
+
+// The 6K/7K/8K chordstream tag needs the chart's chordstream sections to carry
+// it, not just to exist: the in-house score counts flowing chord rows, which
+// a jack chart's bridges supply, and the tag alone credited a whole jack
+// clear's Overall SSR to the player's Chordstream rating. LeoBlack's clusters
+// are the section-level read (importance = amount x difficulty, see
+// clusterShare), and the share is the same 40% line the jack and stream tiles
+// draw. Measured 2026-09-20 on the 6K-8K pack corpora (mostly 7K): jack-pack charts tagged
+// chordstream fall from 11% to 4% (188 charts), the stream packs keep 70% of
+// 227 (one chart lost), tech packs are untouched, and 10% of stream-pack
+// charts still carry both jack and chordstream, which is what a real hybrid
+// looks like. The 8K minijack file above keeps chordstream: its chordstream
+// clusters carry 56%, so the alternating-chord passages are its own content.
+// Charts with no clusters keep the score read. 4K is unchanged.
+const CHORDSTREAM_CLUSTERS = /chordstream/i;
+function chartIsChordstream(keyCount: number | null, chordstreamScore: number, chordstreamShare: number | null): boolean {
+  if (chordstreamScore < PATTERN_TAG_MIN_SCORE) return false;
+  if (keyCount == null || !usesPatternSkillAxes(keyCount)) return true;
+  return chordstreamShare == null || chordstreamShare >= CLUSTER_SHARE_MIN;
+}
 // The ln tag's score is driven by holdRatio pressure, so a rice or jack chart
 // with a token hold section clears PATTERN_TAG_MIN_SCORE while the analyzer
 // itself would never call the chart LN: of the 4K charts tagged ln at 0.5 in
@@ -2101,12 +2148,22 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
       // A chart whose analysis carries no lnRatio cannot be verified as LN, so
       // it keeps no LN tag rather than being trusted.
       const chartReadsLn = chartIsLn(keyCount, { lnRatio, lnEffectiveRatio }) === true;
+      const techCategory = typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
+        ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
+        : null;
+      const isTech = chartIsTech(keyCount, patternScores.get("tech") ?? 0, vetoesTech, techCategory, chartReadsLn);
+      const isChordstream = chartIsChordstream(keyCount, patternScores.get("chordstream") ?? 0, clusterShare(parsed, CHORDSTREAM_CLUSTERS));
+      // Tech and chordstream are decided by their own rules rather than the
+      // score line (a tech label tags a chart the score missed), so the walk
+      // asks them instead of the score; a labelled chart the analyzer gave no
+      // tech entry at all still gets the tag below.
       const patternIds = [...patternScores.entries()]
         .filter(([id, score]) =>
-          score >= patternTagMinScore(id)
-          && !(id === "tech" && vetoesTech)
-          && !(LN_PATTERN_IDS.has(id) && !chartReadsLn))
+          id === "tech" ? isTech
+          : id === "chordstream" ? isChordstream
+          : score >= patternTagMinScore(id) && !(LN_PATTERN_IDS.has(id) && !chartReadsLn))
         .map(([id]) => id);
+      if (isTech && !patternIds.includes("tech")) patternIds.push("tech");
       // The derived whole-jack tag (see chartIsJack). The chordjack tag stays
       // beside it for the consumers that mean chord jack specifically; 4K
       // keeps its native analyzer tags untouched.
@@ -2125,9 +2182,7 @@ export async function loadChartSkillInfo(db: Db, beatmapIds: number[]): Promise<
         jackDemand: parsed?.jackDemand?.detected === true,
         jackShare,
         streamShare: clusterShare(parsed, STREAM_CLUSTERS),
-        techCategory: typeof parsed?.clusterCategory === "string"
-          ? TECH_CLUSTER_CATEGORY.test(parsed.clusterCategory)
-          : null,
+        techCategory,
         clusterTrill: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
           ? TRILL_CLUSTER_CATEGORY.test(parsed.clusterCategory)
           : null,
@@ -7663,7 +7718,11 @@ export const PLAYER_SKILL_PATTERN_SWEEP_JOB = "recompute_player_skill_pattern_sw
 // v14 (2026-09-18): 4K LN identity reads OD 5 or higher (effective v6) and the
 // 4K LN Inverse tag needs the chart held down 40-55% of column time, so both
 // the LN axis membership and the Inverse tile this folds moved.
-export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v14";
+// v15 (2026-09-20): the 6K/7K/8K tech tag follows LeoBlack's headline label
+// (chartIsTech) and the chordstream tag needs 40% chordstream cluster share
+// (chartIsChordstream), so stored per-play tags and the Tech and Chordstream
+// axes they fold move.
+export const PLAYER_SKILL_PATTERN_SWEEP_META_KEY = "player_skill_pattern_sweep_done:v15";
 // The keymodes whose stored per-play tags may still predate their summary.
 // Preserve the existing pattern-keymode sweep; the LN update adds only 4K.
 const PATTERN_SWEEP_KEY_COUNTS = [...new Set([...PATTERN_AXIS_KEY_COUNTS, ...LN_SKILL_KEY_COUNTS])];

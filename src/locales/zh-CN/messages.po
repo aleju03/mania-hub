@@ -1104,6 +1104,14 @@ msgstr "{days} 天 {hours} 小时 {mins} 分"
 msgid "{days}d ago"
 msgstr "{days} 天前"
 
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s"
+#~ msgstr "{DEFAULT_EXPORT_CLIP_SECONDS}s"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
+msgstr "从此处 {DEFAULT_EXPORT_CLIP_SECONDS}s"
+
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads"
 msgstr "{downloadCountLabel} 次下载"
@@ -2837,6 +2845,10 @@ msgstr "还有 {0} 位"
 msgid "and {0} more below these"
 msgstr "此外还有 {0} 次排在这些之后"
 
+#: src/lib/replay-export/errors.ts
+msgid "Another replay video is still exporting. Finish or cancel it first."
+msgstr "已有一个回放视频正在导出，请先完成或取消它。"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/farm-helper.tsx
@@ -3000,6 +3012,7 @@ msgid "At the time of writing there were skill ratings for 14,385 players on 4K,
 msgstr "写这篇文章时，已有 14,385 名 4K 玩家、4,119 名 7K 玩家和 2,879 名 6K 玩家获得技能评分。4K 玩家中，12,974 人有足够的达标通过来估算单点段位，5,038 人足以估算 LN 段位。4K 单点估算分布如下："
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/bbcode.tsx
 msgid "Audio"
@@ -3558,6 +3571,7 @@ msgstr "正在计算技能…"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -3570,6 +3584,14 @@ msgstr "取消"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Cancel forge"
 #~ msgstr "取消锻造"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Cancelled"
+msgstr "已取消"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Cancelling"
+msgstr "正在取消"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "cannot be rated"
@@ -3861,6 +3883,10 @@ msgstr "圆形"
 msgid "CJ"
 msgstr "CJ"
 
+#: src/lib/replay-overlays.ts
+msgid "Classic"
+msgstr "经典"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -4050,6 +4076,7 @@ msgstr "客户端"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -4262,6 +4289,10 @@ msgstr "社区服务器"
 #: src/components/packs/GoatPoll.tsx
 msgid "Community vote for a new GOAT"
 msgstr "社区投票选出新的 GOAT"
+
+#: src/lib/replay-overlays.ts
+#~ msgid "Compact"
+#~ msgstr "紧凑"
 
 #: src/routes/farm-helper.tsx
 msgid "compared to {range} pp"
@@ -5230,16 +5261,17 @@ msgid "Discord servers"
 msgstr "Discord 服务器"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Discord video ready"
-msgstr "Discord 视频已就绪"
+#~ msgid "Discord video ready"
+#~ msgstr "Discord 视频已就绪"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Discord video URL copied"
-msgstr "已复制 Discord 视频链接"
+#~ msgid "Discord video URL copied"
+#~ msgstr "已复制 Discord 视频链接"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/me/TrackingToasts.tsx
 #: src/components/player/SharedSkillPlay.tsx
+#: src/components/replay/ReplayExportPanel.tsx
 msgid "Dismiss"
 msgstr "关闭"
 
@@ -5340,9 +5372,10 @@ msgstr "完成"
 msgid "done with it"
 msgstr "刷够了"
 
+#: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
-msgstr ""
+msgstr "下载"
 
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
@@ -5357,6 +5390,14 @@ msgstr "下载 .osz"
 #: src/components/skins/SkinCard.tsx
 msgid "Download {0}"
 msgstr "下载 {0}"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Download again"
+msgstr "重新下载"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Download started"
+msgstr "已开始下载"
 
 #: src/components/skins/SkinCard.tsx
 msgid "Download the .osk"
@@ -5500,6 +5541,10 @@ msgstr "动态渲染图"
 #: src/components/layout/Nav.tsx
 msgid "Dynamic Renders"
 msgstr "动态渲染"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "e.g. 4K jumpstream warmup"
+msgstr "例如：4K 跳叠热身"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each dan is the average of the best {averageWindow} clears behind it. A column under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
@@ -5699,6 +5744,10 @@ msgstr "预估贡献"
 msgid "Estimated pp gain from replacing your previous best score on this map"
 msgstr "以此成绩替换你在该谱面上的先前最佳后估计增加的 pp"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Estimated size"
+msgstr "预计大小"
+
 #: src/routes/farm-helper.tsx
 msgid "estimates are rough until we've analyzed more of this player's plays"
 msgstr "在分析该玩家更多成绩之前，估算会比较粗略"
@@ -5850,6 +5899,18 @@ msgstr "退出全屏"
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
 msgstr "浏览全球谱面"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Export cancelled."
+msgstr "导出已取消。"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Export failed"
+msgstr "导出失败"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Export video"
+msgstr "导出视频"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Exposed Releases"
@@ -6150,6 +6211,10 @@ msgstr "查找玩家..."
 msgid "Finding more replays..."
 msgstr "正在查找更多回放..."
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Finishing the file"
+msgstr "正在收尾文件"
+
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Finishing this looks risky for you; treat it as a clear attempt, not a farm"
@@ -6306,8 +6371,8 @@ msgid "for banned or deleted"
 msgstr "针对被封禁或已删除的账号"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "For Discord embeds"
-msgstr "用于 Discord 嵌入"
+#~ msgid "For Discord embeds"
+#~ msgstr "用于 Discord 嵌入"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "For screenshots that have nothing to do with the skin."
@@ -6363,6 +6428,10 @@ msgstr "发现了什么问题？请描述一下发生了什么。"
 #~ msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
 #~ msgstr "四这个数字对应的是一个真实课题的长度。某一侧的达标通过不到四次，就干脆不给估算，而不是给一个站不住的。如果你第四好的通过正好落在段位表的最顶端，标记会从「~」变成「>」，读作<0>高于</0>那个段位，而不是把你钉在上面，因为段位表已经没有更高的级别来衡量你了。"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "frames"
+msgstr "帧"
+
 #: src/routes/packs.tsx
 msgid "free"
 msgstr "免费"
@@ -6394,7 +6463,6 @@ msgid "Fronts the browse card"
 msgstr "作为浏览卡片的封面"
 
 #: src/components/packs/SetsView.tsx
-#: src/components/replay/ReplayControls.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Full"
 msgstr "完整"
@@ -6438,12 +6506,12 @@ msgid "General"
 msgstr "综合"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Generate replay video URL"
-msgstr "生成回放视频链接"
+#~ msgid "Generate replay video URL"
+#~ msgstr "生成回放视频链接"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Generate URL"
-msgstr "生成链接"
+#~ msgid "Generate URL"
+#~ msgstr "生成链接"
 
 #: src/components/communities/field-options.tsx
 msgid "German"
@@ -6752,6 +6820,10 @@ msgstr "隐藏"
 #~ msgid "Hide {0}K"
 #~ msgstr "隐藏 {0}K"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Hide export details"
+msgstr "隐藏导出详情"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "对其他人隐藏，而不是显示出来却进不去"
@@ -6860,6 +6932,10 @@ msgstr "在 {mapSlot} 上打出 <0/> <1/> 的准确率"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "hit and hold lighting"
 msgstr "打击与长按光效"
+
+#: src/lib/replay-overlays.ts
+msgid "Hit circles"
+msgstr "打击圈"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit counts and unstable rate."
@@ -7484,6 +7560,10 @@ msgstr "保留"
 msgid "Keep it"
 msgstr "保留"
 
+#: src/lib/replay-export/errors.ts
+msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
+msgstr "此浏览器不支持在该倍速下保持音高。请用 1x 导出，或让音高随倍速变化。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key"
 msgstr "按键"
@@ -7765,6 +7845,7 @@ msgstr "传奇"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/maps.tsx
 msgid "Length"
@@ -8607,6 +8688,10 @@ msgstr "值得刷的谱面"
 msgid "Margin <0>+{0}</0>"
 msgstr "领先 <0>+{0}</0>"
 
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Mark the export range"
+#~ msgstr "标记导出范围"
+
 #: src/routes/farm-helper.tsx
 msgid "marked done"
 msgstr "已标记刷够"
@@ -8950,6 +9035,10 @@ msgstr "下移"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move up"
 msgstr "上移"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "MP4 isn't available here, so the file is WebM."
+msgstr "此浏览器不支持 MP4，文件将保存为 WebM。"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "msd"
@@ -10061,6 +10150,10 @@ msgstr "与你水平相近的玩家刷这张"
 msgid "off"
 msgstr "关闭"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Off"
+msgstr "关"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Off /skins; only you see this page. Your replays keep playing in it"
 msgstr "不出现在 /skins，只有你能看到这个页面。你的回放仍然用它播放"
@@ -10114,6 +10207,10 @@ msgstr "最早最佳成绩 {month}"
 msgid "Oldest Top Play"
 msgstr "最早的最佳成绩"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "On"
+msgstr "开"
+
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "on {0}"
@@ -10160,6 +10257,10 @@ msgstr "送一份给朋友，你还保留 {remaining} 份。"
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 msgstr "一个段位的跨度很大，所以每个段位又分成五档。一张谱面可以是 7--、7-、7、7+ 或 7++，从 7 段最简单的一端排到最难的一端。这些后缀只是段位内部的排序，没有别的意思。"
+
+#: src/lib/replay-export/errors.ts
+msgid "One of the images can't be recorded into a video because of its origin."
+msgstr "其中一张图片因来源限制无法录入视频。"
 
 #: src/components/packs/CardSpotlight.tsx
 #~ msgid "One of these copies was a gift from {sendersText}"
@@ -11200,6 +11301,10 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 msgid "Precision"
 msgstr "精度"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Preparing"
+msgstr "准备中"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Preparing the update."
@@ -11212,6 +11317,10 @@ msgstr "正在准备上传。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "预设名称"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags."
+msgstr "按回车键或英文逗号添加标签，最多可添加 {USER_COLLECTION_MAX_TAGS} 个标签。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
@@ -11750,6 +11859,10 @@ msgstr "正在读取你的服务器"
 msgid "ready"
 msgstr "已就绪"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Ready to download"
+msgstr "可以下载了"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Rebuild failed."
 msgstr "重建失败。"
@@ -12094,6 +12207,10 @@ msgstr "已重命名为 {0}"
 msgid "rendering"
 msgstr "正在渲染"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Rendering"
+msgstr "渲染中"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "正在渲染 {selectedKeymode}K 游玩区域…"
@@ -12168,6 +12285,10 @@ msgstr "回放上传"
 #: src/components/replay/ReplayControls.tsx
 msgid "Replay video export options"
 msgstr "回放视频导出选项"
+
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Replay video export range"
+#~ msgstr "回放视频导出范围"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
@@ -12279,6 +12400,10 @@ msgstr "正在缩放图片…"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "已从此浏览器恢复未保存的草稿。"
+
+#: src/lib/replay-overlays.ts
+msgid "Results"
+msgstr "结算"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -12453,6 +12578,10 @@ msgstr "保存你的 osu! 账号，其他命令就都知道你是谁了。"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "saved"
+msgstr "已保存"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Saved"
 msgstr "已保存"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -13007,8 +13136,8 @@ msgstr "设为我的回放皮肤"
 #~ msgstr "由其在 {courseName} 上 {courseAccuracy} 的通关决定。真实段位课题的通关是估算的下限，因此下方各项技能可能显示更低。"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Set end"
-msgstr "设为结束点"
+#~ msgid "Set end"
+#~ msgstr "设为结束点"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Set goal"
@@ -13031,8 +13160,8 @@ msgid "Set on {at}"
 msgstr "设定于 {at}"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Set start"
-msgstr "设为起始点"
+#~ msgid "Set start"
+#~ msgstr "设为起始点"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Set the next milestone"
@@ -13231,6 +13360,10 @@ msgstr "查看 {0} 的详情"
 #: src/routes/farm-helper.tsx
 msgid "show everything"
 msgstr "显示全部"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Show export details"
+msgstr "显示导出详情"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "show fewer"
@@ -13686,9 +13819,17 @@ msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能
 #~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
 #~ msgstr "有些谱面同时属于其中两项，这类谱面会计入两个技能。当速度与技之间的判断确实难分伯仲，或者一张叠谱长到耐力已占了一半的要求（这会同时归入叠和耐力）时，谱面就会落在两个技能里。大约每九张 4K 谱面就有一张是这种情况。这类通过会同时计入两个技能的等级，但只计入其中较强一方的四次通过门槛，因此它能拉高你已有的技能，却无法凭一己之力开启一个新技能。"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Some hitsound samples couldn't be decoded and were left out."
+msgstr "部分打击音样本无法解码，已被略过。"
+
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "Some LN objects have invalid or overlapping timing. LN difficulty is unavailable."
 #~ msgstr "部分长键的时间无效或存在重叠，无法提供 LN 难度。"
+
+#: src/lib/replay-export/errors.ts
+msgid "Some of the replay's files couldn't be loaded."
+msgstr "回放的部分文件无法加载。"
 
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -13792,6 +13933,11 @@ msgctxt "Maniacard stat"
 msgid "Speed"
 msgstr "速度"
 
+#: src/components/replay/ReplayControls.tsx
+msgctxt "Replay export"
+msgid "Speed"
+msgstr "速度"
+
 #: src/routes/dan-estimates.tsx
 msgid "Speed and tech are told apart by how the chart is played rather than by the ratings, and when the reading is not sure the chart counts as both."
 msgstr "速度与技的区分靠的是谱面怎么打，而不是评分；当无法确定时，该谱面会同时计入两者。"
@@ -13832,6 +13978,10 @@ msgstr "stable 公式准确率（95%）"
 #: src/routes/dan-estimates.tsx
 msgid "Stable-formula acc (96%)"
 msgstr "stable 公式准确率（96%）"
+
+#: src/lib/replay-overlays.ts
+#~ msgid "Stacked"
+#~ msgstr "堆叠"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
@@ -14431,6 +14581,10 @@ msgstr "这个条目不是你的。"
 msgid "That listing no longer exists."
 msgstr "这个条目已经不存在了。"
 
+#: src/lib/replay-export/errors.ts
+msgid "That range is too short to export."
+msgstr "该范围太短，无法导出。"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "That rarity cannot be forged any higher."
 #~ msgstr "该稀有度无法再往上熔铸。"
@@ -14499,6 +14653,10 @@ msgstr "这个上传已经不存在了。"
 #: src/components/packs/GoatPoll.tsx
 msgid "That username doesn't look right."
 msgstr "这个用户名看起来不对。"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
+msgstr "这超出了此浏览器一次能导出的长度。请选择更短的范围或更低的预设。"
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -14953,6 +15111,10 @@ msgstr "估算器会下载谱面文件，读取音符，再把谱型交给评级
 msgid "The exact .osu file works too."
 msgstr "直接用对应的 .osu 文件也可以。"
 
+#: src/lib/replay-export/errors.ts
+msgid "The export was interrupted before it finished."
+msgstr "导出在完成前被中断。"
+
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
@@ -15132,6 +15294,10 @@ msgstr "回放已加载，但对应谱面不在 osu! 上(未提交或已删除)�
 msgid "The replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
 msgstr "回放已加载，但现在无法下载 {mapLabel} 的谱面文件。"
 
+#: src/lib/replay-export/errors.ts
+msgid "The replay renderer stopped during the export."
+msgstr "回放渲染器在导出过程中停止了。"
+
 #: src/routes/replay_.uploads.tsx
 msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
 msgstr "你上传到 Mania Hub 的回放，附带分享链接和删除操作。"
@@ -15272,6 +15438,10 @@ msgstr "皮肤的原作者"
 msgid "The skins list could not be loaded."
 msgstr "皮肤列表加载失败。"
 
+#: src/lib/replay-export/errors.ts
+msgid "The song file can't be decoded here. Export without audio, or pick a shorter range."
+msgstr "此浏览器无法解码该音频文件。请关闭音频导出，或选择更短的范围。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
@@ -15291,6 +15461,18 @@ msgstr "这些最佳成绩正在等待谱面分析器。队列位置：{position
 #: src/components/packs/StreakGame.tsx
 msgid "The tracked player pool is too small to play right now."
 msgstr "已追踪的玩家池太小，现在还玩不了。"
+
+#: src/lib/replay-export/errors.ts
+msgid "The video encoder stopped during the export."
+msgstr "视频编码器在导出过程中停止了。"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "The video is created on your device. Keep this tab open while it exports."
+msgstr "视频在你的设备上生成。导出期间请保持此标签页打开。"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "The video is created on your device. You can browse other pages while it exports. Keep this tab open; refreshing or closing it will cancel the unfinished export."
+msgstr "视频在你的设备上生成。导出期间你可以浏览其他页面，但请保持此标签页打开；刷新或关闭会取消未完成的导出。"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "The vote just closed."
@@ -15406,6 +15588,22 @@ msgstr "第三个抽到这张卡片"
 msgid "This .osk could not be read."
 msgstr "无法读取这个 .osk。"
 
+#: src/lib/replay-export/errors.ts
+msgid "This browser can't encode the audio track for this format."
+msgstr "此浏览器无法为该格式编码音频轨道。"
+
+#: src/lib/replay-export/errors.ts
+msgid "This browser can't encode video at the selected size and frame rate."
+msgstr "此浏览器无法按所选分辨率和帧率编码视频。"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "This browser can't save directly to a file, so the video is held in memory and downloaded when it finishes."
+msgstr "此浏览器无法直接写入文件，视频会先保存在内存中，完成后再下载。"
+
+#: src/lib/replay-export/errors.ts
+msgid "This browser can't save the video file."
+msgstr "此浏览器无法保存视频文件。"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card already has a custom edition. Its appearance is protected."
 #~ msgstr "这张卡片已有定制版本，其外观受到保护。"
@@ -15475,6 +15673,10 @@ msgstr "这一版已经是所有人在你回放里看到的皮肤"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "This exact version is already your replay skin"
 msgstr "这一版已经是你的回放皮肤"
+
+#: src/lib/replay-export/errors.ts
+msgid "This export is too large for this browser. Pick a shorter range or a lower preset."
+msgstr "此次导出对该浏览器来说太大了。请选择更短的范围或更低的预设。"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "This file could not be decoded."
@@ -15636,6 +15838,10 @@ msgstr "这个皮肤的设置太大，无法保存。"
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "This special-edition Eternal stays with its collector."
 msgstr "这张特别版 Eternal 由原收藏者保留。"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "This tab went to the background, which can pause the export."
+msgstr "此标签页已切到后台，导出可能会被暂停。"
 
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
@@ -16737,6 +16943,10 @@ msgstr "三"
 msgid "Wednesdays"
 msgstr "周三"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
+msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -16934,6 +17144,10 @@ msgstr "请先填写内容。"
 msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
 msgstr "在这里编写你的页面。选中文本后用工具栏设置格式，右键查看更多操作，或粘贴图片直接添加。"
 
+#: src/lib/replay-export/errors.ts
+msgid "Writing the video file failed."
+msgstr "写入视频文件失败。"
+
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
 msgstr "答错"
@@ -17087,6 +17301,10 @@ msgstr "你已没有这张卡片了。"
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "You no longer have a spare copy of this card."
 #~ msgstr "你已没有这张卡片的多余副本。"
+
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "You pick where the file is saved."
+#~ msgstr "由你选择文件保存的位置。"
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."

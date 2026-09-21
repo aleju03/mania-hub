@@ -14,6 +14,7 @@ import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
+import { ReplayExportPanel } from "../components/replay/ReplayExportPanel";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
@@ -663,6 +664,10 @@ function RootLayout() {
               <GhostLayer />
             </>
           )}
+          {/* Above the outlet on purpose: a replay video export keeps running
+              while the user browses, so its progress cannot live on the route
+              that started it. */}
+          <ReplayExportPanel />
           <footer className="relative px-16 py-2 text-center text-[10px] text-osu-pink-light/30">
             <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
               <KofiSupportButton />

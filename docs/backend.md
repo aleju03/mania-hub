@@ -102,16 +102,17 @@ A class of per-user endpoints is gated by the server-to-server bridge (`isBridge
 
 All public endpoints are rate-limited per IP by `abuse-guard.ts` with separate buckets (general, costly, pack hands, dan estimates, country activation with per-IP/global/new-country sub-limits, SSE connections with per-IP and total caps, replay video jobs). Note the general bucket applies to every `/api/` path, so a route with its own bucket spends both. CORS allows origins from `ALLOWED_ORIGINS`. `/api/admin/*` requires `LIVE_ADMIN_TOKEN`.
 
-## Replay video export
+Beatmap playback audio is prepared in `audio/beatmap-audio.ts`: MP3 packets are copied into MP4; Ogg packets are repaginated with one packet per page (`-page_duration 1`). The latter avoids Chromium buffered seeks playing earlier audio than `currentTime` reports. Both are lossless. Ogg playback uses `.seek-v1.ogg` R2 pointer keys and `v=ogg-seek-v1` request URLs so old immutable responses cannot bypass preparation. On a cache miss, an old cached Ogg can supply the source without downloading the map archive again; old objects remain intact.
 
-The whole feature is gated by `ENABLE_REPLAY_VIDEO` (default `false`; on only in the owner's local env). When off, `/api/replay-video-job` returns 404, the replay-video worker lanes are not registered, and playwright-core is never imported (it is a dynamic import inside the render function).
+## Replay video export (backend side, dormant)
 
-Two paths, both finishing in the backend queue:
+**The shipping exporter does not use any of this.** Replay video export runs entirely on the user's device; see `docs/frontend.md`. Nothing below is reachable from the ordinary export flow, and no exported video is ever uploaded.
 
-1. Browser render: WebCodecs encodes the MP4 client-side, then the frontend calls `/api/replay-video-job` (`start` -> `upload-video` -> `finish`).
-2. Server render: the backend queues `replay_video_server_render`, which drives headless Chrome (playwright-core) against the frontend to render the video.
+The backend half is gated by `ENABLE_REPLAY_VIDEO` (default `false`, and off in production). When off, `/api/replay-video-job` returns 404 before auth or rate accounting, the replay-video worker lanes are not registered, `workers.ts` refuses `replay_video_server_render` / `replay_video_export` jobs even if some are already queued, and playwright-core is never imported (it is a dynamic import inside the render function).
 
-Either way, `replay_video_export` finalizes: optional ffmpeg audio mux and optimization, upload to R2 (or local path), status in `replay_video_exports`, polled by the frontend via `action=status`. `scripts/dev/replay-video-job.ts` is a local Vite middleware fallback when no live backend URL is configured.
+What the dormant path was: a `start` -> `upload-video` -> `finish` handoff for a browser-encoded MP4, or a `server-render` job driving headless Chrome (playwright-core) against the frontend. Either way `replay_video_export` finalized it with an optional ffmpeg audio mux, uploaded to R2, and the frontend polled `action=status`. `scripts/dev/replay-video-job.ts` was the local Vite middleware fallback for it.
+
+The tables, the R2 prefix, the worker lanes and the ffmpeg dependency are left in place behind the flag rather than removed, so removing them is a separate pass that has to prove no consumer is left.
 
 ## Retention and storage
 

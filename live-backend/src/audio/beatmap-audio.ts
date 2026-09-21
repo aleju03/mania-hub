@@ -118,7 +118,13 @@ async function prepareBeatmapAudio(
   beatmapsetId: string,
   filename: string,
 ): Promise<PreparedBeatmapAudio> {
-  const sourceBuffer = await extractBeatmapArchiveFile(beatmapsetId, filename, config.beatmapArchiveMaxBytes);
+  // Reuse a previously cached Ogg as the conversion source. A seek fix should
+  // not require downloading the whole map archive again (or its availability).
+  const legacyOgg = filename.toLowerCase().endsWith(".ogg")
+    ? await readCachedBeatmapAudioAsset(config, beatmapsetId, filename, { legacyOgg: true })
+    : null;
+  const sourceBuffer = legacyOgg?.buffer
+    ?? await extractBeatmapArchiveFile(beatmapsetId, filename, config.beatmapArchiveMaxBytes);
   const source: AudioValue = {
     buffer: sourceBuffer,
     mimeType: getBeatmapAudioMimeType(filename),
@@ -148,17 +154,25 @@ async function prepareBeatmapAudio(
   return value;
 }
 
-async function preparePlaybackAudio(source: AudioValue, filename: string): Promise<AudioValue> {
+export async function preparePlaybackAudio(source: AudioValue, filename: string): Promise<AudioValue> {
   if (isMp3BeatmapAudio(filename, source.mimeType)) {
-    return copyMp3IntoMp4(source, filename);
+    return remuxPlaybackAudio(source, filename, "mp4");
+  }
+  if (filename.toLowerCase().endsWith(".ogg") || source.mimeType === "audio/ogg") {
+    // Chromium can resume Ogg/Vorbis from an earlier packet while reporting
+    // the requested time after seeking within buffered audio. With the usual
+    // second-long Ogg pages, that leaves the song audibly behind its clock.
+    // One packet per page gives every packet its own granule timestamp without
+    // changing the codec, samples, pitch or browser format support.
+    return remuxPlaybackAudio(source, filename, "ogg");
   }
   return source;
 }
 
-async function copyMp3IntoMp4(input: AudioValue, filename: string): Promise<AudioValue> {
-  const dir = await mkdtemp(join(tmpdir(), "mania-hub-audio-mp3-mp4-"));
+async function remuxPlaybackAudio(input: AudioValue, filename: string, format: "mp4" | "ogg"): Promise<AudioValue> {
+  const dir = await mkdtemp(join(tmpdir(), "mania-hub-audio-playback-"));
   const inputPath = join(dir, `input${getAudioExtension(filename)}`);
-  const outputPath = join(dir, "audio.mp4");
+  const outputPath = join(dir, `audio.${format}`);
   try {
     await writeFile(inputPath, input.buffer);
     await runFfmpeg([
@@ -175,11 +189,12 @@ async function copyMp3IntoMp4(input: AudioValue, filename: string): Promise<Audi
       "-dn",
       "-c:a",
       "copy",
-      "-movflags",
-      "+faststart",
+      // Ogg normally randomizes its stream serial; keep identical sources
+      // byte-identical so the content-addressed audio store can deduplicate.
+      ...(format === "mp4" ? ["-movflags", "+faststart"] : ["-fflags", "+bitexact", "-page_duration", "1"]),
       outputPath,
     ]);
-    return { buffer: await readFile(outputPath), mimeType: MP4_AUDIO_MIME_TYPE };
+    return { buffer: await readFile(outputPath), mimeType: format === "mp4" ? MP4_AUDIO_MIME_TYPE : "audio/ogg" };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

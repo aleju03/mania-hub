@@ -54,6 +54,9 @@ import {
   REPLAY_OVERLAY_LABELS,
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
   normalizeReplayOverlaySettings,
+  REPLAY_MISS_STYLES,
+  REPLAY_MISS_STYLE_LABELS,
+  normalizeReplayMissStyle,
   REPLAY_HAND_ACCURACY_STYLES,
   REPLAY_HAND_ACCURACY_STYLE_LABELS,
   normalizeReplayHandAccuracyStyle,
@@ -62,7 +65,7 @@ import {
   writeReplayMissThumbHand,
   writeReplayOverlaySettings,
 } from "../lib/replay-overlays";
-import type { ReplayHandAccuracyStyle, ReplayThumbHand } from "../lib/replay-overlays";
+import type { ReplayHandAccuracyStyle, ReplayMissStyle, ReplayThumbHand } from "../lib/replay-overlays";
 import { ReplayMasterOverlayControls } from "../components/replay/ReplayMasterOverlayControls";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
@@ -76,13 +79,21 @@ import {
   fetchLiveGlobalRankings,
   fetchLivePlayerCachedProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
-  getLiveBackendUrl,
   isLiveBackendConfigured,
   openReplayPresenceEventSource,
   type LiveGlobalRankingEntry,
   type LivePlayerProfileSnapshot,
 } from "../lib/live-backend";
 import { getReplaySpectatorTicket, type ReplaySpectatorTicket } from "../lib/replay-spectator";
+import { useLocale } from "../lib/locale-context";
+import { getReplayExportManager } from "../lib/replay-export/manager";
+import { useReplayExportJob } from "../lib/replay-export/use-replay-export-job";
+import { requestExportFileHandle, supportsFileSystemAccess } from "../lib/replay-export/save-picker";
+import { buildReplayExportSpec, type ReplayExportCapture } from "../lib/replay-export/snapshot";
+import { DEFAULT_EXPORT_CLIP_SECONDS } from "../lib/replay-export/limits";
+import { MIN_EXPORT_RANGE_MS, resolveExportRange } from "../lib/replay-export/timeline";
+import { ACTIVE_EXPORT_PHASES, type ReplayExportDestinationTarget } from "../lib/replay-export/types";
+import { isLocalReplayVideoExportEnabled } from "../lib/replay-export/feature-flag";
 import { GLOBAL_SCOPE_CODE, isGlobalScope } from "../lib/country";
 import { isRegionScope } from "../lib/regions";
 import { useAuth } from "../lib/auth-context";
@@ -141,6 +152,7 @@ import {
 } from "../lib/replay-recent";
 import { deleteUploadedReplay, fetchUploadedReplayPermissions } from "../lib/uploaded-replays";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
+import { avatarImageSrc } from "../components/ui/Avatar";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
@@ -188,7 +200,6 @@ const INLINE_POINTER_CHROME_HIDE_MS = 50;
 // chrome would bury, so approaching them keeps it down.
 const INLINE_CHROME_REVEAL_PX = 150;
 const FULLSCREEN_CHROME_REVEAL_PX = 190;
-const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
 const MAX_UPLOAD_REPLAY_BYTES = 25 * 1024 * 1024;
 const REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS = 900;
 const REPLAY_PLAYER_INITIAL_SCORE_TARGET_MS = 2000;
@@ -203,10 +214,6 @@ const REPLAY_LANDING_SEO_TITLE = msg`osu!mania replay watcher`;
 const REPLAY_LANDING_OG_TITLE = "osu!mania replay watcher";
 const REPLAY_LANDING_SEO_DESCRIPTION =
   msg`Watch osu!mania replays in your browser.`;
-const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
-  "720p": { width: 1280, height: 720 },
-  "1080p": { width: 1920, height: 1080 },
-};
 const REPLAY_END_AUDIO_FADE_MS = 1500;
 const REPLAY_COVER_FALLBACK_DELAY_MS = 200;
 const REPLAY_AUDIO_RECOVERY_DELAY_MS = 1500;
@@ -245,28 +252,6 @@ function replayAudioNeedsDefaultSamples(settings: ReplayAudioSettings): boolean 
   );
 }
 const UPLOADED_REPLAY_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
-
-type ReplayVideoExportState = {
-  exporting: boolean;
-  progress: number;
-  error: string | null;
-  url: string | null;
-  signed: boolean;
-};
-
-type ReplayVideoExportRequest = ReplayVideoExportOptions & {
-  forceClientRender?: boolean;
-  bgDim?: number;
-  blackPlayfield?: boolean;
-  scrollSpeed?: number;
-  showInputOverlay?: boolean;
-  inputOverlayOnly?: boolean;
-  inputOverlayColor?: string;
-  inputOverlayKeyHistory?: boolean;
-  skinSettings?: ReplaySkinSettings;
-  overlaySettings?: ReplayOverlaySettings;
-  missThumbHand?: ReplayThumbHand;
-};
 
 type ReplayUploadResponse = {
   id: string;
@@ -317,21 +302,9 @@ const EMPTY_LOCAL_BEATMAP_ASSETS: LocalBeatmapAssets = { audioUrl: null, backgro
 
 declare global {
   interface Window {
-    __maniaHubExportReplayVideo?: (options: ReplayVideoExportRequest) => Promise<ReplayVideoJobPayload | null>;
+    /** Development-only hook for driving an export from a browser test. */
+    __maniaHubExportReplayVideo?: (options: ReplayVideoExportOptions) => void;
   }
-}
-
-function getReplayVideoBitrate(width: number, height: number, fps: ReplayVideoExportOptions["fps"]): number {
-  const baseBitrate = height >= 1080 ? 5_000_000 : 3_000_000;
-  const fpsScale = fps <= 30 ? 1 : fps / 30 * 0.82;
-  const pixelScale = Math.max(0.7, Math.min(1.2, (width * height) / (1920 * 1080)));
-  return Math.round(baseBitrate * fpsScale * pixelScale);
-}
-
-function isLocalReplayVideoExportHost(): boolean {
-  if (!import.meta.env.DEV || typeof window === "undefined") return false;
-  const hostname = window.location.hostname.toLowerCase();
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
 function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
@@ -342,100 +315,6 @@ function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
     && window.matchMedia("(pointer: coarse)").matches;
 }
 
-function drawCoverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number) {
-  const imgAspect = image.naturalWidth / image.naturalHeight;
-  const canvasAspect = width / height;
-  let drawWidth = width;
-  let drawHeight = height;
-  if (imgAspect > canvasAspect) {
-    drawHeight = height;
-    drawWidth = height * imgAspect;
-  } else {
-    drawWidth = width;
-    drawHeight = width / imgAspect;
-  }
-  ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
-}
-
-function loadExportBackground(src: string | null): Promise<HTMLImageElement | null> {
-  if (!src) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.decoding = "async";
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = src;
-  });
-}
-
-async function loadFirstExportBackground(sources: Array<string | null | undefined>): Promise<HTMLImageElement | null> {
-  const seen = new Set<string>();
-  for (const source of sources) {
-    const url = getInlineBackgroundUrl(source ?? null);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    const image = await loadExportBackground(url);
-    if (image) return image;
-  }
-  return null;
-}
-
-function sanitizeReplayVideoFilename(value: string): string {
-  return value
-    .trim()
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 90) || "replay";
-}
-
-type ReplayVideoJobPayload = {
-  id: string;
-  status?: "started" | "uploaded" | "queued" | "running" | "done" | "failed" | "cancelled";
-  scoreId?: number | null;
-  url?: string | null;
-  signed?: boolean;
-  error?: string | null;
-};
-
-function getReplayVideoJobUrl(action: string, id?: string, params: Record<string, string | number | null | undefined> = {}): URL {
-  const base = getLiveBackendUrl() ?? window.location.origin;
-  const url = new URL("/api/replay-video-job", base);
-  url.searchParams.set("action", action);
-  if (id) url.searchParams.set("id", id);
-  for (const [key, value] of Object.entries(params)) {
-    if (value != null) url.searchParams.set(key, String(value));
-  }
-  return url;
-}
-
-async function postReplayVideoJson<T>(action: string, body: unknown, id?: string): Promise<T> {
-  const url = getReplayVideoJobUrl(action, id);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  const payload = await response.json().catch(() => null) as (T & { error?: string }) | null;
-  if (!response.ok || !payload) {
-    throw new Error(payload?.error || `Replay video job ${action} failed.`);
-  }
-  return payload;
-}
-
-async function postReplayVideoBlob(jobId: string, blob: Blob): Promise<void> {
-  const url = getReplayVideoJobUrl("upload-video", jobId);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": blob.type || "video/mp4" },
-    body: blob,
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(payload?.error || "Replay video upload failed.");
-  }
-}
 
 async function postUploadedReplay(buffer: ArrayBuffer, filename?: string): Promise<ReplayUploadResponse> {
   const response = await fetch("/api/replay-upload", {
@@ -453,45 +332,6 @@ async function postUploadedReplay(buffer: ArrayBuffer, filename?: string): Promi
   return payload;
 }
 
-async function getRecentReplayVideoJob(scoreId: number): Promise<ReplayVideoJobPayload | null> {
-  const url = getReplayVideoJobUrl("recent", undefined, { scoreId });
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  const payload = await response.json().catch(() => null) as ReplayVideoJobPayload | { url?: null; error?: string } | null;
-  if (!response.ok || !payload || payload.url == null) return null;
-  return payload as ReplayVideoJobPayload;
-}
-
-async function waitForReplayVideoJob(
-  jobId: string,
-  onProgress: (progress: number) => void,
-  options: { minProgress?: number; maxProgress?: number; timeoutMs?: number; intervalMs?: number } = {},
-): Promise<{ url: string; signed: boolean }> {
-  const minProgress = options.minProgress ?? 0.94;
-  const maxProgress = options.maxProgress ?? 0.99;
-  const timeoutMs = options.timeoutMs ?? 20 * 60_000;
-  const intervalMs = options.intervalMs ?? 3_000;
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
-    const job = await postReplayVideoJson<ReplayVideoJobPayload>("status", {}, jobId);
-    if (job.status === "done" && job.url) return { url: job.url, signed: Boolean(job.signed) };
-    if (job.status === "failed" || job.status === "cancelled") {
-      throw new Error(job.error || `Replay video job ${job.status}.`);
-    }
-    const elapsedRatio = Math.min(1, (Date.now() - startedAt) / timeoutMs);
-    onProgress(Math.min(maxProgress, minProgress + (maxProgress - minProgress) * elapsedRatio));
-  }
-  throw new Error("Replay video export is still running in the background. Try again in a moment.");
-}
-
-function shouldUseServerReplayVideoRender(): boolean {
-  return import.meta.env.VITE_REPLAY_VIDEO_SERVER_RENDER === "1";
-}
 
 function formatMissingBeatmapLabel(beatmapMeta: BeatmapChecksumLookupResult): string {
   const set = beatmapMeta.beatmapset;
@@ -2323,14 +2163,7 @@ function ReplayViewer({
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [audioRecoveryRequested, setAudioRecoveryRequested] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
-  const [localReplayVideoExportAvailable, setLocalReplayVideoExportAvailable] = useState(false);
-  const [videoExport, setVideoExport] = useState<ReplayVideoExportState>({
-    exporting: false,
-    progress: 0,
-    error: null,
-    url: null,
-    signed: false,
-  });
+  const locale = useLocale();
   // When the same replay is re-judged in place (the client what-if toggle
   // rebuilds the renderer), playback resumes from where it was instead of
   // resetting to the top. A different replay still starts fresh.
@@ -2365,30 +2198,19 @@ function ReplayViewer({
   const audioRecoveryTimeoutRef = useRef<number | null>(null);
   const audioResyncDoneRef = useRef<string | null>(null);
   const volumeRef = useRef(volume);
-  const recoveredVideoScoreIdRef = useRef<number | null>(null);
   const replayEndAudioFadeActiveRef = useRef(false);
   const replayEndAudioFadeFrameRef = useRef<number | null>(null);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
-  const replayVideoExportAvailable = auth.canUseAdminFeatures && localReplayVideoExportAvailable;
-
-  useEffect(() => {
-    const scoreId = scoreInfo?.id;
-    if (!replayVideoExportAvailable || !scoreId || videoExport.exporting) return;
-    if (recoveredVideoScoreIdRef.current === scoreId) return;
-    recoveredVideoScoreIdRef.current = scoreId;
-    let cancelled = false;
-    getRecentReplayVideoJob(scoreId)
-      .then((job) => {
-        if (cancelled || !job?.url) return;
-        setVideoExport((current) => current.exporting || current.url
-          ? current
-          : { exporting: false, progress: 1, error: null, url: job.url ?? null, signed: Boolean(job.signed) });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [replayVideoExportAvailable, scoreInfo?.id, videoExport.exporting]);
+  // Off by default while the local exporter is in limited release; admins
+  // still get it so it can be exercised against production data. Turning the
+  // flag on does not enable any backend replay-video endpoint.
+  const replayVideoExportAvailable = isLocalReplayVideoExportEnabled() || auth.canUseAdminFeatures;
+  const replayExportJob = useReplayExportJob();
+  const replayExportBusy = replayExportJob !== null
+    && (ACTIVE_EXPORT_PHASES.has(replayExportJob.phase) || replayExportJob.result !== null);
+  // Probed once on mount: the value decides which admission limits the
+  // dialog quotes, and it cannot change while the page is open.
+  const [exportCanSaveToFile] = useState(() => supportsFileSystemAccess());
 
   const cancelReplayEndAudioFade = useCallback((restoreVolume = true) => {
     replayEndAudioFadeActiveRef.current = false;
@@ -2439,10 +2261,6 @@ function ReplayViewer({
     replayEndAudioFadeFrameRef.current = window.requestAnimationFrame(step);
     return true;
   }, [audioEnabled, cancelReplayEndAudioFade]);
-
-  useEffect(() => {
-    setLocalReplayVideoExportAvailable(isLocalReplayVideoExportHost());
-  }, []);
 
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
     const normalized = normalizeReplayScrollSpeed(next);
@@ -2697,6 +2515,11 @@ function ReplayViewer({
     applyOverlaySettings({ ...current, handAccuracy: { ...current.handAccuracy, style } });
     setOverlayMenu(null);
   }, [applyOverlaySettings]);
+  const setMissStyleFromMenu = useCallback((style: ReplayMissStyle) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, misses: { ...current.misses, style } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
     ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
     : [];
@@ -2706,6 +2529,7 @@ function ReplayViewer({
     ? i18n._(REPLAY_OVERLAY_LABELS[overlayMenu.targetId]).toLowerCase()
     : "";
   const handAccuracyStyle = normalizeReplayHandAccuracyStyle(overlaySettings.handAccuracy?.style);
+  const missStyle = normalizeReplayMissStyle(overlaySettings.misses?.style);
   // Only odd keymodes have a lane a thumb covers, so only they can move it
   // between the two hand-stat columns.
   const thumbLaneAvailable = replay.keyCount % 2 === 1;
@@ -2927,26 +2751,35 @@ function ReplayViewer({
   const rendererLeaderboard = useMemo(() => {
     if (!leaderboardScores) return [];
     return leaderboardScores
-      // Real board positions are captured before dropping the watched play
-      // (it would double up against its own live row), so the remaining rows
-      // keep their true rank numbers instead of closing the gap.
+      // Stable keeps original ranks after excluding the watched play. Lazer
+      // retains all existing plays and inserts its tracked row into the ranks.
       .map((score, index) => ({ score, rank: index + 1 }))
-      .filter(({ score }) => score.id !== scoreInfo?.id)
+      .filter(({ score }) => judgeAsLazer || score.id !== scoreInfo?.id)
       .map(({ score, rank }) => ({
         name: score.user?.username ?? "player",
         score: (judgeAsLazer ? score.total_score : score.legacy_total_score ?? score.score) ?? score.score,
         combo: score.max_combo ?? 0,
         rank,
+        ...(judgeAsLazer ? {
+          accuracy: score.accuracy,
+          avatarUrl: avatarImageSrc(score.user?.avatar_url, score.user?.id, { proxy: true }),
+        } : {}),
       }));
   }, [leaderboardScores, scoreInfo?.id, judgeAsLazer]);
   const leaderboardPlayerName = scoreInfo?.user?.username ?? replay.header.playerName ?? "player";
+  const leaderboardOptions = useMemo(() => ({
+    playerAvatarUrl: judgeAsLazer ? avatarImageSrc(scoreInfo?.user?.avatar_url, scoreInfo?.user?.id, { proxy: true }) : undefined,
+    isPartial: (leaderboardScores?.length ?? 0) >= 50,
+  }), [judgeAsLazer, scoreInfo?.user?.avatar_url, scoreInfo?.user?.id, leaderboardScores?.length]);
   const rendererLeaderboardRef = useRef(rendererLeaderboard);
   const leaderboardPlayerNameRef = useRef(leaderboardPlayerName);
+  const leaderboardOptionsRef = useRef(leaderboardOptions);
   useEffect(() => {
     rendererLeaderboardRef.current = rendererLeaderboard;
     leaderboardPlayerNameRef.current = leaderboardPlayerName;
-    rendererRef.current?.setLeaderboard?.(rendererLeaderboard, leaderboardPlayerName);
-  }, [rendererLeaderboard, leaderboardPlayerName]);
+    leaderboardOptionsRef.current = leaderboardOptions;
+    rendererRef.current?.setLeaderboard?.(rendererLeaderboard, leaderboardPlayerName, leaderboardOptions);
+  }, [rendererLeaderboard, leaderboardPlayerName, leaderboardOptions]);
 
   // Shift+Tab keeps normal focus navigation, and typing fields are left alone.
   useEffect(() => {
@@ -2987,11 +2820,9 @@ function ReplayViewer({
     if (inlineChromeTimeoutRef.current != null) return;
     inlineChromeTimeoutRef.current = window.setTimeout(() => {
       inlineChromeTimeoutRef.current = null;
-      if (scrubbingRef.current) return;
-      // The drawer can hide with the pointer still on it (focus loss); reset
-      // the hover pin so proximity can summon it again, since pointerleave
-      // never fires on an unmounted element.
-      inlineChromeHoverRef.current = false;
+      // Selecting menu text blurs its button without leaving the drawer.
+      // Focus loss must not hide the controls under a hovering pointer.
+      if (scrubbingRef.current || inlineChromeHoverRef.current) return;
       setInlineChromeVisible(false);
     }, INLINE_POINTER_CHROME_HIDE_MS);
   }, []);
@@ -3823,7 +3654,7 @@ function ReplayViewer({
           });
         }
         renderer.setHitsoundTrigger?.(hitsoundPlayerRef.current);
-        renderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
+        renderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current, leaderboardOptionsRef.current);
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
         renderer.setSpectatorCount?.(spectatorCountRef.current);
         renderer.setSpectatorNames?.(spectatorNamesRef.current);
@@ -4388,352 +4219,182 @@ function ReplayViewer({
     };
   })();
 
-  const exportReplayVideo = useCallback(async (options: ReplayVideoExportRequest): Promise<ReplayVideoJobPayload | null> => {
-    const sourceCanvas = canvasRef.current;
-    const sourceRenderer = rendererRef.current;
-    if (!sourceRenderer || !sourceCanvas) return null;
+  // Starts a local export and hands it to the app-level manager, which owns
+  // it from here: this route can unmount, the user can open another replay,
+  // and the job keeps its own renderer, assets, and settings.
+  const startReplayVideoExport = useCallback((options: ReplayVideoExportOptions) => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const manager = getReplayExportManager();
+    if (manager.isBusy) return;
 
-    const replayDuration = Math.max(0, sourceRenderer.duration);
-    let startTime = 0;
-    let endTime = replayDuration;
+    const replayDurationMs = Math.max(0, renderer.duration);
+    const range = resolveExportRange(
+      options.kind === "full"
+        ? { kind: "full" }
+        : options.kind === "clip"
+          ? {
+              kind: "clip",
+              atMs: renderer.time,
+              outputSeconds: options.durationSeconds ?? DEFAULT_EXPORT_CLIP_SECONDS,
+            }
+          : { kind: "custom", startMs: options.startTimeMs ?? 0, endMs: options.endTimeMs ?? 0 },
+      replayDurationMs,
+      effectiveRate,
+    );
+    if (range.endMs - range.startMs < MIN_EXPORT_RANGE_MS) return;
 
-    if (options.kind === "custom") {
-      const markedStart = Math.max(0, Math.min(replayDuration, options.startTimeMs ?? 0));
-      const markedEnd = Math.max(0, Math.min(replayDuration, options.endTimeMs ?? 0));
-      startTime = Math.min(markedStart, markedEnd);
-      endTime = Math.max(markedStart, markedEnd);
-      if (endTime - startTime < 500) {
-        setVideoExport({ exporting: false, progress: 0, error: "Mark a longer custom clip range.", url: null, signed: false });
-        return null;
+    const songTitle = scoreInfo?.beatmapset?.title ?? "";
+    const difficultyName = scoreInfo?.beatmap?.version ?? "";
+    // Everything below is read once, here. Nothing in the job reaches back
+    // into this component afterwards.
+    const capture: ReplayExportCapture = {
+      scoreId: scoreInfo?.id ?? null,
+      beatmapId: scoreInfo?.beatmap?.id ?? null,
+      beatmapsetId: effectiveBeatmapsetId ?? null,
+      beatmapChecksum: replay.header.beatmapHash ?? null,
+      uploadId: null,
+      playerName: replay.header.playerName || scoreInfo?.user?.username || "player",
+      songTitle,
+      difficultyName,
+
+      replayFrames: replay.frames,
+      lifeBarFrames: replay.lifeBarFrames,
+      keyCount: replay.keyCount,
+      replayDurationMs,
+
+      notes: beatmap?.notes ?? [],
+      timingPoints: beatmap?.timingPoints,
+      scrollVelocities: beatmap?.scrollVelocities,
+      od: beatmap?.od ?? null,
+      isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
+      expectedCounts: rendererExpectedCounts,
+      realTotalScore: rendererRealTotalScore,
+      initialCombo: 0,
+
+      isLazer: judgeAsLazer,
+      legacyReplayFrameRounding: !sourceIsLazer,
+      mods: rendererMods.map((mod) => (typeof mod === "string"
+        ? { acronym: mod }
+        : { acronym: mod.acronym ?? "", ...(mod.settings ? { settings: mod.settings } : {}) })),
+      modRate,
+      userSpeed: speed,
+      effectiveRate,
+      pitchPreserved: audioPreservesPitch,
+
+      bgDim,
+      blackPlayfield,
+      scrollSpeed,
+      showInputOverlay,
+      inputOverlayOnly,
+      inputOverlayColor,
+      inputOverlayKeyHistory,
+      missThumbHand,
+      skinSettings: activeSkinSettings,
+      overlaySettings: renderer.getOverlaySettingsSnapshot?.() ?? overlaySettings,
+      viewport: renderer.getViewportSnapshot?.(),
+
+      leaderboard: rendererLeaderboardRef.current,
+      leaderboardPlayerName: leaderboardPlayerNameRef.current,
+      leaderboardOptions: leaderboardOptionsRef.current,
+      leaderboardVisible: leaderboardVisibleRef.current,
+      storyboard: storyboardActive ? storyboardRef.current?.data ?? null : null,
+      storyboardEnabled: storyboardActive,
+
+      audioEnabled,
+      songVolume: volume,
+      hitsoundsEnabled: audioSettings.hitsoundsEnabled,
+      beatmapHitsounds: audioSettings.beatmapHitsounds,
+      beatmapHitsoundVolume: audioSettings.beatmapHitsoundVolume,
+      keypressHitsounds: audioSettings.keypressHitsounds,
+      keypressHitsoundVolume: audioSettings.keypressHitsoundVolume,
+      comboBreakSound: audioSettings.comboBreakSound,
+      hitsoundSamples: hitsoundPlayerRef.current?.snapshotSamples() ?? new Map(),
+
+      songUrl: audioUrl,
+      backgroundUrls: [beatmapBackgroundUrl, bgSrc, coverProxyUrl, coverUrl],
+
+      locale,
+    };
+
+    const spec = buildReplayExportSpec(capture, {
+      preset: options.preset,
+      startMs: range.startMs,
+      endMs: range.endMs,
+      includeAudio: true,
+    });
+    const title = songTitle
+      ? `${songTitle}${difficultyName ? ` [${difficultyName}]` : ""}`
+      : capture.playerName;
+
+    const begin = (target: ReplayExportDestinationTarget) => {
+      try {
+        manager.start({ spec, capture, target, title });
+      } catch {
+        // The only synchronous failure is the busy guard, and the panel is
+        // already showing the job that holds the slot.
       }
-    } else if (options.kind === "clip") {
-      const clipSeconds = Math.max(1, Math.min(120, Math.round(options.durationSeconds ?? REPLAY_VIDEO_EXPORT_CLIP_SECONDS)));
-      startTime = sourceRenderer.time >= replayDuration - 500 ? 0 : sourceRenderer.time;
-      endTime = Math.min(
-        replayDuration,
-        startTime + clipSeconds * 1000 * Math.max(0.01, effectiveRate),
-      );
+    };
+
+    if (!supportsFileSystemAccess()) {
+      begin({ kind: "buffer" });
+      return;
     }
-
-    const sourceDurationMs = Math.max(1, endTime - startTime);
-    const outputDurationSeconds = sourceDurationMs / (1000 * Math.max(0.01, effectiveRate));
-    const exportFps = options.fps ?? 48;
-    const frameCount = Math.max(1, Math.ceil(outputDurationSeconds * exportFps));
-    const exportBgDim = options.bgDim ?? bgDim;
-    const exportBlackPlayfield = options.blackPlayfield ?? blackPlayfield;
-    const exportScrollSpeed = options.scrollSpeed ?? scrollSpeed;
-    const exportShowInputOverlay = options.showInputOverlay ?? showInputOverlay;
-    const exportInputOverlayOnly = options.inputOverlayOnly ?? inputOverlayOnly;
-    const exportInputOverlayColor = options.inputOverlayColor ?? inputOverlayColor;
-    const exportInputOverlayKeyHistory = options.inputOverlayKeyHistory ?? inputOverlayKeyHistory;
-    const exportSkinSettings = options.skinSettings ?? activeSkinSettings;
-    const exportOverlaySettings = options.overlaySettings ?? overlaySettings;
-    const exportMissThumbHand = options.missThumbHand ?? missThumbHand;
-    let exportRenderer: ReplayRendererLike | null = null;
-    let exportHost: HTMLDivElement | null = null;
-    let jobId: string | null = null;
-
-    setVideoExport({ exporting: true, progress: 0, error: null, url: null, signed: false });
-
-    try {
-      const resolution = REPLAY_VIDEO_EXPORT_RESOLUTIONS[options.resolution] ?? REPLAY_VIDEO_EXPORT_RESOLUTIONS["1080p"];
-      const player = sanitizeReplayVideoFilename(replay.header.playerName || scoreInfo?.user?.username || "player");
-      const title = sanitizeReplayVideoFilename(scoreInfo?.beatmapset?.title ?? "replay");
-      const diff = sanitizeReplayVideoFilename(scoreInfo?.beatmap?.version ?? "mania");
-      const scoreSuffix = scoreInfo?.id ? `-${scoreInfo.id}` : "";
-      const filename = `${player}-${title}-${diff}${scoreSuffix}.mp4`;
-
-      if (!options.forceClientRender && getLiveBackendUrl() && shouldUseServerReplayVideoRender()) {
-        const job = await postReplayVideoJson<ReplayVideoJobPayload>("server-render", {
-          scoreId: scoreInfo?.id ?? null,
-          beatmapsetId: effectiveBeatmapsetId ?? null,
-          filename,
-          kind: options.kind,
-          startTimeMs: options.startTimeMs,
-          endTimeMs: options.endTimeMs,
-          resolution: options.resolution,
-          fps: exportFps,
-          width: resolution.width,
-          height: resolution.height,
-          frameCount,
-          audioStartSeconds: startTime / 1000,
-          sourceDurationSeconds: sourceDurationMs / 1000,
-          effectiveRate,
-          bgDim: exportBgDim,
-          blackPlayfield: exportBlackPlayfield,
-          scrollSpeed: exportScrollSpeed,
-          showInputOverlay: exportShowInputOverlay,
-          inputOverlayOnly: exportInputOverlayOnly,
-          inputOverlayColor: exportInputOverlayColor,
-          inputOverlayKeyHistory: exportInputOverlayKeyHistory,
-          skinSettings: exportSkinSettings,
-          overlaySettings: exportOverlaySettings,
-          missThumbHand: exportMissThumbHand,
-        });
-        jobId = job.id;
-        const uploaded = await waitForReplayVideoJob(job.id, (progress) => {
-          setVideoExport({ exporting: true, progress, error: null, url: null, signed: false });
-        }, {
-          minProgress: 0.04,
-          maxProgress: 0.98,
-          timeoutMs: 30 * 60_000,
-          intervalMs: 3_000,
-        });
-        const done = { ...job, status: "done" as const, url: uploaded.url, signed: uploaded.signed };
-        setVideoExport({ exporting: false, progress: 1, error: null, url: uploaded.url, signed: uploaded.signed });
-        return done;
-      }
-
-      const cssWidth = resolution.width;
-      const cssHeight = resolution.height;
-      exportHost = document.createElement("div");
-      exportHost.dataset.replayFullscreen = "true";
-      exportHost.style.cssText = [
-        "position:fixed",
-        "left:-10000px",
-        "top:0",
-        `width:${cssWidth}px`,
-        `height:${cssHeight}px`,
-        "overflow:hidden",
-        "pointer-events:none",
-        "opacity:0",
-      ].join(";");
-
-      const exportCanvas = document.createElement("canvas");
-      exportCanvas.width = cssWidth;
-      exportCanvas.height = cssHeight;
-      exportCanvas.style.width = `${cssWidth}px`;
-      exportCanvas.style.height = `${cssHeight}px`;
-      exportHost.appendChild(exportCanvas);
-      document.body.appendChild(exportHost);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-      const { ManiaReplayRenderer } = await withTimeout(
-        loadReplayRenderer(),
-        8000,
-        "Timed out loading the replay renderer.",
-      );
-
-      exportRenderer = new ManiaReplayRenderer(
-        exportCanvas,
-        replay.frames,
-        replay.keyCount,
-        beatmap?.notes ?? [],
-        {
-          isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
-          isLazer: judgeAsLazer,
-          legacyReplayFrameRounding: !sourceIsLazer,
-          od: beatmap?.od,
-          showInputOverlay: exportShowInputOverlay,
-          mods: rendererMods,
-          speedMultiplier: modRate,
-          timingPoints: beatmap?.timingPoints,
-          transparentBackground: true,
-          blackPlayfield: exportBlackPlayfield,
-          hidePerformanceStats: true,
-          scrollVelocities: beatmap?.scrollVelocities,
-          expectedCounts: rendererExpectedCounts,
-          realTotalScore: rendererRealTotalScore,
-          lifeBarFrames: replay.lifeBarFrames,
-          skinSettings: exportSkinSettings,
-          overlaySettings: exportOverlaySettings,
-          missThumbHand: exportMissThumbHand,
-          inputOverlayOnly: exportInputOverlayOnly,
-          inputOverlayColor: exportInputOverlayColor,
-          inputOverlayKeyHistory: exportInputOverlayKeyHistory,
-        },
-      ) as ReplayRendererLike;
-
-      await withTimeout(
-        exportRenderer.ready(),
-        8000,
-        "Timed out starting the export renderer.",
-      );
-      exportRenderer.setScrollSpeed(exportScrollSpeed);
-      exportRenderer.setSpeed(speed);
-      exportRenderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
-      exportRenderer.setBackgroundDim(exportBgDim);
-      const exportStoryboard = storyboardActive ? storyboardRef.current?.data ?? null : null;
-      if (exportStoryboard) {
-        exportRenderer.setStoryboard?.(exportStoryboard);
-        // Textures must be resident before the first frame encodes.
-        await exportRenderer.storyboardReady?.();
-      }
-
-      const width = cssWidth;
-      const height = cssHeight;
-      const compositeCanvas = document.createElement("canvas");
-      compositeCanvas.width = width;
-      compositeCanvas.height = height;
-      const ctx = compositeCanvas.getContext("2d", { alpha: false });
-      if (!ctx) throw new Error("Couldn't create the video compositor.");
-
-      // With a storyboard active the Pixi canvas is opaque (it draws its own
-      // background and dim), so the composite background never shows.
-      let backgroundImage = exportBgDim >= 100 || exportStoryboard
-        ? null
-        : await loadFirstExportBackground([beatmapBackgroundUrl, bgSrc, coverProxyUrl, coverUrl]);
-      const drawCompositeFrame = () => {
-        const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, "#0a0a18");
-        gradient.addColorStop(0.5, "#1a1016");
-        gradient.addColorStop(1, "#0c0c14");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        if (backgroundImage) {
-          try {
-            ctx.save();
-            ctx.globalAlpha = 1;
-            drawCoverImage(ctx, backgroundImage, width, height);
-            ctx.restore();
-          } catch {
-            backgroundImage = null;
-          }
-        }
-
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0, Math.min(1, exportBgDim / 100))})`;
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(exportCanvas, 0, 0, width, height);
-      };
-
-      const job = await postReplayVideoJson<{ id: string }>("start", {
-        scoreId: scoreInfo?.id ?? null,
-        filename,
-        fps: exportFps,
-        width,
-        height,
-        frameCount,
-        // Only a server-reachable URL works here; the backend muxes the audio
-        // and can't fetch a local blob: URL.
-        audioUrl: audioEnabled && remoteAudioUrl && !audioError ? new URL(remoteAudioUrl, window.location.origin).toString() : null,
-        audioStartSeconds: startTime / 1000,
-        sourceDurationSeconds: sourceDurationMs / 1000,
-        effectiveRate,
-      });
-      jobId = job.id;
-
-      const { encodeReplayCanvasToMp4 } = await import("../lib/replay-video-encoder");
-      const encodedVideo = await encodeReplayCanvasToMp4({
-        canvas: compositeCanvas,
-        width,
-        height,
-        fps: exportFps,
-        frameCount,
-        bitrate: getReplayVideoBitrate(width, height, exportFps),
-        renderFrame: async (index) => {
-          const gameTime = Math.min(endTime, startTime + (index / exportFps) * 1000 * effectiveRate);
-          await exportRenderer?.renderFrameAt?.(gameTime);
-          drawCompositeFrame();
-        },
-        onProgress: (progress) => {
-          setVideoExport({
-            exporting: true,
-            progress: Math.min(0.86, progress * 0.86),
-            error: null,
-            url: null,
-            signed: false,
-          });
-        },
-      });
-
-      setVideoExport({
-        exporting: true,
-        progress: 0.9,
-        error: null,
-        url: null,
-        signed: false,
-      });
-      await postReplayVideoBlob(jobId, encodedVideo);
-
-      setVideoExport({
-        exporting: true,
-        progress: 0.94,
-        error: null,
-        url: null,
-        signed: false,
-      });
-      const finished = await postReplayVideoJson<ReplayVideoJobPayload>("finish", {}, jobId);
-      const uploaded = finished.status === "done" && finished.url
-        ? { url: finished.url, signed: Boolean(finished.signed) }
-        : await waitForReplayVideoJob(jobId, (progress) => {
-            setVideoExport({
-              exporting: true,
-              progress,
-              error: null,
-              url: null,
-              signed: false,
-            });
-          }, { minProgress: 0.94, maxProgress: 0.99, timeoutMs: 20 * 60_000 });
-      setVideoExport({
-        exporting: false,
-        progress: 1,
-        error: null,
-        url: uploaded.url,
-        signed: uploaded.signed,
-      });
-      return { id: jobId, status: "done", url: uploaded.url, signed: uploaded.signed };
-    } catch (error) {
-      if (jobId && options.forceClientRender) {
-        void postReplayVideoJson("cancel", {}, jobId).catch(() => {});
-      }
-      const message = error instanceof Error ? error.message : "Couldn't export the replay video.";
-      setVideoExport({ exporting: false, progress: 0, error: message, url: null, signed: false });
-      throw error;
-    } finally {
-      exportRenderer?.destroy();
-      exportRenderer = null;
-      exportHost?.remove();
-    }
+    // Opened straight from the click: awaiting anything first would spend the
+    // transient activation the picker needs.
+    void requestExportFileHandle(spec.filename, "mp4")
+      .then((handle) => {
+        // A dismissed picker is an ordinary cancellation, not a failure.
+        if (handle) begin({ kind: "file", handle });
+      })
+      .catch(() => begin({ kind: "buffer" }));
   }, [
     audioEnabled,
-    audioError,
-    remoteAudioUrl,
-    bgDim,
-    bgSrc,
-    effectiveRate,
-    effectiveBeatmapsetId,
+    audioSettings,
+    audioUrl,
+    audioPreservesPitch,
     beatmap,
     beatmapBackgroundUrl,
+    bgDim,
+    bgSrc,
+    blackPlayfield,
+    coverProxyUrl,
+    coverUrl,
+    effectiveBeatmapsetId,
+    effectiveRate,
     inputOverlayColor,
     inputOverlayKeyHistory,
     inputOverlayOnly,
-    effectiveReplayMods,
-    rendererMods,
-    rendererExpectedCounts,
     judgeAsLazer,
-    sourceIsLazer,
+    locale,
+    missThumbHand,
     modRate,
     overlaySettings,
-    missThumbHand,
-    replay.header.playerName,
-    replay.frames,
-    replay.keyCount,
-    replay.lifeBarFrames,
+    rendererExpectedCounts,
+    rendererMods,
+    rendererRealTotalScore,
+    replay,
     scoreInfo,
-    scoreInfo?.beatmap?.version,
-    scoreInfo?.beatmapset?.title,
-    scoreInfo?.id,
-    scoreInfo?.user?.username,
     scrollSpeed,
     showInputOverlay,
     activeSkinSettings,
+    sourceIsLazer,
     speed,
     storyboardActive,
+    volume,
   ]);
 
   useEffect(() => {
-    window.__maniaHubExportReplayVideo = async (options) => {
-      const startedAt = Date.now();
-      while ((!rendererRef.current || !canvasRef.current) && Date.now() - startedAt < 120_000) {
-        await new Promise((resolve) => window.setTimeout(resolve, 250));
-      }
-      return exportReplayVideo({ ...options, forceClientRender: true });
+    // Development-only automation hook. It starts the same local job the
+    // button does; there is no server render behind it.
+    if (!import.meta.env.DEV) return;
+    window.__maniaHubExportReplayVideo = (options) => {
+      startReplayVideoExport(options);
     };
     return () => {
       if (window.__maniaHubExportReplayVideo) delete window.__maniaHubExportReplayVideo;
     };
-  }, [exportReplayVideo]);
+  }, [startReplayVideoExport]);
 
   const fullscreenChromeVisible = isCanvasFullscreen && showFullscreenChrome;
   const mobileFullscreenButtonVisible = !isCanvasFullscreen && showFullscreenChrome;
@@ -4778,14 +4439,12 @@ function ReplayViewer({
       ownerSkinOn={ownerSkinApplied}
       ownerSkinName={ownerSkin?.record.skin.name ?? null}
       onToggleOwnerSkin={() => setOwnerSkinApplied((value) => !value)}
-      videoExporting={videoExport.exporting}
-      videoExportProgress={videoExport.progress}
-      videoExportError={videoExport.error}
-      videoExportUrl={videoExport.url}
+      videoExportBusy={replayExportBusy}
+      videoExportCanSaveToFile={exportCanSaveToFile}
       shareUrl={shareUrl ?? null}
       onTogglePlay={togglePlay}
       onToggleFullscreen={toggleReplayFullscreen}
-      onExportVideo={replayVideoExportAvailable ? exportReplayVideo : undefined}
+      onExportVideo={replayVideoExportAvailable ? startReplayVideoExport : undefined}
       onSetSpeed={(nextSpeed) => {
         setSpeed(nextSpeed);
         rendererRef.current?.setSpeed(nextSpeed);
@@ -5000,6 +4659,26 @@ function ReplayViewer({
                           aria-hidden="true"
                         />
                         {i18n._(REPLAY_HAND_ACCURACY_STYLE_LABELS[style])}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
+                {overlayMenu.targetId === "misses" && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    {REPLAY_MISS_STYLES.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => setMissStyleFromMenu(style)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${missStyle === style ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {i18n._(REPLAY_MISS_STYLE_LABELS[style])}
                       </button>
                     ))}
                     <div className="my-1 h-px bg-white/10" />
@@ -5250,7 +4929,11 @@ function ReplayViewer({
                     if (!scrubbingRef.current) scheduleInlineChromeHide();
                   }}
                   onFocusCapture={() => revealInlineChrome()}
-                  onBlurCapture={() => scheduleInlineChromeHide()}
+                  onBlurCapture={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget) && !inlineChromeHoverRef.current) {
+                      scheduleInlineChromeHide();
+                    }
+                  }}
                 >
                   {renderReplayControls("overlay")}
                 </motion.div>

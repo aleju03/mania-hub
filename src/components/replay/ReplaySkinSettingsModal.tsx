@@ -9,15 +9,19 @@ import type { I18n, MessageDescriptor } from "@lingui/core";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 import { ReplayMasterOverlayControls } from "./ReplayMasterOverlayControls";
+import { SelectMenu } from "#/components/ui/SelectMenu";
 import { ensureReplayFontStylesheet } from "../../lib/replay-fonts";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
   normalizeReplayHandAccuracyStyle,
+  REPLAY_MISS_STYLES,
+  REPLAY_MISS_STYLE_LABELS,
+  normalizeReplayMissStyle,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
-import type { ReplayHandAccuracyStyle, ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
+import type { ReplayHandAccuracyStyle, ReplayMissStyle, ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
@@ -4090,7 +4094,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = 
 const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
   keypresses: "/images/replay-overlays/keypresses.webp",
   kps: "/images/replay-overlays/kps-v2.webp",
-  misses: "/images/replay-overlays/misses.webp",
+
   accuracy: "/images/replay-overlays/accuracy.webp",
   pp: "/images/replay-overlays/pp.webp",
   judgements: "/images/replay-overlays/judgements.webp",
@@ -4098,8 +4102,33 @@ const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
   replayMaster: "/images/replay-overlays/replay-master.svg",
 };
 
-// The same four shapes the canvas draws, so the card matches what enabling
-// the overlay puts on screen. Fill lengths use the canvas' own curve.
+// Preview each osu!-inspired shape with the same label/value hierarchy as the HUD.
+function MissOverlayPreview({ style }: { style: ReplayMissStyle }) {
+  const circles = style === "compact";
+  const leaderboard = style === "stacked";
+  return (
+    <div className="relative flex h-full w-full items-center justify-center px-4" aria-hidden="true">
+      <div className={`flex gap-2 ${leaderboard ? "w-44 flex-col" : ""}`}>
+        {[
+          { label: "L", value: "2", color: "#5a8fff" },
+          { label: "R", value: "1", color: "#de31ae" },
+        ].map((hand, index) => (
+          <div key={hand.label} className={`relative ${leaderboard ? "grid grid-cols-[1fr_auto] items-center px-4 py-1" : "flex w-[84px] flex-col items-center"}`}>
+            {leaderboard && <div className="absolute inset-0 -skew-x-[11deg] rounded-lg border bg-[#17151e]" style={{ borderColor: `${hand.color}99` }} />}
+            <div className="relative whitespace-nowrap text-sm font-bold text-white [text-shadow:0_1px_2px_#000]">{hand.label} MISS</div>
+            <div
+              className={`relative font-normal text-white [text-shadow:0_1px_2px_#000] ${circles ? "mt-1 grid h-14 w-14 place-items-center rounded-full border-2 border-white text-3xl" : "text-[32px] leading-tight"}`}
+              style={circles ? { backgroundColor: `${hand.color}40`, boxShadow: `inset 0 0 0 3px #111019, inset 0 0 0 4px ${hand.color}` } : undefined}
+            >{hand.value}</div>
+            <div className={`relative col-span-2 whitespace-nowrap text-[9px] font-bold text-white ${index === 0 ? "invisible" : ""}`}>+ THUMB</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Fill lengths use the canvas' own accuracy curve.
 function HandAccuracyOverlayPreview({ style }: { style: ReplayHandAccuracyStyle }) {
   const hands = [
     { label: "L", value: "99.42", color: "#5a8fff", fill: (99.42 / 100) ** 12 },
@@ -4205,18 +4234,18 @@ function ReplayOverlaySettingsRow({
   placement: ReplayOverlaySettings[ReplayOverlayId];
   onChange: (patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => void;
 }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const enabled = placement.enabled;
   const toggle = () => onChange({ enabled: !enabled });
   return (
     <div
-      className={`group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-lg border text-left transition-all ${
+      className={`group relative flex w-full cursor-pointer flex-col rounded-lg border text-left transition-all focus-within:z-10 ${
         enabled
           ? "border-osu-pink/70 bg-osu-b5/55 shadow-[0_0_0_1px_rgba(232,60,144,0.18)]"
           : "border-osu-b3/50 bg-osu-b5/25 hover:border-osu-b2 hover:bg-osu-b5/45"
       }`}
     >
-      <button type="button" aria-pressed={enabled} onClick={toggle} className="flex w-full cursor-pointer flex-col text-left">
+      <button type="button" aria-pressed={enabled} onClick={toggle} className="flex w-full cursor-pointer flex-col overflow-hidden rounded-t-lg text-left">
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-black" style={{ backgroundColor: "#000" }}>
           <div className="absolute inset-0 bg-black" aria-hidden="true" />
           {REPLAY_OVERLAY_PREVIEWS[id] ? (
@@ -4228,6 +4257,8 @@ function ReplayOverlaySettingsRow({
               className="relative h-full w-full object-contain"
               style={{ backgroundColor: "#000" }}
             />
+          ) : id === "misses" ? (
+            <MissOverlayPreview style={normalizeReplayMissStyle(placement.style)} />
           ) : id === "handAccuracy" ? (
             <HandAccuracyOverlayPreview style={normalizeReplayHandAccuracyStyle(placement.style)} />
           ) : id === "hitError" ? (
@@ -4279,6 +4310,19 @@ function ReplayOverlaySettingsRow({
           </div>
         </div>
       </button>
+      {id === "misses" && (
+        <div className="flex items-center gap-2 px-3 pb-3 text-xs text-osu-l1">
+          <span><Trans>Style</Trans></span>
+          <SelectMenu<ReplayMissStyle>
+            ariaLabel={`${i18n._(REPLAY_OVERLAY_LABELS.misses)}: ${t`Style`}`}
+            value={normalizeReplayMissStyle(placement.style)}
+            options={REPLAY_MISS_STYLES.map((style) => ({ value: style, label: i18n._(REPLAY_MISS_STYLE_LABELS[style]) }))}
+            onChange={(style) => onChange({ style })}
+            className="min-w-0 flex-1"
+            block
+          />
+        </div>
+      )}
       {id === "replayMaster" && (
         <div className="px-3 pb-3 text-osu-l1">
           <ReplayMasterOverlayControls placement={placement} onChange={onChange} />

@@ -486,6 +486,7 @@ export function UserCollectionEditor({
                     id="collection-title"
                     value={title}
                     onChange={(event) => setTitle(event.target.value.slice(0, USER_COLLECTION_TITLE_MAX_LENGTH))}
+                    placeholder={t`e.g. 4K jumpstream warmup`}
                     className="w-full rounded-lg bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 outline-none ring-1 ring-white/5 placeholder:text-osu-f1/60 focus:ring-osu-pink/40"
                   />
                 </div>
@@ -499,6 +500,7 @@ export function UserCollectionEditor({
                     value={description}
                     onChange={(event) => setDescription(event.target.value.slice(0, USER_COLLECTION_DESCRIPTION_MAX_LENGTH))}
                     rows={3}
+                    placeholder={t`What are these maps for? Mention the skill focus, difficulty, or suggested play order.`}
                     className="w-full resize-y rounded-lg bg-osu-b4 px-3 py-2 text-[13px] text-osu-l1 outline-none ring-1 ring-white/5 placeholder:text-osu-f1/60 focus:ring-osu-pink/40"
                   />
                 </div>
@@ -524,6 +526,7 @@ export function UserCollectionEditor({
                     {tags.length < USER_COLLECTION_MAX_TAGS && (
                       <input
                         id="collection-tags"
+                        aria-describedby="collection-tags-hint"
                         value={tagDraft}
                         onChange={(event) => setTagDraft(event.target.value)}
                         onKeyDown={(event) => {
@@ -538,6 +541,9 @@ export function UserCollectionEditor({
                       />
                     )}
                   </div>
+                  <p id="collection-tags-hint" className="text-[11px] text-osu-f1/70">
+                    <Trans>Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags.</Trans>
+                  </p>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">

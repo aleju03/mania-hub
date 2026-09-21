@@ -1607,6 +1607,61 @@ describe("computePlayerSkillRatings", () => {
     });
   });
 
+  it("reads 6K/7K/8K tech off LeoBlack's label and chordstream off its cluster share", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // 201 is the 8K minijack shape that opened this: a tech score the veto
+      // could not strip (jack clusters at 37%, single-note jack 0.542), a
+      // chordstream score just over the tag line, and LeoBlack naming the
+      // whole chart "Minijacks". Its chordstream clusters carry 56%, so it
+      // stays a jack + chordstream hybrid and loses only tech.
+      const minijackClusters = [
+        { pattern: "Jacks", importance: 1_893_275 },
+        { pattern: "Chordstream", importance: 1_180_155 },
+        { pattern: "Chordstream", importance: 1_048_206 },
+        { pattern: "Chordstream", importance: 658_115 },
+        { pattern: "Stream", importance: 396_794 },
+      ];
+      const taggings = [
+        [201, [{ id: "tech", score: 0.765 }, { id: "jack", score: 0.542 }, { id: "chordstream", score: 0.52 }, { id: "chordjack", score: 0.345 }], minijackClusters, "Minijacks"],
+        // A tech label tags the chart even under the score line.
+        [202, [{ id: "tech", score: 0.4 }, { id: "chordstream", score: 0.6 }], [{ pattern: "Chordstream", importance: 90 }, { pattern: "Jacks", importance: 10 }], "Light Chordstream Tech"],
+        // Chordstream bridges inside a jack chart: the score fires, the
+        // clusters say the chords are 20% of the difficulty, so no tag.
+        [203, [{ id: "chordstream", score: 0.6 }, { id: "jack", score: 0.9 }], [{ pattern: "Jacks", importance: 80 }, { pattern: "Chordstream", importance: 20 }], "Longjacks"],
+        // No label and no clusters: the score-and-veto read stands.
+        [204, [{ id: "tech", score: 0.7 }, { id: "chordstream", score: 0.55 }], null, null, 0],
+        // An LN chart LeoBlack labels "Inverse Tech" is lntech, not rice tech.
+        [205, [{ id: "tech", score: 0.3 }, { id: "ln", score: 0.9 }, { id: "lninverse", score: 0.8 }], null, "Inverse Tech", 0.7],
+      ] as const;
+      for (const [beatmapId, patterns, clusters, clusterCategory, lnRatio] of taggings) {
+        await storeCachedBeatmapFile(db, beatmapId, buildStreamBeatmapFile(), { source: "test" });
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, classification_json, updated_at)
+           values (?, ?, 'ready', 7, ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ patterns, lnRatio: lnRatio ?? 0, ...(clusters ? { clusters } : {}), ...(clusterCategory ? { clusterCategory } : {}) }), new Date().toISOString()],
+        );
+      }
+      const scores = [
+        play({ id: 1, beatmap_id: 201, accuracy: 0.97 }),
+        play({ id: 2, beatmap_id: 202, accuracy: 0.97 }),
+        play({ id: 3, beatmap_id: 203, accuracy: 0.97 }),
+        play({ id: 4, beatmap_id: 204, accuracy: 0.97 }),
+        play({ id: 5, beatmap_id: 205, accuracy: 0.97 }),
+      ];
+      const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
+      const byBeatmap = new Map(result.plays.map((entry) => [entry.beatmapId, entry.patterns]));
+      expect(byBeatmap.get(201)).toEqual(["jack", "chordstream"]);
+      expect(byBeatmap.get(202)).toEqual(["tech", "chordstream"]);
+      expect(byBeatmap.get(203)).toEqual(["jack"]);
+      expect(byBeatmap.get(204)).toEqual(["tech", "chordstream"]);
+      // The LN tags themselves follow the play's own LN pass, which this
+      // hold-free fixture fails; the point is that the label added no rice tech.
+      expect(byBeatmap.get(205)).not.toContain("tech");
+    });
+  });
+
   it("positions player dan from a quorum of qualifying clears per verdict side", async () => {
     await withDb(async (db) => {
       await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });

@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_REPLAY_SKIN_SETTINGS, getReplaySkinProfile } from "../../lib/replay-skin";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
+import { DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
+import type { ReplayOverlayStage } from "../../lib/replay-overlay-layout";
+import type { ReplayViewportSnapshot } from "../../lib/replay-types";
+import { fitReplayComposition } from "../../lib/replay-export/composition";
+
 
 function createLayoutRenderer(fullHeightLayout: boolean) {
   // Use the real layout calculations without allocating a GPU canvas.
@@ -58,5 +64,238 @@ describe("comparison skin scaling", () => {
     const after = renderer.getLayout();
     expect(after.layoutScale).toBe(before.layoutScale);
     expect(after.pixelsPerMs).toBe(before.pixelsPerMs);
+  });
+});
+
+// Exercise the real renderer methods while keeping WebGL out of these tests.
+
+type OverlayLayout = ReplayOverlayStage & { layoutScale: number };
+type OverlayBox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
+type OverlayRenderer = {
+  cssWidth: number;
+  cssHeight: number;
+  fullscreenLayout: boolean;
+  ruleset: { accuracyMode: "stable" | "lazer" };
+  overlaySettings: ReplayOverlaySettings;
+  overlayHitboxes: OverlayBox[];
+  hidePlaybackInfo: boolean;
+  getLayout(): OverlayLayout;
+  invalidateLayoutCache(): void;
+  getOverlayScale(layout: OverlayLayout, id: ReplayOverlayId): number;
+  getOverlayFrame(layout: OverlayLayout, id: ReplayOverlayId, width: number, height: number, anchor?: { x: number; y: number }): OverlayBox;
+  clampOverlayPosition(id: ReplayOverlayId, x: number, y: number, width: number, height: number, layout: OverlayLayout): { x: number; y: number };
+  getOverlaySettingsSnapshot(): ReplayOverlaySettings;
+  getOverlayPlacementOrigin(box: OverlayBox): { x: number; y: number };
+  updateOverlayPlacements(placements: Array<readonly [ReplayOverlayId, Partial<ReplayOverlaySettings[ReplayOverlayId]>]>): void;
+  updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>): void;
+  setSkinSettings(settings: typeof DEFAULT_REPLAY_SKIN_SETTINGS): void;
+  renderHUD(layout: OverlayLayout): void;
+  measureCanvas(): void;
+  getViewportSnapshot(): ReplayViewportSnapshot;
+};
+
+function overlayRenderer(settings = DEFAULT_REPLAY_OVERLAY_SETTINGS): OverlayRenderer {
+  return Object.assign(Object.create(ManiaReplayRenderer.prototype), {
+    cssWidth: 2048, cssHeight: 900, fullscreenLayout: false, fullHeightLayout: false,
+    barePlayfield: false, keyCount: 7,
+    skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 7),
+    skinSettings: DEFAULT_REPLAY_SKIN_SETTINGS, scrollSpeed: 20, modRate: 1,
+    overlaySettings: normalizeReplayOverlaySettings(settings), overlayHitboxes: [],
+    overlayReferenceLayout: null, ruleset: { accuracyMode: "stable" },
+    render: vi.fn(), onOverlaySettingsChange: vi.fn(),
+  });
+}
+
+function judgementFrame(renderer: OverlayRenderer): OverlayBox {
+  const layout = renderer.getLayout();
+  const scale = renderer.getOverlayScale(layout, "judgements");
+  return { ...renderer.getOverlayFrame(layout, "judgements", 50 * scale, 108 * scale), id: "judgements" };
+}
+
+describe("overlay layout across fullscreen and video export", () => {
+  it("clamps a saved off-screen lazer leaderboard when watching stable", () => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard.x = -0.06;
+    const viewer = overlayRenderer(settings);
+    const layout = viewer.getLayout();
+    const frame = () => viewer.getOverlayFrame(layout, "leaderboard", 400, 300);
+    const dragged = () => viewer.clampOverlayPosition("leaderboard", -0.5, 0.24, 400, 300, layout);
+
+    viewer.ruleset.accuracyMode = "lazer";
+    const lazerFrame = frame();
+    expect(lazerFrame.x).toBeLessThan(0);
+    expect(dragged().x * layout.w + 400).toBeCloseTo(32);
+
+    viewer.ruleset.accuracyMode = "stable";
+    expect(frame().x).toBe(0);
+    expect(dragged().x).toBe(0);
+    expect(viewer.overlaySettings.leaderboard.lazerPosition?.x).toBe(-0.06);
+
+    viewer.ruleset.accuracyMode = "lazer";
+    expect(frame()).toEqual(lazerFrame);
+  });
+
+  it("restores each leaderboard after editing and reopening the other replay type", () => {
+    const lazer = overlayRenderer();
+    lazer.ruleset.accuracyMode = "lazer";
+    lazer.updateOverlayPlacement("leaderboard", { x: -0.06, y: 0.32, scale: 1.4 });
+    const savedLazer = lazer.getOverlaySettingsSnapshot().leaderboard.lazerPosition;
+    const frame = (viewer: OverlayRenderer) => viewer.getOverlayFrame(viewer.getLayout(), "leaderboard", 400, 300);
+    const originalFrame = frame(lazer);
+    const store = (viewer: OverlayRenderer) => JSON.parse(JSON.stringify(viewer.getOverlaySettingsSnapshot()));
+
+    const stable = overlayRenderer(store(lazer));
+    expect(frame(stable).x).toBe(0);
+    stable.updateOverlayPlacements([["leaderboard", { x: 0.12, y: 0.15, scale: 0.8 }]]);
+    stable.updateOverlayPlacement("misses", { x: 0.3 });
+    const savedStable = stable.getOverlaySettingsSnapshot().leaderboard;
+    expect(savedStable.lazerPosition).toEqual(savedLazer);
+
+    const reopened = overlayRenderer(store(stable));
+    reopened.ruleset.accuracyMode = "lazer";
+    expect(frame(reopened)).toEqual(originalFrame);
+    expect(reopened.getOverlaySettingsSnapshot().leaderboard.lazerPosition).toEqual(savedLazer);
+    reopened.updateOverlayPlacements([["leaderboard", { x: -0.08, y: 0.4, scale: 1.6 }]]);
+    const stableAgain = overlayRenderer(store(reopened));
+    expect(frame(stableAgain)).toEqual(frame(stable));
+    expect(stableAgain.overlaySettings.leaderboard).toMatchObject({ x: 0.12, y: 0.15, scale: 0.8, reference: savedStable.reference });
+  });
+
+  it("exports the captured inline composition without shrinking gaps between overlays", () => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };
+    settings.handAccuracy = { enabled: true, x: 0.16, y: 0.46, scale: 1 };
+    settings.misses = { enabled: true, x: 0.15, y: 0.58, scale: 1 };
+    const viewer = overlayRenderer(settings);
+    viewer.cssHeight = 930;
+    const draw = (renderer: OverlayRenderer) => {
+      const layout = renderer.getLayout();
+      return (["leaderboard", "handAccuracy", "misses"] as const).map((id) => {
+        const scale = renderer.getOverlayScale(layout, id);
+        return renderer.getOverlayFrame(layout, id, (id === "leaderboard" ? 112 : 145) * scale, 36 * scale);
+      });
+    };
+    const original = draw(viewer);
+    const viewport = viewer.getViewportSnapshot();
+    const captured = viewer.getOverlaySettingsSnapshot();
+    for (const height of [720, 1080]) {
+      const output = { width: height * 16 / 9, height };
+      const fit = fitReplayComposition(viewport, output);
+      const exporter = overlayRenderer(captured);
+      Object.assign(exporter, {
+        canvas: { style: {}, getBoundingClientRect: () => output },
+        renderViewport: viewport, renderResolution: fit.scale,
+      });
+      exporter.measureCanvas();
+      expect(exporter.fullscreenLayout).toBe(false);
+      expect(exporter.getLayout()).toEqual(viewer.getLayout());
+      const frames = draw(exporter);
+      expect(frames).toEqual(original);
+      for (const index of [1, 2]) {
+        const gap = frames[index].x - frames[0].x - frames[0].width;
+        expect(gap).toBeGreaterThan(0);
+        expect(gap * fit.scale).toBeCloseTo((original[index].x - original[0].width) * fit.scale);
+      }
+    }
+  });
+
+  it("keeps its reference on a settings refresh but rebinds legacy coordinates when the owner skin changes geometry", () => {
+    const viewer = overlayRenderer();
+    const original = viewer.getOverlaySettingsSnapshot().judgements.reference;
+    viewer.cssHeight = 1152;
+    viewer.invalidateLayoutCache();
+    let profile = getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 7);
+    Object.assign(viewer, {
+      updateSkinCache: () => Object.assign(viewer, { skinProfile: profile }),
+      prewarmSkinTextures: vi.fn(),
+    });
+    viewer.setSkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
+    expect(viewer.getOverlaySettingsSnapshot().judgements.reference).toEqual(original);
+    profile = { ...profile, columnStart: 73 };
+    viewer.setSkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
+    expect(viewer.getOverlaySettingsSnapshot().judgements.reference).toMatchObject({
+      height: 1152, playfieldX: viewer.getLayout().playfieldX,
+    });
+  });
+
+  it("keeps authored right-side judgement counts outside a 7K playfield", () => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.judgements = { enabled: true, x: 0.77, y: 0.35, scale: 1.5 };
+    const viewer = overlayRenderer(settings);
+    const original = judgementFrame(viewer);
+    viewer.fullscreenLayout = true;
+    viewer.cssHeight = 1152;
+    viewer.invalidateLayoutCache();
+    const fullscreen = judgementFrame(viewer);
+    const layout = viewer.getLayout();
+    expect(fullscreen.x).toBeGreaterThanOrEqual(layout.playfieldX + layout.playfieldWidth);
+    expect(fullscreen.height / original.height).toBeCloseTo(1152 / 900);
+    expect(fullscreen.y / 1152).toBeCloseTo(original.y / 900);
+
+    const captured = viewer.getOverlaySettingsSnapshot();
+    for (const [width, height] of [[1920, 1080], [1280, 720]]) {
+      const exporter = overlayRenderer(captured);
+      exporter.cssWidth = width;
+      exporter.cssHeight = height;
+      exporter.fullscreenLayout = true;
+      const frame = judgementFrame(exporter);
+      const ratio = height / 1152;
+      expect(frame.x / ratio).toBeCloseTo(fullscreen.x);
+      expect(frame.y / ratio).toBeCloseTo(fullscreen.y);
+      expect(frame.width / ratio).toBeCloseTo(fullscreen.width);
+    }
+    viewer.cssHeight = 900;
+    viewer.invalidateLayoutCache();
+    expect(judgementFrame(viewer)).toEqual(original);
+  });
+
+  it("begins a drag from the displayed position and remembers fullscreen edits", () => {
+    const viewer = overlayRenderer();
+    judgementFrame(viewer);
+    viewer.cssHeight = 1152;
+    viewer.invalidateLayoutCache();
+    const before = judgementFrame(viewer);
+    const origin = viewer.getOverlayPlacementOrigin(before);
+    expect(origin.x).toBe(before.x / viewer.cssWidth);
+    expect(origin.y).toBe(before.y / viewer.cssHeight);
+    viewer.updateOverlayPlacement("judgements", { x: origin.x - 0.02, y: origin.y + 0.05 });
+    const moved = judgementFrame(viewer);
+    expect(moved.x).toBeCloseTo(before.x - 0.02 * viewer.cssWidth);
+    expect(moved.y).toBeCloseTo(before.y + 0.05 * viewer.cssHeight);
+    expect(moved.width).toBeCloseTo(before.width);
+    viewer.updateOverlayPlacement("judgements", { enabled: false });
+    const savedReference = viewer.overlaySettings.judgements.reference;
+    viewer.cssHeight = 900;
+    viewer.invalidateLayoutCache();
+    viewer.updateOverlayPlacement("judgements", { enabled: true });
+    expect(viewer.overlaySettings.judgements.reference).toEqual(savedReference);
+    viewer.cssHeight = 1152;
+    viewer.invalidateLayoutCache();
+    expect(judgementFrame(viewer)).toEqual(moved);
+  });
+
+  it("keeps an anchored hit-error bar on its computed anchor", () => {
+    const viewer = overlayRenderer();
+    const layout = viewer.getLayout();
+    const frame = viewer.getOverlayFrame(layout, "hitError", 400, 30, { x: 700, y: 850 });
+    expect(frame).toMatchObject({ x: 700, y: 850 });
+  });
+
+  it("removes viewer transport labels from exports while retaining gameplay HUD", () => {
+    const viewer = overlayRenderer();
+    const addText = vi.fn();
+    const score = vi.fn();
+    Object.assign(viewer, {
+      ...Object.fromEntries(["renderJudgementPop", "renderCombo", "renderLeaderboard", "renderHitErrorBar", "renderFailOverlay"].map((name) => [name, vi.fn()])),
+      renderScoreBlock: score, shouldRenderCustomOverlays: () => false,
+      addText, hidePerformanceStats: true, hudCachedTime: "3:14", playbackSpeed: 1,
+    });
+    viewer.renderHUD(viewer.getLayout());
+    expect(addText.mock.calls.map(([text]) => text)).toEqual(["3:14", "1x"]);
+    addText.mockClear();
+    viewer.hidePlaybackInfo = true;
+    viewer.renderHUD(viewer.getLayout());
+    expect(addText).not.toHaveBeenCalled();
+    expect(score).toHaveBeenCalledTimes(2);
   });
 });

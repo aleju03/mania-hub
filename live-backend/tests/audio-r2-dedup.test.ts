@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { getAudioBlobKey, getPointerBlobKey } from "../src/audio/r2-assets.js";
+import { getAudioBlobKey, getBeatmapAudioStorageKey, getPointerBlobKey } from "../src/audio/r2-assets.js";
 
 describe("content-addressed audio blobs", () => {
+  it("separates timestamped Ogg playback from the old cached source", () => {
+    const current = getBeatmapAudioStorageKey("1900729", "audio.ogg");
+    const legacy = getBeatmapAudioStorageKey("1900729", "audio.ogg", true);
+    expect(current).toMatch(/\/audio\/1900729\/[a-f0-9]{16}-audio\.seek-v1\.ogg$/);
+    expect(legacy).toBe(current.replace(".seek-v1.ogg", ".ogg"));
+    expect(getBeatmapAudioStorageKey("1", "SONG.OGG")).toMatch(/-SONG\.seek-v1\.ogg$/);
+    expect(getBeatmapAudioStorageKey("1", "song.mp3")).toMatch(/-song\.mp4$/);
+    expect(getBeatmapAudioStorageKey("1", "song.wav")).toMatch(/-song\.wav$/);
+  });
+
   it("derives the same blob key for identical content regardless of set/filename", () => {
     const buffer = Buffer.from("identical audio bytes");
     expect(getAudioBlobKey(buffer, "audio/mp4")).toBe(getAudioBlobKey(buffer, "audio/mp4"));

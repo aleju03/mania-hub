@@ -40,6 +40,7 @@
 @font-face { font-family: "Torus"; font-weight: 800; src: url("/fonts/Torus-Bold.otf") format("opentype"); font-display: swap; }
 @font-face { font-family: "Torus"; font-weight: 900; src: url("/fonts/Torus-Heavy.otf") format("opentype"); font-display: swap; }
 @font-face { font-family: "Venera"; font-weight: 500; src: url("/fonts/Venera-500.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Aller"; font-weight: 400; src: url("/fonts/Aller-Regular.ttf") format("truetype"); font-display: swap; }
 @font-face {
   font-family: "osu-extra";
   src: url("/fonts/extra.woff2") format("woff2"), url("/fonts/extra.woff") format("woff"), url("/fonts/extra.ttf") format("truetype");

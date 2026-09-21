@@ -1,7 +1,8 @@
 import type { ReplayHitCounts } from "./replay-validation";
-import type { ReplayHitsoundTrigger } from "./replay-hitsounds";
+import type { HitsoundSamplePlay, ReplayHitsoundTrigger } from "./replay-hitsounds";
 import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "./replay-overlays";
 import type { ReplaySkinSettings } from "./replay-skin";
+import type { ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "./replay-leaderboard";
 import type { ReplayStoryboardData } from "./storyboard/types";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
 
@@ -53,6 +54,27 @@ export interface ReplayLiveStats {
   meanOffsetMs: number;
 }
 
+/** One key press and the samples it plays, at a source-time position. */
+export interface ReplayHitsoundSchedulePress {
+  timeMs: number;
+  plays: HitsoundSamplePlay[];
+}
+
+/** Every hitsound the run produces, resolved ahead of playback. */
+export interface ReplayHitsoundSchedule {
+  presses: ReplayHitsoundSchedulePress[];
+  comboBreakTimesMs: number[];
+}
+
+/** Logical stage geometry and layout mode, independent of output pixel resolution. */
+export interface ReplayViewportSnapshot {
+  width: number;
+  height: number;
+  fullscreen: boolean;
+  fullHeight: boolean;
+  coarsePointer: boolean;
+}
+
 export interface ReplayRendererLike {
   readonly duration: number;
   readonly displayDuration: number;
@@ -86,17 +108,23 @@ export interface ReplayRendererLike {
   setShowInputOverlay: (value: boolean) => void;
   setInputOverlayOptions: (options: { only?: boolean; color?: string; keyHistory?: boolean }) => void;
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
+  /** Includes authored geometry so an export can reproduce the overlay layout. */
+  getOverlaySettingsSnapshot?: () => ReplayOverlaySettings;
+  getViewportSnapshot?: () => ReplayViewportSnapshot;
   /** Which hand owns the middle lane of an odd keymode in per-hand stats. */
   setMissThumbHand?: (hand: ReplayThumbHand) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
   setStoryboard?: (data: ReplayStoryboardData | null) => void;
   storyboardReady?: () => Promise<void>;
-  setLeaderboard?: (entries: { name: string; score: number; combo: number; rank?: number }[], playerName: string) => void;
+  setLeaderboard?: (entries: ReplayLeaderboardEntry[], playerName: string, options?: ReplayLeaderboardOptions) => void;
+  leaderboardReady?: () => Promise<void>;
   setLeaderboardVisible?: (visible: boolean) => void;
   setSpectatorCount?: (count: number) => void;
   setSpectatorNames?: (names: string[]) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
+  /** Whole-run hitsound timeline, for offline mixing during a video export. */
+  getHitsoundSchedule?: () => ReplayHitsoundSchedule;
   ready: () => Promise<void>;
   getLiveStats?: () => ReplayLiveStats;
   getDiagnostics?: () => { rendererBackend: string; judgementBuildMs: number | null };

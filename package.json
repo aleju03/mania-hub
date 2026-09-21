@@ -41,6 +41,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1037.0",
     "@lingui/core": "^6.6.0",
     "@lingui/react": "^6.6.0",
+    "@mediabunny/aac-encoder": "1.50.6",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",

@@ -199,15 +199,67 @@ const DEFAULT_SAMPLE_BUNDLE_URL = "/assets/replay-default-hitsounds-v1.zip";
 // oldest (quietest) voice rather than dropping the new sound.
 const MAX_CONCURRENT_SOURCES = 48;
 
-function normalizeSampleKey(name: string): string {
+export function normalizeSampleKey(name: string): string {
   return name
     .replace(/\\/g, "/")
     .toLowerCase()
     .replace(/\.(wav|ogg|mp3|flac|m4a)$/, "");
 }
 
-function sampleBaseName(key: string): string {
+export function sampleBaseName(key: string): string {
   return key.slice(key.lastIndexOf("/") + 1);
+}
+
+/** Name of the combo-break sample, which has no bank and no addition. */
+export const COMBO_BREAK_SAMPLE_NAME = "combobreak";
+
+export type HitsoundSampleLookup = (key: string) => boolean;
+
+export type HitsoundKeyResolution = {
+  /** Whether beatmap-folder samples take part in the lookup. */
+  useBeatmapSamples: boolean;
+  has: HitsoundSampleLookup;
+};
+
+/**
+ * Sample precedence, shared by live playback and the offline video mixer so
+ * an exported hitsound is the same file the viewer would have played.
+ */
+export function resolveHitsoundSampleKey(
+  bankedName: string,
+  play: HitsoundSamplePlay | null,
+  { useBeatmapSamples, has }: HitsoundKeyResolution,
+): string | null {
+  const candidates: string[] = [];
+  if (play && useBeatmapSamples && play.index >= 2) candidates.push(`beatmap:${bankedName}${play.index}`);
+  if (!play || (useBeatmapSamples && play.index >= 1)) candidates.push(`beatmap:${bankedName}`);
+  candidates.push(`skin:${bankedName}`);
+  if (play) candidates.push(`skin:${play.name}`);
+  candidates.push(`default:${bankedName}`);
+  for (const key of candidates) {
+    if (has(key)) return key;
+  }
+  return null;
+}
+
+export function resolveHitsoundPlayKey(
+  play: HitsoundSamplePlay,
+  resolution: HitsoundKeyResolution,
+): string | null {
+  if (play.filename && resolution.useBeatmapSamples) {
+    const normalized = normalizeSampleKey(play.filename);
+    const candidates = [`beatmap:${normalized}`, `beatmap:${sampleBaseName(normalized)}`];
+    for (const key of candidates) {
+      if (resolution.has(key)) return key;
+    }
+    // Keysound file is missing: fall back to the bank hitnormal.
+  }
+  return resolveHitsoundSampleKey(`${play.bank}-${play.name}`, play, resolution);
+}
+
+/** Which output channel a resolved sample key is mixed into. */
+export function hitsoundChannelForKey(key: string): HitsoundChannel {
+  return key.startsWith("beatmap:") ? "beatmap" : "keypress";
 }
 
 interface ActiveVoice {
@@ -346,10 +398,19 @@ export class ReplayHitsoundPlayer {
 
   playComboBreak(): void {
     if (!this.enabled || this.muted || !this.comboBreakEnabled) return;
-    const key = this.resolveSampleKey("combobreak", null);
+    const key = this.resolveSampleKey(COMBO_BREAK_SAMPLE_NAME, null);
     // Gated only by its own toggle, but it rides the key press channel volume
     // since it is feedback, not part of the map's sound design.
     if (key) this.playBuffer(key, 1, "keypress");
+  }
+
+  /**
+   * Copy of every loaded sample, keyed the way `resolveHitsoundPlayKey`
+   * expects. A video export retains this so a later skin change or beatmap
+   * load cannot swap the samples out from under a running job.
+   */
+  snapshotSamples(): Map<string, ArrayBuffer> {
+    return new Map(this.raw);
   }
 
   destroy(): void {
@@ -431,29 +492,16 @@ export class ReplayHitsoundPlayer {
     return this.raw.has(key);
   }
 
+  private get keyResolution(): HitsoundKeyResolution {
+    return { useBeatmapSamples: this.useBeatmapSamples, has: (key) => this.hasSample(key) };
+  }
+
   private resolvePlayKey(play: HitsoundSamplePlay): string | null {
-    if (play.filename && this.useBeatmapSamples) {
-      const normalized = normalizeSampleKey(play.filename);
-      const candidates = [`beatmap:${normalized}`, `beatmap:${sampleBaseName(normalized)}`];
-      for (const key of candidates) {
-        if (this.hasSample(key)) return key;
-      }
-      // Keysound file is missing: fall back to the bank hitnormal.
-    }
-    return this.resolveSampleKey(`${play.bank}-${play.name}`, play);
+    return resolveHitsoundPlayKey(play, this.keyResolution);
   }
 
   private resolveSampleKey(bankedName: string, play: HitsoundSamplePlay | null): string | null {
-    const candidates: string[] = [];
-    if (play && this.useBeatmapSamples && play.index >= 2) candidates.push(`beatmap:${bankedName}${play.index}`);
-    if (!play || (this.useBeatmapSamples && play.index >= 1)) candidates.push(`beatmap:${bankedName}`);
-    candidates.push(`skin:${bankedName}`);
-    if (play) candidates.push(`skin:${play.name}`);
-    candidates.push(`default:${bankedName}`);
-    for (const key of candidates) {
-      if (this.hasSample(key)) return key;
-    }
-    return null;
+    return resolveHitsoundSampleKey(bankedName, play, this.keyResolution);
   }
 
   private playBuffer(key: string, volume: number, channel: HitsoundChannel): void {

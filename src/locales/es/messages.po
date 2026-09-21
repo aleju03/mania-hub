@@ -1095,6 +1095,14 @@ msgstr "{days}d {hours}h {mins}m"
 msgid "{days}d ago"
 msgstr "hace {days}d"
 
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s"
+#~ msgstr "{DEFAULT_EXPORT_CLIP_SECONDS}s"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
+msgstr "{DEFAULT_EXPORT_CLIP_SECONDS}s desde aquí"
+
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads"
 msgstr "{downloadCountLabel} descargas"
@@ -2828,6 +2836,10 @@ msgstr "y {0} más"
 msgid "and {0} more below these"
 msgstr "y {0} más por debajo de estos"
 
+#: src/lib/replay-export/errors.ts
+msgid "Another replay video is still exporting. Finish or cancel it first."
+msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero."
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/farm-helper.tsx
@@ -2991,6 +3003,7 @@ msgid "At the time of writing there were skill ratings for 14,385 players on 4K,
 msgstr "Al momento de escribir esto había ratings de habilidad de 14,385 jugadores en 4K, 4,119 en 7K y 2,879 en 6K. De los de 4K, 12,974 tenían suficientes pases válidos para un dan regular y 5,038 para uno de LN. Así se repartían las estimaciones de 4K regular:"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/bbcode.tsx
 msgid "Audio"
@@ -3549,6 +3562,7 @@ msgstr "Calculando habilidades..."
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -3561,6 +3575,14 @@ msgstr "Cancelar"
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Cancel forge"
 #~ msgstr "Cancelar forja"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Cancelling"
+msgstr "Cancelando"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "cannot be rated"
@@ -3852,6 +3874,10 @@ msgstr "Círculos"
 msgid "CJ"
 msgstr "CJ"
 
+#: src/lib/replay-overlays.ts
+msgid "Classic"
+msgstr "Clásico"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -4041,6 +4067,7 @@ msgstr "Cliente"
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
@@ -4253,6 +4280,10 @@ msgstr "Servidor de comunidad"
 #: src/components/packs/GoatPoll.tsx
 msgid "Community vote for a new GOAT"
 msgstr "Votación comunitaria para un nuevo GOAT"
+
+#: src/lib/replay-overlays.ts
+#~ msgid "Compact"
+#~ msgstr "Compacto"
 
 #: src/routes/farm-helper.tsx
 msgid "compared to {range} pp"
@@ -5221,16 +5252,17 @@ msgid "Discord servers"
 msgstr "Servidores de Discord"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Discord video ready"
-msgstr "Video de Discord listo"
+#~ msgid "Discord video ready"
+#~ msgstr "Video de Discord listo"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Discord video URL copied"
-msgstr "URL del video de Discord copiada"
+#~ msgid "Discord video URL copied"
+#~ msgstr "URL del video de Discord copiada"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/me/TrackingToasts.tsx
 #: src/components/player/SharedSkillPlay.tsx
+#: src/components/replay/ReplayExportPanel.tsx
 msgid "Dismiss"
 msgstr "Descartar"
 
@@ -5331,9 +5363,10 @@ msgstr "Listo"
 msgid "done with it"
 msgstr "suficiente"
 
+#: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
-msgstr ""
+msgstr "Descargar"
 
 #: src/routes/skins_.$id.tsx
 msgid "Download .osk"
@@ -5348,6 +5381,14 @@ msgstr "Descargar .osz"
 #: src/components/skins/SkinCard.tsx
 msgid "Download {0}"
 msgstr "Descargar {0}"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Download again"
+msgstr "Descargar de nuevo"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Download started"
+msgstr "Descarga iniciada"
 
 #: src/components/skins/SkinCard.tsx
 msgid "Download the .osk"
@@ -5491,6 +5532,10 @@ msgstr "renders dinámicos"
 #: src/components/layout/Nav.tsx
 msgid "Dynamic Renders"
 msgstr "Renders dinámicos"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "e.g. 4K jumpstream warmup"
+msgstr "p. ej., calentamiento de jumpstream 4K"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each dan is the average of the best {averageWindow} clears behind it. A column under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
@@ -5690,6 +5735,10 @@ msgstr "Aporte estimado"
 msgid "Estimated pp gain from replacing your previous best score on this map"
 msgstr "Ganancia de pp estimada al reemplazar tu mejor score anterior en este mapa"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Estimated size"
+msgstr "Tamaño estimado"
+
 #: src/routes/farm-helper.tsx
 msgid "estimates are rough until we've analyzed more of this player's plays"
 msgstr "las estimaciones son aproximadas hasta que analicemos más plays de este jugador"
@@ -5841,6 +5890,18 @@ msgstr "Salir de pantalla completa"
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
 msgstr "Explorar mapas Globales"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Export cancelled."
+msgstr "Exportación cancelada."
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Export failed"
+msgstr "La exportación falló"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Export video"
+msgstr "Exportar video"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Exposed Releases"
@@ -6141,6 +6202,10 @@ msgstr "buscar jugador..."
 msgid "Finding more replays..."
 msgstr "Buscando más repeticiones..."
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Finishing the file"
+msgstr "Finalizando el archivo"
+
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "Finishing this looks risky for you; treat it as a clear attempt, not a farm"
@@ -6297,8 +6362,8 @@ msgid "for banned or deleted"
 msgstr "para baneados o eliminados"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "For Discord embeds"
-msgstr "Para embeds de Discord"
+#~ msgid "For Discord embeds"
+#~ msgstr "Para embeds de Discord"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "For screenshots that have nothing to do with the skin."
@@ -6354,6 +6419,10 @@ msgstr "¿Encontraste algo que no funciona? Describe qué pasó."
 #~ msgid "Four is standing in for the length of a real course. If you have fewer than four qualifying passes on a side, you get no estimate for it at all rather than a shaky one. And if your 4th best pass sits at the very top of a ladder, the badge switches from \"~\" to \">\" and reads as <0>beyond</0> that level instead of pinning you to it, because the ladder has run out of levels to measure you with."
 #~ msgstr "El cuatro está en lugar de la duración de un dan real. Si tienes menos de cuatro pases válidos en un lado, no recibes ninguna estimación en vez de una poco fiable. Y si tu 4º mejor pase está en lo más alto de una escala, la insignia cambia de \"~\" a \">\" y se lee como <0>más allá</0> de ese nivel en vez de fijarte en él, porque a la escala se le acabaron los niveles con los que medirte."
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "frames"
+msgstr "cuadros"
+
 #: src/routes/packs.tsx
 msgid "free"
 msgstr "gratis"
@@ -6385,7 +6454,6 @@ msgid "Fronts the browse card"
 msgstr "Es la portada de la tarjeta del listado"
 
 #: src/components/packs/SetsView.tsx
-#: src/components/replay/ReplayControls.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Full"
 msgstr "Completo"
@@ -6429,12 +6497,12 @@ msgid "General"
 msgstr "General"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Generate replay video URL"
-msgstr "Generar URL del video del replay"
+#~ msgid "Generate replay video URL"
+#~ msgstr "Generar URL del video del replay"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Generate URL"
-msgstr "Generar URL"
+#~ msgid "Generate URL"
+#~ msgstr "Generar URL"
 
 #: src/components/communities/field-options.tsx
 msgid "German"
@@ -6743,6 +6811,10 @@ msgstr "Ocultar"
 #~ msgid "Hide {0}K"
 #~ msgstr "Ocultar {0}K"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Hide export details"
+msgstr "Ocultar detalles de la exportación"
+
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar"
@@ -6851,6 +6923,10 @@ msgstr "Logra <0/> <1/> de acc en {mapSlot}"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "hit and hold lighting"
 msgstr "iluminación de hits y holds"
+
+#: src/lib/replay-overlays.ts
+msgid "Hit circles"
+msgstr "Círculos"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit counts and unstable rate."
@@ -7475,6 +7551,10 @@ msgstr "conservarlo"
 msgid "Keep it"
 msgstr "Conservarlo"
 
+#: src/lib/replay-export/errors.ts
+msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
+msgstr "Mantener el tono a esta velocidad no está soportado aquí. Exporta a 1x, o deja que el tono siga a la velocidad."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key"
 msgstr "Tecla"
@@ -7756,6 +7836,7 @@ msgstr "Legendario"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/maps.tsx
 msgid "Length"
@@ -8598,6 +8679,10 @@ msgstr "mapas farmeables"
 msgid "Margin <0>+{0}</0>"
 msgstr "Margen <0>+{0}</0>"
 
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Mark the export range"
+#~ msgstr "Marcar el rango de la exportación"
+
 #: src/routes/farm-helper.tsx
 msgid "marked done"
 msgstr "marcado suficiente"
@@ -8941,6 +9026,10 @@ msgstr "Bajar"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move up"
 msgstr "Subir"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "MP4 isn't available here, so the file is WebM."
+msgstr "MP4 no está disponible aquí, así que el archivo es WebM."
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "msd"
@@ -10052,6 +10141,10 @@ msgstr "de jugadores cerca de ti farmean esto"
 msgid "off"
 msgstr "desactivado"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Off"
+msgstr "No"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Off /skins; only you see this page. Your replays keep playing in it"
 msgstr "Desactivada en /skins; solo tú ves esta página. Tus replays la siguen usando"
@@ -10105,6 +10198,10 @@ msgstr "top más antiguo: {month}"
 msgid "Oldest Top Play"
 msgstr "Top play más antiguo"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "On"
+msgstr "Sí"
+
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "on {0}"
@@ -10151,6 +10248,10 @@ msgstr "Una copia para un amigo. Te quedas con {remaining}."
 #: src/routes/dan-estimates.tsx
 msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 msgstr "Un nivel de dan es amplio, así que cada uno se divide en cinco escalones. Un chart puede ser 7--, 7-, 7, 7+ o 7++, del extremo más fácil del 7º dan al más difícil. Esos sufijos ordenan dentro de un nivel, nada más."
+
+#: src/lib/replay-export/errors.ts
+msgid "One of the images can't be recorded into a video because of its origin."
+msgstr "Una de las imágenes no se puede grabar en un video por su origen."
 
 #: src/components/packs/CardSpotlight.tsx
 #~ msgid "One of these copies was a gift from {sendersText}"
@@ -11191,6 +11292,10 @@ msgstr "Recomendaciones de mapas por ganancia de pp adaptadas a un jugador."
 msgid "Precision"
 msgstr "Precisión"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Preparing"
+msgstr "Preparando"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Preparing the update."
@@ -11203,6 +11308,10 @@ msgstr "Preparando la subida."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Preset name"
 msgstr "Nombre del preset"
+
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags."
+msgstr "Pulsa Enter o una coma para añadir una etiqueta. Máximo {USER_COLLECTION_MAX_TAGS} etiquetas."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
@@ -11741,6 +11850,10 @@ msgstr "Leyendo tus servidores"
 msgid "ready"
 msgstr "listo"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Ready to download"
+msgstr "Listo para descargar"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Rebuild failed."
 msgstr "No se pudo reconstruir."
@@ -12085,6 +12198,10 @@ msgstr "Renombrado a {0}"
 msgid "rendering"
 msgstr "renderizando"
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Rendering"
+msgstr "Renderizando"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "Renderizando el playfield de {selectedKeymode}K..."
@@ -12159,6 +12276,10 @@ msgstr "Replays subidos"
 #: src/components/replay/ReplayControls.tsx
 msgid "Replay video export options"
 msgstr "Opciones de exportación de video del replay"
+
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Replay video export range"
+#~ msgstr "Rango de la exportación de video"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
@@ -12270,6 +12391,10 @@ msgstr "Redimensionando imagen..."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "Se restauró un borrador sin guardar de este navegador."
+
+#: src/lib/replay-overlays.ts
+msgid "Results"
+msgstr "Resultados"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -12445,6 +12570,10 @@ msgstr "Guarda tu cuenta de osu! para que los demás comandos sepan quién eres.
 #: src/components/skins/SkinUploadModal.tsx
 msgid "saved"
 msgstr "guardado"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Saved"
+msgstr "Guardado"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saved as your replay skin"
@@ -12998,8 +13127,8 @@ msgstr "Usar como mi skin de replay"
 #~ msgstr "Fijada por su pase de {courseName} con {courseAccuracy}. El pase real de un curso es un mínimo para la estimación, así que las habilidades de abajo pueden mostrar menos."
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Set end"
-msgstr "Fijar fin"
+#~ msgid "Set end"
+#~ msgstr "Fijar fin"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Set goal"
@@ -13022,8 +13151,8 @@ msgid "Set on {at}"
 msgstr "Fijado el {at}"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "Set start"
-msgstr "Fijar inicio"
+#~ msgid "Set start"
+#~ msgstr "Fijar inicio"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Set the next milestone"
@@ -13222,6 +13351,10 @@ msgstr "Ver detalles de {0}"
 #: src/routes/farm-helper.tsx
 msgid "show everything"
 msgstr "mostrar todo"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Show export details"
+msgstr "Mostrar detalles de la exportación"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "show fewer"
@@ -13677,9 +13810,17 @@ msgstr "Algunos charts son dos de esas cosas a la vez, y esos cuentan en ambas. 
 #~ msgid "Some charts are two of those things at once, and those count in both. A chart lands in two skills when the reading is genuinely split between speed and tech, or when it is a jack chart long enough that the endurance is half of what it asks for, which puts it in jack and stamina. About one 4K chart in nine is one of these. A pass on a chart like that counts toward both skills' levels, but only toward the four-pass minimum of the stronger one, so it can raise a skill you already have and cannot start one on its own."
 #~ msgstr "Algunos charts son dos de esas cosas a la vez, y esos cuentan en ambas. Un chart cae en dos skills cuando la lectura está realmente dividida entre speed y tech, o cuando es un chart de jack lo bastante largo como para que el aguante sea la mitad de lo que pide, lo que lo pone en jack y stamina. Cerca de uno de cada nueve charts de 4K es de estos. Una play en un chart así cuenta para el nivel de ambas skills, pero solo para el mínimo de cuatro plays de la más fuerte, así que puede subir una skill que ya tienes y no puede abrir una por sí sola."
 
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Some hitsound samples couldn't be decoded and were left out."
+msgstr "Algunos hitsounds no se pudieron decodificar y quedaron fuera."
+
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "Some LN objects have invalid or overlapping timing. LN difficulty is unavailable."
 #~ msgstr "Algunas LN tienen tiempos inválidos o superpuestos. Su dificultad no está disponible."
+
+#: src/lib/replay-export/errors.ts
+msgid "Some of the replay's files couldn't be loaded."
+msgstr "No se pudieron cargar algunos archivos del replay."
 
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -13783,6 +13924,11 @@ msgctxt "Maniacard stat"
 msgid "Speed"
 msgstr "Velocidad"
 
+#: src/components/replay/ReplayControls.tsx
+msgctxt "Replay export"
+msgid "Speed"
+msgstr "Velocidad"
+
 #: src/routes/dan-estimates.tsx
 msgid "Speed and tech are told apart by how the chart is played rather than by the ratings, and when the reading is not sure the chart counts as both."
 msgstr "Speed y tech se distinguen por cómo se juega el chart, no por los ratings, y cuando la lectura no está segura el chart cuenta como ambas."
@@ -13823,6 +13969,10 @@ msgstr "Acc con fórmula de stable (95%)"
 #: src/routes/dan-estimates.tsx
 msgid "Stable-formula acc (96%)"
 msgstr "Acc con fórmula de stable (96%)"
+
+#: src/lib/replay-overlays.ts
+#~ msgid "Stacked"
+#~ msgstr "Apilado"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
@@ -14422,6 +14572,10 @@ msgstr "Ese listado no es tuyo."
 msgid "That listing no longer exists."
 msgstr "Ese listado ya no existe."
 
+#: src/lib/replay-export/errors.ts
+msgid "That range is too short to export."
+msgstr "Ese rango es demasiado corto para exportar."
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "That rarity cannot be forged any higher."
 #~ msgstr "Esa rareza ya no se puede forjar más alto."
@@ -14490,6 +14644,10 @@ msgstr "Esa subida ya no existe."
 #: src/components/packs/GoatPoll.tsx
 msgid "That username doesn't look right."
 msgstr "Ese usuario no parece válido."
+
+#: src/components/replay/ReplayControls.tsx
+msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
+msgstr "Eso es más largo de lo que este navegador puede exportar de una vez. Elige un rango más corto o un preset más bajo."
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -14944,6 +15102,10 @@ msgstr "Se descarga el archivo del chart, se leen las notas y se pasa el patrón
 msgid "The exact .osu file works too."
 msgstr "El archivo .osu exacto también funciona."
 
+#: src/lib/replay-export/errors.ts
+msgid "The export was interrupted before it finished."
+msgstr "La exportación se interrumpió antes de terminar."
+
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "La primera skin que subas aparecerá aquí."
@@ -15123,6 +15285,10 @@ msgstr "El replay cargó, pero su beatmap no está en osu! (sin subir o eliminad
 msgid "The replay loaded, but the chart file for {mapLabel} can't be downloaded right now."
 msgstr "El replay cargó, pero el archivo del mapa de {mapLabel} no se puede descargar ahora mismo."
 
+#: src/lib/replay-export/errors.ts
+msgid "The replay renderer stopped during the export."
+msgstr "El renderizador del replay se detuvo durante la exportación."
+
 #: src/routes/replay_.uploads.tsx
 msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
 msgstr "Los replays que has subido a Mania Hub, con sus enlaces para compartir y opciones de borrado."
@@ -15263,6 +15429,10 @@ msgstr "El creador original de la skin"
 msgid "The skins list could not be loaded."
 msgstr "No se pudo cargar la lista de skins."
 
+#: src/lib/replay-export/errors.ts
+msgid "The song file can't be decoded here. Export without audio, or pick a shorter range."
+msgstr "El archivo de audio no se puede decodificar aquí. Exporta sin audio, o elige un rango más corto."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "La separación importa porque un lado no dice nada del otro. La precisión en un chart LN se gana casi por completo en los holds y los releases, así que pasarlo no es evidencia sobre tu nivel regular, ni al revés."
@@ -15282,6 +15452,18 @@ msgstr "Los top plays están esperando al analizador de mapas. Posición en la f
 #: src/components/packs/StreakGame.tsx
 msgid "The tracked player pool is too small to play right now."
 msgstr "El pool de jugadores seguidos es demasiado pequeño para jugar ahora mismo."
+
+#: src/lib/replay-export/errors.ts
+msgid "The video encoder stopped during the export."
+msgstr "El codificador de video se detuvo durante la exportación."
+
+#: src/components/replay/ReplayControls.tsx
+msgid "The video is created on your device. Keep this tab open while it exports."
+msgstr "El video se crea en tu dispositivo. Deja esta pestaña abierta mientras se exporta."
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "The video is created on your device. You can browse other pages while it exports. Keep this tab open; refreshing or closing it will cancel the unfinished export."
+msgstr "El video se crea en tu dispositivo. Puedes navegar por otras páginas mientras se exporta. Deja esta pestaña abierta; recargarla o cerrarla cancelará la exportación sin terminar."
 
 #: src/components/packs/GoatPoll.tsx
 msgid "The vote just closed."
@@ -15397,6 +15579,22 @@ msgstr "Tercero en sacar esta carta"
 msgid "This .osk could not be read."
 msgstr "No se pudo leer este .osk."
 
+#: src/lib/replay-export/errors.ts
+msgid "This browser can't encode the audio track for this format."
+msgstr "Este navegador no puede codificar la pista de audio para este formato."
+
+#: src/lib/replay-export/errors.ts
+msgid "This browser can't encode video at the selected size and frame rate."
+msgstr "Este navegador no puede codificar video con el tamaño y los cuadros por segundo elegidos."
+
+#: src/components/replay/ReplayControls.tsx
+msgid "This browser can't save directly to a file, so the video is held in memory and downloaded when it finishes."
+msgstr "Este navegador no puede guardar directamente en un archivo, así que el video se mantiene en memoria y se descarga al terminar."
+
+#: src/lib/replay-export/errors.ts
+msgid "This browser can't save the video file."
+msgstr "Este navegador no puede guardar el archivo de video."
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card already has a custom edition. Its appearance is protected."
 #~ msgstr "Esta carta ya tiene una edición personalizada. Su apariencia está protegida."
@@ -15466,6 +15664,10 @@ msgstr "Esta versión exacta ya se le muestra a todos los que ven tus replays"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "This exact version is already your replay skin"
 msgstr "Esta versión exacta ya es tu skin de replay"
+
+#: src/lib/replay-export/errors.ts
+msgid "This export is too large for this browser. Pick a shorter range or a lower preset."
+msgstr "Esta exportación es demasiado grande para este navegador. Elige un rango más corto o un preset más bajo."
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "This file could not be decoded."
@@ -15627,6 +15829,10 @@ msgstr "Los ajustes de esta skin son demasiado grandes para guardarlos."
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "This special-edition Eternal stays with its collector."
 msgstr "Esta Eternal de edición especial se queda con su coleccionista."
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "This tab went to the background, which can pause the export."
+msgstr "Esta pestaña pasó a segundo plano, lo que puede pausar la exportación."
 
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
@@ -16728,6 +16934,10 @@ msgstr "mié"
 msgid "Wednesdays"
 msgstr "Miércoles"
 
+#: src/components/maps/UserCollectionEditor.tsx
+msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
+msgstr "Tipo de mapas, dificultad y orden recomendado para jugarlos."
+
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "What is it for"
@@ -16925,6 +17135,10 @@ msgstr "Escribe algo primero."
 msgid "Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
 msgstr "Escribe tu página aquí. Selecciona texto y usa la barra de herramientas para darle formato. Clic derecho para más opciones, o pega una imagen para agregarla."
 
+#: src/lib/replay-export/errors.ts
+msgid "Writing the video file failed."
+msgstr "Falló la escritura del archivo de video."
+
 #: src/components/packs/StreakGame.tsx
 msgid "wrong"
 msgstr "mal"
@@ -17078,6 +17292,10 @@ msgstr "Ya no tienes ninguna copia de esta carta."
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "You no longer have a spare copy of this card."
 #~ msgstr "Ya no te quedan copias extra de esta carta."
+
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "You pick where the file is saved."
+#~ msgstr "Tú eliges dónde se guarda el archivo."
 
 #: src/routes/farm-helper.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."

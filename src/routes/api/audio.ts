@@ -30,8 +30,10 @@ function getLiveAudioUrl(requestUrl: string): string | null {
   const target = new URL("/api/audio", base);
   const beatmapsetId = request.searchParams.get("beatmapsetId");
   const filename = request.searchParams.get("filename");
+  const version = request.searchParams.get("v");
   if (beatmapsetId) target.searchParams.set("beatmapsetId", beatmapsetId);
   if (filename) target.searchParams.set("filename", filename);
+  if (version) target.searchParams.set("v", version);
   return target.toString();
 }
 

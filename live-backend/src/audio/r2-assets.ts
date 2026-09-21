@@ -87,11 +87,12 @@ export async function readCachedBeatmapAudioAsset(
   config: Config,
   beatmapsetId: string,
   filename: string,
+  options?: { legacyOgg?: boolean },
 ): Promise<BeatmapAudioObject | null> {
   if (!isBeatmapAudioStorageConfigured(config)) return null;
   const s3 = await loadS3Module();
   const client = getClient(s3, config);
-  const storageKey = getBeatmapAudioStorageKey(beatmapsetId, filename);
+  const storageKey = getBeatmapAudioStorageKey(beatmapsetId, filename, options?.legacyOgg);
   assertReplayCacheKey(storageKey);
 
   try {
@@ -241,18 +242,24 @@ function requireBucket(config: Config): string {
   return config.r2Bucket;
 }
 
-function getBeatmapAudioStorageKey(beatmapsetId: string, filename: string): string {
+export function getBeatmapAudioStorageKey(beatmapsetId: string, filename: string, legacyOgg = false): string {
   const hash = crypto.createHash("sha256").update(filename).digest("hex").slice(0, 16);
-  return `${REPLAY_CACHE_PREFIX}audio/${beatmapsetId}/${hash}-${getAudioPlaybackObjectName(filename)}`;
+  const objectName = legacyOgg && filename.toLowerCase().endsWith(".ogg")
+    ? sanitizeFilename(filename)
+    : getAudioPlaybackObjectName(filename);
+  return `${REPLAY_CACHE_PREFIX}audio/${beatmapsetId}/${hash}-${objectName}`;
 }
 
 function getAudioPlaybackObjectName(filename: string): string {
   const safeSourceName = sanitizeFilename(filename);
-  if (!safeSourceName.toLowerCase().endsWith(".mp3")) return safeSourceName;
+  const extension = safeSourceName.toLowerCase().split(".").pop();
+  if (extension !== "mp3" && extension !== "ogg") return safeSourceName;
   const baseName = safeSourceName.includes(".")
     ? safeSourceName.slice(0, safeSourceName.lastIndexOf("."))
     : safeSourceName;
-  return `${baseName || "audio"}.mp4`;
+  // Leave old Ogg objects intact, but never serve their coarse seek pages as
+  // prepared playback audio. Existing MP3 and other asset keys stay stable.
+  return `${baseName || "audio"}${extension === "ogg" ? ".seek-v1.ogg" : ".mp4"}`;
 }
 
 function sanitizeFilename(filename: string): string {

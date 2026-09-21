@@ -1,7 +1,59 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
+  it("preserves and copies authored geometry through normalization and storage", () => {
+    const reference = { width: 2048, height: 1020, playfieldX: 600, playfieldWidth: 848, hudScale: 1.45 };
+    const settings = { judgements: { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements, reference } };
+    const normalized = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(settings)));
+    expect(normalized.judgements.reference).toEqual(reference);
+    expect(normalizeReplayOverlaySettings(settings).judgements.reference).not.toBe(reference);
+    expect(normalizeReplayOverlaySettings({ judgements: { ...settings.judgements, reference: { ...reference, height: 0 } } }).judgements.reference).toBeUndefined();
+  });
+
+  it("preserves a leaderboard parked past the left edge through a settings round trip", () => {
+    const leaderboard = { enabled: true, x: -0.06, y: 0.24, scale: 1.5 };
+    const settings = normalizeReplayOverlaySettings({ leaderboard });
+    const restored = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(settings)));
+    expect(restored.leaderboard).toMatchObject({ x: 0, y: 0.24, scale: 1.5 });
+    expect(getReplayOverlayPlacement(restored, "leaderboard", true)).toMatchObject(leaderboard);
+  });
+
+  it("allows negative horizontal placement only for the lazer leaderboard and preserves anchored defaults", () => {
+    const settings = normalizeReplayOverlaySettings({ leaderboard: { x: -0.1, y: -0.1 }, accuracy: { x: -0.1 } });
+    expect(settings.leaderboard.x).toBe(0);
+    expect(settings.leaderboard.lazerPosition?.x).toBe(-0.1);
+    expect(settings.leaderboard.y).toBe(0);
+    expect(settings.accuracy.x).toBe(0);
+    expect(settings.hitError.x).toBe(REPLAY_OVERLAY_ANCHORED_COORD);
+  });
+
+  it("saves independent leaderboard geometry while sharing visibility", () => {
+    const reference = { width: 1600, height: 900, playfieldX: 500, playfieldWidth: 600, hudScale: 1.5 };
+    let settings = normalizeReplayOverlaySettings({});
+    settings = updateReplayOverlayPlacement(settings, "leaderboard", { x: -0.08, y: 0.4, scale: 1.4, reference }, true);
+    settings = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(settings)));
+    const lazer = getReplayOverlayPlacement(settings, "leaderboard", true);
+    settings = updateReplayOverlayPlacement(settings, "leaderboard", { x: 0.2, y: 0.1, scale: 0.7, enabled: false }, false);
+    settings = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(settings)));
+    expect(getReplayOverlayPlacement(settings, "leaderboard", false)).toMatchObject({ x: 0.2, y: 0.1, scale: 0.7, enabled: false });
+    expect(getReplayOverlayPlacement(settings, "leaderboard", true)).toEqual({ ...lazer, enabled: false });
+    expect(settings.leaderboard.lazerPosition?.reference).toEqual(reference);
+    expect(settings.leaderboard.lazerPosition?.reference).not.toBe(reference);
+  });
+
+  it("lets the lazer leaderboard cross the edge while leaving enough visible to drag it back", () => {
+    const width = 400;
+    const stageWidth = 1000;
+    const left = getReplayOverlayMinX("leaderboard", width, stageWidth, true) * stageWidth;
+    expect(left).toBeLessThan(-50);
+    expect(left + width).toBe(32);
+    expect(getReplayOverlayMinX("leaderboard", width, stageWidth, false)).toBe(0);
+    expect(getReplayOverlayMinX("accuracy", width, stageWidth, true)).toBe(0);
+    expect(getReplayOverlayMinX("leaderboard", 20, stageWidth, true)).toBe(0);
+    expect(getReplayOverlayMinX("leaderboard", 2000, stageWidth, true)).toBeGreaterThan(REPLAY_OVERLAY_ANCHORED_COORD);
+  });
+
   it("adds Replay Master to old settings without enabling it and preserves its saved placement", () => {
     expect(normalizeReplayOverlaySettings({}).replayMaster.enabled).toBe(false);
     const placement = { enabled: true, x: 0.64, y: 0.12, scale: 1.3 };
@@ -115,5 +167,29 @@ describe("replay per-hand accuracy style", () => {
     const legacy = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.handAccuracy, style: "plain" };
 
     expect(normalizeReplayOverlaySettings({ handAccuracy: legacy }).handAccuracy.style).toBe("plain");
+  });
+});
+
+
+describe("replay miss counter styles", () => {
+  it("defaults to Classic without moving custom placements", () => {
+    expect(normalizeReplayMissStyle(undefined)).toBe("plain");
+    expect(normalizeReplayMissStyle("rings")).toBe("plain");
+    const placement = { enabled: true, x: 0.24, y: 0.63, scale: 1.4 };
+    expect(normalizeReplayOverlaySettings({ misses: placement }).misses).toEqual({ ...placement, style: "plain" });
+  });
+
+  it("migrates removed Results selections to Classic without changing placement", () => {
+    const placement = { enabled: true, x: 0.24, y: 0.63, scale: 1.4, style: "cards" };
+    expect(normalizeReplayMissStyle("cards")).toBe("plain");
+    expect(normalizeReplayOverlaySettings({ misses: placement }).misses).toEqual({ ...placement, style: "plain" });
+  });
+
+  it.each(["compact", "stacked", "plain"])("preserves %s through storage and legacy placement migration", (style) => {
+    const stored = JSON.parse(JSON.stringify({ misses: { enabled: true, x: 0.24, y: 0.63, scale: 1.4, style } }));
+    expect(normalizeReplayOverlaySettings(stored).misses).toEqual(stored.misses);
+    const legacy = { enabled: true, x: 0.085, y: 0.77, scale: 0.75, style };
+    expect(normalizeReplayOverlaySettings({ misses: legacy }).misses).toEqual({ ...DEFAULT_REPLAY_OVERLAY_SETTINGS.misses, style });
+    expect(normalizeReplayOverlaySettings({ handAccuracy: { style: "balance" }, misses: { style } }).handAccuracy.style).toBe("balance");
   });
 });

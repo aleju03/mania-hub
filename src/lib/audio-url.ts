@@ -1,7 +1,10 @@
 import { getLiveBackendUrl } from "./live-backend";
 
 export function getBeatmapAudioUrl(beatmapsetId: number | string, filename: string): string {
-  const path = `/api/audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}`;
+  // The previous Ogg responses are immutable in browser/CDN caches. Request
+  // the packet-timestamped version after the backend's lossless repagination.
+  const version = filename.toLowerCase().endsWith(".ogg") ? "&v=ogg-seek-v1" : "";
+  const path = `/api/audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}${version}`;
   const liveBackendUrl = getLiveBackendUrl();
   return liveBackendUrl ? `${liveBackendUrl}${path}` : path;
 }

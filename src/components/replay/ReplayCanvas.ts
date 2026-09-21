@@ -12,17 +12,19 @@ import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
-import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
+import { replayOverlayScale, replayOverlayX } from "../../lib/replay-overlay-layout";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
 import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
-import type { ReplayLiveStats } from "../../lib/replay-types";
+import type { ReplayLiveStats, ReplayViewportSnapshot } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import type { HitsoundAnchor, ReplayHitsoundTrigger } from "../../lib/replay-hitsounds";
+import type { ReplayHitsoundSchedule, ReplayHitsoundSchedulePress } from "../../lib/replay-types";
 import { buildComboBreakSoundTimes, buildHitsoundAnchorsByColumn, selectHitsoundAnchor } from "../../lib/replay-hitsounds";
 import { MANIA_FLASHLIGHT_DIM_ALPHA, dampManiaHiddenCoverageReference, getManiaFlashlightBand, getManiaHiddenAlphaAtY, getManiaHiddenCoverageReference, getManiaHiddenCoverageReferencePx, getManiaHiddenFadePx } from "../../lib/replay-visibility-mods";
 import { opaqueStoryboardSpriteCoversRect, type StoryboardRect } from "../../lib/storyboard/occlusion";
@@ -32,21 +34,44 @@ import type { CompiledStoryboardSprite, ReplayStoryboardData } from "../../lib/s
 import { peekStoryboardTexture, releaseStoryboardTexture, retainStoryboardTexture } from "./replay-storyboard-textures";
 import { formatPixiRendererType } from "./renderer-debug";
 import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../ui/ModBadge";
+import { LazerReplayLeaderboard } from "./LazerReplayLeaderboard";
+import { LAZER_LEADERBOARD } from "../../lib/replay-leaderboard";
+import type { ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "../../lib/replay-leaderboard";
+export type { ReplayLeaderboardEntry } from "../../lib/replay-leaderboard";
 
 type ReplaySegment = {
   start: number;
   end: number;
 };
 
-export interface ReplayLeaderboardEntry {
-  name: string;
-  score: number;
-  combo: number;
-  /** Real board position; the display never renumbers rows live. */
-  rank?: number;
-}
-
 type ReplayLeaderboardRowKind = "other" | "target" | "player";
+
+// Unmodified legacy osu! textures; attribution and licence: /licenses/osu-scoreboard.txt.
+const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) => ({
+  name: `scoreboard-explosion-${part}`,
+  src: `/images/replay/leaderboard/scoreboard-explosion-${part}@2x.png`,
+}));
+// Measured against isolated overtakes in the 30 fps stable reference clip:
+// the streak expands first, then disappears before the upright glow.
+const LEADERBOARD_EXPLOSION_DURATION_MS = 700;
+const LEADERBOARD_STREAK_EXPAND_MS = 200;
+const LEADERBOARD_STREAK_FADE_MS = 400;
+const LEADERBOARD_GLOW_EXPAND_MS = 500;
+// The scoreboard uses a separate bitmap font, not the HUD/combo typeface.
+// Keep the original @2x canvas sizes, including the comma's descender.
+const LEADERBOARD_SCORE_GLYPHS: Record<string, ReplaySkinImageAsset> = Object.fromEntries(
+  Array.from("0123456789,x", (char, index) => {
+    const name = `scoreentry-${char === "," ? "comma" : char}`;
+    return [char, {
+      name,
+      src: `/images/replay/leaderboard/${name}@2x.png`,
+      width: [24, 23, 21, 21, 23, 21, 22, 21, 22, 22, 12, 22][index],
+      height: char === "," ? 31 : 28,
+      scale: 2,
+    }];
+  }),
+);
+const LEADERBOARD_SCORE_GLYPH_OVERLAP = 4; // Two pixels at the original SD size.
 
 const COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
@@ -357,6 +382,11 @@ interface RendererOptions {
   blackPlayfield?: boolean;
   hideHud?: boolean;
   hidePerformanceStats?: boolean;
+  /** Viewer transport labels (elapsed time and playback speed) don't belong in a video. */
+  hidePlaybackInfo?: boolean;
+  /** Reproduce a captured composition without reflowing it to the export resolution. */
+  viewport?: ReplayViewportSnapshot;
+  renderResolution?: number;
   // Keeps the score/pp machinery running for getLiveStats() even with the HUD
   // hidden, so chrome outside the canvas can draw the same numbers.
   liveStats?: boolean;
@@ -551,6 +581,12 @@ export class ManiaReplayRenderer {
     stripTextures: [],
     cursor: 0,
   };
+  private leaderboardEffectSprites: SkinSpriteFramePool = {
+    layer: new Container(),
+    sprites: [],
+    stripTextures: [],
+    cursor: 0,
+  };
   private activeSkinSprites = this.gameplaySkinSprites;
   private skinTextureCache = new Map<string, Texture>();
   private skinTextureLoadPromises = new Map<string, Promise<Texture | null>>();
@@ -648,6 +684,9 @@ export class ManiaReplayRenderer {
   private blackPlayfield = false;
   private hideHud = false;
   private hidePerformanceStats = false;
+  private hidePlaybackInfo = false;
+  private renderViewport: ReplayViewportSnapshot | null = null;
+  private renderResolution = 1;
   private liveStats = false;
   private showCombo = false;
   private showJudgements = false;
@@ -660,6 +699,7 @@ export class ManiaReplayRenderer {
   private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
+  private overlayReferenceLayout: ReplayOverlayReference | null = null;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private onMissThumbHandChange: ((hand: ReplayThumbHand) => void) | null = null;
   private onContextLost: ((wasPlaying: boolean) => void) | null = null;
@@ -765,12 +805,16 @@ export class ManiaReplayRenderer {
   private leaderboardEntries: ReplayLeaderboardEntry[] = [];
   private leaderboardHidden = false;
   private leaderboardPlayerName = "";
+  private leaderboardOptions: ReplayLeaderboardOptions = {};
+  private lazerLeaderboard: LazerReplayLeaderboard | null = null;
+  private lazerLeaderboardFrameTime: number | null = null;
+  private leaderboardAvatarLoads = new Map<string, Promise<Texture | null>>();
+  private lazerLeaderboardFadeRaf: number | null = null;
   private leaderboardSlotYs = new Map<string, number>();
   private leaderboardSlotGradients = new Map<string, FillGradient>();
   private leaderboardPrevRank: number | null = null;
-  private leaderboardFlashAt = -Infinity;
+  private leaderboardExplosionTimes: number[] = [];
   private leaderboardAnimTs = 0;
-  private leaderboardGlowAsset: ReplaySkinImageAsset | null = null;
   private suppressOvertakeFlash = false;
   private spectatorCount = 0;
   private spectatorNames: string[] = [];
@@ -909,6 +953,9 @@ export class ManiaReplayRenderer {
     this.blackPlayfield = options?.blackPlayfield ?? false;
     this.hideHud = options?.hideHud ?? false;
     this.hidePerformanceStats = options?.hidePerformanceStats ?? false;
+    this.hidePlaybackInfo = options?.hidePlaybackInfo ?? false;
+    this.renderViewport = options?.viewport ? { ...options.viewport } : null;
+    this.renderResolution = options?.renderResolution ?? 1;
     this.liveStats = options?.liveStats ?? false;
     this.showCombo = options?.showCombo ?? false;
     this.showJudgements = options?.showJudgements ?? false;
@@ -920,7 +967,7 @@ export class ManiaReplayRenderer {
     this.hiddenCoverageReference = getManiaHiddenCoverageReference(this.combo);
     this.maxComboSoFar = this.combo;
     this.barePlayfield = options?.barePlayfield ?? false;
-    this.fullHeightLayout = options?.fullHeightLayout ?? false;
+    this.fullHeightLayout = options?.viewport?.fullHeight ?? options?.fullHeightLayout ?? false;
     this.storyboardOnly = options?.storyboardOnly ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
@@ -1026,6 +1073,7 @@ export class ManiaReplayRenderer {
     const invalidate = () => {
       if (this.destroyed) return;
       this.textFontRevision++;
+      this.lazerLeaderboard?.invalidateFonts();
       this.textWidthCache.clear();
       for (const label of this.textPool as Array<Text & { __sig?: string }>) {
         label.__sig = undefined;
@@ -1047,7 +1095,15 @@ export class ManiaReplayRenderer {
     // text before its first paint; a blocked font host falls back after a short
     // wait, with loadingdone invalidating cached text if it recovers later.
     await withTimeout(
-      ensureReplayFontStyle(getReplayComboFontStyle(this.skinSettings.comboFontSet)),
+      Promise.all([
+        ensureReplayFontStyle(getReplayComboFontStyle(this.skinSettings.comboFontSet)),
+        ...(this.ruleset.accuracyMode === "lazer" ? [
+          ensureReplayFontStyle({ family: "Torus, sans-serif", weight: "400" }),
+          ensureReplayFontStyle({ family: "Torus, sans-serif", weight: "600" }),
+        ] : [
+          ensureReplayFontStyle({ family: "Aller, Tahoma, sans-serif", weight: "400" }),
+        ]),
+      ]),
       2500,
       "Timed out loading replay fonts.",
     ).catch(() => {});
@@ -1161,6 +1217,9 @@ export class ManiaReplayRenderer {
     app.stage.addChild(this.hudSkinSprites.layer);
     app.stage.addChild(this.textLayer);
     app.stage.addChild(this.comboTextLayer);
+    // Stable's explosion washes out the names as well as the slot beneath.
+    this.leaderboardEffectSprites.layer.blendMode = "add";
+    app.stage.addChild(this.leaderboardEffectSprites.layer);
     this.rebuildBackgroundSprites();
     this.prewarmSkinTextures();
     this.resize();
@@ -1204,17 +1263,46 @@ export class ManiaReplayRenderer {
   }
 
   // The ingame leaderboard's static rows: the map's top scores (already
-  // scaled to the judging client's scoring), minus the watched play itself.
-  setLeaderboard(entries: ReplayLeaderboardEntry[], playerName: string) {
+  // scaled to the judging client's scoring). Stable omits the watched play;
+  // lazer includes existing plays and breaks ties ahead of the watched row.
+  setLeaderboard(entries: ReplayLeaderboardEntry[], playerName: string, options: ReplayLeaderboardOptions = {}) {
     this.leaderboardEntries = entries
       .filter((entry) => entry && typeof entry.name === "string" && Number.isFinite(entry.score) && entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 50);
     this.leaderboardPlayerName = playerName;
+    this.leaderboardOptions = { ...options };
+    this.lazerLeaderboard?.reset();
     this.leaderboardSlotYs.clear();
     this.leaderboardPrevRank = null;
     this.suppressOvertakeFlash = true;
+    if (this.ruleset.accuracyMode === "lazer") {
+      const urls = new Set(this.getLeaderboardAvatarUrls());
+      for (const src of this.leaderboardAvatarLoads.keys()) {
+        if (!urls.has(src)) {
+          releaseStoryboardTexture(src);
+          this.leaderboardAvatarLoads.delete(src);
+        }
+      }
+      for (const src of urls) {
+        if (this.leaderboardAvatarLoads.has(src)) continue;
+        // Share the existing refcounted image store with storyboards: it
+        // handles extensionless URLs and keeps concurrent exports alive.
+        this.leaderboardAvatarLoads.set(src, retainStoryboardTexture(src, () => {
+          if (!this.destroyed) this.render();
+        }));
+      }
+    }
     if (!this._isPlaying) this.render();
+  }
+
+  private getLeaderboardAvatarUrls(): string[] {
+    return [...new Set([LAZER_LEADERBOARD.guestAvatar, this.leaderboardOptions.playerAvatarUrl, ...this.leaderboardEntries.map((entry) => entry.avatarUrl)]
+      .filter((src): src is string => Boolean(src)))];
+  }
+
+  async leaderboardReady(): Promise<void> {
+    await Promise.allSettled(this.leaderboardAvatarLoads.values());
   }
 
   // Tab toggles the scoreboard, like ingame. Rank tracking stays live while
@@ -1222,6 +1310,17 @@ export class ManiaReplayRenderer {
   setLeaderboardVisible(visible: boolean) {
     if (this.leaderboardHidden === !visible) return;
     this.leaderboardHidden = !visible;
+    if (this.lazerLeaderboard) {
+      if (this.lazerLeaderboardFadeRaf != null) cancelAnimationFrame(this.lazerLeaderboardFadeRaf);
+      const finishAt = performance.now() + 100;
+      const redraw = () => {
+        this.lazerLeaderboardFadeRaf = null;
+        if (this.destroyed) return;
+        if (!this._isPlaying) this.render();
+        if (performance.now() < finishAt) this.lazerLeaderboardFadeRaf = requestAnimationFrame(redraw);
+      };
+      this.lazerLeaderboardFadeRaf = requestAnimationFrame(redraw);
+    }
     if (!this._isPlaying) this.render();
   }
 
@@ -1278,6 +1377,25 @@ export class ManiaReplayRenderer {
     this.keyStateCursor = 0;
     this.resetHitsoundCursors(time);
     this.advanceStats(time);
+  }
+
+  /**
+   * The whole run's hitsound timeline, resolved once. Video export needs
+   * every press ahead of time rather than as the clock crosses it, and it
+   * must be the same selection live playback makes, so this reuses the
+   * anchors and the press cursors' own lookup instead of re-deriving them.
+   */
+  getHitsoundSchedule(): ReplayHitsoundSchedule {
+    const presses: ReplayHitsoundSchedulePress[] = [];
+    for (let col = 0; col < this.keyCount; col++) {
+      const anchors = this.hitsoundAnchorsByColumn[col] ?? [];
+      for (const pressTime of this.keypressTimesByColumn[col] ?? []) {
+        const anchor = selectHitsoundAnchor(anchors, pressTime, this.hitWindows.miss);
+        if (anchor && anchor.plays.length > 0) presses.push({ timeMs: pressTime, plays: anchor.plays });
+      }
+    }
+    presses.sort((a, b) => a.timeMs - b.timeMs);
+    return { presses, comboBreakTimesMs: [...this.comboBreakSoundTimes] };
   }
 
   setHitsoundTrigger(trigger: ReplayHitsoundTrigger | null) {
@@ -1721,6 +1839,16 @@ export class ManiaReplayRenderer {
   }
 
   private measureCanvas() {
+    if (this.renderViewport) {
+      this.cssWidth = this.renderViewport.width;
+      this.cssHeight = this.renderViewport.height;
+      this.fullscreenLayout = this.renderViewport.fullscreen;
+      this.dpr = this.renderResolution;
+      this.antialias = !this.renderViewport.coarsePointer;
+      this.canvas.style.width = `${this.cssWidth}px`;
+      this.canvas.style.height = `${this.cssHeight}px`;
+      return;
+    }
     const fullscreenParent = this.canvas.parentElement?.dataset.replayFullscreen === "true"
       ? this.canvas.parentElement
       : null;
@@ -1791,6 +1919,8 @@ export class ManiaReplayRenderer {
 
     const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, layoutScale, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
     this.cachedLayout = layout;
+    // Bind legacy placements to the first viewer layout before it is resized.
+    this.getOverlayReference(layout);
     let cursorX = playfieldX;
     this.cachedColumns = Array.from({ length: this.keyCount }, (_, i) => {
       const width = configuredColumnWidths[i] * layoutScale;
@@ -1860,6 +1990,7 @@ export class ManiaReplayRenderer {
   }
 
   play() {
+    this.lazerLeaderboardFrameTime = null;
     if (this._isPlaying) return;
     this._isPlaying = true;
     this.lastRenderTime = performance.now();
@@ -1973,6 +2104,7 @@ export class ManiaReplayRenderer {
   }
 
   seek(timeMs: number) {
+    this.lazerLeaderboardFrameTime = null;
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
     this.resetHiddenCoverage();
@@ -1982,11 +2114,20 @@ export class ManiaReplayRenderer {
   }
 
   renderFrameAt(timeMs: number) {
+    const previousTime = this.currentTime;
+    const wasSuppressed = this.suppressOvertakeFlash;
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
     if (this.currentTime < this.hiddenCoverageUpdatedAt) this.resetHiddenCoverage();
     this.lastRenderTime = performance.now();
     this.resetAudioClockSmoothing();
+    if (this.ruleset.accuracyMode === "lazer") {
+      // Sequential export frames advance the same UI timeline as playback.
+      // A backward jump is still a seek and must snap the leaderboard.
+      this.suppressOvertakeFlash = wasSuppressed || this.currentTime < previousTime;
+      this.lazerLeaderboardFrameTime = this.currentTime / (this.modRate * this.playbackSpeed);
+    }
+    // Keep this clock for asset/font-triggered redraws between encoded frames.
     this.render(true);
   }
 
@@ -2304,10 +2445,42 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  getOverlaySettingsSnapshot(): ReplayOverlaySettings {
+    const reference = this.getOverlayReference(this.cachedLayout ?? this.getLayout());
+    let settings = normalizeReplayOverlaySettings(this.overlaySettings);
+    for (const id of Object.keys(settings) as ReplayOverlayId[]) {
+      const placement = this.getOverlayPlacement(id);
+      settings = updateReplayOverlayPlacement(settings, id, {
+        reference: { ...(placement.reference ?? reference) },
+      }, this.ruleset.accuracyMode === "lazer");
+    }
+    return settings;
+  }
+
+  getViewportSnapshot(): ReplayViewportSnapshot {
+    return {
+      width: this.cssWidth,
+      height: this.cssHeight,
+      fullscreen: this.fullscreenLayout,
+      fullHeight: this.fullHeightLayout,
+      coarsePointer: this.renderViewport?.coarsePointer
+        ?? (typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches),
+    };
+  }
+
   setSkinSettings(settings: ReplaySkinSettings) {
+    const previousGeometry = JSON.stringify([
+      this.skinProfile.columnStart, this.getConfiguredColumnWidths(), this.getConfiguredColumnSpacings(),
+    ]);
     this.skinSettings = normalizeReplaySkinSettings(settings);
     void ensureReplayFontStyle(getReplayComboFontStyle(this.skinSettings.comboFontSet)).catch(() => {});
     this.updateSkinCache();
+    const nextGeometry = JSON.stringify([
+      this.skinProfile.columnStart, this.getConfiguredColumnWidths(), this.getConfiguredColumnSpacings(),
+    ]);
+    // Bind legacy placements when an owner skin changes the columns. A
+    // settings refresh on focus must not rebind them to fullscreen geometry.
+    if (previousGeometry !== nextGeometry) this.overlayReferenceLayout = null;
     this.invalidateLayoutCache();
     this.prewarmSkinTextures();
     if (!this._isPlaying) this.render();
@@ -2462,7 +2635,7 @@ export class ManiaReplayRenderer {
       .map((id) => {
         const box = this.overlayHitboxes.find((hitbox) => hitbox.id === id);
         if (!box) return null;
-        const placement = this.overlaySettings[id];
+        const placement = this.getOverlayPlacement(id);
         const origin = this.getOverlayPlacementOrigin(box);
         return {
           id,
@@ -2479,7 +2652,7 @@ export class ManiaReplayRenderer {
   private pruneSelectedOverlays() {
     const visibleIds = new Set(this.overlayHitboxes.map((hitbox) => hitbox.id));
     for (const id of this.selectedOverlayIds) {
-      if (!this.overlaySettings[id]?.enabled || (visibleIds.size > 0 && !visibleIds.has(id))) {
+      if (!this.getOverlayPlacement(id)?.enabled || (visibleIds.size > 0 && !visibleIds.has(id))) {
         this.selectedOverlayIds.delete(id);
       }
     }
@@ -2505,7 +2678,7 @@ export class ManiaReplayRenderer {
   private applyOverlaySelection(ids: ReplayOverlayId[], additive: boolean) {
     const next = additive ? new Set(this.selectedOverlayIds) : new Set<ReplayOverlayId>();
     for (const id of ids) {
-      if (this.overlaySettings[id]?.enabled) next.add(id);
+      if (this.getOverlayPlacement(id)?.enabled) next.add(id);
     }
     this.selectedOverlayIds = next;
     if (!this._isPlaying) this.render();
@@ -2514,7 +2687,7 @@ export class ManiaReplayRenderer {
   private toggleOverlaySelection(id: ReplayOverlayId) {
     if (this.selectedOverlayIds.has(id)) {
       this.selectedOverlayIds.delete(id);
-    } else if (this.overlaySettings[id]?.enabled) {
+    } else if (this.getOverlayPlacement(id)?.enabled) {
       this.selectedOverlayIds.add(id);
     }
     if (!this._isPlaying) this.render();
@@ -2575,11 +2748,11 @@ export class ManiaReplayRenderer {
     return Math.max(REPLAY_OVERLAY_MIN_SCALE, Math.min(REPLAY_OVERLAY_MAX_SCALE, scale));
   }
 
-  private clampOverlayPosition(x: number, y: number, width: number, height: number, layout: Layout): { x: number; y: number } {
+  private clampOverlayPosition(id: ReplayOverlayId, x: number, y: number, width: number, height: number, layout: Layout): { x: number; y: number } {
     const maxX = Math.max(0, 1 - width / Math.max(1, layout.w));
     const maxY = Math.max(0, 1 - height / Math.max(1, layout.h));
     return {
-      x: Math.max(0, Math.min(maxX, x)),
+      x: Math.max(getReplayOverlayMinX(id, width, layout.w, this.ruleset.accuracyMode === "lazer"), Math.min(maxX, x)),
       y: Math.max(0, Math.min(maxY, y)),
     };
   }
@@ -2631,7 +2804,7 @@ export class ManiaReplayRenderer {
 
     this.activeOverlayPointers.set(event.pointerId, { id: hitbox.id, ...point });
     this.canvas.setPointerCapture(event.pointerId);
-    const placement = this.overlaySettings[hitbox.id];
+    const placement = this.getOverlayPlacement(hitbox.id);
     const origin = this.getOverlayPlacementOrigin(hitbox);
     const otherPointer = Array.from(this.activeOverlayPointers.entries())
       .find(([pointerId, pointer]) => pointerId !== event.pointerId && pointer.id === hitbox.id);
@@ -2723,8 +2896,9 @@ export class ManiaReplayRenderer {
       const pinchBox = this.overlayHitboxes.find((hitbox) => hitbox.id === this.pinchingOverlay?.id);
       const origin = pinchBox
         ? this.getOverlayPlacementOrigin(pinchBox)
-        : this.overlaySettings[this.pinchingOverlay.id];
+        : this.getOverlayPlacement(this.pinchingOverlay.id);
       const nextPosition = this.clampOverlayPosition(
+        this.pinchingOverlay.id,
         origin.x,
         origin.y,
         this.pinchingOverlay.startWidth * scaleRatio,
@@ -2756,6 +2930,7 @@ export class ManiaReplayRenderer {
       const nextWidth = resize.startWidth * scaleRatio;
       const nextHeight = resize.startHeight * scaleRatio;
       const nextPosition = this.clampOverlayPosition(
+        resize.id,
         resize.startPlacementX + (resize.direction.includes("w") ? (resize.startWidth - nextWidth) / Math.max(1, layout.w) : 0),
         resize.startPlacementY + (resize.direction.includes("n") ? (resize.startHeight - nextHeight) / Math.max(1, layout.h) : 0),
         nextWidth,
@@ -2767,6 +2942,7 @@ export class ManiaReplayRenderer {
           const itemScale = this.clampOverlayScale(item.scale * scaleRatio);
           const itemRatio = itemScale / Math.max(0.001, item.scale);
           const itemPosition = this.clampOverlayPosition(
+            item.id,
             item.x + (resize.direction.includes("w") ? (item.width - item.width * itemRatio) / Math.max(1, layout.w) : 0),
             item.y + (resize.direction.includes("n") ? (item.height - item.height * itemRatio) / Math.max(1, layout.h) : 0),
             item.width * itemRatio,
@@ -2789,6 +2965,7 @@ export class ManiaReplayRenderer {
       const dx = (point.x - drag.startX) / Math.max(1, layout.w);
       const dy = (point.y - drag.startY) / Math.max(1, layout.h);
       const next = this.clampOverlayPosition(
+        drag.id,
         drag.startPlacementX + dx,
         drag.startPlacementY + dy,
         drag.width,
@@ -2798,7 +2975,7 @@ export class ManiaReplayRenderer {
       if (drag.selected.length > 1) {
         this.updateOverlayPlacements(drag.selected.map((item) => [
           item.id,
-          this.clampOverlayPosition(item.x + dx, item.y + dy, item.width, item.height, layout),
+          this.clampOverlayPosition(item.id, item.x + dx, item.y + dy, item.width, item.height, layout),
         ] as const));
       } else {
         this.updateOverlayPlacement(drag.id, next);
@@ -2850,25 +3027,28 @@ export class ManiaReplayRenderer {
   };
 
   private updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>) {
-    const nextSettings = normalizeReplayOverlaySettings({
-      ...this.overlaySettings,
-      [id]: {
-        ...this.overlaySettings[id],
-        ...placement,
-      },
-    });
+    const settings = this.getOverlaySettingsSnapshot();
+    const layout = this.cachedLayout ?? this.getLayout();
+    const current = getReplayOverlayPlacement(settings, id, this.ruleset.accuracyMode === "lazer");
+    const nextSettings = normalizeReplayOverlaySettings(updateReplayOverlayPlacement(settings, id, {
+      ...placement,
+      reference: placement.x !== undefined || placement.y !== undefined
+        ? this.getCurrentOverlayReference(layout, id)
+        : current.reference,
+    }, this.ruleset.accuracyMode === "lazer"));
     this.overlaySettings = nextSettings;
     this.onOverlaySettingsChange?.(nextSettings);
     if (!this._isPlaying) this.render();
   }
 
   private updateOverlayPlacements(placements: Array<readonly [ReplayOverlayId, Partial<ReplayOverlaySettings[ReplayOverlayId]>]>) {
-    const draft: ReplayOverlaySettings = { ...this.overlaySettings };
+    let draft = this.getOverlaySettingsSnapshot();
+    const layout = this.cachedLayout ?? this.getLayout();
     for (const [id, placement] of placements) {
-      draft[id] = {
-        ...draft[id],
+      draft = updateReplayOverlayPlacement(draft, id, {
         ...placement,
-      };
+        reference: this.getCurrentOverlayReference(layout, id),
+      }, this.ruleset.accuracyMode === "lazer");
     }
     const nextSettings = normalizeReplayOverlaySettings(draft);
     this.overlaySettings = nextSettings;
@@ -3005,6 +3185,7 @@ export class ManiaReplayRenderer {
 
   private render(forceHudSnapshot = false) {
     if (!this.app) return;
+    if (this.lazerLeaderboard) this.lazerLeaderboard.container.visible = false;
 
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
@@ -3321,7 +3502,9 @@ export class ManiaReplayRenderer {
     const referenceLength = Math.max(bgNative?.width ?? 0, colourNative.width) * unitScale;
     const maxLength = h * 0.62;
     const pieceScale = referenceLength > maxLength ? (maxLength / referenceLength) * unitScale : unitScale;
-    const x = playfieldX + playfieldWidth + 8;
+    const reference = this.overlaySettings.hitError.reference ?? this.getOverlayReference(layout);
+    const spacing = (reference.spacingScale ?? 1) * h / reference.height;
+    const x = playfieldX + playfieldWidth + 8 * spacing;
     const bgThickness = (bgNative?.height ?? colourNative.height) * pieceScale;
 
     if (stage.scorebarBg && bgNative) {
@@ -3358,9 +3541,11 @@ export class ManiaReplayRenderer {
     const health = this.getHealthAtTime(this.currentTime);
     if (this.skinSettings.style === "bars" && this.renderSkinHealthBar(layout, health)) return;
     const isLazer = this.ruleset.accuracyMode === "lazer";
-    const barWidth = Math.max(7, Math.min(10, layout.laneWidth * 0.17));
-    const x = playfieldX + playfieldWidth + 13;
-    const height = Math.max(136, h * 0.52);
+    const reference = this.overlaySettings.hitError.reference ?? this.getOverlayReference(layout);
+    const spacing = (reference.spacingScale ?? 1) * h / reference.height;
+    const barWidth = Math.max(7, Math.min(10, layout.laneWidth / spacing * 0.17)) * spacing;
+    const x = playfieldX + playfieldWidth + 13 * spacing;
+    const height = Math.max(136 * spacing, h * 0.52);
     const y = h - height;
     const fillHeight = height * health;
     const fillY = y + height - fillHeight;
@@ -4073,7 +4258,27 @@ export class ManiaReplayRenderer {
   }
 
   private getOverlayScale(layout: Layout, id: ReplayOverlayId): number {
-    return this.getHudScale(layout) * this.overlaySettings[id].scale;
+    const placement = this.getOverlayPlacement(id);
+    return replayOverlayScale(placement.reference ?? this.getOverlayReference(layout), layout.h) * placement.scale;
+  }
+
+  private getOverlayReference(layout: Layout): ReplayOverlayReference {
+    return this.overlayReferenceLayout ??= {
+      width: layout.w, height: layout.h,
+      playfieldX: layout.playfieldX, playfieldWidth: layout.playfieldWidth,
+      hudScale: this.getHudScale(layout),
+      spacingScale: 1,
+    };
+  }
+
+  private getCurrentOverlayReference(layout: Layout, id: ReplayOverlayId): ReplayOverlayReference {
+    const reference = this.getOverlayPlacement(id).reference ?? this.getOverlayReference(layout);
+    return {
+      width: layout.w, height: layout.h,
+      playfieldX: layout.playfieldX, playfieldWidth: layout.playfieldWidth,
+      hudScale: replayOverlayScale(reference, layout.h),
+      spacingScale: (reference.spacingScale ?? 1) * layout.h / reference.height,
+    };
   }
 
   private getTextMeasureContext(): CanvasRenderingContext2D | null {
@@ -4120,6 +4325,10 @@ export class ManiaReplayRenderer {
     return this.skinProfile.tapColors[col] || this.skinProfile.tapColor || this.colors[col];
   }
 
+  private getOverlayPlacement(id: ReplayOverlayId): ReplayOverlayPlacement {
+    return getReplayOverlayPlacement(this.overlaySettings, id, this.ruleset.accuracyMode === "lazer");
+  }
+
   private getOverlayFrame(
     layout: Layout,
     id: ReplayOverlayId,
@@ -4129,10 +4338,14 @@ export class ManiaReplayRenderer {
     // default, in stage pixels.
     anchor?: { x: number; y: number },
   ): ReplayOverlayFrame | null {
-    const placement = this.overlaySettings[id];
+    const placement = this.getOverlayPlacement(id);
     if (!placement.enabled) return null;
     const anchored = this.getAnchoredOverlayOrigin(placement, layout, anchor);
-    const x = Math.max(0, Math.min(Math.max(0, layout.w - width), anchored.x * layout.w));
+    const minX = getReplayOverlayMinX(id, width, layout.w, this.ruleset.accuracyMode === "lazer") * layout.w;
+    const positionX = placement.x === REPLAY_OVERLAY_ANCHORED_COORD
+      ? anchored.x * layout.w
+      : replayOverlayX(placement.x, width, placement.reference ?? this.getOverlayReference(layout), layout);
+    const x = Math.max(minX, Math.min(Math.max(0, layout.w - width), positionX));
     const y = Math.max(0, Math.min(Math.max(0, layout.h - height), anchored.y * layout.h));
     const frame = { x, y, width, height };
     this.overlayHitboxes.push({ id, ...frame });
@@ -4155,10 +4368,9 @@ export class ManiaReplayRenderer {
   // A drag or resize starts from where the overlay is actually drawn, which
   // for an anchored placement is its hitbox rather than its stored fraction.
   private getOverlayPlacementOrigin(hitbox: ReplayOverlayHitbox): { x: number; y: number } {
-    const placement = this.overlaySettings[hitbox.id];
     return {
-      x: placement.x === REPLAY_OVERLAY_ANCHORED_COORD ? hitbox.x / Math.max(1, this.cssWidth) : placement.x,
-      y: placement.y === REPLAY_OVERLAY_ANCHORED_COORD ? hitbox.y / Math.max(1, this.cssHeight) : placement.y,
+      x: hitbox.x / Math.max(1, this.cssWidth),
+      y: hitbox.y / Math.max(1, this.cssHeight),
     };
   }
 
@@ -4287,48 +4499,94 @@ export class ManiaReplayRenderer {
 
   private renderMissOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "misses");
-    const labelFontSize = 9 * scale;
+    // Keep the stored keys so existing placements retain their selected layout.
+    const style = normalizeReplayMissStyle(this.overlaySettings.misses.style);
+    const circles = style === "compact";
+    const leaderboard = style === "stacked";
+    const labelFontSize = 17 * scale;
+    const valueFontSize = (leaderboard ? 28 : 34) * scale;
     const items = [
-      { hand: "left" as const, label: "L MISS", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },
-      { hand: "right" as const, label: "R MISS", value: this.hudCachedRightMisses, color: HAND_COLORS.right },
+      { hand: "left" as const, label: "L", value: this.hudCachedLeftMisses, color: HAND_COLORS.left },
+      { hand: "right" as const, label: "R", value: this.hudCachedRightMisses, color: HAND_COLORS.right },
     ];
-    // Odd keymodes tag the side that owns the middle lane, so the split the
-    // counter assumes is visible instead of a right-click surprise. Both
-    // boxes widen together so the pair stays symmetric.
-    const thumbTag = this.keyCount % 2 === 1 ? { text: "+ THUMB", fontSize: 7.5 * scale, gap: 5 * scale } : null;
-    const labelSpan = Math.max(...items.map((item) => this.measureTextWidth(item.label, labelFontSize, "700")));
+    const thumbTag = this.keyCount % 2 === 1 ? { text: "+ THUMB", fontSize: 11 * scale } : null;
+    // Three digits fit at full size. Larger totals shrink only the number,
+    // keeping the labels legible and the overlay footprint stable.
+    const valueSpan = Math.max(...Array.from({ length: 10 }, (_, digit) =>
+      this.measureTextWidth(String(digit).repeat(3), valueFontSize, "400"),
+    ));
+    const labelSpan = Math.max(...items.map((item) => this.measureTextWidth(`${item.label} MISS`, labelFontSize, "700")));
     const tagWidth = thumbTag ? this.measureTextWidth(thumbTag.text, thumbTag.fontSize, "700") : 0;
-    const boxWidth = Math.max(
-      60 * scale,
-      thumbTag ? 9 * scale + labelSpan + thumbTag.gap + tagWidth + 6 * scale : 0,
-    );
-    const pitch = boxWidth + 8 * scale;
-    const width = boxWidth * 2 + 8 * scale;
-    const height = 36 * scale;
+    const padding = 12 * scale;
+    const radius = Math.max(27 * scale, valueSpan / 2 + 8 * scale);
+    const columnWidth = leaderboard
+      ? labelSpan + valueSpan + 48 * scale
+      : Math.max(92 * scale, labelSpan + padding * 2, circles ? radius * 2 + 8 * scale : valueSpan + padding * 2);
+    const rowHeight = (leaderboard ? (thumbTag ? 56 : 42) : circles ? 30 + radius * 2 / scale + (thumbTag ? 21 : 4) : thumbTag ? 88 : 70) * scale;
+    const gap = (leaderboard ? 5 : 12) * scale;
+    const width = leaderboard ? columnWidth : columnWidth * 2 + gap;
+    const height = leaderboard ? rowHeight * 2 + gap : rowHeight;
     const frame = this.getOverlayFrame(layout, "misses", width, height);
+    this.missThumbTagHitbox = null;
     if (!frame) return;
 
     items.forEach((item, index) => {
-      const x = frame.x + index * pitch;
-      this.fillRect(x, frame.y, boxWidth, height, "#0a0a12", 0.78);
-      this.fillRect(x, frame.y, 3 * scale, height, item.color, 1);
-      this.addText(item.label, x + 9 * scale, frame.y + 5 * scale, { fontSize: labelFontSize, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
-      this.addText(item.value, x + 9 * scale, frame.y + 28 * scale, { fontSize: 16 * scale, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
+      const x = frame.x + (leaderboard ? 0 : index * (columnWidth + gap));
+      const y = frame.y + (leaderboard ? index * (rowHeight + gap) : 0);
+      const centerX = x + columnWidth / 2;
+      if (circles) {
+        const cy = y + 28 * scale + radius;
+        this.circle(centerX, cy, radius, "#111019", 0.85);
+        this.circle(centerX, cy, radius - 4 * scale, item.color, 0.25);
+        this.graphics.circle(centerX, cy, radius).stroke({ color: 0xffffff, alpha: 0.95, width: 2 * scale });
+        this.graphics.circle(centerX, cy, radius - 4 * scale).stroke({ color: hexToNumber(item.color), alpha: 0.9, width: scale });
+      } else if (leaderboard) {
+        // The same shear as lazer's leaderboard, with upright readable text.
+        const shear = LAZER_LEADERBOARD.shear;
+        const inset = rowHeight * shear;
+        this.graphics.save().setTransform(1, 0, -shear, 1, x + inset, y)
+          .roundRect(0, 0, columnWidth - inset, rowHeight, 10 * scale).fill({ color: 0x17151e, alpha: 0.85 })
+          .roundRect(0, 0, columnWidth - inset, rowHeight, 10 * scale).fill({ color: hexToNumber(item.color), alpha: 0.12 })
+          .roundRect(scale, scale, columnWidth - inset - 2 * scale, rowHeight - 2 * scale, 9 * scale)
+          .stroke({ color: hexToNumber(item.color), alpha: 0.6, width: 2 * scale }).restore();
+      }
+      const labelX = leaderboard ? x + 22 * scale : centerX;
+      this.addText(`${item.label} MISS`, labelX, y + (leaderboard ? 8 : 0) * scale, {
+        fontSize: labelFontSize,
+        fill: "#ffffff",
+        fontWeight: "700",
+        anchorX: leaderboard ? 0 : 0.5,
+        dropShadow: true,
+      });
+      const valueY = leaderboard ? y + 34 * scale : circles ? y + 28 * scale + radius : y + 49 * scale;
+      const valueScale = Math.min(1, valueSpan / Math.max(1, this.measureTextWidth(item.value, valueFontSize, "400")));
+      this.addText(item.value, leaderboard ? x + columnWidth - 18 * scale : centerX, valueY, {
+        fontSize: valueFontSize * valueScale,
+        fill: "#ffffff",
+        fontWeight: "400",
+        tabularNums: true,
+        anchorX: leaderboard ? 1 : 0.5,
+        anchorY: leaderboard ? 1 : 0.5,
+        dropShadow: true,
+      });
+      // The coloured hand marker lives under the label, not in its letterforms.
+      if (style === "plain") {
+        this.roundRect(centerX - 12 * scale, y + 22 * scale, 24 * scale, 2 * scale, scale, item.color, 1);
+      }
       if (thumbTag && item.hand === this.missThumbHand) {
-        const tagX = x + 9 * scale + labelSpan + thumbTag.gap;
-        const tagY = frame.y + 5 * scale + (labelFontSize - thumbTag.fontSize) * 0.5;
+        const tagX = leaderboard ? labelX : centerX - tagWidth / 2;
+        const tagY = y + rowHeight - 18 * scale;
         this.addText(thumbTag.text, tagX, tagY, {
           fontSize: thumbTag.fontSize,
-          fill: this.missThumbTagHovered ? "#ffffff" : item.color,
-          alpha: this.missThumbTagHovered ? 0.95 : 0.85,
+          fill: this.missThumbTagHovered ? "#ffffff" : item.hand === "left" ? "#a8c6ff" : "#ffa8e1",
           fontWeight: "700",
+          dropShadow: true,
         });
-        // Generous hit area: the whole label row from the tag to the box edge.
         this.missThumbTagHitbox = {
           x: tagX - 3 * scale,
-          y: frame.y,
-          width: boxWidth - (tagX - x) + 3 * scale,
-          height: 16 * scale,
+          y: tagY - 2 * scale,
+          width: tagWidth + 6 * scale,
+          height: 18 * scale,
         };
       }
     });
@@ -4691,7 +4949,8 @@ export class ManiaReplayRenderer {
   }
 
   private isMobilePortraitLayout(layout: Layout): boolean {
-    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const coarsePointer = this.renderViewport?.coarsePointer
+      ?? (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
     return coarsePointer && layout.h > layout.w;
   }
 
@@ -4763,14 +5022,16 @@ export class ManiaReplayRenderer {
     }
 
     this.renderHitErrorBar(layout);
-    this.addText(this.hudCachedTime, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
-    this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
-      fontSize: 11,
-      fill: "#ffffff",
-      alpha: 0.4,
-      anchorX: 1,
-      anchorY: 1,
-    });
+    if (!this.hidePlaybackInfo) {
+      this.addText(this.hudCachedTime, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
+      this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
+        fontSize: 11,
+        fill: "#ffffff",
+        alpha: 0.4,
+        anchorX: 1,
+        anchorY: 1,
+      });
+    }
     this.renderFailOverlay(layout);
     if (this.hidePerformanceStats) return;
     this.renderFpsCounter(layout);
@@ -5033,13 +5294,17 @@ export class ManiaReplayRenderer {
   // scrolls with the player while keeping the actual #1 pinned on top: on a
   // full board you see #1 then fight #50 first, the ranks between counting
   // down as the player climbs, overtaken slots sliding out below.
-  // Overtakes burst a soft white bloom over the player
-  // slot (stable) or pulse it in the accent blue (lazer). It is a draggable
+  // Overtakes fire a tapered white flare from the left edge of the player
+  // slot. It is a draggable
   // overlay ("leaderboard") like the rest of the custom HUD.
   private renderLeaderboard(layout: Layout) {
     if (!this.shouldRenderCustomOverlays(layout)) return;
     this.renderSpectatorLabel(layout);
     if (this.leaderboardEntries.length === 0 || !this.scoreSimulator) return;
+    if (this.ruleset.accuracyMode === "lazer") {
+      this.renderLazerLeaderboard(layout);
+      return;
+    }
 
     const playerScore = this.scoreSimulator.value;
     const entries = this.leaderboardEntries;
@@ -5047,8 +5312,19 @@ export class ManiaReplayRenderer {
     while (rank < entries.length && entries[rank].score > playerScore) rank++;
 
     const nowWall = performance.now();
+    if (this.suppressOvertakeFlash || this.leaderboardHidden) {
+      this.leaderboardExplosionTimes = [];
+    } else {
+      this.leaderboardExplosionTimes = this.leaderboardExplosionTimes.filter((time) => nowWall - time < LEADERBOARD_EXPLOSION_DURATION_MS);
+    }
     if (this.leaderboardPrevRank != null && rank < this.leaderboardPrevRank && !this.suppressOvertakeFlash) {
-      this.leaderboardFlashAt = nowWall;
+      if (!this.leaderboardHidden) {
+        // A new pass doesn't cancel an earlier burst. Dense score clusters
+        // build up the white flare visible in stable; at most 50 can pass.
+        for (let passed = rank; passed < this.leaderboardPrevRank; passed++) {
+          this.leaderboardExplosionTimes.push(nowWall);
+        }
+      }
     }
     this.leaderboardPrevRank = rank;
     this.suppressOvertakeFlash = false;
@@ -5059,10 +5335,9 @@ export class ManiaReplayRenderer {
     }
 
     const scale = this.getOverlayScale(layout, "leaderboard");
-    const slotWidth = 152 * scale;
-    const slotHeight = 40 * scale;
+    const slotWidth = 112 * scale;
+    const slotHeight = 44 * scale;
     const gap = 2 * scale;
-    const isLazer = this.ruleset.accuracyMode === "lazer";
 
     interface Row {
       key: string;
@@ -5156,19 +5431,43 @@ export class ManiaReplayRenderer {
         pinnedDraw = { row, y };
         return;
       }
-      this.drawLeaderboardSlot(row, frame.x, y, slotWidth, slotHeight, scale, isLazer, nowWall, slideAlpha);
+      this.drawStableLeaderboardSlot(row, frame.x, y, slotWidth, slotHeight, scale, nowWall, slideAlpha);
     });
     if (pinnedDraw != null) {
       const draw = pinnedDraw as { row: Row; y: number };
-      this.drawLeaderboardSlot(draw.row, frame.x, draw.y, slotWidth, slotHeight, scale, isLazer, nowWall, 1);
+      this.drawStableLeaderboardSlot(draw.row, frame.x, draw.y, slotWidth, slotHeight, scale, nowWall, 1);
     }
     if (playerDraw != null) {
       const draw = playerDraw as { row: Row; y: number };
-      this.drawLeaderboardSlot(draw.row, frame.x, draw.y, slotWidth, slotHeight, scale, isLazer, nowWall, 1);
+      this.drawStableLeaderboardSlot(draw.row, frame.x, draw.y, slotWidth, slotHeight, scale, nowWall, 1);
     }
     for (const key of [...this.leaderboardSlotYs.keys()]) {
       if (!seen.has(key)) this.leaderboardSlotYs.delete(key);
     }
+  }
+
+  private renderLazerLeaderboard(layout: Layout) {
+    if (this.leaderboardHidden || !this.app) {
+      this.lazerLeaderboard?.hide(this.lazerLeaderboardFrameTime ?? performance.now());
+      this.suppressOvertakeFlash = true;
+      return;
+    }
+    // Lazer's interface is laid out in 768-high game coordinates.
+    const scale = layout.h / 768 * this.getOverlayPlacement("leaderboard").scale;
+    const frame = this.getOverlayFrame(layout, "leaderboard", LAZER_LEADERBOARD.width * scale, LAZER_LEADERBOARD.height * scale);
+    if (!frame) return;
+    if (!this.lazerLeaderboard) {
+      this.lazerLeaderboard = new LazerReplayLeaderboard((src) => peekStoryboardTexture(src) ?? Texture.EMPTY);
+      this.app.stage.addChildAt(this.lazerLeaderboard.container, this.app.stage.getChildIndex(this.textLayer));
+    }
+    this.lazerLeaderboard.update(this.leaderboardEntries, {
+      name: this.leaderboardPlayerName,
+      score: this.scoreSimulator?.value ?? 0,
+      combo: this.maxComboSoFar,
+      accuracy: this.getAccuracy() / 100,
+      avatarUrl: this.leaderboardOptions.playerAvatarUrl,
+    }, this.leaderboardOptions, { ...frame, scale }, this.lazerLeaderboardFrameTime ?? performance.now(), this.suppressOvertakeFlash);
+    this.suppressOvertakeFlash = false;
   }
 
   // osu!-style spectator counter riding just above the scoreboard's slot,
@@ -5185,15 +5484,21 @@ export class ManiaReplayRenderer {
   // out. The room is what decides, not the name count.
   private renderSpectatorLabel(layout: Layout) {
     if (this.spectatorCount <= 0) return;
-    const scale = this.getOverlayScale(layout, "leaderboard");
+    const isLazer = this.ruleset.accuracyMode === "lazer";
+    const scale = isLazer ? layout.h / 768 * this.getOverlayPlacement("leaderboard").scale : this.getOverlayScale(layout, "leaderboard");
     const height = 26 * scale;
-    const width = 152 * scale;
+    const width = (isLazer ? LAZER_LEADERBOARD.width : 112) * scale;
     const nameHeight = 17 * scale;
     const gap = 4 * scale;
     const names = this.spectatorNames;
-    const placement = this.overlaySettings.leaderboard;
-    const anchorX = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
-    const anchorY = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
+    const placement = this.getOverlayPlacement("leaderboard");
+    const anchored = this.getAnchoredOverlayOrigin(placement, layout);
+    const positionX = placement.x === REPLAY_OVERLAY_ANCHORED_COORD
+      ? anchored.x * layout.w
+      : replayOverlayX(placement.x, width, placement.reference ?? this.getOverlayReference(layout), layout);
+    // Spectator text stays visible even when lazer's cards cross the left edge.
+    const anchorX = Math.max(0, Math.min(Math.max(0, layout.w - width), positionX));
+    const anchorY = Math.max(0, Math.min(Math.max(0, layout.h - height), anchored.y * layout.h));
 
     const room = Math.max(0, Math.floor((anchorY - height - gap) / nameHeight));
     const budget = Math.min(names.length, room, MAX_SPECTATOR_NAMES_DRAWN);
@@ -5243,9 +5548,9 @@ export class ManiaReplayRenderer {
         textureSpace: "local",
         textureSize: 128,
         colorStops: [
-          { offset: 0, color: colorWithAlpha(color, 0.92) },
-          { offset: 0.7, color: colorWithAlpha(color, 0.58) },
-          { offset: 1, color: colorWithAlpha(color, 0.16) },
+          { offset: 0, color: colorWithAlpha(color, 0.18) },
+          { offset: 0.65, color: colorWithAlpha(color, 0.07) },
+          { offset: 1, color: colorWithAlpha(color, 0) },
         ],
       });
       this.leaderboardSlotGradients.set(color, gradient);
@@ -5253,117 +5558,105 @@ export class ManiaReplayRenderer {
     return gradient;
   }
 
-  private drawLeaderboardSlot(
+  private drawStableLeaderboardSlot(
     row: { name: string; score: number; combo: number; kind: ReplayLeaderboardRowKind; rankNumber: number },
     x: number,
     y: number,
     width: number,
     height: number,
     scale: number,
-    isLazer: boolean,
     nowWall: number,
     rowAlpha: number,
   ) {
-    const flashElapsed = nowWall - this.leaderboardFlashAt;
-    const flashDuration = isLazer ? 420 : 800;
-    const flashActive = row.kind === "player" && flashElapsed >= 0 && flashElapsed < flashDuration;
-    const flashStrength = flashActive ? (1 - flashElapsed / flashDuration) ** 1.4 : 0;
+    // Stable's board is a narrow text stack with a faint tint that vanishes
+    // into the playfield. The large rank is a watermark behind both lines.
+    const background = row.kind === "player" ? "#1f4a6e" : row.kind === "target" ? "#6e1f1f" : "#0c0c12";
+    this.graphics.rect(x, y, width, height).fill({ fill: this.getLeaderboardSlotGradient(background), alpha: rowAlpha });
+    if (row.rankNumber > 0) {
+      this.drawStableLeaderboardNumber(String(row.rankNumber), x + width - 3 * scale, y + 8 * scale,
+        25 * scale, 1, 0.02 * rowAlpha, 0xffffff, true);
+    }
 
-    if (isLazer) {
-      const radius = 9 * scale;
-      const background = row.kind === "player" ? "#123a52" : row.kind === "target" ? "#4a1d1d" : "#000000";
-      const backgroundAlpha = row.kind === "player" ? 0.82 : row.kind === "target" ? 0.62 : 0.55;
-      this.graphics.roundRect(x, y, width, height, radius).fill({ color: hexToNumber(background), alpha: backgroundAlpha * rowAlpha });
-      if (row.kind === "player") {
-        this.graphics.roundRect(x, y, width, height, radius).stroke({
-          color: hexToNumber("#66ccff"),
-          alpha: (0.55 + flashStrength * 0.45) * rowAlpha,
-          width: Math.max(1.2, (1.4 + flashStrength * 1.6) * scale),
-        });
-      }
-      if (flashActive) {
-        this.graphics.roundRect(x, y, width, height, radius).fill({ color: 0x66ccff, alpha: 0.4 * flashStrength * rowAlpha });
-      }
-    } else {
-      const background = row.kind === "player" ? "#1f4a6e" : row.kind === "target" ? "#6e1f1f" : "#0c0c12";
-      this.graphics.rect(x, y, width, height).fill({ fill: this.getLeaderboardSlotGradient(background), alpha: rowAlpha });
-      if (flashActive) {
-        // Stable's overtake burst: the slot whites out hard while a huge
-        // soft bloom explodes from its left edge, bleeding well past the
-        // board; stacked layers push the core into overexposure.
-        this.fillRect(x, y, width, height, "#ffffff", 0.75 * flashStrength * rowAlpha);
-        const glow = this.getLeaderboardGlowAsset();
-        if (glow) {
-          const glowCx = x + width * 0.16;
-          const glowCy = y + height / 2;
-          this.drawSkinImage(glow, glowCx, glowCy, width * 3, height * 5, 0.5, 0.5, 0.95 * flashStrength * rowAlpha);
-          this.drawSkinImage(glow, glowCx, glowCy, width * 1.6, height * 2.6, 0.5, 0.5, flashStrength * rowAlpha);
-          this.drawSkinImage(glow, glowCx, glowCy, width * 0.9, height * 1.5, 0.5, 0.5, flashStrength * rowAlpha);
+    const fontFamily = "Aller, Tahoma, sans-serif";
+    const nameSize = 16 * scale;
+    const nameWidth = this.measureTextWidth(row.name, nameSize, "400", "normal", fontFamily);
+    this.addText(row.name, x + 4 * scale, y + 3 * scale, {
+      fontSize: nameSize,
+      fontFamily,
+      fontWeight: "400",
+      fill: "#ffffff",
+      alpha: (row.kind === "player" ? 0.97 : 0.82) * rowAlpha,
+      scaleX: Math.min(1, (width - 8 * scale) / Math.max(1, nameWidth)),
+    });
+
+    const scoreText = row.score.toLocaleString("en-US");
+    const comboText = `${row.combo.toLocaleString("en-US")}x`;
+    const numberHeight = 11 * scale;
+    const numberWidth = this.measureStableLeaderboardNumber(scoreText, numberHeight)
+      + this.measureStableLeaderboardNumber(comboText, numberHeight);
+    // Only compress if an unusually long score/combo would close the gap.
+    const numberScaleX = Math.min(1, (width - 15 * scale) / Math.max(1, numberWidth));
+    const numberY = y + height - 7 * scale - numberHeight;
+    this.drawStableLeaderboardNumber(scoreText, x + 4 * scale, numberY,
+      numberHeight, numberScaleX, (row.kind === "player" ? 0.9 : 0.65) * rowAlpha, 0xffffff, false);
+    this.drawStableLeaderboardNumber(comboText, x + width - 3 * scale, numberY,
+      numberHeight, numberScaleX, 0.68 * rowAlpha, 0xb8dedb, true);
+
+    if (row.kind === "player") {
+      for (const time of this.leaderboardExplosionTimes) {
+        const elapsed = nowWall - time;
+        if (elapsed >= 0 && elapsed < LEADERBOARD_EXPLOSION_DURATION_MS) {
+          this.drawLeaderboardExplosion(x, y + height / 2, width / 152, height / 40, elapsed, rowAlpha);
         }
       }
     }
-
-    // Ghosted rank number filling the slot's right side, stable-style. An
-    // unranked player slot (hasn't overtaken anyone yet) shows none.
-    if (row.rankNumber > 0) {
-      this.addText(String(row.rankNumber), x + width - 5 * scale, y + height * 0.52, {
-        fontSize: height * 0.82,
-        fill: "#ffffff",
-        alpha: (row.kind === "player" ? 0.28 : 0.15) * rowAlpha,
-        fontWeight: "700",
-        tabularNums: true,
-        anchorX: 1,
-        anchorY: 0.5,
-      });
-    }
-
-    const textAlpha = (row.kind === "other" ? 0.85 : 0.97) * rowAlpha;
-    this.addText(row.name, x + 7 * scale, y + 3 * scale, {
-      fontSize: 13 * scale,
-      fill: "#ffffff",
-      alpha: textAlpha,
-      fontWeight: "700",
-    });
-    this.addText(row.score.toLocaleString("en-US"), x + 7 * scale, y + height - 3 * scale, {
-      fontSize: 12 * scale,
-      fill: "#ffffff",
-      alpha: textAlpha * 0.93,
-      tabularNums: true,
-      anchorY: 1,
-    });
-    this.addText(`${row.combo.toLocaleString("en-US")}x`, x + width - 8 * scale, y + height - 3 * scale, {
-      fontSize: 11.5 * scale,
-      fill: isLazer ? "#66ccff" : "#7fd8f2",
-      alpha: 0.95 * rowAlpha,
-      tabularNums: true,
-      anchorX: 1,
-      anchorY: 1,
-    });
   }
 
-  // A radial white falloff rendered once to a canvas; the overtake bloom
-  // stretches it into wide soft ellipses over the player slot.
-  private getLeaderboardGlowAsset(): ReplaySkinImageAsset | null {
-    if (this.leaderboardGlowAsset) return this.leaderboardGlowAsset;
-    if (typeof document === "undefined") return null;
-    const size = 256;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d");
-    if (!context) return null;
-    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.22, "rgba(255,255,255,0.98)");
-    gradient.addColorStop(0.45, "rgba(255,255,255,0.55)");
-    gradient.addColorStop(0.7, "rgba(255,255,255,0.18)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, size, size);
-    const src = "internal:leaderboard-glow";
-    this.skinTextureCache.set(src, Texture.from(canvas));
-    this.leaderboardGlowAsset = { name: "leaderboard-glow", src };
-    return this.leaderboardGlowAsset;
+  private measureStableLeaderboardNumber(text: string, height: number): number {
+    let width = 0;
+    for (const char of text) width += (LEADERBOARD_SCORE_GLYPHS[char]?.width ?? 0) - LEADERBOARD_SCORE_GLYPH_OVERLAP;
+    return (width + LEADERBOARD_SCORE_GLYPH_OVERLAP) * height / 28;
+  }
+
+  private drawStableLeaderboardNumber(
+    text: string, x: number, y: number, height: number, scaleX: number, alpha: number, tint: number, alignRight: boolean,
+  ) {
+    const glyphs = Array.from(text, (char) => LEADERBOARD_SCORE_GLYPHS[char]);
+    if (glyphs.some((asset) => !asset || this.getTexture(asset) === Texture.EMPTY)) {
+      // Keep the numbers readable while the local bitmap assets load.
+      this.addText(text, x, y, {
+        fontFamily: "Aller, Tahoma, sans-serif", fontSize: height, fill: `#${tint.toString(16).padStart(6, "0")}`,
+        alpha, scaleX, anchorX: alignRight ? 1 : 0,
+      });
+      return;
+    }
+    const unit = height / 28;
+    let cursor = alignRight ? x - this.measureStableLeaderboardNumber(text, height) * scaleX : x;
+    for (const asset of glyphs) {
+      this.drawSkinImage(asset, cursor, y, asset.width! * unit * scaleX, asset.height! * unit, 0, 0, alpha, tint);
+      cursor += (asset.width! - LEADERBOARD_SCORE_GLYPH_OVERLAP) * unit * scaleX;
+    }
+  }
+
+  private drawLeaderboardExplosion(x: number, centerY: number, scaleX: number, scaleY: number, elapsed: number, alpha: number) {
+    const glowProgress = Math.min(1, elapsed / LEADERBOARD_EXPLOSION_DURATION_MS);
+    const glowExpansion = 1 - (1 - Math.min(1, elapsed / LEADERBOARD_GLOW_EXPAND_MS)) ** 2;
+    const streakExpansion = 1 - (1 - Math.min(1, elapsed / LEADERBOARD_STREAK_EXPAND_MS)) ** 2;
+    const previousPool = this.activeSkinSprites;
+    this.activeSkinSprites = this.leaderboardEffectSprites;
+    // The beam starts short and shoots outward at a constant thickness.
+    // Both layers fade linearly, with a longer-lived, growing upright glow.
+    this.drawSkinImage(
+      LEADERBOARD_EXPLOSION_ASSETS[0], x, centerY,
+      39 * scaleX, (105 + 31.5 * glowExpansion) * scaleY,
+      0, 0.5, (1 - glowProgress) * alpha,
+    );
+    this.drawSkinImage(
+      LEADERBOARD_EXPLOSION_ASSETS[1], x, centerY,
+      (42 + 238 * streakExpansion) * scaleX, 64 * scaleY,
+      0, 0.5, Math.max(0, 1 - elapsed / LEADERBOARD_STREAK_FADE_MS) * alpha,
+    );
+    this.activeSkinSprites = previousPool;
   }
 
   private drawHudNumberText(
@@ -5426,16 +5719,18 @@ export class ManiaReplayRenderer {
     const range = this.hitWindows.meh;
     if (!(range > 0)) return;
 
-    const hudScale = Math.min(this.getHudScale(layout), 1.3);
+    const reference = placement.reference ?? this.getOverlayReference(layout);
+    const hudScale = Math.min(reference.hudScale, 1.3 * (reference.spacingScale ?? 1)) * layout.h / reference.height;
+    const spacing = (reference.spacingScale ?? 1) * layout.h / reference.height;
     const scale = hudScale * placement.scale;
     const receptorBottom = this.skinSettings.style === "circles" || this.skinSettings.style === "arrows"
       ? judgmentY
       : judgmentY + layout.receptorHeight + 2;
-    const anchorBarY = Math.min(h - 12, receptorBottom > h - 44 ? receptorBottom + 14 : h - 26);
+    const anchorBarY = Math.min(h - 12 * spacing, receptorBottom > h - 44 * spacing ? receptorBottom + 14 * spacing : h - 26 * spacing);
     const halfWidth = Math.min(layout.w * 0.48, Math.min(playfieldWidth * 0.45, 170 * hudScale) * placement.scale);
     // Tall enough for the center marker, the ticks and whichever average
     // marker the ruleset draws outside the bands.
-    const boxHeight = 22 * scale + 6;
+    const boxHeight = 22 * scale + 6 * spacing;
     const anchor = { x: playfieldX + playfieldWidth / 2 - halfWidth, y: anchorBarY - boxHeight / 2 };
     // Narrow and portrait stages keep the fixed bar: they render none of the
     // draggable overlays, so there is nothing there to drag it with.
@@ -6794,6 +7089,7 @@ export class ManiaReplayRenderer {
       fontWeight?: ReplayComboFontStyle["weight"] | "400" | "700";
       fontStyle?: "normal" | "italic";
       tabularNums?: boolean;
+      dropShadow?: boolean;
       anchorX?: number;
       anchorY?: number;
       scaleX?: number;
@@ -6821,7 +7117,7 @@ export class ManiaReplayRenderer {
     const fontWeight = options.fontWeight ?? "400";
     const fontStyle = options.fontStyle ?? "normal";
     const fontVariantNumeric = options.tabularNums ? "tabular-nums" : "normal";
-    const sig = `${this.textFontRevision}|${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${fontVariantNumeric}|${options.fill}`;
+    const sig = `${this.textFontRevision}|${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${fontVariantNumeric}|${options.fill}|${!!options.dropShadow}`;
     if (label.__sig !== sig) {
       label.style.fontFamily = fontFamily;
       label.style.fontSize = options.fontSize;
@@ -6829,6 +7125,9 @@ export class ManiaReplayRenderer {
       label.style.fontStyle = fontStyle;
       (label.style as Text["style"] & { fontVariantNumeric?: string }).fontVariantNumeric = fontVariantNumeric;
       label.style.fill = options.fill;
+      label.style.dropShadow = options.dropShadow
+        ? { color: 0x000000, alpha: 0.8, blur: 2, angle: Math.PI / 2, distance: options.fontSize * 0.06 }
+        : false;
       label.__sig = sig;
     }
     if (label.text !== text) label.text = text;
@@ -7078,6 +7377,10 @@ export class ManiaReplayRenderer {
 
   private prewarmSkinTextures() {
     if (!this.app) return;
+    for (const asset of LEADERBOARD_EXPLOSION_ASSETS) this.getTexture(asset);
+    if (this.ruleset.accuracyMode !== "lazer") {
+      for (const asset of Object.values(LEADERBOARD_SCORE_GLYPHS)) this.getTexture(asset);
+    }
     const assets = this.skinProfile.assets;
     for (const column of assets.columns) {
       if (column.tap) this.getTexture(column.tap);
@@ -7111,11 +7414,12 @@ export class ManiaReplayRenderer {
   private beginSkinSpriteFrame() {
     this.gameplaySkinSprites.cursor = 0;
     this.hudSkinSprites.cursor = 0;
+    this.leaderboardEffectSprites.cursor = 0;
     this.activeSkinSprites = this.gameplaySkinSprites;
   }
 
   private finishSkinSpriteFrame() {
-    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites]) {
+    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites, this.leaderboardEffectSprites]) {
       for (let i = pool.cursor; i < pool.sprites.length; i++) {
         pool.sprites[i].visible = false;
       }
@@ -7151,7 +7455,7 @@ export class ManiaReplayRenderer {
   }
 
   private clearSkinSprites() {
-    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites]) {
+    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites, this.leaderboardEffectSprites]) {
       const children = pool.layer.removeChildren();
       for (const child of children) child.destroy();
       for (const strip of pool.stripTextures) {
@@ -7344,6 +7648,10 @@ export class ManiaReplayRenderer {
     for (const url of this.storyboardRetainedUrls) releaseStoryboardTexture(url);
     this.storyboardRetainedUrls = [];
     this.storyboardData = null;
+    for (const src of this.leaderboardAvatarLoads.keys()) releaseStoryboardTexture(src);
+    this.leaderboardAvatarLoads.clear();
+    if (this.lazerLeaderboardFadeRaf != null) cancelAnimationFrame(this.lazerLeaderboardFadeRaf);
+    this.lazerLeaderboardFadeRaf = null;
     this.storyboardActiveSet = null;
     // Pooled storyboard sprites are detached from the stage, so the app
     // destroy below cannot reach them.
@@ -7351,6 +7659,8 @@ export class ManiaReplayRenderer {
     this.storyboardSpritePool = [];
     const destroyApp = () => {
       if (!this.app) return;
+      this.lazerLeaderboard?.destroy();
+      this.lazerLeaderboard = null;
       this.clearTextLayer();
       this.clearComboTextLayer();
       this.clearSkinSprites();

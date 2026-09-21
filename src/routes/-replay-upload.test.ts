@@ -89,8 +89,9 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain("<MissingBeatmapPanel");
     expect(routeSource).toContain("localAudioUrl={localBeatmapAssets.audioUrl}");
     expect(routeSource).toContain("localBackgroundUrl={localBeatmapAssets.backgroundUrl}");
-    // Server-side export muxing can't read local blob: URLs.
-    expect(routeSource).toContain("audioUrl: audioEnabled && remoteAudioUrl && !audioError");
+    // Video export runs on the device, so it takes whatever the viewer is
+    // playing, including a blob: URL out of a locally supplied .osz.
+    expect(routeSource).toContain("songUrl: audioUrl,");
 
     // The panel takes .osz archives (lazer writes .olz for the same thing) and
     // exact .osu files, and spells out where each client keeps them.
