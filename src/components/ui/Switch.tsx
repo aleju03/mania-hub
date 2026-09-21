@@ -11,8 +11,11 @@ import { Check } from "lucide-react";
  * A square rather than a sliding pill: the pill belongs to phone settings and
  * to lazer, the square to stable's options, which is where everyone here
  * learned what a setting looks like. No pop, no travel, no colour but the
- * accent it already uses - in a list of rows, the control should be the
- * quietest thing in the row.
+ * accent it already uses.
+ *
+ * The empty box draws its border in osu-f1 (70% lightness) rather than a
+ * b-scale grey: at 18px on a b4 panel, a 25%-lightness line is a control
+ * nobody can find.
  */
 export function Switch({
   checked,
@@ -30,10 +33,10 @@ export function Switch({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`grid h-4 w-4 shrink-0 cursor-pointer place-items-center rounded-[4px] border transition-colors duration-150 ${
+      className={`grid h-[18px] w-[18px] shrink-0 cursor-pointer place-items-center rounded-[4px] border-[1.5px] transition-colors duration-150 ${
         checked
           ? "border-osu-pink bg-osu-pink hover:border-osu-pink-light hover:bg-osu-pink-light"
-          : "border-osu-b3/70 bg-transparent hover:border-osu-pink/60"
+          : "border-osu-f1/70 bg-osu-b6/60 hover:border-osu-pink hover:bg-osu-pink/10"
       }`}
     >
       <Check
