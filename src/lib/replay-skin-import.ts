@@ -5,6 +5,7 @@ import {
   EMPTY_REPLAY_SKIN_ASSETS,
   REPLAY_SKIN_MAX_ANIMATION_FRAMES,
   REPLAY_SKIN_MAX_COLUMNS,
+  REPLAY_SKIN_NOTE_FRAME_DURATION_MS,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
   osuManiaStagePositionToReplayPosition,
@@ -21,9 +22,6 @@ import type {
 interface SkinIniData {
   name: string | null;
   author: string | null;
-  // [General] AnimationFramerate: frames per second for every animated
-  // element. Null (or stable's -1) means each animation loops once a second.
-  animationFramerate: number | null;
   fonts: Record<string, string>;
   mania: Array<Record<string, string>>;
 }
@@ -148,7 +146,6 @@ export async function importReplaySkinFromOsk(
       fonts: parsed.fonts,
       baseProfile: getReplaySkinProfile(nextSettings, keys),
       keys,
-      animationFramerate: parsed.animationFramerate,
       onTick,
     });
     keymodeProfiles[String(keys)] = imported.profile;
@@ -170,7 +167,6 @@ export async function importReplaySkinFromOsk(
       fonts: parsed.fonts,
       baseProfile: getReplaySkinProfile(nextSettings, keys),
       keys,
-      animationFramerate: parsed.animationFramerate,
       onTick,
     });
     if (imported.noteAssets + imported.receptorAssets === 0) continue;
@@ -489,7 +485,6 @@ function parseSkinIni(content: string): SkinIniData {
   const data: SkinIniData = {
     name: null,
     author: null,
-    animationFramerate: null,
     fonts: {},
     mania: [],
   };
@@ -518,10 +513,6 @@ function parseSkinIni(content: string): SkinIniData {
     if (section === "General") {
       if (key === "Name") data.name = value || data.name;
       if (key === "Author") data.author = value || data.author;
-      if (key === "AnimationFramerate") {
-        const rate = parseNumber(value);
-        data.animationFramerate = rate != null && rate > 0 ? rate : null;
-      }
     } else if (section === "Fonts") {
       data.fonts[key] = value;
     } else if (section === "Mania" && currentMania) {
@@ -540,7 +531,6 @@ async function buildProfileFromManiaBlock({
   fonts,
   baseProfile,
   keys,
-  animationFramerate = null,
   onTick,
 }: {
   zip: JSZip;
@@ -550,7 +540,6 @@ async function buildProfileFromManiaBlock({
   fonts: Record<string, string>;
   baseProfile: ReplaySkinKeymodeProfile;
   keys: number;
-  animationFramerate?: number | null;
   onTick?: () => void;
 }): Promise<{
   profile: ReplaySkinKeymodeProfile;
@@ -661,7 +650,7 @@ async function buildProfileFromManiaBlock({
       for (const base of [reference, fallback]) {
         if (!base) continue;
         const first = await resolveTracked(`${base}-0`);
-        if (first) return withAnimationFrames(first, base, animationFramerate, (name) => resolveAssetReference(zip, lookup, assetCache, name));
+        if (first) return withAnimationFrames(first, base, (name) => resolveAssetReference(zip, lookup, assetCache, name));
         const single = await resolveTracked(base);
         if (single) return single;
       }
@@ -961,13 +950,11 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
 
 // Gathers "base-1", "base-2", ... after a resolved "base-0" frame onto the
 // asset. A gap ends the sequence, as stable stops at the first missing frame.
-// The frame clock comes from skin.ini's AnimationFramerate when set; unset,
-// every animation loops once per second regardless of its frame count. Frame
+// Mania notes use a fixed 60 FPS, independent of AnimationFramerate. Frame
 // reads are not progress ticks: the reference total counts one per element.
 async function withAnimationFrames(
   first: ReplaySkinImageAsset,
   base: string,
-  animationFramerate: number | null,
   resolve: (name: string) => Promise<ReplaySkinImageAsset | undefined>,
 ): Promise<ReplaySkinImageAsset> {
   const frames: ReplaySkinImageAsset[] = [];
@@ -977,9 +964,7 @@ async function withAnimationFrames(
     frames.push(frame);
   }
   if (frames.length === 0) return first;
-  const count = frames.length + 1;
-  const frameDurationMs = animationFramerate && animationFramerate > 0 ? 1000 / animationFramerate : 1000 / count;
-  return { ...first, frames, frameDurationMs };
+  return { ...first, frames, frameDurationMs: REPLAY_SKIN_NOTE_FRAME_DURATION_MS };
 }
 
 // WebGL rejects a texture past its max size (16384 on desktop, half that on

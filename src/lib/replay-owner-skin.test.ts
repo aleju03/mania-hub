@@ -123,7 +123,7 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(profile.assets.judgements.hit300).toBeUndefined();
   });
 
-  it("carries animation frames through the wire format and back", async () => {
+  it("carries animation frames through the wire format and repairs old note timing", async () => {
     const animated: ReplaySkinImageAsset = {
       ...importedAsset("left-0.png", "mania/left-0.png"),
       frames: [importedAsset("left-1.png", "mania/left-1.png"), importedAsset("left-2.png", "mania/left-2.png")],
@@ -144,7 +144,10 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     const wireTap = payload.settings.keymodeProfiles["4"].assets.columns[0].tap;
     expect(wireTap?.src).toBe("");
     expect(wireTap?.frames?.map((frame) => [frame.src, frame.path])).toEqual([["", "mania/left-1.png"], ["", "mania/left-2.png"]]);
-    expect(wireTap?.frameDurationMs).toBe(125);
+    expect(wireTap?.frameDurationMs).toBeCloseTo(1000 / 60);
+
+    // Published payloads from the old importer also get repaired on read.
+    wireTap!.frameDurationMs = 125;
 
     // left-2 deliberately missing from the rebuilt archive: the loop shortens.
     const archive = await buildArchive(["mania/left-0.png", "mania/left-1.png"]);
@@ -153,7 +156,7 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(tap?.src).toContain("base64");
     expect(tap?.frames?.map((frame) => frame.path)).toEqual(["mania/left-1.png"]);
     expect(tap?.frames?.[0].src).toContain("base64");
-    expect(tap?.frameDurationMs).toBe(125);
+    expect(tap?.frameDurationMs).toBeCloseTo(1000 / 60);
   });
 
   it("decodes only the replay's active keymode for the watch path", async () => {

@@ -258,7 +258,7 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
     expect(profile.assets.combo?.digits[1]?.path).toBe("c/combo-1.png");
   });
 
-  it("collects animated note frames and clocks them from AnimationFramerate", async () => {
+  it("collects animated note frames at 60 FPS, ignoring AnimationFramerate", async () => {
     const file = await buildOsk(
       [
         "[General]",
@@ -292,23 +292,24 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
 
     expect(columns[0].tap?.path).toBe("mania/arrows/left-0.png");
     expect(columns[0].tap?.frames?.map((frame) => frame.path)).toEqual(["mania/arrows/left-1.png", "mania/arrows/left-2.png"]);
-    expect(columns[0].tap?.frameDurationMs).toBe(100);
+    expect(columns[0].tap?.frameDurationMs).toBeCloseTo(1000 / 60);
     expect(columns[0].lnHead?.frames?.map((frame) => frame.path)).toEqual(["mania/arrows/leftLN-1.png"]);
+    expect(columns[0].lnHead?.frameDurationMs).toBeCloseTo(1000 / 60);
     expect(columns[0].lnBody?.path).toBe("mania/arrows/body-0.png");
     expect(columns[0].lnBody?.frames).toBeUndefined();
     expect(columns[1].tap?.path).toBe("mania/arrows/up.png");
     expect(columns[1].tap?.frames).toBeUndefined();
   });
 
-  it("loops an animation once per second when the skin sets no framerate", async () => {
+  it.each(["", "AnimationFramerate: -1"])("uses 60 FPS for seven-frame notes with default framerate (%s)", async (framerate) => {
     const file = await buildOsk(
-      ["[General]", "Name: Spinner", "[Mania]", "Keys: 4", "NoteImage0: mania/arrows/left"].join("\n"),
-      ["mania/arrows/left-0.png", "mania/arrows/left-1.png", "mania/arrows/left-2.png", "mania/arrows/left-3.png"],
+      ["[General]", "Name: Spinner", framerate, "[Mania]", "Keys: 4", "NoteImage0: mania/arrows/left"].join("\n"),
+      Array.from({ length: 7 }, (_, i) => `mania/arrows/left-${i}.png`),
     );
     const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
     const tap = result.settings.keymodeProfiles["4"].assets.columns[0].tap;
-    expect(tap?.frames).toHaveLength(3);
-    expect(tap?.frameDurationMs).toBe(250);
+    expect(tap?.frames).toHaveLength(6);
+    expect(tap?.frameDurationMs).toBeCloseTo(1000 / 60);
   });
 
   it("keeps undeclared keymodes untouched when no default-named art exists", async () => {

@@ -28,20 +28,23 @@ describe("animated skin assets", () => {
 
   it("picks the frame for a note's own clock, wrapping either way", () => {
     expect(pickSkinAnimationFrame(animated, 0).name).toBe("left-0.png");
-    expect(pickSkinAnimationFrame(animated, 99).name).toBe("left-0.png");
-    expect(pickSkinAnimationFrame(animated, 100).name).toBe("left-1.png");
-    expect(pickSkinAnimationFrame(animated, 250).name).toBe("left-2.png");
-    expect(pickSkinAnimationFrame(animated, 300).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(animated, 16).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(animated, 17).name).toBe("left-1.png");
+    expect(pickSkinAnimationFrame(animated, 34).name).toBe("left-2.png");
+    expect(pickSkinAnimationFrame(animated, 50).name).toBe("left-0.png");
     expect(pickSkinAnimationFrame(animated, -1).name).toBe("left-2.png");
     expect(pickSkinAnimationFrame(animated, -250).name).toBe("left-0.png");
   });
 
-  it("loops once per second when no frame duration was recorded", () => {
-    const loop = { ...animated, frameDurationMs: undefined };
-    expect(pickSkinAnimationFrame(loop, 333).name).toBe("left-0.png");
-    expect(pickSkinAnimationFrame(loop, 334).name).toBe("left-1.png");
-    expect(pickSkinAnimationFrame(loop, 999).name).toBe("left-2.png");
-    expect(pickSkinAnimationFrame(loop, 1000).name).toBe("left-0.png");
+  it.each([undefined, 1000 / 7, 100])("plays seven-frame arrows at 60 FPS with saved duration %s", (frameDurationMs) => {
+    // Seven-frame arrow skins used to loop in 1000ms instead of 117ms.
+    // Old imports and owner payloads must be corrected without reimporting.
+    const loop = { ...animated, frames: Array.from({ length: 6 }, (_, i) => frame(`left-${i + 1}.png`)), frameDurationMs };
+    expect(pickSkinAnimationFrame(loop, 16).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(loop, 17).name).toBe("left-1.png");
+    expect(pickSkinAnimationFrame(loop, 100).name).toBe("left-6.png");
+    expect(pickSkinAnimationFrame(loop, 117).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(loop, 134).name).toBe("left-1.png");
   });
 
   it("is the identity for static art", () => {
@@ -69,7 +72,7 @@ describe("animated skin assets", () => {
     });
     const column = settings.keymodeProfiles["4"].assets.columns[0];
     expect(column.tap?.frames?.map((entry) => entry.name)).toEqual(["left-1.png", "left-2.png"]);
-    expect(column.tap?.frameDurationMs).toBe(100);
+    expect(column.tap?.frameDurationMs).toBeCloseTo(1000 / 60);
     expect(column.lnHead?.frames).toHaveLength(2);
     expect(column.lnTail?.frames).toHaveLength(2);
     expect(column.lnBody?.frames).toBeUndefined();

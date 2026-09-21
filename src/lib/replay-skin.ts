@@ -73,11 +73,14 @@ export interface ReplaySkinImageAsset {
   // hold heads and hold tails from "-N" frames, keys never animate, and a
   // body's animation is press-driven, so it stays on its first frame here.
   frames?: ReplaySkinImageAsset[];
-  // How long each frame shows. skin.ini AnimationFramerate when the skin sets
-  // one, otherwise one full loop per second, which is what stable and lazer
-  // do with an unset (-1) framerate.
+  // Retained in stored/wire assets for compatibility. Mania note animations
+  // always run at 60 FPS, ignoring the general skin.ini AnimationFramerate.
   frameDurationMs?: number;
 }
+
+// LegacyNotePiece.GetAnimationFromLookup does not enable applyConfigFrameRate:
+// https://github.com/ppy/osu/blob/master/osu.Game.Rulesets.Mania/Skinning/Legacy/LegacyNotePiece.cs
+export const REPLAY_SKIN_NOTE_FRAME_DURATION_MS = 1000 / 60;
 
 // The most frames one element keeps. Rotating-arrow skins ship 6 to 12; a
 // cap bounds the textures a column can ask for.
@@ -92,7 +95,9 @@ export function pickSkinAnimationFrame(asset: ReplaySkinImageAsset, elapsedMs: n
   const frames = asset.frames;
   if (!frames || frames.length === 0) return asset;
   const count = frames.length + 1;
-  const duration = asset.frameDurationMs && asset.frameDurationMs > 0 ? asset.frameDurationMs : 1000 / count;
+  // Ignore durations persisted by the old importer, which incorrectly applied
+  // the general skin animation rate (or one loop per second) to mania notes.
+  const duration = REPLAY_SKIN_NOTE_FRAME_DURATION_MS;
   if (!Number.isFinite(elapsedMs)) return asset;
   const index = ((Math.floor(elapsedMs / duration) % count) + count) % count;
   return index === 0 ? asset : frames[index - 1];
@@ -666,8 +671,7 @@ function normalizeImageAsset(value: unknown, allowFrames = false): ReplaySkinIma
       .filter((frame): frame is ReplaySkinImageAsset => Boolean(frame));
     if (frames.length > 0) {
       asset.frames = frames;
-      const duration = Number(raw.frameDurationMs);
-      if (Number.isFinite(duration) && duration > 0) asset.frameDurationMs = Math.min(10_000, duration);
+      asset.frameDurationMs = REPLAY_SKIN_NOTE_FRAME_DURATION_MS;
     }
   }
   return asset;
