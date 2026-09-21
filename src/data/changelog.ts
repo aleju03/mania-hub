@@ -33,7 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-21", text: "Replay skins with animated notes now animate, in the replay viewer and on skin previews.", to: "/skins" },
+  { date: "2026-09-21", text: "Skins with animated notes now animate in the replay viewer.", to: "/skins" },
   { date: "2026-09-21", text: "Added a Hits only style to the hit error bar overlay that hides the colored bar.", to: "/replay" },
   { date: "2026-09-21", text: "Added a Horizontal layout option to the Judgements overlay.", to: "/replay" },
   { date: "2026-09-21", text: "New replay overlay: Per-finger stats, showing accuracy or unstable rate for every column, in four styles.", to: "/replay" },
