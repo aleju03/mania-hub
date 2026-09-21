@@ -551,11 +551,13 @@ describe("skins HTTP endpoints", () => {
     const osk = await call(mockReq("GET", `/api/skins/file/${id}/${encodeURIComponent("Cloudy Skies.osk")}`));
     expect(osk.status).toBe(200);
     expect(osk.headers["content-type"]).toBe("application/octet-stream");
+    expect(osk.headers["x-robots-tag"]).toBe("noindex");
     expect(String(osk.body)).toContain(`object:skins/${id}/`);
 
     const preview = await call(mockReq("GET", `/api/skins/file/${id}/preview.png`));
     expect(preview.status).toBe(200);
     expect(preview.headers["cache-control"]).toContain("immutable");
+    expect(preview.headers["x-robots-tag"]).toBeUndefined();
 
     // only keys recorded on the row are reachable
     expect((await call(mockReq("GET", `/api/skins/file/${id}/other.osk`))).status).toBe(404);

@@ -1,6 +1,7 @@
 import { fetchBeatmapFileWithMeta, fetchWithCacheLock, osuFetch } from "./api";
 import { getCommunityBeatmapAssets, getCommunityBeatmapFile } from "./community-beatmap-store";
 import type { BeatmapChecksumLookupResult } from "./osu/replay";
+import { withTimeout } from "./promise-timeout";
 import { getJsonArtifact, getUploadedReplayPackedStorageKey, putJsonArtifact } from "./r2-cache";
 import { packReplayFrames } from "./replay-pack";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
@@ -25,6 +26,8 @@ import { normalizeUploadedReplayId, readUploadedReplay, uploadedReplaysUseR2 } f
 
 const PACKED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const PACKED_LOCK_TTL_MS = 30_000;
+const BEATMAP_LOOKUP_CACHE_TTL_MS = 5 * 60_000;
+const COMMUNITY_LOOKUP_TIMEOUT_MS = 3_000;
 
 export type StoredPackedUpload = { replay: UploadedReplayPacked; filename: string | null };
 
@@ -92,30 +95,47 @@ export async function readUploadedReplayPacked(id: string): Promise<StoredPacked
 
 async function lookupBeatmapMeta(checksum: string): Promise<BeatmapChecksumLookupResult | null> {
   if (!/^[a-f0-9]{32}$/i.test(checksum)) return null;
-  try {
-    const lookup = await osuFetch<BeatmapChecksumLookupResult>(
-      "/beatmaps/lookup",
-      { checksum },
-      // The lookup is immutable per checksum, so the proxy may keep it: the
-      // upload POST and the share link's opens all ask for the same one.
-      { caller: "uploadedReplayBeatmap", cacheTtlMs: 10 * 60 * 1000, expectedStatuses: [404] },
-    );
-    return lookup && Number.isFinite(lookup.id) && lookup.id > 0 ? lookup : null;
-  } catch (error) {
-    // 404 means the checksum is unknown to osu! (unsubmitted or deleted map).
-    // Anything else is an outage, and that is the caller's to surface: a map
-    // osu! knows must not be mistaken for one the viewer has to supply.
-    if (error instanceof Error && error.message.includes("] 404 ")) return null;
-    throw error;
-  }
+  // The proxy caches successful responses only. Keep confirmed misses here
+  // too, so reopening an unlisted replay doesn't queue another osu! request.
+  // Wrap null because fetchWithCacheLock treats a bare null as a cache miss.
+  const { meta } = await fetchWithCacheLock(
+    `uploaded-replay-beatmap:v1:${checksum.toLowerCase()}`,
+    BEATMAP_LOOKUP_CACHE_TTL_MS,
+    async (): Promise<{ meta: BeatmapChecksumLookupResult | null }> => {
+      try {
+        const lookup = await osuFetch<BeatmapChecksumLookupResult>(
+          "/beatmaps/lookup",
+          { checksum },
+          { caller: "uploadedReplayBeatmap", cacheTtlMs: 10 * 60 * 1000, expectedStatuses: [404] },
+        );
+        return { meta: lookup && Number.isFinite(lookup.id) && lookup.id > 0 ? lookup : null };
+      } catch (error) {
+        // Only a confirmed 404 is a missing map. Outages stay retryable and
+        // must not be cached as a map the viewer has to supply.
+        if (error instanceof Error && error.message.includes("] 404 ")) return { meta: null };
+        throw error;
+      }
+    },
+  );
+  return meta;
 }
 
 async function readCommunityCopy(checksum: string): Promise<UploadedReplayBeatmapResolution["community"]> {
-  const [content, assets] = await Promise.all([
-    getCommunityBeatmapFile(checksum).catch(() => null),
-    getCommunityBeatmapAssets(checksum).catch(() => ({ audio: false, background: false })),
-  ]);
-  return content ? { content, assets } : null;
+  const content = await withTimeout(
+    getCommunityBeatmapFile(checksum),
+    COMMUNITY_LOOKUP_TIMEOUT_MS,
+    "Community beatmap lookup timed out",
+  ).catch(() => null);
+  // Asset probes cannot make a missing chart playable; don't wait for them
+  // before showing the local map prompt. Never cache this miss: a contributor
+  // can supply the chart at any time, even while the osu! miss is cached.
+  if (!content) return null;
+  const assets = await withTimeout(
+    getCommunityBeatmapAssets(checksum),
+    COMMUNITY_LOOKUP_TIMEOUT_MS,
+    "Community beatmap asset lookup timed out",
+  ).catch(() => ({ audio: false, background: false }));
+  return { content, assets };
 }
 
 // The chart for a replay's checksum, as far as the server can take it. A
@@ -135,4 +155,3 @@ export async function resolveUploadedReplayBeatmap(checksum: string): Promise<Up
   const community = !meta || !file || file.checksumMatched === false ? await readCommunityCopy(checksum) : null;
   return { meta, file, community };
 }
-

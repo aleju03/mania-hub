@@ -21,22 +21,30 @@ describe("community replay browsing", () => {
     }
   });
 
-  it("filters keys and sorts highest accuracy with deterministic ties", () => {
+  it("filters keys", () => {
     const entries = [upload(1), upload(2, { keyCount: 7, accuracy: 1 }), upload(3, { keyCount: 6 }), upload(4)];
     expect(queryCommunityUploads(entries, { ...query, keys: "7" }).uploads.map((e) => e.id)).toEqual([entries[1].id]);
     expect(queryCommunityUploads(entries, { ...query, keys: "other" }).uploads.map((e) => e.id)).toEqual([entries[2].id]);
-    expect(queryCommunityUploads(entries, { ...query, sort: "accuracy" }).uploads.map((e) => e.id)).toEqual([entries[1].id, entries[3].id, entries[2].id, entries[0].id]);
   });
 
-  it("sorts highest difficulty first and puts unknown difficulty last", () => {
-    const entries = [upload(1), upload(2, { beatmap: { starRating: 5 } as never }), upload(3, { beatmap: { starRating: 8 } as never })];
-    const page = queryCommunityUploads(entries, { ...query, sort: "difficulty" }, false, 2);
-    expect(page.uploads.map((entry) => entry.id)).toEqual([entries[2].id, entries[1].id]);
-    expect(queryCommunityUploads(entries, { ...query, sort: "difficulty", cursor: page.nextCursor! }).uploads.map((entry) => entry.id)).toEqual([entries[0].id]);
-    expect(normalizeCommunityUploadsQuery({ sort: "difficulty" }).sort).toBe("difficulty");
+  it("filters grades by letter, silver ranks included", () => {
+    const entries = [upload(1, { grade: "X" }), upload(2, { grade: "SH" }), upload(3, { grade: "A" }), upload(4, { grade: "C" })];
+    expect(queryCommunityUploads(entries, { ...query, grade: "SS" }).uploads.map((e) => e.id)).toEqual([entries[0].id]);
+    expect(queryCommunityUploads(entries, { ...query, grade: "S" }).uploads.map((e) => e.id)).toEqual([entries[1].id]);
+    expect(queryCommunityUploads(entries, { ...query, grade: "A" }).uploads.map((e) => e.id)).toEqual([entries[2].id]);
+    expect(queryCommunityUploads(entries, { ...query, grade: "B" }).uploads).toHaveLength(0);
+    expect(queryCommunityUploads(entries, query).uploads).toHaveLength(4);
   });
 
-  it.each(["newest", "oldest", "accuracy", "difficulty"] as const)("keeps %s pagination stable across insertions and deletion of the boundary", (sort) => {
+  it("filters a star range on either end and drops uploads with no rating", () => {
+    const entries = [upload(1), upload(2, { beatmap: { starRating: 4 } as never }), upload(3, { beatmap: { starRating: 8 } as never })];
+    expect(queryCommunityUploads(entries, { ...query, starMin: 5, starMax: 0 }).uploads.map((e) => e.id)).toEqual([entries[2].id]);
+    expect(queryCommunityUploads(entries, { ...query, starMin: 0, starMax: 5 }).uploads.map((e) => e.id)).toEqual([entries[1].id]);
+    expect(queryCommunityUploads(entries, { ...query, starMin: 3, starMax: 9 }).uploads.map((e) => e.id)).toEqual([entries[2].id, entries[1].id]);
+    expect(queryCommunityUploads(entries, query).uploads).toHaveLength(3);
+  });
+
+  it.each(["newest", "oldest"] as const)("keeps %s pagination stable across insertions and deletion of the boundary", (sort) => {
     const entries = Array.from({ length: 50 }, (_, i) => upload(i + 1, { accuracy: (i + 1) / 50 }));
     const ordered = queryCommunityUploads(entries, { ...query, sort }, false, 100).uploads;
     const first = queryCommunityUploads(entries, { ...query, sort });
@@ -48,7 +56,8 @@ describe("community replay browsing", () => {
   });
 
   it("normalizes untrusted controls and ignores malformed cursors", () => {
-    expect(normalizeCommunityUploadsQuery({ q: " a ", keys: "0", sort: "sql", cursor: {} })).toEqual({ q: "a", keys: "all", sort: "newest" });
+    expect(normalizeCommunityUploadsQuery({ q: " a ", keys: "0", grade: "F", starMin: "x", starMax: 99, sort: "sql", cursor: {} }))
+      .toEqual({ q: "a", keys: "all", grade: "all", starMin: 0, starMax: 15, sort: "newest" });
     expect(queryCommunityUploads([upload(1)], { ...query, cursor: "broken" }).uploads).toHaveLength(1);
     expect(queryCommunityUploads([], query, true)).toMatchObject({ uploads: [], total: 0, nextCursor: null, indexing: true });
   });

@@ -3,7 +3,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { waitUntil } from "@vercel/functions";
 import { getCommunityBeatmapAssets } from "./community-beatmap-store";
-import { DESCRIPTION_VERSION, describeUploadedReplayById, readUploadedReplayDescription } from "./uploaded-replay-describe";
+import { DESCRIPTION_VERSION, describeUploadedReplayById, needsStarRatingAtRate, readUploadedReplayDescription } from "./uploaded-replay-describe";
 import { fetchUploadedReplayIndexRows } from "./uploaded-replay-index";
 import { queryCommunityUploads, type CommunityUploadsQuery } from "./uploaded-replay-feed";
 import type { CommunityUploadEntry } from "./uploaded-replay-payload";
@@ -127,7 +127,8 @@ async function refreshCatalog(): Promise<void> {
   const toRefresh = entries.filter((entry) => {
     const cached = catalog.get(entry.id);
     return repairs.has(entry.id) || (cached && (Date.now() - cached.checkedAt >= DESCRIPTION_REFRESH_MS
-      || (cached.upload.version ?? 1) < DESCRIPTION_VERSION));
+      || (cached.upload.version ?? 1) < DESCRIPTION_VERSION
+      || needsStarRatingAtRate(cached.upload)));
   });
   pending = repairs.size;
   next = 0;

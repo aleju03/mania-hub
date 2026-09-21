@@ -10,6 +10,7 @@ import { getCommunityBeatmapAssetUrl } from "#/lib/community-beatmap-assets";
 import { formatAccuracy, formatTimeAgo } from "#/lib/format";
 import { useLocale } from "#/lib/locale-context";
 import { withModRate } from "#/lib/score";
+import { uploadStarRating } from "#/lib/uploaded-replay-feed";
 import type { CommunityUploadEntry } from "#/lib/uploaded-replay-payload";
 import { ReplayCoverFallback } from "./ReplayCoverFallback";
 
@@ -19,8 +20,10 @@ export const CommunityReplayCard = memo(function CommunityReplayCard({ upload }:
   const [failedCover, setFailedCover] = useState<string | null>(null);
   const title = upload.beatmap?.title || upload.originalFilename || t`Unknown beatmap`;
   const uploader = upload.uploadedBy;
+  const playerName = upload.playerName;
+  const stars = uploadStarRating(upload);
   const cover = upload.beatmap?.beatmapsetId
-    ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/cover.jpg`
+    ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/cover@2x.jpg`
     : upload.communityBackground && upload.beatmapHash ? getCommunityBeatmapAssetUrl(upload.beatmapHash, "background") : null;
   return (
     <Link
@@ -35,9 +38,9 @@ export const CommunityReplayCard = memo(function CommunityReplayCard({ upload }:
           : <ReplayCoverFallback seed={upload.beatmapHash || upload.id} keyCount={upload.keyCount} playerName={upload.playerName} />}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/5" />
         <span className="absolute left-2.5 top-2.5 rounded-md bg-black/70 px-2 py-1 text-xs font-bold text-white">{upload.keyCount}K</span>
-        {upload.beatmap?.starRating != null && (
-          <span className="absolute right-2.5 top-2.5 flex" title={t`Beatmap difficulty (without mods)`}>
-            <StarRatingBadge stars={upload.beatmap.starRating} size={1.2} />
+        {stars != null && (
+          <span className="absolute right-2.5 top-2.5 flex" title={upload.starRatingAtRate != null ? t`Beatmap difficulty at this play's rate` : t`Beatmap difficulty`}>
+            <StarRatingBadge stars={stars} size={1.2} />
           </span>
         )}
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -57,7 +60,7 @@ export const CommunityReplayCard = memo(function CommunityReplayCard({ upload }:
         <div className="min-w-0 flex-1">
           <h2 className="line-clamp-2 text-sm font-bold leading-snug text-white group-hover:text-osu-pink-light">{title}</h2>
           {upload.beatmap && <p className="mt-1 truncate text-xs text-osu-f1" title={`${upload.beatmap.artist} · ${upload.beatmap.version}`}>{upload.beatmap.artist} · {upload.beatmap.version}</p>}
-          <p className="mt-1.5 truncate text-xs font-semibold text-osu-l2">{upload.playerName}</p>
+          <p className="mt-1.5 truncate text-xs font-semibold text-osu-l2"><Trans>Played by {playerName}</Trans></p>
           <p className="mt-0.5 truncate text-[11px] text-osu-f1">
             {uploader && <><Trans>Uploaded by {uploader.username || String(uploader.userId)}</Trans><span aria-hidden="true"> · </span></>}
             {formatTimeAgo(new Date(upload.uploadedAt).toISOString(), locale)}

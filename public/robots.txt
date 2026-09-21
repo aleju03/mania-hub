@@ -13,8 +13,7 @@ User-agent: *
 Allow: /api/og
 Disallow: /api/
 Disallow: /admin/
-Disallow: /tracker
-Disallow: /snipes
+# /tracker and /snipes must be crawlable so their noindex tags can be read.
 Allow: /
 
 Sitemap: https://mania-tracker.com/sitemap.xml

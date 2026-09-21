@@ -343,6 +343,9 @@ export async function handleSkinsRoutes(req: IncomingMessage, res: ServerRespons
     sendCors(req, res, ctx);
     res.statusCode = 200;
     res.setHeader("content-type", object.contentType);
+    // Index the skin's HTML detail page, not its downloadable archive.
+    // Preview images use the separate branch above and remain indexable.
+    res.setHeader("x-robots-tag", "noindex");
     if (object.contentLength != null) res.setHeader("content-length", String(object.contentLength));
     if (object.contentDisposition) res.setHeader("content-disposition", object.contentDisposition);
     res.setHeader("cache-control", cacheControl);

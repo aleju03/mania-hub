@@ -1139,6 +1139,10 @@ msgstr "{from} a {to}"
 msgid "{gap}pp to go"
 msgstr "faltan {gap}pp"
 
+#: src/routes/replay_.community.tsx
+msgid "{grade} only"
+msgstr "Solo {grade}"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "{have} / {want} plays"
 msgstr "{have} / {want} plays"
@@ -2693,7 +2697,7 @@ msgstr "todos los modos de teclas"
 msgid "All keymodes"
 msgstr "Todos los modos de teclas"
 
-#: src/routes/replay_.community.tsx
+#: src/components/me/MyDataPanel.tsx
 msgid "All keys"
 msgstr "Todos los modos"
 
@@ -2836,11 +2840,13 @@ msgstr "cualquiera"
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/maps.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "Cualquiera"
 
+#: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
 msgid "Any grade"
 msgstr "Cualquier rank"
@@ -3223,8 +3229,16 @@ msgid "Beatmap card: stars, keys, status, BPM, length and dan."
 msgstr "Tarjeta de beatmap: estrellas, teclas, estado, BPM, duración y dan."
 
 #: src/components/replay/CommunityReplayCard.tsx
-msgid "Beatmap difficulty (without mods)"
-msgstr "Dificultad del mapa (sin mods)"
+msgid "Beatmap difficulty"
+msgstr "Dificultad del mapa"
+
+#: src/components/replay/CommunityReplayCard.tsx
+#~ msgid "Beatmap difficulty (without mods)"
+#~ msgstr "Dificultad del mapa (sin mods)"
+
+#: src/components/replay/CommunityReplayCard.tsx
+msgid "Beatmap difficulty at this play's rate"
+msgstr "Dificultad del mapa a la velocidad de esta jugada"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -3845,7 +3859,12 @@ msgstr "CJ"
 msgid "clear"
 msgstr "limpiar"
 
+#: src/components/maps/RangePill.tsx
+#: src/components/maps/RangeSlider.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/maps.tsx
+#: src/routes/player/$username.tsx
 msgid "Clear"
 msgstr "Limpiar"
 
@@ -3864,6 +3883,7 @@ msgid "Clear editor"
 msgstr "Limpiar editor"
 
 #: src/routes/replay_.community.tsx
+#: src/routes/snipes.tsx
 msgid "Clear filters"
 msgstr "Limpiar filtros"
 
@@ -3884,6 +3904,12 @@ msgstr "Quitar marcas"
 msgid "Clear player filter"
 msgstr "Quitar filtro de jugador"
 
+#: src/components/maps/MapSearchSection.tsx
+#: src/components/me/MyDataPanel.tsx
+#: src/components/replay/ReplayBrowseView.tsx
+#: src/components/settings/SettingsPanel.tsx
+#: src/routes/farm-helper.tsx
+#: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 msgid "Clear search"
 msgstr "Limpiar búsqueda"
@@ -4600,7 +4626,6 @@ msgstr "No se pudo cargar el detalle completo del día."
 msgid "Couldn't load the song audio for this replay."
 msgstr "No se pudo cargar el audio de la canción para este replay."
 
-#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
 msgstr "No se pudieron cargar las subidas; actualiza para reintentar."
@@ -5155,6 +5180,7 @@ msgstr "dificultad"
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/replay_.community.tsx
 msgid "Difficulty"
 msgstr "Dificultad"
 
@@ -6580,6 +6606,7 @@ msgstr "Dorado"
 #~ msgstr "¡Listo!"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
 msgid "Grade"
 msgstr "Rank"
@@ -6778,12 +6805,12 @@ msgid "Higher values move receptors lower."
 msgstr "Los valores más altos mueven los receptores hacia abajo."
 
 #: src/routes/replay_.community.tsx
-msgid "Highest accuracy"
-msgstr "Mayor precisión"
+#~ msgid "Highest accuracy"
+#~ msgstr "Mayor precisión"
 
 #: src/routes/replay_.community.tsx
-msgid "Highest difficulty"
-msgstr "Mayor dificultad"
+#~ msgid "Highest difficulty"
+#~ msgstr "Mayor dificultad"
 
 #: src/routes/player/$username.tsx
 msgid "Highest PP first"
@@ -7452,7 +7479,9 @@ msgstr "Historial de teclas"
 msgid "Key hitsounds"
 msgstr "Hitsounds de teclas"
 
-#: src/routes/replay_.community.tsx
+#: src/components/rankings/LeaderboardControls.tsx
+#: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/farm-helper.tsx
 msgid "Key mode"
 msgstr "Modo"
 
@@ -7501,6 +7530,7 @@ msgstr "modo"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/maps.tsx
+#: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "Keys"
@@ -7974,6 +8004,7 @@ msgstr "Cargar la página me! de un jugador"
 msgid "Load into editor"
 msgstr "Cargar en el editor"
 
+#: src/components/player/DanEvidenceModal.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Load more"
 msgstr "Cargar más"
@@ -8128,7 +8159,16 @@ msgstr "Cargando tus datos…"
 msgid "loading..."
 msgstr "cargando..."
 
+#: src/components/packs/CardCollectors.tsx
+#: src/components/packs/GoatHoldersButton.tsx
+#: src/components/packs/SetsView.tsx
+#: src/components/replay/ReplayBufferingIndicator.tsx
+#: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/skins/SkinAssetExplorer.tsx
+#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
+#: src/routes/replay_.uploads.tsx
+#: src/routes/snipes.tsx
 msgid "Loading..."
 msgstr "Cargando..."
 
@@ -9081,6 +9121,7 @@ msgstr "más recientes"
 msgid "Newest"
 msgstr "Más recientes"
 
+#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
 msgid "Newest first"
 msgstr "Más recientes primero"
@@ -10039,6 +10080,7 @@ msgstr "más antiguo"
 msgid "Oldest"
 msgstr "Más antiguo"
 
+#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
 msgid "Oldest first"
 msgstr "Más antiguos primero"
@@ -10436,6 +10478,7 @@ msgstr "otro"
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/replay_.community.tsx
 msgid "Other"
 msgstr "Otro"
 
@@ -10444,8 +10487,8 @@ msgstr "Otro"
 #~ msgstr "Otros modos de teclas"
 
 #: src/routes/replay_.community.tsx
-msgid "Other keys"
-msgstr "Otros modos"
+#~ msgid "Other keys"
+#~ msgstr "Otros modos"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Other rating updates"
@@ -10866,6 +10909,10 @@ msgstr "Jugado"
 #: src/routes/player/$username.tsx
 msgid "Played {0} on {1}"
 msgstr "Jugó {0} en {1}"
+
+#: src/components/replay/CommunityReplayCard.tsx
+msgid "Played by {playerName}"
+msgstr "Jugado por {playerName}"
 
 #: src/components/ui/LazerBadge.tsx
 #~ msgid "Played on osu!lazer"
@@ -11728,6 +11775,7 @@ msgid "Recent plays"
 msgstr "Plays recientes"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/player/$username.tsx
 msgid "Recent Plays"
 msgstr "Plays recientes"
 
@@ -12066,6 +12114,7 @@ msgstr "Reemplazar el borrador con {0}"
 msgid "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
 msgstr "Reemplaza el cursor del mouse por uno estilo osu! en todo el sitio. Solo en escritorio."
 
+#: src/components/replay/ReplayCoverFallback.tsx
 #: src/routes/player/$username.tsx
 msgid "Replay"
 msgstr "Replay"
@@ -12104,6 +12153,7 @@ msgid "Replay video export options"
 msgstr "Opciones de exportación de video del replay"
 
 #: src/routes/replay_.community.tsx
+#: src/routes/replay_.uploads.tsx
 msgid "Replays"
 msgstr "Replays"
 
@@ -13185,7 +13235,6 @@ msgstr "mostrar más"
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
-#: src/routes/replay_.community.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Show more"
 msgstr "Mostrar más"
@@ -13198,6 +13247,10 @@ msgstr "Mostrar mi nombre entre los espectadores al ver una repetición"
 #~ msgid "Show newest {REPORTER_THREAD_PREVIEW_COUNT}"
 #~ msgstr "Mostrar las {REPORTER_THREAD_PREVIEW_COUNT} más recientes"
 
+#: src/routes/replay_.community.tsx
+msgid "Show newest first"
+msgstr "Mostrar más recientes primero"
+
 #: src/routes/top-plays.tsx
 msgid "Show non-4K plays"
 msgstr "Mostrar plays que no son 4K"
@@ -13205,6 +13258,10 @@ msgstr "Mostrar plays que no son 4K"
 #: src/routes/tracker.tsx
 msgid "Show non-4K scores"
 msgstr "Mostrar scores que no son 4K"
+
+#: src/routes/replay_.community.tsx
+msgid "Show oldest first"
+msgstr "Mostrar más antiguos primero"
 
 #: src/components/packs/BindersView.tsx
 #~ msgid "Show on shelf"
@@ -13686,8 +13743,8 @@ msgid "Sort plays"
 msgstr "Ordenar plays"
 
 #: src/routes/replay_.community.tsx
-msgid "Sort replays"
-msgstr "Ordenar repeticiones"
+#~ msgid "Sort replays"
+#~ msgstr "Ordenar repeticiones"
 
 #: src/routes/tracker.tsx
 msgid "Sorting highest star rating first - left click for ascending, right click to clear"
@@ -13791,6 +13848,7 @@ msgstr "Estándar"
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/replay_.community.tsx
 msgid "Star rating"
 msgstr "Rating de estrellas"
 
@@ -15436,6 +15494,7 @@ msgid "This is not available yet. Check back soon."
 msgstr "Esto aún no está disponible. Vuelve pronto."
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "this map"
 msgstr "este mapa"
 
@@ -16004,7 +16063,12 @@ msgstr "Dejar de ocultar"
 #~ msgid "Unique cards"
 #~ msgstr "Cartas únicas"
 
+#: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
+#: src/components/packs/collections/RecordBoards.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
+#: src/components/skins/SkinUpdateModal.tsx
+#: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "unknown"
 msgstr "desconocido"
 
@@ -16019,6 +16083,8 @@ msgid "unknown artist"
 msgstr "artista desconocido"
 
 #: src/components/replay/CommunityReplayCard.tsx
+#: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay.tsx
 msgid "Unknown beatmap"
 msgstr "Beatmap desconocido"
 
@@ -16135,10 +16201,12 @@ msgid "updating"
 msgstr "actualizando"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.uploads.tsx
 msgid "Upload"
 msgstr "Subir"
 
 #: src/routes/replay_.community.tsx
+#: src/routes/replay_.uploads.tsx
 msgid "Upload a replay"
 msgstr "Subir un replay"
 
@@ -17288,6 +17356,7 @@ msgid "Your top plays are waiting for the chart analyzer. Position in queue: {po
 msgstr "Tus top plays están esperando al analizador de charts. Posición en la fila: {position}"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/routes/replay_.uploads.tsx
 msgid "Your uploads"
 msgstr "Tus subidas"
 

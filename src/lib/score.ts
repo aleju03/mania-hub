@@ -166,6 +166,18 @@ export function withModRate(acronyms: string[], rate: number | null | undefined)
   ));
 }
 
+/** `getScoreRate` for the same stored shape `withModRate` reads: acronyms plus
+ *  the one custom rate kept beside them. */
+export function getModListRate(acronyms: string[], rate: number | null | undefined): number {
+  const custom = Number(rate);
+  for (const acronym of acronyms) {
+    const defaultRate = MOD_RATE_DEFAULTS[acronym];
+    if (defaultRate === undefined) continue;
+    return Number.isFinite(custom) && custom > 0 ? custom : defaultRate;
+  }
+  return 1;
+}
+
 /** Like `getModAcronyms`, but preserves lazer custom rate settings so the UI
  *  can render e.g. "0.9x" instead of the plain DC icon. */
 export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true): ModDisplay[] {

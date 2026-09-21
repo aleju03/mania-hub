@@ -92,6 +92,9 @@ export const Route = createFileRoute("/packs")({
       origin: match.context.origin,
       imageKind: "packs",
       imageTitle: "Card Packs",
+      // The game initially renders a loading board; only the packs landing
+      // page should be a search result, not an interactive session entry.
+      noindex: match.search.view === "streak",
     });
   },
   component: PacksPage,

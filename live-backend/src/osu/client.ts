@@ -342,6 +342,8 @@ function classifyLimiterLane(caller: string, path: string): LimiterLane {
   if (path.startsWith("/scores/") && path.endsWith("/download")) return "interactive";
   if (
     caller === "score-submission"
+    || caller === "uploadedReplayBeatmap"
+    || caller === "lookupBeatmapByChecksum"
     || caller.startsWith("api:")
     || caller.startsWith("admin:")
     || caller.startsWith("get")

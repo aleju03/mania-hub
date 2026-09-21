@@ -1,24 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, stripSearchParams } from "@tanstack/react-router";
-import { ArrowDownWideNarrow, ArrowLeft, ArrowUpWideNarrow, LoaderCircle, Percent, Search, Star, Upload, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowLeft, ArrowUpWideNarrow, LoaderCircle, Search, Upload, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CommunityReplayCard } from "../components/replay/CommunityReplayCard";
-import { SelectMenu } from "../components/ui/SelectMenu";
-import { normalizeCommunityUploadsQuery, type CommunityUploadsQuery } from "../lib/uploaded-replay-feed";
+import { StarRangePill } from "../components/maps/StarRangePill";
+import { GradeImg } from "../components/ui/GradeImg";
+import { FilterField, SegmentedControl } from "../components/ui/SegmentedControl";
+import { COMMUNITY_STAR_MAX, normalizeCommunityUploadsQuery, type CommunityUploadGrade, type CommunityUploadsQuery } from "../lib/uploaded-replay-feed";
 import { useCommunityUploadFeed } from "../lib/use-community-upload-feed";
 import { pageSeo } from "../lib/seo";
 import { formatNumber } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
 
-type CommunitySearch = Partial<Pick<CommunityUploadsQuery, "q" | "keys" | "sort">>;
-const defaults: CommunitySearch = { q: "", keys: "all", sort: "newest" };
+type CommunitySearch = Partial<Pick<CommunityUploadsQuery, "q" | "keys" | "grade" | "starMin" | "starMax" | "sort">>;
+const defaults: CommunitySearch = { q: "", keys: "all", grade: "all", starMin: 0, starMax: 0, sort: "newest" };
 export const Route = createFileRoute("/replay_/community")({
   validateSearch: (search: Record<string, unknown>): CommunitySearch => {
-    const { q, keys, sort } = normalizeCommunityUploadsQuery(search);
-    return { q, keys, sort };
+    const { q, keys, grade, starMin, starMax, sort } = normalizeCommunityUploadsQuery(search);
+    return { q, keys, grade, starMin, starMax, sort };
   },
   search: { middlewares: [stripSearchParams<CommunitySearch>(defaults)] },
   head: ({ match }) => {
@@ -61,10 +63,10 @@ function CommunityReplaysPage() {
     return () => observer.disconnect();
   }, [feed.nextCursor, feed.loading, feed.failed, feed.indexing, feed.loadMore]);
 
-  const filtered = query.q !== "" || query.keys !== "all";
+  const filtered = query.q !== "" || query.keys !== "all" || query.grade !== "all" || query.starMin > 0 || query.starMax > 0;
   const clear = () => {
     setSearch("");
-    void navigate({ search: { ...query, q: "", keys: "all" }, resetScroll: false });
+    void navigate({ search: { ...query, ...defaults, sort: query.sort }, resetScroll: false });
   };
   const count = formatNumber(feed.total, locale);
 
@@ -92,27 +94,56 @@ function CommunityReplaysPage() {
               />
               {search && <button type="button" onClick={() => setSearch("")} aria-label={t`Clear search`} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-osu-f1 hover:text-white"><X className="h-4 w-4" /></button>}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label={t`Key mode`}>
-                {([ ["all", t`All keys`], ["4", "4K"], ["7", "7K"], ["other", t`Other keys`] ] as const).map(([keys, label]) => (
-                  <button key={keys} type="button" aria-pressed={query.keys === keys}
-                    onClick={() => void navigate({ search: { ...query, keys }, resetScroll: false })}
-                    className={`inline-flex h-8 cursor-pointer items-center rounded-lg px-3 text-xs font-semibold transition-colors ${query.keys === keys ? "bg-osu-l1 text-osu-b6" : "bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white"}`}>{label}</button>
-                ))}
-              </div>
-              <SelectMenu
-                ariaLabel={t`Sort replays`}
-                value={query.sort}
-                align="right"
-                className="ml-auto [&>button]:h-8 [&>button]:rounded-lg [&>button]:px-3"
-                options={[
-                  { value: "newest", label: t`Newest first`, icon: ArrowDownWideNarrow },
-                  { value: "oldest", label: t`Oldest first`, icon: ArrowUpWideNarrow },
-                  { value: "accuracy", label: t`Highest accuracy`, icon: Percent },
-                  { value: "difficulty", label: t`Highest difficulty`, icon: Star },
-                ]}
-                onChange={(sort) => void navigate({ search: { ...query, sort }, resetScroll: false })}
-              />
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <FilterField label={t`Keys`}>
+                <SegmentedControl
+                  id="community-keys"
+                  value={query.keys}
+                  className="tabular-nums"
+                  options={([["all", t`Any`], ["4", "4K"], ["7", "7K"], ["other", t`Other`]] as const).map(([keys, label]) => ({ value: keys, label }))}
+                  onChange={(keys) => void navigate({ search: { ...query, keys }, resetScroll: false })}
+                />
+              </FilterField>
+              <FilterField label={t`Grade`}>
+                <SegmentedControl
+                  id="community-grade"
+                  size="icon"
+                  dimInactive
+                  value={query.grade}
+                  options={(["all", "SS", "S", "A", "B"] as CommunityUploadGrade[]).map((grade) => ({
+                    value: grade,
+                    title: grade === "all" ? t`Any grade` : t`${grade} only`,
+                    label: grade === "all"
+                      ? <span className="px-1 text-[11px]"><Trans>Any</Trans></span>
+                      : <GradeImg grade={grade} size={20} />,
+                  }))}
+                  onChange={(grade) => void navigate({ search: { ...query, grade }, resetScroll: false })}
+                />
+              </FilterField>
+              <FilterField label={t`Difficulty`}>
+                <StarRangePill
+                  lo={0}
+                  hi={COMMUNITY_STAR_MAX}
+                  min={query.starMin}
+                  max={query.starMax}
+                  step={0.1}
+                  ariaLabel={t`Star rating`}
+                  onChange={(starMin, starMax) => void navigate({ search: { ...query, starMin, starMax }, resetScroll: false })}
+                />
+              </FilterField>
+              {/* Not a filter, so it keeps the segmented track's weight without
+                  its pink fill: one press flips the order. */}
+              <button
+                type="button"
+                onClick={() => void navigate({ search: { ...query, sort: query.sort === "newest" ? "oldest" : "newest" }, resetScroll: false })}
+                title={query.sort === "newest" ? t`Show oldest first` : t`Show newest first`}
+                className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/25 bg-osu-b4/50 px-2.5 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-l2"
+              >
+                {query.sort === "newest"
+                  ? <ArrowDownWideNarrow className="h-3.5 w-3.5" aria-hidden="true" />
+                  : <ArrowUpWideNarrow className="h-3.5 w-3.5" aria-hidden="true" />}
+                {query.sort === "newest" ? <Trans>Newest first</Trans> : <Trans>Oldest first</Trans>}
+              </button>
             </div>
           </div>
 

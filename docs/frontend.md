@@ -37,6 +37,8 @@ Client state uses Zustand in `src/store.ts`, persisted to localStorage under `ma
 
 ## OG images and SEO
 
+Tracker, snipes and report pages serve `noindex` in their route heads and remain crawlable so search engines can read that directive. `/packs?view=streak` also serves `noindex`; the main `/packs` landing page stays indexable. The backend's streamed `.osk` downloads carry `X-Robots-Tag: noindex`, while public skin previews remain indexable.
+
 OG images are rendered by `src/routes/api/og.ts` (@vercel/og) and cached in R2 keyed by the `OG_IMAGE_VERSION` constant in `src/lib/seo.ts`; bump it there when changing OG layouts. Meta and OG URL builders also live in `src/lib/seo.ts`; the sitemap is `src/routes/api/sitemap.ts`. Shared uploaded replays use their public upload id to render the normal replay result card from the persisted uploaded-replay description, since a manually uploaded `.osr` has no guaranteed public score id.
 
 The frontend-wide API/server-function/OG limiter trusts `cf-connecting-ip` only when `TRUST_PROXY_HEADERS` is explicitly enabled. That switch is valid only for a Cloudflare-only origin; otherwise it stays off and all requests use the conservative shared `unknown` bucket. OG rasterization is single-flight per key and guarded by a hard two-render semaphore, including the cold default-card fallback.

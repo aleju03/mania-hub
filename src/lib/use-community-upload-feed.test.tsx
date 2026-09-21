@@ -10,7 +10,7 @@ import { useCommunityUploadFeed } from "./use-community-upload-feed";
 function page(ids: string[], nextCursor: string | null = null): CommunityUploadsPage {
   return { uploads: ids.map((id) => ({ id } as CommunityUploadEntry)), total: 100, nextCursor, indexing: false };
 }
-const query = { q: "", keys: "all", sort: "newest" } as const;
+const query = { q: "", keys: "all", grade: "all", starMin: 0, starMax: 0, sort: "newest" } as const;
 
 describe("community feed requests", () => {
   it("prefetches once, deduplicates appends, and restores loaded cards on return", async () => {

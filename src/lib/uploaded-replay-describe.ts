@@ -1,8 +1,10 @@
 import type { BeatmapChecksumLookupResult } from "./osu/replay";
-import { getPersistentCacheEntry, osuFetch, setPersistentCache } from "./api";
+import { fetchBeatmapFileWithMeta, getPersistentCacheEntry, osuFetch, setPersistentCache } from "./api";
+import { parseManiaBeatmap } from "./beatmap-parser";
+import { calculateManiaStarRating } from "./mania-star-rating";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
 import { getJsonArtifact, getUploadedReplayDescStorageKey, getUploadedReplayStorageKey, putJsonArtifact } from "./r2-cache";
-import { getManiaAccuracyFromCounts, getModDisplayList, scoreUsesLazerScoring } from "./score";
+import { getManiaAccuracyFromCounts, getManiaKeyModCount, getModDisplayList, getModListRate, scoreUsesLazerScoring } from "./score";
 import {
   normalizeUploadedReplayId,
   normalizeUploadedReplayFilename,
@@ -83,6 +85,10 @@ export type UploadedReplayDescription = {
   // re-reading the .osr; computedAt is when that lookup last ran.
   beatmapHash?: string;
   computedAt?: number;
+  /** The chart's star rating at the rate the play ran at, which is what the
+   *  viewer shows once it opens. Only stored for a rate-changing play; at 1.0x
+   *  the map's own `beatmap.starRating` already is the rating. */
+  starRatingAtRate?: number;
   /** DESCRIPTION_VERSION at write time; absent means the original shape. */
   version?: number;
 };
@@ -150,6 +156,62 @@ async function lookupUploadedReplayBeatmap(checksum: string): Promise<UploadedRe
   }
 }
 
+// A chart that would not rate (deleted map, a .osu that never arrives) is tried
+// once per process; without this the catalog would reach for it on every
+// refresh, and a restart is enough of a retry for a transient outage.
+const unratedAtRate = new Set<string>();
+
+/** A play with a rate mod is rated at that rate, so the map's own rating (what
+ *  the osu! lookup returns) is not the number to show. Nothing to do at 1.0x,
+ *  or for a map osu! doesn't know: there is no chart to rate. */
+export function needsStarRatingAtRate(description: UploadedReplayDescription): boolean {
+  return description.starRatingAtRate === undefined
+    && !unratedAtRate.has(description.id)
+    && description.beatmap?.beatmapId != null
+    && getModListRate(description.mods, description.modRate) !== 1;
+}
+
+// The same computation the viewer's info bar runs: the lazer diffcalc port over
+// the parsed chart at the play's rate, so a card and the replay it opens agree.
+// A failure leaves the field unset and follows the process-level retry guard.
+async function computeStarRatingAtRate(description: UploadedReplayDescription): Promise<number | null> {
+  const beatmap = description.beatmap;
+  if (!beatmap?.beatmapId) return null;
+  try {
+    const file = await fetchBeatmapFileWithMeta(beatmap.beatmapId, beatmap.beatmapsetId, description.beatmapHash || null);
+    // The fetch can return osu!'s current revision when the replay's original
+    // chart is unavailable. Never persist that other chart's rating.
+    if (file.checksumMatched === false) return null;
+    // The same choice the viewer's getManiaParseKeyCount makes: a native mania
+    // chart carries its own column count, a convert takes the xK keymod's and
+    // otherwise lets the lazer convert formula decide.
+    const chart = parseManiaBeatmap(file.content,
+      beatmap.mode === "mania" ? {} : { keyCount: getManiaKeyModCount(description.mods.map((acronym) => ({ acronym }))) });
+    if (chart.notes.length === 0) return null;
+    const stars = calculateManiaStarRating(chart.notes, chart.keyCount, getModListRate(description.mods, description.modRate));
+    return Number.isFinite(stars) ? stars : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fills the field in on an artifact written before it existed, in place. Reads
+// nothing but the .osu file, so no .osr parse and no osu! lookup are repeated.
+async function withStarRatingAtRate(
+  normalized: string,
+  description: UploadedReplayDescription,
+): Promise<UploadedReplayDescription> {
+  if (!needsStarRatingAtRate(description)) return description;
+  const starRatingAtRate = await computeStarRatingAtRate(description);
+  if (starRatingAtRate == null) {
+    unratedAtRate.add(description.id);
+    return description;
+  }
+  const filled = { ...description, starRatingAtRate };
+  await persistDescription(normalized, filled);
+  return filled;
+}
+
 function descriptionCacheKey(normalized: string): string {
   return `uploaded-replay-desc:v${DESCRIPTION_VERSION}:${normalized}`;
 }
@@ -201,11 +263,11 @@ export async function describeUploadedReplayById(id: string): Promise<UploadedRe
 
   const cacheKey = descriptionCacheKey(normalized);
   const cached = await getPersistentCacheEntry<UploadedReplayDescription>(cacheKey);
-  if (cached.hit) return cached.value;
+  if (cached.hit) return withStarRatingAtRate(normalized, cached.value);
 
   const stored = await getJsonArtifact<UploadedReplayDescription>(getUploadedReplayDescStorageKey(normalized));
   if (stored) {
-    const description = await upgradeStoredDescription(normalized, stored);
+    const description = await withStarRatingAtRate(normalized, await upgradeStoredDescription(normalized, stored));
     const ttl = description.beatmap ? DESCRIPTION_CACHE_TTL : DESCRIPTION_UNRESOLVED_CACHE_TTL;
     await setPersistentCache(cacheKey, description, ttl);
     return description;
@@ -288,7 +350,7 @@ async function buildUploadedReplayDescription(
   const isLazer = scoreUsesLazerScoring(null, header.gameVersion);
   const accuracy = maniaAccuracy(judgements, isLazer, mods);
 
-  return {
+  const described: UploadedReplayDescription = {
     id: normalized,
     playerName: header.playerName,
     mods,
@@ -308,6 +370,13 @@ async function buildUploadedReplayDescription(
     computedAt: Date.now(),
     version: DESCRIPTION_VERSION,
   };
+  if (!needsStarRatingAtRate(described)) return described;
+  const starRatingAtRate = await computeStarRatingAtRate(described);
+  if (starRatingAtRate == null) {
+    unratedAtRate.add(described.id);
+    return described;
+  }
+  return { ...described, starRatingAtRate };
 }
 
 export async function describeUploadedReplayByKey(key: string): Promise<UploadedReplayDescription | null> {

@@ -15,7 +15,7 @@ const EMPTY: Feed = { uploads: [], total: 0, nextCursor: null, indexing: false }
 const CACHE_MS = 60_000;
 
 export function useCommunityUploadFeed(query: CommunityUploadsQuery) {
-  const key = JSON.stringify([query.q, query.keys, query.sort]);
+  const key = JSON.stringify([query.q, query.keys, query.grade, query.starMin, query.starMax, query.sort]);
   const saved = feeds.get(key);
   const initial = saved && Date.now() - saved.fetchedAt < CACHE_MS ? saved.feed : EMPTY;
   const [feed, setFeed] = useState<Feed>(initial);
@@ -27,6 +27,7 @@ export function useCommunityUploadFeed(query: CommunityUploadsQuery) {
 
   const load = useCallback(async (append: boolean) => {
     if (busy.current) return;
+    const filters = { q: query.q, keys: query.keys, grade: query.grade, starMin: query.starMin, starMax: query.starMax, sort: query.sort };
     busy.current = true;
     const revision = generation.current;
     const cursor = append ? current.current.nextCursor : null;
@@ -36,7 +37,7 @@ export function useCommunityUploadFeed(query: CommunityUploadsQuery) {
       const saved = feeds.get(key);
       const result = cursor && saved?.prefetch?.cursor === cursor
         ? await saved.prefetch.result
-        : await getCommunityUploadsPage({ data: { q: query.q, keys: query.keys, sort: query.sort,
+        : await getCommunityUploadsPage({ data: { ...filters,
           ...(cursor ? { cursor } : { limit: Math.max(24, current.current.uploads.length) }) } });
       if (generation.current !== revision) return;
       const seen = new Set(current.current.uploads.map((entry) => entry.id));
@@ -50,7 +51,7 @@ export function useCommunityUploadFeed(query: CommunityUploadsQuery) {
       feeds.set(key, cached);
       while (feeds.size > 8) feeds.delete(feeds.keys().next().value!);
       if (result.nextCursor && !result.indexing) {
-        const resultPromise = getCommunityUploadsPage({ data: { q: query.q, keys: query.keys, sort: query.sort, cursor: result.nextCursor } });
+        const resultPromise = getCommunityUploadsPage({ data: { ...filters, cursor: result.nextCursor } });
         cached.prefetch = { cursor: result.nextCursor, result: resultPromise };
         // Speculative failures must not become unhandled rejections or poison
         // Retry. A foreground attempt will make a fresh request instead.
@@ -64,7 +65,7 @@ export function useCommunityUploadFeed(query: CommunityUploadsQuery) {
         setLoading(false);
       }
     }
-  }, [key, query.q, query.keys, query.sort]);
+  }, [key, query.q, query.keys, query.grade, query.starMin, query.starMax, query.sort]);
 
   useEffect(() => {
     generation.current += 1;

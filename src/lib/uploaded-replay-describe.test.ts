@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // the caching/refresh logic around describeUploadedReplayById is exercised,
 // not the KV/R2 stores or the replay parser. vi.hoisted keeps these defined
 // before the hoisted vi.mock factories run.
-const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedReplay, uploadedReplaysUseR2, getJsonArtifact, putJsonArtifact, parseUploadedReplayBuffer } = vi.hoisted(() => ({
+const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedReplay, uploadedReplaysUseR2, getJsonArtifact, putJsonArtifact, parseUploadedReplayBuffer, fetchBeatmapFileWithMeta } = vi.hoisted(() => ({
   getPersistentCacheEntry: vi.fn(),
   setPersistentCache: vi.fn(async () => {}),
   osuFetch: vi.fn(),
@@ -14,12 +14,14 @@ const { getPersistentCacheEntry, setPersistentCache, osuFetch, readUploadedRepla
   getJsonArtifact: vi.fn(async () => null),
   putJsonArtifact: vi.fn(async () => true),
   parseUploadedReplayBuffer: vi.fn(),
+  fetchBeatmapFileWithMeta: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
   getPersistentCacheEntry,
   setPersistentCache,
   osuFetch,
+  fetchBeatmapFileWithMeta,
 }));
 vi.mock("./uploaded-replay-store", async (importActual) => {
   const actual = await importActual<typeof import("./uploaded-replay-store")>();
@@ -65,6 +67,12 @@ function fakeParsed(beatmapHash: string, mods: OsuMod[] = [], gameVersion?: numb
   } as unknown as UploadedReplayParseResult;
 }
 
+// A 4K chart with enough notes to carry a rating; columns come from the x
+// positions (512 / 4 keys), one note every 150ms.
+const FOUR_KEY_OSU = ["osu file format v14", "", "[General]", "Mode: 3", "", "[Difficulty]",
+  "CircleSize:4", "OverallDifficulty:8", "", "[TimingPoints]", "0,300,4,1,0,100,1,0", "", "[HitObjects]",
+  ...Array.from({ length: 64 }, (_, index) => `${[64, 192, 320, 448][index % 4]},192,${index * 150},1,0,0:0:0:0:`)].join("\n");
+
 function unresolvedStored(overrides: Partial<UploadedReplayDescription> = {}): UploadedReplayDescription {
   return {
     id: VALID_ID,
@@ -94,7 +102,7 @@ describe("describeUploadedReplayById caching", () => {
   });
 
   it("returns the cached description without re-reading the replay", async () => {
-    const cached = { id: VALID_ID, playerName: "someone", beatmap: { beatmapId: 1 } };
+    const cached = { id: VALID_ID, playerName: "someone", mods: [], beatmap: { beatmapId: 1 } };
     getPersistentCacheEntry.mockResolvedValue({ hit: true, value: cached });
 
     const result = await describeUploadedReplayById(VALID_ID);
@@ -204,6 +212,71 @@ describe("describeUploadedReplayById caching", () => {
 
     expect(readUploadedReplay).toHaveBeenCalledWith(VALID_ID);
     expect(result).toEqual(stored);
+    expect(putJsonArtifact).not.toHaveBeenCalled();
+  });
+});
+
+describe("star rating at the play's rate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    putJsonArtifact.mockResolvedValue(true);
+    fetchBeatmapFileWithMeta.mockResolvedValue({ content: FOUR_KEY_OSU, checksumMatched: true });
+  });
+
+  const rateModded = (overrides: Partial<UploadedReplayDescription> = {}) => unresolvedStored({
+    mods: ["DT"],
+    beatmap: { beatmapId: 42, beatmapsetId: 7, artist: "a", title: "t", version: "v", creator: "c", starRating: 4.75, mode: "mania" },
+    ...overrides,
+  });
+
+  it("fills in the rated-at-rate number for a stored description that predates it", async () => {
+    const stored = rateModded();
+    getPersistentCacheEntry.mockResolvedValue({ hit: true, value: stored });
+
+    const result = await describeUploadedReplayById(VALID_ID);
+
+    expect(result?.starRatingAtRate).toBeGreaterThan(0);
+    expect(fetchBeatmapFileWithMeta).toHaveBeenCalledWith(42, 7, stored.beatmapHash);
+    expect(putJsonArtifact).toHaveBeenCalled();
+  });
+
+  it("rates a 1.5x play above the same chart at 1.0x", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: true, value: rateModded() });
+    const fast = (await describeUploadedReplayById(VALID_ID))?.starRatingAtRate ?? 0;
+    getPersistentCacheEntry.mockResolvedValue({ hit: true, value: rateModded({ mods: ["HT"] }) });
+    const slow = (await describeUploadedReplayById(VALID_ID))?.starRatingAtRate ?? 0;
+    expect(fast).toBeGreaterThan(slow);
+  });
+
+  it("leaves a play at the map's own speed alone, without fetching the chart", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: true, value: rateModded({ mods: ["HD"] }) });
+
+    const result = await describeUploadedReplayById(VALID_ID);
+
+    expect(result?.starRatingAtRate).toBeUndefined();
+    expect(fetchBeatmapFileWithMeta).not.toHaveBeenCalled();
+  });
+
+  it("stops asking for a chart that would not rate", async () => {
+    fetchBeatmapFileWithMeta.mockRejectedValue(new Error("gone"));
+    getPersistentCacheEntry.mockResolvedValue({ hit: true, value: rateModded({ id: VALID_ID }) });
+
+    expect((await describeUploadedReplayById(VALID_ID))?.starRatingAtRate).toBeUndefined();
+    expect((await describeUploadedReplayById(VALID_ID))?.starRatingAtRate).toBeUndefined();
+    expect(fetchBeatmapFileWithMeta).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not persist a rate-adjusted rating from a different chart revision", async () => {
+    const stored = rateModded({ id: "mismatchedreplay1" });
+    getPersistentCacheEntry.mockResolvedValue({ hit: true, value: stored });
+    fetchBeatmapFileWithMeta.mockResolvedValue({ content: FOUR_KEY_OSU, checksumMatched: false });
+
+    const result = await describeUploadedReplayById(stored.id);
+
+    expect(fetchBeatmapFileWithMeta).toHaveBeenCalledWith(42, 7, stored.beatmapHash);
+    expect(result).toEqual(stored);
+    expect(result?.starRatingAtRate).toBeUndefined();
+    expect(setPersistentCache).not.toHaveBeenCalled();
     expect(putJsonArtifact).not.toHaveBeenCalled();
   });
 });

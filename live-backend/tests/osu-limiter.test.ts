@@ -14,6 +14,39 @@ afterEach(async () => {
 });
 
 describe("token bucket limiter", () => {
+  it.each(["uploadedReplayBeatmap", "lookupBeatmapByChecksum"])("gives %s the interactive burst slot", async (caller) => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(60, 45, undefined, { interactiveBurstCapacity: 4 });
+    await limiter.schedule("job:enrich_user", "/users/1", async () => {});
+    const lookup = vi.fn(async () => null);
+    const result = limiter.schedule(caller, "/beatmaps/lookup?checksum=abc", lookup);
+
+    // A default-lane lookup waits for the next paced slot. A person opening
+    // a replay can use the interactive allowance immediately.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lookup).toHaveBeenCalledOnce();
+    await result;
+  });
+
+  it.each(["uploadedReplayBeatmap", "lookupBeatmapByChecksum"])("caps self-chosen pauses for %s and respects mandated cooldowns", async (caller) => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(60, 45, undefined, { interactiveBurstCapacity: 4 });
+    limiter.pause(60_000);
+    const lookup = vi.fn(async () => null);
+    const result = limiter.schedule(caller, "/beatmaps/lookup?checksum=abc", lookup);
+    await vi.advanceTimersByTimeAsync(INTERACTIVE_PAUSE_CAP_MS);
+    expect(lookup).toHaveBeenCalledOnce();
+    await result;
+
+    limiter.pause(60_000, { mandated: true });
+    const next = limiter.schedule(caller, "/beatmaps/lookup?checksum=def", lookup);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(lookup).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await next;
+    expect(lookup).toHaveBeenCalledTimes(2);
+  });
+
   it("gives pasted scores interactive priority without bypassing upstream cooldowns", async () => {
     vi.useFakeTimers();
     const limiter = new TokenBucketLimiter(60, 45, undefined, { interactiveBurstCapacity: 4 });
