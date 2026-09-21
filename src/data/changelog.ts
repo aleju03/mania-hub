@@ -42,7 +42,7 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-09-21", text: "Redesigned the L/R miss counter overlay and added new styles.", to: "/replay" },
   { date: "2026-09-21", text: "Fixed replay audio falling out of sync after seeking in some cases.", to: "/replay" },
   { date: "2026-09-21", text: "Updated the replay leaderboard overlay to match osu!stable and osu!lazer more accurately", to: "/replay" },
-  { date: "2026-09-21", text: "Adjusted tech and chordstream pattern detection on 6K, 7K and 8K maps." },
+  { date: "2026-09-20", text: "Adjusted tech and chordstream pattern detection on 6K, 7K and 8K maps." },
   { date: "2026-09-21", text: "The hit error bar on replays is an overlay now: drag it, resize it or turn it off like the other overlays.", to: "/replay" },
   { date: "2026-09-19", text: "Reworked the All uploads replay page with a thumbnail feed, search, key filters, sorting by date, accuracy or difficulty, and faster loading as you scroll.", to: "/replay/community" },
   { date: "2026-09-19", text: "Track your Maniacard rating and tier changes in the new Progression tab, inside the (?) window." },
