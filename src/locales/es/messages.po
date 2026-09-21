@@ -6858,7 +6858,7 @@ msgstr "Conteos de hits y unstable rate."
 
 #: src/lib/replay-overlays.ts
 msgid "Hit error bar"
-msgstr "Barra de error"
+msgstr "Hit error bar"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"
