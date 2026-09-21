@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ensureMapPlaceholderFont } from "../../lib/replay-fonts";
-import { Plural, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 import { beatmapStatusPill } from "../../lib/beatmap-status";
@@ -188,7 +188,7 @@ export function SearchCard({
               className="text-[13px] text-osu-f1/45"
               style={{ fontFamily: '"Comic Sans MS", "Comic Neue", ui-rounded, cursive', fontStyle: "italic" }}
             >
-              no bg
+              <Trans>no bg</Trans>
             </span>
           </div>
         )}

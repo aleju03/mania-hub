@@ -4963,8 +4963,8 @@ function ReplayViewer({
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-osu-pink shadow-lg shadow-black/40">
                   <Play className="ml-1 h-6 w-6" fill="currentColor" strokeWidth={2.4} />
                 </span>
-                <span className="text-base font-bold">Play from {formatReplayStartTime(initialTime)}</span>
-                <span className="text-xs font-medium text-white/60">Start with sound</span>
+                <span className="text-base font-bold"><Trans>Play from {formatReplayStartTime(initialTime)}</Trans></span>
+                <span className="text-xs font-medium text-white/60"><Trans>Start with sound</Trans></span>
               </span>
             </motion.button>
           )}
@@ -5122,7 +5122,7 @@ function ReplayViewer({
           <button
             type="button"
             onClick={toggleReplayFullscreen}
-            aria-label="Enter fullscreen"
+            aria-label={t`Enter fullscreen`}
             className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white active:scale-95"
           >
             <Maximize2 className="h-[18px] w-[18px]" />

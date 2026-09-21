@@ -268,6 +268,11 @@ msgstr "{0, plural, one {map} other {maps}}"
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, one {play} other {plays}}"
 
+#. placeholder {0}: map.playerCount
+#: src/routes/maps.tsx
+msgid "{0, plural, one {player} other {players}}"
+msgstr "{0, plural, one {player} other {players}}"
+
 #. placeholder {0}: Number(card.copies)
 #. placeholder {0}: shared.card.copies
 #: src/components/packs/CardSpotlight.tsx
@@ -438,6 +443,11 @@ msgstr "{0} Eternal maniacard"
 #: src/routes/maps.tsx
 msgid "{0} favourites"
 msgstr "{0} favourites"
+
+#. placeholder {0}: country.toLowerCase()
+#: src/routes/maps.tsx
+msgid "{0} favs"
+msgstr "{0} favs"
 
 #. placeholder {0}: nominee.up
 #: src/components/packs/GoatPoll.tsx
@@ -1528,6 +1538,7 @@ msgid "{selectedImageCount, plural, one {# image selected} other {# images selec
 msgstr "{selectedImageCount, plural, one {# image selected} other {# images selected}}"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{selectedKeymode}K preview"
 msgstr "{selectedKeymode}K preview"
@@ -2817,6 +2828,10 @@ msgstr "already tracked"
 msgid "Alt = from center"
 msgstr "Alt = from center"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Always reveal all"
+msgstr "Always reveal all"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "amber"
@@ -3109,6 +3124,10 @@ msgstr "avg intensity, 0-100"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "avg nps"
 msgstr "avg nps"
+
+#: src/routes/maps.tsx
+msgid "avg pp"
+msgstr "avg pp"
 
 #: src/routes/maps.tsx
 msgid "Avg PP"
@@ -4027,6 +4046,10 @@ msgstr "cleared {date} · {pp}pp"
 #: src/components/me/GoalsPanel.tsx
 msgid "cleared {date} · #{rank}"
 msgstr "cleared {date} · #{rank}"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
+msgstr "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
@@ -5124,6 +5147,10 @@ msgstr "Dealing a matchup…"
 msgid "Dealing your pack is taking a moment"
 msgstr "Dealing your pack is taking a moment"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Deals every card out at once instead of one at a time"
+msgstr "Deals every card out at once instead of one at a time"
+
 #: src/components/packs/GiftInbox.tsx
 msgid "Decline"
 msgstr "Decline"
@@ -5261,6 +5288,10 @@ msgstr "difficulty"
 #: src/routes/replay_.community.tsx
 msgid "Difficulty"
 msgstr "Difficulty"
+
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "Difficulty radar chart"
+msgstr "Difficulty radar chart"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Direction"
@@ -5810,6 +5841,10 @@ msgstr "Europe, Central America, France"
 msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 msgstr "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "every card"
+msgstr "every card"
+
 #: src/components/packs/RevealStage.tsx
 msgid "Every card came out in two pieces"
 msgstr "Every card came out in two pieces"
@@ -6027,6 +6062,10 @@ msgstr "farm verdict"
 msgid "Farmed"
 msgstr "Farmed"
 
+#: src/routes/maps.tsx
+msgid "Farmed by"
+msgstr "Farmed by"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Fast export"
 msgstr "Fast export"
@@ -6044,6 +6083,10 @@ msgid "Fastest"
 msgstr "Fastest"
 
 #: src/routes/maps.tsx
+msgid "Favourited by"
+msgstr "Favourited by"
+
+#: src/routes/maps.tsx
 msgid "Favourites"
 msgstr "Favourites"
 
@@ -6054,6 +6097,10 @@ msgstr "Favourites globally"
 #: src/routes/maps.tsx
 msgid "Favourites in {countryName}"
 msgstr "Favourites in {countryName}"
+
+#: src/routes/maps.tsx
+msgid "favs"
+msgstr "favs"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
@@ -6183,8 +6230,8 @@ msgid "filtered out"
 msgstr "filtered out"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "filters"
-msgstr "filters"
+#~ msgid "filters"
+#~ msgstr "filters"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -6634,6 +6681,7 @@ msgid "Give the set a name."
 msgstr "Give the set a name."
 
 #: src/components/me/GoalsPanel.tsx
+#: src/routes/maps.tsx
 msgid "global"
 msgstr "global"
 
@@ -6641,6 +6689,10 @@ msgstr "global"
 #: src/routes/player/$username.tsx
 msgid "Global"
 msgstr "Global"
+
+#: src/routes/maps.tsx
+msgid "global favs"
+msgstr "global favs"
 
 #: src/routes/farm-helper.tsx
 msgid "Global mania farm helper"
@@ -6653,6 +6705,10 @@ msgstr "Global mania rankings"
 #: src/routes/snipes.tsx
 msgid "Global mania snipes"
 msgstr "Global mania snipes"
+
+#: src/routes/maps.tsx
+msgid "global plays"
+msgstr "global plays"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Global tracker is ready"
@@ -8275,6 +8331,14 @@ msgstr "Loading goals..."
 msgid "Loading history…"
 msgstr "Loading history…"
 
+#: src/components/player/bbcode/ImageEditorModal.tsx
+msgid "Loading image…"
+msgstr "Loading image…"
+
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "Loading map shape analysis"
+msgstr "Loading map shape analysis"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Loading maps..."
@@ -8812,6 +8876,10 @@ msgid "Max combo"
 msgstr "Max combo"
 
 #: src/routes/maps.tsx
+msgid "max pp"
+msgstr "max pp"
+
+#: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "Max PP"
 
@@ -9090,6 +9158,10 @@ msgstr "Most played"
 #: src/routes/maps.tsx
 msgid "Most Played"
 msgstr "Most Played"
+
+#: src/routes/maps.tsx
+msgid "Most played by"
+msgstr "Most played by"
 
 #: src/routes/maps.tsx
 msgid "Most played globally"
@@ -9440,6 +9512,10 @@ msgstr "No album matches \"{0}\"."
 msgid "No beatmaps found for \"{query}\""
 msgstr "No beatmaps found for \"{query}\""
 
+#: src/components/maps/SearchCard.tsx
+msgid "no bg"
+msgstr "no bg"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "No binders yet. Name one above, then add cards to it."
 #~ msgstr "No binders yet. Name one above, then add cards to it."
@@ -9642,6 +9718,10 @@ msgstr "No pattern signal for this keymode yet."
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
 msgstr "No players"
+
+#: src/routes/maps.tsx
+msgid "No players found"
+msgstr "No players found"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "No players found for \"{trimmedQuery}\"."
@@ -10294,6 +10374,10 @@ msgstr "oldest top {month}"
 msgid "Oldest Top Play"
 msgstr "Oldest Top Play"
 
+#: src/components/ui/Switch.tsx
+#~ msgid "on"
+#~ msgstr "on"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "On"
 msgstr "On"
@@ -10450,6 +10534,7 @@ msgstr "Open another"
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Open beatmap on osu!"
 msgstr "Open beatmap on osu!"
 
@@ -10465,6 +10550,10 @@ msgstr "Open image"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
 msgstr "Open image in new tab"
+
+#: src/routes/maps.tsx
+msgid "Open in"
+msgstr "Open in"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/maps.tsx
@@ -10568,6 +10657,14 @@ msgstr "Opening what is left..."
 #: src/components/packs/PackStage.tsx
 msgid "Opening..."
 msgstr "Opening..."
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Opens packs without the shuffle and flip animations"
+#~ msgstr "Opens packs without the shuffle and flip animations"
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Opens packs without the shuffle, flips and celebrations"
+#~ msgstr "Opens packs without the shuffle, flips and celebrations"
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -10791,6 +10888,7 @@ msgid "packs"
 msgstr "packs"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "Packs"
 msgstr "Packs"
 
@@ -11081,6 +11179,11 @@ msgstr "Play both replays"
 msgid "Play Count"
 msgstr "Play Count"
 
+#. placeholder {0}: formatReplayStartTime(initialTime)
+#: src/routes/replay.tsx
+msgid "Play from {0}"
+msgstr "Play from {0}"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
 msgstr "Play habits and a playstyle breakdown: active days, sessions and skill mix."
@@ -11156,6 +11259,7 @@ msgstr "Player's skin"
 #: src/components/layout/Nav.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/farm-helper.tsx
+#: src/routes/maps.tsx
 msgid "players"
 msgstr "players"
 
@@ -11187,6 +11291,7 @@ msgstr "Playing"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "plays"
 msgstr "plays"
@@ -11392,6 +11497,10 @@ msgstr "PP-gain map recommendations tuned to a player."
 msgid "Precision"
 msgstr "Precision"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "preferences"
+msgstr "preferences"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Prefers hardware encoding. Larger files."
 msgstr "Prefers hardware encoding. Larger files."
@@ -11442,6 +11551,7 @@ msgid "Preview position"
 msgstr "Preview position"
 
 #: src/components/maps/MapPreviewAudio.tsx
+#: src/routes/maps.tsx
 msgid "Preview volume"
 msgstr "Preview volume"
 
@@ -11991,6 +12101,10 @@ msgstr "recent"
 msgid "Recent"
 msgstr "Recent"
 
+#: src/components/packs/PackPulse.tsx
+msgid "recent global pulls"
+msgstr "recent global pulls"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Recent notable top plays across a country."
 msgstr "Recent notable top plays across a country."
@@ -12310,6 +12424,7 @@ msgstr "rendering"
 msgid "Rendering"
 msgstr "Rendering"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "Rendering the {selectedKeymode}K playfield..."
@@ -12474,6 +12589,10 @@ msgstr "Reset orientation"
 #: src/routes/replay.tsx
 msgid "Reset size"
 msgstr "Reset size"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Reset to {defaultValue}"
+msgstr "Reset to {defaultValue}"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Reset to current page"
@@ -12972,6 +13091,7 @@ msgid "search player..."
 msgstr "search player..."
 
 #: src/components/ui/SearchInput.tsx
+#: src/routes/maps.tsx
 msgid "Search player..."
 msgstr "Search player..."
 
@@ -13533,6 +13653,10 @@ msgid "Show on Showcase"
 msgstr "Show on Showcase"
 
 #: src/routes/farm-helper.tsx
+msgid "show popular maps"
+msgstr "show popular maps"
+
+#: src/routes/farm-helper.tsx
 msgid "show skillboost"
 msgstr "show skillboost"
 
@@ -13605,6 +13729,10 @@ msgstr "Showing the newest {0}."
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "Shows"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows your cards with a quick fade instead of the full reveal"
+msgstr "Shows your cards with a quick fade instead of the full reveal"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -13862,6 +13990,10 @@ msgstr "Skins"
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "Skins are unavailable right now"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Skip animations"
+msgstr "Skip animations"
 
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."
@@ -14199,6 +14331,10 @@ msgstr "Start here"
 msgid "Start tracking your plays"
 msgstr "Start tracking your plays"
 
+#: src/routes/replay.tsx
+msgid "Start with sound"
+msgstr "Start with sound"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Starting playback…"
 msgstr "Starting playback…"
@@ -14388,6 +14524,10 @@ msgstr "Sundays"
 #: src/routes/__root.tsx
 msgid "support"
 msgstr "support"
+
+#: src/routes/__root.tsx
+msgid "Support Mania Tracker on Ko-fi"
+msgstr "Support Mania Tracker on Ko-fi"
 
 #: src/routes/__root.tsx
 msgid "Support mania-tracker"
@@ -16222,6 +16362,10 @@ msgid "Top-play feed"
 msgstr "Top-play feed"
 
 #: src/routes/maps.tsx
+msgid "total plays"
+msgstr "total plays"
+
+#: src/routes/maps.tsx
 msgid "Tournament"
 msgstr "Tournament"
 
@@ -16699,6 +16843,7 @@ msgid "Use {0} as the backdrop"
 msgstr "Use {0} as the backdrop"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Use {selectedKeymode}K as the card cover"
 msgstr "Use {selectedKeymode}K as the card cover"
@@ -16936,6 +17081,7 @@ msgid "Viewer editor"
 msgstr "Viewer editor"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Viewing <0>{selectedKeymode}K</0>"
 msgstr "Viewing <0>{selectedKeymode}K</0>"
@@ -17290,6 +17436,10 @@ msgstr "within a minute"
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "Won on score, not pp"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "working on next"
+msgstr "working on next"
 
 #: src/routes/report.tsx
 msgid "Write a reply"

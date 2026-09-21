@@ -91,7 +91,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useNoDans } from "../../store";
+import { useAppStore, useNoDans, usePacksRevealAll, usePacksSkipAnimations } from "../../store";
 import { Switch } from "../ui/Switch";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -126,11 +126,11 @@ const STYLE_LABELS: Record<ReplaySkinStyle, ReturnType<typeof msg>> = {
   arrows: msg`Arrows`,
 };
 
-type TabId = "skin" | "viewer" | "filters" | "appearance";
+type TabId = "skin" | "viewer" | "preferences" | "appearance";
 const TABS: { id: TabId; label: ReturnType<typeof msg> }[] = [
   { id: "skin", label: msg`skin & layout` },
   { id: "viewer", label: msg`playback` },
-  { id: "filters", label: msg`filters` },
+  { id: "preferences", label: msg`preferences` },
   { id: "appearance", label: msg`appearance` },
 ];
 
@@ -364,7 +364,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
           }}
         />
       ) : null}
-      {activeTab === "filters" ? <HiddenPlayersPanel /> : null}
+      {activeTab === "preferences" ? <PreferencesPanel /> : null}
     </>
   );
 
@@ -1040,10 +1040,14 @@ function ViewerPanel({
   );
 }
 
-function HiddenPlayersPanel() {
+function PreferencesPanel() {
   const { t } = useLingui();
   const noDans = useNoDans();
   const setNoDans = useAppStore((state) => state.setNoDans);
+  const packsSkipAnimations = usePacksSkipAnimations();
+  const setPacksSkipAnimations = useAppStore((state) => state.setPacksSkipAnimations);
+  const packsRevealAll = usePacksRevealAll();
+  const setPacksRevealAll = useAppStore((state) => state.setPacksRevealAll);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
   const addHiddenUser = useAppStore((state) => state.addHiddenUser);
   const removeHiddenUser = useAppStore((state) => state.removeHiddenUser);
@@ -1106,6 +1110,27 @@ function HiddenPlayersPanel() {
             </div>
           </div>
           <Switch checked={noDans} onChange={setNoDans} label={t`No Dans`} />
+        </div>
+      </PanelGroup>
+
+      <PanelGroup label={t`Packs`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Skip animations</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Shows your cards with a quick fade instead of the full reveal</Trans>
+            </div>
+          </div>
+          <Switch checked={packsSkipAnimations} onChange={setPacksSkipAnimations} label={t`Skip animations`} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Always reveal all</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Deals every card out at once instead of one at a time</Trans>
+            </div>
+          </div>
+          <Switch checked={packsRevealAll} onChange={setPacksRevealAll} label={t`Always reveal all`} />
         </div>
       </PanelGroup>
 

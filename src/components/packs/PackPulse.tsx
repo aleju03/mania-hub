@@ -1,4 +1,4 @@
-import { useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, Users } from "lucide-react";
@@ -569,7 +569,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-50" />
                   <span className="relative inline-flex h-1 w-1 rounded-full bg-osu-pink" />
                 </span>
-                recent global pulls
+                <Trans>recent global pulls</Trans>
               </motion.div>
             )}
             {entries.map(({ pull, instant }) => {

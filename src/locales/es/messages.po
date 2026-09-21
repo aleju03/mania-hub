@@ -88,7 +88,7 @@ msgstr "? vistas de replays"
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
 msgid "· {0}/{averageWindow} counted"
-msgstr ""
+msgstr "· {0}/{averageWindow} contados"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
@@ -268,6 +268,11 @@ msgstr "{0, plural, one {mapa} other {mapas}}"
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, one {play} other {plays}}"
 
+#. placeholder {0}: map.playerCount
+#: src/routes/maps.tsx
+msgid "{0, plural, one {player} other {players}}"
+msgstr "{0, plural, one {jugador} other {jugadores}}"
+
 #. placeholder {0}: Number(card.copies)
 #. placeholder {0}: shared.card.copies
 #: src/components/packs/CardSpotlight.tsx
@@ -438,6 +443,11 @@ msgstr "Maniacard Eternal de {0}"
 #: src/routes/maps.tsx
 msgid "{0} favourites"
 msgstr "{0} favoritos"
+
+#. placeholder {0}: country.toLowerCase()
+#: src/routes/maps.tsx
+msgid "{0} favs"
+msgstr "favs de {0}"
 
 #. placeholder {0}: nominee.up
 #: src/components/packs/GoatPoll.tsx
@@ -1505,6 +1515,7 @@ msgid "{selectedImageCount, plural, one {# image selected} other {# images selec
 msgstr "{selectedImageCount, plural, one {# imagen seleccionada} other {# imágenes seleccionadas}}"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{selectedKeymode}K preview"
 msgstr "Vista previa {selectedKeymode}K"
@@ -2425,7 +2436,7 @@ msgstr "Precisión o unstable rate de cada columna, una casilla por dedo."
 #. placeholder {0}: formatAccuracy(credential.bar)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, against its {0} bar"
-msgstr ""
+msgstr "Acc con la que se juzgó este clear, frente a su barra de {0}"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
@@ -2790,6 +2801,10 @@ msgstr "ya registrado"
 msgid "Alt = from center"
 msgstr "Alt = desde el centro"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Always reveal all"
+msgstr "Revelar todas siempre"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "ámbar"
@@ -3082,6 +3097,10 @@ msgstr "intensidad promedio, 0-100"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "avg nps"
 msgstr "nps promedio"
+
+#: src/routes/maps.tsx
+msgid "avg pp"
+msgstr "pp medio"
 
 #: src/routes/maps.tsx
 msgid "Avg PP"
@@ -4000,6 +4019,10 @@ msgstr "completado {date} · {pp}pp"
 #: src/components/me/GoalsPanel.tsx
 msgid "cleared {date} · #{rank}"
 msgstr "completado {date} · #{rank}"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
+msgstr "Haz clic en una columna para seleccionarla. Arrastra un recuadro para selección múltiple. Mantén Shift para un rango y Ctrl/Cmd para alternar."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
@@ -5097,6 +5120,10 @@ msgstr "Repartiendo un duelo…"
 msgid "Dealing your pack is taking a moment"
 msgstr "Preparar tu sobre está tardando un poco"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Deals every card out at once instead of one at a time"
+msgstr "Reparte todas las cartas de una vez en lugar de una por una"
+
 #: src/components/packs/GiftInbox.tsx
 msgid "Decline"
 msgstr "Rechazar"
@@ -5209,7 +5236,7 @@ msgstr "Detectado en el .osk"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Detected sections"
-msgstr ""
+msgstr "Secciones detectadas"
 
 #: src/routes/discord.tsx
 msgid "dev preview"
@@ -5234,6 +5261,10 @@ msgstr "dificultad"
 #: src/routes/replay_.community.tsx
 msgid "Difficulty"
 msgstr "Dificultad"
+
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "Difficulty radar chart"
+msgstr "Gráfico de radar de dificultad"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Direction"
@@ -5571,7 +5602,7 @@ msgstr "Cada jugador tiene la misma probabilidad, sin importar cuántos favorito
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr ""
+msgstr "Cada skillset promedia hasta {averageWindow} clears. Solo cuentan tus dos mejores plays de rate por chart. Con menos evidencia, promedia lo que tengas y la estimación todavía se está completando."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
@@ -5782,6 +5813,10 @@ msgstr "Europa, Centroamérica, Francia"
 #: src/routes/legal.tsx
 msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 msgstr "Incluso con esas salvaguardas, los datos pueden estar retrasados, incompletos, desactualizados o no disponibles."
+
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "every card"
+msgstr "todas las cartas"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Every card came out in two pieces"
@@ -5996,6 +6031,10 @@ msgstr "veredicto de farm"
 msgid "Farmed"
 msgstr "Farmeados"
 
+#: src/routes/maps.tsx
+msgid "Farmed by"
+msgstr "Farmeado por"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Fast export"
 msgstr "Exportación rápida"
@@ -6013,6 +6052,10 @@ msgid "Fastest"
 msgstr "Más rápido"
 
 #: src/routes/maps.tsx
+msgid "Favourited by"
+msgstr "Guardado por"
+
+#: src/routes/maps.tsx
 msgid "Favourites"
 msgstr "Favoritos"
 
@@ -6023,6 +6066,10 @@ msgstr "Favoritos globales"
 #: src/routes/maps.tsx
 msgid "Favourites in {countryName}"
 msgstr "Favoritos en {countryName}"
+
+#: src/routes/maps.tsx
+msgid "favs"
+msgstr "favs"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
@@ -6152,8 +6199,8 @@ msgid "filtered out"
 msgstr "filtrados"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "filters"
-msgstr "filtros"
+#~ msgid "filters"
+#~ msgstr "filtros"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -6603,6 +6650,7 @@ msgid "Give the set a name."
 msgstr "Dale un nombre al set."
 
 #: src/components/me/GoalsPanel.tsx
+#: src/routes/maps.tsx
 msgid "global"
 msgstr "global"
 
@@ -6610,6 +6658,10 @@ msgstr "global"
 #: src/routes/player/$username.tsx
 msgid "Global"
 msgstr "Global"
+
+#: src/routes/maps.tsx
+msgid "global favs"
+msgstr "favs globales"
 
 #: src/routes/farm-helper.tsx
 msgid "Global mania farm helper"
@@ -6622,6 +6674,10 @@ msgstr "Clasificación global de mania"
 #: src/routes/snipes.tsx
 msgid "Global mania snipes"
 msgstr "Snipes globales de mania"
+
+#: src/routes/maps.tsx
+msgid "global plays"
+msgstr "plays globales"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Global tracker is ready"
@@ -7333,7 +7389,7 @@ msgstr "Indonesio"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Influence in this average; Dan credit is unchanged"
-msgstr ""
+msgstr "Influencia en este promedio; el crédito de dan no cambia"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -8240,6 +8296,14 @@ msgstr "Cargando metas..."
 msgid "Loading history…"
 msgstr "Cargando historial…"
 
+#: src/components/player/bbcode/ImageEditorModal.tsx
+msgid "Loading image…"
+msgstr "Cargando imagen…"
+
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "Loading map shape analysis"
+msgstr "Cargando el análisis de forma del mapa"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Loading maps..."
@@ -8777,6 +8841,10 @@ msgid "Max combo"
 msgstr "Combo máx."
 
 #: src/routes/maps.tsx
+msgid "max pp"
+msgstr "pp máximo"
+
+#: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "PP máx."
 
@@ -9055,6 +9123,10 @@ msgstr "Más jugados"
 #: src/routes/maps.tsx
 msgid "Most Played"
 msgstr "Más jugados"
+
+#: src/routes/maps.tsx
+msgid "Most played by"
+msgstr "Más jugado por"
 
 #: src/routes/maps.tsx
 msgid "Most played globally"
@@ -9405,6 +9477,10 @@ msgstr "Ningún álbum coincide con \"{0}\"."
 msgid "No beatmaps found for \"{query}\""
 msgstr "No se encontraron beatmaps para \"{query}\""
 
+#: src/components/maps/SearchCard.tsx
+msgid "no bg"
+msgstr "sin bg"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "No binders yet. Name one above, then add cards to it."
 #~ msgstr "Aún no hay carpetas. Ponle nombre a una arriba y luego añádele cartas."
@@ -9607,6 +9683,10 @@ msgstr "Aún no hay señal de patrones para este keymode."
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
 msgstr "Sin jugadores"
+
+#: src/routes/maps.tsx
+msgid "No players found"
+msgstr "No se encontraron jugadores"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "No players found for \"{trimmedQuery}\"."
@@ -10259,6 +10339,10 @@ msgstr "top más antiguo: {month}"
 msgid "Oldest Top Play"
 msgstr "Top play más antiguo"
 
+#: src/components/ui/Switch.tsx
+#~ msgid "on"
+#~ msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "On"
 msgstr "Sí"
@@ -10365,11 +10449,11 @@ msgstr "solo tú puedes abrirlas"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
-msgstr ""
+msgstr "Solo tus dos mejores plays de rate en el mismo chart cuentan para el dan. Este play queda fuera de esos dos."
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
-msgstr ""
+msgstr "Solo tus dos mejores plays de rate en el mismo chart cuentan para cada escalera de dan, elegidos por su crédito de dan ajustado por acc antes de agrupar por skillset. Los dos cuentan por completo. Las resubidas de rate verificadas comparten este límite, y los demás plays de rate no pueden llenar el promedio ni cumplir un requisito de clear. Un play mejor puede reemplazar a cualquiera de los dos."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Opacity"
@@ -10415,6 +10499,7 @@ msgstr "Abrir otro"
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Open beatmap on osu!"
 msgstr "Abrir beatmap en osu!"
 
@@ -10430,6 +10515,10 @@ msgstr "Ver la imagen"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
 msgstr "Abrir imagen en una nueva pestaña"
+
+#: src/routes/maps.tsx
+msgid "Open in"
+msgstr "Abrir en"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/maps.tsx
@@ -10533,6 +10622,14 @@ msgstr "Abriendo lo que queda..."
 #: src/components/packs/PackStage.tsx
 msgid "Opening..."
 msgstr "Abriendo..."
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Opens packs without the shuffle and flip animations"
+#~ msgstr ""
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Opens packs without the shuffle, flips and celebrations"
+#~ msgstr ""
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -10711,7 +10808,7 @@ msgstr "fuera del promedio"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Outside this average's best-clear window"
-msgstr ""
+msgstr "Fuera de la ventana de mejores clears de este promedio"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Outside this average's weighted window"
@@ -10756,6 +10853,7 @@ msgid "packs"
 msgstr "packs"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "Packs"
 msgstr "Packs"
 
@@ -11046,6 +11144,11 @@ msgstr "Reproducir ambos replays"
 msgid "Play Count"
 msgstr "Cantidad de plays"
 
+#. placeholder {0}: formatReplayStartTime(initialTime)
+#: src/routes/replay.tsx
+msgid "Play from {0}"
+msgstr "Reproducir desde {0}"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
 msgstr "Hábitos de juego y desglose del estilo de juego: días activos, sesiones y mezcla de habilidades."
@@ -11121,6 +11224,7 @@ msgstr "Skin del jugador"
 #: src/components/layout/Nav.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/farm-helper.tsx
+#: src/routes/maps.tsx
 msgid "players"
 msgstr "jugadores"
 
@@ -11152,6 +11256,7 @@ msgstr "Jugando"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "plays"
 msgstr "plays"
@@ -11357,6 +11462,10 @@ msgstr "Recomendaciones de mapas por ganancia de pp adaptadas a un jugador."
 msgid "Precision"
 msgstr "Precisión"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "preferences"
+msgstr "preferencias"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Prefers hardware encoding. Larger files."
 msgstr "Prioriza la codificación por hardware. Archivos más grandes."
@@ -11407,6 +11516,7 @@ msgid "Preview position"
 msgstr "Posición de la vista previa"
 
 #: src/components/maps/MapPreviewAudio.tsx
+#: src/routes/maps.tsx
 msgid "Preview volume"
 msgstr "Volumen de la vista previa"
 
@@ -11755,7 +11865,7 @@ msgstr "Los mods de velocidad cuentan, y cuentan por lo que vale el chart a esa 
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "calculado con {plays} plays de los top plays de osu!, DT y HT a su rate real, acc ponderada por la proporción MAX:300 frente a las ventanas de OD de cada chart, secciones de vibro localizado ajustadas, vibro sostenido excluido"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11767,7 +11877,7 @@ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "calculado con {plays} plays de los top plays y el historial registrado, DT y HT a su rate real, acc ponderada por la proporción MAX:300 frente a las ventanas de OD de cada chart, secciones de vibro localizado ajustadas, vibro sostenido excluido"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11779,7 +11889,7 @@ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "calculado con {plays} plays de tus top plays de osu!, DT y HT a su rate real, acc ponderada por la proporción MAX:300 frente a las ventanas de OD de cada chart, secciones de vibro localizado ajustadas, vibro sostenido excluido"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11791,7 +11901,7 @@ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "calculado con {plays} plays de tus top plays y tu historial registrado, DT y HT a su rate real, acc ponderada por la proporción MAX:300 frente a las ventanas de OD de cada chart, secciones de vibro localizado ajustadas, vibro sostenido excluido"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11955,6 +12065,10 @@ msgstr "recientes"
 #: src/routes/top-plays.tsx
 msgid "Recent"
 msgstr "Recientes"
+
+#: src/components/packs/PackPulse.tsx
+msgid "recent global pulls"
+msgstr "tirajes globales recientes"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Recent notable top plays across a country."
@@ -12275,6 +12389,7 @@ msgstr "renderizando"
 msgid "Rendering"
 msgstr "Renderizando"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "Renderizando el playfield de {selectedKeymode}K..."
@@ -12439,6 +12554,10 @@ msgstr "Restablecer orientación"
 #: src/routes/replay.tsx
 msgid "Reset size"
 msgstr "Restablecer tamaño"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Reset to {defaultValue}"
+msgstr "Restablecer a {defaultValue}"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Reset to current page"
@@ -12937,6 +13056,7 @@ msgid "search player..."
 msgstr "buscar jugador..."
 
 #: src/components/ui/SearchInput.tsx
+#: src/routes/maps.tsx
 msgid "Search player..."
 msgstr "Buscar jugador..."
 
@@ -13498,6 +13618,10 @@ msgid "Show on Showcase"
 msgstr "Mostrar en Destacados"
 
 #: src/routes/farm-helper.tsx
+msgid "show popular maps"
+msgstr "ver mapas populares"
+
+#: src/routes/farm-helper.tsx
 msgid "show skillboost"
 msgstr "mostrar skillboost"
 
@@ -13570,6 +13694,10 @@ msgstr "Mostrando los {0} más recientes."
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "Muestra"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows your cards with a quick fade instead of the full reveal"
+msgstr "Muestra tus cartas con un fundido rápido en lugar de la revelación completa"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -13777,7 +13905,7 @@ msgstr "Los skills en los que no tengas cuatro pases quedan fuera del promedio e
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Skillset clears"
-msgstr ""
+msgstr "Clears por skillset"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -13827,6 +13955,10 @@ msgstr "Skins"
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "Las skins no están disponibles por ahora"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Skip animations"
+msgstr "Saltar animaciones"
 
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."
@@ -14164,6 +14296,10 @@ msgstr "Empezar aquí"
 msgid "Start tracking your plays"
 msgstr "Empieza a seguir tus plays"
 
+#: src/routes/replay.tsx
+msgid "Start with sound"
+msgstr "Empezar con sonido"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Starting playback…"
 msgstr "Iniciando reproducción…"
@@ -14213,7 +14349,7 @@ msgstr "Paso 4: tus pases se reparten en cuatro skills"
 
 #: src/routes/dan-estimates.tsx
 msgid "Step 5: each skill's dan is an average of your best passes"
-msgstr ""
+msgstr "Paso 5: el dan de cada skill es un promedio de tus mejores pases"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
@@ -14355,6 +14491,10 @@ msgid "support"
 msgstr "apoyar"
 
 #: src/routes/__root.tsx
+msgid "Support Mania Tracker on Ko-fi"
+msgstr "Apoya a Mania Tracker en Ko-fi"
+
+#: src/routes/__root.tsx
 msgid "Support mania-tracker"
 msgstr "Apoya a mania-tracker"
 
@@ -14450,7 +14590,7 @@ msgstr "¿Retirarlo definitivamente?"
 
 #: src/routes/dan-estimates.tsx
 msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr ""
+msgstr "Toma tus pases acreditados en un skill, ordénalos por el nivel que acreditó cada uno y promedia los 20 mejores clears válidos. Ese es tu dan en ese skill. No se añade nada por encima de la evidencia, y ningún pase por sí solo lo define."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -14770,12 +14910,12 @@ msgstr "Es el mismo score en ambos lados. Elige otra run para el otro lado."
 #. placeholder {0}: formatDan(credential.level)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The {0} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept"
-msgstr ""
+msgstr "El chart {0} de esta escalera de skillset: superarlo fija el nivel directamente, y se conserva una estimación más alta"
 
 #. placeholder {0}: formatDan(clear.credential.level)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The {0} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as"
-msgstr ""
+msgstr "El chart {0} de esta escalera de skillset: el clear fija ese nivel, sea lo que sea que el estimador lea del archivo"
 
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -15759,7 +15899,7 @@ msgstr "Este mapa aún no está analizado."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
-msgstr ""
+msgstr "Este chart se editó después de conseguir este play, así que el play no se puede emparejar con las notas actuales del chart y no cuenta para el dan."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
@@ -16177,6 +16317,10 @@ msgstr "top pp"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Top-play feed"
 msgstr "Feed de top plays"
+
+#: src/routes/maps.tsx
+msgid "total plays"
+msgstr "plays totales"
 
 #: src/routes/maps.tsx
 msgid "Tournament"
@@ -16656,6 +16800,7 @@ msgid "Use {0} as the backdrop"
 msgstr "Usar {0} como fondo"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Use {selectedKeymode}K as the card cover"
 msgstr "Usar {selectedKeymode}K como portada de la carta"
@@ -16723,7 +16868,7 @@ msgstr "Verificado"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Verified clear"
-msgstr ""
+msgstr "Clear verificado"
 
 #: src/lib/replay-overlays.ts
 msgid "Vertical"
@@ -16776,7 +16921,7 @@ msgstr "Se detectó vibro. Este play no cuenta para el rating de habilidad ni de
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
-msgstr ""
+msgstr "Secciones de vibro excluidas del rating. El crédito usa una estimación de acc conservadora para las notas restantes."
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Video bitrate"
@@ -16874,7 +17019,7 @@ msgstr "Ver perfil"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"
-msgstr ""
+msgstr "ver el score"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
@@ -16886,13 +17031,14 @@ msgstr "Ver top plays de {entryLabel}"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "View verified skillset clears"
-msgstr ""
+msgstr "Ver clears verificados por skillset"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Viewer editor"
 msgstr "Editor del visor"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Viewing <0>{selectedKeymode}K</0>"
 msgstr "Viendo <0>{selectedKeymode}K</0>"
@@ -17230,7 +17376,7 @@ msgstr "Si son mapas distintos, tu dan de jack es el promedio de tus 20 mejores 
 
 #: src/routes/dan-estimates.tsx
 msgid "With fewer than 20 eligible clears the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr ""
+msgstr "Con menos de 20 clears válidos el promedio se hace sobre la evidencia que tengas; no necesitas 20 charts distintos. Un skill en el que tengas menos de cuatro pases válidos no recibe dan propio, y un lado en el que tengas menos de cuatro no recibe ninguna estimación en vez de una poco fiable."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -17247,6 +17393,10 @@ msgstr "en menos de un minuto"
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "Ganó por score, no por pp"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "working on next"
+msgstr "en lo que trabajo ahora"
 
 #: src/routes/report.tsx
 msgid "Write a reply"

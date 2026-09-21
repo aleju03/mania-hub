@@ -65,6 +65,7 @@ import {
 } from "../lib/packs";
 import type { OsuScore } from "../lib/types";
 import { getI18n } from "../lib/i18n";
+import { usePacksRevealAll, usePacksSkipAnimations } from "../store";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
@@ -460,7 +461,12 @@ function PackTypeSelector({
 
 function PacksPage() {
   const { t } = useLingui();
+  const revealAllPreferred = usePacksRevealAll();
+  const skipAnimations = usePacksSkipAnimations();
   const reducedMotion = useReducedMotion();
+  /* "Skip animations" shortens the reveal to the pace phones already run at;
+     it is not reduced motion, so the cards still deal and turn one after
+     another, and the pack keeps the tear people came for. */
   const auth = useAuth();
   const { view, album: openAlbumCode } = Route.useSearch();
   /* Local first, URL second: mounting the game must land in the click's own
@@ -1142,6 +1148,8 @@ function PacksPage() {
                       <RevealStage
                         cards={cards}
                         reducedMotion={reducedMotion}
+                        autoRevealAll={revealAllPreferred}
+                        compactReveal={skipAnimations}
                         damage={damage}
                         onCardRevealed={(pull) => {
                           // In the wallet now, so no longer owed by the pending pack.

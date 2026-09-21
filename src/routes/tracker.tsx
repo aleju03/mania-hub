@@ -1772,7 +1772,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   className="text-sm font-semibold text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                  title="Open beatmap on osu!"
+                  title={t`Open beatmap on osu!`}
                 >
                   {sample.beatmapset?.title}
                 </a>
@@ -1837,7 +1837,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                      title="Open beatmap on osu!"
+                      title={t`Open beatmap on osu!`}
                     >
                       {roundSample.beatmapset?.title}
                     </a>
@@ -2004,7 +2004,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                    title="Open beatmap on osu!"
+                    title={t`Open beatmap on osu!`}
                   >
                     {score.beatmapset?.title}
                   </a>

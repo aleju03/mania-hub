@@ -597,6 +597,7 @@ function danSuffix(label: string): string {
 }
 
 function RadarChart({ axes }: { axes: Array<{ label: string; value: number }> }) {
+  const { t } = useLingui();
   const size = 380;
   const center = size / 2;
   const maxRadius = 112;
@@ -621,7 +622,7 @@ function RadarChart({ axes }: { axes: Array<{ label: string; value: number }> })
 
   return (
     <div className="mt-2 flex justify-center">
-      <svg viewBox={`0 0 ${size} ${size}`} className="h-[300px] w-full max-w-[350px] text-osu-pink" role="img" aria-label="Difficulty radar chart">
+      <svg viewBox={`0 0 ${size} ${size}`} className="h-[300px] w-full max-w-[350px] text-osu-pink" role="img" aria-label={t`Difficulty radar chart`}>
         {rings.map((ring) => {
           const ringPoints = axes.map((_, index) => {
             const angle = (-Math.PI / 2) + (index / axes.length) * Math.PI * 2;
@@ -668,9 +669,10 @@ function splitRadarLabel(label: string): string[] {
 }
 
 function AnalysisLoadingState() {
+  const { t } = useLingui();
   return (
     <div className="mt-2 flex justify-center">
-      <svg viewBox="0 0 380 380" className="h-[300px] w-full max-w-[350px]" role="img" aria-label="Loading map shape analysis">
+      <svg viewBox="0 0 380 380" className="h-[300px] w-full max-w-[350px]" role="img" aria-label={t`Loading map shape analysis`}>
         {[0.33, 0.66, 1].map((ring) => (
           <polygon
             key={ring}

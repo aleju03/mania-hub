@@ -3066,6 +3066,7 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
   grid?: boolean;
   renderRow: (player: T, rank: number) => React.ReactNode;
 }) {
+  const { t } = useLingui();
   const hiddenUserIds = useHiddenUserIds();
   const serverMode = control != null;
   const [clientQuery, setClientQuery] = useState("");
@@ -3125,7 +3126,7 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search player..."
+          placeholder={t`Search player...`}
           className="mb-1.5 w-full rounded-lg bg-osu-b4 border border-osu-b3/40 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none transition-colors"
         />
       )}
@@ -3141,7 +3142,7 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
         ) : serverMode && control.loading ? (
           <MapsPlayerListSkeleton grid={grid} count={grid ? 9 : 8} />
         ) : (
-          <div className="px-3 py-4 text-center text-[11px] text-osu-f1 col-span-full">No players found</div>
+          <div className="px-3 py-4 text-center text-[11px] text-osu-f1 col-span-full"><Trans>No players found</Trans></div>
         )}
         {serverMode && control.loadingMore && rows.length > 0 && (
           <MapsPlayerListSkeleton grid={grid} count={grid ? 3 : 2} />
@@ -3152,6 +3153,7 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
 }
 
 function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: string }) {
+  const { t } = useLingui();
   const locale = useLocale();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
   const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
@@ -3176,13 +3178,13 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
   return (
     <>
       <StatRow>
-        <StatItem label="players" value={formatNumber(totalPlayers)} accent="blue" />
-        <StatItem label="avg pp" value={`~${Math.round(entry.avgPp)}`} accent="pink" />
-        <StatItem label="max pp" value={Math.round(entry.maxPp).toString()} accent="pink" />
+        <StatItem label={t`players`} value={formatNumber(totalPlayers)} accent="blue" />
+        <StatItem label={t`avg pp`} value={`~${Math.round(entry.avgPp)}`} accent="pink" />
+        <StatItem label={t`max pp`} value={Math.round(entry.maxPp).toString()} accent="pink" />
       </StatRow>
 
       <ModalPlayerList
-        title="Farmed by"
+        title={t`Farmed by`}
         players={sortedPlayers}
         total={totalPlayers}
         control={enabled ? control : undefined}
@@ -3223,6 +3225,7 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
 }
 
 function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; country: string }) {
+  const { t } = useLingui();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
   const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
     country,
@@ -3242,13 +3245,13 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
   return (
     <>
       <StatRow>
-        <StatItem label="total plays" value={formatNumber(entry.totalPlays)} accent="pink" />
-        <StatItem label="players" value={formatNumber(totalPlayers)} accent="blue" />
-        <StatItem label="global plays" value={formatNumber(entry.globalPlayCount)} />
+        <StatItem label={t`total plays`} value={formatNumber(entry.totalPlays)} accent="pink" />
+        <StatItem label={t`players`} value={formatNumber(totalPlayers)} accent="blue" />
+        <StatItem label={t`global plays`} value={formatNumber(entry.globalPlayCount)} />
       </StatRow>
 
       <ModalPlayerList
-        title="Most played by"
+        title={t`Most played by`}
         players={sortedPlayers}
         total={totalPlayers}
         control={enabled ? control : undefined}
@@ -3274,6 +3277,7 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
 }
 
 function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; country: string }) {
+  const { t } = useLingui();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
   const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
     country,
@@ -3286,13 +3290,13 @@ function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; 
   return (
     <>
       <StatRow>
-        <StatItem label={`${country.toLowerCase()} favs`} value={formatNumber(totalPlayers)} accent="pink" />
-        <StatItem label="global favs" value={formatNumber(entry.globalFavouriteCount)} />
-        <StatItem label="global plays" value={formatNumber(entry.globalPlayCount)} />
+        <StatItem label={t`${country.toLowerCase()} favs`} value={formatNumber(totalPlayers)} accent="pink" />
+        <StatItem label={t`global favs`} value={formatNumber(entry.globalFavouriteCount)} />
+        <StatItem label={t`global plays`} value={formatNumber(entry.globalPlayCount)} />
       </StatRow>
 
       <ModalPlayerList
-        title="Favourited by"
+        title={t`Favourited by`}
         players={visiblePlayers}
         total={totalPlayers}
         control={enabled ? control : undefined}
@@ -3369,11 +3373,11 @@ function FarmedCard({
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Torus" }}>{map.playerCount}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">{map.playerCount === 1 ? "player" : "players"}</span>
+            <span className="text-[8px] text-osu-f1 uppercase"><Plural value={map.playerCount} one="player" other="players" /></span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>~{Math.round(map.avgPp)}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">avg pp</span>
+            <span className="text-[8px] text-osu-f1 uppercase"><Trans>avg pp</Trans></span>
           </div>
         </div>
 
@@ -3435,11 +3439,11 @@ function MostPlayedCard({
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>{formatNumber(map.totalPlays)}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">plays</span>
+            <span className="text-[8px] text-osu-f1 uppercase"><Trans>plays</Trans></span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Torus" }}>{map.playerCount}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">{map.playerCount === 1 ? "player" : "players"}</span>
+            <span className="text-[8px] text-osu-f1 uppercase"><Plural value={map.playerCount} one="player" other="players" /></span>
           </div>
         </div>
 
@@ -3493,7 +3497,7 @@ function FavouriteCard({
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(fav.globalFavouriteCount)}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">global</span>
+            <span className="text-[8px] text-osu-f1 uppercase"><Trans>global</Trans></span>
           </div>
         </div>
 
@@ -4158,6 +4162,7 @@ function DifficultyPicker({
 }
 
 function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
+  const { t } = useLingui();
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const coverUrl = bm.covers.cover ?? bm.covers.card ?? bm.covers["list@2x"] ?? bm.covers.list ?? "";
   const keys = bm.maniaKeys ?? [];
@@ -4965,18 +4970,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start flex-shrink-0">
             <div className="flex items-center gap-1">
               <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
-              <span className="text-[9px] text-osu-f1 uppercase">favs</span>
+              <span className="text-[9px] text-osu-f1 uppercase"><Trans>favs</Trans></span>
             </div>
             <div className="flex items-center gap-1">
               <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalPlayCount)}</span>
-              <span className="text-[9px] text-osu-f1 uppercase">plays</span>
+              <span className="text-[9px] text-osu-f1 uppercase"><Trans>plays</Trans></span>
             </div>
             <a
               href={`osu://dl/${bm.id}`}
               className="hidden sm:flex items-center gap-1.5 text-osu-pink/80 hover:text-osu-pink hover:scale-105 transition-all cursor-pointer focus:outline-none focus-visible:outline-none"
-              title="Open in osu!"
+              title={t`Open in osu!`}
             >
-              <span className="text-[11px] font-semibold">Open in</span>
+              <span className="text-[11px] font-semibold"><Trans>Open in</Trans></span>
               <OsuLogo className="h-[26px] w-[26px]" />
             </a>
           </div>
@@ -5096,7 +5101,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               step={0.05}
               value={volume}
               onChange={(e) => applyVolume(Number(e.target.value))}
-              aria-label="Preview volume"
+              aria-label={t`Preview volume`}
               className="w-12 h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer shrink-0 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink"
             />
 

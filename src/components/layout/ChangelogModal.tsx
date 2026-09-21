@@ -7,7 +7,7 @@ import { ChevronRight, X } from "lucide-react";
 import { UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
 import { formatReleaseAge, groupUpdatesByDay } from "#/lib/changelog";
 import { formatDate } from "#/lib/format";
-import { useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 const DAYS = groupUpdatesByDay(UPDATES);
 /** Newest day only: it is the one the reader came for, and every other day
@@ -222,7 +222,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             {WIP.length > 0 ? (
               <div className="border-t border-osu-b3/50 bg-black/20 px-4 py-3">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
-                  working on next
+                  <Trans>working on next</Trans>
                 </div>
                 <div className="mt-1 text-[12.5px] leading-relaxed text-osu-c2/80">
                   {WIP.map((item) => (

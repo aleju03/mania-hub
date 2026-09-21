@@ -97,7 +97,7 @@ msgstr "? 次回放观看"
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
 msgid "· {0}/{averageWindow} counted"
-msgstr ""
+msgstr "· 已计入 {0}/{averageWindow}"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
@@ -277,6 +277,11 @@ msgstr "{0, plural, other {张谱面}}"
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, other {次游玩}}"
 
+#. placeholder {0}: map.playerCount
+#: src/routes/maps.tsx
+msgid "{0, plural, one {player} other {players}}"
+msgstr "{0, plural, other {玩家}}"
+
 #. placeholder {0}: Number(card.copies)
 #. placeholder {0}: shared.card.copies
 #: src/components/packs/CardSpotlight.tsx
@@ -447,6 +452,11 @@ msgstr "{0} 的 Eternal maniacard"
 #: src/routes/maps.tsx
 msgid "{0} favourites"
 msgstr "{0} 个收藏"
+
+#. placeholder {0}: country.toLowerCase()
+#: src/routes/maps.tsx
+msgid "{0} favs"
+msgstr "{0} 收藏"
 
 #. placeholder {0}: nominee.up
 #: src/components/packs/GoatPoll.tsx
@@ -1514,6 +1524,7 @@ msgid "{selectedImageCount, plural, one {# image selected} other {# images selec
 msgstr "{selectedImageCount, plural, other {已选择 # 张图片}}"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{selectedKeymode}K preview"
 msgstr "{selectedKeymode}K 预览"
@@ -2434,7 +2445,7 @@ msgstr "每列的准确率或 UR，每根手指一格。"
 #. placeholder {0}: formatAccuracy(credential.bar)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, against its {0} bar"
-msgstr ""
+msgstr "这次通过所依据的准确率，对照它 {0} 的门槛"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, in the ladder's own scoring"
@@ -2799,6 +2810,10 @@ msgstr "已记录"
 msgid "Alt = from center"
 msgstr "Alt = 从中心"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Always reveal all"
+msgstr "始终全部揭晓"
+
 #: src/components/layout/ThemePicker.tsx
 msgid "amber"
 msgstr "琥珀"
@@ -3091,6 +3106,10 @@ msgstr "平均强度，0-100"
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "avg nps"
 msgstr "平均 nps"
+
+#: src/routes/maps.tsx
+msgid "avg pp"
+msgstr "平均 pp"
 
 #: src/routes/maps.tsx
 msgid "Avg PP"
@@ -4009,6 +4028,10 @@ msgstr "完成于 {date} · {pp}pp"
 #: src/components/me/GoalsPanel.tsx
 msgid "cleared {date} · #{rank}"
 msgstr "完成于 {date} · 第 {rank} 名"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
+msgstr "点击某一轨道即可选中。拖出框选区域可多选。按住 Shift 选择连续范围，Ctrl/Cmd 可切换选中。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
@@ -5106,6 +5129,10 @@ msgstr "正在发牌…"
 msgid "Dealing your pack is taking a moment"
 msgstr "卡包准备中，请稍候"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Deals every card out at once instead of one at a time"
+msgstr "一次性发出所有卡片，而不是一张一张揭开"
+
 #: src/components/packs/GiftInbox.tsx
 msgid "Decline"
 msgstr "拒绝"
@@ -5218,7 +5245,7 @@ msgstr "在 .osk 中检测到"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Detected sections"
-msgstr ""
+msgstr "检测到的片段"
 
 #: src/routes/discord.tsx
 msgid "dev preview"
@@ -5243,6 +5270,10 @@ msgstr "难度"
 #: src/routes/replay_.community.tsx
 msgid "Difficulty"
 msgstr "难度"
+
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "Difficulty radar chart"
+msgstr "难度雷达图"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Direction"
@@ -5580,7 +5611,7 @@ msgstr "每位玩家被抽中的概率相同，与其收藏数量无关。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr ""
+msgstr "每个技能组最多平均 {averageWindow} 次通过。同一张谱面只计入你最好的两个变速成绩。证据更少时，会用现有的记录求平均，估算仍在完善中。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Each skillset is the average of the best {averageWindow} clears behind it. A skillset under {averageWindow} is averaged from what it has, so it gets more accurate as more clears land."
@@ -5791,6 +5822,10 @@ msgstr "欧洲、中美洲、法国"
 #: src/routes/legal.tsx
 msgid "Even with those safeguards, data may be delayed, incomplete, stale, or unavailable."
 msgstr "即便有这些防护措施，数据仍可能出现延迟、不完整、过期或不可用的情况。"
+
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "every card"
+msgstr "全部卡片"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Every card came out in two pieces"
@@ -6005,6 +6040,10 @@ msgstr "刷图评估"
 msgid "Farmed"
 msgstr "刷图热门"
 
+#: src/routes/maps.tsx
+msgid "Farmed by"
+msgstr "农过的玩家"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Fast export"
 msgstr "快速导出"
@@ -6022,6 +6061,10 @@ msgid "Fastest"
 msgstr "最快"
 
 #: src/routes/maps.tsx
+msgid "Favourited by"
+msgstr "收藏的玩家"
+
+#: src/routes/maps.tsx
 msgid "Favourites"
 msgstr "收藏"
 
@@ -6032,6 +6075,10 @@ msgstr "全球收藏"
 #: src/routes/maps.tsx
 msgid "Favourites in {countryName}"
 msgstr "{countryName} 的收藏"
+
+#: src/routes/maps.tsx
+msgid "favs"
+msgstr "收藏"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/routes/tracker.tsx
@@ -6161,8 +6208,8 @@ msgid "filtered out"
 msgstr "已被筛掉"
 
 #: src/components/settings/SettingsPanel.tsx
-msgid "filters"
-msgstr "筛选"
+#~ msgid "filters"
+#~ msgstr "筛选"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -6612,6 +6659,7 @@ msgid "Give the set a name."
 msgstr "给卡组起个名字。"
 
 #: src/components/me/GoalsPanel.tsx
+#: src/routes/maps.tsx
 msgid "global"
 msgstr "全球"
 
@@ -6619,6 +6667,10 @@ msgstr "全球"
 #: src/routes/player/$username.tsx
 msgid "Global"
 msgstr "全球"
+
+#: src/routes/maps.tsx
+msgid "global favs"
+msgstr "全球收藏"
 
 #: src/routes/farm-helper.tsx
 msgid "Global mania farm helper"
@@ -6631,6 +6683,10 @@ msgstr "全球 mania 排行榜"
 #: src/routes/snipes.tsx
 msgid "Global mania snipes"
 msgstr "全球 mania 狙击"
+
+#: src/routes/maps.tsx
+msgid "global plays"
+msgstr "全球游玩次数"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Global tracker is ready"
@@ -7342,7 +7398,7 @@ msgstr "印尼语"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Influence in this average; Dan credit is unchanged"
-msgstr ""
+msgstr "在这个平均值中的影响；段位贡献不变"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
@@ -8249,6 +8305,14 @@ msgstr "目标加载中…"
 msgid "Loading history…"
 msgstr "正在加载历史…"
 
+#: src/components/player/bbcode/ImageEditorModal.tsx
+msgid "Loading image…"
+msgstr "正在加载图片…"
+
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "Loading map shape analysis"
+msgstr "正在加载谱面形态分析"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Loading maps..."
@@ -8786,6 +8850,10 @@ msgid "Max combo"
 msgstr "最大连击"
 
 #: src/routes/maps.tsx
+msgid "max pp"
+msgstr "最高 pp"
+
+#: src/routes/maps.tsx
 msgid "Max PP"
 msgstr "最高 PP"
 
@@ -9064,6 +9132,10 @@ msgstr "游玩最多"
 #: src/routes/maps.tsx
 msgid "Most Played"
 msgstr "游玩最多"
+
+#: src/routes/maps.tsx
+msgid "Most played by"
+msgstr "游玩最多的玩家"
 
 #: src/routes/maps.tsx
 msgid "Most played globally"
@@ -9414,6 +9486,10 @@ msgstr "没有匹配「{0}」的卡册。"
 msgid "No beatmaps found for \"{query}\""
 msgstr "没有找到匹配「{query}」的谱面"
 
+#: src/components/maps/SearchCard.tsx
+msgid "no bg"
+msgstr "无背景"
+
 #: src/components/packs/BindersView.tsx
 #~ msgid "No binders yet. Name one above, then add cards to it."
 #~ msgstr "还没有卡夹。在上方起个名字，然后往里加卡片。"
@@ -9616,6 +9692,10 @@ msgstr "这个键数还没有可用的谱型数据。"
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
 msgstr "没有玩家"
+
+#: src/routes/maps.tsx
+msgid "No players found"
+msgstr "未找到玩家"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "No players found for \"{trimmedQuery}\"."
@@ -10268,6 +10348,10 @@ msgstr "最早最佳成绩 {month}"
 msgid "Oldest Top Play"
 msgstr "最早的最佳成绩"
 
+#: src/components/ui/Switch.tsx
+#~ msgid "on"
+#~ msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 msgid "On"
 msgstr "开"
@@ -10374,11 +10458,11 @@ msgstr "只有你能打开这些"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
-msgstr ""
+msgstr "同一张谱面只有你最好的两个变速成绩计入段位。这个成绩不在其中。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Only your two best rate plays on the same chart count toward each Dan ladder, chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count fully. Verified rate reuploads share this limit, and further rate plays cannot fill the average or satisfy a clear requirement. A better play can replace either one."
-msgstr ""
+msgstr "同一张谱面只有你最好的两个变速成绩计入每条段位表，按技能分组前依据经准确率调整的段位贡献挑选。两个都完整计入。已认证的变速重传共用这个上限，其余变速成绩既不能填满平均，也不能满足通过要求。更好的成绩可以替换其中任意一个。"
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Opacity"
@@ -10424,6 +10508,7 @@ msgstr "再开一个"
 #: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
+#: src/routes/tracker.tsx
 msgid "Open beatmap on osu!"
 msgstr "在 osu! 上打开谱面"
 
@@ -10439,6 +10524,10 @@ msgstr "查看图片"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open image in new tab"
 msgstr "在新标签页打开图片"
+
+#: src/routes/maps.tsx
+msgid "Open in"
+msgstr "在此打开"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/routes/maps.tsx
@@ -10542,6 +10631,14 @@ msgstr "正在打开剩下的…"
 #: src/components/packs/PackStage.tsx
 msgid "Opening..."
 msgstr "正在打开…"
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Opens packs without the shuffle and flip animations"
+#~ msgstr ""
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Opens packs without the shuffle, flips and celebrations"
+#~ msgstr ""
 
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
@@ -10720,7 +10817,7 @@ msgstr "不计入平均"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Outside this average's best-clear window"
-msgstr ""
+msgstr "不在这个平均值的最佳通过范围内"
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Outside this average's weighted window"
@@ -10765,6 +10862,7 @@ msgid "packs"
 msgstr "卡包"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/settings/SettingsPanel.tsx
 msgid "Packs"
 msgstr "卡包"
 
@@ -11055,6 +11153,11 @@ msgstr "播放两份回放"
 msgid "Play Count"
 msgstr "游玩次数"
 
+#. placeholder {0}: formatReplayStartTime(initialTime)
+#: src/routes/replay.tsx
+msgid "Play from {0}"
+msgstr "从 {0} 开始播放"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Play habits and a playstyle breakdown: active days, sessions and skill mix."
 msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成。"
@@ -11130,6 +11233,7 @@ msgstr "玩家的皮肤"
 #: src/components/layout/Nav.tsx
 #: src/routes/dan-estimates.tsx
 #: src/routes/farm-helper.tsx
+#: src/routes/maps.tsx
 msgid "players"
 msgstr "玩家"
 
@@ -11161,6 +11265,7 @@ msgstr "游玩中"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
+#: src/routes/maps.tsx
 #: src/routes/player/$username.tsx
 msgid "plays"
 msgstr "游玩次数"
@@ -11366,6 +11471,10 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 msgid "Precision"
 msgstr "精度"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "preferences"
+msgstr "偏好设置"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Prefers hardware encoding. Larger files."
 msgstr "优先使用硬件编码，文件更大。"
@@ -11416,6 +11525,7 @@ msgid "Preview position"
 msgstr "试听进度"
 
 #: src/components/maps/MapPreviewAudio.tsx
+#: src/routes/maps.tsx
 msgid "Preview volume"
 msgstr "试听音量"
 
@@ -11764,7 +11874,7 @@ msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "根据 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定窗口下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11776,7 +11886,7 @@ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "根据最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定窗口下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11788,7 +11898,7 @@ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "根据你的 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定窗口下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11800,7 +11910,7 @@ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
-msgstr ""
+msgstr "根据你的最佳成绩与追踪历史中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定窗口下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "rated from {plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, unranked vibro charts excluded"
@@ -11964,6 +12074,10 @@ msgstr "最近"
 #: src/routes/top-plays.tsx
 msgid "Recent"
 msgstr "最新"
+
+#: src/components/packs/PackPulse.tsx
+msgid "recent global pulls"
+msgstr "最近的全球抽卡"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Recent notable top plays across a country."
@@ -12284,6 +12398,7 @@ msgstr "正在渲染"
 msgid "Rendering"
 msgstr "渲染中"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Rendering the {selectedKeymode}K playfield..."
 msgstr "正在渲染 {selectedKeymode}K 游玩区域…"
@@ -12448,6 +12563,10 @@ msgstr "重置方向"
 #: src/routes/replay.tsx
 msgid "Reset size"
 msgstr "重置大小"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Reset to {defaultValue}"
+msgstr "重置为 {defaultValue}"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Reset to current page"
@@ -12946,6 +13065,7 @@ msgid "search player..."
 msgstr "搜索玩家…"
 
 #: src/components/ui/SearchInput.tsx
+#: src/routes/maps.tsx
 msgid "Search player..."
 msgstr "搜索玩家…"
 
@@ -13507,6 +13627,10 @@ msgid "Show on Showcase"
 msgstr "在展示区显示"
 
 #: src/routes/farm-helper.tsx
+msgid "show popular maps"
+msgstr "查看热门谱面"
+
+#: src/routes/farm-helper.tsx
 msgid "show skillboost"
 msgstr "显示技能提升谱面"
 
@@ -13579,6 +13703,10 @@ msgstr "显示最新的 {0} 个。"
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "显示"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows your cards with a quick fade instead of the full reveal"
+msgstr "用快速淡入显示卡片，而不是完整的揭晓动画"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -13786,7 +13914,7 @@ msgstr "通过数不到四次的技能会被排除在平均之外，而不是按
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Skillset clears"
-msgstr ""
+msgstr "技能组通过记录"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/skins_.$id.tsx
@@ -13836,6 +13964,10 @@ msgstr "皮肤"
 #: src/routes/skins.tsx
 msgid "Skins are unavailable right now"
 msgstr "皮肤列表暂时不可用"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Skip animations"
+msgstr "跳过动画"
 
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."
@@ -14173,6 +14305,10 @@ msgstr "在此开始"
 msgid "Start tracking your plays"
 msgstr "开始追踪你的成绩"
 
+#: src/routes/replay.tsx
+msgid "Start with sound"
+msgstr "带声音开始"
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Starting playback…"
 msgstr "正在开始播放…"
@@ -14222,7 +14358,7 @@ msgstr "第四步：你的通过会被分进四个技能"
 
 #: src/routes/dan-estimates.tsx
 msgid "Step 5: each skill's dan is an average of your best passes"
-msgstr ""
+msgstr "第五步：每个技能的段位是你最好通过记录的平均"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Step 5: each skill's dan is the average of your 20 best passes in it"
@@ -14364,6 +14500,10 @@ msgid "support"
 msgstr "支持"
 
 #: src/routes/__root.tsx
+msgid "Support Mania Tracker on Ko-fi"
+msgstr "在 Ko-fi 上支持 Mania Tracker"
+
+#: src/routes/__root.tsx
 msgid "Support mania-tracker"
 msgstr "支持 mania-tracker"
 
@@ -14459,7 +14599,7 @@ msgstr "确定要永久下架吗？"
 
 #: src/routes/dan-estimates.tsx
 msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
-msgstr ""
+msgstr "取你在某个技能上已计入的通过，按每次通过所对应的等级排序，再对最好的 20 次达标通过求平均。那就是你在该技能上的段位。不会在证据之外额外增加，任何单次通过也无法独自决定它。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take your credited passes in one skill, sort them by the level each one credited, and average the top 20. That is your dan in that skill. Nothing is added on top of the evidence, and no single pass can set it on its own."
@@ -14779,12 +14919,12 @@ msgstr "两边是同一个成绩。给另一边选一份别的成绩。"
 #. placeholder {0}: formatDan(credential.level)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The {0} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept"
-msgstr ""
+msgstr "这条技能组段位表的 {0} 谱面：通过它会直接确定该等级，更高的估算会被保留"
 
 #. placeholder {0}: formatDan(clear.credential.level)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "The {0} chart of this skillset ladder: the clear sets that level, whatever the estimator reads the file as"
-msgstr ""
+msgstr "这条技能组段位表的 {0} 谱面：无论估算器如何读取该文件，通过都会确定那个等级"
 
 #. placeholder {0}: formatDan(danLabel)
 #: src/components/player/DanEvidenceModal.tsx
@@ -15768,7 +15908,7 @@ msgstr "这张谱面还没有被分析。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count toward dan."
-msgstr ""
+msgstr "这张谱面在该成绩之后被修改过，因此无法与谱面当前的音符对应，也不计入段位。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count."
@@ -16186,6 +16326,10 @@ msgstr "最高 pp"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Top-play feed"
 msgstr "最佳成绩 feed"
+
+#: src/routes/maps.tsx
+msgid "total plays"
+msgstr "总游玩次数"
 
 #: src/routes/maps.tsx
 msgid "Tournament"
@@ -16665,6 +16809,7 @@ msgid "Use {0} as the backdrop"
 msgstr "把 {0} 用作背景"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Use {selectedKeymode}K as the card cover"
 msgstr "把 {selectedKeymode}K 用作卡片封面"
@@ -16732,7 +16877,7 @@ msgstr "已认证"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Verified clear"
-msgstr ""
+msgstr "已认证通过"
 
 #: src/lib/replay-overlays.ts
 msgid "Vertical"
@@ -16785,7 +16930,7 @@ msgstr "检测到 vibro。此成绩不计入技能或段位评分。"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
-msgstr ""
+msgstr "评分已排除 vibro 片段。剩余音符的贡献采用较保守的准确率估算。"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Video bitrate"
@@ -16883,7 +17028,7 @@ msgstr "查看主页"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"
-msgstr ""
+msgstr "查看成绩"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "View the skin page"
@@ -16895,13 +17040,14 @@ msgstr "查看 {entryLabel} 最佳成绩"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "View verified skillset clears"
-msgstr ""
+msgstr "查看已认证的技能组通过记录"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Viewer editor"
 msgstr "回放外观编辑器"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Viewing <0>{selectedKeymode}K</0>"
 msgstr "正在查看 <0>{selectedKeymode}K</0>"
@@ -17239,7 +17385,7 @@ msgstr "如果这些成绩来自不同谱面，你的叠段位就是其中最好
 
 #: src/routes/dan-estimates.tsx
 msgid "With fewer than 20 eligible clears the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
-msgstr ""
+msgstr "达标通过不足 20 次时，平均只基于你现有的记录；你不需要 20 张不同的谱面。达标通过少于四次的技能不会有自己的段位，某一侧少于四次时则完全不给估算，而不是给一个不可靠的数字。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "With fewer than 20 weighted slots the average is over the evidence you have; you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."
@@ -17256,6 +17402,10 @@ msgstr "一分钟内"
 #: src/routes/snipes.tsx
 msgid "Won on score, not pp"
 msgstr "以分数取胜，而非 pp"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "working on next"
+msgstr "接下来在做的"
 
 #: src/routes/report.tsx
 msgid "Write a reply"

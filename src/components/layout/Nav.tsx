@@ -1207,7 +1207,7 @@ export function Nav() {
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                         >
                           <UserRound className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          Profile
+                          <Trans>Profile</Trans>
                         </Link>
                         <Link
                           to="/my-stats"
@@ -1218,7 +1218,7 @@ export function Nav() {
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                         >
                           <BarChart3 className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          My Stats
+                          <Trans>My Stats</Trans>
                         </Link>
                         <Link
                           to="/goals"
@@ -1229,7 +1229,7 @@ export function Nav() {
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                         >
                           <Target className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          Goals
+                          <Trans>Goals</Trans>
                         </Link>
                         <Link
                           to="/dynamic-renders"
@@ -1240,7 +1240,7 @@ export function Nav() {
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                         >
                           <ImageIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          Dynamic Renders
+                          <Trans>Dynamic Renders</Trans>
                         </Link>
                         <form method="post" action={logoutHref} className="contents">
                           <button
@@ -1248,7 +1248,7 @@ export function Nav() {
                             className="flex w-full items-center gap-2.5 border-t border-osu-b3/30 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                           >
                             <LogOut className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                            Logout
+                            <Trans>Logout</Trans>
                           </button>
                         </form>
                       </div>

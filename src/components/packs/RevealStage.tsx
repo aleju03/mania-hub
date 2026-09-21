@@ -59,6 +59,14 @@ interface RevealStageProps {
      the cards too, so the whole hand deals out at once, in halves, with none
      of the ceremony a card nobody ruined would get. */
   damage?: PackDamage | null;
+  /* The viewer asked for reveal-all in settings: the hand deals itself out
+     the moment the reveal mounts, with no stack to tap through first. */
+  autoRevealAll?: boolean;
+  /* "Skip animations": the reveal runs at the short pace phones already get
+     (a 120ms deal, a quick turn) instead of the full desktop ceremony. Not
+     the same as reducedMotion, which removes the motion outright - the cards
+     still deal and turn one after another here, just without the wait. */
+  compactReveal?: boolean;
   /* Called once per card the moment it is revealed; returns whether this is
      the player's first copy in the viewer's collection. */
   onCardRevealed?: (pull: PulledCard) => boolean;
@@ -579,6 +587,8 @@ export function RevealStage({
   cards,
   reducedMotion,
   damage = null,
+  autoRevealAll = false,
+  compactReveal = false,
   onCardRevealed,
   onComplete,
 }: RevealStageProps) {
@@ -844,9 +854,9 @@ export function RevealStage({
       setPhase("flipping");
       // A short beat while the canvas card (same neutral back as the stack)
       // takes over the top of the stack, then it turns.
-      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : 220));
+      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : compactReveal ? 110 : 220));
       if (cancelledRef.current) return;
-      const flipMs = reducedMotion ? 240 : 980;
+      const flipMs = reducedMotion ? 240 : compactReveal ? 420 : 980;
       playFlipWhoosh(flipMs);
       await rendererRef.current?.playRevealFlip(flipMs);
       if (cancelledRef.current) return;
@@ -1079,7 +1089,7 @@ export function RevealStage({
     // minimum gap so hot data still cascades.
     /* The mobile cascade is intentionally flat and already laid out in its
        final slots, so it only needs a short beat for that grid to paint. */
-    const dealMs = reducedMotion ? 0 : mobileViewport ? 120 : 300 + count * 60;
+    const dealMs = reducedMotion ? 0 : mobileViewport || compactReveal ? 120 : 300 + count * 60;
     let nextFlipAt = performance.now() + dealMs;
 
     // Each card runs its whole pipeline (scores, then thumbnail render) in its
@@ -1216,18 +1226,19 @@ export function RevealStage({
     // cascade already showed every card, so instead of fading the grid out
     // and staggering it back in, the summary takes over in place and flies
     // each tile from the rect it occupies right now.
-    await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 150 : 700));
+    await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 150 : compactReveal ? 300 : 700));
     if (!cancelledRef.current) onComplete(revealedRef.current, { sourceRects: collectHandoffRects() });
   };
 
   /* A butchered pack has nothing to draw for one at a time: there is no tier
      worth holding a beat on, and the stack is in halves. It deals itself out
-     the moment the reveal mounts, and the summary follows. The ref keeps that
-     to one run: StrictMode's mount -> cleanup -> mount would otherwise start a
+     the moment the reveal mounts, and the summary follows; a viewer who set
+     reveal-all in settings gets the same deal on every pack. The ref keeps
+     that to one run: StrictMode's mount -> cleanup -> mount would otherwise start a
      second pass that records every pull twice. */
   const autoDealtRef = useRef(false);
   useEffect(() => {
-    if (!damage || autoDealtRef.current) return;
+    if ((!damage && !autoRevealAll) || autoDealtRef.current) return;
     autoDealtRef.current = true;
     void revealRest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1424,18 +1435,23 @@ export function RevealStage({
                   entry={revealed[position]}
                   username={cards[position]?.player.user.username ?? ""}
                   cardBack={cardBack}
-                  mobile={mobileViewport}
+                  /* Compact takes the phone's flat crossfade too: no
+                     perspective, no turn, the face simply comes up where the
+                     back was. That is the reveal people asked to skip to. */
+                  mobile={mobileViewport || compactReveal}
                   reducedMotion={reducedMotion}
                   damage={damage}
                   onLanded={() => handleCascadeLanded(position)}
                   onFaceVisible={() => handleCascadeFaceVisible(position)}
                 />
               );
-              if (mobileViewport) {
+              if (mobileViewport || compactReveal) {
                 /* Positions are ordinary layout coordinates on mobile. Even a
                    settled transform plus will-change creates a GPU-backed
                    layer in WebKit; ten of those were enough to corrupt tiles
-                   outside the reveal itself. */
+                   outside the reveal itself. Compact takes the same branch on
+                   purpose: the hand is simply laid out in its slots, with no
+                   deal pulling each card out of the stack first. */
                 return (
                   <div
                     key={position}

@@ -1,4 +1,4 @@
-import { useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
   useCallback,
   useEffect,
@@ -608,7 +608,7 @@ export function ImageEditorModal({
               <div className="px-6 text-center text-[13px] text-osu-red">{error}</div>
             ) : !img ? (
               <div className="flex items-center gap-2 text-[13px] text-osu-f1">
-                <Loader2 size={16} className="animate-spin" /> Loading image…
+                <Loader2 size={16} className="animate-spin" /> <Trans>Loading image…</Trans>
               </div>
             ) : (
               <div className="relative" style={{ width: dispW, height: dispH }}>

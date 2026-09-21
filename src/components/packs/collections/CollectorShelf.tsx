@@ -591,7 +591,7 @@ export function CollectorShelf({ collector, tab }: {
       <Section className="mt-10">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <SectionHeading>
-            every card
+            <Trans>every card</Trans>
             <HeadingCount value={shownPage ? total : null} />
           </SectionHeading>
           <label className="relative flex min-w-[160px] flex-1 items-center sm:max-w-[220px]">

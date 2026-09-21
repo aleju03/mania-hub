@@ -44,7 +44,7 @@ import type { AppLocale } from "../lib/locale";
 import { LocaleContext, useLocale } from "../lib/locale-context";
 import { getI18n } from "../lib/i18n";
 import { I18nProvider } from "@lingui/react";
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { AnalyticsProvider } from "../lib/analytics-provider";
 import { track } from "../lib/analytics";
@@ -524,6 +524,7 @@ function NotFoundPage() {
 const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 
 function KofiSupportButton() {
+  const { t } = useLingui();
   // getI18n rather than useLingui for the same reason as RootErrorComponent.
   const i = getI18n(useLocale());
   const [open, setOpen] = useState(false);
@@ -580,7 +581,7 @@ function KofiSupportButton() {
             </div>
             <iframe
               src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
-              title="Support Mania Tracker on Ko-fi"
+              title={t`Support Mania Tracker on Ko-fi`}
               loading="eager"
               scrolling="yes"
               allow="payment *"

@@ -532,28 +532,28 @@ export function SkinUpdateModal({
                     <div className="relative overflow-hidden rounded-xl border border-osu-b3/30 bg-osu-b4">
                       <div className="aspect-video w-full">
                         {hero ? (
-                          <img src={hero.url} alt={`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
+                          <img src={hero.url} alt={t`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex h-full items-center justify-center text-[12px] text-osu-f1">
-                            Rendering the {selectedKeymode}K playfield...
+                            <Trans>Rendering the {selectedKeymode}K playfield...</Trans>
                           </div>
                         )}
                       </div>
                       {hero && rendering && (
                         <div className="pointer-events-none absolute right-2 top-2 rounded bg-osu-b5/85 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2">
-                          rendering
+                          <Trans>rendering</Trans>
                         </div>
                       )}
                     </div>
 
                     <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
                       <span className="text-osu-f1">
-                        Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span>
+                        <Trans>Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></Trans>
                       </span>
                       {coverKeymode === selectedKeymode ? (
                         <span className="flex items-center gap-1 font-bold text-osu-pink">
                           <Star size={11} aria-hidden="true" />
-                          card cover
+                          <Trans>card cover</Trans>
                         </span>
                       ) : (
                         <button
@@ -563,7 +563,7 @@ export function SkinUpdateModal({
                           className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
                         >
                           <Star size={11} aria-hidden="true" />
-                          Use {selectedKeymode}K as the card cover
+                          <Trans>Use {selectedKeymode}K as the card cover</Trans>
                         </button>
                       )}
                     </div>

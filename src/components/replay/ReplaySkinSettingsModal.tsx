@@ -2603,7 +2603,7 @@ export function ReplaySkinSettingsModal({
             />
             {keymodeHasSkinArt ? null : (
               <div className="mt-2 text-[10px] text-osu-f1">
-                Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle.
+                <Trans>Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle.</Trans>
               </div>
             )}
           </div>
@@ -4563,7 +4563,7 @@ function LayoutNumberControl({
           disabled={isDefault}
           className="text-[10px] uppercase tracking-wide text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-50 disabled:hover:text-osu-f1"
         >
-          Reset to {defaultValue}
+          <Trans>Reset to {defaultValue}</Trans>
         </button>
       </div>
       <div className="flex items-center gap-3">

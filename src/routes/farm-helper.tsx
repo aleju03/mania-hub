@@ -1023,7 +1023,7 @@ function FarmHelperPage() {
                             onClick={() => setView("popular")}
                             className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
                           >
-                            show popular maps
+                            <Trans>show popular maps</Trans>
                           </button>
                         }
                       />

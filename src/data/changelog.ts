@@ -33,6 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-21", text: "Two new pack options in settings: \"Skip animations\" shows your cards with a quick fade instead of the full reveal, and \"Always reveal all\" deals every card out at once instead of one at a time.", to: "/settings" },
   { date: "2026-09-21", text: "Stage art and the health bar from your skin can be moved, resized or hidden in replays, like the other overlays.", to: "/replay" },
   { date: "2026-09-21", text: "Skins with animated notes now animate in the replay viewer.", to: "/skins" },
   { date: "2026-09-21", text: "Added a Hits only style to the hit error bar overlay that hides the colored bar.", to: "/replay" },
@@ -43,8 +44,8 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-09-21", text: "Redesigned the L/R miss counter overlay and added new styles.", to: "/replay" },
   { date: "2026-09-21", text: "Fixed replay audio falling out of sync after seeking in some cases.", to: "/replay" },
   { date: "2026-09-21", text: "Updated the replay leaderboard overlay to match osu!stable and osu!lazer more accurately", to: "/replay" },
-  { date: "2026-09-20", text: "Adjusted tech and chordstream pattern detection on 6K, 7K and 8K maps." },
   { date: "2026-09-21", text: "The hit error bar on replays is an overlay now: drag it, resize it or turn it off like the other overlays.", to: "/replay" },
+  { date: "2026-09-20", text: "Adjusted tech and chordstream pattern detection on 6K, 7K and 8K maps." },
   { date: "2026-09-19", text: "Reworked the All uploads replay page with a thumbnail feed, search, key filters, sorting by date, accuracy or difficulty, and faster loading as you scroll.", to: "/replay/community" },
   { date: "2026-09-19", text: "Track your Maniacard rating and tier changes in the new Progression tab, inside the (?) window." },
   { date: "2026-09-19", text: "Fixed bugs in how 4K dan estimates are calculated that caused some estimates to appear higher than expected. Map and player estimates are being recalculated." },
