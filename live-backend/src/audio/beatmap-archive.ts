@@ -1,8 +1,16 @@
 import { inflateRawSync } from "node:zlib";
+import { logWarn } from "../logger.js";
 
 const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
+// A whole archive can run to tens of MB; the range path only pulls one entry.
+const FULL_ARCHIVE_FETCH_TIMEOUT_MS = 45_000;
 const ARCHIVE_SOURCE_MIN_INTERVAL_MS = 2_500;
+// A mirror that rejects us (403/429/5xx) is left alone for a while. A timeout
+// is usually one slow transfer, not an outage, so it earns a much shorter
+// pause: with a 15-minute pause per timeout, one oversized archive walked
+// through every mirror and left cold audio 404ing site-wide for 15 minutes.
 const ARCHIVE_SOURCE_COOLDOWN_MS = 15 * 60 * 1000;
+const ARCHIVE_SOURCE_TIMEOUT_COOLDOWN_MS = 60 * 1000;
 const ZIP_TAIL_BYTES = 128 * 1024;
 const MAX_ZIP_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 // Real mania sets get this big: beatmapset 2136400 (Vietnamese Chordjack Pack 5,
@@ -160,8 +168,30 @@ function isArchiveSourceCoolingDown(source: ArchiveSourceName, now = Date.now())
   return getArchiveSourceState(source).cooldownUntil > now;
 }
 
-function cooldownArchiveSource(source: ArchiveSourceName): void {
-  getArchiveSourceState(source).cooldownUntil = Date.now() + ARCHIVE_SOURCE_COOLDOWN_MS;
+function cooldownArchiveSource(source: ArchiveSourceName, reason: unknown, ms = ARCHIVE_SOURCE_COOLDOWN_MS): void {
+  const state = getArchiveSourceState(source);
+  state.cooldownUntil = Math.max(state.cooldownUntil, Date.now() + ms);
+  logWarn("archive_source_cooldown", {
+    source,
+    cooldownMs: ms,
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+}
+
+function cooldownArchiveSourceForError(source: ArchiveSourceName, error: unknown): void {
+  if (error instanceof Error && error.name === "AbortError") {
+    cooldownArchiveSource(source, error, ARCHIVE_SOURCE_TIMEOUT_COOLDOWN_MS);
+    return;
+  }
+  cooldownArchiveSource(source, error);
+}
+
+// Sources that are not cooling down, or every source when all of them are: a
+// stale cooldown must never turn into a guaranteed failure for a cold request.
+function getArchiveSourceAttemptOrder(skip?: ReadonlySet<ArchiveSourceName>): ArchiveSourceEntry[] {
+  const ordered = getArchiveSourceOrder().filter((source) => !skip?.has(source.name));
+  const available = ordered.filter((source) => !isArchiveSourceCoolingDown(source.name));
+  return available.length > 0 ? available : ordered;
 }
 
 function shouldCooldownArchiveSource(status: number): boolean {
@@ -182,7 +212,7 @@ function getArchiveSourceOrder(now = Date.now()): ArchiveSourceEntry[] {
       };
     })
     .sort((left, right) =>
-      Number(left.cooldownWaitMs > 0) - Number(right.cooldownWaitMs > 0)
+      left.cooldownWaitMs - right.cooldownWaitMs
       || left.slotWaitMs - right.slotWaitMs
       || left.rotationRank - right.rotationRank)
     .map((entry) => entry.source);
@@ -200,6 +230,14 @@ export function __setArchiveSourceStateForTest(
   const existing = getArchiveSourceState(source);
   existing.nextAvailableAt = state.nextAvailableAt ?? existing.nextAvailableAt;
   existing.cooldownUntil = state.cooldownUntil ?? existing.cooldownUntil;
+}
+
+export function __getArchiveSourceAttemptOrderForTest(): ArchiveSourceName[] {
+  return getArchiveSourceAttemptOrder().map((source) => source.name);
+}
+
+export function __cooldownArchiveSourceForErrorForTest(source: ArchiveSourceName, error: Error): void {
+  cooldownArchiveSourceForError(source, error);
 }
 
 export function __getArchiveSourceOrderForTest(now: number): ArchiveSourceName[] {
@@ -791,12 +829,7 @@ async function findBeatmapOsuFileByRangeFromUrl(
 
 async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
   const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
-
+  for (const source of getArchiveSourceAttemptOrder()) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     try {
@@ -805,7 +838,7 @@ async function extractArchiveFileByRange(beatmapsetId: string, filename: string)
         return extractArchiveFileByRangeFromUrl(rangeUrl, filename, controller.signal);
       });
     } catch (error) {
-      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSourceForError(source.name, error);
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
     } finally {
@@ -821,11 +854,7 @@ async function extractBeatmapOsuFileByRange(
   hints?: { version?: string | null },
 ): Promise<BeatmapArchiveOsuFile> {
   const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
+  for (const source of getArchiveSourceAttemptOrder()) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
@@ -835,7 +864,7 @@ async function extractBeatmapOsuFileByRange(
         return findBeatmapOsuFileByRangeFromUrl(rangeUrl, beatmapId, hints, controller.signal);
       });
     } catch (error) {
-      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSourceForError(source.name, error);
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
     } finally {
@@ -866,7 +895,7 @@ const MAX_FULL_ARCHIVE_ATTEMPTS = 2;
 // ceiling and sheds on arrival — the same shape as the total SSE connection cap
 // — and every waiter it does accept expires on its own.
 const MAX_FULL_ARCHIVE_WAITERS = 8;
-const FULL_ARCHIVE_QUEUE_TIMEOUT_MS = ARCHIVE_SOURCES.length * ARCHIVE_FETCH_TIMEOUT_MS;
+const FULL_ARCHIVE_QUEUE_TIMEOUT_MS = ARCHIVE_SOURCES.length * FULL_ARCHIVE_FETCH_TIMEOUT_MS;
 
 type FullArchive = {
   buffer: ArrayBuffer;
@@ -943,14 +972,9 @@ async function fetchFullArchive(
   skipSources: ReadonlySet<ArchiveSourceName>,
 ): Promise<FullArchive> {
   const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (skipSources.has(source.name)) continue;
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
+  for (const source of getArchiveSourceAttemptOrder(skipSources)) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), FULL_ARCHIVE_FETCH_TIMEOUT_MS);
     let shouldCooldown = false;
     try {
       const archiveResponse = await withArchiveSourceSlot(source.name, controller.signal, () => fetch(source.url(beatmapsetId), {
@@ -969,7 +993,7 @@ async function fetchFullArchive(
       return { buffer, source: source.name };
     } catch (error) {
       if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
-        cooldownArchiveSource(source.name);
+        cooldownArchiveSourceForError(source.name, error);
       }
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
@@ -1159,11 +1183,7 @@ async function extractHitsoundsByRange(
   maxTotalBytes: number,
 ): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
   const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
+  for (const source of getArchiveSourceAttemptOrder()) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
@@ -1186,7 +1206,7 @@ async function extractHitsoundsByRange(
         return { files, dropped };
       });
     } catch (error) {
-      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSourceForError(source.name, error);
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
     } finally {
@@ -1308,11 +1328,7 @@ async function probeStoryboardAbsenceByRange(
   callbacks: BeatmapArchiveStoryboardCallbacks,
 ): Promise<boolean> {
   const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
+  for (const source of getArchiveSourceAttemptOrder()) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
@@ -1334,7 +1350,7 @@ async function probeStoryboardAbsenceByRange(
         return true;
       });
     } catch (error) {
-      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSourceForError(source.name, error);
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
     } finally {

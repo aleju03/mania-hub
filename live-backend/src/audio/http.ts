@@ -7,6 +7,7 @@ import {
   type PreparedBeatmapAudio,
 } from "./beatmap-audio.js";
 import { appendVary } from "../http/respond.js";
+import { logWarn } from "../logger.js";
 import { HITSOUND_BUNDLE_MIME_TYPE, getPreparedHitsoundBundle } from "./hitsound-bundle.js";
 import { STORYBOARD_BUNDLE_MIME_TYPE, getPreparedStoryboardBundle } from "./storyboard-bundle.js";
 
@@ -76,6 +77,7 @@ export async function handleBeatmapAudioRequest(
     sendAudioBuffer(req, res, config, audio, buffer, req.headers.range);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown audio extraction error";
+    logWarn("beatmap_audio_unavailable", { beatmapsetId, filename, error: message });
     sendAudioText(req, res, config, 404, message);
   }
 }

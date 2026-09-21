@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  __cooldownArchiveSourceForErrorForTest,
+  __getArchiveSourceAttemptOrderForTest,
   __getArchiveSourceOrderForTest,
   __resetArchiveSourceOrderForTest,
   __setArchiveSourceStateForTest,
@@ -42,6 +44,30 @@ describe("beatmap archive mirror order", () => {
       "osudl",
       "catboy",
     ]);
+  });
+
+  it("skips cooling mirrors while any is available, but tries all of them once none is", () => {
+    const now = Date.now();
+    const names = ["osudl", "osu.direct", "catboy", "hinai", "nerinyan", "sayobot"] as const;
+    for (const name of names.slice(1)) __setArchiveSourceStateForTest(name, { cooldownUntil: now + 60_000 });
+    expect(__getArchiveSourceAttemptOrderForTest()).toEqual(["osudl"]);
+
+    __setArchiveSourceStateForTest("osudl", { cooldownUntil: now + 120_000 });
+    const attempted = __getArchiveSourceAttemptOrderForTest();
+    expect(attempted).toHaveLength(names.length);
+    // Soonest to expire first; osudl carries the longest pause.
+    expect(attempted[attempted.length - 1]).toBe("osudl");
+  });
+
+  it("pauses a mirror briefly on a timeout and for longer on a rejection", () => {
+    const before = Date.now();
+    const timeout = new Error("archive request timed out");
+    timeout.name = "AbortError";
+    __cooldownArchiveSourceForErrorForTest("catboy", timeout);
+    __cooldownArchiveSourceForErrorForTest("hinai", new Error("hinai returned 429"));
+    const order = __getArchiveSourceOrderForTest(before + 2 * 60_000);
+    // Two minutes later the timed-out mirror is back ahead of the rejected one.
+    expect(order.indexOf("catboy")).toBeLessThan(order.indexOf("hinai"));
   });
 });
 
