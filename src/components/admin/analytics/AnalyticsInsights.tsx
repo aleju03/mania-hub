@@ -34,8 +34,10 @@ export const AnalyticsInsights = memo(function AnalyticsInsights({
 }) {
   return (
     <div className="space-y-4">
-      <AnalyticsProductInsights />
+      {/* Signed-in players leads: it is the first thing read on this tab, so it
+          sits above the weekly audience block rather than under it. */}
       <AnalyticsViewersCard />
+      <AnalyticsProductInsights />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="flex lg:col-span-3">
           <TopReplaysCard rows={data.topReplays} range={range} />
