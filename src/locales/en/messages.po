@@ -5559,6 +5559,10 @@ msgstr "Earlier changes weren’t recorded."
 msgid "Early"
 msgstr "Early"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Early/late meter with the real hit windows."
+msgstr "Early/late meter with the real hit windows."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Earn <0/> <1/>"
 msgstr "Earn <0/> <1/>"
@@ -6882,6 +6886,10 @@ msgstr "hit and hold lighting"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit counts and unstable rate."
 msgstr "Hit counts and unstable rate."
+
+#: src/lib/replay-overlays.ts
+msgid "Hit error bar"
+msgstr "Hit error bar"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"

@@ -5541,6 +5541,10 @@ msgstr "更早的变化未被记录。"
 msgid "Early"
 msgstr "偏早"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Early/late meter with the real hit windows."
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Earn <0/> <1/>"
 msgstr "拿到 <0/>（<1/>）"
@@ -6860,6 +6864,10 @@ msgstr "打击与长按光效"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit counts and unstable rate."
 msgstr "打击数与 UR。"
+
+#: src/lib/replay-overlays.ts
+msgid "Hit error bar"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"

@@ -12,7 +12,7 @@ import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayHandAccuracyStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
@@ -2463,10 +2463,11 @@ export class ManiaReplayRenderer {
         const box = this.overlayHitboxes.find((hitbox) => hitbox.id === id);
         if (!box) return null;
         const placement = this.overlaySettings[id];
+        const origin = this.getOverlayPlacementOrigin(box);
         return {
           id,
-          x: placement.x,
-          y: placement.y,
+          x: origin.x,
+          y: origin.y,
           scale: placement.scale,
           width: box.width,
           height: box.height,
@@ -2631,6 +2632,7 @@ export class ManiaReplayRenderer {
     this.activeOverlayPointers.set(event.pointerId, { id: hitbox.id, ...point });
     this.canvas.setPointerCapture(event.pointerId);
     const placement = this.overlaySettings[hitbox.id];
+    const origin = this.getOverlayPlacementOrigin(hitbox);
     const otherPointer = Array.from(this.activeOverlayPointers.entries())
       .find(([pointerId, pointer]) => pointerId !== event.pointerId && pointer.id === hitbox.id);
 
@@ -2658,8 +2660,8 @@ export class ManiaReplayRenderer {
         pointerId: event.pointerId,
         startX: point.x,
         startY: point.y,
-        startPlacementX: placement.x,
-        startPlacementY: placement.y,
+        startPlacementX: origin.x,
+        startPlacementY: origin.y,
         startScale: placement.scale,
         startWidth: hitbox.width,
         startHeight: hitbox.height,
@@ -2675,8 +2677,8 @@ export class ManiaReplayRenderer {
       pointerId: event.pointerId,
       startX: point.x,
       startY: point.y,
-      startPlacementX: placement.x,
-      startPlacementY: placement.y,
+      startPlacementX: origin.x,
+      startPlacementY: origin.y,
       width: hitbox.width,
       height: hitbox.height,
       selected: this.getSelectedOverlaySnapshots(hitbox.id),
@@ -2718,10 +2720,13 @@ export class ManiaReplayRenderer {
         this.pinchingOverlay.startScale * (this.getPointerDistance(first, second) / this.pinchingOverlay.startDistance),
       );
       const scaleRatio = nextScale / Math.max(0.001, this.pinchingOverlay.startScale);
-      const placement = this.overlaySettings[this.pinchingOverlay.id];
+      const pinchBox = this.overlayHitboxes.find((hitbox) => hitbox.id === this.pinchingOverlay?.id);
+      const origin = pinchBox
+        ? this.getOverlayPlacementOrigin(pinchBox)
+        : this.overlaySettings[this.pinchingOverlay.id];
       const nextPosition = this.clampOverlayPosition(
-        placement.x,
-        placement.y,
+        origin.x,
+        origin.y,
         this.pinchingOverlay.startWidth * scaleRatio,
         this.pinchingOverlay.startHeight * scaleRatio,
         layout,
@@ -4120,14 +4125,41 @@ export class ManiaReplayRenderer {
     id: ReplayOverlayId,
     width: number,
     height: number,
+    // Where the overlay sits while its placement is still the anchored
+    // default, in stage pixels.
+    anchor?: { x: number; y: number },
   ): ReplayOverlayFrame | null {
     const placement = this.overlaySettings[id];
     if (!placement.enabled) return null;
-    const x = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
-    const y = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
+    const anchored = this.getAnchoredOverlayOrigin(placement, layout, anchor);
+    const x = Math.max(0, Math.min(Math.max(0, layout.w - width), anchored.x * layout.w));
+    const y = Math.max(0, Math.min(Math.max(0, layout.h - height), anchored.y * layout.h));
     const frame = { x, y, width, height };
     this.overlayHitboxes.push({ id, ...frame });
     return frame;
+  }
+
+  // Anchored placements keep their built-in spot until the first drag, so
+  // they still follow the stage geometry they were drawn against.
+  private getAnchoredOverlayOrigin(
+    placement: { x: number; y: number },
+    layout: Layout,
+    anchor?: { x: number; y: number },
+  ): { x: number; y: number } {
+    return {
+      x: placement.x === REPLAY_OVERLAY_ANCHORED_COORD ? (anchor?.x ?? 0) / Math.max(1, layout.w) : placement.x,
+      y: placement.y === REPLAY_OVERLAY_ANCHORED_COORD ? (anchor?.y ?? 0) / Math.max(1, layout.h) : placement.y,
+    };
+  }
+
+  // A drag or resize starts from where the overlay is actually drawn, which
+  // for an anchored placement is its hitbox rather than its stored fraction.
+  private getOverlayPlacementOrigin(hitbox: ReplayOverlayHitbox): { x: number; y: number } {
+    const placement = this.overlaySettings[hitbox.id];
+    return {
+      x: placement.x === REPLAY_OVERLAY_ANCHORED_COORD ? hitbox.x / Math.max(1, this.cssWidth) : placement.x,
+      y: placement.y === REPLAY_OVERLAY_ANCHORED_COORD ? hitbox.y / Math.max(1, this.cssHeight) : placement.y,
+    };
   }
 
   private getKeypressOverlayMetrics(scale: number): KeypressOverlayMetrics {
@@ -5388,17 +5420,31 @@ export class ManiaReplayRenderer {
   // 100, orange = 50 in stable's default palette), fading judgement ticks,
   // and a rolling-average marker.
   private renderHitErrorBar(layout: Layout) {
+    const placement = this.overlaySettings.hitError;
+    if (!placement.enabled) return;
     const { h, playfieldX, playfieldWidth, judgmentY } = layout;
-    const centerX = playfieldX + playfieldWidth / 2;
     const range = this.hitWindows.meh;
     if (!(range > 0)) return;
 
-    const scale = Math.min(this.getHudScale(layout), 1.3);
+    const hudScale = Math.min(this.getHudScale(layout), 1.3);
+    const scale = hudScale * placement.scale;
     const receptorBottom = this.skinSettings.style === "circles" || this.skinSettings.style === "arrows"
       ? judgmentY
       : judgmentY + layout.receptorHeight + 2;
-    const barY = Math.min(h - 12, receptorBottom > h - 44 ? receptorBottom + 14 : h - 26);
-    const halfWidth = Math.min(playfieldWidth * 0.45, 170 * scale);
+    const anchorBarY = Math.min(h - 12, receptorBottom > h - 44 ? receptorBottom + 14 : h - 26);
+    const halfWidth = Math.min(layout.w * 0.48, Math.min(playfieldWidth * 0.45, 170 * hudScale) * placement.scale);
+    // Tall enough for the center marker, the ticks and whichever average
+    // marker the ruleset draws outside the bands.
+    const boxHeight = 22 * scale + 6;
+    const anchor = { x: playfieldX + playfieldWidth / 2 - halfWidth, y: anchorBarY - boxHeight / 2 };
+    // Narrow and portrait stages keep the fixed bar: they render none of the
+    // draggable overlays, so there is nothing there to drag it with.
+    const frame = this.shouldRenderCustomOverlays(layout)
+      ? this.getOverlayFrame(layout, "hitError", halfWidth * 2, boxHeight, anchor)
+      : { x: anchor.x, y: anchor.y, width: halfWidth * 2, height: boxHeight };
+    if (!frame) return;
+    const centerX = frame.x + halfWidth;
+    const barY = frame.y + boxHeight / 2;
     const pxPerMs = halfWidth / range;
     const isLazer = this.ruleset.accuracyMode === "lazer";
 

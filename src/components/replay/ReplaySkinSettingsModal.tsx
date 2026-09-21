@@ -4081,6 +4081,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = 
   handAccuracy: msg`Current accuracy percentage for each hand.`,
   pp: msg`Live performance points.`,
   judgements: msg`Hit counts and unstable rate.`,
+  hitError: msg`Early/late meter with the real hit windows.`,
   progress: msg`Map completion percentage.`,
   leaderboard: msg`Ingame scoreboard with live rank climbing. Tab toggles it.`,
   replayMaster: msg`Scrolling judgement-colored notes with actual hit offsets and long-note releases.`,
@@ -4229,6 +4230,18 @@ function ReplayOverlaySettingsRow({
             />
           ) : id === "handAccuracy" ? (
             <HandAccuracyOverlayPreview style={normalizeReplayHandAccuracyStyle(placement.style)} />
+          ) : id === "hitError" ? (
+            <div className="relative flex h-full w-full items-center justify-center" aria-hidden="true">
+              <div className="relative h-4 w-3/5">
+                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#e8a733]" />
+                <div className="absolute inset-x-[18%] top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#85cc26]" />
+                <div className="absolute inset-x-[38%] top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#46b8e8]" />
+                {[12, 34, 46, 52, 58, 71, 88].map((left) => (
+                  <div key={left} className="absolute top-0 h-full w-0.5 bg-white/70" style={{ left: `${left}%` }} />
+                ))}
+                <div className="absolute top-0 h-full w-0.5 bg-white" style={{ left: "50%" }} />
+              </div>
+            </div>
           ) : id === "leaderboard" ? (
             <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
               <div className="w-3/5 space-y-1">

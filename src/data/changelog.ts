@@ -33,6 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-20", text: "The hit error bar on replays is an overlay now: drag it, resize it or turn it off like the other overlays.", to: "/replay" },
   { date: "2026-09-19", text: "Reworked the All uploads replay page with a thumbnail feed, search, key filters, sorting by date, accuracy or difficulty, and faster loading as you scroll.", to: "/replay/community" },
   { date: "2026-09-19", text: "Track your Maniacard rating and tier changes in the new Progression tab, inside the (?) window." },
   { date: "2026-09-19", text: "Fixed bugs in how 4K dan estimates are calculated that caused some estimates to appear higher than expected. Map and player estimates are being recalculated." },

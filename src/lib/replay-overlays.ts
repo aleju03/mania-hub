@@ -23,7 +23,7 @@ export function normalizeReplayMasterScrollSpeed(value: unknown): number {
   return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
 }
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "pp", "judgements", "progress", "leaderboard", "replayMaster"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -36,6 +36,7 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   handAccuracy: msg`Per-hand accuracy`,
   pp: msg`PP counter`,
   judgements: msg`Judgements`,
+  hitError: msg`Hit error bar`,
   progress: msg`Progress pie`,
   leaderboard: msg`Leaderboard`,
   replayMaster: msg`Mania Replay Master`,
@@ -61,6 +62,11 @@ export function normalizeReplayHandAccuracyStyle(value: unknown): ReplayHandAccu
     ? value as ReplayHandAccuracyStyle
     : DEFAULT_REPLAY_HAND_ACCURACY_STYLE;
 }
+
+// An overlay whose default position is a computed anchor rather than a
+// fraction of the stage stores this in x/y until it is first dragged; the
+// stage then keeps drawing it where it always sat.
+export const REPLAY_OVERLAY_ANCHORED_COORD = -1;
 
 export interface ReplayOverlayPlacement {
   enabled: boolean;
@@ -92,6 +98,8 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1, style: DEFAULT_REPLAY_HAND_ACCURACY_STYLE },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.5 },
+  // Anchored under the receptors until dragged, where it has always sat.
+  hitError: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
   // Below the accuracy readout: the detached pie must not land on top of
   // the cluster it just left, or toggling it looks like a no-op.
   progress: { enabled: false, x: 0.03, y: 0.1, scale: 1 },
@@ -173,14 +181,19 @@ function normalizeNumber(value: unknown, fallback: number, min: number, max: num
   return Math.max(min, Math.min(max, parsed));
 }
 
+function normalizeCoord(value: unknown, fallback: number): number {
+  if (value === REPLAY_OVERLAY_ANCHORED_COORD) return REPLAY_OVERLAY_ANCHORED_COORD;
+  return normalizeNumber(value, fallback, 0, 1);
+}
+
 function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement): ReplayOverlayPlacement {
   const raw = value && typeof value === "object" && !Array.isArray(value)
     ? value as Partial<ReplayOverlayPlacement>
     : {};
   return {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : fallback.enabled,
-    x: normalizeNumber(raw.x, fallback.x, 0, 1),
-    y: normalizeNumber(raw.y, fallback.y, 0, 1),
+    x: normalizeCoord(raw.x, fallback.x),
+    y: normalizeCoord(raw.y, fallback.y),
     scale: normalizeNumber(raw.scale, fallback.scale, REPLAY_OVERLAY_MIN_SCALE, REPLAY_OVERLAY_MAX_SCALE),
   };
 }
