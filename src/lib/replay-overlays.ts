@@ -23,9 +23,21 @@ export function normalizeReplayMasterScrollSpeed(value: unknown): number {
   return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
 }
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
+
+// The pieces a skin draws around the stage rather than HUD readouts we lay
+// out ourselves. They ride the same placement, drag and selection machinery,
+// but a skin authors their default spot, so they stay anchored there (and out
+// of the settings gallery) until someone moves one.
+export const REPLAY_STAGE_ART_OVERLAY_IDS = ["stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
+
+export type ReplayStageArtOverlayId = typeof REPLAY_STAGE_ART_OVERLAY_IDS[number];
+
+export function isReplayStageArtOverlay(id: ReplayOverlayId): id is ReplayStageArtOverlayId {
+  return (REPLAY_STAGE_ART_OVERLAY_IDS as readonly string[]).includes(id);
+}
 
 // Shared by the settings modal and the stage's right-click overlay menu.
 export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> = {
@@ -41,6 +53,10 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   progress: msg`Progress pie`,
   leaderboard: msg`Leaderboard`,
   replayMaster: msg`Mania Replay Master`,
+  stageLeft: msg`Stage art (left)`,
+  stageRight: msg`Stage art (right)`,
+  stageBottom: msg`Stage art (bottom)`,
+  healthBar: msg`Health bar`,
 };
 
 // Hand overlays carry their selected shape with the saved placement.
@@ -155,9 +171,23 @@ export const REPLAY_OVERLAY_ANCHORED_COORD = -1;
 // left edge; keep a small visible strip available for dragging it back.
 export const REPLAY_LEADERBOARD_MIN_X = -0.95;
 
+// Skin art is sized by the skin, not by us: a stage frame can be wider than
+// the space beside the lanes and the health bar taller than the stage, so
+// both axes may go negative. -1 stays reserved for anchored placements.
+export const REPLAY_STAGE_ART_MIN_COORD = -0.95;
+
 export function getReplayOverlayMinX(id: ReplayOverlayId, width: number, stageWidth: number, isLazer: boolean): number {
+  if (isReplayStageArtOverlay(id)) {
+    return Math.max(REPLAY_STAGE_ART_MIN_COORD, -Math.max(0, width - 32) / Math.max(1, stageWidth));
+  }
   if (!isLazer || id !== "leaderboard" || width <= 32) return 0;
   return Math.max(REPLAY_LEADERBOARD_MIN_X, -Math.max(0, width - 32) / Math.max(1, stageWidth));
+}
+
+// Same rule down the other axis; only skin art is allowed to hang off.
+export function getReplayOverlayMinY(id: ReplayOverlayId, height: number, stageHeight: number): number {
+  if (!isReplayStageArtOverlay(id)) return 0;
+  return Math.max(REPLAY_STAGE_ART_MIN_COORD, -Math.max(0, height - 32) / Math.max(1, stageHeight));
 }
 
 export interface ReplayOverlayPlacement {
@@ -252,6 +282,11 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   // the cluster it just left, or toggling it looks like a no-op.
   progress: { enabled: false, x: 0.03, y: 0.1, scale: 1 },
   leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
+  // Skin art: anchored where the skin puts it until it is dragged.
+  stageLeft: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
+  stageRight: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
+  stageBottom: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
+  healthBar: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
 };
 
 // Earlier cuts of the left-side accuracy readout shipped over- and
@@ -334,7 +369,7 @@ function normalizeCoord(value: unknown, fallback: number, min = 0): number {
   return normalizeNumber(value, fallback, min, 1);
 }
 
-function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement, minX = 0): ReplayOverlayPlacement {
+function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement, minX = 0, minY = 0): ReplayOverlayPlacement {
   const raw = value && typeof value === "object" && !Array.isArray(value)
     ? value as Partial<ReplayOverlayPlacement>
     : {};
@@ -342,7 +377,7 @@ function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement, mi
   return {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : fallback.enabled,
     x: normalizeCoord(raw.x, fallback.x, minX),
-    y: normalizeCoord(raw.y, fallback.y),
+    y: normalizeCoord(raw.y, fallback.y, minY),
     scale: normalizeNumber(raw.scale, fallback.scale, REPLAY_OVERLAY_MIN_SCALE, REPLAY_OVERLAY_MAX_SCALE),
     ...(reference ? { reference } : {}),
   };
@@ -391,7 +426,8 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     ? value as Partial<Record<ReplayOverlayId, unknown>>
     : {};
   return REPLAY_OVERLAY_IDS.reduce((settings, id) => {
-    const placement = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id]);
+    const artMin = isReplayStageArtOverlay(id) ? REPLAY_STAGE_ART_MIN_COORD : 0;
+    const placement = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id], artMin, artMin);
     if (id === "handAccuracy") {
       const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
       placement.style = normalizeReplayHandAccuracyStyle(rawStyle);

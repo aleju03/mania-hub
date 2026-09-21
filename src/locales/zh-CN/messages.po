@@ -3136,6 +3136,10 @@ msgstr "返回回放浏览器"
 msgid "back to servers"
 msgstr "返回服务器列表"
 
+#: src/routes/replay.tsx
+msgid "Back to skin position"
+msgstr "回到皮肤位置"
+
 #: src/routes/skins_.$id.tsx
 msgid "back to skins"
 msgstr "返回皮肤"
@@ -6799,6 +6803,10 @@ msgstr "持有 <0/> 个 <1/> 以上的成绩"
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "标题"
+
+#: src/lib/replay-overlays.ts
+msgid "Health bar"
+msgstr "血条"
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -14048,6 +14056,18 @@ msgstr "stable 公式准确率（96%）"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
 msgstr "面板"
+
+#: src/lib/replay-overlays.ts
+msgid "Stage art (bottom)"
+msgstr "面板图片（下）"
+
+#: src/lib/replay-overlays.ts
+msgid "Stage art (left)"
+msgstr "面板图片（左）"
+
+#: src/lib/replay-overlays.ts
+msgid "Stage art (right)"
+msgstr "面板图片（右）"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."

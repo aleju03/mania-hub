@@ -15,6 +15,7 @@ import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
+  isReplayStageArtOverlay,
   normalizeReplayHandAccuracyStyle,
   REPLAY_COLUMN_STAT_STYLES,
   REPLAY_COLUMN_STAT_STYLE_LABELS,
@@ -33,7 +34,7 @@ import {
   normalizeReplayJudgementLayout,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
-import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
+import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayOverlayId, ReplayOverlaySettings, ReplayStageArtOverlayId } from "#/lib/replay-overlays";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
@@ -2383,7 +2384,7 @@ export function ReplaySkinSettingsModal({
               </section>
             ) : activeTab === "overlays" ? (
               <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {REPLAY_OVERLAY_IDS.map((id) => (
+                {REPLAY_HUD_OVERLAY_IDS.map((id) => (
                   <ReplayOverlaySettingsRow
                     key={id}
                     id={id}
@@ -4092,7 +4093,15 @@ function PresetTextButton({
 }
 
 
-const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = {
+// Skin stage art is placed on the stage, not picked from this gallery: the
+// skin decides whether it exists at all and where it starts.
+type ReplayHudOverlayId = Exclude<ReplayOverlayId, ReplayStageArtOverlayId>;
+
+const REPLAY_HUD_OVERLAY_IDS = REPLAY_OVERLAY_IDS.filter(
+  (id): id is ReplayHudOverlayId => !isReplayStageArtOverlay(id),
+);
+
+const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayHudOverlayId, MessageDescriptor> = {
   keypresses: msg`Per-column press count.`,
   kps: msg`Keys pressed per second.`,
   misses: msg`Left vs right hand miss totals.`,
@@ -4107,7 +4116,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = 
   replayMaster: msg`Scrolling judgement-colored notes with actual hit offsets and long-note releases.`,
 };
 
-const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
+const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayHudOverlayId, string>> = {
   keypresses: "/images/replay-overlays/keypresses.webp",
   kps: "/images/replay-overlays/kps-v2.webp",
 
@@ -4348,7 +4357,7 @@ function ReplayOverlaySettingsRow({
   placement,
   onChange,
 }: {
-  id: ReplayOverlayId;
+  id: ReplayHudOverlayId;
   placement: ReplayOverlaySettings[ReplayOverlayId];
   onChange: (patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => void;
 }) {

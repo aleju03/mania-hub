@@ -33,6 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-21", text: "Stage art and the health bar from your skin can be moved, resized or hidden in replays, like the other overlays.", to: "/replay" },
   { date: "2026-09-21", text: "Skins with animated notes now animate in the replay viewer.", to: "/skins" },
   { date: "2026-09-21", text: "Added a Hits only style to the hit error bar overlay that hides the colored bar.", to: "/replay" },
   { date: "2026-09-21", text: "Added a Horizontal layout option to the Judgements overlay.", to: "/replay" },

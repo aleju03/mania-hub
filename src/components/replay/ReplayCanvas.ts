@@ -12,7 +12,7 @@ import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayMinY, getReplayOverlayPlacement, isReplayStageArtOverlay, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayOverlaySizeReference, ReplayThumbHand } from "../../lib/replay-overlays";
 import { replayOverlayCenteredY, replayOverlayLayoutScale, replayOverlayRegion, replayOverlayX } from "../../lib/replay-overlay-layout";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
@@ -552,6 +552,72 @@ function readLnTailArtTop(src: string): void {
   image.src = src;
 }
 
+// Where a skin image's visible pixels sit inside its own rect, as fractions of
+// its width and height. Only the draggable stage art needs it: a stage frame
+// is mostly transparent and full stage height, so hit-testing its whole rect
+// would hand every click beside the lanes to the frame. Read once per source
+// off a downscaled scratch canvas (the bounds only feed a hitbox, so a coarse
+// read is plenty) and cached; undefined while the read is in flight or if it
+// failed, which leaves the full rect grabbable.
+type SkinArtBounds = { left: number; top: number; right: number; bottom: number };
+const SKIN_ART_ALPHA_THRESHOLD = 8;
+const SKIN_ART_SCAN_SIZE = 192;
+const skinArtBoundsCache = new Map<string, SkinArtBounds | null | "pending">();
+
+function getSkinArtOpaqueBounds(src: string): SkinArtBounds | null {
+  const cached = skinArtBoundsCache.get(src);
+  if (cached === undefined) {
+    readSkinArtOpaqueBounds(src);
+    return null;
+  }
+  return cached === "pending" ? null : cached;
+}
+
+function readSkinArtOpaqueBounds(src: string): void {
+  if (skinArtBoundsCache.has(src)) return;
+  skinArtBoundsCache.set(src, "pending");
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    try {
+      const naturalWidth = image.naturalWidth || 0;
+      const naturalHeight = image.naturalHeight || 0;
+      if (!(naturalWidth > 0) || !(naturalHeight > 0)) return;
+      const scale = Math.min(1, SKIN_ART_SCAN_SIZE / Math.max(naturalWidth, naturalHeight));
+      const width = Math.max(1, Math.round(naturalWidth * scale));
+      const height = Math.max(1, Math.round(naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(image, 0, 0, width, height);
+      const alpha = ctx.getImageData(0, 0, width, height).data;
+      let left = width;
+      let right = -1;
+      let top = height;
+      let bottom = -1;
+      for (let row = 0; row < height; row += 1) {
+        for (let col = 0; col < width; col += 1) {
+          if (alpha[(row * width + col) * 4 + 3] < SKIN_ART_ALPHA_THRESHOLD) continue;
+          if (col < left) left = col;
+          if (col > right) right = col;
+          if (row < top) top = row;
+          if (row > bottom) bottom = row;
+        }
+      }
+      // Fully transparent art gets an empty box, not the full rect: nothing is
+      // drawn, so nothing should be grabbable either.
+      skinArtBoundsCache.set(src, right < 0 || bottom < 0
+        ? { left: 0, top: 0, right: 0, bottom: 0 }
+        : { left: left / width, top: top / height, right: (right + 1) / width, bottom: (bottom + 1) / height });
+    } catch {
+      // Tainted or unreadable: stays "pending", the whole rect stays grabbable.
+    }
+  };
+  image.src = src;
+}
+
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type ReplayOverlayResizeDirection = "n" | "e" | "s" | "w" | "ne" | "nw" | "se" | "sw";
@@ -758,6 +824,11 @@ export class ManiaReplayRenderer {
   // playfield (the overlay is gone) and must not read as click-to-pause.
   private suppressPlayfieldClickAt = -Infinity;
   private selectedOverlayIds = new Set<ReplayOverlayId>();
+  // Stage art the current skin actually draws, so the right-click menu only
+  // offers the pieces this skin has, and the gap between a piece's drawn rect
+  // and its trimmed hitbox, so dragging one moves the art and not the trim.
+  private stageArtOverlayIds = new Set<ReplayOverlayId>();
+  private stageArtOriginOffsets = new Map<ReplayOverlayId, { x: number; y: number }>();
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
   private previousCanvasTouchAction = "";
   private previousCanvasTabIndex: string | null = null;
@@ -2564,7 +2635,11 @@ export class ManiaReplayRenderer {
   getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings {
     const layout = this.cachedLayout ?? this.getLayout();
     const reference = this.getOverlayReference(layout);
-    const boxes = options?.resolveLayout ? [...this.overlayHitboxes] : [];
+    // Stage art sits where the skin puts it and never joins the HUD's
+    // side-group fitting; a full-height frame would swallow every column.
+    const boxes = options?.resolveLayout
+      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id))
+      : [];
     // Scores arrive separately from the replay. Reserve an enabled board's
     // footprint even before that request finishes (or while Tab hides it),
     // otherwise an early resize permanently groups only the hand overlays.
@@ -2941,10 +3016,22 @@ export class ManiaReplayRenderer {
   }
 
   private clampOverlayPosition(id: ReplayOverlayId, x: number, y: number, width: number, height: number, layout: Layout): { x: number; y: number } {
+    const minX = getReplayOverlayMinX(id, width, layout.w, this.ruleset.accuracyMode === "lazer");
+    // Skin art is often taller or wider than the space it sits in (a stage
+    // frame runs the full stage height), so holding its whole rect on screen
+    // would pin it in place. Keep a grabbable strip instead.
+    if (isReplayStageArtOverlay(id)) {
+      const marginX = Math.min(width, 32) / Math.max(1, layout.w);
+      const marginY = Math.min(height, 32) / Math.max(1, layout.h);
+      return {
+        x: Math.max(minX, Math.min(1 - marginX, x)),
+        y: Math.max(getReplayOverlayMinY(id, height, layout.h), Math.min(1 - marginY, y)),
+      };
+    }
     const maxX = Math.max(0, 1 - width / Math.max(1, layout.w));
     const maxY = Math.max(0, 1 - height / Math.max(1, layout.h));
     return {
-      x: Math.max(getReplayOverlayMinX(id, width, layout.w, this.ruleset.accuracyMode === "lazer"), Math.min(maxX, x)),
+      x: Math.max(minX, Math.min(maxX, x)),
       y: Math.max(0, Math.min(maxY, y)),
     };
   }
@@ -3283,11 +3370,24 @@ export class ManiaReplayRenderer {
       spacingScale: 1,
       region: "playfield",
     };
+    const origin = box ? this.getOverlayPlacementOrigin(box) : null;
     const settings = updateReplayOverlayPlacement(this.getOverlaySettingsSnapshot(), id, {
-      x: box ? box.x / layout.w : current.x,
-      y: box ? box.y / layout.h : current.y,
+      x: origin ? origin.x : current.x,
+      y: origin ? origin.y : current.y,
       scale: DEFAULT_REPLAY_OVERLAY_SETTINGS[id].scale,
       reference,
+    }, this.ruleset.accuracyMode === "lazer");
+    this.setOverlaySettings(settings);
+    this.onOverlaySettingsChange?.(this.getOverlaySettingsSnapshot());
+  }
+
+  /** Hands a piece of stage art back to the spot the skin authored for it. */
+  resetOverlayPlacement(id: ReplayOverlayId) {
+    const settings = updateReplayOverlayPlacement(this.getOverlaySettingsSnapshot(), id, {
+      x: REPLAY_OVERLAY_ANCHORED_COORD,
+      y: REPLAY_OVERLAY_ANCHORED_COORD,
+      scale: DEFAULT_REPLAY_OVERLAY_SETTINGS[id].scale,
+      reference: undefined,
     }, this.ruleset.accuracyMode === "lazer");
     this.setOverlaySettings(settings);
     this.onOverlaySettingsChange?.(this.getOverlaySettingsSnapshot());
@@ -3476,6 +3576,12 @@ export class ManiaReplayRenderer {
     this.beginSkinSpriteFrame();
     this.beginTextFrame();
 
+    // Reset before anything draws: stage art registers its hitboxes from the
+    // gameplay passes, well before the HUD's.
+    this.overlayHitboxes = [];
+    this.missThumbTagHitbox = null;
+    this.stageArtOverlayIds.clear();
+    this.stageArtOriginOffsets.clear();
     this.storyboardOccludesPlayfield = false;
     this.renderBackground(layout);
     this.renderStoryboard(layout);
@@ -3514,8 +3620,6 @@ export class ManiaReplayRenderer {
     this.graphics = this.hudGraphics;
     this.activeSkinSprites = this.hudSkinSprites;
     if (this.showHealthBar) this.renderHealthBar(layout);
-    this.overlayHitboxes = [];
-    this.missThumbTagHitbox = null;
     if (!this.hideHud) {
       this.renderHUD(layout);
     } else {
@@ -3672,6 +3776,60 @@ export class ManiaReplayRenderer {
     return Math.max(1, (native?.height ?? 0) * (480 / 768) * layout.layoutScale);
   }
 
+  // Stage art (the skin's frame, deck and health bar) is placed the way the
+  // HUD overlays are, except the skin authors its default spot: the placement
+  // stays anchored to the geometry below until someone drags or resizes the
+  // piece, so a skin looks untouched until it is touched. The returned rect is
+  // what gets drawn; the hitbox pushed for it is trimmed to the art's visible
+  // pixels, and `scale` is the placement's own multiplier for callers that
+  // draw several pieces off one frame.
+  private getStageArtFrame(
+    layout: Layout,
+    id: ReplayOverlayId,
+    base: ReplayOverlayFrame,
+    art?: { asset: ReplaySkinImageAsset; rotatedCcw?: boolean },
+  ): (ReplayOverlayFrame & { scale: number }) | null {
+    const bounds = art ? getSkinArtOpaqueBounds(art.asset.src) : null;
+    const blank = bounds != null && (bounds.right <= bounds.left || bounds.bottom <= bounds.top);
+    if (!blank) this.stageArtOverlayIds.add(id);
+    const placement = this.getOverlayPlacement(id);
+    if (!placement.enabled) return null;
+    const scale = placement.scale;
+    const width = Math.max(1, base.width * scale);
+    const height = Math.max(1, base.height * scale);
+    const frame = {
+      x: placement.x === REPLAY_OVERLAY_ANCHORED_COORD ? base.x : placement.x * layout.w,
+      y: placement.y === REPLAY_OVERLAY_ANCHORED_COORD ? base.y : placement.y * layout.h,
+      width,
+      height,
+      scale,
+    };
+    if (blank) return frame;
+    const hitbox = bounds ? this.getStageArtHitbox(frame, bounds, art?.rotatedCcw === true) : frame;
+    this.stageArtOriginOffsets.set(id, { x: hitbox.x - frame.x, y: hitbox.y - frame.y });
+    this.overlayHitboxes.push({ id, x: hitbox.x, y: hitbox.y, width: hitbox.width, height: hitbox.height });
+    return frame;
+  }
+
+  // The art's visible box inside its drawn rect. A rotated piece (the mania
+  // health bar) has its texture's x axis running up the screen, so the two
+  // fraction pairs swap and the vertical one reads from the bottom.
+  private getStageArtHitbox(frame: ReplayOverlayFrame, bounds: SkinArtBounds, rotatedCcw: boolean): ReplayOverlayFrame {
+    const [left, right] = rotatedCcw ? [bounds.top, bounds.bottom] : [bounds.left, bounds.right];
+    const [top, bottom] = rotatedCcw ? [1 - bounds.right, 1 - bounds.left] : [bounds.top, bounds.bottom];
+    return {
+      x: frame.x + frame.width * left,
+      y: frame.y + frame.height * top,
+      width: Math.max(1, frame.width * (right - left)),
+      height: Math.max(1, frame.height * (bottom - top)),
+    };
+  }
+
+  /** Stage art this skin draws, whether or not it is currently shown. */
+  listStageArtOverlayIds(): ReplayOverlayId[] {
+    return Array.from(this.stageArtOverlayIds ?? []);
+  }
+
   // Stage furniture under the notes: the column light beneath held keys and
   // the hit-position hint strip. Bars style only - it is the style every .osk
   // import forces, and the synthetic styles have no stage art to draw.
@@ -3736,21 +3894,33 @@ export class ManiaReplayRenderer {
       if (native) {
         const width = Math.max(1, native.width * layout.layoutScale);
         const height = Math.max(1, native.height * layout.layoutScale);
-        const centerX = playfieldX + playfieldWidth / 2;
-        if (upscroll) this.drawSkinImage(stage.bottom, centerX, 0, width, height, 0.5, 0, 1, 0xffffff, true);
-        else this.drawSkinImage(stage.bottom, centerX, h - height, width, height, 0.5, 0, 1);
+        const frame = this.getStageArtFrame(layout, "stageBottom", {
+          x: playfieldX + playfieldWidth / 2 - width / 2,
+          y: upscroll ? 0 : h - height,
+          width,
+          height,
+        }, { asset: stage.bottom });
+        if (frame) {
+          this.drawSkinImage(stage.bottom, frame.x + frame.width / 2, frame.y, frame.width, frame.height, 0.5, 0, 1, 0xffffff, upscroll);
+        }
       }
     }
 
-    for (const [asset, side] of [[stage.left, "left"], [stage.right, "right"]] as const) {
+    for (const [asset, id] of [[stage.left, "stageLeft"], [stage.right, "stageRight"]] as const) {
       if (!asset) continue;
       // The frame hangs outside the columns at its own width, stretched down
       // the full stage the way stable scales it to the playfield height.
       const native = this.getStageAssetNativeSize(asset);
       if (!native) continue;
       const width = Math.max(1, native.width * (480 / 768) * layout.layoutScale);
-      const x = side === "left" ? playfieldX - width / 2 : playfieldX + playfieldWidth + width / 2;
-      this.drawSkinImage(asset, x, 0, width, h, 0.5, 0, 1);
+      const frame = this.getStageArtFrame(layout, id, {
+        x: id === "stageLeft" ? playfieldX - width : playfieldX + playfieldWidth,
+        y: 0,
+        width,
+        height: h,
+      }, { asset });
+      if (!frame) continue;
+      this.drawSkinImage(asset, frame.x + frame.width / 2, frame.y, frame.width, frame.height, 0.5, 0, 1);
     }
   }
 
@@ -3775,17 +3945,29 @@ export class ManiaReplayRenderer {
     const pieceScale = referenceLength > maxLength ? (maxLength / referenceLength) * unitScale : unitScale;
     const reference = this.overlaySettings.hitError.reference ?? this.getOverlayReference(layout);
     const spacing = (reference.spacingScale ?? 1) * h / reference.height;
-    const x = playfieldX + playfieldWidth + 8 * spacing;
-    const bgThickness = (bgNative?.height ?? colourNative.height) * pieceScale;
+    const baseX = playfieldX + playfieldWidth + 8 * spacing;
+    const baseThickness = (bgNative?.height ?? colourNative.height) * pieceScale;
+    const baseLength = Math.max(bgNative?.width ?? 0, colourNative.width) * pieceScale;
+    // The whole bar moves as one piece, so the frame is the bg's box (or the
+    // fill's, for a skin that ships no bg) and every part scales with it.
+    const frame = this.getStageArtFrame(layout, "healthBar", {
+      x: baseX, y: h - baseLength, width: baseThickness, height: baseLength,
+    }, { asset: stage.scorebarBg ?? colour, rotatedCcw: true });
+    // The skin still owns the bar even while it is hidden; falling through
+    // would draw our own over a skin that has its own.
+    if (!frame) return true;
+    const x = frame.x;
+    const bottom = frame.y + frame.height;
+    const bgThickness = baseThickness * frame.scale;
 
     if (stage.scorebarBg && bgNative) {
-      this.drawSkinImageRotatedCcw(stage.scorebarBg, x, h, bgNative.width * pieceScale, bgThickness, 1);
+      this.drawSkinImageRotatedCcw(stage.scorebarBg, x, bottom, bgNative.width * pieceScale * frame.scale, bgThickness, 1);
     }
-    const colourThickness = colourNative.height * pieceScale;
+    const colourThickness = colourNative.height * pieceScale * frame.scale;
     const colourX = x + Math.max(0, (bgThickness - colourThickness) / 2);
-    const colourLength = colourNative.width * pieceScale;
+    const colourLength = colourNative.width * pieceScale * frame.scale;
     if (health > 0) {
-      this.drawSkinImageRotatedCcw(colour, colourX, h, colourLength, colourThickness, 0.98, health);
+      this.drawSkinImageRotatedCcw(colour, colourX, bottom, colourLength, colourThickness, 0.98, health);
     }
 
     // No synthetic fallback marker: a Graphics circle would render under the
@@ -3793,9 +3975,9 @@ export class ManiaReplayRenderer {
     if (stage.scorebarMarker && health > 0) {
       const markerNative = this.getStageAssetNativeSize(stage.scorebarMarker);
       if (markerNative) {
-        const fillY = h - colourLength * health;
-        const markerWidth = Math.max(1, markerNative.width * pieceScale);
-        const markerHeight = Math.max(1, markerNative.height * pieceScale);
+        const fillY = bottom - colourLength * health;
+        const markerWidth = Math.max(1, markerNative.width * pieceScale * frame.scale);
+        const markerHeight = Math.max(1, markerNative.height * pieceScale * frame.scale);
         this.drawSkinImage(stage.scorebarMarker, colourX + colourThickness / 2, fillY, markerWidth, markerHeight, 0.5, 0.5, 1);
       }
     }
@@ -3814,10 +3996,16 @@ export class ManiaReplayRenderer {
     const isLazer = this.ruleset.accuracyMode === "lazer";
     const reference = this.overlaySettings.hitError.reference ?? this.getOverlayReference(layout);
     const spacing = (reference.spacingScale ?? 1) * h / reference.height;
-    const barWidth = Math.max(7, Math.min(10, layout.laneWidth / spacing * 0.17)) * spacing;
-    const x = playfieldX + playfieldWidth + 13 * spacing;
-    const height = Math.max(136 * spacing, h * 0.52);
-    const y = h - height;
+    const baseWidth = Math.max(7, Math.min(10, layout.laneWidth / spacing * 0.17)) * spacing;
+    const baseHeight = Math.max(136 * spacing, h * 0.52);
+    const frame = this.getStageArtFrame(layout, "healthBar", {
+      x: playfieldX + playfieldWidth + 13 * spacing,
+      y: h - baseHeight,
+      width: baseWidth,
+      height: baseHeight,
+    });
+    if (!frame) return;
+    const { x, y, width: barWidth, height } = frame;
     const fillHeight = height * health;
     const fillY = y + height - fillHeight;
 
@@ -4675,9 +4863,12 @@ export class ManiaReplayRenderer {
   // A drag or resize starts from where the overlay is actually drawn, which
   // for an anchored placement is its hitbox rather than its stored fraction.
   private getOverlayPlacementOrigin(hitbox: ReplayOverlayHitbox): { x: number; y: number } {
+    // Stage art is grabbed by its visible pixels but placed by its full rect,
+    // so the trim comes back off before the position is stored.
+    const offset = this.stageArtOriginOffsets?.get(hitbox.id) ?? { x: 0, y: 0 };
     return {
-      x: hitbox.x / Math.max(1, this.cssWidth),
-      y: hitbox.y / Math.max(1, this.cssHeight),
+      x: (hitbox.x - offset.x) / Math.max(1, this.cssWidth),
+      y: (hitbox.y - offset.y) / Math.max(1, this.cssHeight),
     };
   }
 

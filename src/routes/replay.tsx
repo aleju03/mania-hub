@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { Suspense, useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, RotateCcw, Send, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -52,6 +52,7 @@ import {
   REPLAY_MISS_THUMB_HAND_CHANGE_EVENT,
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
+  isReplayStageArtOverlay,
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
   normalizeReplayOverlaySettings,
   REPLAY_MISS_STYLES,
@@ -2479,7 +2480,7 @@ function ReplayViewer({
   // Right-click overlay menu on the stage: on an overlay it offers removal,
   // on a bare spot it lists the hidden overlays to add back. Coordinates are
   // stage-relative so the menu tracks the canvas, not the viewport.
-  const [overlayMenu, setOverlayMenu] = useState<{ x: number; y: number; targetId: ReplayOverlayId | null } | null>(null);
+  const [overlayMenu, setOverlayMenu] = useState<{ x: number; y: number; targetId: ReplayOverlayId | null; stageArtIds: ReplayOverlayId[] } | null>(null);
   const overlayMenuRef = useRef<HTMLDivElement | null>(null);
   const handleCanvasContextMenu = useCallback((event: ReactMouseEvent<HTMLCanvasElement>) => {
     const renderer = rendererRef.current;
@@ -2491,6 +2492,9 @@ function ReplayViewer({
       x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 200)),
       y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 280)),
       targetId: renderer.getOverlayIdAtClientPoint(event.clientX, event.clientY),
+      // Which stage art the applied skin actually draws is only known to the
+      // renderer, and only once it has drawn a frame.
+      stageArtIds: renderer.listStageArtOverlayIds?.() ?? [],
     });
   }, []);
   useEffect(() => {
@@ -2548,7 +2552,8 @@ function ReplayViewer({
     setOverlayMenu(null);
   }, [applyOverlaySettings]);
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
-    ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
+    ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled
+      && (!isReplayStageArtOverlay(id) || overlayMenu.stageArtIds.includes(id)))
     : [];
   // Reads as "Remove misses" mid-sentence, so the label is lowercased before
   // it goes into the message.
@@ -4829,6 +4834,19 @@ function ReplayViewer({
                   <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
                   <Trans>Reset size</Trans>
                 </button>
+                {isReplayStageArtOverlay(overlayMenu.targetId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      rendererRef.current?.resetOverlayPlacement?.(overlayMenu.targetId!);
+                      setOverlayMenu(null);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Trans>Back to skin position</Trans>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setOverlayEnabledFromMenu(overlayMenu.targetId!, false)}

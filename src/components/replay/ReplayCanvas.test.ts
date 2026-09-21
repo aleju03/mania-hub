@@ -88,8 +88,8 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("if (this.showHealthBar) this.renderHealthBar(layout);");
     expect(source).toContain("private getHealthAtTime(time: number)");
     expect(source).toContain("playfieldX + playfieldWidth + 13");
-    expect(source).toContain("const height = Math.max(136 * spacing, h * 0.52);");
-    expect(source).toContain("const y = h - height;");
+    expect(source).toContain("const baseHeight = Math.max(136 * spacing, h * 0.52);");
+    expect(source).toContain("y: h - baseHeight,");
     expect(source).toContain("this.fillRect(x, fillY, barWidth, fillHeight");
     expect(source).toContain("private buildFallbackLifeBarFrames(events: ReplayJudgementEvent[])");
   });

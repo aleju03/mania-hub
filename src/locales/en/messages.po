@@ -3154,6 +3154,10 @@ msgstr "Back to replay browser"
 msgid "back to servers"
 msgstr "back to servers"
 
+#: src/routes/replay.tsx
+msgid "Back to skin position"
+msgstr "Back to skin position"
+
 #: src/routes/skins_.$id.tsx
 msgid "back to skins"
 msgstr "back to skins"
@@ -6821,6 +6825,10 @@ msgstr "Have <0/> plays worth <1/> or more"
 #: src/routes/bbcode.tsx
 msgid "Heading"
 msgstr "Heading"
+
+#: src/lib/replay-overlays.ts
+msgid "Health bar"
+msgstr "Health bar"
 
 #: src/components/communities/field-options.tsx
 msgid "Hebrew"
@@ -14074,6 +14082,18 @@ msgstr "Stable-formula acc (96%)"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage"
 msgstr "Stage"
+
+#: src/lib/replay-overlays.ts
+msgid "Stage art (bottom)"
+msgstr "Stage art (bottom)"
+
+#: src/lib/replay-overlays.ts
+msgid "Stage art (left)"
+msgstr "Stage art (left)"
+
+#: src/lib/replay-overlays.ts
+msgid "Stage art (right)"
+msgstr "Stage art (right)"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Stage's left edge, skin.ini ColumnStart."
