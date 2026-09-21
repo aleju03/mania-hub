@@ -3,7 +3,7 @@
 Mania Hub (mania-tracker.com) is an osu!mania community site with two cooperating parts:
 
 - **Frontend** (`src/`): TanStack Start + Vite + React 19, SSR via Nitro (node-server preset, self-hosted on the VPS; the Vercel preset only builds when `process.env.VERCEL` is set, kept as a rollback target). File-based routes in `src/routes/`; `src/routeTree.gen.ts` is generated, do not hand-edit.
-- **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227). It is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its own guide is `live-backend/AGENTS.md`; read it before working under that directory.
+- **Live backend** (`live-backend/`, maintained separately and gitignored here, so it has its own commits/branches/pushes): always-on Node service that ingests osu! scores from the score feed (an osu! API recent-scores poller, with a legacy oSC Socket.IO source behind it), keeps durable SQLite projections, runs a DB-backed job queue, and streams updates to browsers over SSE (port 7227). It is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is set. Its own guide is `live-backend/AGENTS.md`; read it before working under that directory.
 
 Countries are dynamic, not hardcoded: the backend keeps a `country_registry` with per-country status (cold -> warm -> active, can pause) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 

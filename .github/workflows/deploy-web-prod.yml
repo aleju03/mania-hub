@@ -7,7 +7,6 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'live-backend/**'
       - '**.md'
   workflow_dispatch:
     inputs:
@@ -34,6 +33,18 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      # live-backend/ is maintained separately and not tracked here. The
+      # frontend build resolves #dan/* and #leoblack/* into it and imports
+      # backend types, so check out the matching branch alongside.
+      - name: Check out live backend
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.BACKEND_DEPLOY_KEY }}" > ~/.ssh/backend_deploy
+          chmod 600 ~/.ssh/backend_deploy
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/backend_deploy -o IdentitiesOnly=yes' \
+            git clone --depth 1 --branch main "${{ secrets.BACKEND_REPO }}" live-backend
 
       - uses: actions/setup-node@v4
         with:

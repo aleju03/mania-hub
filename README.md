@@ -41,7 +41,7 @@ The country list is not fixed in code. Visiting an untracked country queues it f
 ## How it works
 
 - **Frontend** (`src/`): TanStack Start + React 19, SSR via Nitro, self-hosted behind Cloudflare. File-based routes, one Zustand store, Tailwind v4.
-- **Backend** (`live-backend/`): always-on Node service that ingests osu!mania scores, keeps SQLite projections, runs a job queue (enrichment, rosters, snipe boards, chart analysis, dan estimates, skill ratings), and pushes deltas over SSE.
+- **Backend** (`live-backend/`, maintained separately): always-on Node service that ingests osu!mania scores, keeps SQLite projections, runs a job queue (enrichment, rosters, snipe boards, chart analysis, dan estimates, skill ratings), and pushes deltas over SSE.
 
 Browsers load a snapshot on entry then subscribe to `/api/live`; reconnects replay missed events via `Last-Event-ID`. Authenticated osu! API calls stay server-side behind a rate limiter, heavy artifacts cache in R2.
 
