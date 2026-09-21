@@ -18,6 +18,7 @@ import {
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  hasRateEditedAudio,
   resolveInitialChartPreviewAudioMode,
   shouldUseSetPreviewForReplayAudio,
 } from "../../lib/chart-preview";
@@ -41,6 +42,7 @@ const AUDIO_CLOCK_ADVANCE_EPSILON_SECONDS = 0.005;
 const RENDERER_ADVANCE_EPSILON_MS = 0.5;
 
 type ReplayAudioMode = "set-preview" | "selected-file";
+type AudioLoadStage = "loading" | "seeking" | "buffering" | "starting";
 
 type ReplayAudioClockSample = {
   seconds: number;
@@ -127,7 +129,8 @@ export function ChartPreviewPanel({
   const [ending, setEnding] = useState(false);
   const [ready, setReady] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioLoadStage, setAudioLoadStage] = useState<AudioLoadStage | null>(null);
+  const audioLoading = audioLoadStage !== null;
   const [error, setError] = useState<string | null>(null);
 
   const rawPreviewUrl = typeof beatmapset.previewUrl === "string" ? beatmapset.previewUrl : "";
@@ -205,7 +208,7 @@ export function ChartPreviewPanel({
     setPlaying(false);
     setEnding(false);
     setReady(false);
-    setAudioLoading(false);
+    setAudioLoadStage(null);
     setPreviewBeatmap(null);
     setChartStartMs(0);
     setChartPlaybackMs(0);
@@ -253,7 +256,7 @@ export function ChartPreviewPanel({
     setPreviewLoading(true);
     setPlaying(false);
     setReady(false);
-    setAudioLoading(false);
+    setAudioLoadStage(null);
     setError(null);
     audioReadyRef.current = false;
     audioClockSampleRef.current = null;
@@ -342,7 +345,7 @@ export function ChartPreviewPanel({
     audioClockSampleRef.current = null;
     audioClockAnchorRef.current = null;
     audioStartSecondsRef.current = 0;
-    setAudioLoading(false);
+    setAudioLoadStage(null);
     setPlaying(false);
     setEnding(true);
     resetAudioElement(audioRef.current);
@@ -352,7 +355,7 @@ export function ChartPreviewPanel({
       setPlaying(false);
       setEnding(false);
       setReady(false);
-      setAudioLoading(false);
+      setAudioLoadStage(null);
     }, 220);
   }, []);
 
@@ -369,7 +372,7 @@ export function ChartPreviewPanel({
         audioReadyRef.current = false;
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
-        setAudioLoading(false);
+        setAudioLoadStage(null);
         setError(t`Couldn't find chart preview audio`);
       }
       return;
@@ -386,27 +389,37 @@ export function ChartPreviewPanel({
     applyAudioPlaybackSettings(audio);
 
     try {
-      setAudioLoading(audioMode === "selected-file");
+      setAudioLoadStage("loading");
       if (audioMode === "selected-file") {
         audio.preload = "auto";
-        try {
-          audio.load();
-        } catch {
-          // Browsers can reject load while React is swapping sources.
+        // Keep already loaded audio when scrubbing or restarting. Calling
+        // load() again discards the media buffer and restarts source selection.
+        if (audio.readyState < HTMLMediaElement.HAVE_METADATA) {
+          try {
+            audio.load();
+          } catch {
+            // Browsers can reject load while React is swapping sources.
+          }
         }
       }
+      await waitForAudioMetadata(
+        audio,
+        audioMode === "selected-file" ? SELECTED_AUDIO_METADATA_TIMEOUT_MS : AUDIO_METADATA_TIMEOUT_MS,
+        audioMode === "selected-file",
+      );
+      // Metadata can arrive after a different chart or seek has taken over.
+      if (!isCurrentRequest()) return;
+      setAudioLoadStage("seeking");
       try {
         audio.currentTime = audioStartSeconds;
       } catch {
         // Metadata may not be ready yet.
       }
-      await seekAudioElement(audio, audioStartSeconds, audioMode === "selected-file"
-        ? {
-          metadataTimeoutMs: SELECTED_AUDIO_METADATA_TIMEOUT_MS,
-          requireMetadata: true,
-          seekSettleTimeoutMs: SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS,
-        }
-        : undefined);
+      await waitForAudioSeekSettle(
+        audio,
+        audioStartSeconds,
+        audioMode === "selected-file" ? SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS : AUDIO_SEEK_SETTLE_TIMEOUT_MS,
+      );
       // A superseded request must not touch the element: whoever bumped the
       // token (a seek, a restart, the end of the preview) has already put it
       // where it wants it, and the newer request may be playing on it by now.
@@ -416,6 +429,7 @@ export function ChartPreviewPanel({
       if (audioStartSeconds > 0.25 && Math.abs(audio.currentTime - audioStartSeconds) > 1) {
         throw new Error("Chart preview audio seek failed");
       }
+      setAudioLoadStage(audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ? "buffering" : "starting");
       await audio.play();
       if (!isCurrentRequest()) return;
       resetReplayAudioClockSample(audioClockSampleRef, audio.currentTime);
@@ -426,18 +440,18 @@ export function ChartPreviewPanel({
       };
       audioReadyRef.current = true;
       setPlaying(true);
-      setAudioLoading(false);
+      setAudioLoadStage(null);
     } catch {
       if (isCurrentRequest()) {
         audioReadyRef.current = false;
         audioClockSampleRef.current = null;
         audioClockAnchorRef.current = null;
-        setAudioLoading(false);
+        setAudioLoadStage(null);
         setError(t`Couldn't play chart preview audio`);
         setPlaying(false);
       }
     }
-  }, [applyAudioPlaybackSettings, audioPlaybackRate, audioStartSeconds, audioUrl, volume]);
+  }, [applyAudioPlaybackSettings, audioMode, audioPlaybackRate, audioStartSeconds, audioUrl, volume]);
 
   const getChartPlaybackMs = useCallback(() => {
     const baseMs = Math.max(0, chartStartMs);
@@ -687,6 +701,18 @@ export function ChartPreviewPanel({
   const paused = requested && ready && audioReadyRef.current && !playing && !ending && !audioLoading && !error;
   const preparing = requested && !ending && !playing && !paused && !audioLoading && !error;
   const canToggle = requested && !ending && !audioLoading && (playing || ready);
+  const loadingLabel = audioLoadStage === "loading"
+    ? audioMode === "selected-file" ? t`Loading full audio…` : t`Loading audio preview…`
+    : audioLoadStage === "seeking" ? t`Seeking audio…`
+    : audioLoadStage === "buffering" ? t`Buffering audio…`
+    : audioLoadStage === "starting" ? t`Starting playback…`
+    : previewLoading || !previewBeatmap ? t`Loading chart…`
+    : !ready ? null
+    : t`Starting playback…`;
+  const fullAudioReason = audioMode !== "selected-file" ? null
+    : chartScrub ? t`Seeking beyond the clip needs the full song.`
+    : hasRateEditedAudio(maniaBeatmaps) ? t`Rate edits detected. Using this difficulty's audio to keep notes in sync.`
+    : t`The short audio clip can't be used for this chart.`;
 
   return (
     <div className={`relative min-h-[360px] overflow-hidden rounded-xl border ${flatBackdrop ? "border-transparent bg-transparent" : "border-osu-b3/30 bg-osu-b6"} ${className}`}>
@@ -725,18 +751,17 @@ export function ChartPreviewPanel({
         />
       ) : null}
 
-      {audioLoading ? (
-        <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
-          <div className="grid h-9 w-9 place-items-center rounded-md border border-osu-b3/50 bg-osu-b5/85 shadow-lg">
-            <Loader2 className="h-4 w-4 animate-spin text-osu-pink" />
-          </div>
-        </div>
-      ) : null}
-
-      {preparing ? (
-        <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-          <div className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/40 bg-osu-b5/65 shadow-lg shadow-black/20 backdrop-blur-[1px]">
-            <Loader2 className="h-4 w-4 animate-spin text-osu-pink" />
+      {(audioLoading || preparing) && loadingLabel ? (
+        <div className={`pointer-events-none absolute inset-0 z-30 grid place-items-center p-4 ${audioLoading ? "bg-osu-b5/45 backdrop-blur-[1px]" : ""}`}>
+          <div role="status" className="flex max-w-64 flex-col items-center gap-2 rounded-lg border border-osu-b3/50 bg-osu-b5/90 px-4 py-3 text-center shadow-lg shadow-black/20">
+            <Loader2 className="h-4 w-4 animate-spin text-osu-pink" aria-hidden="true" />
+            <span className="text-xs font-medium text-osu-l1">{loadingLabel}</span>
+            {audioLoadStage === "loading" && fullAudioReason ? (
+              <span className="text-[11px] leading-relaxed text-osu-l2">
+                {fullAudioReason}{" "}
+                <Trans>The song may need to be downloaded and prepared first.</Trans>
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -872,11 +897,18 @@ export function ChartPreviewPanel({
           preload={audioMode === "set-preview" ? "metadata" : "none"}
           onCanPlay={(e) => {
             applyAudioPlaybackSettings(e.currentTarget);
-            setAudioLoading(false);
+            // Initial canplay can precede the requested seek and play().
+            if (audioReadyRef.current) setAudioLoadStage(null);
+          }}
+          onWaiting={() => {
+            if (requested && audioReadyRef.current && playing) setAudioLoadStage("buffering");
+          }}
+          onSeeking={() => {
+            if (requested && audioReadyRef.current && playing) setAudioLoadStage("seeking");
           }}
           onPlaying={(e) => {
             applyAudioPlaybackSettings(e.currentTarget);
-            setAudioLoading(false);
+            setAudioLoadStage(null);
           }}
           onTimeUpdate={(e) => {
             const audio = e.currentTarget;
@@ -885,7 +917,7 @@ export function ChartPreviewPanel({
           }}
           onEnded={finishPreview}
           onError={() => {
-            setAudioLoading(false);
+            setAudioLoadStage(null);
             setError(t`Couldn't load chart preview audio`);
             setPlaying(false);
             audioStartPendingRef.current = false;
@@ -1361,21 +1393,6 @@ function waitForAudioSeekSettle(
     timeoutId = window.setTimeout(done, timeoutMs);
     scheduleCheck();
   });
-}
-
-async function seekAudioElement(
-  audio: HTMLAudioElement,
-  seconds: number,
-  options?: { metadataTimeoutMs?: number; requireMetadata?: boolean; seekSettleTimeoutMs?: number },
-): Promise<void> {
-  const targetSeconds = Math.max(0, seconds);
-  await waitForAudioMetadata(audio, options?.metadataTimeoutMs, options?.requireMetadata);
-  try {
-    audio.currentTime = targetSeconds;
-  } catch {
-    return;
-  }
-  await waitForAudioSeekSettle(audio, targetSeconds, options?.seekSettleTimeoutMs);
 }
 
 async function getBeatmapFileWithRetry(beatmapId: number, beatmapsetId?: number) {

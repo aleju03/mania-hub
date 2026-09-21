@@ -3526,6 +3526,10 @@ msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它
 msgid "Buffering audio"
 msgstr "音频缓冲中"
 
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Buffering audio…"
+msgstr "正在缓冲音频…"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "Buffering..."
 msgstr "缓冲中…"
@@ -8206,6 +8210,10 @@ msgstr "加载 {0} 失败"
 msgid "Loading {countryName} snipes…"
 msgstr "正在加载 {countryName} 狙击…"
 
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Loading audio preview…"
+msgstr "正在加载试听音频…"
+
 #: src/routes/snipes.tsx
 msgid "Loading board…"
 msgstr "正在加载榜单…"
@@ -8213,6 +8221,10 @@ msgstr "正在加载榜单…"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Loading both replays..."
 msgstr "正在加载两份回放…"
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Loading chart…"
+msgstr "正在加载谱面…"
 
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/packs/CollectionPanel.tsx
@@ -8223,6 +8235,10 @@ msgstr "正在加载收藏册…"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Loading collections..."
 msgstr "正在加载收藏册…"
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Loading full audio…"
+msgstr "正在加载完整音频…"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Loading goals..."
@@ -11730,6 +11746,10 @@ msgstr "稀有度"
 msgid "Rate"
 msgstr "速率"
 
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Rate edits detected. Using this difficulty's audio to keep notes in sync."
+msgstr "检测到变速版本。正在使用当前难度的音频，以保持音符同步。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, which the site rates separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
 #~ msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x) 下的通过，都会按谱面在那个速度下的段位计入，而这个段位是本站单独评的。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。lazer 的自定义倍速比如 1.15x 不会计入你的段位。本站可以按需给任意速度评一个段位，你打开一个自定义倍速的成绩时谱面页就是这么做的，但只有 0.75x、1.0x 和 1.5x 会存下来，而段位只读存下来的那些。"
@@ -13014,6 +13034,14 @@ msgstr "查看谁为 {0} 投了票"
 msgid "See your pulls"
 msgstr "查看你抽到的卡"
 
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Seeking audio…"
+msgstr "正在定位音频…"
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Seeking beyond the clip needs the full song."
+msgstr "跳转到试听片段以外的位置需要完整歌曲。"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Select"
 msgstr "选择"
@@ -14144,6 +14172,10 @@ msgstr "在此开始"
 #: src/routes/player/$username.tsx
 msgid "Start tracking your plays"
 msgstr "开始追踪你的成绩"
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "Starting playback…"
+msgstr "正在开始播放…"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -15442,6 +15474,10 @@ msgstr "你所在的服务器列表，好让我们列出你能发布的那些"
 msgid "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 msgstr "本次游玩的评分变化为 {0} 点，谱面贡献的估算合计为 {1} 点。这里显示的是两者的差额，并非额外加分。"
 
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "The short audio clip can't be used for this chart."
+msgstr "此谱面无法使用试听片段。"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "The side-by-side playfields failed to mount."
 msgstr "并排游玩区域加载失败。"
@@ -15523,6 +15559,10 @@ msgstr "皮肤列表加载失败。"
 #: src/lib/replay-export/errors.ts
 msgid "The song file can't be decoded here. Export without audio, or pick a shorter range."
 msgstr "此浏览器无法解码该音频文件。请关闭音频导出，或选择更短的范围。"
+
+#: src/components/maps/ChartPreviewPanel.tsx
+msgid "The song may need to be downloaded and prepared first."
+msgstr "可能需要先下载并处理歌曲。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
