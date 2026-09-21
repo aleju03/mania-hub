@@ -258,6 +258,59 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
     expect(profile.assets.combo?.digits[1]?.path).toBe("c/combo-1.png");
   });
 
+  it("collects animated note frames and clocks them from AnimationFramerate", async () => {
+    const file = await buildOsk(
+      [
+        "[General]",
+        "Name: Spinner",
+        "AnimationFramerate: 10",
+        "[Mania]",
+        "Keys: 4",
+        "NoteImage0: mania/arrows/left",
+        "NoteImage0H: mania/arrows/leftLN",
+        "NoteImage0L: mania/arrows/body",
+        "NoteImage1: mania/arrows/up",
+      ].join("\n"),
+      [
+        // A static copy next to the frames: the animation wins, as in game.
+        "mania/arrows/left.png",
+        "mania/arrows/left-0.png",
+        "mania/arrows/left-1.png",
+        "mania/arrows/left-2.png",
+        // A gap ends the sequence.
+        "mania/arrows/left-4.png",
+        "mania/arrows/leftLN-0.png",
+        "mania/arrows/leftLN-1.png",
+        // Bodies stay on their first frame: no frames collected.
+        "mania/arrows/body-0.png",
+        "mania/arrows/body-1.png",
+        "mania/arrows/up.png",
+      ],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+    const columns = result.settings.keymodeProfiles["4"].assets.columns;
+
+    expect(columns[0].tap?.path).toBe("mania/arrows/left-0.png");
+    expect(columns[0].tap?.frames?.map((frame) => frame.path)).toEqual(["mania/arrows/left-1.png", "mania/arrows/left-2.png"]);
+    expect(columns[0].tap?.frameDurationMs).toBe(100);
+    expect(columns[0].lnHead?.frames?.map((frame) => frame.path)).toEqual(["mania/arrows/leftLN-1.png"]);
+    expect(columns[0].lnBody?.path).toBe("mania/arrows/body-0.png");
+    expect(columns[0].lnBody?.frames).toBeUndefined();
+    expect(columns[1].tap?.path).toBe("mania/arrows/up.png");
+    expect(columns[1].tap?.frames).toBeUndefined();
+  });
+
+  it("loops an animation once per second when the skin sets no framerate", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: Spinner", "[Mania]", "Keys: 4", "NoteImage0: mania/arrows/left"].join("\n"),
+      ["mania/arrows/left-0.png", "mania/arrows/left-1.png", "mania/arrows/left-2.png", "mania/arrows/left-3.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+    const tap = result.settings.keymodeProfiles["4"].assets.columns[0].tap;
+    expect(tap?.frames).toHaveLength(3);
+    expect(tap?.frameDurationMs).toBe(250);
+  });
+
   it("keeps undeclared keymodes untouched when no default-named art exists", async () => {
     const file = await buildOsk(
       ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),

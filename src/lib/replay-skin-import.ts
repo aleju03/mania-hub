@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   EMPTY_REPLAY_SKIN_ASSETS,
+  REPLAY_SKIN_MAX_ANIMATION_FRAMES,
   REPLAY_SKIN_MAX_COLUMNS,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
@@ -20,6 +21,9 @@ import type {
 interface SkinIniData {
   name: string | null;
   author: string | null;
+  // [General] AnimationFramerate: frames per second for every animated
+  // element. Null (or stable's -1) means each animation loops once a second.
+  animationFramerate: number | null;
   fonts: Record<string, string>;
   mania: Array<Record<string, string>>;
 }
@@ -144,6 +148,7 @@ export async function importReplaySkinFromOsk(
       fonts: parsed.fonts,
       baseProfile: getReplaySkinProfile(nextSettings, keys),
       keys,
+      animationFramerate: parsed.animationFramerate,
       onTick,
     });
     keymodeProfiles[String(keys)] = imported.profile;
@@ -165,6 +170,7 @@ export async function importReplaySkinFromOsk(
       fonts: parsed.fonts,
       baseProfile: getReplaySkinProfile(nextSettings, keys),
       keys,
+      animationFramerate: parsed.animationFramerate,
       onTick,
     });
     if (imported.noteAssets + imported.receptorAssets === 0) continue;
@@ -483,6 +489,7 @@ function parseSkinIni(content: string): SkinIniData {
   const data: SkinIniData = {
     name: null,
     author: null,
+    animationFramerate: null,
     fonts: {},
     mania: [],
   };
@@ -511,6 +518,10 @@ function parseSkinIni(content: string): SkinIniData {
     if (section === "General") {
       if (key === "Name") data.name = value || data.name;
       if (key === "Author") data.author = value || data.author;
+      if (key === "AnimationFramerate") {
+        const rate = parseNumber(value);
+        data.animationFramerate = rate != null && rate > 0 ? rate : null;
+      }
     } else if (section === "Fonts") {
       data.fonts[key] = value;
     } else if (section === "Mania" && currentMania) {
@@ -529,6 +540,7 @@ async function buildProfileFromManiaBlock({
   fonts,
   baseProfile,
   keys,
+  animationFramerate = null,
   onTick,
 }: {
   zip: JSZip;
@@ -538,6 +550,7 @@ async function buildProfileFromManiaBlock({
   fonts: Record<string, string>;
   baseProfile: ReplaySkinKeymodeProfile;
   keys: number;
+  animationFramerate?: number | null;
   onTick?: () => void;
 }): Promise<{
   profile: ReplaySkinKeymodeProfile;
@@ -639,10 +652,25 @@ async function buildProfileFromManiaBlock({
         ?? (reference ? await resolveTracked(`${reference}-0`) : undefined)
         ?? (await resolveTracked(fallback))
         ?? (await resolveTracked(`${fallback}-0`));
-    const tap = await resolveWithDefaults(block[`NoteImage${col}`], `mania-note${suffix}`);
-    const lnHead = await resolveWithDefaults(block[`NoteImage${col}H`], `mania-note${suffix}H`);
+    // Taps, hold heads and hold tails animate: "-0..N" frames outrank the
+    // static image, as in stable and lazer's legacy skin loader, and the
+    // frames after the first ride on the asset. Bodies keep the static
+    // resolution: their animation is press-driven and one frame is what a
+    // still and a scrolling hold both show.
+    const resolveAnimatedWithDefaults = async (reference: string | undefined, fallback: string): Promise<ReplaySkinImageAsset | undefined> => {
+      for (const base of [reference, fallback]) {
+        if (!base) continue;
+        const first = await resolveTracked(`${base}-0`);
+        if (first) return withAnimationFrames(first, base, animationFramerate, (name) => resolveAssetReference(zip, lookup, assetCache, name));
+        const single = await resolveTracked(base);
+        if (single) return single;
+      }
+      return undefined;
+    };
+    const tap = await resolveAnimatedWithDefaults(block[`NoteImage${col}`], `mania-note${suffix}`);
+    const lnHead = await resolveAnimatedWithDefaults(block[`NoteImage${col}H`], `mania-note${suffix}H`);
     const lnBody = await resolveWithDefaults(block[`NoteImage${col}L`], `mania-note${suffix}L`);
-    const lnTail = await resolveWithDefaults(block[`NoteImage${col}T`], `mania-note${suffix}T`);
+    const lnTail = await resolveAnimatedWithDefaults(block[`NoteImage${col}T`], `mania-note${suffix}T`);
     const receptor = await resolveWithDefaults(block[`KeyImage${col}`], `mania-key${suffix}`);
     const receptorPressed = await resolveWithDefaults(block[`KeyImage${col}D`], `mania-key${suffix}D`);
     if (tap) column.tap = tap;
@@ -929,6 +957,29 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     height: size?.height,
     scale: resolved.scale,
   };
+}
+
+// Gathers "base-1", "base-2", ... after a resolved "base-0" frame onto the
+// asset. A gap ends the sequence, as stable stops at the first missing frame.
+// The frame clock comes from skin.ini's AnimationFramerate when set; unset,
+// every animation loops once per second regardless of its frame count. Frame
+// reads are not progress ticks: the reference total counts one per element.
+async function withAnimationFrames(
+  first: ReplaySkinImageAsset,
+  base: string,
+  animationFramerate: number | null,
+  resolve: (name: string) => Promise<ReplaySkinImageAsset | undefined>,
+): Promise<ReplaySkinImageAsset> {
+  const frames: ReplaySkinImageAsset[] = [];
+  for (let index = 1; index < REPLAY_SKIN_MAX_ANIMATION_FRAMES; index += 1) {
+    const frame = await resolve(`${base}-${index}`);
+    if (!frame) break;
+    frames.push(frame);
+  }
+  if (frames.length === 0) return first;
+  const count = frames.length + 1;
+  const frameDurationMs = animationFramerate && animationFramerate > 0 ? 1000 / animationFramerate : 1000 / count;
+  return { ...first, frames, frameDurationMs };
 }
 
 // WebGL rejects a texture past its max size (16384 on desktop, half that on

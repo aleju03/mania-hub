@@ -33,6 +33,11 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-21", text: "Replay skins with animated notes now animate, in the replay viewer and on skin previews.", to: "/skins" },
+  { date: "2026-09-21", text: "Added a Hits only style to the hit error bar overlay that hides the colored bar.", to: "/replay" },
+  { date: "2026-09-21", text: "Added a Horizontal layout option to the Judgements overlay.", to: "/replay" },
+  { date: "2026-09-21", text: "New replay overlay: Per-finger stats, showing accuracy or unstable rate for every column, in four styles.", to: "/replay" },
+  { date: "2026-09-21", text: "Arrow keys now move the selected replay overlays, one pixel per press or ten with Shift held.", to: "/replay" },
   { date: "2026-09-20", text: "New feature: Export replays to video files, client-side rendering only for now, so export speed depends on your device.", to: "/replay" },
   { date: "2026-09-20", text: "Redesigned the L/R miss counter overlay and added new styles.", to: "/replay" },
   { date: "2026-09-20", text: "Fixed replay audio falling out of sync after seeking in some cases.", to: "/replay" },

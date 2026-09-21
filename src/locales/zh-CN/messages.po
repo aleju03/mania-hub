@@ -2427,6 +2427,10 @@ msgstr "准确率低于技能评级范围，因此此成绩在任何技能类别
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "准度决定档次，不只是过没过。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>，而 94% 差一点没过仍然读作 <3>delta--</3>，因为差一点通关也比什么都没有强。再低就完全不算。要求别的准度的段位系统，整条刻度也跟着平移。"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Accuracy or unstable rate for every column, one cell per finger."
+msgstr "每列的准确率或 UR，每根手指一格。"
+
 #. placeholder {0}: formatAccuracy(credential.bar)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, against its {0} bar"
@@ -6973,9 +6977,17 @@ msgstr "判定线位置"
 msgid "hit result art"
 msgstr "判定图像"
 
+#: src/lib/replay-overlays.ts
+msgid "Hit windows"
+msgstr "判定区间"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hitburst and judgement height."
 msgstr "打击特效与判定文字的高度。"
+
+#: src/lib/replay-overlays.ts
+msgid "Hits only"
+msgstr "仅显示击打"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7039,6 +7051,10 @@ msgstr "首页"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Honorary roster"
 msgstr "荣誉名单"
+
+#: src/lib/replay-overlays.ts
+msgid "Horizontal"
+msgstr "横向"
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "How card rating is calculated"
@@ -7778,6 +7794,7 @@ msgid "Latvian"
 msgstr "拉脱维亚语"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
 msgid "Layout"
 msgstr "布局"
 
@@ -10900,6 +10917,10 @@ msgid "Per-column press count."
 msgstr "每列的按键次数。"
 
 #: src/lib/replay-overlays.ts
+msgid "Per-finger stats"
+msgstr "每指数据"
+
+#: src/lib/replay-overlays.ts
 msgid "Per-hand accuracy"
 msgstr "左右手准确率"
 
@@ -12396,6 +12417,10 @@ msgstr "恢复默认"
 msgid "Reset orientation"
 msgstr "重置方向"
 
+#: src/routes/replay.tsx
+msgid "Reset size"
+msgstr "重置大小"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Reset to current page"
 msgstr "重置为当前页面"
@@ -12426,8 +12451,8 @@ msgid "Restored an unsaved draft from this browser."
 msgstr "已从此浏览器恢复未保存的草稿。"
 
 #: src/lib/replay-overlays.ts
-msgid "Results"
-msgstr "结算"
+#~ msgid "Results"
+#~ msgstr "结算"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -13513,6 +13538,11 @@ msgstr "只显示 {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "显示最新的 {0} 个。"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
+msgid "Shows"
+msgstr "显示"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -16416,6 +16446,10 @@ msgstr "未评分成绩"
 msgid "unreadable"
 msgstr "无法读取"
 
+#: src/lib/replay-overlays.ts
+msgid "Unstable rate"
+msgstr "UR"
+
 #: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
@@ -16639,6 +16673,10 @@ msgstr "已认证"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Verified clear"
 msgstr ""
+
+#: src/lib/replay-overlays.ts
+msgid "Vertical"
+msgstr "纵向"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"

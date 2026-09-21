@@ -2418,6 +2418,10 @@ msgstr "Precisión por debajo del rango de valoración, así que este play no ti
 #~ msgid "Accuracy decides the tier, not just whether you passed. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, 98% and up as <2>delta++</2>, and coming up short at 94% still reads as <3>delta--</3>, because nearly clearing a course is worth more than nothing. Anything under that credits nothing at all. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "La precisión decide el escalón, no solo si pasaste. En un ladder cuyos cursos piden 96%, un pase justo de 96% en el curso delta se lee como <0>delta</0>, un 97.5% como <1>delta+</1>, un 98% o más como <2>delta++</2>, y quedarte corto en 94% aún se lee como <3>delta--</3>, porque quedarte a nada de superar un curso vale más que nada. Por debajo de eso no cuenta nada. Los ladders que piden otra precisión desplazan toda la escala con ellos."
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Accuracy or unstable rate for every column, one cell per finger."
+msgstr "Precisión o unstable rate de cada columna, una casilla por dedo."
+
 #. placeholder {0}: formatAccuracy(credential.bar)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Accuracy this clear was judged on, against its {0} bar"
@@ -6964,9 +6968,17 @@ msgstr "Posición de hits"
 msgid "hit result art"
 msgstr "arte de resultados de hit"
 
+#: src/lib/replay-overlays.ts
+msgid "Hit windows"
+msgstr "Ventanas de acierto"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hitburst and judgement height."
 msgstr "Altura del hitburst y del juicio."
+
+#: src/lib/replay-overlays.ts
+msgid "Hits only"
+msgstr "Solo los golpes"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7030,6 +7042,10 @@ msgstr "inicio"
 #: src/components/packs/album/AlbumView.tsx
 msgid "Honorary roster"
 msgstr "Plantel honorífico"
+
+#: src/lib/replay-overlays.ts
+msgid "Horizontal"
+msgstr "Horizontal"
 
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 msgid "How card rating is calculated"
@@ -7769,6 +7785,7 @@ msgid "Latvian"
 msgstr "Letón"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
 msgid "Layout"
 msgstr "Diseño"
 
@@ -10891,6 +10908,10 @@ msgid "Per-column press count."
 msgstr "Recuento de pulsaciones por columna."
 
 #: src/lib/replay-overlays.ts
+msgid "Per-finger stats"
+msgstr "Estadísticas por dedo"
+
+#: src/lib/replay-overlays.ts
 msgid "Per-hand accuracy"
 msgstr "Precisión por mano"
 
@@ -12387,6 +12408,10 @@ msgstr "Restablecer predeterminados"
 msgid "Reset orientation"
 msgstr "Restablecer orientación"
 
+#: src/routes/replay.tsx
+msgid "Reset size"
+msgstr "Restablecer tamaño"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Reset to current page"
 msgstr "Restablecer a la página actual"
@@ -12417,8 +12442,8 @@ msgid "Restored an unsaved draft from this browser."
 msgstr "Se restauró un borrador sin guardar de este navegador."
 
 #: src/lib/replay-overlays.ts
-msgid "Results"
-msgstr "Resultados"
+#~ msgid "Results"
+#~ msgstr "Resultados"
 
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Resume chart preview"
@@ -13504,6 +13529,11 @@ msgstr "Mostrando solo {label}"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Showing the newest {0}."
 msgstr "Mostrando los {0} más recientes."
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
+msgid "Shows"
+msgstr "Muestra"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -16407,6 +16437,10 @@ msgstr "Jugadas sin clasificar"
 msgid "unreadable"
 msgstr "ilegible"
 
+#: src/lib/replay-overlays.ts
+msgid "Unstable rate"
+msgstr "Unstable rate"
+
 #: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
@@ -16630,6 +16664,10 @@ msgstr "Verificado"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Verified clear"
 msgstr ""
+
+#: src/lib/replay-overlays.ts
+msgid "Vertical"
+msgstr "Vertical"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "vibro"

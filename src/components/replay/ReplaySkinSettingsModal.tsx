@@ -16,12 +16,24 @@ import {
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
   normalizeReplayHandAccuracyStyle,
+  REPLAY_COLUMN_STAT_STYLES,
+  REPLAY_COLUMN_STAT_STYLE_LABELS,
+  normalizeReplayColumnStatStyle,
+  REPLAY_COLUMN_STAT_METRICS,
+  REPLAY_COLUMN_STAT_METRIC_LABELS,
+  normalizeReplayColumnStatMetric,
   REPLAY_MISS_STYLES,
   REPLAY_MISS_STYLE_LABELS,
   normalizeReplayMissStyle,
+  REPLAY_HIT_ERROR_STYLES,
+  REPLAY_HIT_ERROR_STYLE_LABELS,
+  normalizeReplayHitErrorStyle,
+  REPLAY_JUDGEMENT_LAYOUTS,
+  REPLAY_JUDGEMENT_LAYOUT_LABELS,
+  normalizeReplayJudgementLayout,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
-import type { ReplayHandAccuracyStyle, ReplayMissStyle, ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
+import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
@@ -1857,6 +1869,9 @@ export function ReplaySkinSettingsModal({
       />
       <motion.div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={saveScope === "owner" ? t`Customize my replay skin` : t`Replay settings`}
         className={`fixed z-[111] flex flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl ${
           windowRect ? "" : "pointer-events-none opacity-0"
         }`}
@@ -4083,6 +4098,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, MessageDescriptor> = 
   misses: msg`Left vs right hand miss totals.`,
   accuracy: msg`Current accuracy percentage.`,
   handAccuracy: msg`Current accuracy percentage for each hand.`,
+  columnStats: msg`Accuracy or unstable rate for every column, one cell per finger.`,
   pp: msg`Live performance points.`,
   judgements: msg`Hit counts and unstable rate.`,
   hitError: msg`Early/late meter with the real hit windows.`,
@@ -4225,6 +4241,108 @@ function HandAccuracyOverlayPreview({ style }: { style: ReplayHandAccuracyStyle 
   );
 }
 
+// The same four shapes the canvas draws, with its own fill curves and value
+// colours.
+function ColumnStatsOverlayPreview({ style, metric }: { style: ReplayColumnStatStyle; metric: ReplayColumnStatMetric }) {
+  const columns = metric === "ur"
+    ? [46, 81, 62, 128].map((ur) => ({ text: String(ur), fill: 1 - ur / 180 }))
+    : [99.4, 96.8, 98.6, 93.1].map((accuracy) => ({ text: accuracy.toFixed(1), fill: (accuracy / 100) ** 12 }));
+  const color = (fill: number) => fill >= 0.8 ? "#b3f5ff"
+    : fill >= 0.6 ? "#88da20"
+    : fill >= 0.4 ? "#ffcc22"
+    : fill >= 0.2 ? "#ff8a22"
+    : "#ff4444";
+
+  return (
+    <div className={`relative flex h-full w-full items-center justify-center ${style === "plain" ? "gap-3" : style === "circles" ? "gap-1.5" : "gap-1"}`} aria-hidden="true">
+      {columns.map((column, index) => (
+        <div key={index}>
+          {style === "circles" ? (
+            <div
+              className="grid h-11 w-11 place-items-center rounded-full border-2 border-white/90 text-[11px] font-bold text-white/95 tabular-nums"
+              style={{ backgroundColor: `${color(column.fill)}38`, boxShadow: `inset 0 0 0 3px #111019, inset 0 0 0 4px ${color(column.fill)}` }}
+            >{column.text}</div>
+          ) : style === "leaderboard" ? (
+            <div className="relative grid h-7 w-14 place-items-center">
+              <div
+                className="absolute inset-0 -skew-x-[11deg] rounded border bg-[#17151e]"
+                style={{ borderColor: `${color(column.fill)}99`, backgroundColor: `${color(column.fill)}1f` }}
+              />
+              <span className="relative text-[11px] font-bold text-white/95 tabular-nums">{column.text}</span>
+            </div>
+          ) : style === "plain" ? (
+            <div className="text-center text-xs font-bold leading-none tabular-nums" style={{ color: color(column.fill) }}>{column.text}</div>
+          ) : (
+            <div className="w-12">
+              <div className="text-center text-xs font-bold leading-none text-white/95 tabular-nums">{column.text}</div>
+              <div className="mt-1 h-[3px] w-full bg-white/10">
+                <div className="h-full" style={{ width: `${column.fill * 100}%`, backgroundColor: color(column.fill) }} />
+              </div>
+            </div>
+          )}
+          <div className="mt-1 text-center text-[9px] font-bold leading-none text-white/50">{index + 1}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Same bar the canvas draws: colored windows behind white ticks, or the
+// ticks alone carrying the window colour themselves.
+function HitErrorOverlayPreview({ style }: { style: ReplayHitErrorStyle }) {
+  const bandsHidden = style === "ticks";
+  const tickColor = (left: number) => {
+    const distance = Math.abs(left - 50);
+    if (distance <= 12) return "#46b8e8";
+    if (distance <= 32) return "#85cc26";
+    return "#e8a733";
+  };
+  return (
+    <div className="relative flex h-full w-full items-center justify-center" aria-hidden="true">
+      <div className="relative h-4 w-3/5">
+        {!bandsHidden && (
+          <>
+            <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#e8a733]" />
+            <div className="absolute inset-x-[18%] top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#85cc26]" />
+            <div className="absolute inset-x-[38%] top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#46b8e8]" />
+          </>
+        )}
+        {[12, 34, 46, 52, 58, 71, 88].map((left) => (
+          <div
+            key={left}
+            className={`absolute top-0 h-full w-0.5 ${bandsHidden ? "" : "bg-white/70"}`}
+            style={{ left: `${left}%`, ...(bandsHidden ? { backgroundColor: tickColor(left) } : {}) }}
+          />
+        ))}
+        <div className="absolute top-0 h-full w-0.5 bg-white" style={{ left: "50%" }} />
+      </div>
+    </div>
+  );
+}
+
+// Only the horizontal arrangement is drawn; the vertical one has its own
+// capture in REPLAY_OVERLAY_PREVIEWS.
+function JudgementsOverlayPreview() {
+  return (
+    <div className="relative flex h-full w-full items-center justify-center gap-2.5 px-3" aria-hidden="true">
+      {[
+        { label: "MAX", value: "1204", color: "#b3f5ff" },
+        { label: "300", value: "318", color: "#ffcc22" },
+        { label: "200", value: "27", color: "#88da20" },
+        { label: "100", value: "9", color: "#5a8fff" },
+        { label: "50", value: "2", color: "#cc8800" },
+        { label: "MISS", value: "4", color: "#ff4444" },
+        { label: "UR", value: "71", color: "#b3f5ff" },
+      ].map((item) => (
+        <div key={item.label} className="text-center">
+          <div className="text-[9px] font-bold leading-none" style={{ color: item.color }}>{item.label}</div>
+          <div className="mt-1 text-[9px] font-bold leading-none text-white/90 tabular-nums">{item.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ReplayOverlaySettingsRow({
   id,
   placement,
@@ -4237,6 +4355,11 @@ function ReplayOverlaySettingsRow({
   const { i18n, t } = useLingui();
   const enabled = placement.enabled;
   const toggle = () => onChange({ enabled: !enabled });
+  // The judgement capture only shows the stacked arrangement, so the
+  // horizontal one falls through to a drawn preview.
+  const previewSrc = id === "judgements" && normalizeReplayJudgementLayout(placement.style) === "horizontal"
+    ? undefined
+    : REPLAY_OVERLAY_PREVIEWS[id];
   return (
     <div
       className={`group relative flex w-full cursor-pointer flex-col rounded-lg border text-left transition-all focus-within:z-10 ${
@@ -4248,9 +4371,9 @@ function ReplayOverlaySettingsRow({
       <button type="button" aria-pressed={enabled} onClick={toggle} className="flex w-full cursor-pointer flex-col overflow-hidden rounded-t-lg text-left">
         <div className="relative aspect-[16/9] w-full overflow-hidden bg-black" style={{ backgroundColor: "#000" }}>
           <div className="absolute inset-0 bg-black" aria-hidden="true" />
-          {REPLAY_OVERLAY_PREVIEWS[id] ? (
+          {previewSrc ? (
             <img
-              src={REPLAY_OVERLAY_PREVIEWS[id]}
+              src={previewSrc}
               alt=""
               loading="lazy"
               draggable={false}
@@ -4261,18 +4384,15 @@ function ReplayOverlaySettingsRow({
             <MissOverlayPreview style={normalizeReplayMissStyle(placement.style)} />
           ) : id === "handAccuracy" ? (
             <HandAccuracyOverlayPreview style={normalizeReplayHandAccuracyStyle(placement.style)} />
+          ) : id === "columnStats" ? (
+            <ColumnStatsOverlayPreview
+              style={normalizeReplayColumnStatStyle(placement.style)}
+              metric={normalizeReplayColumnStatMetric(placement.metric)}
+            />
           ) : id === "hitError" ? (
-            <div className="relative flex h-full w-full items-center justify-center" aria-hidden="true">
-              <div className="relative h-4 w-3/5">
-                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#e8a733]" />
-                <div className="absolute inset-x-[18%] top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#85cc26]" />
-                <div className="absolute inset-x-[38%] top-1/2 h-1.5 -translate-y-1/2 rounded-sm bg-[#46b8e8]" />
-                {[12, 34, 46, 52, 58, 71, 88].map((left) => (
-                  <div key={left} className="absolute top-0 h-full w-0.5 bg-white/70" style={{ left: `${left}%` }} />
-                ))}
-                <div className="absolute top-0 h-full w-0.5 bg-white" style={{ left: "50%" }} />
-              </div>
-            </div>
+            <HitErrorOverlayPreview style={normalizeReplayHitErrorStyle(placement.style)} />
+          ) : id === "judgements" ? (
+            <JudgementsOverlayPreview />
           ) : id === "leaderboard" ? (
             <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
               <div className="w-3/5 space-y-1">
@@ -4321,6 +4441,58 @@ function ReplayOverlaySettingsRow({
             className="min-w-0 flex-1"
             block
           />
+        </div>
+      )}
+      {id === "hitError" && (
+        <div className="flex items-center gap-2 px-3 pb-3 text-xs text-osu-l1">
+          <span><Trans>Style</Trans></span>
+          <SelectMenu<ReplayHitErrorStyle>
+            ariaLabel={`${i18n._(REPLAY_OVERLAY_LABELS.hitError)}: ${t`Style`}`}
+            value={normalizeReplayHitErrorStyle(placement.style)}
+            options={REPLAY_HIT_ERROR_STYLES.map((style) => ({ value: style, label: i18n._(REPLAY_HIT_ERROR_STYLE_LABELS[style]) }))}
+            onChange={(style) => onChange({ style })}
+            className="min-w-0 flex-1"
+            block
+          />
+        </div>
+      )}
+      {id === "judgements" && (
+        <div className="flex items-center gap-2 px-3 pb-3 text-xs text-osu-l1">
+          <span><Trans>Layout</Trans></span>
+          <SelectMenu<ReplayJudgementLayout>
+            ariaLabel={`${i18n._(REPLAY_OVERLAY_LABELS.judgements)}: ${t`Layout`}`}
+            value={normalizeReplayJudgementLayout(placement.style)}
+            options={REPLAY_JUDGEMENT_LAYOUTS.map((style) => ({ value: style, label: i18n._(REPLAY_JUDGEMENT_LAYOUT_LABELS[style]) }))}
+            onChange={(style) => onChange({ style })}
+            className="min-w-0 flex-1"
+            block
+          />
+        </div>
+      )}
+      {id === "columnStats" && (
+        <div className="space-y-1.5 px-3 pb-3 text-xs text-osu-l1">
+          <div className="flex items-center gap-2">
+            <span><Trans>Style</Trans></span>
+            <SelectMenu<ReplayColumnStatStyle>
+              ariaLabel={`${i18n._(REPLAY_OVERLAY_LABELS.columnStats)}: ${t`Style`}`}
+              value={normalizeReplayColumnStatStyle(placement.style)}
+              options={REPLAY_COLUMN_STAT_STYLES.map((style) => ({ value: style, label: i18n._(REPLAY_COLUMN_STAT_STYLE_LABELS[style]) }))}
+              onChange={(style) => onChange({ style })}
+              className="min-w-0 flex-1"
+              block
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span><Trans>Shows</Trans></span>
+            <SelectMenu<ReplayColumnStatMetric>
+              ariaLabel={`${i18n._(REPLAY_OVERLAY_LABELS.columnStats)}: ${t`Shows`}`}
+              value={normalizeReplayColumnStatMetric(placement.metric)}
+              options={REPLAY_COLUMN_STAT_METRICS.map((metric) => ({ value: metric, label: i18n._(REPLAY_COLUMN_STAT_METRIC_LABELS[metric]) }))}
+              onChange={(metric) => onChange({ metric })}
+              className="min-w-0 flex-1"
+              block
+            />
+          </div>
         </div>
       )}
       {id === "replayMaster" && (

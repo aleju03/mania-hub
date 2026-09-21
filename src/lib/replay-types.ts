@@ -108,6 +108,7 @@ export interface ReplayRendererLike {
   setShowInputOverlay: (value: boolean) => void;
   setInputOverlayOptions: (options: { only?: boolean; color?: string; keyHistory?: boolean }) => void;
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
+  resetOverlaySize?: (id: ReplayOverlayId) => void;
   /** Includes authored geometry so an export can reproduce the overlay layout. */
   getOverlaySettingsSnapshot?: (options?: { resolveLayout?: boolean }) => ReplayOverlaySettings;
   getViewportSnapshot?: () => ReplayViewportSnapshot;

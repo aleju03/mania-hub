@@ -1,4 +1,4 @@
-import type { ReplayOverlayReference } from "./replay-overlays";
+import type { ReplayOverlayReference, ReplayOverlaySizeReference } from "./replay-overlays";
 
 export type ReplayOverlayStage = {
   w: number;
@@ -20,7 +20,7 @@ export function replayOverlayRegion(
  * Fit the occupied side-group extent only when that group would otherwise spill
  * onto the playfield; unused gutter space is not part of the group.
  */
-export function replayOverlayLayoutScale(reference: ReplayOverlayReference, stage: ReplayOverlayStage): number {
+export function replayOverlayLayoutScale(reference: ReplayOverlaySizeReference, stage: ReplayOverlayStage): number {
   const scale = reference.region === "left" || reference.region === "right"
     ? stage.w / reference.width : Math.min(stage.w / reference.width, stage.h / reference.height);
   if (!reference.groupExtent || reference.region === "playfield") return scale;
@@ -59,7 +59,8 @@ export function replayOverlayX(
 }
 
 export function replayOverlayScale(reference: ReplayOverlayReference, stage: ReplayOverlayStage): number {
-  return reference.hudScale * replayOverlayLayoutScale(reference, stage);
+  const size = reference.size ?? reference;
+  return size.hudScale * replayOverlayLayoutScale(size, stage);
 }
 
 /** Keep a leaderboard's relative center when its size and the stage height
@@ -71,6 +72,12 @@ export function replayOverlayCenteredY(
   reference: ReplayOverlayReference,
   stage: ReplayOverlayStage,
 ): number {
-  const originalHeight = height / replayOverlayLayoutScale(reference, stage);
+  const sizeScale = reference.size
+    ? replayOverlayScale(reference, stage) / replayOverlayScale(reference, {
+        w: reference.width, h: reference.height,
+        playfieldX: reference.playfieldX, playfieldWidth: reference.playfieldWidth,
+      })
+    : replayOverlayLayoutScale(reference, stage);
+  const originalHeight = height / sizeScale;
   return (y + originalHeight / (2 * reference.height)) * stage.h - height / 2;
 }

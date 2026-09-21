@@ -123,6 +123,39 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(profile.assets.judgements.hit300).toBeUndefined();
   });
 
+  it("carries animation frames through the wire format and back", async () => {
+    const animated: ReplaySkinImageAsset = {
+      ...importedAsset("left-0.png", "mania/left-0.png"),
+      frames: [importedAsset("left-1.png", "mania/left-1.png"), importedAsset("left-2.png", "mania/left-2.png")],
+      frameDurationMs: 125,
+    };
+    const settings = normalizeReplaySkinSettings({
+      ...settingsWithAssets(),
+      keymodeProfiles: {
+        4: {
+          ...DEFAULT_REPLAY_SKIN_PROFILE,
+          assets: { columns: [{ tap: animated }, {}, {}, {}], judgements: {}, combo: null, stage: EMPTY_REPLAY_SKIN_STAGE_ASSETS },
+        },
+      },
+    });
+    const payload = dehydrateReplaySkinSettings(settings) as {
+      settings: { keymodeProfiles: Record<string, { assets: { columns: Array<{ tap?: { src: string; frames?: Array<{ src: string; path: string }>; frameDurationMs?: number } }> } }> };
+    };
+    const wireTap = payload.settings.keymodeProfiles["4"].assets.columns[0].tap;
+    expect(wireTap?.src).toBe("");
+    expect(wireTap?.frames?.map((frame) => [frame.src, frame.path])).toEqual([["", "mania/left-1.png"], ["", "mania/left-2.png"]]);
+    expect(wireTap?.frameDurationMs).toBe(125);
+
+    // left-2 deliberately missing from the rebuilt archive: the loop shortens.
+    const archive = await buildArchive(["mania/left-0.png", "mania/left-1.png"]);
+    const rehydrated = await rehydrateOwnerReplaySkinSettings(payload, archive);
+    const tap = rehydrated?.keymodeProfiles["4"].assets.columns[0].tap;
+    expect(tap?.src).toContain("base64");
+    expect(tap?.frames?.map((frame) => frame.path)).toEqual(["mania/left-1.png"]);
+    expect(tap?.frames?.[0].src).toContain("base64");
+    expect(tap?.frameDurationMs).toBe(125);
+  });
+
   it("decodes only the replay's active keymode for the watch path", async () => {
     const source = settingsWithAssets();
     source.keymodeProfiles["7"] = {

@@ -23,7 +23,7 @@ export function normalizeReplayMasterScrollSpeed(value: unknown): number {
   return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
 }
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -34,6 +34,7 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   misses: msg`L/R miss counter`,
   accuracy: msg`Accuracy`,
   handAccuracy: msg`Per-hand accuracy`,
+  columnStats: msg`Per-finger stats`,
   pp: msg`PP counter`,
   judgements: msg`Judgements`,
   hitError: msg`Hit error bar`,
@@ -62,6 +63,42 @@ export function normalizeReplayHandAccuracyStyle(value: unknown): ReplayHandAccu
     : DEFAULT_REPLAY_HAND_ACCURACY_STYLE;
 }
 
+// The per-column strip has two settings: the shape it draws, like the other
+// styled overlays, and which number goes in it. Accuracy and unstable rate
+// answer the same question from opposite ends (what you hit, how steady you
+// hit it), so they share every shape.
+export const REPLAY_COLUMN_STAT_STYLES = ["meters", "circles", "leaderboard", "plain"] as const;
+export type ReplayColumnStatStyle = typeof REPLAY_COLUMN_STAT_STYLES[number];
+export const DEFAULT_REPLAY_COLUMN_STAT_STYLE: ReplayColumnStatStyle = "meters";
+
+export const REPLAY_COLUMN_STAT_STYLE_LABELS: Record<ReplayColumnStatStyle, MessageDescriptor> = {
+  meters: msg`Meters`,
+  circles: msg`Hit circles`,
+  leaderboard: msg`Leaderboard`,
+  plain: msg`Numbers only`,
+};
+
+export function normalizeReplayColumnStatStyle(value: unknown): ReplayColumnStatStyle {
+  return REPLAY_COLUMN_STAT_STYLES.includes(value as ReplayColumnStatStyle)
+    ? value as ReplayColumnStatStyle
+    : DEFAULT_REPLAY_COLUMN_STAT_STYLE;
+}
+
+export const REPLAY_COLUMN_STAT_METRICS = ["accuracy", "ur"] as const;
+export type ReplayColumnStatMetric = typeof REPLAY_COLUMN_STAT_METRICS[number];
+export const DEFAULT_REPLAY_COLUMN_STAT_METRIC: ReplayColumnStatMetric = "accuracy";
+
+export const REPLAY_COLUMN_STAT_METRIC_LABELS: Record<ReplayColumnStatMetric, MessageDescriptor> = {
+  accuracy: msg`Accuracy`,
+  ur: msg`Unstable rate`,
+};
+
+export function normalizeReplayColumnStatMetric(value: unknown): ReplayColumnStatMetric {
+  return REPLAY_COLUMN_STAT_METRICS.includes(value as ReplayColumnStatMetric)
+    ? value as ReplayColumnStatMetric
+    : DEFAULT_REPLAY_COLUMN_STAT_METRIC;
+}
+
 export const REPLAY_MISS_STYLES = ["compact", "stacked", "plain"] as const;
 export type ReplayMissStyle = typeof REPLAY_MISS_STYLES[number];
 export const DEFAULT_REPLAY_MISS_STYLE: ReplayMissStyle = "plain";
@@ -75,6 +112,39 @@ export function normalizeReplayMissStyle(value: unknown): ReplayMissStyle {
   return REPLAY_MISS_STYLES.includes(value as ReplayMissStyle)
     ? value as ReplayMissStyle
     : DEFAULT_REPLAY_MISS_STYLE;
+}
+
+// The colored windows behind the ticks are the bar's background, not its
+// data. Dropping them leaves the hits themselves, which then carry their
+// own window colour so the reading survives.
+export const REPLAY_HIT_ERROR_STYLES = ["bands", "ticks"] as const;
+export type ReplayHitErrorStyle = typeof REPLAY_HIT_ERROR_STYLES[number];
+export const DEFAULT_REPLAY_HIT_ERROR_STYLE: ReplayHitErrorStyle = "bands";
+export const REPLAY_HIT_ERROR_STYLE_LABELS: Record<ReplayHitErrorStyle, MessageDescriptor> = {
+  bands: msg`Hit windows`,
+  ticks: msg`Hits only`,
+};
+
+export function normalizeReplayHitErrorStyle(value: unknown): ReplayHitErrorStyle {
+  return REPLAY_HIT_ERROR_STYLES.includes(value as ReplayHitErrorStyle)
+    ? value as ReplayHitErrorStyle
+    : DEFAULT_REPLAY_HIT_ERROR_STYLE;
+}
+
+// The judgement counts stack under the score block by default; laid out in a
+// row they fit the strips along the top and bottom of the stage instead.
+export const REPLAY_JUDGEMENT_LAYOUTS = ["vertical", "horizontal"] as const;
+export type ReplayJudgementLayout = typeof REPLAY_JUDGEMENT_LAYOUTS[number];
+export const DEFAULT_REPLAY_JUDGEMENT_LAYOUT: ReplayJudgementLayout = "vertical";
+export const REPLAY_JUDGEMENT_LAYOUT_LABELS: Record<ReplayJudgementLayout, MessageDescriptor> = {
+  vertical: msg`Vertical`,
+  horizontal: msg`Horizontal`,
+};
+
+export function normalizeReplayJudgementLayout(value: unknown): ReplayJudgementLayout {
+  return REPLAY_JUDGEMENT_LAYOUTS.includes(value as ReplayJudgementLayout)
+    ? value as ReplayJudgementLayout
+    : DEFAULT_REPLAY_JUDGEMENT_LAYOUT;
 }
 
 // An overlay whose default position is a computed anchor rather than a
@@ -97,26 +167,33 @@ export interface ReplayOverlayPlacement {
   scale: number;
   /** Stage geometry when this placement was authored; keeps it stable across aspect ratios. */
   reference?: ReplayOverlayReference;
-  /** Each hand overlay normalizes against its own set of styles. */
-  style?: ReplayHandAccuracyStyle | ReplayMissStyle;
+  /** Each styled overlay normalizes against its own set of styles. */
+  style?: ReplayHandAccuracyStyle | ReplayMissStyle | ReplayColumnStatStyle | ReplayHitErrorStyle | ReplayJudgementLayout;
+  /** Which number the per-finger strip puts in its cells. */
+  metric?: ReplayColumnStatMetric;
   /** Mania Replay Master scroll multiplier; independent of replay playback. */
   scrollSpeed?: number;
   /** Show Replay Master's marks directly over the stage. */
   transparentBackground?: boolean;
 }
 
-export interface ReplayOverlayReference {
+export interface ReplayOverlaySizeReference {
   width: number;
   height: number;
+  hudScale: number;
+  region?: "left" | "right" | "playfield";
+  groupExtent?: number;
+}
+
+export interface ReplayOverlayReference extends ReplayOverlaySizeReference {
   playfieldX: number;
   playfieldWidth: number;
-  hudScale: number;
   /** Scale of fixed HUD spacing in this reference, independent of font scaling. */
   spacingScale?: number;
   /** Resolved side-group geometry shared by fullscreen and video export. */
-  region?: "left" | "right" | "playfield";
-  groupExtent?: number;
   groupStart?: number;
+  /** Authored size before temporary viewport fitting; independent of position edits. */
+  size?: ReplayOverlaySizeReference;
 }
 
 export type ReplayOverlayPosition = Pick<ReplayOverlayPlacement, "x" | "y" | "scale" | "reference">;
@@ -164,10 +241,13 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1, style: DEFAULT_REPLAY_MISS_STYLE },
   accuracy: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
   handAccuracy: { enabled: false, x: 0.03, y: 0.16, scale: 1, style: DEFAULT_REPLAY_HAND_ACCURACY_STYLE },
+  // Above the keypress strip: both are per-column rows, and the pair reads as
+  // one block when someone turns on both.
+  columnStats: { enabled: false, x: 0.035, y: 0.57, scale: 1, style: DEFAULT_REPLAY_COLUMN_STAT_STYLE, metric: DEFAULT_REPLAY_COLUMN_STAT_METRIC },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
-  judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.5 },
+  judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.5, style: DEFAULT_REPLAY_JUDGEMENT_LAYOUT },
   // Anchored under the receptors until dragged, where it has always sat.
-  hitError: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1 },
+  hitError: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1, style: DEFAULT_REPLAY_HIT_ERROR_STYLE },
   // Below the accuracy readout: the detached pie must not land on top of
   // the cluster it just left, or toggling it looks like a no-op.
   progress: { enabled: false, x: 0.03, y: 0.1, scale: 1 },
@@ -268,16 +348,30 @@ function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement, mi
   };
 }
 
+function normalizeOverlaySizeReference(value: unknown): ReplayOverlaySizeReference | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { width, height, hudScale, region, groupExtent } = value as ReplayOverlaySizeReference;
+  if (![width, height, hudScale].every((number) => typeof number === "number" && Number.isFinite(number) && number > 0)) return undefined;
+  const validRegion = region === "left" || region === "right" || region === "playfield";
+  return {
+    width, height, hudScale,
+    ...(validRegion ? { region } : {}),
+    ...(validRegion && typeof groupExtent === "number" && Number.isFinite(groupExtent) && groupExtent > 0 ? { groupExtent } : {}),
+  };
+}
+
 function normalizeOverlayReference(value: unknown): ReplayOverlayReference | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale, region, groupExtent, groupStart } = value as ReplayOverlayReference;
+  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale, region, groupExtent, groupStart, size } = value as ReplayOverlayReference;
   if (![width, height, playfieldX, playfieldWidth, hudScale].every((number) => typeof number === "number" && Number.isFinite(number))) return undefined;
   if (width <= 0 || height <= 0 || playfieldX < 0 || playfieldWidth <= 0
     || playfieldX + playfieldWidth > width + 0.001 || hudScale <= 0) return undefined;
   if (spacingScale !== undefined && (typeof spacingScale !== "number" || !Number.isFinite(spacingScale) || spacingScale <= 0)) return undefined;
   const validRegion = region === "left" || region === "right" || region === "playfield";
+  const normalizedSize = normalizeOverlaySizeReference(size);
   return {
     width, height, playfieldX, playfieldWidth, hudScale,
+    ...(normalizedSize ? { size: normalizedSize } : {}),
     ...(spacingScale === undefined ? {} : { spacingScale }),
     ...(validRegion ? { region } : {}),
     ...(validRegion && typeof groupExtent === "number" && Number.isFinite(groupExtent) && groupExtent > 0 ? { groupExtent } : {}),
@@ -305,6 +399,19 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     if (id === "misses") {
       const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
       placement.style = normalizeReplayMissStyle(rawStyle);
+    }
+    if (id === "columnStats") {
+      const stored = raw[id] && typeof raw[id] === "object" ? raw[id] as { style?: unknown; metric?: unknown } : {};
+      placement.style = normalizeReplayColumnStatStyle(stored.style);
+      placement.metric = normalizeReplayColumnStatMetric(stored.metric);
+    }
+    if (id === "hitError") {
+      const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
+      placement.style = normalizeReplayHitErrorStyle(rawStyle);
+    }
+    if (id === "judgements") {
+      const rawStyle = raw[id] && typeof raw[id] === "object" ? (raw[id] as { style?: unknown }).style : undefined;
+      placement.style = normalizeReplayJudgementLayout(rawStyle);
     }
     if (id === "replayMaster") {
       const rawSpeed = raw[id] && typeof raw[id] === "object" ? (raw[id] as { scrollSpeed?: unknown }).scrollSpeed : undefined;

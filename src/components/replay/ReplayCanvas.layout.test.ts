@@ -91,6 +91,7 @@ type OverlayRenderer = {
   getOverlayPlacementOrigin(box: OverlayBox): { x: number; y: number };
   updateOverlayPlacements(placements: Array<readonly [ReplayOverlayId, Partial<ReplayOverlaySettings[ReplayOverlayId]>]>): void;
   updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>): void;
+  resetOverlaySize(id: ReplayOverlayId): void;
   setSkinSettings(settings: typeof DEFAULT_REPLAY_SKIN_SETTINGS): void;
   renderHUD(layout: OverlayLayout): void;
   measureCanvas(): void;
@@ -106,6 +107,7 @@ function overlayRenderer(settings = DEFAULT_REPLAY_OVERLAY_SETTINGS): OverlayRen
     overlaySettings: normalizeReplayOverlaySettings(settings), overlayHitboxes: [],
     overlaySettingsInputSignature: JSON.stringify(normalizeReplayOverlaySettings(settings)),
     overlayReferenceLayout: null, ruleset: { accuracyMode: "stable" },
+    selectedOverlayIds: new Set<ReplayOverlayId>(),
     render: vi.fn(), onOverlaySettingsChange: vi.fn(),
   });
 }
@@ -117,6 +119,75 @@ function judgementFrame(renderer: OverlayRenderer): OverlayBox {
 }
 
 describe("overlay layout across fullscreen and video export", () => {
+  it.each(["move", "resize", "multi-selection", "style change"] as const)("preserves authored sizes after a %s in a narrow window", (edit) => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };
+    settings.handAccuracy = { enabled: true, x: 0.18, y: 0.36, scale: 1 };
+    settings.misses = { enabled: true, x: 0.18, y: 0.5, scale: 1 };
+    const viewer = overlayRenderer(settings);
+    Object.assign(viewer, { keyCount: 4, fullHeightLayout: true, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4) });
+    const draw = (renderer: OverlayRenderer) => {
+      renderer.overlayHitboxes = [];
+      const layout = renderer.getLayout();
+      return (["handAccuracy", "misses"] as const).map((id) => {
+        const scale = renderer.getOverlayScale(layout, id);
+        return renderer.getOverlayFrame(layout, id, 100 * scale, 45 * scale);
+      });
+    };
+    const original = draw(viewer);
+    viewer.prepareOverlayLayout();
+    viewer.cssWidth = 900;
+    viewer.cssHeight = 1000;
+    viewer.invalidateLayoutCache();
+    const narrow = draw(viewer);
+    expect(narrow[0].width / original[0].width).toBeLessThan(900 / 2048);
+    const origin = viewer.getOverlayPlacementOrigin(narrow[0]);
+    const scale = edit === "resize" ? 1.5 : 1;
+    const patch = { x: origin.x, y: origin.y + 0.01, scale };
+    if (edit === "multi-selection") {
+      viewer.updateOverlayPlacements([["handAccuracy", patch], ["misses", {
+        ...viewer.getOverlayPlacementOrigin(narrow[1]), y: narrow[1].y / viewer.cssHeight + 0.01,
+      }]]);
+    } else viewer.updateOverlayPlacement("handAccuracy", edit === "style change" ? { style: "plain" } : patch);
+    expect(draw(viewer)[0].width).toBeCloseTo(narrow[0].width * scale);
+    viewer.prepareOverlayLayout();
+    viewer.cssWidth = 2048;
+    viewer.cssHeight = 900;
+    viewer.invalidateLayoutCache();
+    const restored = draw(viewer);
+    expect(restored[0].width).toBeCloseTo(original[0].width * scale);
+    expect(restored[1].width).toBeCloseTo(original[1].width);
+
+    const reopened = overlayRenderer(JSON.parse(JSON.stringify(viewer.getOverlaySettingsSnapshot())));
+    Object.assign(reopened, { keyCount: 4, fullHeightLayout: true, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4) });
+    expect(draw(reopened).map((box) => box.width)).toEqual(restored.map((box) => box.width));
+    reopened.updateOverlayPlacement("handAccuracy", { scale: 2.5 });
+    expect(draw(reopened)[0].width).toBeCloseTo(original[0].width * 2.5);
+  });
+
+  it("recovers an already shrunken overlay without resetting its position or its neighbours", () => {
+    const viewer = overlayRenderer();
+    const normal = judgementFrame(viewer);
+    const settings = viewer.getOverlaySettingsSnapshot();
+    settings.judgements = {
+      ...settings.judgements, scale: 2.5,
+      reference: { ...settings.judgements.reference!, hudScale: 0.1 },
+    };
+    viewer.setOverlaySettings(settings);
+    viewer.overlayHitboxes = [];
+    const shrunken = judgementFrame(viewer);
+    const neighbours = viewer.getOverlaySettingsSnapshot();
+    expect(shrunken.width).toBeLessThan(normal.width / 2);
+
+    viewer.resetOverlaySize("judgements");
+    const restored = judgementFrame(viewer);
+    expect(restored.width).toBeCloseTo(normal.width);
+    expect(restored.x).toBeCloseTo(shrunken.x);
+    expect(restored.y).toBeCloseTo(shrunken.y);
+    expect(viewer.getOverlaySettingsSnapshot().misses).toEqual(neighbours.misses);
+    expect(viewer.getOverlaySettingsSnapshot().leaderboard).toEqual(neighbours.leaderboard);
+  });
+
   it.each(["before fullscreen", "in fullscreen"])("fits the leaderboard with hand stats when its scores arrive %s", (arrival) => {
     const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };

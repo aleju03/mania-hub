@@ -68,6 +68,39 @@ export interface ReplaySkinImageAsset {
   width?: number;
   height?: number;
   scale?: number;
+  // The rest of an animated element ("name-1", "name-2", ...); the asset
+  // itself is frame 0. Only note art carries these: stable animates taps,
+  // hold heads and hold tails from "-N" frames, keys never animate, and a
+  // body's animation is press-driven, so it stays on its first frame here.
+  frames?: ReplaySkinImageAsset[];
+  // How long each frame shows. skin.ini AnimationFramerate when the skin sets
+  // one, otherwise one full loop per second, which is what stable and lazer
+  // do with an unset (-1) framerate.
+  frameDurationMs?: number;
+}
+
+// The most frames one element keeps. Rotating-arrow skins ship 6 to 12; a
+// cap bounds the textures a column can ask for.
+export const REPLAY_SKIN_MAX_ANIMATION_FRAMES = 60;
+
+// The frame an animated asset shows `elapsedMs` after its animation started
+// (negative before it starts, which wraps like a running loop). A static
+// asset is its own answer. Callers pass the note's own clock, since stable
+// starts each note's animation when the note spawns rather than sharing one
+// clock, so two notes a few rows apart sit on different frames.
+export function pickSkinAnimationFrame(asset: ReplaySkinImageAsset, elapsedMs: number): ReplaySkinImageAsset {
+  const frames = asset.frames;
+  if (!frames || frames.length === 0) return asset;
+  const count = frames.length + 1;
+  const duration = asset.frameDurationMs && asset.frameDurationMs > 0 ? asset.frameDurationMs : 1000 / count;
+  if (!Number.isFinite(elapsedMs)) return asset;
+  const index = ((Math.floor(elapsedMs / duration) % count) + count) % count;
+  return index === 0 ? asset : frames[index - 1];
+}
+
+// Every image an asset draws: itself, then its animation frames.
+export function listSkinAssetFrames(asset: ReplaySkinImageAsset): ReplaySkinImageAsset[] {
+  return asset.frames && asset.frames.length > 0 ? [asset, ...asset.frames] : [asset];
 }
 
 export interface ReplaySkinColumnAssets {
@@ -608,7 +641,7 @@ export function replayStagePositionToOsuManiaPosition(position: number): number 
 export const osuManiaHitPositionToReplayHitPosition = osuManiaStagePositionToReplayPosition;
 export const replayHitPositionToOsuManiaHitPosition = replayStagePositionToOsuManiaPosition;
 
-function normalizeImageAsset(value: unknown): ReplaySkinImageAsset | undefined {
+function normalizeImageAsset(value: unknown, allowFrames = false): ReplaySkinImageAsset | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const raw = value as Partial<Record<keyof ReplaySkinImageAsset, unknown>>;
   const src = typeof raw.src === "string" && raw.src.startsWith("data:image/") ? raw.src : null;
@@ -617,7 +650,7 @@ function normalizeImageAsset(value: unknown): ReplaySkinImageAsset | undefined {
   const width = Math.round(Number(raw.width));
   const height = Math.round(Number(raw.height));
   const scale = Number(raw.scale);
-  return {
+  const asset: ReplaySkinImageAsset = {
     name,
     src,
     path: typeof raw.path === "string" && raw.path.trim() ? raw.path.trim().slice(0, 320) : undefined,
@@ -625,16 +658,29 @@ function normalizeImageAsset(value: unknown): ReplaySkinImageAsset | undefined {
     height: Number.isFinite(height) && height > 0 ? Math.min(4096, height) : undefined,
     scale: Number.isFinite(scale) && scale > 0 ? Math.min(4, scale) : undefined,
   };
+  // Frames nest one level: a frame of a frame is nothing stable has.
+  if (allowFrames && Array.isArray(raw.frames)) {
+    const frames = raw.frames
+      .slice(0, REPLAY_SKIN_MAX_ANIMATION_FRAMES - 1)
+      .map((frame) => normalizeImageAsset(frame, false))
+      .filter((frame): frame is ReplaySkinImageAsset => Boolean(frame));
+    if (frames.length > 0) {
+      asset.frames = frames;
+      const duration = Number(raw.frameDurationMs);
+      if (Number.isFinite(duration) && duration > 0) asset.frameDurationMs = Math.min(10_000, duration);
+    }
+  }
+  return asset;
 }
 
 function normalizeColumnAsset(value: unknown): ReplaySkinColumnAssets {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const raw = value as Partial<Record<keyof ReplaySkinColumnAssets, unknown>>;
   const normalized: ReplaySkinColumnAssets = {};
-  const tap = normalizeImageAsset(raw.tap);
-  const lnHead = normalizeImageAsset(raw.lnHead);
+  const tap = normalizeImageAsset(raw.tap, true);
+  const lnHead = normalizeImageAsset(raw.lnHead, true);
   const lnBody = normalizeImageAsset(raw.lnBody);
-  const lnTail = normalizeImageAsset(raw.lnTail);
+  const lnTail = normalizeImageAsset(raw.lnTail, true);
   const receptor = normalizeImageAsset(raw.receptor);
   const receptorPressed = normalizeImageAsset(raw.receptorPressed);
   if (tap) normalized.tap = tap;

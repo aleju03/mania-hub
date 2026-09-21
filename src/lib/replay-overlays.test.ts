@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayColumnStatStyle, normalizeReplayColumnStatMetric, normalizeReplayMissStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
   it("preserves and copies authored geometry through normalization and storage", () => {
@@ -9,6 +9,20 @@ describe("replay overlay settings", () => {
     expect(normalized.judgements.reference).toEqual(reference);
     expect(normalizeReplayOverlaySettings(settings).judgements.reference).not.toBe(reference);
     expect(normalizeReplayOverlaySettings({ judgements: { ...settings.judgements, reference: { ...reference, height: 0 } } }).judgements.reference).toBeUndefined();
+  });
+
+  it("preserves an independent size reference and rejects invalid size baselines", () => {
+    const size = { width: 2048, height: 900, hudScale: 1.5, region: "left", groupExtent: 500 };
+    const reference = { width: 900, height: 1000, playfieldX: 150, playfieldWidth: 600, hudScale: 0.45, size };
+    const settings = { handAccuracy: { enabled: true, reference } };
+    const normalized = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(settings)));
+    expect(normalized.handAccuracy.reference).toEqual(reference);
+    expect(normalizeReplayOverlaySettings(settings).handAccuracy.reference?.size).not.toBe(size);
+    for (const invalid of [{ ...size, width: 0 }, { ...size, hudScale: NaN }, { ...size, height: -1 }]) {
+      const result = normalizeReplayOverlaySettings({ handAccuracy: { reference: { ...reference, size: invalid } } });
+      expect(result.handAccuracy.reference?.size).toBeUndefined();
+      expect(result.handAccuracy.reference?.hudScale).toBe(0.45);
+    }
   });
 
   it("preserves a leaderboard parked past the left edge through a settings round trip", () => {
@@ -82,6 +96,12 @@ describe("replay overlay settings", () => {
   it("ships per-hand accuracy as an opt-in draggable overlay", () => {
     expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.handAccuracy).toEqual({ enabled: false, x: 0.03, y: 0.16, scale: 1, style: "meters" });
     expect(normalizeReplayOverlaySettings({}).handAccuracy).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.handAccuracy);
+  });
+
+  it("ships the per-finger strip as an opt-in overlay above the keypresses", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.columnStats).toEqual({ enabled: false, x: 0.035, y: 0.57, scale: 1, style: "meters", metric: "accuracy" });
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.columnStats.y).toBeLessThan(DEFAULT_REPLAY_OVERLAY_SETTINGS.keypresses.y);
+    expect(normalizeReplayOverlaySettings({}).columnStats).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.columnStats);
   });
 
   it("keeps the detached progress pie clear of the accuracy cluster", () => {
@@ -171,6 +191,31 @@ describe("replay per-hand accuracy style", () => {
 });
 
 
+describe("per-finger stat styles", () => {
+  it("defaults the shape to meters and the reading to accuracy", () => {
+    expect(normalizeReplayColumnStatStyle(undefined)).toBe("meters");
+    expect(normalizeReplayColumnStatStyle("nonsense")).toBe("meters");
+    expect(normalizeReplayColumnStatStyle("leaderboard")).toBe("leaderboard");
+    expect(normalizeReplayColumnStatMetric(undefined)).toBe("accuracy");
+    // The shape names and the metric names live in separate sets.
+    expect(normalizeReplayColumnStatMetric("circles")).toBe("accuracy");
+    expect(normalizeReplayColumnStatStyle("ur")).toBe("meters");
+    expect(normalizeReplayColumnStatMetric("ur")).toBe("ur");
+  });
+
+  it("keeps a picked shape and reading through storage without touching the other styled overlays", () => {
+    const stored = JSON.parse(JSON.stringify({
+      columnStats: { enabled: true, x: 0.2, y: 0.4, scale: 1.2, style: "circles", metric: "ur" },
+      handAccuracy: { style: "rings" },
+      misses: { style: "compact" },
+    }));
+    const settings = normalizeReplayOverlaySettings(stored);
+    expect(settings.columnStats).toEqual(stored.columnStats);
+    expect(settings.handAccuracy.style).toBe("rings");
+    expect(settings.misses.style).toBe("compact");
+  });
+});
+
 describe("replay miss counter styles", () => {
   it("defaults to Classic without moving custom placements", () => {
     expect(normalizeReplayMissStyle(undefined)).toBe("plain");
@@ -191,5 +236,36 @@ describe("replay miss counter styles", () => {
     const legacy = { enabled: true, x: 0.085, y: 0.77, scale: 0.75, style };
     expect(normalizeReplayOverlaySettings({ misses: legacy }).misses).toEqual({ ...DEFAULT_REPLAY_OVERLAY_SETTINGS.misses, style });
     expect(normalizeReplayOverlaySettings({ handAccuracy: { style: "balance" }, misses: { style } }).handAccuracy.style).toBe("balance");
+  });
+});
+
+describe("hit error bar styles", () => {
+  it("ships the hit windows behind the ticks", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.hitError.style).toBe("bands");
+    expect(normalizeReplayHitErrorStyle(undefined)).toBe("bands");
+    expect(normalizeReplayHitErrorStyle("plain")).toBe("bands");
+  });
+
+  it("keeps the hits-only pick through storage without disturbing the anchored placement", () => {
+    const stored = JSON.parse(JSON.stringify({
+      hitError: { enabled: true, x: REPLAY_OVERLAY_ANCHORED_COORD, y: REPLAY_OVERLAY_ANCHORED_COORD, scale: 1, style: "ticks" },
+    }));
+    expect(normalizeReplayOverlaySettings(stored).hitError).toEqual(stored.hitError);
+  });
+});
+
+describe("judgement overlay layouts", () => {
+  it("ships the stacked column and rejects unknown arrangements", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements.style).toBe("vertical");
+    expect(normalizeReplayJudgementLayout(undefined)).toBe("vertical");
+    expect(normalizeReplayJudgementLayout("inline")).toBe("vertical");
+  });
+
+  it("keeps a horizontal pick through storage and legacy placement migration", () => {
+    const stored = JSON.parse(JSON.stringify({ judgements: { enabled: true, x: 0.4, y: 0.6, scale: 1.25, style: "horizontal" } }));
+    expect(normalizeReplayOverlaySettings(stored).judgements).toEqual(stored.judgements);
+    const legacy = { enabled: true, x: 0.74, y: 0.07, scale: 1.25, style: "horizontal" };
+    expect(normalizeReplayOverlaySettings({ judgements: legacy }).judgements)
+      .toEqual({ ...DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements, style: "horizontal" });
   });
 });

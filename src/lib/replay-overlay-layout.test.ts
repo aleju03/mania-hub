@@ -7,6 +7,22 @@ const inline = { w: reference.width, h: reference.height, playfieldX: reference.
 const fullscreen = { w: 2048, h: 1152, playfieldX: 545, playfieldWidth: 958 };
 
 describe("replay overlay layout", () => {
+  it("keeps the leaderboard center after editing it while its authored size is temporarily fitted", () => {
+    const edited: ReplayOverlayReference = {
+      width: 900, height: 1000, playfieldX: 150, playfieldWidth: 600,
+      hudScale: 0.45, region: "left",
+      size: { width: 2048, height: 900, hudScale: 1.5, region: "left", groupExtent: 500 },
+    };
+    const narrow = { w: 900, h: 1000, playfieldX: 150, playfieldWidth: 600 };
+    const wide = { w: 2048, h: 900, playfieldX: 700, playfieldWidth: 648 };
+    const heightBefore = 320 * replayOverlayScale(edited, narrow);
+    const heightAfter = 320 * replayOverlayScale(edited, wide);
+    const y = 0.3;
+    const center = (y * narrow.h + heightBefore / 2) / narrow.h;
+    expect((replayOverlayCenteredY(y, heightAfter, edited, wide) + heightAfter / 2) / wide.h).toBeCloseTo(center);
+    expect(replayOverlayCenteredY(y, heightBefore, edited, narrow)).toBeCloseTo(y * narrow.h);
+  });
+
   it.each([0.35, 0.5, 0.65])("keeps the leaderboard center at %s when fullscreen shrinks its side group", (center) => {
     const source = { ...reference, region: "left" as const, groupStart: 0, groupExtent: 580 };
     const originalHeight = 360;

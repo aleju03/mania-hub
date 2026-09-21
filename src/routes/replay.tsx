@@ -60,12 +60,24 @@ import {
   REPLAY_HAND_ACCURACY_STYLES,
   REPLAY_HAND_ACCURACY_STYLE_LABELS,
   normalizeReplayHandAccuracyStyle,
+  REPLAY_COLUMN_STAT_STYLES,
+  REPLAY_COLUMN_STAT_STYLE_LABELS,
+  normalizeReplayColumnStatStyle,
+  REPLAY_COLUMN_STAT_METRICS,
+  REPLAY_COLUMN_STAT_METRIC_LABELS,
+  normalizeReplayColumnStatMetric,
+  REPLAY_HIT_ERROR_STYLES,
+  REPLAY_HIT_ERROR_STYLE_LABELS,
+  normalizeReplayHitErrorStyle,
+  REPLAY_JUDGEMENT_LAYOUTS,
+  REPLAY_JUDGEMENT_LAYOUT_LABELS,
+  normalizeReplayJudgementLayout,
   readReplayMissThumbHand,
   readReplayOverlaySettings,
   writeReplayMissThumbHand,
   writeReplayOverlaySettings,
 } from "../lib/replay-overlays";
-import type { ReplayHandAccuracyStyle, ReplayMissStyle, ReplayThumbHand } from "../lib/replay-overlays";
+import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayThumbHand } from "../lib/replay-overlays";
 import { ReplayMasterOverlayControls } from "../components/replay/ReplayMasterOverlayControls";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
@@ -2515,6 +2527,26 @@ function ReplayViewer({
     applyOverlaySettings({ ...current, misses: { ...current.misses, style } });
     setOverlayMenu(null);
   }, [applyOverlaySettings]);
+  const setColumnStatStyleFromMenu = useCallback((style: ReplayColumnStatStyle) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, columnStats: { ...current.columnStats, style } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
+  const setColumnStatMetricFromMenu = useCallback((metric: ReplayColumnStatMetric) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, columnStats: { ...current.columnStats, metric } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
+  const setHitErrorStyleFromMenu = useCallback((style: ReplayHitErrorStyle) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, hitError: { ...current.hitError, style } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
+  const setJudgementLayoutFromMenu = useCallback((style: ReplayJudgementLayout) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, judgements: { ...current.judgements, style } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
     ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
     : [];
@@ -2525,6 +2557,10 @@ function ReplayViewer({
     : "";
   const handAccuracyStyle = normalizeReplayHandAccuracyStyle(overlaySettings.handAccuracy?.style);
   const missStyle = normalizeReplayMissStyle(overlaySettings.misses?.style);
+  const columnStatStyle = normalizeReplayColumnStatStyle(overlaySettings.columnStats?.style);
+  const columnStatMetric = normalizeReplayColumnStatMetric(overlaySettings.columnStats?.metric);
+  const hitErrorStyle = normalizeReplayHitErrorStyle(overlaySettings.hitError?.style);
+  const judgementLayout = normalizeReplayJudgementLayout(overlaySettings.judgements?.style);
   // Only odd keymodes have a lane a thumb covers, so only they can move it
   // between the two hand-stat columns.
   const thumbLaneAvailable = replay.keyCount % 2 === 1;
@@ -4684,6 +4720,81 @@ function ReplayViewer({
                     <div className="my-1 h-px bg-white/10" />
                   </>
                 )}
+                {overlayMenu.targetId === "columnStats" && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    {REPLAY_COLUMN_STAT_STYLES.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => setColumnStatStyleFromMenu(style)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${columnStatStyle === style ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {i18n._(REPLAY_COLUMN_STAT_STYLE_LABELS[style])}
+                      </button>
+                    ))}
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Shows</Trans></div>
+                    {REPLAY_COLUMN_STAT_METRICS.map((metric) => (
+                      <button
+                        key={metric}
+                        type="button"
+                        onClick={() => setColumnStatMetricFromMenu(metric)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${columnStatMetric === metric ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {i18n._(REPLAY_COLUMN_STAT_METRIC_LABELS[metric])}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
+                {overlayMenu.targetId === "hitError" && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Style</Trans></div>
+                    {REPLAY_HIT_ERROR_STYLES.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => setHitErrorStyleFromMenu(style)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${hitErrorStyle === style ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {i18n._(REPLAY_HIT_ERROR_STYLE_LABELS[style])}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
+                {overlayMenu.targetId === "judgements" && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Layout</Trans></div>
+                    {REPLAY_JUDGEMENT_LAYOUTS.map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => setJudgementLayoutFromMenu(style)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${judgementLayout === style ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {i18n._(REPLAY_JUDGEMENT_LAYOUT_LABELS[style])}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
                 {(overlayMenu.targetId === "misses" || overlayMenu.targetId === "handAccuracy") && thumbLaneAvailable && (
                   <>
                     <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40"><Trans>Middle lane thumb</Trans></div>
@@ -4707,6 +4818,17 @@ function ReplayViewer({
                     <div className="my-1 h-px bg-white/10" />
                   </>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    rendererRef.current?.resetOverlaySize?.(overlayMenu.targetId!);
+                    setOverlayMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Trans>Reset size</Trans>
+                </button>
                 <button
                   type="button"
                   onClick={() => setOverlayEnabledFromMenu(overlayMenu.targetId!, false)}

@@ -8,17 +8,80 @@ import {
   getReplaySkinColumnColor,
   getReplaySkinProfile,
   getReplaySkinStagePosition,
+  listSkinAssetFrames,
   normalizeReplaySkinSettings,
   osuManiaHitPositionToReplayHitPosition,
   parseReplaySkinShareKey,
+  pickSkinAnimationFrame,
   readReplaySkinPresets,
   readReplaySkinSettings,
   replayHitPositionToOsuManiaHitPosition,
   writeReplaySkinPresets,
   writeReplaySkinSettings,
 } from "./replay-skin";
-import type { ReplaySkinSettings } from "./replay-skin";
+import type { ReplaySkinImageAsset, ReplaySkinSettings } from "./replay-skin";
 import type { SkinSummary } from "./skins";
+
+describe("animated skin assets", () => {
+  const frame = (name: string): ReplaySkinImageAsset => ({ name, src: "data:image/png;base64,AA==", path: `mania/${name}` });
+  const animated: ReplaySkinImageAsset = { ...frame("left-0.png"), frames: [frame("left-1.png"), frame("left-2.png")], frameDurationMs: 100 };
+
+  it("picks the frame for a note's own clock, wrapping either way", () => {
+    expect(pickSkinAnimationFrame(animated, 0).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(animated, 99).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(animated, 100).name).toBe("left-1.png");
+    expect(pickSkinAnimationFrame(animated, 250).name).toBe("left-2.png");
+    expect(pickSkinAnimationFrame(animated, 300).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(animated, -1).name).toBe("left-2.png");
+    expect(pickSkinAnimationFrame(animated, -250).name).toBe("left-0.png");
+  });
+
+  it("loops once per second when no frame duration was recorded", () => {
+    const loop = { ...animated, frameDurationMs: undefined };
+    expect(pickSkinAnimationFrame(loop, 333).name).toBe("left-0.png");
+    expect(pickSkinAnimationFrame(loop, 334).name).toBe("left-1.png");
+    expect(pickSkinAnimationFrame(loop, 999).name).toBe("left-2.png");
+    expect(pickSkinAnimationFrame(loop, 1000).name).toBe("left-0.png");
+  });
+
+  it("is the identity for static art", () => {
+    expect(pickSkinAnimationFrame(frame("note.png"), 12345).name).toBe("note.png");
+    expect(listSkinAssetFrames(frame("note.png"))).toHaveLength(1);
+    expect(listSkinAssetFrames(animated).map((entry) => entry.name)).toEqual(["left-0.png", "left-1.png", "left-2.png"]);
+  });
+
+  it("keeps note frames through normalization and drops them from art that never animates", () => {
+    const settings = normalizeReplaySkinSettings({
+      keymodeProfiles: {
+        4: {
+          assets: {
+            columns: [
+              { tap: animated, lnHead: animated, lnTail: animated, lnBody: animated, receptor: animated },
+              {},
+              {},
+              {},
+            ],
+            judgements: { hit300: animated },
+            combo: null,
+          },
+        },
+      },
+    });
+    const column = settings.keymodeProfiles["4"].assets.columns[0];
+    expect(column.tap?.frames?.map((entry) => entry.name)).toEqual(["left-1.png", "left-2.png"]);
+    expect(column.tap?.frameDurationMs).toBe(100);
+    expect(column.lnHead?.frames).toHaveLength(2);
+    expect(column.lnTail?.frames).toHaveLength(2);
+    expect(column.lnBody?.frames).toBeUndefined();
+    expect(column.receptor?.frames).toBeUndefined();
+    expect(settings.keymodeProfiles["4"].assets.judgements.hit300?.frames).toBeUndefined();
+    // A frame of a frame is nothing stable has.
+    const nested = normalizeReplaySkinSettings({
+      keymodeProfiles: { 4: { assets: { columns: [{ tap: { ...animated, frames: [{ ...frame("left-1.png"), frames: [frame("x.png")] }] } }], judgements: {}, combo: null } } },
+    });
+    expect(nested.keymodeProfiles["4"].assets.columns[0].tap?.frames?.[0].frames).toBeUndefined();
+  });
+});
 
 describe("replay skin settings", () => {
   beforeEach(() => {

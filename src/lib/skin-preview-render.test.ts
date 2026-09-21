@@ -8,9 +8,11 @@ import {
   lnTailArtEdgeFraction,
   longNoteGeometry,
   mulberry32,
+  previewAnimationFrame,
   SKIN_PREVIEW_HEIGHT,
   SKIN_PREVIEW_WIDTH,
 } from "./skin-preview-render";
+import type { ReplaySkinImageAsset } from "./replay-skin";
 import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
 
 describe("computeSkinPreviewLayout", () => {
@@ -71,6 +73,28 @@ describe("computeSkinPreviewLayout", () => {
     const layout = computeSkinPreviewLayout(profile, 7);
     expect(layout.hitLineY).toBeGreaterThan(0);
     expect(layout.hitLineY).toBeLessThan(SKIN_PREVIEW_HEIGHT);
+  });
+});
+
+describe("previewAnimationFrame", () => {
+  const frame = (name: string): ReplaySkinImageAsset => ({ name, src: `data:image/png;base64,${name}` });
+  const animated: ReplaySkinImageAsset = { ...frame("f0"), frames: [frame("f1"), frame("f2"), frame("f3")], frameDurationMs: 100 };
+
+  it("runs a note's loop backwards from the hit line, like the replay canvas", () => {
+    expect(previewAnimationFrame(animated, 0).name).toBe("f0");
+    expect(previewAnimationFrame(animated, 50).name).toBe("f3");
+    expect(previewAnimationFrame(animated, 150).name).toBe("f2");
+    expect(previewAnimationFrame(animated, 400).name).toBe("f0");
+    expect(previewAnimationFrame(animated, undefined).name).toBe("f0");
+  });
+
+  it("gives every pattern note a clock so frames differ down the field", () => {
+    const pattern = buildSkinPreviewPattern(4);
+    expect(pattern.taps.every((tap) => typeof tap.timeMs === "number" && tap.timeMs >= 0)).toBe(true);
+    expect(pattern.longNotes.every((ln) => typeof ln.timeMs === "number")).toBe(true);
+    const chart = buildChartPreviewPattern({ beatmapId: 1, keys: 4, label: "x", stars: 1, notes: [{ column: 0, time: 0, endTime: 0 }, { column: 1, time: 240, endTime: 0 }, { column: 2, time: 120, endTime: 600 }] });
+    expect(chart.taps.map((tap) => tap.timeMs)).toEqual([240, 0]);
+    expect(chart.longNotes[0].timeMs).toBe(120);
   });
 });
 

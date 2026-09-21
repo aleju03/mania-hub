@@ -1,4 +1,5 @@
 import type { SkinPreviewChartNote, SkinPreviewChartSnippet } from "./skin-preview-patterns";
+import { listSkinAssetFrames, pickSkinAnimationFrame } from "./replay-skin";
 import type { ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
 import {
   getReplaySkinProfile,
@@ -65,13 +66,21 @@ export interface SkinPreviewLayout {
 export interface SkinPreviewTapNote {
   column: number;
   y: number;
+  // How far from the hit line in time, for animated note art: the frame a
+  // note shows depends on how long it has been on screen.
+  timeMs?: number;
 }
 
 export interface SkinPreviewLongNote {
   column: number;
   headY: number;
   tailY: number;
+  timeMs?: number;
 }
+
+// The synthetic pattern has no chart clock, so its notes get one from their
+// height: roughly the scroll speed the chart-backed patterns land on.
+const BUILTIN_PATTERN_PX_PER_MS = 0.55;
 
 export interface SkinPreviewPattern {
   taps: SkinPreviewTapNote[];
@@ -162,7 +171,7 @@ export function buildSkinPreviewPattern(keyCount: number, options: SkinPreviewPa
     const length = Math.max(noteHeight * 2.6, usable * (0.26 + random() * 0.12));
     // tailY is a position line and the tail sprite's box grows above it
     // (downscroll), so it needs the same sprite-height headroom as the taps.
-    return { column, headY, tailY: Math.max(minY, headY - length) };
+    return { column, headY, tailY: Math.max(minY, headY - length), timeMs: (hitLineY - headY) / BUILTIN_PATTERN_PX_PER_MS };
   });
 
   const tapCount = Math.min(14, Math.max(6, keys * 2));
@@ -178,7 +187,7 @@ export function buildSkinPreviewPattern(keyCount: number, options: SkinPreviewPa
     if (longNotes.some((ln) => ln.column === column && y >= ln.tailY - minGap * 0.6 && y - noteHeight <= ln.headY + minGap * 0.6)) continue;
     placed.push(y);
     columnYs.set(column, placed);
-    taps.push({ column, y });
+    taps.push({ column, y, timeMs: (hitLineY - y) / BUILTIN_PATTERN_PX_PER_MS });
   }
   taps.sort((a, b) => a.y - b.y);
   // Nothing lands on the line in the synthetic pattern, so one column is simply
@@ -240,6 +249,7 @@ export function buildChartPreviewPattern(
       if (note.time <= 0) pressed.add(note.column);
       longNotes.push({
         column: note.column,
+        timeMs: note.time,
         headY: hitLineY - Math.max(0, note.time) * pxPerMs,
         // Tails past the top of the field are left off the canvas, so a long
         // hold runs off the edge instead of growing a cap that is not there.
@@ -250,7 +260,7 @@ export function buildChartPreviewPattern(
     if (note.time < 0 || note.time > windowMs) continue;
     // The note sitting on the line is the one being hit.
     if (note.time === 0) pressed.add(note.column);
-    taps.push({ column: note.column, y: hitLineY - note.time * pxPerMs });
+    taps.push({ column: note.column, y: hitLineY - note.time * pxPerMs, timeMs: note.time });
   }
   taps.sort((a, b) => a.y - b.y);
   return { taps, longNotes, pressed: [...pressed].sort((a, b) => a - b) };
@@ -785,6 +795,13 @@ function drawImageFlippedY(
   ctx.restore();
 }
 
+// The still is frozen at the chart's time zero, so a note `timeMs` from the
+// hit line has been animating for minus that long, the same clock the replay
+// canvas runs. A note with no time shows its first frame.
+export function previewAnimationFrame(asset: ReplaySkinImageAsset, timeMs: number | undefined): ReplaySkinImageAsset {
+  return pickSkinAnimationFrame(asset, -(timeMs ?? 0));
+}
+
 function drawTapNote(
   ctx: CanvasRenderingContext2D,
   profile: ReplaySkinKeymodeProfile,
@@ -796,7 +813,7 @@ function drawTapNote(
   mapY: (y: number) => number,
 ): void {
   const assets = profile.assets.columns[tap.column] ?? {};
-  const image = assets.tap ? images.get(assets.tap.src) : undefined;
+  const image = assets.tap ? images.get(previewAnimationFrame(assets.tap, tap.timeMs).src) : undefined;
   const laneX = layout.laneXs[tap.column];
   const laneWidth = layout.laneWidths[tap.column];
   const anchorY = mapY(tap.y);
@@ -991,9 +1008,11 @@ function drawLongNote(
   const assets = profile.assets.columns[ln.column] ?? {};
   const laneX = layout.laneXs[ln.column];
   const laneWidth = layout.laneWidths[ln.column];
-  const headImage = (assets.lnHead && images.get(assets.lnHead.src)) ?? (assets.tap && images.get(assets.tap.src)) ?? undefined;
+  const headImage = (assets.lnHead && images.get(previewAnimationFrame(assets.lnHead, ln.timeMs).src))
+    ?? (assets.tap && images.get(previewAnimationFrame(assets.tap, ln.timeMs).src))
+    ?? undefined;
   const bodyImage = assets.lnBody ? images.get(assets.lnBody.src) : undefined;
-  const tailImage = assets.lnTail ? images.get(assets.lnTail.src) : undefined;
+  const tailImage = assets.lnTail ? images.get(previewAnimationFrame(assets.lnTail, ln.timeMs).src) : undefined;
   const headEndY = mapY(ln.headY);
   const tailEndY = mapY(ln.tailY);
   const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
@@ -1187,7 +1206,8 @@ async function decodeProfileImages(profile: ReplaySkinKeymodeProfile): Promise<M
   const sources = new Set<string>();
   for (const column of profile.assets.columns) {
     for (const asset of Object.values(column)) {
-      if (asset?.src) sources.add(asset.src);
+      if (!asset?.src) continue;
+      for (const frame of listSkinAssetFrames(asset)) sources.add(frame.src);
     }
   }
   for (const asset of Object.values(profile.assets.judgements)) {

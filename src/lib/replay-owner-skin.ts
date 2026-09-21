@@ -81,6 +81,15 @@ function dehydrateAsset(asset: ReplaySkinImageAsset | undefined | null): Record<
   if (asset.width) out.width = asset.width;
   if (asset.height) out.height = asset.height;
   if (asset.scale) out.scale = asset.scale;
+  // Animation frames dehydrate the same way; a frame without a path drops
+  // and the loop just gets shorter.
+  if (asset.frames && asset.frames.length > 0) {
+    const frames = asset.frames.map((frame) => dehydrateAsset(frame)).filter(Boolean);
+    if (frames.length > 0) {
+      out.frames = frames;
+      if (asset.frameDurationMs) out.frameDurationMs = asset.frameDurationMs;
+    }
+  }
   return out;
 }
 
@@ -153,8 +162,22 @@ export async function rehydrateOwnerReplaySkinSettings(
     if (!isRecord(raw)) return;
     if (raw.src !== "" || typeof raw.path !== "string" || !raw.path) return;
     const path = raw.path;
-    loads.push(loadOskImageAssetByPath(archive, path).then((asset) => {
-      holder[key] = asset ?? undefined;
+    // Frames are dehydrated the same way and come back attached to the
+    // element they belong to; one that no longer resolves drops out.
+    const framePaths = Array.isArray(raw.frames)
+      ? raw.frames.flatMap((frame) => isRecord(frame) && frame.src === "" && typeof frame.path === "string" && frame.path ? [frame.path] : [])
+      : [];
+    const frameDurationMs = typeof raw.frameDurationMs === "number" ? raw.frameDurationMs : undefined;
+    loads.push(Promise.all([
+      loadOskImageAssetByPath(archive, path),
+      ...framePaths.map((framePath) => loadOskImageAssetByPath(archive, framePath)),
+    ]).then(([asset, ...frames]) => {
+      if (!asset) {
+        holder[key] = undefined;
+        return;
+      }
+      const loaded = frames.filter((frame): frame is ReplaySkinImageAsset => Boolean(frame));
+      holder[key] = loaded.length > 0 ? { ...asset, frames: loaded, frameDurationMs } : asset;
     }));
   };
 

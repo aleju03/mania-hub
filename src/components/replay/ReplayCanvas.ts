@@ -12,13 +12,13 @@ import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
-import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
-import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayColumnStatMetric, normalizeReplayColumnStatStyle, normalizeReplayHandAccuracyStyle, normalizeReplayHitErrorStyle, normalizeReplayJudgementLayout, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayOverlaySizeReference, ReplayThumbHand } from "../../lib/replay-overlays";
 import { replayOverlayCenteredY, replayOverlayLayoutScale, replayOverlayRegion, replayOverlayX } from "../../lib/replay-overlay-layout";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, listSkinAssetFrames, normalizeReplaySkinSettings, pickSkinAnimationFrame } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
 import type { ReplayLiveStats, ReplayViewportSnapshot } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
@@ -56,6 +56,16 @@ const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) =
 // Pointer this close to the stage bottom edge is past any overlay it was
 // reaching for, so the bottom chrome may reveal there (CSS px).
 const OVERLAY_APPROACH_EDGE_PX = 12;
+// Arrow keys nudge the selected overlays one CSS px at a time, Shift ten, the
+// way every editor with a drag-and-drop canvas does it.
+const OVERLAY_NUDGE_PX = 1;
+const OVERLAY_NUDGE_FAST_PX = 10;
+const OVERLAY_NUDGE_KEYS: Record<string, { x: number; y: number }> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+};
 const LEADERBOARD_EXPLOSION_DURATION_MS = 700;
 const LEADERBOARD_STREAK_EXPAND_MS = 200;
 const LEADERBOARD_STREAK_FADE_MS = 400;
@@ -174,6 +184,25 @@ function darkenModBadgeColor(hex: string): string {
 function handAccuracyMeterFill(accuracy: number): number {
   const normalized = Math.max(0, Math.min(1, accuracy / 100));
   return normalized ** 12;
+}
+
+// Unstable rate runs the other way: a full bar is a steady finger. 180 is the
+// far end because ordinary play sits between 40 and 150, which keeps the
+// fingers apart in the middle of the track instead of pinned at one end.
+function columnUrMeterFill(ur: number): number {
+  return Math.max(0, Math.min(1, 1 - ur / 180));
+}
+
+// Per-finger cells colour by how the reading is doing, not by which lane it
+// is: the lane colours are a skin's business, and a row of them says nothing
+// about the hand. Both metrics arrive here as their own 0-1 fill, so one
+// reading is one colour whichever number is on screen.
+function columnStatColor(fill: number): string {
+  if (fill >= 0.8) return "#b3f5ff";
+  if (fill >= 0.6) return "#88da20";
+  if (fill >= 0.4) return "#ffcc22";
+  if (fill >= 0.2) return "#ff8a22";
+  return "#ff4444";
 }
 
 const HOLD_VISUAL_GRACE_MS = 60;
@@ -731,6 +760,7 @@ export class ManiaReplayRenderer {
   private selectedOverlayIds = new Set<ReplayOverlayId>();
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
   private previousCanvasTouchAction = "";
+  private previousCanvasTabIndex: string | null = null;
   private draggingOverlay: {
     id: ReplayOverlayId;
     pointerId: number;
@@ -829,6 +859,14 @@ export class ManiaReplayRenderer {
   private rightHandMisses = 0;
   private leftHandJudgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private rightHandJudgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
+  // Per-column judgement counts and hit-offset sums, for the per-finger strip.
+  // Whole run rather than the rolling window the hit-error bar uses: one
+  // column of a 7K chart can go a whole section without a note, and a window
+  // that short would leave most fingers reading nothing.
+  private columnJudgmentCounts: number[][] = [];
+  private columnHits: number[] = [];
+  private columnOffsetSums: number[] = [];
+  private columnOffsetSumSqs: number[] = [];
   private missThumbHand: ReplayThumbHand = DEFAULT_REPLAY_MISS_THUMB_HAND;
   private recentHitOffsets: number[] = [];
   private recentHitTimes: number[] = [];
@@ -873,6 +911,12 @@ export class ManiaReplayRenderer {
   private hudCachedLeftHandAccuracyValue = 100;
   private hudCachedRightHandAccuracyValue = 100;
   private hudCachedKeyKps: string[] = [];
+  private hudCachedColumnAccuracy: string[] = [];
+  private hudCachedColumnAccuracyValues: number[] = [];
+  // "-" until a column has enough hits for a spread; an unplayed lane must not
+  // read as a steady one.
+  private hudCachedColumnUr: string[] = [];
+  private hudCachedColumnUrValues: (number | null)[] = [];
   private hudCachedTotalKps = "0";
   private hudCachedTotalKpsValue = 0;
   private hudCachedMaxKps = "0";
@@ -900,6 +944,7 @@ export class ManiaReplayRenderer {
     this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
     this.keypressTimes = this.keypressTimesByColumn.flat().sort((a, b) => a - b);
     this.hudCachedKeyKps = new Array(keyCount).fill("0");
+    this.resetColumnStats();
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
     for (const c of this.colors) hexToNumber(c);
 
@@ -1351,6 +1396,17 @@ export class ManiaReplayRenderer {
     return Array.from({ length: n }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / n) * Math.PI))).toString(16).padStart(6, "0")}`);
   }
 
+  private resetColumnStats() {
+    this.columnJudgmentCounts = Array.from({ length: this.keyCount }, () => [0, 0, 0, 0, 0, 0, 0]);
+    this.columnHits = new Array(this.keyCount).fill(0);
+    this.columnOffsetSums = new Array(this.keyCount).fill(0);
+    this.columnOffsetSumSqs = new Array(this.keyCount).fill(0);
+    this.hudCachedColumnAccuracy = new Array(this.keyCount).fill("100.0");
+    this.hudCachedColumnAccuracyValues = new Array(this.keyCount).fill(100);
+    this.hudCachedColumnUr = new Array(this.keyCount).fill("-");
+    this.hudCachedColumnUrValues = new Array(this.keyCount).fill(null);
+  }
+
   private recomputeStatsUpTo(time: number) {
     this.statsScanIndex = 0;
     this.comboScanIndex = 0;
@@ -1368,6 +1424,7 @@ export class ManiaReplayRenderer {
     this.rightHandMisses = 0;
     this.leftHandJudgmentCounts = [0, 0, 0, 0, 0, 0, 0];
     this.rightHandJudgmentCounts = [0, 0, 0, 0, 0, 0, 0];
+    this.resetColumnStats();
     this.recentHitOffsets = [];
     this.recentHitTimes = [];
     this.hitErrorAvgDisplayed = null;
@@ -1497,10 +1554,17 @@ export class ManiaReplayRenderer {
         if (hand === "right") this.rightHandJudgmentCounts[event.judgment]++;
         if (event.judgment === 6 && hand === "left") this.leftHandMisses++;
         if (event.judgment === 6 && hand === "right") this.rightHandMisses++;
+        const columnCounts = this.columnJudgmentCounts[event.column];
+        if (columnCounts) columnCounts[event.judgment]++;
       }
 
       if (event.judgment <= 5) {
         const offset = event.offsetMs;
+        if (this.columnHits[event.column] !== undefined) {
+          this.columnHits[event.column]++;
+          this.columnOffsetSums[event.column] += offset;
+          this.columnOffsetSumSqs[event.column] += offset * offset;
+        }
         this.recentHitOffsets.push(offset);
         this.recentHitTimes.push(event.time);
         this.urSum += offset;
@@ -1668,10 +1732,24 @@ export class ManiaReplayRenderer {
       const v = this.formatKeyKps(keyKps);
       if (this.hudCachedKeyKps[col] !== v) this.hudCachedKeyKps[col] = v;
     }
+    this.updateColumnStatSnapshot();
     this.hudCachedTotalKpsValue = Math.round(totalKps);
     this.hudCachedTotalKps = this.formatKeyKps(totalKps);
     this.hudCachedMaxKpsValue = Math.round(this.getMaxKpsUpTo(this.currentTime));
     this.hudCachedMaxKps = this.formatKeyKps(this.hudCachedMaxKpsValue);
+  }
+
+  private updateColumnStatSnapshot() {
+    for (let col = 0; col < this.keyCount; col++) {
+      const accuracy = calculateReplayAccuracy(this.columnJudgmentCounts[col] ?? [], this.ruleset.accuracyMode);
+      this.hudCachedColumnAccuracyValues[col] = accuracy;
+      // One decimal: five digits per finger is already the widest cell a 10K
+      // strip can carry without the numbers touching.
+      this.hudCachedColumnAccuracy[col] = accuracy.toFixed(1);
+      const ur = this.getColumnUr(col);
+      this.hudCachedColumnUrValues[col] = ur;
+      this.hudCachedColumnUr[col] = ur == null ? "-" : String(Math.round(ur));
+    }
   }
 
   private updateSkinCache() {
@@ -1729,6 +1807,16 @@ export class ManiaReplayRenderer {
     if (n < 2) return 0;
     const mean = this.urSum / n;
     const variance = Math.max(0, this.urSumSq / n - mean * mean);
+    return Math.sqrt(variance) * 10;
+  }
+
+  // Null until the column has a spread to measure: two hits is the least that
+  // can have any, and one stray note must not read as a UR.
+  private getColumnUr(column: number): number | null {
+    const n = this.columnHits[column] ?? 0;
+    if (n < 2) return null;
+    const mean = this.columnOffsetSums[column] / n;
+    const variance = Math.max(0, this.columnOffsetSumSqs[column] / n - mean * mean);
     return Math.sqrt(variance) * 10;
   }
 
@@ -2047,6 +2135,7 @@ export class ManiaReplayRenderer {
     this.scrollVelocities = options?.scrollVelocities ?? [];
     this.receptorFlashTimestamps = new Array(this.keyCount).fill(0);
     this.hudCachedKeyKps = new Array(this.keyCount).fill("0");
+    this.resetColumnStats();
     this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
     this.keypressTimes = this.keypressTimesByColumn.flat().sort((a, b) => a - b);
     this.updateSkinCache();
@@ -2120,7 +2209,11 @@ export class ManiaReplayRenderer {
     this.resetHiddenCoverage();
     this.lastRenderTime = performance.now();
     this.resetAudioClockSmoothing();
-    this.render();
+    // Forced: the stats the HUD reads were just rebuilt for the new time, and
+    // the snapshot's 50ms throttle would otherwise leave a paused stage
+    // showing the old ones (or, for the per-finger strip, its fresh zeroes)
+    // until some later frame happens to redraw.
+    this.render(true);
   }
 
   renderFrameAt(timeMs: number) {
@@ -2514,12 +2607,21 @@ export class ManiaReplayRenderer {
       if (box) {
         const group = groups.get(id)!;
         const current = this.getCurrentOverlayReference(layout, id);
+        const size = this.getOverlaySizeReference(layout, id);
+        const sizeScale = replayOverlayLayoutScale(size, layout);
         settings = updateReplayOverlayPlacement(settings, id, {
           x: box.x / layout.w,
           y: box.y / layout.h,
           reference: {
             ...current, region: group.region,
             ...(group.region === "playfield" ? {} : { groupStart: group.groupStart, groupExtent: group.groupExtent }),
+            // Group bounds are measured after fitting. Convert them back to
+            // authored size units so this capture cannot freeze that shrink.
+            size: {
+              width: size.width, height: size.height, hudScale: size.hudScale,
+              region: group.region,
+              ...(group.region === "playfield" ? {} : { groupExtent: group.groupExtent / sizeScale }),
+            },
           },
         }, this.ruleset.accuracyMode === "lazer");
         continue;
@@ -2644,20 +2746,28 @@ export class ManiaReplayRenderer {
   private installOverlayPointerHandlers() {
     this.previousCanvasTouchAction = this.canvas.style.touchAction;
     this.canvas.style.touchAction = "none";
+    this.previousCanvasTabIndex = this.canvas.getAttribute("tabindex");
+    if (this.previousCanvasTabIndex == null) this.canvas.tabIndex = -1;
     this.canvas.addEventListener("pointerdown", this.handleOverlayPointerDown);
     this.canvas.addEventListener("pointermove", this.handleOverlayPointerMove);
     this.canvas.addEventListener("pointerup", this.handleOverlayPointerEnd);
     this.canvas.addEventListener("pointercancel", this.handleOverlayPointerEnd);
     this.canvas.addEventListener("pointerleave", this.handleOverlayPointerLeave);
+    // Capture phase lets overlay nudges take precedence over page shortcuts;
+    // focused controls and open dialogs are excluded by the key handler.
+    if (typeof window !== "undefined") window.addEventListener("keydown", this.handleOverlayKeyDown, true);
   }
 
   private removeOverlayPointerHandlers() {
     this.canvas.style.touchAction = this.previousCanvasTouchAction;
+    if (this.previousCanvasTabIndex == null) this.canvas.removeAttribute("tabindex");
+    else this.canvas.setAttribute("tabindex", this.previousCanvasTabIndex);
     this.canvas.removeEventListener("pointerdown", this.handleOverlayPointerDown);
     this.canvas.removeEventListener("pointermove", this.handleOverlayPointerMove);
     this.canvas.removeEventListener("pointerup", this.handleOverlayPointerEnd);
     this.canvas.removeEventListener("pointercancel", this.handleOverlayPointerEnd);
     this.canvas.removeEventListener("pointerleave", this.handleOverlayPointerLeave);
+    if (typeof window !== "undefined") window.removeEventListener("keydown", this.handleOverlayKeyDown, true);
   }
 
   private getCanvasPointerPoint(event: PointerEvent): { x: number; y: number } {
@@ -2855,6 +2965,9 @@ export class ManiaReplayRenderer {
     }
     const hitbox = this.getOverlayAtPoint(point.x, point.y);
     const desktopSelection = this.canUseDesktopOverlaySelection(event);
+    // preventDefault below prevents the browser's normal focus change.
+    // Return keyboard control to the canvas after using a settings button.
+    if (desktopSelection) this.canvas.focus({ preventScroll: true });
     // A press on the thumb tag still arms the drag; the release decides
     // between a click (toggle the hand) and a move.
     this.missThumbTagPress = hitbox?.id === "misses" && this.isMissThumbTagPoint(point.x, point.y)
@@ -3107,6 +3220,78 @@ export class ManiaReplayRenderer {
     this.setMissThumbTagHovered(false);
     if (!this.draggingOverlay && !this.resizingOverlay && !this.pinchingOverlay && !this.selectingOverlays) this.canvas.style.cursor = "";
   };
+
+  // Arrow keys move the selected overlays, for the pixel of travel a mouse
+  // drag cannot land. Without a selection the keys are left to the page.
+  private handleOverlayKeyDown = (event: KeyboardEvent) => {
+    if (!this.applyOverlayNudgeKey(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  private applyOverlayNudgeKey(event: Pick<KeyboardEvent, "key" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey" | "target">): boolean {
+    const step = OVERLAY_NUDGE_KEYS[event.key];
+    if (!step || event.altKey || event.ctrlKey || event.metaKey) return false;
+    if (this.destroyed || this.draggingOverlay || this.resizingOverlay || this.pinchingOverlay || this.selectingOverlays) return false;
+    const target = event.target as HTMLElement | null;
+    // This capture listener runs before controls receive their keys. Custom
+    // dropdowns use buttons/listboxes, and modal focus can still be on the
+    // page while a dialog opens, so neither may inherit an overlay selection.
+    if (target?.isContentEditable || target?.closest?.(
+      'input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="listbox"], [role="combobox"], [role="option"], [role="slider"], [role="menu"], [role="tablist"], [role="dialog"], dialog',
+    )) return false;
+    if (typeof document !== "undefined" && document.querySelector('[aria-modal="true"], dialog[open]')) return false;
+    if (!this.canEditOverlays()) return false;
+    this.pruneSelectedOverlays();
+    if (this.selectedOverlayIds.size === 0) return false;
+    const distance = event.shiftKey ? OVERLAY_NUDGE_FAST_PX : OVERLAY_NUDGE_PX;
+    return this.nudgeSelectedOverlays(step.x * distance, step.y * distance);
+  }
+
+  private nudgeSelectedOverlays(dx: number, dy: number): boolean {
+    const [first] = this.selectedOverlayIds;
+    if (!first) return false;
+    const snapshots = this.getSelectedOverlaySnapshots(first);
+    if (snapshots.length === 0) return false;
+    const layout = this.cachedLayout ?? this.getLayout();
+    this.updateOverlayPlacements(snapshots.map((item) => [
+      item.id,
+      this.clampOverlayPosition(
+        item.id,
+        item.x + dx / Math.max(1, layout.w),
+        item.y + dy / Math.max(1, layout.h),
+        item.width,
+        item.height,
+        layout,
+      ),
+    ] as const));
+    // Every press starts from where the overlay is drawn, so a held arrow key
+    // needs the moved frame on screen before the next repeat lands;
+    // updateOverlayPlacements only redraws a paused stage.
+    if (this._isPlaying) this.render();
+    return true;
+  }
+
+  resetOverlaySize(id: ReplayOverlayId) {
+    const layout = this.cachedLayout ?? this.getLayout();
+    const box = this.overlayHitboxes.find((hitbox) => hitbox.id === id);
+    const current = this.getOverlayPlacement(id);
+    const reference: ReplayOverlayReference = {
+      width: layout.w, height: layout.h,
+      playfieldX: layout.playfieldX, playfieldWidth: layout.playfieldWidth,
+      hudScale: id === "leaderboard" && this.ruleset.accuracyMode === "lazer" ? layout.h / 768 : this.getHudScale(layout),
+      spacingScale: 1,
+      region: "playfield",
+    };
+    const settings = updateReplayOverlayPlacement(this.getOverlaySettingsSnapshot(), id, {
+      x: box ? box.x / layout.w : current.x,
+      y: box ? box.y / layout.h : current.y,
+      scale: DEFAULT_REPLAY_OVERLAY_SETTINGS[id].scale,
+      reference,
+    }, this.ruleset.accuracyMode === "lazer");
+    this.setOverlaySettings(settings);
+    this.onOverlaySettingsChange?.(this.getOverlaySettingsSnapshot());
+  }
 
   private updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>) {
     const settings = this.getOverlaySettingsSnapshot();
@@ -3796,7 +3981,7 @@ export class ManiaReplayRenderer {
         const tailTrimDelta = this.skinSettings.percy
           ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
           : 0;
-        if (this.renderHoldSkinImages(layout, col, assets, colX, colWidth, top, bottom, headEndY, tailEndY, bodyAlpha, headAlpha, noteFadeHeight, layout)) {
+        if (this.renderHoldSkinImages(layout, col, assets, colX, colWidth, top, bottom, headEndY, tailEndY, bodyAlpha, headAlpha, noteFadeHeight, note.time, layout)) {
           continue;
         }
 
@@ -3887,7 +4072,7 @@ export class ManiaReplayRenderer {
           const visibilityAlpha = this.getHiddenAlphaAtNoteEdge(noteTop, noteTop + assetHeight, layout);
           if (visibilityAlpha <= 0) continue;
           const alpha = this.topFadeAlpha(Math.max(0, Math.min(noteTop + assetHeight, noteFadeHeight)), noteFadeHeight, 0.55) * visibilityAlpha;
-          this.drawSkinImage(assets.tap, colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha);
+          this.drawSkinImage(this.noteAnimationFrame(assets.tap, note.time), colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha);
           continue;
         }
 
@@ -4012,7 +4197,7 @@ export class ManiaReplayRenderer {
         const headEndY = this.skinSettings.upscroll ? top : bottom;
         const tailEndY = this.skinSettings.upscroll ? bottom : top;
         const isHold = seg.end - seg.start > HOLD_VISUAL_GRACE_MS && bottom - top > noteHeight * 0.65;
-        this.renderInputOverlayNoteSkin(layout, col, top, bottom, headEndY, tailEndY, isHold, noteFadeHeight);
+        this.renderInputOverlayNoteSkin(layout, col, top, bottom, headEndY, tailEndY, isHold, noteFadeHeight, seg.start);
       }
     }
   }
@@ -4026,6 +4211,7 @@ export class ManiaReplayRenderer {
     tailEndY: number,
     isHold: boolean,
     noteFadeHeight: number,
+    noteTime: number,
   ) {
     const { noteHeight } = layout;
     const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
@@ -4053,7 +4239,7 @@ export class ManiaReplayRenderer {
         ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
         : 0;
 
-      if (this.renderHoldSkinImages(layout, col, assets, colX, colWidth, top, bottom, headEndY, tailEndY, 0.92, 0.96, noteFadeHeight)) {
+      if (this.renderHoldSkinImages(layout, col, assets, colX, colWidth, top, bottom, headEndY, tailEndY, 0.92, 0.96, noteFadeHeight, noteTime)) {
         return;
       }
 
@@ -4120,7 +4306,7 @@ export class ManiaReplayRenderer {
       const assetHeight = this.getNoteAssetHeight(assets.tap, colWidth, layout, Math.max(noteHeight, circleDiameter, arrowSize));
       const noteTop = this.skinSettings.upscroll ? headEndY : headEndY - assetHeight;
       const alpha = this.topFadeAlpha(Math.max(0, Math.min(noteTop + assetHeight, noteFadeHeight)), noteFadeHeight, 0.55);
-      this.drawSkinImage(assets.tap, colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha * 0.96);
+      this.drawSkinImage(this.noteAnimationFrame(assets.tap, noteTime), colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha * 0.96);
       return;
     }
 
@@ -4345,12 +4531,22 @@ export class ManiaReplayRenderer {
 
   private getOverlayScale(layout: Layout, id: ReplayOverlayId): number {
     const placement = this.getOverlayPlacement(id);
+    const reference = this.getOverlaySizeReference(layout, id);
+    return reference.hudScale * replayOverlayLayoutScale(reference, layout) * placement.scale;
+  }
+
+  private getOverlaySizeReference(layout: Layout, id: ReplayOverlayId): ReplayOverlaySizeReference {
+    const placement = this.getOverlayPlacement(id);
     const reference = placement.reference ?? this.getOverlayReference(layout);
+    if (reference.size) return reference.size;
     // Old lazer placements were based on 768-high game coordinates. Once
     // resolved, hudScale records that actual scale rather than the generic HUD base.
     const base = id === "leaderboard" && this.ruleset.accuracyMode === "lazer" && !reference.region
       ? reference.height / 768 : reference.hudScale;
-    return base * replayOverlayLayoutScale(reference, layout) * placement.scale;
+    return {
+      width: reference.width, height: reference.height, hudScale: base,
+      region: reference.region, groupExtent: reference.groupExtent,
+    };
   }
 
   private getOverlayReference(layout: Layout): ReplayOverlayReference {
@@ -4368,6 +4564,7 @@ export class ManiaReplayRenderer {
       width: layout.w, height: layout.h,
       playfieldX: layout.playfieldX, playfieldWidth: layout.playfieldWidth,
       hudScale: this.getOverlayScale(layout, id) / this.getOverlayPlacement(id).scale,
+      size: this.getOverlaySizeReference(layout, id),
       spacingScale: (reference.spacingScale ?? 1) * replayOverlayLayoutScale(reference, layout),
       region: reference.region ?? "playfield",
     };
@@ -4987,14 +5184,117 @@ export class ManiaReplayRenderer {
     this.fillRect(centerX - Math.max(0.5, scale / 2), trackY - 2 * scale, Math.max(1, scale), trackHeight + 4 * scale, "#ffffff", 0.3);
   }
 
-  private renderJudgementOverlay(layout: Layout) {
-    const scale = this.getOverlayScale(layout, "judgements");
-    const width = 50 * scale;
-    const height = 108 * scale;
-    const frame = this.getOverlayFrame(layout, "judgements", width, height);
+  private getColumnStatCells(): Array<{ text: string; fill: number; color: string }> {
+    const ur = normalizeReplayColumnStatMetric(this.overlaySettings.columnStats.metric) === "ur";
+    return Array.from({ length: this.keyCount }, (_, col) => {
+      const value = ur ? this.hudCachedColumnUrValues[col] : this.hudCachedColumnAccuracyValues[col];
+      const fill = value == null ? 0 : ur ? columnUrMeterFill(value) : handAccuracyMeterFill(value);
+      return {
+        text: ur ? this.hudCachedColumnUr[col] : this.hudCachedColumnAccuracy[col],
+        fill,
+        color: value == null ? "#ffffff" : columnStatColor(fill),
+      };
+    });
+  }
+
+  // One cell per column, in the shape the style picks: the number, something
+  // carrying its colour, and the column under it. Every shape keeps the same
+  // cell pitch so the strip stays a strip whichever one is on.
+  private renderColumnStatsOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "columnStats");
+    const style = normalizeReplayColumnStatStyle(this.overlaySettings.columnStats.style);
+    const metric = normalizeReplayColumnStatMetric(this.overlaySettings.columnStats.metric);
+    const cells = this.getColumnStatCells();
+    const labelFontSize = 8.5 * scale;
+    const labelGap = 3 * scale;
+    const valueFontSize = (style === "leaderboard" ? 12 : this.keyCount >= 8 ? 11 : 12.5) * scale;
+    // Sized off the widest reading the metric can produce, so the numbers
+    // moving never moves the strip (or its drag hitbox).
+    const valueSpan = this.measureTextWidth(metric === "ur" ? "999" : "100.0", valueFontSize, "700");
+    const radius = Math.max(15 * scale, valueSpan / 2 + 6 * scale);
+    const trackHeight = Math.max(2, 3 * scale);
+    const shear = LAZER_LEADERBOARD.shear;
+    const panelHeight = 24 * scale;
+    const cellWidth = Math.ceil(
+      style === "circles" ? radius * 2
+        : style === "leaderboard" ? Math.max(34 * scale, valueSpan + panelHeight * shear + 14 * scale)
+        : style === "plain" ? Math.max(22 * scale, valueSpan)
+        : Math.max(26 * scale, valueSpan + 8 * scale),
+    );
+    const cellGap = Math.max(1, Math.round((style === "plain" ? 7 : style === "circles" ? 5 : 3) * scale));
+    const shapeHeight = style === "circles" ? radius * 2
+      : style === "leaderboard" ? panelHeight
+      // The meter sits between the number and the column, so it is part of
+      // the shape rather than of the gap under it.
+      : style === "meters" ? valueFontSize + labelGap + trackHeight
+      : valueFontSize;
+    const width = this.keyCount * cellWidth + (this.keyCount - 1) * cellGap;
+    const height = Math.ceil(shapeHeight + labelGap + labelFontSize);
+    const frame = this.getOverlayFrame(layout, "columnStats", width, height);
     if (!frame) return;
 
-    [
+    cells.forEach((cell, col) => {
+      const x = frame.x + col * (cellWidth + cellGap);
+      const center = x + cellWidth / 2;
+      let valueY = frame.y + valueFontSize / 2;
+      let valueColor = "#ffffff";
+
+      if (style === "circles") {
+        const cy = frame.y + radius;
+        valueY = cy;
+        this.circle(center, cy, radius, "#111019", 0.85);
+        this.circle(center, cy, radius - 3.5 * scale, cell.color, 0.22);
+        this.graphics.circle(center, cy, radius).stroke({ color: 0xffffff, alpha: 0.9, width: 1.5 * scale });
+        this.graphics.circle(center, cy, radius - 3.5 * scale)
+          .stroke({ color: hexToNumber(cell.color), alpha: 0.9, width: scale });
+      } else if (style === "leaderboard") {
+        // The same shear as lazer's leaderboard, with upright readable text.
+        const inset = panelHeight * shear;
+        valueY = frame.y + panelHeight / 2;
+        this.graphics.save().setTransform(1, 0, -shear, 1, x + inset, frame.y)
+          .roundRect(0, 0, cellWidth - inset, panelHeight, 6 * scale).fill({ color: 0x17151e, alpha: 0.85 })
+          .roundRect(0, 0, cellWidth - inset, panelHeight, 6 * scale).fill({ color: hexToNumber(cell.color), alpha: 0.14 })
+          .roundRect(scale, scale, cellWidth - inset - 2 * scale, panelHeight - 2 * scale, 5 * scale)
+          .stroke({ color: hexToNumber(cell.color), alpha: 0.6, width: 1.5 * scale }).restore();
+      } else if (style === "plain") {
+        // Nothing to carry the colour but the number itself.
+        valueColor = cell.color;
+      } else {
+        const trackY = frame.y + valueFontSize + labelGap;
+        this.fillRect(x, trackY, cellWidth, trackHeight, "#ffffff", 0.12);
+        if (cell.fill * cellWidth > 0.5) this.fillRect(x, trackY, cellWidth * cell.fill, trackHeight, cell.color, 0.95);
+      }
+
+      // Circles and panels clamp an overlong reading to what they can hold.
+      const valueScale = style === "circles" || style === "leaderboard"
+        ? Math.min(1, (cellWidth - 10 * scale) / Math.max(1, this.measureTextWidth(cell.text, valueFontSize, "700")))
+        : 1;
+      this.addText(cell.text, center, valueY, {
+        fontSize: valueFontSize * valueScale,
+        fill: valueColor,
+        alpha: 0.95,
+        fontWeight: "700",
+        tabularNums: true,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        dropShadow: style === "meters" || style === "plain",
+      });
+      this.addText(String(col + 1), center, frame.y + height - labelFontSize / 2, {
+        fontSize: labelFontSize,
+        fill: "#ffffff",
+        alpha: 0.5,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+        dropShadow: true,
+      });
+    });
+  }
+
+  private renderJudgementOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "judgements");
+    const fontSize = 8.5 * scale;
+    const items = [
       { label: "MAX", value: this.hudCachedJudgmentCounts[1], color: JUDGMENT_COLORS[1] },
       { label: "300", value: this.hudCachedJudgmentCounts[2], color: JUDGMENT_COLORS[2] },
       { label: "200", value: this.hudCachedJudgmentCounts[3], color: JUDGMENT_COLORS[3] },
@@ -5002,11 +5302,41 @@ export class ManiaReplayRenderer {
       { label: "50", value: this.hudCachedJudgmentCounts[5], color: JUDGMENT_COLORS[5] },
       { label: "MISS", value: this.hudCachedJudgmentCounts[6], color: JUDGMENT_COLORS[6] },
       { label: "UR", value: this.hudCachedUr, color: "#b3f5ff" },
-    ].forEach((item, index) => {
+    ];
+    // Horizontal stacks each count under its own label and runs the cells
+    // left to right. Cell width comes from a fixed four-digit span, not the
+    // live counts, so a rolling total never resizes a placed overlay.
+    if (normalizeReplayJudgementLayout(this.getOverlayPlacement("judgements").style) === "horizontal") {
+      const labelSpan = Math.max(...items.map((item) => this.measureTextWidth(item.label, fontSize, "700")));
+      const digitSpan = Math.max(...Array.from({ length: 10 }, (_, digit) =>
+        this.measureTextWidth(String(digit).repeat(4), fontSize, "700"),
+      ));
+      const cellWidth = Math.max(labelSpan, digitSpan) + 7 * scale;
+      const rowGap = 11 * scale;
+      const frame = this.getOverlayFrame(layout, "judgements", cellWidth * items.length, rowGap + fontSize * 1.35);
+      if (!frame) return;
+      items.forEach((item, index) => {
+        const centerX = frame.x + (index + 0.5) * cellWidth;
+        this.addText(item.label, centerX, frame.y, { fontSize, fill: item.color, fontWeight: "700", anchorX: 0.5 });
+        this.addText(item.value, centerX, frame.y + rowGap, {
+          fontSize,
+          fill: "#ffffff",
+          alpha: 0.88,
+          fontWeight: "700",
+          anchorX: 0.5,
+        });
+      });
+      return;
+    }
+
+    const frame = this.getOverlayFrame(layout, "judgements", 50 * scale, 108 * scale);
+    if (!frame) return;
+
+    items.forEach((item, index) => {
       const y = frame.y + index * 15.5 * scale;
-      this.addText(item.label, frame.x, y, { fontSize: 8.5 * scale, fill: item.color, fontWeight: "700" });
+      this.addText(item.label, frame.x, y, { fontSize, fill: item.color, fontWeight: "700" });
       this.addText(item.value, frame.x + 44 * scale, y, {
-        fontSize: 8.5 * scale,
+        fontSize,
         fill: "#ffffff",
         alpha: 0.88,
         fontWeight: "700",
@@ -5132,6 +5462,7 @@ export class ManiaReplayRenderer {
       this.renderMissOverlay(layout);
       this.renderAccuracyOverlay(layout);
       this.renderHandAccuracyOverlay(layout);
+      this.renderColumnStatsOverlay(layout);
       this.renderPpOverlay(layout);
       this.renderJudgementOverlay(layout);
       this.renderProgressOverlay(layout);
@@ -5865,24 +6196,30 @@ export class ManiaReplayRenderer {
       : { inner: "#46b8e8", mid: "#85cc26", outer: "#e8a733" };
     const bandHeight = (isLazer ? 6 : 5) * scale;
     const bandRadius = isLazer ? bandHeight / 2 : 0;
-    const drawBand = (halfMs: number, color: string, alpha: number) => {
-      const half = Math.min(halfWidth, halfMs * pxPerMs);
-      if (half <= 0) return;
-      this.roundRect(centerX - half, barY - bandHeight / 2, half * 2, bandHeight, bandRadius, color, alpha);
-    };
-    drawBand(this.hitWindows.meh, colors.outer, 0.8);
-    drawBand(this.hitWindows.ok, colors.mid, 0.85);
-    drawBand(this.hitWindows.great, colors.inner, 0.9);
-
-    // Center marker.
-    this.fillRect(centerX - 1, barY - 9 * scale, 2, 18 * scale, "#ffffff", isLazer ? 0.65 : 0.9);
-
     const tickColorFor = (offset: number) => {
       const abs = Math.abs(offset);
       if (abs <= this.hitWindows.great) return colors.inner;
       if (abs <= this.hitWindows.ok) return colors.mid;
       return colors.outer;
     };
+    // "Hits only" drops the colored windows, which are the bar's backdrop
+    // rather than its data. The box keeps its size either way, so switching
+    // styles never moves a placed overlay.
+    const bandsHidden = normalizeReplayHitErrorStyle(placement.style) === "ticks";
+    if (!bandsHidden) {
+      const drawBand = (halfMs: number, color: string, alpha: number) => {
+        const half = Math.min(halfWidth, halfMs * pxPerMs);
+        if (half <= 0) return;
+        this.roundRect(centerX - half, barY - bandHeight / 2, half * 2, bandHeight, bandRadius, color, alpha);
+      };
+      drawBand(this.hitWindows.meh, colors.outer, 0.8);
+      drawBand(this.hitWindows.ok, colors.mid, 0.85);
+      drawBand(this.hitWindows.great, colors.inner, 0.9);
+    }
+
+    // Center marker.
+    this.fillRect(centerX - 1, barY - 9 * scale, 2, 18 * scale, "#ffffff", isLazer ? 0.65 : 0.9);
+
     const tickHeight = 14 * scale;
     this.recentHitOffsets.forEach((offset, index) => {
       const normalized = Math.max(-1, Math.min(1, offset / range));
@@ -5894,7 +6231,10 @@ export class ManiaReplayRenderer {
       const timeFade = Math.max(0, 1 - age / 4000);
       const evictionFade = Math.min(1, (index + 1) / 6);
       const alpha = 0.1 + 0.76 * timeFade * evictionFade;
-      this.roundRect(x - 1, barY - tickHeight / 2, 2, tickHeight, isLazer ? 1 : 0, "#ffffff", alpha);
+      // Without the bands behind them the ticks are the only thing left that
+      // can say which window a hit landed in, so they take that colour.
+      const color = bandsHidden ? tickColorFor(offset) : "#ffffff";
+      this.roundRect(x - 1, barY - tickHeight / 2, 2, tickHeight, isLazer ? 1 : 0, color, alpha);
     });
     const last = this.recentHitOffsets[this.recentHitOffsets.length - 1];
     if (last != null) {
@@ -6349,13 +6689,14 @@ export class ManiaReplayRenderer {
     bodyAlpha: number,
     headAlpha: number,
     fadeHeight: number,
+    noteTime: number,
     visibilityLayout?: Layout,
   ): boolean {
     if (!assets?.lnHead && !assets?.lnBody && !assets?.lnTail) return false;
 
     const bodyAsset = assets.lnBody;
-    const headAsset = assets.lnHead ?? assets.tap;
-    const tailAsset = assets.lnTail;
+    const headAsset = this.noteAnimationFrame(assets.lnHead ?? assets.tap, noteTime);
+    const tailAsset = this.noteAnimationFrame(assets.lnTail, noteTime);
     const headHeight = headAsset ? this.getNoteAssetHeight(headAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
     // A cap that draws nothing occupies no box. Skins routinely point the tail
     // at a blank placeholder (a 1x1 or 5x4 transparent png, or the default
@@ -6547,6 +6888,19 @@ export class ManiaReplayRenderer {
       push(offset, end, 0, (end - offset) / tileHeight);
     }
     return tiles.length > 0 ? tiles : stretched;
+  }
+
+  // The frame an animated note shows now. Stable starts each note's loop when
+  // the note spawns, so the clock is the note's own: how long ago (in wall
+  // time, since the loop does not speed up under DT) this note was at the
+  // hit line, negative while it is still on its way down. Every note spawns
+  // the same distance out, so this matches stable up to a constant phase.
+  private noteAnimationFrame(asset: ReplaySkinImageAsset, noteTime: number): ReplaySkinImageAsset;
+  private noteAnimationFrame(asset: ReplaySkinImageAsset | undefined, noteTime: number): ReplaySkinImageAsset | undefined;
+  private noteAnimationFrame(asset: ReplaySkinImageAsset | undefined, noteTime: number): ReplaySkinImageAsset | undefined {
+    if (!asset?.frames?.length) return asset;
+    const rate = this.modRate > 0 ? this.modRate : 1;
+    return pickSkinAnimationFrame(asset, (this.currentTime - noteTime) / rate);
   }
 
   private getNoteAssetHeight(asset: ReplaySkinImageAsset, columnWidth: number, layout: Layout, fallbackHeight: number): number {
@@ -7500,10 +7854,10 @@ export class ManiaReplayRenderer {
     }
     const assets = this.skinProfile.assets;
     for (const column of assets.columns) {
-      if (column.tap) this.getTexture(column.tap);
-      if (column.lnHead) this.getTexture(column.lnHead);
+      for (const frame of column.tap ? listSkinAssetFrames(column.tap) : []) this.getTexture(frame);
+      for (const frame of column.lnHead ? listSkinAssetFrames(column.lnHead) : []) this.getTexture(frame);
       if (column.lnBody) this.getTexture(column.lnBody);
-      if (column.lnTail) this.getTexture(column.lnTail);
+      for (const frame of column.lnTail ? listSkinAssetFrames(column.lnTail) : []) this.getTexture(frame);
       if (column.receptor) this.getTexture(column.receptor);
       if (column.receptorPressed) this.getTexture(column.receptorPressed);
     }
