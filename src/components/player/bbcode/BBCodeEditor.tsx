@@ -722,6 +722,7 @@ export function BBCodeEditor({
   onClose,
   enableLoadFromUser = false,
   enableLoadOwnPage = false,
+  layout = "card",
 }: {
   userId: number | null;
   username?: string;
@@ -729,6 +730,9 @@ export function BBCodeEditor({
   onClose?: () => void;
   enableLoadFromUser?: boolean;
   enableLoadOwnPage?: boolean;
+  /** "card" is a bordered box with fixed-height panes; "page" drops the
+      chrome and fills whatever height its flex-column parent gives it. */
+  layout?: "card" | "page";
 }) {
   const { t, i18n } = useLingui();
   const draftKey = `${DRAFT_KEY_PREFIX}${userId ?? "guest"}`;
@@ -3779,10 +3783,18 @@ export function BBCodeEditor({
     }
   };
 
-  const paneHeightClass = "h-[480px] lg:h-[580px]";
+  const isPage = layout === "page";
+  const paneHeightClass = isPage ? "h-full" : "h-[480px] lg:h-[580px]";
+  // The scrolling panes grow into the leftover height on a page; in a card
+  // they are the fixed-height pane themselves.
+  const paneGrowClass = isPage ? "flex-1 min-h-0" : "";
 
   return (
-    <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+    <div
+      className={isPage
+        ? "flex min-h-0 flex-1 flex-col overflow-hidden bg-osu-b4"
+        : "bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden"}
+    >
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-osu-b3/30">
         <div className="min-w-0">
@@ -3951,7 +3963,7 @@ export function BBCodeEditor({
         </div>
       ) : null}
 
-      <div className="relative">
+      <div className={`relative ${isPage ? "flex min-h-0 flex-1 flex-col" : ""}`}>
         {/* Inspectors, upload status and tool dialogs dock to the bottom of the
             editing surface as an overlay: nothing above them reflows or shifts,
             and the surface's bottom padding keeps covered content scrollable. */}
@@ -4013,7 +4025,7 @@ export function BBCodeEditor({
           // The docked inspector overlays the bottom of the pane; pad the
           // scroller (not the zoomed column) so the gap is real screen pixels.
           style={{ paddingBottom: surfacePadBottom, scrollPaddingBottom: surfacePadBottom }}
-          className={`${paneHeightClass} bbcode-editor-frame`}
+          className={`${isPage ? paneGrowClass : paneHeightClass} bbcode-editor-frame`}
         >
           <div
             ref={visualRef}
@@ -4052,9 +4064,9 @@ export function BBCodeEditor({
             ))}
           </div>
 
-          <div className="grid lg:grid-cols-2">
-            <div className={`${mobilePane === "write" ? "block" : "hidden"} lg:block lg:border-r border-osu-b3/30`}>
-              <div className="relative">
+          <div className={`grid lg:grid-cols-2 ${paneGrowClass}`}>
+            <div className={`${mobilePane === "write" ? "block" : "hidden"} lg:block lg:border-r border-osu-b3/30 min-h-0`}>
+              <div className={`relative ${isPage ? "h-full" : ""}`}>
                 <div
                   ref={sourceBackdropRef}
                   aria-hidden
@@ -4089,11 +4101,11 @@ export function BBCodeEditor({
                 />
               </div>
             </div>
-            <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
+            <div className={`${mobilePane === "preview" ? "flex" : "hidden"} lg:flex flex-col min-h-0 bg-osu-b5/40`}>
               <div
                 ref={previewFrameRef}
                 style={{ paddingBottom: surfacePadBottom }}
-                className={`${paneHeightClass} bbcode-editor-frame`}
+                className={`${isPage ? paneGrowClass : paneHeightClass} bbcode-editor-frame`}
               >
                 <div className="bbcode-content bbcode-preview-surface py-3 text-sm text-osu-l2">
                   <BBCodePreview

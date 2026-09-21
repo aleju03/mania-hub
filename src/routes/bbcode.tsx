@@ -30,7 +30,6 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
-import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
@@ -77,7 +76,7 @@ const TOOLBAR_GROUPS: Array<Array<{ label: ReturnType<typeof msg>; icon: ReactNo
 function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
   const { i18n } = useLingui();
   return (
-    <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-osu-b4">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-osu-b3/30">
         <div className="min-w-0">
@@ -148,7 +147,7 @@ function BBCodeEditorSkeleton({ signedIn }: { signedIn: boolean }) {
       </div>
 
       {/* Editing surface: placeholder line where the hint text sits */}
-      <div className="h-[480px] lg:h-[580px] px-4 py-3">
+      <div className="min-h-0 flex-1 px-4 py-3">
         <Skeleton className="h-3.5 w-80 max-w-full opacity-60" />
       </div>
 
@@ -183,13 +182,15 @@ function BBCodePage() {
   const { viewer } = useAuth();
 
   return (
-    <div className="relative flex min-h-screen flex-col">
-      <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
-        <OsuTriangleBackdrop />
-        <div className="relative z-10 flex flex-1 flex-col">
+    // The editor is the page: it takes the viewport under the fixed nav and
+    // scrolls inside its panes, not the document.
+    <div className="relative flex h-[calc(100dvh-60px)] flex-col">
+      {/* Same fill as the editor so its column does not read as a cut-out. */}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-clip bg-osu-b4">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/profile.svg" title={t`osu! profile BBCode editor`} />
-
-          <div className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-5 sm:px-5">
+          {/* Same column as the page header so the toolbar lines up with the title. */}
+          <div className="mx-auto flex w-full max-w-[1200px] min-h-0 flex-1 flex-col px-4 pt-4 sm:px-5">
             <Suspense fallback={<BBCodeEditorSkeleton signedIn={!!viewer} />}>
               <BBCodeEditorLazy
                 userId={viewer?.id ?? null}
@@ -197,6 +198,7 @@ function BBCodePage() {
                 initialSource={null}
                 enableLoadFromUser={!viewer}
                 enableLoadOwnPage={!!viewer}
+                layout="page"
               />
             </Suspense>
           </div>
