@@ -93,7 +93,6 @@ import { buildReplayExportSpec, type ReplayExportCapture } from "../lib/replay-e
 import { DEFAULT_EXPORT_CLIP_SECONDS } from "../lib/replay-export/limits";
 import { MIN_EXPORT_RANGE_MS, resolveExportRange } from "../lib/replay-export/timeline";
 import { ACTIVE_EXPORT_PHASES, type ReplayExportDestinationTarget } from "../lib/replay-export/types";
-import { isLocalReplayVideoExportEnabled } from "../lib/replay-export/feature-flag";
 import { GLOBAL_SCOPE_CODE, isGlobalScope } from "../lib/country";
 import { isRegionScope } from "../lib/regions";
 import { useAuth } from "../lib/auth-context";
@@ -2201,10 +2200,6 @@ function ReplayViewer({
   const replayEndAudioFadeActiveRef = useRef(false);
   const replayEndAudioFadeFrameRef = useRef<number | null>(null);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
-  // Off by default while the local exporter is in limited release; admins
-  // still get it so it can be exercised against production data. Turning the
-  // flag on does not enable any backend replay-video endpoint.
-  const replayVideoExportAvailable = isLocalReplayVideoExportEnabled() || auth.canUseAdminFeatures;
   const replayExportJob = useReplayExportJob();
   const replayExportBusy = replayExportJob !== null
     && (ACTIVE_EXPORT_PHASES.has(replayExportJob.phase) || replayExportJob.result !== null);
@@ -4449,7 +4444,7 @@ function ReplayViewer({
       shareUrl={shareUrl ?? null}
       onTogglePlay={togglePlay}
       onToggleFullscreen={toggleReplayFullscreen}
-      onExportVideo={replayVideoExportAvailable ? startReplayVideoExport : undefined}
+      onExportVideo={startReplayVideoExport}
       onSetSpeed={(nextSpeed) => {
         setSpeed(nextSpeed);
         rendererRef.current?.setSpeed(nextSpeed);

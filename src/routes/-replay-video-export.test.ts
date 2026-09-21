@@ -13,7 +13,6 @@ const rootSource = read("./__root.tsx");
 const managerSource = read("../lib/replay-export/manager.ts");
 const runnerSource = read("../lib/replay-export/runners/local.ts");
 const snapshotSource = read("../lib/replay-export/snapshot.ts");
-const flagSource = read("../lib/replay-export/feature-flag.ts");
 
 const exportModules = [managerSource, runnerSource, snapshotSource];
 
@@ -38,9 +37,9 @@ describe("backend isolation", () => {
     expect(runnerSource).not.toContain("signed");
   });
 
-  it("gates the button on its own client flag", () => {
-    expect(flagSource).toContain("VITE_ENABLE_LOCAL_REPLAY_VIDEO_EXPORT");
-    expect(routeSource).toContain("isLocalReplayVideoExportEnabled()");
+  it("offers the button to everyone, with no release flag", () => {
+    expect(routeSource).not.toContain("VITE_ENABLE_LOCAL_REPLAY_VIDEO_EXPORT");
+    expect(routeSource).toContain("onExportVideo={startReplayVideoExport}");
   });
 
   it("keeps the automation hook development-only", () => {

@@ -19,7 +19,7 @@ Fade-mask cleanup destroys the texture without destroying its source: Pixi's poo
 
 ## Replay video export
 
-Export runs entirely on the user's device. No exported video is uploaded, no render job is queued, and the backend's `/api/replay-video-job` is not part of this path at all (`docs/backend.md` describes that dormant half). What still crosses the network is ordinary asset retrieval during preparation: the song, the background, the beatmap, the skin. Gated by `VITE_ENABLE_LOCAL_REPLAY_VIDEO_EXPORT=1`, plus admins while it is in limited release.
+Export runs entirely on the user's device. No exported video is uploaded, no render job is queued, and the backend's `/api/replay-video-job` is not part of this path at all (`docs/backend.md` describes that dormant half). What still crosses the network is ordinary asset retrieval during preparation: the song, the background, the beatmap, the skin. Available to every visitor; there is no release flag.
 
 The whole thing lives in `src/lib/replay-export/`:
 
