@@ -5,25 +5,35 @@
 // to catch the failure somewhere else.
 
 export type ReplayExportPresetId = "720p30" | "720p60" | "1080p30" | "1080p60";
+export type ReplayExportEncodingMode = "fast" | "compact";
+export const DEFAULT_REPLAY_EXPORT_ENCODING_MODE: ReplayExportEncodingMode = "fast";
+export const MIN_CUSTOM_VIDEO_BITRATE = 500_000;
+export const MAX_CUSTOM_VIDEO_BITRATE = 20_000_000;
+
+export function isCustomVideoBitrateAllowed(value: number): boolean {
+  return Number.isInteger(value) && value >= MIN_CUSTOM_VIDEO_BITRATE && value <= MAX_CUSTOM_VIDEO_BITRATE;
+}
 
 export type ReplayExportPreset = {
   id: ReplayExportPresetId;
-  /** Reference width for bitrate budgeting at 16:9; actual width follows the stage. */
+  /** Exact encoded width; presets use standard 16:9 dimensions. */
   width: number;
-  /** Actual encoded picture height, including for wide and portrait stages. */
+  /** Exact encoded picture height. */
   height: number;
   fps: number;
   /** Size estimate for quality encoding; target bitrate for compatibility encoders. */
   videoBitrate: number;
+  /** VBR target for hardware-oriented Fast export, at the reference dimensions. */
+  fastVideoBitrate: number;
 };
 
 export const REPLAY_EXPORT_PRESETS: Record<ReplayExportPresetId, ReplayExportPreset> = {
   // AV1 quality encoding varies with the scene; these nominal rates budget
   // compressed output and serve as VBR targets on the compatibility path.
-  "720p60": { id: "720p60", width: 1280, height: 720, fps: 60, videoBitrate: 1_500_000 },
-  "720p30": { id: "720p30", width: 1280, height: 720, fps: 30, videoBitrate: 1_000_000 },
-  "1080p60": { id: "1080p60", width: 1920, height: 1080, fps: 60, videoBitrate: 3_000_000 },
-  "1080p30": { id: "1080p30", width: 1920, height: 1080, fps: 30, videoBitrate: 2_000_000 },
+  "720p60": { id: "720p60", width: 1280, height: 720, fps: 60, videoBitrate: 1_500_000, fastVideoBitrate: 2_500_000 },
+  "720p30": { id: "720p30", width: 1280, height: 720, fps: 30, videoBitrate: 1_000_000, fastVideoBitrate: 1_500_000 },
+  "1080p60": { id: "1080p60", width: 1920, height: 1080, fps: 60, videoBitrate: 3_000_000, fastVideoBitrate: 4_000_000 },
+  "1080p30": { id: "1080p30", width: 1920, height: 1080, fps: 30, videoBitrate: 2_000_000, fastVideoBitrate: 3_000_000 },
 };
 
 export const DEFAULT_REPLAY_EXPORT_PRESET: ReplayExportPresetId = "720p60";
@@ -31,7 +41,7 @@ export const DEFAULT_REPLAY_EXPORT_PRESET: ReplayExportPresetId = "720p60";
 /** Order the preset picker lists them in. */
 export const REPLAY_EXPORT_PRESET_ORDER: ReplayExportPresetId[] = ["720p60", "720p30", "1080p60", "1080p30"];
 
-/** Allow wide layouts at true 1080p, bounded to 4096×1080 at 60 FPS. */
+/** Legacy wide captures remain readable; new presets are 1280×720 or 1920×1080. */
 export const MAX_EXPORT_WIDTH = 4096;
 export const MAX_EXPORT_HEIGHT = 1080;
 export const MAX_EXPORT_FPS = 60;
@@ -94,8 +104,10 @@ export function estimateOutputBytes(
 export function exportVideoBitrate(
   preset: ReplayExportPreset,
   output: { width: number; height: number },
+  mode: ReplayExportEncodingMode = DEFAULT_REPLAY_EXPORT_ENCODING_MODE,
 ): number {
-  return Math.round(preset.videoBitrate * output.width * output.height / (preset.width * preset.height));
+  const bitrate = mode === "fast" ? preset.fastVideoBitrate : preset.videoBitrate;
+  return Math.round(bitrate * output.width * output.height / (preset.width * preset.height));
 }
 
 export type ReplayExportAdmissionInput = {

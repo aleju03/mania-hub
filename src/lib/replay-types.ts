@@ -109,7 +109,7 @@ export interface ReplayRendererLike {
   setInputOverlayOptions: (options: { only?: boolean; color?: string; keyHistory?: boolean }) => void;
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
   /** Includes authored geometry so an export can reproduce the overlay layout. */
-  getOverlaySettingsSnapshot?: () => ReplayOverlaySettings;
+  getOverlaySettingsSnapshot?: (options?: { resolveLayout?: boolean }) => ReplayOverlaySettings;
   getViewportSnapshot?: () => ReplayViewportSnapshot;
   /** Which hand owns the middle lane of an odd keymode in per-hand stats. */
   setMissThumbHand?: (hand: ReplayThumbHand) => void;

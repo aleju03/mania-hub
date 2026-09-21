@@ -10,6 +10,7 @@
 import type { ReplayOverlaySettings, ReplayThumbHand } from "../replay-overlays";
 import type { ReplaySkinSettings } from "../replay-skin";
 import type { ReplayViewportSnapshot } from "../replay-types";
+import type { ReplayExportEncodingMode } from "./limits";
 
 export const REPLAY_EXPORT_SPEC_VERSION = 1;
 
@@ -19,7 +20,7 @@ export const REPLAY_EXPORT_SPEC_VERSION = 1;
  * label would let a spec captured under one build be rendered by another and
  * still claim to match.
  */
-export const REPLAY_EXPORT_RENDERER_REVISION = "replay-export-r5";
+export const REPLAY_EXPORT_RENDERER_REVISION = "replay-export-r10";
 
 export type ReplayExportPitchPolicy = "follows-rate" | "preserved";
 
@@ -46,12 +47,15 @@ export type ReplayExportAssetRef = {
 };
 
 export type ReplayExportOutputSpec = {
+  /** Absent only in legacy captures, which retain their previous codec policy. */
+  encodingMode?: ReplayExportEncodingMode;
   container: "mp4" | "webm";
   width: number;
   height: number;
   fps: number;
   videoCodec: "av1" | "avc" | "vp9" | "vp8";
   videoBitrate: number;
+  videoBitrateMode?: "variable" | "quantizer";
   /** AV1 quality target; absent for bitrate-controlled codecs. */
   videoQuantizer?: number;
   /** Null when the export was explicitly asked for without an audio track. */
@@ -74,7 +78,7 @@ export type ReplayExportVisualSpec = {
   leaderboardVisible: boolean;
   skinSettings: ReplaySkinSettings;
   overlaySettings: ReplayOverlaySettings;
-  /** Captured viewer composition; older specs without this use the output dimensions. */
+  /** Logical export composition; older specs without this use the output dimensions. */
   viewport?: ReplayViewportSnapshot;
 };
 
@@ -248,6 +252,21 @@ export function parseReplayExportSpec(value: unknown): ReplayExportSpecV1 {
     || videoQuantizer < 0 || videoQuantizer > 255)) {
     fail("output.videoQuantizer must be an AV1 quantizer index from 0 to 255");
   }
+  const encodingMode = output.encodingMode;
+  const videoBitrateMode = output.videoBitrateMode;
+  if (videoBitrateMode !== undefined && videoBitrateMode !== "variable" && videoBitrateMode !== "quantizer") {
+    fail("output.videoBitrateMode must be 'variable' or 'quantizer'");
+  }
+  if ((videoBitrateMode === "variable" && videoQuantizer !== undefined)
+    || (videoBitrateMode === "quantizer" && videoQuantizer === undefined)) {
+    fail("output.videoBitrateMode must match the quantizer configuration");
+  }
+  if (encodingMode !== undefined && encodingMode !== "fast" && encodingMode !== "compact") {
+    fail("output.encodingMode must be 'fast' or 'compact'");
+  }
+  if (encodingMode === "fast" && videoQuantizer !== undefined) {
+    fail("Fast exports cannot request software AV1 quantizer encoding");
+  }
   const audioCodec = output.audioCodec === null ? null : requireString(output.audioCodec, "output.audioCodec");
   if (audioCodec !== null && audioCodec !== "aac" && audioCodec !== "opus") {
     fail("output.audioCodec is not a supported codec");
@@ -304,12 +323,14 @@ export function parseReplayExportSpec(value: unknown): ReplayExportSpecV1 {
       pitchPolicy,
     },
     output: {
+      ...(encodingMode === undefined ? {} : { encodingMode }),
       container,
       width: requireFiniteNumber(output.width, "output.width"),
       height: requireFiniteNumber(output.height, "output.height"),
       fps: requireFiniteNumber(output.fps, "output.fps"),
       videoCodec,
       videoBitrate: requireFiniteNumber(output.videoBitrate, "output.videoBitrate"),
+      ...(videoBitrateMode === undefined ? {} : { videoBitrateMode }),
       ...(videoQuantizer === undefined ? {} : { videoQuantizer }),
       audioCodec,
       audioBitrate: requireFiniteNumber(output.audioBitrate, "output.audioBitrate"),

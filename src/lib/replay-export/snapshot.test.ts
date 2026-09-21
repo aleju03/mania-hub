@@ -87,6 +87,17 @@ describe("buildReplayExportSpec", () => {
     expect(() => parseReplayExportSpec(JSON.parse(JSON.stringify(spec)))).not.toThrow();
   });
 
+  it("defaults to Fast export and only requests software AV1 for Smaller file", () => {
+    const capture = makeCapture();
+    const fast = buildReplayExportSpec(capture, options);
+    const compact = buildReplayExportSpec(capture, { ...options, encodingMode: "compact" });
+    expect(fast.output).toMatchObject({ encodingMode: "fast", videoCodec: "avc" });
+    expect(fast.output.videoQuantizer).toBeUndefined();
+    expect(compact.output).toMatchObject({ encodingMode: "compact", videoCodec: "av1", videoQuantizer: 96, videoBitrate: 1_500_000 });
+    expect(fast.output.videoBitrate).toBeGreaterThan(compact.output.videoBitrate);
+    expect(parseReplayExportSpec(JSON.parse(JSON.stringify(compact))).output.encodingMode).toBe("compact");
+  });
+
   it("copies mutable settings so a later preferences write cannot reach the job", () => {
     const capture = makeCapture();
     const spec = buildReplayExportSpec(capture, options);
@@ -94,16 +105,30 @@ describe("buildReplayExportSpec", () => {
     expect(spec.visual.skinSettings.comboFontSet).not.toBe("set2");
   });
 
-  it("captures the actual viewer viewport independently of output dimensions", () => {
+  it.each(["fast", "compact"] as const)("captures a real custom bitrate in %s mode", (encodingMode) => {
+    const spec = buildReplayExportSpec(makeCapture(), { ...options, encodingMode, videoBitrate: 2_000_000 });
+    expect(spec.output.videoBitrate).toBe(2_000_000);
+    expect(spec.output.videoBitrateMode).toBe("variable");
+    expect(spec.output.videoQuantizer).toBeUndefined();
+    expect(parseReplayExportSpec(JSON.parse(JSON.stringify(spec))).output.videoBitrate).toBe(2_000_000);
+  });
+
+  it.each([0, 499_999, 20_000_001, NaN, Infinity])("rejects invalid custom bitrate %s", (videoBitrate) => {
+    expect(() => buildReplayExportSpec(makeCapture(), { ...options, videoBitrate })).toThrow(/bitrate/);
+  });
+
+  it("uses exact preset dimensions and a 16:9 logical viewport even for a wide viewer", () => {
     const capture = makeCapture({ viewport: {
       width: 2040, height: 930, fullscreen: false, fullHeight: false, coarsePointer: false,
     } });
     const spec = buildReplayExportSpec(capture, options);
-    expect(spec.output).toMatchObject({ width: 1580, height: 720 });
-    expect(spec.output.videoBitrate).toBe(1_851_563);
-    expect(parseReplayExportSpec(JSON.parse(JSON.stringify(spec))).visual.viewport).toEqual(capture.viewport);
+    expect(spec.output).toMatchObject({ width: 1280, height: 720 });
+    expect(spec.output.videoBitrate).toBe(2_500_000);
+    expect(parseReplayExportSpec(JSON.parse(JSON.stringify(spec))).visual.viewport).toEqual({
+      ...capture.viewport, height: 2040 * 9 / 16, fullscreen: true,
+    });
     capture.viewport!.height = 1080;
-    expect(spec.visual.viewport?.height).toBe(930);
+    expect(spec.visual.viewport?.height).toBe(2040 * 9 / 16);
   });
 
   it("retains the viewer's authored overlay geometry independently of export resolution", () => {

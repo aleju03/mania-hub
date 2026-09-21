@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  video: vi.fn(), audio: vi.fn(), support: vi.fn(), qualityStart: vi.fn(),
+  video: vi.fn(), audio: vi.fn(), support: vi.fn(), qualityStart: vi.fn(), canvasAdd: vi.fn(),
 }));
 vi.mock("mediabunny", () => ({
   canEncodeVideo: mocks.video,
@@ -18,7 +18,11 @@ vi.mock("mediabunny", () => ({
     async finalize() { this.state = "finalized"; }
     async cancel() { this.state = "canceled"; }
   },
-  CanvasSource: class { async add() {} close() {} },
+  CanvasSource: class {
+    constructor(_canvas: unknown, private options: { codec: string; hardwareAcceleration: string }) {}
+    async add() { await mocks.canvasAdd(this.options); }
+    close() {}
+  },
   AudioSampleSource: class { async add() {} close() {} },
   AudioSample: class { close() {} },
 }));
@@ -45,11 +49,68 @@ beforeEach(() => {
   mocks.video.mockReset().mockResolvedValue(true);
   mocks.audio.mockReset().mockResolvedValue(true);
   mocks.qualityStart.mockReset();
+  mocks.canvasAdd.mockReset();
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ fillRect: vi.fn() } as unknown as ReturnType<HTMLCanvasElement["getContext"]>);
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("export codec selection", () => {
+  it("uses hardware H.264 for Fast export without starting the software AV1 encoder", async () => {
+    const plan = await validateExportCodecs({ ...request, encodingMode: "fast" });
+    expect(plan).toMatchObject({ videoCodec: "avc", hardwareAcceleration: "prefer-hardware", audioCodec: "aac" });
+    expect(plan?.videoQuantizer).toBeUndefined();
+    expect(mocks.qualityStart).not.toHaveBeenCalled();
+    expect(mocks.support).not.toHaveBeenCalled();
+    expect(mocks.canvasAdd).toHaveBeenCalledWith(expect.objectContaining({ hardwareAcceleration: "prefer-hardware" }));
+  });
+
+  it("can use hardware AV1 without opting into software quantizer mode", async () => {
+    mocks.video.mockImplementation(async (codec: string) => codec === "av1");
+    expect(await validateExportCodecs({ ...request, width: 2384, encodingMode: "fast" })).toMatchObject({
+      videoCodec: "av1", hardwareAcceleration: "prefer-hardware", fullCodecString: "av01.0.12M.08",
+    });
+    expect(mocks.qualityStart).not.toHaveBeenCalled();
+  });
+
+  it("tries another hardware codec if the first advertises support but fails a real encode", async () => {
+    mocks.canvasAdd.mockImplementation(async ({ codec }: { codec: string }) => {
+      if (codec === "avc") throw new Error("Broken hardware H.264");
+    });
+    expect(await validateExportCodecs({ ...request, encodingMode: "fast" }))
+      .toMatchObject({ videoCodec: "av1", hardwareAcceleration: "prefer-hardware" });
+    expect(mocks.qualityStart).not.toHaveBeenCalled();
+  });
+
+  it("does not silently switch Fast export to software when hardware is unavailable", async () => {
+    mocks.video.mockImplementation(async (_codec: string, options: { hardwareAcceleration?: string }) => options.hardwareAcceleration !== "prefer-hardware");
+    await expect(validateExportCodecs({ ...request, encodingMode: "fast" })).rejects.toMatchObject({ code: "fast_export_unavailable" });
+    expect(mocks.video).toHaveBeenCalledTimes(4);
+    expect(mocks.canvasAdd).not.toHaveBeenCalled();
+    expect(mocks.qualityStart).not.toHaveBeenCalled();
+    expect(mocks.support).not.toHaveBeenCalled();
+  });
+
+  it("also refuses silent software fallback when every hardware smoke encode fails", async () => {
+    mocks.canvasAdd.mockRejectedValue(new Error("Hardware failed"));
+    await expect(validateExportCodecs({ ...request, encodingMode: "fast" })).rejects.toMatchObject({ code: "fast_export_unavailable" });
+    expect(mocks.video.mock.calls.every(([, options]) => options.hardwareAcceleration === "prefer-hardware")).toBe(true);
+    expect(mocks.qualityStart).not.toHaveBeenCalled();
+  });
+
+  it("keeps software AV1 available when Smaller file is explicitly selected", async () => {
+    expect(await validateExportCodecs({ ...request, encodingMode: "compact" })).toMatchObject({
+      videoCodec: "av1", videoQuantizer: 96, hardwareAcceleration: "prefer-software",
+    });
+  });
+
+  it("uses the custom bitrate for AV1 instead of ignoring it in fixed-quantizer mode", async () => {
+    const plan = await validateExportCodecs({ ...request, encodingMode: "compact", videoBitrateMode: "variable", videoBitrate: 2_000_000 });
+    expect(plan).toMatchObject({ videoCodec: "av1", hardwareAcceleration: "prefer-software" });
+    expect(plan?.videoQuantizer).toBeUndefined();
+    expect(mocks.qualityStart).not.toHaveBeenCalled();
+    expect(mocks.canvasAdd).toHaveBeenCalledWith(expect.objectContaining({ codec: "av1", bitrate: 2_000_000, bitrateMode: "variable" }));
+  });
+
   it.each([
     { width: 1590, height: 720, fps: 60, codec: "av01.0.08M.08" },
     { width: 2370, height: 1080, fps: 30, codec: "av01.0.12M.08" },

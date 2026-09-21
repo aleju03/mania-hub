@@ -3828,6 +3828,10 @@ msgstr "中文"
 msgid "Choke"
 msgstr "断连"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Choose a bitrate from 0.5 to 20 Mbps."
+msgstr "请选择 0.5 到 20 Mbps 的码率。"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Choose a collector"
 msgstr "选择收藏者"
@@ -4920,6 +4924,10 @@ msgstr "自定义"
 msgid "Custom (30-200)"
 msgstr "自定义 (30-200)"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Custom bitrate"
+msgstr "自定义码率"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Custom color"
 msgstr "自定义颜色"
@@ -5985,6 +5993,14 @@ msgstr "刷图评估"
 msgid "Farmed"
 msgstr "刷图热门"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Fast export"
+msgstr "快速导出"
+
+#: src/lib/replay-export/errors.ts
+msgid "Fast export isn't available in this browser at this size. Try a lower preset or Smaller file."
+msgstr "此浏览器不支持以该分辨率快速导出。请降低分辨率或选择“更小文件”。"
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Fast single-note runs flowing across the keys."
 msgstr "在各键之间快速流动的单点串。"
@@ -6750,6 +6766,10 @@ msgstr "难"
 #: src/components/packs/collections/RecordBoards.tsx
 #~ msgid "hardest cards to find"
 #~ msgstr "最难找到的卡片"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Hardware encoding isn't available here. Smaller file uses your CPU."
+msgstr "此处无法使用硬件编码。“更小文件”会使用 CPU。"
 
 #: src/components/communities/field-options.tsx
 msgid "Harmful, hateful or a scam"
@@ -11301,6 +11321,10 @@ msgstr "针对某位玩家定制的 pp 提升谱面推荐。"
 msgid "Precision"
 msgstr "精度"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Prefers hardware encoding. Larger files."
+msgstr "优先使用硬件编码，文件更大。"
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Preparing"
 msgstr "准备中"
@@ -13759,6 +13783,10 @@ msgstr "已撕开"
 msgid "Slovak"
 msgstr "斯洛伐克语"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Slower export with more CPU use."
+msgstr "导出较慢，CPU 占用更高。"
+
 #: src/routes/player/$username.tsx
 msgid "Slowest"
 msgstr "最慢"
@@ -13766,6 +13794,10 @@ msgstr "最慢"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "小"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Smaller file"
+msgstr "更小文件"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Snipe feed"
@@ -14655,8 +14687,8 @@ msgid "That username doesn't look right."
 msgstr "这个用户名看起来不对。"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
-msgstr "这超出了此浏览器一次能导出的长度。请选择更短的范围或更低的预设。"
+#~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
+#~ msgstr "这超出了此浏览器一次能导出的长度。请选择更短的范围或更低的预设。"
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -15562,6 +15594,10 @@ msgstr "这两份成绩的速率不同（{leftRate}x 与 {rightRate}x）。并�
 #: src/lib/replay-side-by-side.ts
 msgid "These scores are on different maps. Side by side plays two runs of the same beatmap."
 msgstr "这两个成绩来自不同谱面。并排观看需要同一张谱面的两份成绩。"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "These settings exceed this browser's export limit. Choose a shorter range, lower preset, or lower bitrate."
+msgstr "这些设置超出了此浏览器的导出限制。请缩短片段、降低分辨率或降低码率。"
 
 #: src/components/packs/GiftInbox.tsx
 msgid "They no longer have that card to give."
@@ -16652,6 +16688,14 @@ msgstr "检测到 vibro。此成绩不计入技能或段位评分。"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
 msgstr ""
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Video bitrate"
+msgstr "视频码率"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Video bitrate (Mbps)"
+msgstr "视频码率（Mbps）"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"

@@ -33,9 +33,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-20", text: "New feature: Export replays to video files, client-side rendering only for now, so export speed depends on your device.", to: "/replay" },
   { date: "2026-09-20", text: "Redesigned the L/R miss counter overlay and added new styles.", to: "/replay" },
   { date: "2026-09-20", text: "Fixed replay audio falling out of sync after seeking in some cases.", to: "/replay" },
-  { date: "2026-09-20", text: "New feature: Export replays to video files, client-side rendering only for now", to: "/replay" },
   { date: "2026-09-20", text: "Updated the replay leaderboard overlay to match osu!stable and osu!lazer more accurately", to: "/replay" },
   { date: "2026-09-20", text: "Adjusted tech and chordstream pattern detection on 6K, 7K and 8K maps." },
   { date: "2026-09-20", text: "The hit error bar on replays is an overlay now: drag it, resize it or turn it off like the other overlays.", to: "/replay" },

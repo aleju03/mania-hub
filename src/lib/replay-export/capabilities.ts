@@ -16,7 +16,7 @@ import {
   type CanvasSource as CanvasSourceType,
 } from "mediabunny";
 import { ReplayExportError } from "./errors";
-import { MAX_EXPORT_FPS, MAX_EXPORT_HEIGHT, MAX_EXPORT_WIDTH } from "./limits";
+import { MAX_EXPORT_FPS, MAX_EXPORT_HEIGHT, MAX_EXPORT_WIDTH, type ReplayExportEncodingMode } from "./limits";
 import { QualityVideoSource } from "./quality-video-source";
 import { REPLAY_EXPORT_AV1_QUANTIZER, av1QualityEncoderConfig } from "./video-quality";
 
@@ -26,6 +26,7 @@ export type ReplayExportCodecPlan = {
   container: "mp4" | "webm";
   videoCodec: "av1" | "avc" | "vp9" | "vp8";
   videoQuantizer?: number;
+  fullCodecString?: string;
   hardwareAcceleration: "prefer-software" | "prefer-hardware" | "no-preference";
   audioCodec: "aac" | "opus" | null;
   /** True when the AAC track needs the lazily loaded WASM extension. */
@@ -35,6 +36,8 @@ export type ReplayExportCodecPlan = {
 };
 
 export type ReplayExportCapabilityRequest = {
+  encodingMode?: ReplayExportEncodingMode;
+  videoBitrateMode?: "variable" | "quantizer";
   width: number;
   height: number;
   fps: number;
@@ -114,8 +117,50 @@ async function canEncodeAudioCodec(
   });
 }
 
+/** Fast mode never opts into a software codec after hardware probing fails. */
+async function* fastExportPlans(
+  request: ReplayExportCapabilityRequest,
+): AsyncGenerator<ReplayExportCodecPlan> {
+  if (!supportsWebCodecsVideo() || !isOutputSizeAllowed(request.width, request.height, request.fps)) return;
+  for (const codec of ["avc", "av1", "vp9", "vp8"] as const) {
+    const fullCodecString = codec === "av1"
+      ? av1QualityEncoderConfig(request.width, request.height, request.fps, request.videoBitrate).codec : undefined;
+    try {
+      if (!(await canEncodeVideo(codec, {
+        width: request.width,
+        height: request.height,
+        bitrate: request.videoBitrate,
+        bitrateMode: "variable",
+        latencyMode: "quality",
+        hardwareAcceleration: "prefer-hardware",
+        ...(fullCodecString ? { fullCodecString } : {}),
+      }))) continue;
+    } catch {
+      continue;
+    }
+    const mp4 = codec === "avc" || codec === "av1";
+    const audioCodec = request.wantsAudio ? (mp4 ? "aac" : "opus") : null;
+    let usesAacExtension = false;
+    if (audioCodec && !(await canEncodeAudioCodec(audioCodec, request))) {
+      if (audioCodec !== "aac" || !(await ensureAacEncoderExtension())
+        || !(await canEncodeAudioCodec("aac", request))) continue;
+      usesAacExtension = true;
+    }
+    yield {
+      container: mp4 ? "mp4" : "webm",
+      videoCodec: codec,
+      ...(fullCodecString ? { fullCodecString } : {}),
+      hardwareAcceleration: "prefer-hardware",
+      audioCodec,
+      usesAacExtension,
+      mimeType: mp4 ? "video/mp4" : "video/webm",
+      fileExtension: mp4 ? "mp4" : "webm",
+    };
+  }
+}
+
 /**
- * Prefers quality-controlled AV1, then the compatible H.264/WebM paths.
+ * Fast exports prefer hardware; compact and legacy exports prefer quality-controlled AV1.
  * Audio is optional in the
  * sense that a user can ask for a silent video; it is never dropped silently
  * to make an unsupported configuration look supported.
@@ -123,16 +168,27 @@ async function canEncodeAudioCodec(
 export async function planExportCodecs(
   request: ReplayExportCapabilityRequest,
 ): Promise<ReplayExportCodecPlan | null> {
+  if (request.encodingMode === "fast") {
+    for await (const plan of fastExportPlans(request)) return plan;
+    return null;
+  }
   if (!supportsWebCodecsVideo()) return null;
   if (!isOutputSizeAllowed(request.width, request.height, request.fps)) return null;
 
   if (request.preferredVideoCodec !== "avc") {
     try {
-      const support = await VideoEncoder.isConfigSupported(
-        av1QualityEncoderConfig(request.width, request.height, request.fps),
-      );
+      const variable = request.videoBitrateMode === "variable";
+      const config = av1QualityEncoderConfig(request.width, request.height, request.fps, variable ? request.videoBitrate : undefined);
+      const support = variable ? null : await VideoEncoder.isConfigSupported(config);
+      const supported = variable
+        ? await canEncodeVideo("av1", {
+          width: request.width, height: request.height, bitrate: request.videoBitrate,
+          fullCodecString: config.codec, bitrateMode: "variable", latencyMode: "quality",
+          hardwareAcceleration: "prefer-software",
+        })
+        : support?.supported && support.config?.bitrateMode === "quantizer";
       // Older implementations may discard an unrecognized bitrate mode.
-      if (support.supported && support.config?.bitrateMode === "quantizer") {
+      if (supported) {
         let usesAacExtension = false;
         let audioSupported = !request.wantsAudio || await canEncodeAudioCodec("aac", request);
         if (!audioSupported) {
@@ -142,7 +198,7 @@ export async function planExportCodecs(
         if (audioSupported) return {
           container: "mp4",
           videoCodec: "av1",
-          videoQuantizer: request.videoQuantizer ?? REPLAY_EXPORT_AV1_QUANTIZER,
+          ...(variable ? { fullCodecString: config.codec } : { videoQuantizer: request.videoQuantizer ?? REPLAY_EXPORT_AV1_QUANTIZER }),
           hardwareAcceleration: "prefer-software",
           audioCodec: request.wantsAudio ? "aac" : null,
           usesAacExtension,
@@ -250,6 +306,7 @@ export async function smokeTestExportPlan(
     latencyMode: "quality",
     keyFrameInterval: 1,
     hardwareAcceleration: plan.hardwareAcceleration,
+    fullCodecString: plan.fullCodecString,
   });
   output.addVideoTrack(videoSource, { frameRate: fps });
 
@@ -302,10 +359,22 @@ export async function smokeTestExportPlan(
   }
 }
 
-/** An advertised AV1 encoder must survive a real encode before the job uses it. */
+/** Advertised encoders must survive a real encode before the job uses them. */
 export async function validateExportCodecs(
   request: ReplayExportCapabilityRequest,
 ): Promise<ReplayExportCodecPlan | null> {
+  if (request.encodingMode === "fast") {
+    let failure: unknown;
+    for await (const plan of fastExportPlans(request)) {
+      try {
+        await smokeTestExportPlan(plan, request);
+        return plan;
+      } catch (error) {
+        failure = error;
+      }
+    }
+    throw new ReplayExportError("fast_export_unavailable", undefined, { cause: failure });
+  }
   const plan = await planExportCodecs(request);
   if (!plan) return null;
   try {

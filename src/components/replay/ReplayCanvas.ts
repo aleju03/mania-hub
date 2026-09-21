@@ -14,7 +14,7 @@ import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { getReplayHandForColumn } from "../../lib/replay-hand-stats";
 import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_ANCHORED_COORD, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, getReplayOverlayMinX, getReplayOverlayPlacement, updateReplayOverlayPlacement, normalizeReplayHandAccuracyStyle, normalizeReplayMissStyle, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlayReference, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
-import { replayOverlayScale, replayOverlayX } from "../../lib/replay-overlay-layout";
+import { replayOverlayCenteredY, replayOverlayLayoutScale, replayOverlayRegion, replayOverlayX } from "../../lib/replay-overlay-layout";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
@@ -53,6 +53,9 @@ const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) =
 }));
 // Measured against isolated overtakes in the 30 fps stable reference clip:
 // the streak expands first, then disappears before the upright glow.
+// Pointer this close to the stage bottom edge is past any overlay it was
+// reaching for, so the bottom chrome may reveal there (CSS px).
+const OVERLAY_APPROACH_EDGE_PX = 12;
 const LEADERBOARD_EXPLOSION_DURATION_MS = 700;
 const LEADERBOARD_STREAK_EXPAND_MS = 200;
 const LEADERBOARD_STREAK_FADE_MS = 400;
@@ -699,7 +702,9 @@ export class ManiaReplayRenderer {
   private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
+  private overlaySettingsInputSignature = "";
   private overlayReferenceLayout: ReplayOverlayReference | null = null;
+  private overlayLayoutPrepared = false;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private onMissThumbHandChange: ((hand: ReplayThumbHand) => void) | null = null;
   private onContextLost: ((wasPlaying: boolean) => void) | null = null;
@@ -972,6 +977,7 @@ export class ManiaReplayRenderer {
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
+    this.overlaySettingsInputSignature = JSON.stringify(this.overlaySettings);
     this.missThumbHand = normalizeReplayMissThumbHand(options?.missThumbHand);
     this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
     this.onMissThumbHandChange = options?.onMissThumbHandChange ?? null;
@@ -1879,11 +1885,7 @@ export class ManiaReplayRenderer {
     this.staticDirty = true;
   }
 
-  private getLayout(): Layout {
-    if (this.cachedLayout) return this.cachedLayout;
-
-    const w = this.cssWidth;
-    const h = this.cssHeight;
+  private calculateLayout(w: number, h: number): Layout {
     const configuredColumnWidths = this.getConfiguredColumnWidths();
     const configuredColumnSpacings = this.getConfiguredColumnSpacings();
     const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
@@ -1917,15 +1919,22 @@ export class ManiaReplayRenderer {
     const scrollLength = scaleHeight * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
     const pixelsPerMs = scrollLength / scrollTimeRange;
 
-    const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, layoutScale, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
+    return { w, h, playfieldWidth, playfieldX, laneWidth, layoutScale, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
+  }
+
+  private getLayout(): Layout {
+    if (this.cachedLayout) return this.cachedLayout;
+    const layout = this.calculateLayout(this.cssWidth, this.cssHeight);
     this.cachedLayout = layout;
     // Bind legacy placements to the first viewer layout before it is resized.
     this.getOverlayReference(layout);
-    let cursorX = playfieldX;
+    const configuredColumnWidths = this.getConfiguredColumnWidths();
+    const configuredColumnSpacings = this.getConfiguredColumnSpacings();
+    let cursorX = layout.playfieldX;
     this.cachedColumns = Array.from({ length: this.keyCount }, (_, i) => {
-      const width = configuredColumnWidths[i] * layoutScale;
+      const width = configuredColumnWidths[i] * layout.layoutScale;
       const column = { x: cursorX, width };
-      cursorX += width + (configuredColumnSpacings[i] ?? 0) * layoutScale;
+      cursorX += width + (configuredColumnSpacings[i] ?? 0) * layout.layoutScale;
       return column;
     });
     return layout;
@@ -1980,6 +1989,7 @@ export class ManiaReplayRenderer {
   }
 
   resize() {
+    this.prepareOverlayLayout();
     this.measureCanvas();
     this.invalidateLayoutCache();
     if (this.app) {
@@ -2440,16 +2450,80 @@ export class ManiaReplayRenderer {
   }
 
   setOverlaySettings(settings: ReplayOverlaySettings) {
-    this.overlaySettings = normalizeReplayOverlaySettings(settings);
+    const normalized = normalizeReplayOverlaySettings(settings);
+    const signature = JSON.stringify(normalized);
+    // Focus/prefs refreshes must not re-author a resized layout and make
+    // repeated fullscreen transitions progressively change its size.
+    if (signature === this.overlaySettingsInputSignature) return;
+    this.overlaySettingsInputSignature = signature;
+    this.overlaySettings = normalized;
+    this.overlayLayoutPrepared = false;
     this.pruneSelectedOverlays();
     if (!this._isPlaying) this.render();
   }
 
-  getOverlaySettingsSnapshot(): ReplayOverlaySettings {
-    const reference = this.getOverlayReference(this.cachedLayout ?? this.getLayout());
+  private prepareOverlayLayout() {
+    if (this.overlayLayoutPrepared || this.overlayHitboxes.length === 0) return;
+    this.overlaySettings = this.getOverlaySettingsSnapshot({ resolveLayout: true });
+    this.overlayLayoutPrepared = true;
+  }
+
+  getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings {
+    const layout = this.cachedLayout ?? this.getLayout();
+    const reference = this.getOverlayReference(layout);
+    const boxes = options?.resolveLayout ? [...this.overlayHitboxes] : [];
+    // Scores arrive separately from the replay. Reserve an enabled board's
+    // footprint even before that request finishes (or while Tab hides it),
+    // otherwise an early resize permanently groups only the hand overlays.
+    if (boxes.length > 0 && !boxes.some((box) => box.id === "leaderboard")) {
+      const isLazer = this.ruleset.accuracyMode === "lazer";
+      const scale = this.getOverlayScale(layout, "leaderboard");
+      const rows = this.leaderboardEntries?.length ? Math.min(6, this.leaderboardEntries.length + 1) : 6;
+      const frame = this.getOverlayBounds(layout, "leaderboard",
+        (isLazer ? LAZER_LEADERBOARD.width : 112) * scale,
+        (isLazer ? LAZER_LEADERBOARD.height : rows * 46 - 2) * scale);
+      if (frame) boxes.push({ id: "leaderboard", ...frame });
+    }
+    const groups = new Map<ReplayOverlayId, { region: "left" | "right" | "playfield"; groupStart: number; groupExtent: number }>();
+    const playfieldRight = layout.playfieldX + layout.playfieldWidth;
+    const handGroup = new Set<ReplayOverlayId>(["leaderboard", "handAccuracy", "misses"]);
+    for (const first of boxes) {
+      if (groups.has(first.id)) continue;
+      const region = replayOverlayRegion(first, layout);
+      const members = [first];
+      for (let index = 0; index < members.length; index++) {
+        const member = members[index];
+        for (const box of boxes) {
+          if (members.includes(box) || replayOverlayRegion(box, layout) !== region) continue;
+          const sharesRows = box.y < member.y + member.height && member.y < box.y + box.height;
+          if (sharesRows || (handGroup.has(box.id) && handGroup.has(member.id))) members.push(box);
+        }
+      }
+      const origin = region === "right" ? playfieldRight : 0;
+      const start = Math.max(0, Math.min(...members.map((box) => box.x)) - origin);
+      const end = Math.max(...members.map((box) => box.x + box.width));
+      // Reserve a little clearance, but move an isolated top overlay before
+      // shrinking a whole column of unrelated hand stats underneath it.
+      const padding = Math.max(0, Math.min(8, region === "left" ? layout.playfieldX - end : layout.w - end));
+      for (const box of members) groups.set(box.id, { region, groupStart: start, groupExtent: end - origin - start + padding });
+    }
     let settings = normalizeReplayOverlaySettings(this.overlaySettings);
     for (const id of Object.keys(settings) as ReplayOverlayId[]) {
       const placement = this.getOverlayPlacement(id);
+      const box = boxes.find((entry) => entry.id === id);
+      if (box) {
+        const group = groups.get(id)!;
+        const current = this.getCurrentOverlayReference(layout, id);
+        settings = updateReplayOverlayPlacement(settings, id, {
+          x: box.x / layout.w,
+          y: box.y / layout.h,
+          reference: {
+            ...current, region: group.region,
+            ...(group.region === "playfield" ? {} : { groupStart: group.groupStart, groupExtent: group.groupExtent }),
+          },
+        }, this.ruleset.accuracyMode === "lazer");
+        continue;
+      }
       settings = updateReplayOverlayPlacement(settings, id, {
         reference: { ...(placement.reference ?? reference) },
       }, this.ruleset.accuracyMode === "lazer");
@@ -2480,7 +2554,10 @@ export class ManiaReplayRenderer {
     ]);
     // Bind legacy placements when an owner skin changes the columns. A
     // settings refresh on focus must not rebind them to fullscreen geometry.
-    if (previousGeometry !== nextGeometry) this.overlayReferenceLayout = null;
+    if (previousGeometry !== nextGeometry) {
+      this.overlayReferenceLayout = null;
+      this.overlayLayoutPrepared = false;
+    }
     this.invalidateLayoutCache();
     this.prewarmSkinTextures();
     if (!this._isPlaying) this.render();
@@ -2536,7 +2613,11 @@ export class ManiaReplayRenderer {
   // drag/resize/pinch/marquee runs, while the pointer rests on an overlay or
   // its close button, and - with chromeBandPx set to how far up the chrome
   // reaches - while an overlay sits in the straight-down approach path, so
-  // reaching for one never summons the thing that would bury it.
+  // reaching for one never summons the thing that would bury it. Once the
+  // pointer is past the overlay (below its bottom edge) or touching the
+  // stage's bottom edge, the approach is over and the chrome may rise:
+  // pushing straight down past the hit error bar is how the seeker is
+  // reached from the middle of the playfield.
   isOverlayEditPoint(clientX: number, clientY: number, chromeBandPx = 0): boolean {
     if (this.draggingOverlay || this.resizingOverlay || this.pinchingOverlay || this.selectingOverlays) return true;
     if (!this.canEditOverlays()) return false;
@@ -2547,6 +2628,7 @@ export class ManiaReplayRenderer {
     const y = (clientY - rect.top) * scaleY;
     if (this.getOverlayCloseButtonAtPoint(x, y) != null || this.getOverlayAtPoint(x, y) != null) return true;
     if (chromeBandPx <= 0) return false;
+    if (y >= this.cssHeight - OVERLAY_APPROACH_EDGE_PX * scaleY) return false;
     const bandTop = this.cssHeight - chromeBandPx * scaleY;
     for (const box of this.overlayHitboxes) {
       const frame = this.getOverlayInteractionFrame(box);
@@ -3037,6 +3119,8 @@ export class ManiaReplayRenderer {
         : current.reference,
     }, this.ruleset.accuracyMode === "lazer"));
     this.overlaySettings = nextSettings;
+    this.overlaySettingsInputSignature = JSON.stringify(nextSettings);
+    this.overlayLayoutPrepared = false;
     this.onOverlaySettingsChange?.(nextSettings);
     if (!this._isPlaying) this.render();
   }
@@ -3052,6 +3136,8 @@ export class ManiaReplayRenderer {
     }
     const nextSettings = normalizeReplayOverlaySettings(draft);
     this.overlaySettings = nextSettings;
+    this.overlaySettingsInputSignature = JSON.stringify(nextSettings);
+    this.overlayLayoutPrepared = false;
     this.onOverlaySettingsChange?.(nextSettings);
     if (!this._isPlaying) this.render();
   }
@@ -4259,7 +4345,12 @@ export class ManiaReplayRenderer {
 
   private getOverlayScale(layout: Layout, id: ReplayOverlayId): number {
     const placement = this.getOverlayPlacement(id);
-    return replayOverlayScale(placement.reference ?? this.getOverlayReference(layout), layout.h) * placement.scale;
+    const reference = placement.reference ?? this.getOverlayReference(layout);
+    // Old lazer placements were based on 768-high game coordinates. Once
+    // resolved, hudScale records that actual scale rather than the generic HUD base.
+    const base = id === "leaderboard" && this.ruleset.accuracyMode === "lazer" && !reference.region
+      ? reference.height / 768 : reference.hudScale;
+    return base * replayOverlayLayoutScale(reference, layout) * placement.scale;
   }
 
   private getOverlayReference(layout: Layout): ReplayOverlayReference {
@@ -4276,8 +4367,9 @@ export class ManiaReplayRenderer {
     return {
       width: layout.w, height: layout.h,
       playfieldX: layout.playfieldX, playfieldWidth: layout.playfieldWidth,
-      hudScale: replayOverlayScale(reference, layout.h),
-      spacingScale: (reference.spacingScale ?? 1) * layout.h / reference.height,
+      hudScale: this.getOverlayScale(layout, id) / this.getOverlayPlacement(id).scale,
+      spacingScale: (reference.spacingScale ?? 1) * replayOverlayLayoutScale(reference, layout),
+      region: reference.region ?? "playfield",
     };
   }
 
@@ -4338,6 +4430,18 @@ export class ManiaReplayRenderer {
     // default, in stage pixels.
     anchor?: { x: number; y: number },
   ): ReplayOverlayFrame | null {
+    const frame = this.getOverlayBounds(layout, id, width, height, anchor);
+    if (frame) this.overlayHitboxes.push({ id, ...frame });
+    return frame;
+  }
+
+  private getOverlayBounds(
+    layout: Layout,
+    id: ReplayOverlayId,
+    width: number,
+    height: number,
+    anchor?: { x: number; y: number },
+  ): ReplayOverlayFrame | null {
     const placement = this.getOverlayPlacement(id);
     if (!placement.enabled) return null;
     const anchored = this.getAnchoredOverlayOrigin(placement, layout, anchor);
@@ -4346,10 +4450,16 @@ export class ManiaReplayRenderer {
       ? anchored.x * layout.w
       : replayOverlayX(placement.x, width, placement.reference ?? this.getOverlayReference(layout), layout);
     const x = Math.max(minX, Math.min(Math.max(0, layout.w - width), positionX));
-    const y = Math.max(0, Math.min(Math.max(0, layout.h - height), anchored.y * layout.h));
-    const frame = { x, y, width, height };
-    this.overlayHitboxes.push({ id, ...frame });
-    return frame;
+    const y = this.getOverlayY(layout, id, height, anchored.y);
+    return { x, y, width, height };
+  }
+
+  private getOverlayY(layout: Layout, id: ReplayOverlayId, height: number, y: number): number {
+    const placement = this.getOverlayPlacement(id);
+    const position = id === "leaderboard" && placement.y !== REPLAY_OVERLAY_ANCHORED_COORD
+      ? replayOverlayCenteredY(y, height, placement.reference ?? this.getOverlayReference(layout), layout)
+      : y * layout.h;
+    return Math.max(0, Math.min(Math.max(0, layout.h - height), position));
   }
 
   // Anchored placements keep their built-in spot until the first drag, so
@@ -4387,7 +4497,13 @@ export class ManiaReplayRenderer {
   private renderAccuracyOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "accuracy");
     const fontSize = 18 * scale;
-    const textWidth = this.getTextOverlayWidth(this.hudCachedAccuracy, fontSize, scale, "700");
+    // A layout captured at 100% must agree with one captured after the first
+    // judgement; changing digits must not move a fitted accuracy overlay.
+    const textWidth = Math.max(
+      this.getTextOverlayWidth(this.hudCachedAccuracy, fontSize, scale, "700"),
+      this.getTextOverlayWidth("100.00%", fontSize, scale, "700"),
+      this.getTextOverlayWidth("99.99%", fontSize, scale, "700"),
+    );
     const height = 26 * scale;
     const pieAttached = !this.overlaySettings.progress.enabled;
     const pieRadius = fontSize * 0.54;
@@ -5452,8 +5568,7 @@ export class ManiaReplayRenderer {
       this.suppressOvertakeFlash = true;
       return;
     }
-    // Lazer's interface is laid out in 768-high game coordinates.
-    const scale = layout.h / 768 * this.getOverlayPlacement("leaderboard").scale;
+    const scale = this.getOverlayScale(layout, "leaderboard");
     const frame = this.getOverlayFrame(layout, "leaderboard", LAZER_LEADERBOARD.width * scale, LAZER_LEADERBOARD.height * scale);
     if (!frame) return;
     if (!this.lazerLeaderboard) {
@@ -5485,7 +5600,7 @@ export class ManiaReplayRenderer {
   private renderSpectatorLabel(layout: Layout) {
     if (this.spectatorCount <= 0) return;
     const isLazer = this.ruleset.accuracyMode === "lazer";
-    const scale = isLazer ? layout.h / 768 * this.getOverlayPlacement("leaderboard").scale : this.getOverlayScale(layout, "leaderboard");
+    const scale = this.getOverlayScale(layout, "leaderboard");
     const height = 26 * scale;
     const width = (isLazer ? LAZER_LEADERBOARD.width : 112) * scale;
     const nameHeight = 17 * scale;
@@ -5498,7 +5613,8 @@ export class ManiaReplayRenderer {
       : replayOverlayX(placement.x, width, placement.reference ?? this.getOverlayReference(layout), layout);
     // Spectator text stays visible even when lazer's cards cross the left edge.
     const anchorX = Math.max(0, Math.min(Math.max(0, layout.w - width), positionX));
-    const anchorY = Math.max(0, Math.min(Math.max(0, layout.h - height), anchored.y * layout.h));
+    const boardHeight = (isLazer ? LAZER_LEADERBOARD.height : Math.min(6, this.leaderboardEntries.length + 1) * 46 - 2) * scale;
+    const anchorY = this.getOverlayY(layout, "leaderboard", boardHeight, anchored.y);
 
     const room = Math.max(0, Math.floor((anchorY - height - gap) / nameHeight));
     const budget = Math.min(names.length, room, MAX_SPECTATOR_NAMES_DRAWN);
@@ -5720,8 +5836,9 @@ export class ManiaReplayRenderer {
     if (!(range > 0)) return;
 
     const reference = placement.reference ?? this.getOverlayReference(layout);
-    const hudScale = Math.min(reference.hudScale, 1.3 * (reference.spacingScale ?? 1)) * layout.h / reference.height;
-    const spacing = (reference.spacingScale ?? 1) * layout.h / reference.height;
+    const layoutScale = replayOverlayLayoutScale(reference, layout);
+    const hudScale = Math.min(reference.hudScale, 1.3 * (reference.spacingScale ?? 1)) * layoutScale;
+    const spacing = (reference.spacingScale ?? 1) * layoutScale;
     const scale = hudScale * placement.scale;
     const receptorBottom = this.skinSettings.style === "circles" || this.skinSettings.style === "arrows"
       ? judgmentY

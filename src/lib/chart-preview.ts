@@ -13,7 +13,6 @@ export type ChartPreviewAudioMode = "set-preview" | "selected-file";
 export type ChartPreviewPlaybackPlan = {
   beatmap: ManiaBeatmap;
   startTimeMs: number;
-  timeScale: number;
   audioMode: ChartPreviewAudioMode;
 };
 
@@ -120,59 +119,17 @@ export function isLikelyTimedRateVariantSet(beatmaps: ChartPreviewDifficulty[]):
   return isLikelyRateVariantSet(meaningfulBeatmaps) || isLikelyBracketBpmVariantSet(meaningfulBeatmaps);
 }
 
-// The rate a difficulty's name claims against the song at 1.0x.
-function parseAbsoluteDifficultyRate(
-  beatmap: ChartPreviewDifficulty,
-  beatmaps: ChartPreviewDifficulty[],
-): number {
-  const bracketBpm = parseBracketBpm(beatmap.version);
-  const baseBpm = isLikelyBracketBpmVariantSet(beatmaps) ? getBracketBpmBase(beatmaps) : null;
-  if (bracketBpm && baseBpm) return bracketBpm / baseBpm;
-  return parseDifficultyRate(beatmap.version);
-}
-
-// The rate to play the set's reference difficulty (and its audio) at so it
-// sounds and scrolls like the selected one. That is the selected rate itself
-// when the set ships a 1.0x member; a set of only rate edits (x0.85 and x0.9,
-// or [1.4] and [1.45]) has no such member, and its reference is already rated,
-// so re-timing it by the selected rate outright would rate it twice.
-export function parseSelectedDifficultyRate(
-  selected: ChartPreviewDifficulty | null,
-  beatmaps: ChartPreviewDifficulty[],
-): number {
-  if (!selected) return 1;
-  const reference = getSetPreviewReferenceBeatmap(beatmaps);
-  const referenceRate = reference ? parseAbsoluteDifficultyRate(reference, beatmaps) : 1;
-  return parseAbsoluteDifficultyRate(selected, beatmaps) / referenceRate;
-}
-
-// The diff whose audio the set preview clip actually corresponds to: the 1.0x
-// or base-BPM member of a rate-variant set. Null means "no stand-in needed".
-export function getSetPreviewReferenceBeatmap<T extends ChartPreviewDifficulty>(beatmaps: T[]): T | null {
+// A rate edit is a re-encoded audio file plus a re-timed chart, so every
+// rated difficulty in a set ships its own song file. osu! cuts the set's
+// preview clip from one of those files without saying which (both reported
+// sets had it cut from the slowest edit, not the 1.0x chart), so the clip is
+// at an unknown rate and nothing can be timed against it.
+export function hasRateEditedAudio(beatmaps: ChartPreviewDifficulty[]): boolean {
   const meaningfulBeatmaps = beatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5);
-  if (!meaningfulBeatmaps.length) return beatmaps[0] ?? null;
-
-  if (isLikelyBracketBpmVariantSet(meaningfulBeatmaps)) {
-    const baseBpm = getBracketBpmBase(meaningfulBeatmaps);
-    return meaningfulBeatmaps.find((beatmap) => parseBracketBpm(beatmap.version) === baseBpm) ?? meaningfulBeatmaps[0] ?? null;
-  }
-
-  if (isLikelyRateVariantSet(meaningfulBeatmaps)) {
-    // With no 1.0x member, the member nearest 1.0x is the least re-timed
-    // stand-in for the others.
-    let reference: T | null = null;
-    let referenceDistance = Number.POSITIVE_INFINITY;
-    for (const beatmap of meaningfulBeatmaps) {
-      const distance = Math.abs(parseDifficultyRate(beatmap.version) - 1);
-      if (distance < referenceDistance) {
-        reference = beatmap;
-        referenceDistance = distance;
-      }
-    }
-    return reference;
-  }
-
-  return null;
+  const pool = meaningfulBeatmaps.length >= 2 ? meaningfulBeatmaps : beatmaps;
+  if (pool.length <= 1) return false;
+  if (isLikelyBracketBpmVariantSet(pool)) return true;
+  return pool.some((beatmap) => parseDifficultyRate(beatmap.version) !== 1);
 }
 
 // A pack, dan course or practice compilation puts several different songs in
@@ -229,6 +186,7 @@ export function hasOneSongLengthSpread(beatmaps: ChartPreviewDifficulty[]): bool
 
 export function shouldUseSetPreviewForReplayAudio(title: string, beatmaps: ChartPreviewDifficulty[]): boolean {
   if (beatmaps.length <= 1) return true;
+  if (hasRateEditedAudio(beatmaps)) return false;
   if (!hasOneSongLengthSpread(beatmaps)) return false;
   if (COMPILATION_WORDS.test(title)) return false;
   return !beatmaps.some((beatmap) => COMPILATION_WORDS.test(beatmap.version));
@@ -329,44 +287,25 @@ export function findDensestPreviewStartTime(beatmap: ManiaBeatmap, timeScale = 1
   return Math.max(0, Math.round(bestStart));
 }
 
+// The chart always plays against its own audio file (or the set clip, which
+// is the same song at the same rate whenever shouldUseSetPreviewForReplayAudio
+// allows it), so a difficulty's note times are never re-scaled here.
 export function getChartPreviewPlaybackPlan({
   selectedBeatmap,
-  referenceBeatmap = selectedBeatmap,
   usesSetPreviewForAudio,
-  timedRateVariant,
-  selectedDifficultyRate,
 }: {
   selectedBeatmap: ManiaBeatmap;
-  referenceBeatmap?: ManiaBeatmap;
   usesSetPreviewForAudio: boolean;
-  timedRateVariant: boolean;
-  selectedDifficultyRate: number;
 }): ChartPreviewPlaybackPlan {
-  let beatmap = timedRateVariant ? referenceBeatmap : selectedBeatmap;
-  const referenceStartMs = pickPreviewStartTime(referenceBeatmap.previewTime, selectedBeatmap.previewTime);
-  const shouldUseSelectedAudio = !usesSetPreviewForAudio;
-  let startTimeMs = shouldUseSelectedAudio
-    ? pickPreviewStartTime(selectedBeatmap.previewTime)
-    : timedRateVariant
-    ? referenceStartMs
-    : usesSetPreviewForAudio
-    ? pickPreviewStartTime(selectedBeatmap.previewTime, referenceStartMs)
-    : pickPreviewStartTime(selectedBeatmap.previewTime);
-  let timeScale = timedRateVariant ? selectedDifficultyRate : 1;
-  let audioMode: ChartPreviewAudioMode = shouldUseSelectedAudio ? "selected-file" : "set-preview";
-  const hasMappedPreview = hasMappedPreviewTime(selectedBeatmap.previewTime) || (
-    usesSetPreviewForAudio && hasMappedPreviewTime(referenceBeatmap.previewTime)
-  );
-  const canUseUnmappedSetPreview = usesSetPreviewForAudio && timedRateVariant;
+  let startTimeMs = pickPreviewStartTime(selectedBeatmap.previewTime);
+  let audioMode: ChartPreviewAudioMode = usesSetPreviewForAudio ? "set-preview" : "selected-file";
 
-  if ((!hasMappedPreview && !canUseUnmappedSetPreview) || !hasPreviewNotes(beatmap, startTimeMs, timeScale)) {
-    beatmap = selectedBeatmap;
+  if (!hasMappedPreviewTime(selectedBeatmap.previewTime) || !hasPreviewNotes(selectedBeatmap, startTimeMs)) {
     startTimeMs = findDensestPreviewStartTime(selectedBeatmap);
-    timeScale = 1;
     audioMode = "selected-file";
   }
 
-  return { beatmap, startTimeMs, timeScale, audioMode };
+  return { beatmap: selectedBeatmap, startTimeMs, audioMode };
 }
 
 export function getPreviewNotes(

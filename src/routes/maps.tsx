@@ -75,13 +75,10 @@ import {
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
-  getSetPreviewReferenceBeatmap,
   isLikelyBracketBpmVariantSet,
   isLikelyRateVariantSet,
-  isLikelyTimedRateVariantSet,
   parseBracketBpm,
   parseDifficultyRate,
-  parseSelectedDifficultyRate,
   resolveInitialChartPreviewAudioMode,
   shouldUseSetPreviewForReplayAudio,
 } from "../lib/chart-preview";
@@ -4206,7 +4203,6 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   );
   const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(() => getDefaultRandomBeatmapId(maniaBeatmaps));
   const selectedBeatmap = maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? maniaBeatmaps[0] ?? null;
-  const selectedDifficultyRate = parseSelectedDifficultyRate(selectedBeatmap, maniaBeatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5));
   const mapMetadata = [
     bm.bpm > 0 ? `${Math.round(bm.bpm)} BPM` : null,
     selectedBeatmap && selectedBeatmap.totalLength > 0 ? formatDuration(selectedBeatmap.totalLength) : null,
@@ -4233,8 +4229,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayAudioFullUrl = previewBeatmap?.audioFilename
     ? getBeatmapAudioUrl(audioBeatmapsetId, previewBeatmap.audioFilename)
     : null;
-  const replayAudioPlaybackRate = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
-  const replayClockRateDivisor = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
+  // Both audio sources are the same song at the chart's own rate (see
+  // shouldUseSetPreviewForReplayAudio), so the chart and audio share a clock.
+  const replayAudioPlaybackRate = 1;
+  const replayClockRateDivisor = 1;
   const replayPreviewKeyCount = previewBeatmap?.keyCount ?? Math.round(selectedBeatmap?.cs ?? 0);
   const replayPreviewWidth = replayPreviewKeyCount >= 7
     ? 460
@@ -4368,25 +4366,12 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayAudioLoading(false);
     setReplayAudioSizeBytes(null);
     setReplayPreviewError(null);
-    const referenceBeatmap = usesSetPreviewForReplayAudio ? getSetPreviewReferenceBeatmap(maniaBeatmaps) : null;
-    const referenceBeatmapId = referenceBeatmap?.id && referenceBeatmap.id !== selectedBeatmap.id ? referenceBeatmap.id : null;
-    Promise.all([
-      getBeatmapFileWithRetry(selectedBeatmap.id, metadataBeatmapsetId),
-      referenceBeatmapId ? getBeatmapFileWithRetry(referenceBeatmapId, metadataBeatmapsetId).catch(() => null) : Promise.resolve(null),
-    ])
-      .then(([selectedResult, referenceResult]) => {
+    getBeatmapFileWithRetry(selectedBeatmap.id, metadataBeatmapsetId)
+      .then((selectedResult) => {
         if (cancelled) return;
-        const selectedParsed = parseCachedManiaBeatmap(selectedBeatmap.id, selectedResult.content);
-        const referenceParsed = referenceResult && referenceBeatmapId
-          ? parseCachedManiaBeatmap(referenceBeatmapId, referenceResult.content)
-          : selectedParsed;
-        const timedRateVariant = usesSetPreviewForReplayAudio && isLikelyTimedRateVariantSet(maniaBeatmaps);
         const previewPlan = getChartPreviewPlaybackPlan({
-          selectedBeatmap: selectedParsed,
-          referenceBeatmap: referenceParsed,
+          selectedBeatmap: parseCachedManiaBeatmap(selectedBeatmap.id, selectedResult.content),
           usesSetPreviewForAudio: usesSetPreviewForReplayAudio,
-          timedRateVariant,
-          selectedDifficultyRate,
         });
 
         setPreviewBeatmap(previewPlan.beatmap);
@@ -4408,7 +4393,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         } else {
           setReplayChartStartMs(previewPlan.startTimeMs);
           setReplayChartPlaybackMs(previewPlan.startTimeMs);
-          setReplayChartTimeScale(previewPlan.timeScale);
+          setReplayChartTimeScale(1);
           setReplayAudioMode(resolveInitialChartPreviewAudioMode({
             plannedAudioMode: previewPlan.audioMode,
             hasSelectedAudioFile: Boolean(previewPlan.beatmap.audioFilename),
@@ -4429,7 +4414,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     return () => {
       cancelled = true;
     };
-  }, [maniaBeatmaps, metadataBeatmapsetId, previewUrl, replayChartScrub, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
+  }, [metadataBeatmapsetId, previewUrl, replayChartScrub, replayPreviewRequested, selectedBeatmap, usesSetPreviewForReplayAudio]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;

@@ -4291,7 +4291,7 @@ function ReplayViewer({
       inputOverlayKeyHistory,
       missThumbHand,
       skinSettings: activeSkinSettings,
-      overlaySettings: renderer.getOverlaySettingsSnapshot?.() ?? overlaySettings,
+      overlaySettings: renderer.getOverlaySettingsSnapshot?.({ resolveLayout: true }) ?? overlaySettings,
       viewport: renderer.getViewportSnapshot?.(),
 
       leaderboard: rendererLeaderboardRef.current,
@@ -4319,6 +4319,8 @@ function ReplayViewer({
 
     const spec = buildReplayExportSpec(capture, {
       preset: options.preset,
+      encodingMode: options.encodingMode,
+      videoBitrate: options.videoBitrate,
       startMs: range.startMs,
       endMs: range.endMs,
       includeAudio: true,
@@ -4330,6 +4332,9 @@ function ReplayViewer({
     const begin = (target: ReplayExportDestinationTarget) => {
       try {
         manager.start({ spec, capture, target, title });
+        // Avoid running the live replay alongside its export renderer. The
+        // user can resume it manually; cancelling the picker never pauses it.
+        if (rendererRef.current === renderer && renderer.isPlaying) togglePlayRef.current?.();
       } catch {
         // The only synchronous failure is the busy guard, and the panel is
         // already showing the job that holds the slot.

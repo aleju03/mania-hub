@@ -27,6 +27,9 @@ import {
   REPLAY_EXPORT_PRESETS,
   REPLAY_EXPORT_SAMPLE_RATE,
   exportVideoBitrate,
+  DEFAULT_REPLAY_EXPORT_ENCODING_MODE,
+  isCustomVideoBitrateAllowed,
+  type ReplayExportEncodingMode,
   type ReplayExportPresetId,
 } from "./limits";
 import {
@@ -37,7 +40,7 @@ import {
 } from "./render-spec";
 import type { LocalExportResources, ReplayExportLeaderboardEntry } from "./types";
 import { REPLAY_EXPORT_AV1_QUANTIZER } from "./video-quality";
-import { replayExportDimensions } from "./composition";
+import { replayExportDimensions, replayExportViewport } from "./composition";
 
 export type ReplayExportCapture = {
   /** Identity, for the filename and the spec. None of it is required. */
@@ -115,6 +118,9 @@ export type ReplayExportCapture = {
 
 export type ReplayExportSpecOptions = {
   preset: ReplayExportPresetId;
+  encodingMode?: ReplayExportEncodingMode;
+  /** Optional explicit video bitrate in bits per second. */
+  videoBitrate?: number;
   startMs: number;
   endMs: number;
   /** False produces a video with no audio track at all. */
@@ -174,6 +180,11 @@ export function buildReplayExportSpec(
   options: ReplayExportSpecOptions,
 ): ReplayExportSpecV1 {
   const preset = REPLAY_EXPORT_PRESETS[options.preset];
+  const encodingMode = options.encodingMode ?? DEFAULT_REPLAY_EXPORT_ENCODING_MODE;
+  if (options.videoBitrate !== undefined && !isCustomVideoBitrateAllowed(options.videoBitrate)) {
+    throw new RangeError("Custom video bitrate must be between 0.5 and 20 Mbps.");
+  }
+  const quantizerMode = encodingMode === "compact" && options.videoBitrate === undefined;
   const dimensions = replayExportDimensions(capture.viewport ?? preset, preset);
   const wantsAudio = options.includeAudio && capture.audioEnabled;
   const hitsoundsEnabled = wantsAudio && capture.hitsoundsEnabled;
@@ -210,9 +221,11 @@ export function buildReplayExportSpec(
       width: dimensions.width,
       height: dimensions.height,
       fps: preset.fps,
-      videoCodec: "av1",
-      videoBitrate: exportVideoBitrate(preset, dimensions),
-      videoQuantizer: REPLAY_EXPORT_AV1_QUANTIZER,
+      encodingMode,
+      videoCodec: encodingMode === "compact" ? "av1" : "avc",
+      videoBitrate: options.videoBitrate ?? exportVideoBitrate(preset, dimensions, encodingMode),
+      videoBitrateMode: quantizerMode ? "quantizer" : "variable",
+      ...(quantizerMode ? { videoQuantizer: REPLAY_EXPORT_AV1_QUANTIZER } : {}),
       audioCodec: wantsAudio ? "aac" : null,
       audioBitrate: REPLAY_EXPORT_AUDIO_BITRATE,
       sampleRate: REPLAY_EXPORT_SAMPLE_RATE,
@@ -231,7 +244,7 @@ export function buildReplayExportSpec(
       leaderboardVisible: capture.leaderboardVisible,
       skinSettings: structuredClone(capture.skinSettings),
       overlaySettings: structuredClone(capture.overlaySettings),
-      ...(capture.viewport ? { viewport: { ...capture.viewport } } : {}),
+      ...(capture.viewport ? { viewport: replayExportViewport(capture.viewport, dimensions) } : {}),
     },
     audio: {
       songEnabled: wantsAudio && capture.songUrl !== null,

@@ -5,7 +5,8 @@ import { DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayOverlaySettings } from 
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayStage } from "../../lib/replay-overlay-layout";
 import type { ReplayViewportSnapshot } from "../../lib/replay-types";
-import { fitReplayComposition } from "../../lib/replay-export/composition";
+import { fitReplayComposition, replayExportViewport } from "../../lib/replay-export/composition";
+import { LAZER_LEADERBOARD } from "../../lib/replay-leaderboard";
 
 
 function createLayoutRenderer(fullHeightLayout: boolean) {
@@ -84,7 +85,9 @@ type OverlayRenderer = {
   getOverlayScale(layout: OverlayLayout, id: ReplayOverlayId): number;
   getOverlayFrame(layout: OverlayLayout, id: ReplayOverlayId, width: number, height: number, anchor?: { x: number; y: number }): OverlayBox;
   clampOverlayPosition(id: ReplayOverlayId, x: number, y: number, width: number, height: number, layout: OverlayLayout): { x: number; y: number };
-  getOverlaySettingsSnapshot(): ReplayOverlaySettings;
+  getOverlaySettingsSnapshot(options?: { resolveLayout?: boolean }): ReplayOverlaySettings;
+  prepareOverlayLayout(): void;
+  setOverlaySettings(settings: ReplayOverlaySettings): void;
   getOverlayPlacementOrigin(box: OverlayBox): { x: number; y: number };
   updateOverlayPlacements(placements: Array<readonly [ReplayOverlayId, Partial<ReplayOverlaySettings[ReplayOverlayId]>]>): void;
   updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>): void;
@@ -101,6 +104,7 @@ function overlayRenderer(settings = DEFAULT_REPLAY_OVERLAY_SETTINGS): OverlayRen
     skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 7),
     skinSettings: DEFAULT_REPLAY_SKIN_SETTINGS, scrollSpeed: 20, modRate: 1,
     overlaySettings: normalizeReplayOverlaySettings(settings), overlayHitboxes: [],
+    overlaySettingsInputSignature: JSON.stringify(normalizeReplayOverlaySettings(settings)),
     overlayReferenceLayout: null, ruleset: { accuracyMode: "stable" },
     render: vi.fn(), onOverlaySettingsChange: vi.fn(),
   });
@@ -113,6 +117,174 @@ function judgementFrame(renderer: OverlayRenderer): OverlayBox {
 }
 
 describe("overlay layout across fullscreen and video export", () => {
+  it.each(["before fullscreen", "in fullscreen"])("fits the leaderboard with hand stats when its scores arrive %s", (arrival) => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };
+    settings.handAccuracy = { enabled: true, x: 0.18, y: 0.36, scale: 1 };
+    settings.misses = { enabled: true, x: 0.18, y: 0.5, scale: 1 };
+    const viewer = overlayRenderer(settings);
+    viewer.ruleset.accuracyMode = "lazer";
+    viewer.cssHeight = 930;
+    const skinProfile = { ...getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 7), columnWidths: Array(7).fill(66) };
+    Object.assign(viewer, { skinProfile });
+    const draw = (renderer: OverlayRenderer, hasScores: boolean) => {
+      renderer.overlayHitboxes = [];
+      const layout = renderer.getLayout();
+      const ids: ReplayOverlayId[] = hasScores ? ["leaderboard", "handAccuracy", "misses"] : ["handAccuracy", "misses"];
+      return ids.map((id) => {
+        const scale = renderer.getOverlayScale(layout, id);
+        return renderer.getOverlayFrame(layout, id,
+          (id === "leaderboard" ? LAZER_LEADERBOARD.width : 100) * scale,
+          (id === "leaderboard" ? LAZER_LEADERBOARD.height : 45) * scale);
+      });
+    };
+    // The initial ResizeObserver callback runs while the score request is pending.
+    draw(viewer, false);
+    viewer.prepareOverlayLayout();
+    const captured = viewer.getOverlaySettingsSnapshot({ resolveLayout: true });
+    const original = draw(viewer, true);
+    if (arrival === "in fullscreen") draw(viewer, false);
+    for (let pass = 0; pass < 3; pass++) {
+      viewer.prepareOverlayLayout();
+      viewer.cssHeight = 1152;
+      viewer.fullscreenLayout = true;
+      viewer.invalidateLayoutCache();
+      const fullscreen = draw(viewer, true);
+      const scale = fullscreen[0].width / original[0].width;
+      expect(scale).toBeLessThan(1);
+      for (const index of [1, 2]) {
+        const gap = fullscreen[index].x - fullscreen[0].x - fullscreen[0].width;
+        expect(gap).toBeGreaterThan(0);
+        expect(gap).toBeCloseTo((original[index].x - original[0].x - original[0].width) * scale);
+      }
+      expect((fullscreen[0].y + fullscreen[0].height / 2) / 1152)
+        .toBeCloseTo((original[0].y + original[0].height / 2) / 930);
+      for (const height of [720, 1080]) {
+        const exporter = overlayRenderer(captured);
+        Object.assign(exporter, { skinProfile });
+        exporter.ruleset.accuracyMode = "lazer";
+        exporter.cssWidth = height * 16 / 9;
+        exporter.cssHeight = height;
+        exporter.fullscreenLayout = true;
+        const exported = draw(exporter, true);
+        for (let i = 0; i < exported.length; i++) {
+          for (const key of ["x", "y", "width", "height"] as const) {
+            expect(exported[i][key] / (height / 1152)).toBeCloseTo(fullscreen[i][key]);
+          }
+        }
+      }
+      viewer.prepareOverlayLayout();
+      viewer.cssHeight = 930;
+      viewer.fullscreenLayout = false;
+      viewer.invalidateLayoutCache();
+      expect(draw(viewer, true)).toEqual(original);
+    }
+  });
+
+  it.each(["stable", "lazer"] as const)("keeps %s overlay sizes/gaps through fullscreen, export, and return", (mode) => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard = { enabled: true, x: 0, y: 0.22, scale: 1 };
+    settings.handAccuracy = { enabled: true, x: 0.21, y: 0.36, scale: 1 };
+    settings.misses = { enabled: true, x: 0.21, y: 0.5, scale: 1 };
+    const viewer = overlayRenderer(settings);
+    viewer.ruleset.accuracyMode = mode;
+    viewer.cssHeight = 930;
+    Object.assign(viewer, { keyCount: 4, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4) });
+    const draw = (renderer: OverlayRenderer) => {
+      renderer.overlayHitboxes = [];
+      const layout = renderer.getLayout();
+      return (["leaderboard", "handAccuracy", "misses"] as const).map((id) => {
+        const scale = renderer.getOverlayScale(layout, id);
+        const width = id === "leaderboard" ? (mode === "lazer" ? LAZER_LEADERBOARD.width : 112) : 100;
+        return renderer.getOverlayFrame(layout, id, width * scale, (id === "leaderboard" ? 320 : 45) * scale);
+      });
+    };
+    const original = draw(viewer);
+    const captured = viewer.getOverlaySettingsSnapshot({ resolveLayout: true });
+    viewer.prepareOverlayLayout();
+    for (let pass = 0; pass < 3; pass++) {
+      viewer.cssHeight = 1152;
+      viewer.fullscreenLayout = true;
+      viewer.invalidateLayoutCache();
+      const fullscreen = draw(viewer);
+      expect(fullscreen.map((box) => box.width)).toEqual(original.map((box) => box.width));
+      expect((fullscreen[0].y + fullscreen[0].height / 2) / 1152)
+        .toBeCloseTo((original[0].y + original[0].height / 2) / 930);
+      for (const index of [1, 2]) {
+        expect(fullscreen[index].x - fullscreen[0].x - fullscreen[0].width)
+          .toBeCloseTo(original[index].x - original[0].x - original[0].width);
+      }
+      // A focus refresh must not reset the original geometry.
+      viewer.setOverlaySettings(settings);
+      for (const height of [720, 1080]) {
+        const exporter = overlayRenderer(captured);
+        exporter.ruleset.accuracyMode = mode;
+        Object.assign(exporter, { keyCount: 4, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4) });
+        exporter.cssWidth = height * 16 / 9;
+        exporter.cssHeight = height;
+        exporter.fullscreenLayout = true;
+        const exported = draw(exporter);
+        const ratio = height / 1152;
+        for (let i = 0; i < exported.length; i++) {
+          for (const key of ["x", "y", "width", "height"] as const) {
+            expect(exported[i][key] / ratio).toBeCloseTo(fullscreen[i][key]);
+          }
+        }
+      }
+      viewer.cssHeight = 930;
+      viewer.fullscreenLayout = false;
+      viewer.invalidateLayoutCache();
+      expect(draw(viewer)).toEqual(original);
+    }
+  });
+
+  it.each([4, 7])("fits a wide %iK viewer into 16:9 with shared side-overlay spacing", (keyCount) => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };
+    settings.handAccuracy = { enabled: true, x: 0.16, y: 0.46, scale: 1 };
+    settings.misses = { enabled: true, x: 0.15, y: 0.58, scale: 1 };
+    settings.judgements = { enabled: true, x: 0.77, y: 0.36, scale: 1 };
+    const viewer = overlayRenderer(settings);
+    Object.assign(viewer, { keyCount, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, keyCount) });
+    viewer.cssHeight = 930;
+    const draw = (renderer: OverlayRenderer) => {
+      const layout = renderer.getLayout();
+      return (["leaderboard", "handAccuracy", "misses", "judgements"] as const).map((id) => {
+        const scale = renderer.getOverlayScale(layout, id);
+        return renderer.getOverlayFrame(layout, id, (id === "leaderboard" ? 112 : 145) * scale, 36 * scale);
+      });
+    };
+    const original = draw(viewer);
+    const sourceLayout = viewer.getLayout();
+    const sourceSettings = structuredClone(viewer.overlaySettings);
+    const captured = viewer.getOverlaySettingsSnapshot({ resolveLayout: true });
+    for (const height of [720, 1080]) {
+      const output = { width: height * 16 / 9, height };
+      const viewport = replayExportViewport(viewer.getViewportSnapshot(), output);
+      const fit = fitReplayComposition(viewport, output);
+      const exporter = overlayRenderer(captured);
+      Object.assign(exporter, { keyCount, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, keyCount),
+        canvas: { style: {} }, renderViewport: viewport, renderResolution: fit.scale,
+      });
+      exporter.measureCanvas();
+      const frames = draw(exporter);
+      const layout = exporter.getLayout();
+      expect(fit).toMatchObject({ x: 0, y: 0, width: output.width, height });
+      const groupScale = frames[0].width / original[0].width;
+      for (const index of [1, 2]) {
+        const originalGap = original[index].x - original[0].x - original[0].width;
+        const gap = frames[index].x - frames[0].x - frames[0].width;
+        expect(gap).toBeGreaterThan(0);
+        expect(gap).toBeCloseTo(originalGap * groupScale);
+        expect(frames[index].x + frames[index].width).toBeLessThanOrEqual(layout.playfieldX);
+      }
+      expect(frames[3].x).toBeGreaterThanOrEqual(layout.playfieldX + layout.playfieldWidth);
+      expect(frames[3].x + frames[3].width).toBeLessThanOrEqual(layout.w);
+    }
+    expect(viewer.getLayout()).toEqual(sourceLayout);
+    expect(viewer.overlaySettings).toEqual(sourceSettings);
+  });
+
   it("clamps a saved off-screen lazer leaderboard when watching stable", () => {
     const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     settings.leaderboard.x = -0.06;
@@ -229,7 +401,7 @@ describe("overlay layout across fullscreen and video export", () => {
     const fullscreen = judgementFrame(viewer);
     const layout = viewer.getLayout();
     expect(fullscreen.x).toBeGreaterThanOrEqual(layout.playfieldX + layout.playfieldWidth);
-    expect(fullscreen.height / original.height).toBeCloseTo(1152 / 900);
+    expect(fullscreen.height).toBeCloseTo(original.height);
     expect(fullscreen.y / 1152).toBeCloseTo(original.y / 900);
 
     const captured = viewer.getOverlaySettingsSnapshot();

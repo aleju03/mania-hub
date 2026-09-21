@@ -7,13 +7,12 @@ import {
   createClockStallWatch,
   findDensestPreviewStartTime,
   getChartPreviewPlaybackPlan,
-  getSetPreviewReferenceBeatmap,
   hasPreviewNotes,
+  hasRateEditedAudio,
   getPreviewNotes,
   getPreviewScrollVelocities,
   isLikelyTimedRateVariantSet,
   parseDifficultyRate,
-  parseSelectedDifficultyRate,
   pickPreviewStartTime,
   resolveInitialChartPreviewAudioMode,
   shouldUseSetPreviewForReplayAudio,
@@ -158,72 +157,40 @@ describe("chart preview helpers", () => {
     const plan = getChartPreviewPlaybackPlan({
       selectedBeatmap: beatmap,
       usesSetPreviewForAudio: true,
-      timedRateVariant: false,
-      selectedDifficultyRate: 1,
     });
 
     expect(plan.beatmap).toBe(beatmap);
     expect(plan.startTimeMs).toBe(39_000);
-    expect(plan.timeScale).toBe(1);
     expect(plan.audioMode).toBe("selected-file");
   });
 
-  it("can use a mapped reference preview for timed rate variants", () => {
-    const selectedBeatmap: ManiaBeatmap = {
+  it("plays a rate edit against its own file at its own note times", () => {
+    // A rate edit's notes are already re-timed for its own audio file. The
+    // reference-chart stand-in this replaces re-scaled the 1.0x chart against
+    // the set clip, which osu! may have cut from any member's file.
+    const rateEdit: ManiaBeatmap = {
       ...baseBeatmap,
-      previewTime: -1,
+      version: "[4K] Orbbbb [0,8x Rate]",
+      audioFilename: "audio-0.8.mp3",
+      previewTime: 60_000,
       notes: [
         { column: 0, time: 60_000, endTime: 60_000, isHold: false },
         { column: 1, time: 60_500, endTime: 60_500, isHold: false },
       ],
     };
-    const referenceBeatmap: ManiaBeatmap = {
-      ...baseBeatmap,
-      previewTime: 60_000,
-      notes: selectedBeatmap.notes,
-    };
 
     const plan = getChartPreviewPlaybackPlan({
-      selectedBeatmap,
-      referenceBeatmap,
-      usesSetPreviewForAudio: true,
-      timedRateVariant: true,
-      selectedDifficultyRate: 1.5,
+      selectedBeatmap: rateEdit,
+      usesSetPreviewForAudio: shouldUseSetPreviewForReplayAudio("Animation Warrior Theme", [
+        difficulty("[4K] Orbbbb [0,7x Rate]", 243),
+        difficulty("[4K] Orbbbb [0,8x Rate]", 212),
+        difficulty("[4K] Orbbbb", 170),
+      ]),
     });
 
-    expect(plan.beatmap).toBe(referenceBeatmap);
+    expect(plan.beatmap).toBe(rateEdit);
     expect(plan.startTimeMs).toBe(60_000);
-    expect(plan.timeScale).toBe(1.5);
-    expect(plan.audioMode).toBe("set-preview");
-  });
-
-  it("keeps set preview audio for timed rate variants with no mapped preview when notes are visible", () => {
-    const selectedBeatmap: ManiaBeatmap = {
-      ...baseBeatmap,
-      previewTime: -1,
-      notes: [
-        { column: 0, time: 1_000, endTime: 1_000, isHold: false },
-        { column: 1, time: 1_500, endTime: 1_500, isHold: false },
-      ],
-    };
-    const referenceBeatmap: ManiaBeatmap = {
-      ...baseBeatmap,
-      previewTime: -1,
-      notes: selectedBeatmap.notes,
-    };
-
-    const plan = getChartPreviewPlaybackPlan({
-      selectedBeatmap,
-      referenceBeatmap,
-      usesSetPreviewForAudio: true,
-      timedRateVariant: true,
-      selectedDifficultyRate: 1.4,
-    });
-
-    expect(plan.beatmap).toBe(referenceBeatmap);
-    expect(plan.startTimeMs).toBe(0);
-    expect(plan.timeScale).toBe(1.4);
-    expect(plan.audioMode).toBe("set-preview");
+    expect(plan.audioMode).toBe("selected-file");
   });
 
   it("keeps chart previews on the set preview audio until seek", () => {
@@ -282,9 +249,31 @@ describe("set preview audio source", () => {
     ])).toBe(false);
   });
 
-  it("keeps the set preview for rate variants, whose lengths differ by their own rate", () => {
+  it("downloads the song for rate edits, whose set clip is at an unknown rate", () => {
+    // Each rate edit ships its own re-encoded file and osu! cuts the set clip
+    // from whichever one it picks. Two reported sets had it cut from the
+    // slowest edit, so the 1.0x chart ran against 0.7x audio.
     const beatmaps = [difficulty("[4K] Macabre", 120), difficulty("[4K] Macabre 1.2x", 100)];
     expect(isLikelyTimedRateVariantSet(beatmaps)).toBe(true);
+    expect(hasRateEditedAudio(beatmaps)).toBe(true);
+    expect(shouldUseSetPreviewForReplayAudio("Odoru Mizushibuki", beatmaps)).toBe(false);
+
+    const oneRateEdit = [
+      difficulty("[4K] ade_maine's Challenge 0.7x (128bpm)", 391),
+      difficulty("[4K] ade_maine's Challenge", 273),
+      difficulty("[4K] Darkbbt's Insane", 273),
+    ];
+    expect(isLikelyTimedRateVariantSet(oneRateEdit)).toBe(false);
+    expect(shouldUseSetPreviewForReplayAudio("GHOST", oneRateEdit)).toBe(false);
+
+    const bracketBpm = [difficulty("[4K] Song [130]", 200), difficulty("[4K] Song [160]", 163)];
+    expect(hasRateEditedAudio(bracketBpm)).toBe(true);
+    expect(shouldUseSetPreviewForReplayAudio("Song", bracketBpm)).toBe(false);
+  });
+
+  it("keeps the set preview for a plain difficulty spread", () => {
+    const beatmaps = [difficulty("[4K] Easy", 165), difficulty("[4K] Normal", 165), difficulty("[4K] Insane", 165)];
+    expect(hasRateEditedAudio(beatmaps)).toBe(false);
     expect(shouldUseSetPreviewForReplayAudio("Odoru Mizushibuki", beatmaps)).toBe(true);
   });
 
@@ -325,13 +314,7 @@ describe("rate variant parsing", () => {
   it("treats a comma-decimal set as a rate variant rather than two songs", () => {
     const beatmaps = [difficulty("[4K] Supersensory", 150), difficulty("[4K] Supersensory [1,05x Rate]", 143)];
     expect(isLikelyTimedRateVariantSet(beatmaps)).toBe(true);
-    expect(shouldUseSetPreviewForReplayAudio("x7124", beatmaps)).toBe(true);
-  });
-
-  it("scales bracket-BPM variants against the base BPM", () => {
-    const beatmaps = [difficulty("[4K] Song [130]", 200), difficulty("[4K] Song [160]", 163)];
-    expect(parseSelectedDifficultyRate(beatmaps[1], beatmaps)).toBeCloseTo(160 / 130, 5);
-    expect(parseSelectedDifficultyRate(beatmaps[0], beatmaps)).toBe(1);
+    expect(hasRateEditedAudio(beatmaps)).toBe(true);
   });
 
   it("keeps a number that is part of the name out of the rate", () => {
@@ -340,33 +323,14 @@ describe("rate variant parsing", () => {
     expect(parseDifficultyRate("[4K] 1st Dan")).toBe(1);
   });
 
-  it("treats the named base of a rate-edit set as the 1.0x difficulty", () => {
-    const beatmaps = [
+  it("reads a rate marker on any member, not only sets that are nothing but rate edits", () => {
+    expect(hasRateEditedAudio([
       difficulty("[4K] 0.95", 191),
       difficulty("[4K] 2mnd", 182),
       difficulty("[4K] 1.05", 173),
-      difficulty("[4K] 1.1", 165),
-      difficulty("[4K] 1.25", 146),
-    ];
-    expect(parseSelectedDifficultyRate(beatmaps[1], beatmaps)).toBe(1);
-    expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] 2mnd");
-  });
-
-  it("points the reference beatmap at the unscaled difficulty", () => {
-    const beatmaps = [difficulty("[4K] Macabre 1.2x", 100), difficulty("[4K] Macabre", 120)];
-    expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] Macabre");
-  });
-
-  it("rates a set of only rate edits against its member nearest 1.0x, not against 1.0x", () => {
-    const slow = [difficulty("[4K] x0.85", 259), difficulty("[4K] x0.9", 244)];
-    expect(getSetPreviewReferenceBeatmap(slow)?.version).toBe("[4K] x0.9");
-    expect(parseSelectedDifficultyRate(slow[1], slow)).toBe(1);
-    expect(parseSelectedDifficultyRate(slow[0], slow)).toBeCloseTo(0.85 / 0.9, 5);
-
-    const fast = [difficulty("[4K] HOMICIDE [1.45]", 61), difficulty("[4K] HOMICIDE [1.4]", 63)];
-    expect(getSetPreviewReferenceBeatmap(fast)?.version).toBe("[4K] HOMICIDE [1.4]");
-    expect(parseSelectedDifficultyRate(fast[1], fast)).toBe(1);
-    expect(parseSelectedDifficultyRate(fast[0], fast)).toBeCloseTo(1.45 / 1.4, 5);
+    ])).toBe(true);
+    expect(hasRateEditedAudio([difficulty("[4K] 2mnd", 182), difficulty("[4K] 3rd", 190)])).toBe(false);
+    expect(hasRateEditedAudio([difficulty("[4K] x0.85", 259)])).toBe(false);
   });
 });
 

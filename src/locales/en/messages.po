@@ -3846,6 +3846,10 @@ msgstr "Chinese"
 msgid "Choke"
 msgstr "Choke"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Choose a bitrate from 0.5 to 20 Mbps."
+msgstr "Choose a bitrate from 0.5 to 20 Mbps."
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Choose a collector"
 msgstr "Choose a collector"
@@ -4938,6 +4942,10 @@ msgstr "Custom"
 msgid "Custom (30-200)"
 msgstr "Custom (30-200)"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Custom bitrate"
+msgstr "Custom bitrate"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Custom color"
 msgstr "Custom color"
@@ -6007,6 +6015,14 @@ msgstr "farm verdict"
 msgid "Farmed"
 msgstr "Farmed"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Fast export"
+msgstr "Fast export"
+
+#: src/lib/replay-export/errors.ts
+msgid "Fast export isn't available in this browser at this size. Try a lower preset or Smaller file."
+msgstr "Fast export isn't available in this browser at this size. Try a lower preset or Smaller file."
+
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Fast single-note runs flowing across the keys."
 msgstr "Fast single-note runs flowing across the keys."
@@ -6772,6 +6788,10 @@ msgstr "hard"
 #: src/components/packs/collections/RecordBoards.tsx
 #~ msgid "hardest cards to find"
 #~ msgstr "hardest cards to find"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Hardware encoding isn't available here. Smaller file uses your CPU."
+msgstr "Hardware encoding isn't available here. Smaller file uses your CPU."
 
 #: src/components/communities/field-options.tsx
 msgid "Harmful, hateful or a scam"
@@ -11327,6 +11347,10 @@ msgstr "PP-gain map recommendations tuned to a player."
 msgid "Precision"
 msgstr "Precision"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Prefers hardware encoding. Larger files."
+msgstr "Prefers hardware encoding. Larger files."
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Preparing"
 msgstr "Preparing"
@@ -13785,6 +13809,10 @@ msgstr "sliced"
 msgid "Slovak"
 msgstr "Slovak"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Slower export with more CPU use."
+msgstr "Slower export with more CPU use."
+
 #: src/routes/player/$username.tsx
 msgid "Slowest"
 msgstr "Slowest"
@@ -13792,6 +13820,10 @@ msgstr "Slowest"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "Small"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Smaller file"
+msgstr "Smaller file"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Snipe feed"
@@ -14681,8 +14713,8 @@ msgid "That username doesn't look right."
 msgstr "That username doesn't look right."
 
 #: src/components/replay/ReplayControls.tsx
-msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
-msgstr "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
+#~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
+#~ msgstr "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -15596,6 +15628,10 @@ msgstr "These runs used different rates ({leftRate}x vs {rightRate}x). Side by s
 #: src/lib/replay-side-by-side.ts
 msgid "These scores are on different maps. Side by side plays two runs of the same beatmap."
 msgstr "These scores are on different maps. Side by side plays two runs of the same beatmap."
+
+#: src/components/replay/ReplayControls.tsx
+msgid "These settings exceed this browser's export limit. Choose a shorter range, lower preset, or lower bitrate."
+msgstr "These settings exceed this browser's export limit. Choose a shorter range, lower preset, or lower bitrate."
 
 #: src/components/packs/GiftInbox.tsx
 msgid "They no longer have that card to give."
@@ -16686,6 +16722,14 @@ msgstr "Vibro detected. This play does not count toward skill or dan ratings."
 #: src/components/maps/MapDetailModal.tsx
 msgid "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
 msgstr "Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes."
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Video bitrate"
+msgstr "Video bitrate"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Video bitrate (Mbps)"
+msgstr "Video bitrate (Mbps)"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"

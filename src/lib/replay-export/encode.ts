@@ -72,6 +72,7 @@ export class ReplayExportEncoder {
       latencyMode: "quality",
       keyFrameInterval: REPLAY_EXPORT_KEYFRAME_SECONDS,
       hardwareAcceleration: plan.hardwareAcceleration,
+      fullCodecString: plan.fullCodecString,
     });
     this.output.addVideoTrack(this.videoSource, {
       frameRate: timeline.fps,

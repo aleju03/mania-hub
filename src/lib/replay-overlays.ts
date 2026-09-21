@@ -113,6 +113,10 @@ export interface ReplayOverlayReference {
   hudScale: number;
   /** Scale of fixed HUD spacing in this reference, independent of font scaling. */
   spacingScale?: number;
+  /** Resolved side-group geometry shared by fullscreen and video export. */
+  region?: "left" | "right" | "playfield";
+  groupExtent?: number;
+  groupStart?: number;
 }
 
 export type ReplayOverlayPosition = Pick<ReplayOverlayPlacement, "x" | "y" | "scale" | "reference">;
@@ -266,12 +270,19 @@ function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement, mi
 
 function normalizeOverlayReference(value: unknown): ReplayOverlayReference | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale } = value as ReplayOverlayReference;
+  const { width, height, playfieldX, playfieldWidth, hudScale, spacingScale, region, groupExtent, groupStart } = value as ReplayOverlayReference;
   if (![width, height, playfieldX, playfieldWidth, hudScale].every((number) => typeof number === "number" && Number.isFinite(number))) return undefined;
   if (width <= 0 || height <= 0 || playfieldX < 0 || playfieldWidth <= 0
     || playfieldX + playfieldWidth > width + 0.001 || hudScale <= 0) return undefined;
   if (spacingScale !== undefined && (typeof spacingScale !== "number" || !Number.isFinite(spacingScale) || spacingScale <= 0)) return undefined;
-  return { width, height, playfieldX, playfieldWidth, hudScale, ...(spacingScale === undefined ? {} : { spacingScale }) };
+  const validRegion = region === "left" || region === "right" || region === "playfield";
+  return {
+    width, height, playfieldX, playfieldWidth, hudScale,
+    ...(spacingScale === undefined ? {} : { spacingScale }),
+    ...(validRegion ? { region } : {}),
+    ...(validRegion && typeof groupExtent === "number" && Number.isFinite(groupExtent) && groupExtent > 0 ? { groupExtent } : {}),
+    ...(validRegion && typeof groupStart === "number" && Number.isFinite(groupStart) && groupStart >= 0 ? { groupStart } : {}),
+  };
 }
 
 function placementMatches(a: ReplayOverlayPlacement, b: ReplayOverlayPlacement | undefined): boolean {

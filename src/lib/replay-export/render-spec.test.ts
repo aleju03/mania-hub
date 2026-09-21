@@ -94,6 +94,19 @@ describe("replay export spec", () => {
     expect(parsed.ruleset.mods[0]).toEqual({ acronym: "DT", settings: { speed_change: 1.4 } });
   });
 
+  it("validates and hashes the encoding mode, without allowing software quantizer mode in Fast export", () => {
+    const fast = makeSpec();
+    fast.output.encodingMode = "fast";
+    const compact = structuredClone(fast);
+    compact.output.encodingMode = "compact";
+    expect(cloneReplayExportSpec(fast).output.encodingMode).toBe("fast");
+    expect(canonicalReplayExportSpecJson(fast)).not.toBe(canonicalReplayExportSpecJson(compact));
+    expect(() => parseReplayExportSpec({ ...fast, output: { ...fast.output, encodingMode: "turbo" } })).toThrow(/encodingMode/);
+    fast.output.videoCodec = "av1";
+    fast.output.videoQuantizer = 96;
+    expect(() => parseReplayExportSpec(fast)).toThrow(/Fast exports/);
+  });
+
   it("refuses a locator where an asset identity belongs", () => {
     const spec = makeSpec() as unknown as Record<string, unknown>;
     spec.assets = [{ role: "song", id: "blob:https://mania-tracker.com/abc" }];

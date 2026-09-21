@@ -10,16 +10,27 @@ import { formatBytes } from "#/lib/format";
 import {
   DEFAULT_EXPORT_CLIP_SECONDS,
   DEFAULT_REPLAY_EXPORT_PRESET,
+  DEFAULT_REPLAY_EXPORT_ENCODING_MODE,
+  MIN_CUSTOM_VIDEO_BITRATE,
+  MAX_CUSTOM_VIDEO_BITRATE,
+  isCustomVideoBitrateAllowed,
   REPLAY_EXPORT_AUDIO_BITRATE,
+  REPLAY_EXPORT_SAMPLE_RATE,
+  REPLAY_EXPORT_CHANNELS,
   REPLAY_EXPORT_PRESETS,
   REPLAY_EXPORT_PRESET_ORDER,
   checkExportAdmission,
   exportVideoBitrate,
   type ReplayExportPresetId,
+  type ReplayExportEncodingMode,
 } from "#/lib/replay-export/limits";
 import { MIN_EXPORT_RANGE_MS } from "#/lib/replay-export/timeline";
 import { replayExportDimensions } from "#/lib/replay-export/composition";
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
+
+// The mobile/fullscreen seek bar can live outside this controls component.
+// Associate each bar with its replay so seeking is part of the export dialog.
+const replaySeekBarOwners = new WeakMap<HTMLElement, MutableRefObject<ReplayRendererLike | null>>();
 
 interface ReplayControlsProps {
   /** "card" is the classic settings card in the page flow (phones); "overlay"
@@ -96,6 +107,8 @@ interface ReplayControlsProps {
 }
 
 export type ReplayVideoExportOptions = {
+  encodingMode?: ReplayExportEncodingMode;
+  videoBitrate?: number;
   kind: "clip" | "full" | "custom";
   /** Output seconds for a clip; source span is this times the rate. */
   durationSeconds?: number;
@@ -203,11 +216,15 @@ export function ReplayControls({
   const [shareAtTimestamp, setShareAtTimestamp] = useState(false);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
+  const [videoMenuLayout, setVideoMenuLayout] = useState({ alignRight: false, maxHeight: 512 });
   const [videoClipMode, setVideoClipMode] = useState(false);
   const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("clip");
   const [videoCustomStartMs, setVideoCustomStartMs] = useState<number | null>(null);
   const [videoCustomEndMs, setVideoCustomEndMs] = useState<number | null>(null);
   const [videoPreset, setVideoPreset] = useState<ReplayExportPresetId>(DEFAULT_REPLAY_EXPORT_PRESET);
+  const [preferredVideoEncodingMode, setPreferredVideoEncodingMode] = useState<ReplayExportEncodingMode>(DEFAULT_REPLAY_EXPORT_ENCODING_MODE);
+  const [customBitrateMbps, setCustomBitrateMbps] = useState<string | null>(null);
+  const [fastEncodingSupport, setFastEncodingSupport] = useState<{ key: string; available: boolean } | null>(null);
   const [scrollSpeedInput, setScrollSpeedInput] = useState(String(scrollSpeed));
   const [editingScrollSpeed, setEditingScrollSpeed] = useState(false);
   const cancelScrollSpeedCommitRef = useRef(false);
@@ -224,6 +241,7 @@ export function ReplayControls({
   // Only phones get the native share sheet: desktop Chrome answers
   // navigator.share too, with a QR-code-and-email window nobody wants here.
   const canNativeShare = nativeShareSupported && isCoarsePointer;
+  const formatMbps = (bitsPerSecond: number) => (bitsPerSecond / 1_000_000).toFixed(2);
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
 
   useEffect(() => {
@@ -234,6 +252,7 @@ export function ReplayControls({
     if (!videoMenuOpen) return;
     const onDocPointer = (event: PointerEvent) => {
       const el = videoMenuRef.current;
+      if (event.composedPath().some((target) => target instanceof HTMLElement && replaySeekBarOwners.get(target) === rendererRef)) return;
       if (el && !el.contains(event.target as Node)) setVideoMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
@@ -245,7 +264,7 @@ export function ReplayControls({
       document.removeEventListener("pointerdown", onDocPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [videoMenuOpen]);
+  }, [videoMenuOpen, rendererRef]);
 
   useEffect(() => {
     if (!sharePanelOpen) return;
@@ -379,6 +398,42 @@ export function ReplayControls({
   const effectiveExportRate = Math.max(0.01, speed * modRate);
   const exportPreset = REPLAY_EXPORT_PRESETS[videoPreset];
   const exportDimensions = replayExportDimensions(rendererRef.current?.getViewportSnapshot?.() ?? exportPreset, exportPreset);
+  const customVideoBitrate = customBitrateMbps === null ? undefined : Math.round(Number(customBitrateMbps) * 1_000_000);
+  const customBitrateInvalid = customVideoBitrate !== undefined
+    && (customBitrateMbps?.trim() === "" || !isCustomVideoBitrateAllowed(customVideoBitrate));
+  // The probe asks whether a hardware encoder exists for this frame size and
+  // rate; the bitrate stays out of the key so a slider drag does not re-run it
+  // and flicker the export button. The job re-validates at the real bitrate.
+  const fastVideoBitrate = exportVideoBitrate(exportPreset, exportDimensions, "fast");
+  const fastSupportKey = `${exportDimensions.width}:${exportDimensions.height}:${exportPreset.fps}`;
+  // Keep the last verdict while a re-probe is in flight so the notice text
+  // (one line vs two) does not change height and shift the scrolled panel.
+  const fastSupportUnavailable = fastEncodingSupport !== null && !fastEncodingSupport.available;
+  const videoEncodingMode = fastSupportUnavailable ? "compact" : preferredVideoEncodingMode;
+  const fastSupportChecking = videoEncodingMode === "fast" && fastEncodingSupport?.key !== fastSupportKey;
+  const recommendedVideoBitrate = exportVideoBitrate(exportPreset, exportDimensions, videoEncodingMode);
+  const selectedVideoBitrate = !customBitrateInvalid && customVideoBitrate !== undefined ? customVideoBitrate : recommendedVideoBitrate;
+  // Check on menu intent, before the user opens a save picker. The real job
+  // repeats validation with a smoke encode; this is only the inexpensive probe.
+  useEffect(() => {
+    if (!videoMenuOpen) return;
+    let active = true;
+    void import("#/lib/replay-export/capabilities")
+      .then(({ planExportCodecs }) => planExportCodecs({
+        encodingMode: "fast",
+        width: exportDimensions.width,
+        height: exportDimensions.height,
+        fps: exportPreset.fps,
+        videoBitrate: fastVideoBitrate,
+        audioBitrate: REPLAY_EXPORT_AUDIO_BITRATE,
+        sampleRate: REPLAY_EXPORT_SAMPLE_RATE,
+        channels: REPLAY_EXPORT_CHANNELS,
+        wantsAudio: false,
+      }))
+      .then((plan) => { if (active) setFastEncodingSupport({ key: fastSupportKey, available: plan !== null }); })
+      .catch(() => { if (active) setFastEncodingSupport({ key: fastSupportKey, available: false }); });
+    return () => { active = false; };
+  }, [videoMenuOpen, exportDimensions.width, exportDimensions.height, exportPreset.fps, fastVideoBitrate, fastSupportKey]);
   const replayDurationMs = rendererRef.current?.duration ?? 0;
   const exportOutputSeconds = videoExportKind === "full"
     ? replayDurationMs / (1000 * effectiveExportRate)
@@ -391,7 +446,7 @@ export function ReplayControls({
   const exportAdmission = checkExportAdmission({
     destination: exportDestination,
     outputSeconds: exportOutputSeconds,
-    videoBitrate: exportVideoBitrate(exportPreset, exportDimensions),
+    videoBitrate: selectedVideoBitrate,
     audioBitrate: REPLAY_EXPORT_AUDIO_BITRATE,
     // Resource preparation checks the input working set before encoding.
     workingMemoryBytes: 0,
@@ -403,14 +458,14 @@ export function ReplayControls({
   const videoMarkingActive = videoExportKind === "custom" && videoClipMode;
 
   const submitVideoExport = () => {
-    if (!onExportVideo || videoExportBusy || !exportRangeReady || exportOverLimit) return;
+    if (!onExportVideo || videoExportBusy || !exportRangeReady || exportOverLimit || fastSupportChecking || customBitrateInvalid) return;
     setVideoMenuOpen(false);
     if (videoExportKind === "full") {
-      onExportVideo({ kind: "full", preset: videoPreset });
+      onExportVideo({ kind: "full", preset: videoPreset, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate });
     } else if (videoExportKind === "clip") {
-      onExportVideo({ kind: "clip", durationSeconds: DEFAULT_EXPORT_CLIP_SECONDS, preset: videoPreset });
+      onExportVideo({ kind: "clip", durationSeconds: DEFAULT_EXPORT_CLIP_SECONDS, preset: videoPreset, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate });
     } else {
-      onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, preset: videoPreset });
+      onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, preset: videoPreset, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate });
     }
   };
 
@@ -667,7 +722,16 @@ export function ReplayControls({
     <div ref={videoMenuRef} className={`${isOverlay ? "" : "order-9 sm:order-none "}relative inline-flex`}>
       <button
         type="button"
-        onClick={() => setVideoMenuOpen((open) => !open)}
+        onClick={() => {
+          if (!videoMenuOpen && videoMenuRef.current) {
+            const bounds = videoMenuRef.current.getBoundingClientRect();
+            setVideoMenuLayout({
+              alignRight: bounds.left + 208 > window.innerWidth - 8,
+              maxHeight: Math.max(100, Math.min(512, bounds.top - 16)),
+            });
+          }
+          setVideoMenuOpen((open) => !open);
+        }}
         disabled={videoExportBusy}
         aria-label={t`Replay video export options`}
         aria-expanded={videoMenuOpen}
@@ -690,7 +754,8 @@ export function ReplayControls({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.1 }}
-            className={`absolute bottom-full z-50 mb-1.5 w-52 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${isOverlay ? "right-0" : "left-0"}`}
+            style={{ maxHeight: videoMenuLayout.maxHeight }}
+            className={`absolute bottom-full z-50 mb-1.5 w-52 overflow-y-auto rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${videoMenuLayout.alignRight ? "right-0" : "left-0"}`}
           >
             <button
               type="button"
@@ -806,14 +871,79 @@ export function ReplayControls({
                     key={presetId}
                     type="button"
                     onClick={() => setVideoPreset(presetId)}
-                    className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums hover:bg-osu-b4 ${
-                      videoPreset === presetId ? "bg-osu-pink text-white" : "text-osu-f0"
+                    className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums transition-colors ${
+                      videoPreset === presetId ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
                     }`}
                   >
                     {preset.height}p{preset.fps}
                   </button>
                 );
               })}
+            </div>
+            <div className="my-1 h-px bg-osu-b2" />
+            <div className="grid grid-cols-2 gap-1">
+              {(["fast", "compact"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={videoEncodingMode === mode}
+                  disabled={mode === "fast" && fastSupportUnavailable}
+                  onClick={() => setPreferredVideoEncodingMode(mode)}
+                  className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${
+                    videoEncodingMode === mode ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
+                  }`}
+                >
+                  {mode === "fast" ? t`Fast export` : t`Smaller file`}
+                </button>
+              ))}
+            </div>
+            <div className="px-1 py-1 text-[10px] leading-tight text-osu-f1">
+              {fastSupportUnavailable
+                ? t`Hardware encoding isn't available here. Smaller file uses your CPU.`
+                : videoEncodingMode === "fast"
+                  ? t`Prefers hardware encoding. Larger files.`
+                  : t`Slower export with more CPU use.`}
+            </div>
+            <div className="my-1 h-px bg-osu-b2" />
+            <div className="space-y-1.5 px-1 pb-1 text-[10px] text-osu-f1">
+              <label className="flex cursor-pointer items-center justify-between gap-2">
+                <span>{t`Custom bitrate`}</span>
+                <input
+                  type="checkbox"
+                  className="accent-osu-pink"
+                  checked={customBitrateMbps !== null}
+                  onChange={(event) => setCustomBitrateMbps(event.target.checked ? formatMbps(recommendedVideoBitrate) : null)}
+                />
+              </label>
+              {customBitrateMbps !== null && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      aria-label={t`Video bitrate`}
+                      min={MIN_CUSTOM_VIDEO_BITRATE / 1_000_000}
+                      max={MAX_CUSTOM_VIDEO_BITRATE / 1_000_000}
+                      step={0.25}
+                      value={selectedVideoBitrate / 1_000_000}
+                      onChange={(event) => setCustomBitrateMbps(Number(event.target.value).toFixed(2))}
+                      className={`${sliderClass} min-w-0 flex-1`}
+                    />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      aria-label={t`Video bitrate (Mbps)`}
+                      value={customBitrateMbps}
+                      onChange={(event) => setCustomBitrateMbps(event.target.value.replace(",", "."))}
+                      onBlur={() => {
+                        if (!customBitrateInvalid && customVideoBitrate !== undefined) setCustomBitrateMbps(formatMbps(customVideoBitrate));
+                      }}
+                      className="w-12 rounded bg-osu-b4 px-1.5 py-1 text-right text-[11px] tabular-nums text-white outline-none focus:ring-1 focus:ring-osu-pink"
+                    />
+                    <span>Mbps</span>
+                  </div>
+                  {customBitrateInvalid && <p className="text-osu-yellow">{t`Choose a bitrate from 0.5 to 20 Mbps.`}</p>}
+                </>
+              )}
             </div>
             <div className="my-1 h-px bg-osu-b2" />
             <div className="px-1 text-[10px] leading-relaxed text-osu-f1">
@@ -826,7 +956,7 @@ export function ReplayControls({
               <div className="flex justify-between gap-2">
                 <span>{t`Estimated size`}</span>
                 <span className="tabular-nums text-white">
-                  {exportRangeReady ? formatBytes(exportEstimatedBytes) : "--"}
+                  {exportRangeReady && !customBitrateInvalid ? formatBytes(exportEstimatedBytes) : "--"}
                 </span>
               </div>
               <div className="flex justify-between gap-2">
@@ -847,7 +977,7 @@ export function ReplayControls({
             )}
             {exportOverLimit && exportRangeReady && (
               <div className="px-1 pt-1 text-[10px] leading-tight text-osu-yellow">
-                {t`That's longer than this browser can export in one go. Pick a shorter range or a lower preset.`}
+                {t`These settings exceed this browser's export limit. Choose a shorter range, lower preset, or lower bitrate.`}
               </div>
             )}
             <div className="px-1 pt-1 text-[10px] leading-tight text-osu-f1">
@@ -856,9 +986,10 @@ export function ReplayControls({
             <button
               type="button"
               onClick={submitVideoExport}
-              disabled={videoExportBusy || !exportRangeReady || exportOverLimit}
+              disabled={videoExportBusy || !exportRangeReady || exportOverLimit || fastSupportChecking || customBitrateInvalid}
               className="mt-1.5 flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
             >
+              {fastSupportChecking && <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />}
               {t`Export video`}
             </button>
           </motion.div>
@@ -1603,6 +1734,8 @@ export function ReplayProgressBar({
 
   return (
     <div
+      ref={(element) => { if (element) replaySeekBarOwners.set(element, rendererRef); }}
+      data-replay-seek-bar=""
       className={`group relative flex items-center gap-3 px-4 pt-3 pb-1 ${className}`}
       onContextMenu={(e) => {
         e.preventDefault();

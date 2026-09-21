@@ -11,6 +11,7 @@ import type { MessageDescriptor } from "@lingui/core";
 export const REPLAY_EXPORT_ERROR_CODES = [
   "export_busy",
   "unsupported_video_codec",
+  "fast_export_unavailable",
   "unsupported_audio_codec",
   "unsupported_audio_decode",
   "unsupported_pitch_processing",
@@ -66,6 +67,8 @@ export function isRetryableExportError(code: ReplayExportErrorCode): boolean {
 
 export function describeReplayExportError(code: ReplayExportErrorCode): MessageDescriptor {
   switch (code) {
+    case "fast_export_unavailable":
+      return msg`Fast export isn't available in this browser at this size. Try a lower preset or Smaller file.`;
     case "export_busy":
       return msg`Another replay video is still exporting. Finish or cancel it first.`;
     case "unsupported_video_codec":

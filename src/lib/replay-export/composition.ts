@@ -1,13 +1,15 @@
+import type { ReplayViewportSnapshot } from "../replay-types";
+
 type Size = { width: number; height: number };
 
-/** The preset is picture height; width follows the captured stage's aspect ratio. */
-export function replayExportDimensions(viewport: Size, preset: Size): Size {
-  const scale = preset.height / viewport.height;
-  // Even dimensions work with the 4:2:0 encoders on both codec paths.
-  return {
-    width: Math.max(2, Math.round(viewport.width * scale / 2) * 2),
-    height: preset.height,
-  };
+/** Video presets always mean standard 16:9 pixel dimensions. */
+export function replayExportDimensions(_viewport: Size, preset: Size): Size {
+  return { width: preset.width, height: preset.height };
+}
+
+/** Use the same layout as a fullscreen viewport at the viewer's width. */
+export function replayExportViewport(viewport: ReplayViewportSnapshot, output: Size): ReplayViewportSnapshot {
+  return { ...viewport, height: viewport.width * output.height / output.width, fullscreen: true };
 }
 
 /** Fit the entire captured stage with one transform, preserving every gap and proportion. */

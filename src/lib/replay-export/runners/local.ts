@@ -87,11 +87,13 @@ export async function runLocalExport(options: LocalExportRunOptions): Promise<Re
     height: spec.output.height,
     fps: spec.output.fps,
     videoBitrate: spec.output.videoBitrate,
+    videoBitrateMode: spec.output.videoBitrateMode,
     audioBitrate: spec.output.audioBitrate,
     sampleRate: spec.output.sampleRate,
     channels: spec.output.channels,
     wantsAudio,
     preferredVideoCodec: spec.output.videoCodec,
+    encodingMode: spec.output.encodingMode,
     videoQuantizer: spec.output.videoQuantizer,
   });
   if (!plan) throw new ReplayExportError("unsupported_video_codec", "No validated local encoder configuration.");
