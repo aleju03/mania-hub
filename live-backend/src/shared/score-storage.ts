@@ -130,7 +130,7 @@ export async function persistScoresDisplayMetadata(db: Db, scores: OscScore[], u
                 cs = excluded.cs,
                 difficulty_rating = excluded.difficulty_rating,
                 bpm = excluded.bpm,
-                max_combo = excluded.max_combo,
+                max_combo = coalesce(excluded.max_combo, beatmaps.max_combo),
                 version = excluded.version,
                 url = excluded.url,
                 metadata_json = case
@@ -179,9 +179,22 @@ function hydrateScoreDisplayMetadata(
   return {
     ...score,
     user: user ? mergeScoreUser(score.user, user) : score.user,
-    beatmap: score.beatmap ?? metadata?.beatmap,
+    beatmap: score.beatmap ? mergeScoreBeatmap(score.beatmap, metadata?.beatmap) : metadata?.beatmap,
     beatmapset: score.beatmapset ?? metadata?.beatmapset,
   };
+}
+
+/* osu! score payloads embed the beatmap with max_combo null. The card model
+   falls back to note count for its combo ratio in that case, so a score rated
+   straight from the payload and the same score rated after a round trip
+   through the beatmaps table disagree by a fraction of a point - enough to
+   flip a rounded rating by ±1 on a profile refresh. Fill the gap from the
+   stored row so both paths rate the same beatmap. */
+function mergeScoreBeatmap(current: OsuBeatmap, stored: OsuBeatmap | undefined): OsuBeatmap {
+  if (!stored || current.id !== stored.id) return current;
+  const hasCombo = typeof current.max_combo === "number" && current.max_combo > 0;
+  if (hasCombo || !(typeof stored.max_combo === "number" && stored.max_combo > 0)) return current;
+  return { ...current, max_combo: stored.max_combo };
 }
 
 function mergeScoreUser(current: ScoreUser | undefined, stored: ScoreUser): ScoreUser {

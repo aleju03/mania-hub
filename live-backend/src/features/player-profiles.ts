@@ -1075,8 +1075,11 @@ export async function persistSessionProfileSnapshot(db: Db, userId: number): Pro
   const userFetchedAt = existing?.user_fetched_at ?? fetchedAt;
   await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
   const cardUser = existing ? unpackJson<Record<string, unknown>>(existing.user_json, {}) : user;
+  // Rate from the same hydrated view the user-only refresh uses, or the card
+  // history flips ±1 between the two paths on unchanged scores.
+  const cardScores = await hydrateScoresDisplayMetadata(db, bestScores);
   await writeProfileWithManiacardHistory(db, userId, {
-    scores: bestScores, globalPp: readNumber(readRecord(cardUser.statistics)?.pp), recordedAt: fetchedAt,
+    scores: cardScores, globalPp: readNumber(readRecord(cardUser.statistics)?.pp), recordedAt: fetchedAt,
   }, "session", {
     sql: `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
      values (?, ?, ?, ?, ?, ?, ?, ?, null)
@@ -1176,8 +1179,9 @@ async function fetchAndStoreProfileSnapshot(
   const fetchedAt = nowIso();
   const usernameKey = normalizeProfileKey(username);
   await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
+  const cardScores = await hydrateScoresDisplayMetadata(db, bestScores);
   await writeProfileWithManiacardHistory(db, userId, {
-    scores: bestScores, globalPp: readNumber(readRecord(storedUser.statistics)?.pp), recordedAt: fetchedAt,
+    scores: cardScores, globalPp: readNumber(readRecord(storedUser.statistics)?.pp), recordedAt: fetchedAt,
   }, "refresh", {
     sql: `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
      values (?, ?, ?, ?, ?, ?, ?, ?, null)
