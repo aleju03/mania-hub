@@ -9,12 +9,12 @@ import type { CollectedCard } from "#/lib/pack-collection";
 
    Two kinds of detail, both hanging off the bottom right edge like stickers
    on a sleeve, outside the art: a scalloped medal for a low serial (gold for
-   the first pull, silver and bronze for the next two, a holo finish when
-   nobody else ever pulled it), and the player's own face again as a round
-   badge when the collector pulled themselves. */
+   the first pull, silver and bronze for the next two, a holo finish when this
+   is the only copy that ever existed), and the player's own face again as a
+   round badge when the collector pulled themselves. */
 
 export type CardMark =
-  /* Serial 1 and nobody else ever pulled it. */
+  /* Serial 1 and no second serial was ever minted. */
   | { kind: "only" }
   /* Serial 1 of several. */
   | { kind: "first" }
@@ -26,13 +26,18 @@ export type CardMark =
 const EARLY_SERIALS = 3;
 
 /* The marks a holding earns, in the order they are worn. A card the desk
-   handed out has a serial like any other but was never pulled, so its serial
-   says nothing (grantedAt is what tells the two apart, same as the
-   spotlight). */
+   handed out has a serial like any other but was never pulled, so its place in
+   the mint order says nothing (grantedAt is what tells the two apart, same as
+   the spotlight) and it wears no ordinal medal.
+
+   1/1 is the exception, because it is a claim about the card rather than about
+   the race for it: one serial ever minted means this copy is the only one that
+   exists, which is just as true of a one-off the desk minted (an awarded
+   Eternal, a variant nobody else holds) as of a card nobody else ever pulled. */
 export function cardMarksFor(card: CollectedCard, collectorUserId: number | null | undefined): CardMark[] {
   const marks: CardMark[] = [];
   const pulled = !card.grantedAt;
-  if (pulled && card.serial === 1 && card.mintedTotal === 1) marks.push({ kind: "only" });
+  if (card.serial === 1 && card.mintedTotal === 1) marks.push({ kind: "only" });
   else if (pulled && card.serial === 1) marks.push({ kind: "first" });
   else if (pulled && card.serial && card.serial <= EARLY_SERIALS) marks.push({ kind: "early", serial: card.serial });
   if (collectorUserId != null && collectorUserId === card.userId) marks.push({ kind: "self" });
@@ -97,8 +102,12 @@ export function CardMarks({ card, collectorUserId }: {
     <span className="pointer-events-none absolute -bottom-2 right-1 flex items-center gap-0.5" data-card-marks="">
       {marks.map((mark) => {
         switch (mark.kind) {
-          case "only":
-            return <span key={mark.kind} className="pointer-events-auto" title={t`The only one ever pulled`}><Seal finish="holo" label="1/1" title={t`The only one ever pulled`} /></span>;
+          case "only": {
+            /* The same seal either way, but a card the desk minted was never
+               pulled, so it gets the claim the mark actually makes. */
+            const title = card.grantedAt ? t`Only one` : t`The only one ever pulled`;
+            return <span key={mark.kind} className="pointer-events-auto" title={title}><Seal finish="holo" label="1/1" title={title} /></span>;
+          }
           case "first":
             return <span key={mark.kind} className="pointer-events-auto" title={t`First to pull this card`}><Seal finish="gold" label="1" title={t`First to pull this card`} /></span>;
           case "early": {

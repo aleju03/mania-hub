@@ -16,9 +16,13 @@ it("marks a serial 1 as first, or as the only one when nobody else pulled it", (
   expect(cardMarksFor({ ...base, serial: 4, mintedTotal: 40 }, 9)).toEqual([]);
 });
 
-it("never reads a granted or gifted card's serial as a pull", () => {
-  expect(cardMarksFor({ ...base, serial: 1, mintedTotal: 1, grantedAt: 5 }, 9)).toEqual([]);
+it("never reads a granted or gifted card's serial as a pull, but still calls a lone serial a 1/1", () => {
+  expect(cardMarksFor({ ...base, serial: 1, mintedTotal: 12, grantedAt: 5 }, 9)).toEqual([]);
+  expect(cardMarksFor({ ...base, serial: 2, mintedTotal: 12, grantedAt: 5 }, 9)).toEqual([]);
   expect(cardMarksFor({ ...base, serial: 1, grantedAt: 5, giftedBy: { userId: 2, username: "Giver" } }, 9)).toEqual([]);
+  // One serial ever minted: the copy is unique whoever minted it, which is
+  // what an awarded Eternal or a desk one-off is.
+  expect(cardMarksFor({ ...base, serial: 1, mintedTotal: 1, grantedAt: 5 }, 9)).toEqual([{ kind: "only" }]);
 });
 
 it("marks a collector holding their own card, only when the surface knows whose shelf it is", () => {
