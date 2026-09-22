@@ -1,6 +1,6 @@
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame, ReplayLifeBarFrame } from "./types";
-import type { Judgment, ManiaReplayMod, ManiaReplayTimingPoint, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
+import type { Judgment, ManiaReplayMod, ManiaReplayTimingPoint, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "#replay-judge/mania-replay-judgement.ts";
 import {
   applyManiaReplayModsToNotes,
   buildReplaySegments,
@@ -10,7 +10,7 @@ import {
   getManiaReplayModSetting,
   getManiaReplayRuleset,
   simulateManiaReplayJudgements,
-} from "./mania-replay-judgement.ts";
+} from "#replay-judge/mania-replay-judgement.ts";
 
 export interface ReplayHitCounts {
   countGeki: number;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeManiaRulesetWhatIf } from "./replay-what-if";
-import { getManiaReplayHitWindows, getManiaReplayRuleset } from "./mania-replay-judgement";
+import { getManiaReplayHitWindows, getManiaReplayRuleset } from "#replay-judge/mania-replay-judgement";
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
 

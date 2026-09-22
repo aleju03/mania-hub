@@ -1,4 +1,4 @@
-import type { Judgment } from "./mania-replay-judgement";
+import type { Judgment } from "#replay-judge/mania-replay-judgement";
 
 // Live score counters for the replay HUD, mirroring the two real clients:
 // - stable: ScoreV1 osu!mania (wiki/Gameplay/Score/ScoreV1/osu!mania), 1M cap

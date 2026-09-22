@@ -1562,6 +1562,49 @@ export async function fetchLivePlayerReplayScoresDirect(
   return fetchLiveJson(`/api/profiles/${userId}/replay-scores?${query.toString()}`);
 }
 
+export interface CompanellaPublicPlay {
+  id: string;
+  keyCount: number | null;
+  /* From the uploaded file, so the uploader wrote them. */
+  title: string | null;
+  artist: string | null;
+  version: string | null;
+  creator: string | null;
+  mods: string[];
+  runtimeRate: number;
+  accuracy: number | null;
+  maxCombo: number;
+  count300: number;
+  countGeki: number;
+  count100: number;
+  countKatu: number;
+  count50: number;
+  countMiss: number;
+  playedAt: string | null;
+  msd: number | null;
+  ssr: number | null;
+  chartLabel: string | null;
+}
+
+export interface CompanellaPublicProfile {
+  userId: number;
+  plays: CompanellaPublicPlay[];
+  ratings: Array<{ keyCount: number; overall: number | null; officialOverall: number | null; localPlays: number }>;
+}
+
+/* A restricted player's Companella imports, the one public Companella read.
+   Null when there is nothing to show: an active account, Companella switched
+   off, or no imports. */
+export async function fetchCompanellaPublicProfileDirect(userId: number): Promise<CompanellaPublicProfile | null> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  try {
+    return await fetchLiveJson<CompanellaPublicProfile>(`/api/integrations/companella/public/players/${userId}`);
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/about`);

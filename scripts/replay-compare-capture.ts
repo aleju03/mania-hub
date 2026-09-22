@@ -21,7 +21,7 @@ import {
   type ReplayNoteState,
   simulateManiaReplayJudgements,
   type Judgment,
-} from "../src/lib/mania-replay-judgement.ts";
+} from "#replay-judge/mania-replay-judgement.ts";
 import type { ReplayHitCounts } from "../src/lib/replay-validation.ts";
 import {
   countReplayJudgements,

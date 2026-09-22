@@ -4,7 +4,7 @@
 // Ported to a seekable Pixi drawing layer; judgements come from Mania Hub.
 // License: public/licenses/mania-replay-master.txt
 import type { ManiaNote } from "./beatmap-parser";
-import type { Judgment, ReplayNoteState, ReplaySegment } from "./mania-replay-judgement";
+import type { Judgment, ReplayNoteState, ReplaySegment } from "#replay-judge/mania-replay-judgement";
 import { REPLAY_MASTER_MIN_SCROLL_SPEED, normalizeReplayMasterScrollSpeed } from "./replay-overlays";
 
 export const REPLAY_MASTER_COLORS: Record<Judgment, string> = {

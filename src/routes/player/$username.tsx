@@ -59,6 +59,8 @@ import {
 import { useAuth } from "../../lib/auth-context";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
+import { ProfileImportedPlays } from "../../components/companella/ProfileImportedPlays";
+import { DisplayNameButton, DisplayNameForm, pendingRenameDate } from "../../components/player/DisplayNameEditor";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
@@ -403,6 +405,9 @@ function slimLoaderUser(user: OsuUser): OsuUser {
     playstyle: user.playstyle,
     post_count: user.post_count,
     comments_count: user.comments_count,
+    ...(user.account_status ? { account_status: user.account_status } : {}),
+    ...(user.display_name ? { display_name: user.display_name } : {}),
+    ...(user.display_name_next_change_at ? { display_name_next_change_at: user.display_name_next_change_at } : {}),
   };
 }
 
@@ -781,6 +786,9 @@ function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
     a.is_online === b.is_online &&
     a.last_visit === b.last_visit &&
     a.is_supporter === b.is_supporter &&
+    a.account_status === b.account_status &&
+    a.display_name === b.display_name &&
+    a.display_name_next_change_at === b.display_name_next_change_at &&
     a.statistics?.pp === b.statistics?.pp &&
     a.statistics?.play_count === b.statistics?.play_count &&
     a.statistics?.global_rank === b.statistics?.global_rank &&
@@ -1105,6 +1113,7 @@ export function PlayerProfilePage({
   const loaderBestFilters = loaderData?.cachedBestFilters ?? EMPTY_PLAYER_BEST_FILTERS;
   const loaderManiaCardSkills = loaderData?.cachedManiaCardSkills ?? null;
   const [user, setUser] = useState<OsuUser | null>(() => loaderSnapshot?.user ?? null);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [best, setBest] = useState<OsuScore[]>(() => loaderBestScores);
   const [bestFilters, setBestFilters] = useState<PlayerBestFilterMetadata>(() => loaderBestFilters);
   const [maniaCardSkills, setManiaCardSkills] = useState<ManiaSkills | null>(() => loaderManiaCardSkills);
@@ -1563,6 +1572,13 @@ export function PlayerProfilePage({
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
+    // osu! 404s a restricted or missing account; the stored list is all there is.
+    if (user.account_status) {
+      setBestWindowLoaded(true);
+      setBestWindowComplete(true);
+      setLoadingInsights(false);
+      return;
+    }
 
     let cancelled = false;
     const timeout = window.setTimeout(
@@ -1982,7 +1998,27 @@ export function PlayerProfilePage({
     .filter((variant) => variant.mode === "mania" && variant.pp > 0)
     .sort((a, b) => a.variant.localeCompare(b.variant));
 
-  const heroMeta: ReactNode[] = [
+  // osu! 404s a restricted or missing account, so its profile link would too.
+  // A frozen account's owner can name their profile (DisplayNameEditor).
+  const canRename = !!user.account_status && auth.viewer?.id === user.id;
+  const heroMeta: ReactNode[] = user.account_status ? [
+    <span key="status" className="rounded-full bg-osu-red/20 px-2 py-0.5 font-semibold text-osu-red-light">
+      {user.account_status === "restricted" ? <Trans>Restricted on osu!</Trans> : <Trans>Not on osu! anymore</Trans>}
+    </span>,
+    // A display name is the player's own label; the osu! name stays in view
+    // so it can never pass for someone else's.
+    ...(user.display_name ? [
+      <span key="osu-name"><Trans>osu! name {user.username}</Trans></span>,
+    ] : []),
+    ...(canRename ? [
+      <DisplayNameButton
+        key="rename"
+        nextChangeAt={pendingRenameDate(user.display_name_next_change_at)}
+        open={renameOpen}
+        onOpen={() => setRenameOpen(true)}
+      />,
+    ] : []),
+  ] : [
     <a
       key="osu"
       href={`https://osu.ppy.sh/users/${user.id}/mania`}
@@ -2673,7 +2709,7 @@ export function PlayerProfilePage({
                     box is tighter than the ink: a capital J overhangs it on the
                     left and below. The padding/-margin pair buys room on every
                     side without moving anything. */}
-                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"
@@ -2699,6 +2735,27 @@ export function PlayerProfilePage({
                   </span>
                 ))}
               </div>
+              {canRename && renameOpen ? (
+                <DisplayNameForm
+                  current={user.display_name ?? null}
+                  osuName={user.username}
+                  onClose={() => setRenameOpen(false)}
+                  onSaved={(displayName, nextChangeAt) => {
+                    // Cached snapshots still carry the old name; the next visit refetches.
+                    playerSnapshotDataCache.clear();
+                    userDataCache.clear();
+                    setUser((current) => {
+                      if (!current) return current;
+                      const { display_name: _previous, ...rest } = current;
+                      return {
+                        ...rest,
+                        ...(displayName ? { display_name: displayName } : {}),
+                        display_name_next_change_at: nextChangeAt,
+                      };
+                    });
+                  }}
+                />
+              ) : null}
             </div>
           </div>
 
@@ -2935,7 +2992,7 @@ export function PlayerProfilePage({
             </div>
             {(tab === "recent" || (tab === "best" && availableKeyModes.length > 1)) && (
               <div className="hidden min-w-0 items-center gap-2 lg:flex">
-                {tab === "recent" && (
+                {tab === "recent" && !user.account_status && (
                   <RecentOsuSourceButton
                     loading={loadingOsuRecent}
                     loaded={recentOsuLoaded}
@@ -2986,12 +3043,14 @@ export function PlayerProfilePage({
             <div className={`mt-3 flex flex-wrap items-center gap-2 lg:hidden ${
               availableKeyModes.length > 1 ? "justify-between" : "justify-end"
             }`}>
-              <RecentOsuSourceButton
-                loading={loadingOsuRecent}
-                loaded={recentOsuLoaded}
-                fetchedAt={recentOsuFetchedAt}
-                onFetch={handleFetchOsuRecent}
-              />
+              {!user.account_status && (
+                <RecentOsuSourceButton
+                  loading={loadingOsuRecent}
+                  loaded={recentOsuLoaded}
+                  fetchedAt={recentOsuFetchedAt}
+                  onFetch={handleFetchOsuRecent}
+                />
+              )}
               {availableKeyModes.length > 1 && (
                 <KeyModeControl
                   availableKeyModes={availableKeyModes}
@@ -3091,6 +3150,16 @@ export function PlayerProfilePage({
               >
                 <PlayerActivityPanel user={user} />
               </motion.div>
+            ) : tab === "recent" && user.account_status ? (
+              <motion.div
+                key="imported"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.14 }}
+              >
+                <ProfileImportedPlays userId={user.id} />
+              </motion.div>
             ) : tab === "skills" ? (
               <motion.div
                 key="skills"
@@ -3152,7 +3221,7 @@ export function PlayerProfilePage({
             )}
           </AnimatePresence>
 
-          {tab !== "about" && tab !== "card" && tab !== "activity" && !loadingScores && !scoresError && canShowMore && (
+          {tab !== "about" && tab !== "card" && tab !== "activity" && !(tab === "recent" && user.account_status) && !loadingScores && !scoresError && canShowMore && (
             <div className="pt-3 flex justify-center">
               <button
                 type="button"

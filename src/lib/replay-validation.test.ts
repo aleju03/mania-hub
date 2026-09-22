@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
 import { buildStableReplayComboEvents, countReplayJudgements, resolveReplayJudgementEvents, validateReplaySimulation } from "./replay-validation";
-import type { ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement";
+import type { ReplayJudgementEvent, ReplayNoteState } from "#replay-judge/mania-replay-judgement";
 
 describe("replay validation", () => {
   it("converts replay judgement events into osu!mania hit counts", () => {

@@ -88,6 +88,15 @@ export interface OsuUser {
   playstyle: string[] | null;
   post_count: number;
   comments_count: number;
+  /* Mania Hub's own flag, set by the live backend when osu! no longer serves
+     the account: `restricted` when osu! told us so at sign-in, `missing` when
+     osu! just 404s. The profile shown is the last one stored. */
+  account_status?: "restricted" | "missing";
+  /* The name a restricted player gave their profile. A label only: the URL
+     and everything keyed on the account keep `username`. */
+  display_name?: string;
+  /* When that player may rename again; absent once they can. */
+  display_name_next_change_at?: string;
 }
 
 export interface OsuCovers {

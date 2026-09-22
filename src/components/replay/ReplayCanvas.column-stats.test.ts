@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
-import type { ReplayJudgementEvent } from "../../lib/mania-replay-judgement";
+import type { ReplayJudgementEvent } from "#replay-judge/mania-replay-judgement";
 
 type Hit = { column: number; judgment: number; offsetMs: number };
 

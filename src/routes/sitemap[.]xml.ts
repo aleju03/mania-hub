@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCanonicalOrigin } from "#/lib/origin";
+import { fetchPlayerSitemapEntries, type PlayerSitemapEntry } from "#/lib/player-sitemap";
 import { fetchSkinSitemapEntries, type SkinSitemapEntry } from "#/lib/skins";
 
 // Paths that should be crawled and indexed. Keep in sync with robots.txt
@@ -52,13 +53,22 @@ function urlEntry(
   </url>`;
 }
 
-export function buildSitemap(origin: string, skins: SkinSitemapEntry[]): string {
+export function buildSitemap(
+  origin: string,
+  skins: SkinSitemapEntry[],
+  players: PlayerSitemapEntry[] = [],
+): string {
   const urls = [
     ...STATIC_PATHS.map(({ path, changefreq, priority }) =>
       urlEntry(`${origin}${path}`, changefreq, priority)),
     // Every public skin page, also reachable through /skins pagination.
     ...skins.map((skin) =>
       urlEntry(`${origin}${skin.path}`, "monthly", "0.6", lastmodDate(skin.lastmod))),
+    // Ranked player profiles. No page links to one in its server HTML (every
+    // player list fills in the browser), so without these a crawler only
+    // finds a profile by running the page's JavaScript.
+    ...players.map((player) =>
+      urlEntry(`${origin}${player.path}`, "weekly", "0.5", lastmodDate(player.lastmod))),
   ].join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -67,16 +77,47 @@ ${urls}
 </urlset>`;
 }
 
+// Cloudflare passes the sitemap through uncached (cf-cache-status DYNAMIC),
+// and every build spends the backend rate bucket this server's SSR reads share,
+// so each instance builds it once an hour. A build whose player list failed is
+// retried after a few minutes instead.
+const SITEMAP_TTL_MS = 60 * 60_000;
+const SITEMAP_RETRY_TTL_MS = 5 * 60_000;
+const sitemapCache = new Map<string, { xml: string; expiresAt: number }>();
+const sitemapInflight = new Map<string, Promise<string>>();
+
+function getSitemapXml(origin: string): Promise<string> {
+  const cached = sitemapCache.get(origin);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.xml);
+  const pending = sitemapInflight.get(origin);
+  if (pending) return pending;
+  const build = (async () => {
+    let playersFailed = false;
+    // An unreachable backend serves the static paths alone: a short sitemap
+    // beats a 500.
+    const [skins, players] = await Promise.all([
+      fetchSkinSitemapEntries().catch(() => []),
+      fetchPlayerSitemapEntries().catch(() => {
+        playersFailed = true;
+        return [];
+      }),
+    ]);
+    const xml = buildSitemap(origin, skins, players);
+    sitemapCache.set(origin, {
+      xml,
+      expiresAt: Date.now() + (playersFailed ? SITEMAP_RETRY_TTL_MS : SITEMAP_TTL_MS),
+    });
+    return xml;
+  })().finally(() => sitemapInflight.delete(origin));
+  sitemapInflight.set(origin, build);
+  return build;
+}
+
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const origin = getCanonicalOrigin(request);
-        // An unreachable backend serves the static paths alone: a short
-        // sitemap beats a 500, and the s-maxage below means this walk is a
-        // daily cost rather than a per-crawl one.
-        const skins = await fetchSkinSitemapEntries().catch(() => []);
-        const xml = buildSitemap(origin, skins);
+        const xml = await getSitemapXml(getCanonicalOrigin(request));
         return new Response(xml, {
           status: 200,
           headers: {

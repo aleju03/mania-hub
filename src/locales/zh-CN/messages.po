@@ -498,6 +498,11 @@ msgstr "{0} 张 GOAT"
 msgid "{0} icon"
 msgstr "{0} 的图标"
 
+#. placeholder {0}: mode.contributingLocalPlays
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "{0} imported plays counted"
+msgstr ""
+
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} is live"
@@ -969,6 +974,14 @@ msgstr "在 {map} 上以 {speed} 打出 {acc}%"
 #: src/components/packs/album/AlbumView.tsx
 msgid "{ALBUM_SEASON} series"
 msgstr "{ALBUM_SEASON} 系列"
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "{appName} needs your Mania Hub account to send plays to."
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "{appName} needs your Mania Tracker account to send plays to."
+msgstr ""
 
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
@@ -1799,6 +1812,14 @@ msgstr "<0>{0}</0> 个音效"
 msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
 msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不代表你在这个键数上更差。"
 
+#: src/routes/companella_.authorize.tsx
+#~ msgid "<0>{appName}</0> wants to access your Mania Hub account"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "<0>{appName}</0> wants to access your Mania Tracker account"
+msgstr ""
+
 #: src/components/packs/collections/CollectorShelf.tsx
 #~ msgid "<0>{collector}</0> has not opened a pack."
 #~ msgstr "<0>{collector}</0> 还没有开过卡包。"
@@ -2187,6 +2208,10 @@ msgstr "一个收藏册至少要有 {USER_COLLECTION_MIN_ITEMS} 张谱面"
 msgid "a collector"
 msgstr "一位收藏者"
 
+#: src/components/companella/SecurityActivity.tsx
+msgid "A country change is not a problem on its own. VPNs, mobile networks and dual boot all move it, and nothing here bans an account or deletes a score."
+msgstr ""
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "A customizable picture for your osu! profile that keeps itself updated."
 msgstr "一张可以自定义的图片，放在你的 osu! 个人资料里，还会自己更新。"
@@ -2354,6 +2379,11 @@ msgstr "A-Z"
 msgid "About"
 msgstr "关于"
 
+#. placeholder {0}: match.relativeRate.toFixed(2)
+#: src/components/companella/SubmissionDetail.tsx
+msgid "About {0}x the file this was matched against."
+msgstr ""
+
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/rankings.tsx
@@ -2374,9 +2404,14 @@ msgstr "接受"
 msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
 msgstr "Vibro 谱面的有效成绩：准确率 {0}，MAX:300 比值 {qualityRatio}:1，OD{1}。"
 
+#: src/components/companella/TestClientPanel.tsx
 #: src/components/layout/Nav.tsx
 msgid "Account"
 msgstr "账号"
+
+#: src/components/companella/SecurityActivity.tsx
+msgid "Account activity"
+msgstr ""
 
 #: src/components/layout/Nav.tsx
 msgid "Account menu"
@@ -2388,6 +2423,7 @@ msgstr "账号菜单"
 msgid "accuracy"
 msgstr "准确率"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
@@ -2473,6 +2509,7 @@ msgstr "统计自 {usageSampleSize} 个带 Mod 的最佳成绩"
 msgid "across {usageSampleSize} top plays"
 msgstr "统计自 {usageSampleSize} 个最佳成绩"
 
+#: src/components/companella/InstallationList.tsx
 #: src/components/me/GoalsPanel.tsx
 msgid "Active"
 msgstr "进行中"
@@ -2566,6 +2603,10 @@ msgstr "发布前请至少添加 {USER_COLLECTION_MIN_ITEMS} 张谱面。"
 #: src/components/packs/BindersView.tsx
 #~ msgid "Add cards"
 #~ msgstr "添加卡片"
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "Add charts the site is missing to the shared chart pool"
+#~ msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Add color"
@@ -2778,6 +2819,10 @@ msgstr "快好了{elapsedLabel}"
 msgid "already a GOAT"
 msgstr "已经是 GOAT"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Already answered"
+msgstr ""
+
 #: src/components/packs/SetsView.tsx
 msgid "Already in set"
 msgstr "已在卡组中"
@@ -2834,6 +2879,10 @@ msgstr "一个你多半能超过的旧成绩"
 msgid "analysis"
 msgstr "分析"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Analysis"
+msgstr ""
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "analysis unavailable"
 msgstr "暂无分析"
@@ -2863,6 +2912,10 @@ msgstr "还有 {0} 位"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "and {0} more below these"
 msgstr "此外还有 {0} 次排在这些之后"
+
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Another player already goes by that name."
+msgstr "已有其他玩家使用这个名字。"
 
 #: src/lib/replay-export/errors.ts
 msgid "Another replay video is still exporting. Finish or cancel it first."
@@ -2961,6 +3014,22 @@ msgstr "应用到所有列"
 msgid "Applying…"
 msgstr "应用中…"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Approve a Companella installation for your osu! account."
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Approved"
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Approved installations"
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "Approving a new connection needs a recent sign-in. Sign in again, then approve."
+#~ msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Arabic"
 msgstr "阿拉伯语"
@@ -3054,9 +3123,17 @@ msgstr "2026年8月23日"
 #~ msgid "Aurora"
 #~ msgstr "极光"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Authorize {appName}"
+msgstr ""
+
 #: src/routes/discord.tsx
 msgid "Authorize. The bot needs to send messages and embed links."
 msgstr "授权。机器人需要发送消息和嵌入链接的权限。"
+
+#: src/routes/companella_.authorize.tsx
+msgid "Authorizing will redirect to <0>{redirectHost}</0> on this computer."
+msgstr ""
 
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/lib/signature-style.ts
@@ -3541,6 +3618,10 @@ msgstr "浏览皮肤"
 msgid "Browser preferences and local caches stay on your device until they expire, are replaced, or you clear localStorage. osu! login sessions can last up to 30 days unless you log out earlier."
 msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Browser test client"
+msgstr ""
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
 msgstr "音频缓冲中"
@@ -3598,16 +3679,19 @@ msgstr "按玩家"
 msgid "Calculating skills..."
 msgstr "正在计算技能…"
 
+#: src/components/companella/InstallationList.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/player/DisplayNameEditor.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/TranslationReportForm.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
+#: src/routes/companella_.authorize.tsx
 #: src/routes/report.tsx
 msgid "Cancel"
 msgstr "取消"
@@ -3732,6 +3816,15 @@ msgstr "更换{0}"
 msgid "Change map"
 msgstr "更换谱面"
 
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Change name"
+msgstr "更改名字"
+
+#. placeholder {0}: formatDate(nextChangeAt, "UTC", locale)
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Change name on {0}"
+msgstr "{0} 可更改名字"
+
 #: src/routes/farm-helper.tsx
 msgid "change player"
 msgstr "更换玩家"
@@ -3768,6 +3861,10 @@ msgstr "修改皮肤可见范围失败。请重试。"
 msgid "Chart"
 msgstr "谱面"
 
+#: src/components/companella/TestClientPanel.tsx
+msgid "Chart (.osu)"
+msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "chart changed on osu!, waiting for a fresh check"
 msgstr "谱面在 osu! 上有改动，等待重新检查"
@@ -3776,6 +3873,10 @@ msgstr "谱面在 osu! 上有改动，等待重新检查"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "chart dan"
 msgstr "谱面段位"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Chart dan"
+msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Chart Dan"
@@ -3793,6 +3894,10 @@ msgstr "谱面估计"
 #: src/components/maps/DanProgressRail.tsx
 msgid "Chart estimate: {0}"
 msgstr "谱面估计值：{0}"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Chart file"
+msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -3818,6 +3923,14 @@ msgstr "谱面预览流速数值"
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Chart preview volume"
 msgstr "谱面预览音量"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Chart relationship"
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#~ msgid "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
+#~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "chasing your first {chaseTarget}pp play"
@@ -4094,6 +4207,7 @@ msgstr "点击查看"
 msgid "client"
 msgstr "客户端"
 
+#: src/components/companella/InstallationList.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Client"
 msgstr "客户端"
@@ -4101,6 +4215,7 @@ msgstr "客户端"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -4333,13 +4448,47 @@ msgstr "社区投票选出新的 GOAT"
 #~ msgid "Compact"
 #~ msgstr "紧凑"
 
+#: src/routes/companella_.test-callback.tsx
+#: src/routes/companella.tsx
+msgid "Companella"
+msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the installation, and the approval is bound to that installation only."
+msgstr ""
+
 #: src/routes/farm-helper.tsx
 msgid "compared to {range} pp"
 msgstr "对比 {range} pp"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Completion"
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Connect Companella"
+msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Connect Companella to Mania Hub and review the plays it imported."
+#~ msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Connect Companella to Mania Tracker and review the plays it imported."
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "Connect your Discord account first."
 msgstr "请先关联你的 Discord 账号。"
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Connected"
+msgstr ""
+
+#. placeholder {0}: result.username
+#: src/components/companella/TestClientPanel.tsx
+msgid "Connected as {0}."
+msgstr ""
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
@@ -4348,6 +4497,10 @@ msgstr "已连接 Discord"
 #: src/routes/tracker.tsx
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "已连接，但几分钟内没有新成绩。等信息流跟上后，最近的游玩会显示出来。"
+
+#: src/routes/companella.tsx
+msgid "Connection"
+msgstr ""
 
 #: src/routes/tracker.tsx
 msgid "Connection lost; reconnecting."
@@ -4556,6 +4709,10 @@ msgstr "无法连接 Discord 校验这个邀请链接。请稍后再试。"
 msgid "Could not reach the player pool. Try again in a moment."
 msgstr "无法读取玩家池。请稍后再试。"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Could not reach the server. Try again."
+msgstr ""
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not read your Discord servers. Try connecting again."
 msgstr "无法读取你的 Discord 服务器，请重新连接。"
@@ -4564,9 +4721,21 @@ msgstr "无法读取你的 Discord 服务器，请重新连接。"
 msgid "Could not remove that listing."
 msgstr "无法移除这条收录。"
 
+#: src/routes/companella.tsx
+msgid "Could not rename that installation."
+msgstr ""
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not resize the image."
 msgstr "无法调整图片尺寸。"
+
+#: src/routes/companella.tsx
+msgid "Could not revoke that installation."
+msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Could not revoke the installations."
+msgstr ""
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
@@ -4586,6 +4755,11 @@ msgstr "无法发送该更新。请重试。"
 #: src/routes/report.tsx
 msgid "Could not send that. Try again."
 msgstr "提交失败，请重试。"
+
+#. placeholder {0}: created.error ?? "unknown"
+#: src/components/companella/TestClientPanel.tsx
+msgid "Could not start an authorization request ({0})."
+msgstr ""
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not submit that. Try again."
@@ -4647,6 +4821,10 @@ msgstr "无法加载谱面预览音频"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Couldn't load collections."
 msgstr "无法加载收藏册。"
+
+#: src/components/companella/ProfileImportedPlays.tsx
+msgid "Couldn't load imported plays right now."
+msgstr "暂时无法加载导入的成绩。"
 
 #: src/routes/snipes.tsx
 msgid "Couldn't load live snipes."
@@ -4789,6 +4967,10 @@ msgstr "保存失败。请稍后再试。"
 msgid "Couldn't save the collection."
 msgstr "无法保存这个收藏册。"
 
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Couldn't save your name right now."
+msgstr "暂时无法保存你的名字。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
 msgstr "保存失败，请重试。"
@@ -4887,10 +5069,18 @@ msgstr "创建"
 msgid "Create a set to organize your cards."
 msgstr "创建卡组来整理你的卡片。"
 
+#: src/components/companella/TestClientPanel.tsx
+msgid "Create test installation"
+msgstr ""
+
 #. placeholder {0}: preset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Created {0}"
 msgstr "已创建 {0}"
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Creating"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Credit"
@@ -5161,6 +5351,7 @@ msgstr "默认音量"
 msgid "Delay"
 msgstr "延迟"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
@@ -5199,6 +5390,10 @@ msgstr "删除预设"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete skin"
 msgstr "删除皮肤"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
+msgstr ""
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/routes/replay_.uploads.tsx
@@ -5445,6 +5640,10 @@ msgstr "下载 {0}"
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Download again"
 msgstr "重新下载"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Download replay"
+msgstr ""
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Download started"
@@ -5947,9 +6146,17 @@ msgstr "退出全屏"
 #~ msgid "Experimental"
 #~ msgstr "实验性"
 
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "Experimental local evidence"
+msgstr ""
+
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 #~ msgstr "Mania Hub 实验性 LN 估算：松键时机、保持按键时的手指协调，以及松键后再次按键的衔接。与 MinaCalc 并行的独立模型。"
+
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "Experimental rating preview"
+msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
@@ -6286,9 +6493,17 @@ msgstr "查找玩家..."
 msgid "Finding more replays..."
 msgstr "正在查找更多回放..."
 
+#: src/routes/companella_.test-callback.tsx
+msgid "Finishing the connection..."
+msgstr ""
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Finishing the file"
 msgstr "正在收尾文件"
+
+#: src/routes/companella_.test-callback.tsx
+msgid "Finishing the test client connection."
+msgstr ""
 
 #: src/routes/farm-helper.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -6448,6 +6663,10 @@ msgstr "针对被封禁或已删除的账号"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "For Discord embeds"
 #~ msgstr "用于 Discord 嵌入"
+
+#: src/components/companella/SecurityActivity.tsx
+msgid "For review"
+msgstr ""
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "For screenshots that have nothing to do with the skin."
@@ -7251,6 +7470,10 @@ msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用
 msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
 msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
 
+#: src/routes/companella_.authorize.tsx
+msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
+msgstr "如果你的 osu! 账号被限制，导入的成绩会显示在你的 Mania Tracker 主页上。"
+
 #: src/routes/dan-estimates.tsx
 msgid "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
 msgstr "如果记录到的成绩表明你通过了某个段位课题，那么无论技能平均值是多少，这一侧的估算都<0>不会低于该课题</0>。通过 EXTRA-EPSILON 后，即使技能平均只有 delta，显示结果也至少是 epsilon。这一页其余部分都在根据你的成绩算出一个数值，而课题会直接给出一个，所以以课题为准。"
@@ -7301,14 +7524,30 @@ msgstr "导入"
 msgid "Import share code"
 msgstr "导入分享码"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Import your completed osu!mania plays"
+msgstr ""
+
 #. placeholder {0}: preset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Imported {0}"
 msgstr "已导入 {0}"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Imported from your own client, so it is not an osu! verified score."
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Imported note image height scaling."
 msgstr "导入的音符图片高度缩放。"
+
+#: src/components/companella/SubmissionList.tsx
+msgid "Imported plays"
+msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Imported replays are private to you. Public rankings, pp, snipes and rewards are not affected by anything on this page."
+msgstr ""
 
 #: src/components/player/AddScoreModal.tsx
 msgid "importing"
@@ -7400,6 +7639,10 @@ msgstr "印尼语"
 msgid "Influence in this average; Dan credit is unchanged"
 msgstr "在这个平均值中的影响；段位贡献不变"
 
+#: src/components/companella/SecurityActivity.tsx
+msgid "Info"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Ingame scoreboard with live rank climbing. Tab toggles it."
 msgstr "游戏内排行榜，实时显示名次变化。按 Tab 开关。"
@@ -7429,6 +7672,15 @@ msgstr ".osk 内部"
 #: src/components/packs/collections/ShowcaseWall.tsx
 msgid "Inspect {0}'s maniacard"
 msgstr "查看 {0} 的 maniacard"
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Installation"
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#: src/routes/companella_.authorize.tsx
+msgid "Installation name"
+msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -7600,6 +7852,12 @@ msgstr "JS"
 msgid "Judged"
 msgstr "已判定"
 
+#. placeholder {0}: timing.ratingOd
+#. placeholder {1}: timing.fileOd
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Judged at OD {0}, the original map's, instead of this file's OD {1}."
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Judgement set"
 msgstr "判定图组"
@@ -7668,9 +7926,14 @@ msgstr "保留"
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
 msgstr "此浏览器不支持在该倍速下保持音高。请用 1x 导出，或让音高随倍速变化。"
 
+#: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key"
 msgstr "按键"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Key count"
+msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Key history"
@@ -7828,6 +8091,10 @@ msgstr "收藏册末页"
 msgid "Last page"
 msgstr "最后一页"
 
+#: src/components/companella/InstallationList.tsx
+msgid "Last seen"
+msgstr ""
+
 #. placeholder {0}: formatDetailedTimeAgo(user.last_visit, locale)
 #: src/routes/player/$username.tsx
 msgid "Last seen {0}"
@@ -7931,6 +8198,10 @@ msgstr "左键筛选全连，右键筛选 FC 断连"
 #: src/routes/tracker.tsx
 msgid "Left click for highest star rating first, right click for lowest first"
 msgstr "左键按星级从高到低，右键从低到高"
+
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "Left out"
+msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Left thumb"
@@ -8382,6 +8653,8 @@ msgstr "正在加载你的数据…"
 msgid "loading..."
 msgstr "加载中…"
 
+#: src/components/companella/ProfileImportedPlays.tsx
+#: src/components/companella/SubmissionList.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/SetsView.tsx
@@ -9015,6 +9288,7 @@ msgstr "审核皮肤"
 msgid "moderation"
 msgstr "审核"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
@@ -9260,6 +9534,10 @@ msgstr "名称与简介"
 msgid "Name for screenshot {0}"
 msgstr "第 {0} 张截图的名称"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Name on the replay"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Name preset"
 msgstr "为预设命名"
@@ -9280,6 +9558,10 @@ msgstr "需要 {quorum} 次"
 #: src/components/packs/GoatPoll.tsx
 msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
+
+#: src/components/companella/InstallationList.tsx
+msgid "Never"
+msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "never loaded here"
@@ -9588,9 +9870,17 @@ msgstr "没有符合搜索的图片。"
 msgid "No images or sounds were found in the archive."
 msgstr "压缩包里没有找到图片或音效。"
 
+#: src/components/companella/InstallationList.tsx
+msgid "No installation has been approved yet."
+msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "No key data"
 msgstr "无键数数据"
+
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "No keymode has enough evidence yet."
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
@@ -9716,6 +10006,10 @@ msgstr "没有匹配的玩家。"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "No plays match these filters"
 msgstr "没有符合筛选条件的成绩"
+
+#: src/components/companella/ProfileImportedPlays.tsx
+msgid "No plays sent through Companella yet."
+msgstr "还没有通过 Companella 提交的成绩。"
 
 #: src/routes/farm-helper.tsx
 msgid "no pp range"
@@ -10056,6 +10350,14 @@ msgstr "挪威语"
 msgid "not a bug"
 msgstr "并非问题"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Not analyzed yet."
+msgstr ""
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Not connected"
+msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "not counted"
@@ -10095,6 +10397,10 @@ msgstr "不在最佳成绩里"
 msgid "Not in your collection"
 msgstr "不在你的收藏册里"
 
+#: src/routes/player/$username.tsx
+msgid "Not on osu! anymore"
+msgstr "已不在 osu! 上"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
 msgstr "还没通过"
@@ -10107,6 +10413,10 @@ msgstr "还没打过"
 msgid "not rated"
 msgstr "未评级"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Not rated."
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "not set"
 msgstr "未设置"
@@ -10114,6 +10424,10 @@ msgstr "未设置"
 #: src/components/layout/Nav.tsx
 msgid "Not signed in"
 msgstr "未登录"
+
+#: src/components/companella/InstallationList.tsx
+msgid "Not stated"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Not the server it says it is"
@@ -10152,6 +10466,7 @@ msgstr "音符形状"
 msgid "notes"
 msgstr "音符"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10174,6 +10489,10 @@ msgstr "没有叫这个名字的。"
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "Nothing dated yet."
 #~ msgstr "暂无带日期的记录。"
+
+#: src/components/companella/SubmissionList.tsx
+msgid "Nothing has been submitted yet."
+msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "Nothing here would move your total"
@@ -10216,6 +10535,11 @@ msgstr "没有缺失。卡池里的每位玩家都在你的收藏册里。"
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
 msgstr "当前筛选下暂时没有符合的谱面，但其他理由下还有。"
 
+#: src/components/companella/SecurityActivity.tsx
+msgid "Nothing recorded yet."
+msgstr ""
+
+#: src/components/companella/RatingPreviewPanel.tsx
 #: src/components/player/bbcode/BBCodePreview.tsx
 msgid "Nothing to preview yet."
 msgstr "还没有可预览的内容。"
@@ -10258,6 +10582,7 @@ msgstr "已获得"
 msgid "Obtained on {dateText}"
 msgstr "获得于 {dateText}"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -10427,6 +10752,10 @@ msgstr "在线"
 msgid "Online"
 msgstr "在线"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Only approve a request you started yourself. If someone sent you this link, close it."
+msgstr ""
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
 msgstr "仅自己"
@@ -10438,6 +10767,10 @@ msgstr "唯一一张"
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
 msgstr "只有来自该地区的玩家才能加入"
+
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Only restricted accounts can change their name here."
+msgstr "只有被限制的账号可以在这里更改名字。"
 
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
@@ -10455,6 +10788,10 @@ msgstr "仅你可见"
 #: src/routes/skins.tsx
 msgid "only you can open these"
 msgstr "只有你能打开这些"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Only you can open this. It is not listed anywhere and has no share link."
+msgstr ""
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
@@ -10678,6 +11015,11 @@ msgstr "osu! 没有响应，请一分钟后再试。"
 msgid "osu! Login"
 msgstr "osu! 登录"
 
+#. placeholder {0}: user.username
+#: src/routes/player/$username.tsx
+msgid "osu! name {0}"
+msgstr "osu! 名字 {0}"
+
 #: src/lib/replay-score-availability.ts
 msgid "osu! no longer has the replay file for this score."
 msgstr "osu! 已经没有这个成绩的回放文件了。"
@@ -10765,6 +11107,10 @@ msgstr "其他"
 #: src/routes/replay_.community.tsx
 #~ msgid "Other keys"
 #~ msgstr "其他键数"
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "Other players' imports can reuse them. Not private storage for unreleased maps."
+#~ msgstr ""
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Other rating updates"
@@ -11083,6 +11429,10 @@ msgstr "换一个文件"
 msgid "Pick any map on the left to preview it here."
 msgstr "点击左侧任意谱面即可在此预览。"
 
+#: src/components/companella/TestClientPanel.tsx
+msgid "Pick both a .osr and the .osu it was played on."
+msgstr ""
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Pick five cards of the same rarity."
 #~ msgstr "请选择五张同一稀有度的卡。"
@@ -11131,6 +11481,10 @@ msgstr "粉色"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Pinned"
 msgstr "已置顶"
+
+#: src/components/companella/InstallationList.tsx
+msgid "Platform"
+msgstr ""
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
@@ -11186,6 +11540,7 @@ msgstr "单个成绩至少"
 msgid "playback"
 msgstr "回放"
 
+#: src/components/companella/SubmissionList.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Played"
 msgstr "游玩于"
@@ -11294,6 +11649,10 @@ msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
 #~ msgstr "每场游玩次数"
+
+#: src/components/companella/ProfileImportedPlays.tsx
+msgid "Plays sent through Companella"
+msgstr "通过 Companella 提交的成绩"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated."
@@ -11616,6 +11975,10 @@ msgstr "私有 · 更新于 {updatedAtLabel}"
 msgid "Probably restarting or under maintenance. Try again in a bit."
 msgstr "可能正在重启或维护。请稍后再试。"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Processing"
+msgstr ""
+
 #: src/components/me/GoalsPanel.tsx
 msgid "profile"
 msgstr "个人"
@@ -11872,6 +12235,10 @@ msgstr "检测到变速版本。正在使用当前难度的音频，以保持音
 msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x), at <2/> or <3/> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited against the chart's dan at that exact rate, with each speed rated separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. A speed nobody has rated that chart at yet is worked out the first time your estimate needs it, so a play at an unusual rate can take a little while to start counting."
 msgstr "变速 Mod 算数，而且按谱面在那个速度下值多少来算。1.0x、<0/> 或 <1/>(1.5x)、<2/> 或 <3/>(0.75x)，以及 0.5x 到 2.0x 之间任意的 lazer 自定义倍速下的通过，都会按谱面在那个速度下的段位计入，每个速度单独评。Runengon [4K Hard] 在 1.0x 是 4 段谱面，在 <4/> 下大约是 9 段，所以一次 <5/> 的通过按 9 段计入，而不是 4 段。ANiMA [Starry's 4K Lv.15] 同理，从 3 段变到大约 7 段。降速则反过来：0.75x 的通过只值这张谱面在 0.75x 下的水平，远低于它原速的段位。如果某个速度还没有人评过这张谱面，你的估算第一次用到它时就会现算，所以冷门倍速的成绩可能要过一小会儿才开始计入。"
 
+#: src/components/companella/SubmissionDetail.tsx
+#~ msgid "Rated at"
+#~ msgstr ""
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "rated from {plays} plays across the osu! top plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded"
 msgstr "根据 osu! 最佳成绩中的 {plays} 个成绩评定，DT 和 HT 按其真实倍速计算，准确率按每张谱面 OD 判定窗口下的 MAX:300 比例加权，局部 vibro 片段已调整，持续 vibro 已排除"
@@ -12057,6 +12424,11 @@ msgstr "立即重建"
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Rebuilding..."
 msgstr "重建中…"
+
+#: src/components/companella/SubmissionDetail.tsx
+#: src/components/companella/SubmissionList.tsx
+msgid "Received"
+msgstr ""
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "Received as a gift {timesText} times, from {sendersText}"
@@ -12374,6 +12746,7 @@ msgstr "已移除导入的皮肤打击音"
 msgid "Removing the screenshot failed. Try again."
 msgstr "移除截图失败。请重试。"
 
+#: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Rename"
@@ -12440,6 +12813,10 @@ msgstr "在全站将鼠标光标替换为 osu! 风格光标。仅桌面端。"
 #: src/routes/player/$username.tsx
 msgid "Replay"
 msgstr "回放"
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Replay (.osr)"
+msgstr ""
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Replay again"
@@ -12564,6 +12941,10 @@ msgstr "重置方向"
 msgid "Reset size"
 msgstr "重置大小"
 
+#: src/components/companella/TestClientPanel.tsx
+msgid "Reset test key"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Reset to {defaultValue}"
 msgstr "重置为 {defaultValue}"
@@ -12596,6 +12977,10 @@ msgstr "正在缩放图片…"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Restored an unsaved draft from this browser."
 msgstr "已从此浏览器恢复未保存的草稿。"
+
+#: src/routes/player/$username.tsx
+msgid "Restricted on osu!"
+msgstr "已在 osu! 被限制"
 
 #: src/lib/replay-overlays.ts
 #~ msgid "Results"
@@ -12635,10 +13020,38 @@ msgstr "正在揭晓剩下的…"
 #~ msgid "Reverse Shields"
 #~ msgstr "反盾"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Review"
+msgstr ""
+
 #. placeholder {0}: status.cost
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Review ingredients ({available}/{0})"
 #~ msgstr "查看材料（{available}/{0}）"
+
+#: src/components/companella/InstallationList.tsx
+msgid "Revoke"
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Revoke all"
+msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Revoke every installation on this account?"
+msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Revoke this installation? It stops submitting right away."
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Revoked"
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Revoking stops an installation from submitting straight away. Scores it already imported stay in your history until you delete them."
+msgstr ""
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Rice"
@@ -12730,7 +13143,9 @@ msgid "Saturdays"
 msgstr "周六"
 
 #: src/components/communities/CommunityEditModal.tsx
+#: src/components/companella/InstallationList.tsx
 #: src/components/me/GoalsPanel.tsx
+#: src/components/player/DisplayNameEditor.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Save"
 msgstr "保存"
@@ -12821,6 +13236,10 @@ msgstr "正在保存回放皮肤…"
 msgid "Saving."
 msgstr "正在保存。"
 
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Saving..."
+msgstr "正在保存..."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saving…"
 msgstr "保存中…"
@@ -12862,10 +13281,15 @@ msgstr "缩放图片以适应"
 msgid "Scales the skin's hitburst art."
 msgstr "缩放皮肤的打击特效图。"
 
+#: src/components/companella/TestClientPanel.tsx
+msgid "Scopes"
+msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "score"
 msgstr "成绩"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -13230,6 +13654,10 @@ msgstr "发送"
 msgid "Send report"
 msgstr "提交反馈"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Send the chart file when the site does not already have it"
+msgstr ""
+
 #. placeholder {0}: recipient.username
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Send to {0}"
@@ -13418,6 +13846,10 @@ msgstr "设置"
 msgid "Settings for {0}"
 msgstr "{0} 的设置"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Settings that differ from that file:"
+msgstr ""
+
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/StreakGame.tsx
@@ -13587,6 +14019,7 @@ msgstr "收起"
 msgid "show more"
 msgstr "显示更多"
 
+#: src/components/companella/SubmissionList.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
@@ -13740,6 +14173,10 @@ msgstr "请重新登录以发送礼物。"
 msgid "Sign in and runs like that pay shards."
 msgstr "登录后，这样的连胜就能赚碎片。"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Sign in to connect {appName}"
+msgstr ""
+
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Sign in to like collections"
@@ -13770,9 +14207,17 @@ msgstr "登录后投票 →"
 msgid "Sign in with Discord so we can check the server is yours to post. Discord will share:"
 msgstr "用 Discord 登录，好让我们确认这个服务器由你来发布。Discord 会提供："
 
+#: src/routes/companella_.authorize.tsx
+msgid "Sign in with osu!"
+msgstr ""
+
 #: src/routes/communities.tsx
 msgid "Sign in with osu! first, then connect Discord."
 msgstr "请先用 osu! 登录，再关联 Discord。"
+
+#: src/routes/companella.tsx
+msgid "Sign in with osu! to connect Companella and see the plays it imported."
+msgstr ""
 
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in with osu! to play blitz."
@@ -13787,6 +14232,7 @@ msgid "Sign in with osu! to see your uploads."
 msgstr "用 osu! 登录后即可看到你的上传。"
 
 #: src/components/layout/Nav.tsx
+#: src/routes/companella_.authorize.tsx
 msgid "Signed in as"
 msgstr "当前登录为"
 
@@ -13794,6 +14240,16 @@ msgstr "当前登录为"
 #: src/components/layout/Nav.tsx
 msgid "Signed in as {0}"
 msgstr "当前登录为 {0}"
+
+#. placeholder {0}: auth.viewer.username
+#: src/routes/companella.tsx
+msgid "Signed in as {0}. {activeInstallations} connected."
+msgstr ""
+
+#. placeholder {0}: auth.viewer.username
+#: src/routes/companella.tsx
+msgid "Signed in as {0}. Nothing is connected yet."
+msgstr ""
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
@@ -14176,6 +14632,10 @@ msgstr "速度与技的区分靠的是谱面怎么打，而不是评分；当无
 #~ msgid "Speed and tech are told apart by the notes rather than by the ratings. On dense charts Stream and Technical rate within a fraction of each other and whichever edges ahead is close to a coin flip, so the chart analysis measures the movement instead: how much of the chart is two column trills, minijacks and broken rhythm, which are played by rocking the wrist, against how much of it rolls across the hands. Checked against 738 charts from 170 named speed and tech practice packs, with whole packs held out of the check, that reading agrees with the pack names far more often than the ratings alone do. When it is not sure, the chart counts as both."
 #~ msgstr "速度与技的区分靠的是音符本身，而不是评分。在高密度谱面上，Stream 和 Technical 的评分往往只差一点点，谁略微领先几乎是抛硬币的结果，所以谱面分析改为衡量动作：谱面中有多少是双键交互、小叠和不规则节奏（这些要靠转动手腕来打），又有多少是在两手之间铺开的楼梯。在来自 170 个速度与技练习包的 738 张谱面上验证过，且验证时会整包排除在外，这种判断与包名吻合的比例远高于只看评分。当它无法确定时，该谱面会同时计入两者。"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Speed played at"
+msgstr ""
+
 #: src/lib/pattern-labels.ts
 msgid "Speedjack"
 msgstr "速叠"
@@ -14300,6 +14760,10 @@ msgstr "从你当前的 me! 页面开始"
 msgid "Start here"
 msgstr "在此开始"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Start the connection again from the app."
+msgstr ""
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/routes/player/$username.tsx
 msgid "Start tracking your plays"
@@ -14414,6 +14878,14 @@ msgstr "停止分享这一张"
 msgid "stop sim"
 msgstr "停止模拟"
 
+#: src/routes/companella.tsx
+msgid "Storage is not configured, so uploads will fail until it is."
+msgstr ""
+
+#: src/components/companella/SubmissionList.tsx
+msgid "Stored, but not rated:"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Storyboard"
@@ -14475,6 +14947,20 @@ msgstr "最强项是 <0>{0}</0>"
 msgid "Style"
 msgstr "样式"
 
+#. placeholder {0}: result.submissionId ?? ""
+#: src/components/companella/TestClientPanel.tsx
+msgid "Submission {0} finished."
+msgstr ""
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Submission detail"
+msgstr ""
+
+#. placeholder {0}: result.error ?? "unknown"
+#: src/components/companella/TestClientPanel.tsx
+msgid "Submission refused: {0}"
+msgstr ""
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Submission sent"
 msgstr "已提交"
@@ -14482,6 +14968,10 @@ msgstr "已提交"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Submit"
 msgstr "提交"
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Submit play"
+msgstr ""
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -14713,6 +15203,18 @@ msgstr "条款"
 #: src/routes/terms.tsx
 msgid "Terms of Service"
 msgstr "服务条款"
+
+#: src/components/companella/SubmissionList.tsx
+msgid "Test"
+msgstr ""
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Test client"
+msgstr ""
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "Test key cleared."
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Text"
@@ -15003,6 +15505,14 @@ msgstr "浏览器拦截了剪贴板。请再次点击复制 BBCode。"
 msgid "The browser stores preferences and caches in localStorage, including theme settings, selected country, hidden users, replay viewer preferences, map filters, and similar client-side state. You can clear this data through your browser storage controls."
 msgstr "浏览器会在 localStorage 里存储偏好和缓存，包括主题设置、所选国家/地区、隐藏的用户、回放查看器偏好、谱面筛选条件，以及类似的客户端状态。你可以通过浏览器的存储控制清除这些数据。"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "The calculation could not run; it will be retried."
+msgstr ""
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "The callback did not match this browser's transaction; connect again."
+msgstr ""
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The card cover could not be changed. Try again."
 msgstr "无法更换卡片封面。请重试。"
@@ -15276,6 +15786,18 @@ msgstr "谱面段位 +1.18"
 msgid "the chart's level +1.5"
 msgstr "谱面段位 +1.5"
 
+#: src/components/companella/TestClientPanel.tsx
+msgid "The code exchange was refused."
+msgstr ""
+
+#: src/routes/companella.tsx
+msgid "The Companella beta is not switched on for this site yet."
+msgstr ""
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "The comparison budget ran out; this is still being checked."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, by beatmap: Dan ~ REFORM ~ on 4K regular, the 4K LN dan courses through 17th, Jinjin's 7K regular and LN phases, Arkman's 6K regular courses and sunnyxxy's 6K LN bands. Re-uploads of those packs by other people are not counted, and nothing about this changes how a chart is rated - it only changes what your own passes are worth."
 #~ msgstr "课题是真正的那些，按谱面认：4K regular 的 Dan ~ REFORM ~、4K LN 到 17 段的 LN 段位课题、Jinjin 的 7K regular 与 LN 各期、Arkman 的 6K regular 课题，以及 sunnyxxy 的 6K LN 各段。别人重新上传的同名图包不算，而且这一切都不会改变谱面本身怎么评级，只会改变你自己的成绩值多少。"
@@ -15369,6 +15891,11 @@ msgstr "直接用对应的 .osu 文件也可以。"
 msgid "The export was interrupted before it finished."
 msgstr "导出在完成前被中断。"
 
+#. placeholder {0}: chart.declaredBeatmapId
+#: src/components/companella/SubmissionDetail.tsx
+msgid "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
+msgstr ""
+
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
 msgstr "第一个上传的皮肤会出现在这里。"
@@ -15393,9 +15920,17 @@ msgstr "第一个上传的皮肤会出现在这里。"
 msgid "The images uploaded, but the browser blocked the clipboard. Click Copy BBCode once more."
 msgstr "图片已上传，但浏览器拦截了剪贴板。请再点一次复制 BBCode。"
 
+#: src/routes/companella.tsx
+msgid "The integration backend is not reachable right now."
+msgstr ""
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The judgement counts for this play are gone, so there is no accuracy to check it against."
 msgstr "该成绩的判定数据已丢失，无法据此核对准确率。"
+
+#: src/components/companella/SubmissionDetail.tsx
+msgid "The judgements saved in this replay don't match its key presses, so it's held for review."
+msgstr ""
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The link and the .osk filename stay as published."
@@ -15634,6 +16169,10 @@ msgstr "本站会缓存、排队并复用数据，以避免反复向 osu! 请求
 #~ msgid "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 #~ msgstr "本站会下载谱面文件，读出音符，再把谱型交给一个评分算法。用哪个算法取决于键数，因为没有哪一个在所有键数上都是最好的："
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "The site has no matching chart indexed. That does not mean this chart is new, only that nothing here matched it."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded automatically.</0>"
 msgstr "本站是通过 osu! 的新成绩信息流知道你在打的，而那个信息流只列出有排行榜谱面上的成绩，所以坟场谱面上的成绩根本不会出现在里面。你的最近成绩是另一个查询，坟场谱面的成绩它是包含的，但它只能按玩家逐个去查，所以只有当一个有排行榜的成绩表明你在打时，本站才开始查，并每隔几分钟查一次，直到你停下来，也就是 30 分钟没有新成绩。这段时间里查到的都算，包括未上架谱面。<0>如果你只打未上架谱面，什么都不会被自动记录。</0>"
@@ -15707,6 +16246,10 @@ msgstr "可能需要先下载并处理歌曲。"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
+
+#: src/components/companella/TestClientPanel.tsx
+msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
+msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "The top plays are being rated by the chart analyzer. The first pass takes a minute or two."
@@ -15854,6 +16397,10 @@ msgstr "第三个抽到这张卡片"
 msgid "This .osk could not be read."
 msgstr "无法读取这个 .osk。"
 
+#: src/routes/companella.tsx
+msgid "This account is not in the Companella beta."
+msgstr ""
+
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't encode the audio track for this format."
 msgstr "此浏览器无法为该格式编码音频轨道。"
@@ -15926,11 +16473,19 @@ msgstr "这个收藏册里还没有谱面。"
 msgid "This collection is gone, or the link is wrong."
 msgstr "这个收藏册不在了，或者链接不对。"
 
+#: src/routes/companella_.authorize.tsx
+msgid "This connection request has already been answered."
+msgstr ""
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
 #: src/routes/player/$username.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
+
+#: src/routes/companella_.authorize.tsx
+msgid "This does not give the app your osu! account. You can revoke it any time on your Companella page."
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "This exact version is already shown to everyone watching your replays"
@@ -15957,6 +16512,10 @@ msgstr "这个文件有 {0}，上限是 50 MB。"
 msgid "This file is {size}. The limit is 50 MB."
 msgstr "这个文件有 {size}，上限是 50 MB。"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "This file looks like more than one known chart, so it is left out of the preview until that is resolved."
+msgstr ""
+
 #. placeholder {0}: communityInviteExpiryLabel(inviteCheck.preview.expiresAt)
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "This invite expires on {0}. When it does, your server gets hidden until you paste a new link."
@@ -15969,6 +16528,14 @@ msgstr "这个邀请链接在 {expiry} 过期。到期后你的服务器会被�
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "This invite stopped working, so your server is hidden. Paste a new link to put it back."
 msgstr "这个邀请链接已失效，你的服务器已被隐藏。贴上新的链接就能恢复。"
+
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted."
+msgstr ""
+
+#: src/components/companella/RatingPreviewPanel.tsx
+#~ msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it."
+#~ msgstr ""
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "This is how it looks on the skins page."
@@ -16052,6 +16619,22 @@ msgstr "这个回放里没有谱面校验值。"
 msgid "This replay needs its beatmap"
 msgstr "这个回放需要对应的谱面"
 
+#: src/routes/companella_.authorize.tsx
+msgid "This request expired. Start the connection again from the app."
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "This request has expired"
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "This request is not valid any more. Start the connection again from the app."
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "This request was already answered. Start the connection again from the app."
+msgstr ""
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "This run"
 msgstr "这次成绩"
@@ -16116,6 +16699,10 @@ msgstr "这个工具需要从服务器读取跨国家/地区的刷图数据，�
 #: src/components/rankings/UnratedPlaysBoard.tsx
 msgid "This week"
 msgstr "本周"
+
+#: src/routes/companella_.authorize.tsx
+msgid "This will allow {appName} to"
+msgstr ""
 
 #: src/routes/report.tsx
 msgid "Those images are no longer available."
@@ -16654,6 +17241,10 @@ msgstr "无法读取"
 msgid "Unstable rate"
 msgstr "UR"
 
+#: src/components/companella/ProfileImportedPlays.tsx
+msgid "Untitled chart"
+msgstr "无标题谱面"
+
 #: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
@@ -16814,6 +17405,10 @@ msgstr "把 {0} 用作背景"
 msgid "Use {selectedKeymode}K as the card cover"
 msgstr "把 {selectedKeymode}K 用作卡片封面"
 
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Use 3 to 15 letters, numbers, spaces, or - _ [ ]."
+msgstr "使用 3 到 15 个字母、数字、空格或 - _ [ ]。"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Use as the {slotLabelLower} run"
 msgstr "用作{slotLabelLower}的成绩"
@@ -16830,6 +17425,10 @@ msgstr "用于我的回放"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Use map cover {0} as the backdrop"
 msgstr "把谱面封面 {0} 用作背景"
+
+#: src/components/player/DisplayNameEditor.tsx
+msgid "Use my osu! name"
+msgstr "使用我的 osu! 名字"
 
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
@@ -17133,6 +17732,10 @@ msgstr "等待审核中。"
 msgid "Waiting for audio to load..."
 msgstr "等待音频加载…"
 
+#: src/components/companella/SubmissionList.tsx
+msgid "Waiting for files"
+msgstr ""
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
 msgstr "等待新成绩"
@@ -17350,6 +17953,11 @@ msgstr "谱面为何出现在这里"
 msgid "Width of the exported image, in pixels"
 msgstr "导出图片的宽度，单位像素"
 
+#. placeholder {0}: analysis.runtimeRate
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Wife3 is measured from the replay's key presses at {0}x."
+msgstr ""
+
 #: src/lib/packs.ts
 msgid "Wild"
 msgstr "狂野"
@@ -17514,6 +18122,19 @@ msgstr "你的收藏册数量已达上限。"
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
 
+#: src/components/player/DisplayNameEditor.tsx
+msgid "You can change it once a week. Your profile link keeps your osu! name."
+msgstr "每周可以更改一次。你的主页链接仍使用你的 osu! 名字。"
+
+#. placeholder {0}: formatDate(result.nextChangeAt, "UTC", locale)
+#: src/components/player/DisplayNameEditor.tsx
+msgid "You can change your name again on {0}."
+msgstr "你可以在 {0} 再次更改名字。"
+
+#: src/components/player/DisplayNameEditor.tsx
+msgid "You can change your name once a week."
+msgstr "每周可以更改一次名字。"
+
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "你最多可以发布 {COMMUNITY_MAX_PER_USER} 个服务器。"
@@ -17671,6 +18292,10 @@ msgstr "你的 {yourPp}pp · 已过去 {age}"
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家中前四分之一在 {p75}pp。"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Your account is not on the list for this beta."
+msgstr ""
+
 #: src/routes/dan-estimates.tsx
 msgid "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, and 98% and up as <2>delta++</2>. Come up short and you still get something for it: 95% reads as <3>delta-</3> and 94% as <4>delta--</4>. Below 94% you get nothing. Ladders that ask for a different accuracy shift the whole scale with them."
 msgstr "档次由你的准度决定。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>。差一点没过也仍然算数：95% 读作 <3>delta-</3>，94% 读作 <4>delta--</4>。低于 94% 就什么都没有。要求别的准度的段位系统，整条刻度也跟着平移。"
@@ -17780,6 +18405,10 @@ msgstr "你最低的评分是 {0}。"
 msgid "your marks"
 msgstr "你的标记"
 
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
+msgstr ""
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."
 msgstr "这是你唯一的一张。对方接受后它会离开你的收藏。"
@@ -17856,6 +18485,10 @@ msgstr "你的成绩"
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your server shows up here once it is approved. Until then you can see it, and edit it, in your own listings above."
 msgstr "审核通过后你的服务器就会出现在这里。在那之前，你可以在上面自己的收录里看到并修改它。"
+
+#: src/routes/companella_.authorize.tsx
+msgid "Your session ended. Sign in again, then approve."
+msgstr ""
 
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/components/packs/SetsView.tsx

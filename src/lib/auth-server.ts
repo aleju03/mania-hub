@@ -9,12 +9,16 @@ import {
 } from "./auth-shared";
 import type { AuthState, AuthViewer } from "./auth-shared";
 import { isLocalDevAccessGranted } from "./auth-local-dev";
+import { bridgeAuthHeaders } from "./live-backend-tokens";
 import { getCanonicalOrigin } from "./origin";
 
 const DEFAULT_DEV_OSU_USER_IDS: number[] = [];
 const DEFAULT_ADMIN_OSU_USER_IDS = [7095193];
 const OSU_API_VERSION = "20220705";
 const OSU_OAUTH_TIMEOUT_MS = 10_000;
+// Short: the sign-in redirect waits on it, and a missed report only means a
+// restricted player's profile appears on their next sign-in instead.
+const LOGIN_REPORT_TIMEOUT_MS = 2_500;
 const COOKIE_PATH = "/";
 
 interface AuthCookiePayload extends AuthViewer {
@@ -40,6 +44,7 @@ interface OsuMeResponse {
   username?: string;
   avatar_url?: string;
   country_code?: string;
+  is_restricted?: boolean;
 }
 
 type SameSite = "lax" | "strict" | "none";
@@ -449,10 +454,32 @@ export async function exchangeOsuCodeForViewer(code: string, redirectUri: string
     throw new Error("osu! profile response was missing an id or username.");
   }
 
+  await reportLoginToBackend(me);
+
   return {
     id,
     username: me.username,
     avatarUrl: me.avatar_url ?? "",
     countryCode: me.country_code ?? null,
   };
+}
+
+/* /me is the one osu! answer that still describes a restricted account (every
+   public lookup 404s), so the backend hears about each sign-in: a restricted
+   player is deactivated and kept, never deleted, and gets a profile from this
+   payload; an account the 404 path deactivated comes back. Best-effort by
+   contract, awaited so the profile exists by the time the redirect lands. */
+async function reportLoginToBackend(me: OsuMeResponse): Promise<void> {
+  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  if (!base) return;
+  try {
+    const response = await fetchWithTimeout(
+      `${base}/api/session/login`,
+      { method: "POST", headers: bridgeAuthHeaders(true), body: JSON.stringify({ me }) },
+      LOGIN_REPORT_TIMEOUT_MS,
+    );
+    if (!response.ok) console.warn(`[auth] login report answered ${response.status}`);
+  } catch (error) {
+    console.warn("[auth] login report failed", error);
+  }
 }

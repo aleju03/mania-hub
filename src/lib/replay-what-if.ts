@@ -11,7 +11,7 @@
 
 import type { ManiaNote, ManiaTimingPoint } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
-import type { ManiaReplayMod } from "./mania-replay-judgement";
+import type { ManiaReplayMod } from "#replay-judge/mania-replay-judgement";
 import {
   applyManiaReplayModsToNotes,
   buildReplaySegments,
@@ -21,7 +21,7 @@ import {
   getManiaReplayModSetting,
   getManiaReplayRuleset,
   simulateManiaReplayJudgements,
-} from "./mania-replay-judgement";
+} from "#replay-judge/mania-replay-judgement";
 import { calculateManiaPp, getManiaPpModMultiplier } from "./mania-pp";
 import { calculateManiaStarRating } from "./mania-star-rating";
 

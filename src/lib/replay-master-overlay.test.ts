@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ManiaNote } from "./beatmap-parser";
-import type { ReplayNoteState } from "./mania-replay-judgement";
+import type { ReplayNoteState } from "#replay-judge/mania-replay-judgement";
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "./replay-master-overlay";
 
 const note = (time: number, endTime = time): ManiaNote => ({ column: 0, time, endTime, isHold: endTime > time });

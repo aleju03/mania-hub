@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as CommunitiesRouteImport } from './routes/communities'
+import { Route as CompanellaRouteImport } from './routes/companella'
 import { Route as DanEstimatesRouteImport } from './routes/dan-estimates'
 import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as DynamicRendersRouteImport } from './routes/dynamic-renders'
@@ -36,6 +37,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as ValleyRouteImport } from './routes/valley'
+import { Route as AdminBannedUsersRouteImport } from './routes/admin/banned-users'
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
 import { Route as AdminBugReportsRouteImport } from './routes/admin/bug-reports'
 import { Route as AdminCollectionsRouteImport } from './routes/admin/collections'
@@ -65,6 +67,9 @@ import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as CollectionsIdRouteImport } from './routes/collections_.$id'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
+import { Route as CompanellaAuthorizeRouteImport } from './routes/companella_.authorize'
+import { Route as CompanellaDocsRouteImport } from './routes/companella_.docs'
+import { Route as CompanellaTestCallbackRouteImport } from './routes/companella_.test-callback'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
@@ -74,6 +79,10 @@ import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
+import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/chart'
+import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
+import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
+import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
 import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
 import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
 import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
@@ -85,6 +94,15 @@ import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filen
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 import { Route as ApiSignatureTokenVariantRouteImport } from './routes/api/signature/$token/$variant'
+import { Route as ApiIntegrationsCompanellaV1CapabilitiesRouteImport } from './routes/api/integrations/companella/v1/capabilities'
+import { Route as ApiIntegrationsCompanellaV1MeRouteImport } from './routes/api/integrations/companella/v1/me'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsRouteImport } from './routes/api/integrations/companella/v1/submissions'
+import { Route as ApiIntegrationsCompanellaV1OauthRevokeRouteImport } from './routes/api/integrations/companella/v1/oauth/revoke'
+import { Route as ApiIntegrationsCompanellaV1OauthTokenRouteImport } from './routes/api/integrations/companella/v1/oauth/token'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsIdRouteImport } from './routes/api/integrations/companella/v1/submissions/$id'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/beatmap'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsIdCompleteRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/complete'
+import { Route as ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteImport } from './routes/api/integrations/companella/v1/submissions/$id/replay'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -104,6 +122,11 @@ const BbcodeRoute = BbcodeRouteImport.update({
 const CommunitiesRoute = CommunitiesRouteImport.update({
   id: '/communities',
   path: '/communities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanellaRoute = CompanellaRouteImport.update({
+  id: '/companella',
+  path: '/companella',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DanEstimatesRoute = DanEstimatesRouteImport.update({
@@ -219,6 +242,11 @@ const TrackerRoute = TrackerRouteImport.update({
 const ValleyRoute = ValleyRouteImport.update({
   id: '/valley',
   path: '/valley',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBannedUsersRoute = AdminBannedUsersRouteImport.update({
+  id: '/admin/banned-users',
+  path: '/admin/banned-users',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminBbcodeImagesRoute = AdminBbcodeImagesRouteImport.update({
@@ -367,6 +395,21 @@ const CommunitiesReviewRoute = CommunitiesReviewRouteImport.update({
   path: '/communities/review',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanellaAuthorizeRoute = CompanellaAuthorizeRouteImport.update({
+  id: '/companella_/authorize',
+  path: '/companella/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanellaDocsRoute = CompanellaDocsRouteImport.update({
+  id: '/companella_/docs',
+  path: '/companella/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanellaTestCallbackRoute = CompanellaTestCallbackRouteImport.update({
+  id: '/companella_/test-callback',
+  path: '/companella/test-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   id: '/dev/opt-in-preview',
   path: '/dev/opt-in-preview',
@@ -412,6 +455,28 @@ const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
   path: '/api/auth/osu',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCompanellaChartRoute = ApiCompanellaChartRouteImport.update({
+  id: '/api/companella/chart',
+  path: '/api/companella/chart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCompanellaReplayRoute = ApiCompanellaReplayRouteImport.update({
+  id: '/api/companella/replay',
+  path: '/api/companella/replay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanellaDocsOpenapiDotyamlRoute =
+  CompanellaDocsOpenapiDotyamlRouteImport.update({
+    id: '/companella_/docs_/openapi.yaml',
+    path: '/companella/docs/openapi.yaml',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const CompanellaDocsReferenceClientDotmjsRoute =
+  CompanellaDocsReferenceClientDotmjsRouteImport.update({
+    id: '/companella_/docs_/reference-client.mjs',
+    path: '/companella/docs/reference-client.mjs',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const FarmHelperMapBeatmapIdRoute = FarmHelperMapBeatmapIdRouteImport.update({
   id: '/map/$beatmapId',
   path: '/map/$beatmapId',
@@ -468,12 +533,67 @@ const ApiSignatureTokenVariantRoute =
     path: '/api/signature/$token/$variant',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiIntegrationsCompanellaV1CapabilitiesRoute =
+  ApiIntegrationsCompanellaV1CapabilitiesRouteImport.update({
+    id: '/api/integrations/companella/v1/capabilities',
+    path: '/api/integrations/companella/v1/capabilities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsCompanellaV1MeRoute =
+  ApiIntegrationsCompanellaV1MeRouteImport.update({
+    id: '/api/integrations/companella/v1/me',
+    path: '/api/integrations/companella/v1/me',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsCompanellaV1SubmissionsRoute =
+  ApiIntegrationsCompanellaV1SubmissionsRouteImport.update({
+    id: '/api/integrations/companella/v1/submissions',
+    path: '/api/integrations/companella/v1/submissions',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsCompanellaV1OauthRevokeRoute =
+  ApiIntegrationsCompanellaV1OauthRevokeRouteImport.update({
+    id: '/api/integrations/companella/v1/oauth/revoke',
+    path: '/api/integrations/companella/v1/oauth/revoke',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsCompanellaV1OauthTokenRoute =
+  ApiIntegrationsCompanellaV1OauthTokenRouteImport.update({
+    id: '/api/integrations/companella/v1/oauth/token',
+    path: '/api/integrations/companella/v1/oauth/token',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsCompanellaV1SubmissionsIdRoute =
+  ApiIntegrationsCompanellaV1SubmissionsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsRoute,
+  } as any)
+const ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute =
+  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteImport.update({
+    id: '/beatmap',
+    path: '/beatmap',
+    getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsIdRoute,
+  } as any)
+const ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute =
+  ApiIntegrationsCompanellaV1SubmissionsIdCompleteRouteImport.update({
+    id: '/complete',
+    path: '/complete',
+    getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsIdRoute,
+  } as any)
+const ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute =
+  ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteImport.update({
+    id: '/replay',
+    path: '/replay',
+    getParentRoute: () => ApiIntegrationsCompanellaV1SubmissionsIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
+  '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
@@ -497,6 +617,7 @@ export interface FileRoutesByFullPath {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
@@ -526,6 +647,9 @@ export interface FileRoutesByFullPath {
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
+  '/companella/authorize': typeof CompanellaAuthorizeRoute
+  '/companella/docs': typeof CompanellaDocsRoute
+  '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -535,6 +659,10 @@ export interface FileRoutesByFullPath {
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/companella/chart': typeof ApiCompanellaChartRoute
+  '/api/companella/replay': typeof ApiCompanellaReplayRoute
+  '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
+  '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
@@ -546,12 +674,22 @@ export interface FileRoutesByFullPath {
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
+  '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
+  '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
+  '/api/integrations/companella/v1/submissions': typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
+  '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
+  '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
+  '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
+  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
+  '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
@@ -575,6 +713,7 @@ export interface FileRoutesByTo {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
@@ -604,6 +743,9 @@ export interface FileRoutesByTo {
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
+  '/companella/authorize': typeof CompanellaAuthorizeRoute
+  '/companella/docs': typeof CompanellaDocsRoute
+  '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -613,6 +755,10 @@ export interface FileRoutesByTo {
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/companella/chart': typeof ApiCompanellaChartRoute
+  '/api/companella/replay': typeof ApiCompanellaReplayRoute
+  '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
+  '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
@@ -624,6 +770,15 @@ export interface FileRoutesByTo {
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
+  '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
+  '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
+  '/api/integrations/companella/v1/submissions': typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
+  '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
+  '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
+  '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
+  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -631,6 +786,7 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
   '/communities': typeof CommunitiesRoute
+  '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
@@ -654,6 +810,7 @@ export interface FileRoutesById {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
@@ -683,6 +840,9 @@ export interface FileRoutesById {
   '/collections_/$id': typeof CollectionsIdRoute
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
+  '/companella_/authorize': typeof CompanellaAuthorizeRoute
+  '/companella_/docs': typeof CompanellaDocsRoute
+  '/companella_/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -692,6 +852,10 @@ export interface FileRoutesById {
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/companella/chart': typeof ApiCompanellaChartRoute
+  '/api/companella/replay': typeof ApiCompanellaReplayRoute
+  '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
+  '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
@@ -703,6 +867,15 @@ export interface FileRoutesById {
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
+  '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
+  '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
+  '/api/integrations/companella/v1/submissions': typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
+  '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
+  '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
+  '/api/integrations/companella/v1/submissions/$id': typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+  '/api/integrations/companella/v1/submissions/$id/beatmap': typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  '/api/integrations/companella/v1/submissions/$id/complete': typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
+  '/api/integrations/companella/v1/submissions/$id/replay': typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -711,6 +884,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/bbcode'
     | '/communities'
+    | '/companella'
     | '/dan-estimates'
     | '/discord'
     | '/dynamic-renders'
@@ -734,6 +908,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/banned-users'
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
@@ -763,6 +938,9 @@ export interface FileRouteTypes {
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
+    | '/companella/authorize'
+    | '/companella/docs'
+    | '/companella/test-callback'
     | '/dev/opt-in-preview'
     | '/packs/collections'
     | '/player/$username'
@@ -772,6 +950,10 @@ export interface FileRouteTypes {
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/api/companella/chart'
+    | '/api/companella/replay'
+    | '/companella/docs/openapi.yaml'
+    | '/companella/docs/reference-client.mjs'
     | '/farm-helper/map/$beatmapId'
     | '/player/$username/about'
     | '/player/$username/activity'
@@ -783,12 +965,22 @@ export interface FileRouteTypes {
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
+    | '/api/integrations/companella/v1/capabilities'
+    | '/api/integrations/companella/v1/me'
+    | '/api/integrations/companella/v1/submissions'
+    | '/api/integrations/companella/v1/oauth/revoke'
+    | '/api/integrations/companella/v1/oauth/token'
+    | '/api/integrations/companella/v1/submissions/$id'
+    | '/api/integrations/companella/v1/submissions/$id/beatmap'
+    | '/api/integrations/companella/v1/submissions/$id/complete'
+    | '/api/integrations/companella/v1/submissions/$id/replay'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$'
     | '/bbcode'
     | '/communities'
+    | '/companella'
     | '/dan-estimates'
     | '/discord'
     | '/dynamic-renders'
@@ -812,6 +1004,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/banned-users'
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
@@ -841,6 +1034,9 @@ export interface FileRouteTypes {
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
+    | '/companella/authorize'
+    | '/companella/docs'
+    | '/companella/test-callback'
     | '/dev/opt-in-preview'
     | '/packs/collections'
     | '/player/$username'
@@ -850,6 +1046,10 @@ export interface FileRouteTypes {
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/api/companella/chart'
+    | '/api/companella/replay'
+    | '/companella/docs/openapi.yaml'
+    | '/companella/docs/reference-client.mjs'
     | '/farm-helper/map/$beatmapId'
     | '/player/$username/about'
     | '/player/$username/activity'
@@ -861,12 +1061,22 @@ export interface FileRouteTypes {
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
+    | '/api/integrations/companella/v1/capabilities'
+    | '/api/integrations/companella/v1/me'
+    | '/api/integrations/companella/v1/submissions'
+    | '/api/integrations/companella/v1/oauth/revoke'
+    | '/api/integrations/companella/v1/oauth/token'
+    | '/api/integrations/companella/v1/submissions/$id'
+    | '/api/integrations/companella/v1/submissions/$id/beatmap'
+    | '/api/integrations/companella/v1/submissions/$id/complete'
+    | '/api/integrations/companella/v1/submissions/$id/replay'
   id:
     | '__root__'
     | '/'
     | '/$'
     | '/bbcode'
     | '/communities'
+    | '/companella'
     | '/dan-estimates'
     | '/discord'
     | '/dynamic-renders'
@@ -890,6 +1100,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/banned-users'
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
@@ -919,6 +1130,9 @@ export interface FileRouteTypes {
     | '/collections_/$id'
     | '/communities_/$id'
     | '/communities_/review'
+    | '/companella_/authorize'
+    | '/companella_/docs'
+    | '/companella_/test-callback'
     | '/dev/opt-in-preview'
     | '/packs_/collections'
     | '/player/$username'
@@ -928,6 +1142,10 @@ export interface FileRouteTypes {
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/api/companella/chart'
+    | '/api/companella/replay'
+    | '/companella_/docs_/openapi.yaml'
+    | '/companella_/docs_/reference-client.mjs'
     | '/farm-helper/map/$beatmapId'
     | '/player/$username/about'
     | '/player/$username/activity'
@@ -939,6 +1157,15 @@ export interface FileRouteTypes {
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
     | '/api/signature/$token/$variant'
+    | '/api/integrations/companella/v1/capabilities'
+    | '/api/integrations/companella/v1/me'
+    | '/api/integrations/companella/v1/submissions'
+    | '/api/integrations/companella/v1/oauth/revoke'
+    | '/api/integrations/companella/v1/oauth/token'
+    | '/api/integrations/companella/v1/submissions/$id'
+    | '/api/integrations/companella/v1/submissions/$id/beatmap'
+    | '/api/integrations/companella/v1/submissions/$id/complete'
+    | '/api/integrations/companella/v1/submissions/$id/replay'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -946,6 +1173,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   BbcodeRoute: typeof BbcodeRoute
   CommunitiesRoute: typeof CommunitiesRoute
+  CompanellaRoute: typeof CompanellaRoute
   DanEstimatesRoute: typeof DanEstimatesRoute
   DiscordRoute: typeof DiscordRoute
   DynamicRendersRoute: typeof DynamicRendersRoute
@@ -969,6 +1197,7 @@ export interface RootRouteChildren {
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   ValleyRoute: typeof ValleyRoute
+  AdminBannedUsersRoute: typeof AdminBannedUsersRoute
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
   AdminBugReportsRoute: typeof AdminBugReportsRoute
   AdminCollectionsRoute: typeof AdminCollectionsRoute
@@ -998,6 +1227,9 @@ export interface RootRouteChildren {
   CollectionsIdRoute: typeof CollectionsIdRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
+  CompanellaAuthorizeRoute: typeof CompanellaAuthorizeRoute
+  CompanellaDocsRoute: typeof CompanellaDocsRoute
+  CompanellaTestCallbackRoute: typeof CompanellaTestCallbackRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
@@ -1007,9 +1239,18 @@ export interface RootRouteChildren {
   ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
+  ApiCompanellaChartRoute: typeof ApiCompanellaChartRoute
+  ApiCompanellaReplayRoute: typeof ApiCompanellaReplayRoute
+  CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
+  CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
   ApiSignatureTokenVariantRoute: typeof ApiSignatureTokenVariantRoute
+  ApiIntegrationsCompanellaV1CapabilitiesRoute: typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
+  ApiIntegrationsCompanellaV1MeRoute: typeof ApiIntegrationsCompanellaV1MeRoute
+  ApiIntegrationsCompanellaV1SubmissionsRoute: typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
+  ApiIntegrationsCompanellaV1OauthRevokeRoute: typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
+  ApiIntegrationsCompanellaV1OauthTokenRoute: typeof ApiIntegrationsCompanellaV1OauthTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1040,6 +1281,13 @@ declare module '@tanstack/react-router' {
       path: '/communities'
       fullPath: '/communities'
       preLoaderRoute: typeof CommunitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companella': {
+      id: '/companella'
+      path: '/companella'
+      fullPath: '/companella'
+      preLoaderRoute: typeof CompanellaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dan-estimates': {
@@ -1201,6 +1449,13 @@ declare module '@tanstack/react-router' {
       path: '/valley'
       fullPath: '/valley'
       preLoaderRoute: typeof ValleyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/banned-users': {
+      id: '/admin/banned-users'
+      path: '/admin/banned-users'
+      fullPath: '/admin/banned-users'
+      preLoaderRoute: typeof AdminBannedUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/bbcode-images': {
@@ -1406,6 +1661,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CommunitiesReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/companella_/authorize': {
+      id: '/companella_/authorize'
+      path: '/companella/authorize'
+      fullPath: '/companella/authorize'
+      preLoaderRoute: typeof CompanellaAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companella_/docs': {
+      id: '/companella_/docs'
+      path: '/companella/docs'
+      fullPath: '/companella/docs'
+      preLoaderRoute: typeof CompanellaDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companella_/test-callback': {
+      id: '/companella_/test-callback'
+      path: '/companella/test-callback'
+      fullPath: '/companella/test-callback'
+      preLoaderRoute: typeof CompanellaTestCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dev/opt-in-preview': {
       id: '/dev/opt-in-preview'
       path: '/dev/opt-in-preview'
@@ -1467,6 +1743,34 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/osu'
       fullPath: '/api/auth/osu'
       preLoaderRoute: typeof ApiAuthOsuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/companella/chart': {
+      id: '/api/companella/chart'
+      path: '/api/companella/chart'
+      fullPath: '/api/companella/chart'
+      preLoaderRoute: typeof ApiCompanellaChartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/companella/replay': {
+      id: '/api/companella/replay'
+      path: '/api/companella/replay'
+      fullPath: '/api/companella/replay'
+      preLoaderRoute: typeof ApiCompanellaReplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companella_/docs_/openapi.yaml': {
+      id: '/companella_/docs_/openapi.yaml'
+      path: '/companella/docs/openapi.yaml'
+      fullPath: '/companella/docs/openapi.yaml'
+      preLoaderRoute: typeof CompanellaDocsOpenapiDotyamlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companella_/docs_/reference-client.mjs': {
+      id: '/companella_/docs_/reference-client.mjs'
+      path: '/companella/docs/reference-client.mjs'
+      fullPath: '/companella/docs/reference-client.mjs'
+      preLoaderRoute: typeof CompanellaDocsReferenceClientDotmjsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/farm-helper/map/$beatmapId': {
@@ -1546,6 +1850,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSignatureTokenVariantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/integrations/companella/v1/capabilities': {
+      id: '/api/integrations/companella/v1/capabilities'
+      path: '/api/integrations/companella/v1/capabilities'
+      fullPath: '/api/integrations/companella/v1/capabilities'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1CapabilitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/companella/v1/me': {
+      id: '/api/integrations/companella/v1/me'
+      path: '/api/integrations/companella/v1/me'
+      fullPath: '/api/integrations/companella/v1/me'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1MeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/companella/v1/submissions': {
+      id: '/api/integrations/companella/v1/submissions'
+      path: '/api/integrations/companella/v1/submissions'
+      fullPath: '/api/integrations/companella/v1/submissions'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/companella/v1/oauth/revoke': {
+      id: '/api/integrations/companella/v1/oauth/revoke'
+      path: '/api/integrations/companella/v1/oauth/revoke'
+      fullPath: '/api/integrations/companella/v1/oauth/revoke'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1OauthRevokeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/companella/v1/oauth/token': {
+      id: '/api/integrations/companella/v1/oauth/token'
+      path: '/api/integrations/companella/v1/oauth/token'
+      fullPath: '/api/integrations/companella/v1/oauth/token'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1OauthTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/companella/v1/submissions/$id': {
+      id: '/api/integrations/companella/v1/submissions/$id'
+      path: '/$id'
+      fullPath: '/api/integrations/companella/v1/submissions/$id'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteImport
+      parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsRoute
+    }
+    '/api/integrations/companella/v1/submissions/$id/beatmap': {
+      id: '/api/integrations/companella/v1/submissions/$id/beatmap'
+      path: '/beatmap'
+      fullPath: '/api/integrations/companella/v1/submissions/$id/beatmap'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteImport
+      parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRoute
+    }
+    '/api/integrations/companella/v1/submissions/$id/complete': {
+      id: '/api/integrations/companella/v1/submissions/$id/complete'
+      path: '/complete'
+      fullPath: '/api/integrations/companella/v1/submissions/$id/complete'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRouteImport
+      parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRoute
+    }
+    '/api/integrations/companella/v1/submissions/$id/replay': {
+      id: '/api/integrations/companella/v1/submissions/$id/replay'
+      path: '/replay'
+      fullPath: '/api/integrations/companella/v1/submissions/$id/replay'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRouteImport
+      parentRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRoute
+    }
   }
 }
 
@@ -1605,11 +1972,48 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
   ApiAuthOsuRouteChildren,
 )
 
+interface ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren {
+  ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute
+  ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute
+  ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute
+}
+
+const ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren: ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren =
+  {
+    ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute:
+      ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRoute,
+    ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute:
+      ApiIntegrationsCompanellaV1SubmissionsIdCompleteRoute,
+    ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute:
+      ApiIntegrationsCompanellaV1SubmissionsIdReplayRoute,
+  }
+
+const ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren =
+  ApiIntegrationsCompanellaV1SubmissionsIdRoute._addFileChildren(
+    ApiIntegrationsCompanellaV1SubmissionsIdRouteChildren,
+  )
+
+interface ApiIntegrationsCompanellaV1SubmissionsRouteChildren {
+  ApiIntegrationsCompanellaV1SubmissionsIdRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren
+}
+
+const ApiIntegrationsCompanellaV1SubmissionsRouteChildren: ApiIntegrationsCompanellaV1SubmissionsRouteChildren =
+  {
+    ApiIntegrationsCompanellaV1SubmissionsIdRoute:
+      ApiIntegrationsCompanellaV1SubmissionsIdRouteWithChildren,
+  }
+
+const ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren =
+  ApiIntegrationsCompanellaV1SubmissionsRoute._addFileChildren(
+    ApiIntegrationsCompanellaV1SubmissionsRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   BbcodeRoute: BbcodeRoute,
   CommunitiesRoute: CommunitiesRoute,
+  CompanellaRoute: CompanellaRoute,
   DanEstimatesRoute: DanEstimatesRoute,
   DiscordRoute: DiscordRoute,
   DynamicRendersRoute: DynamicRendersRoute,
@@ -1633,6 +2037,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   ValleyRoute: ValleyRoute,
+  AdminBannedUsersRoute: AdminBannedUsersRoute,
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
   AdminBugReportsRoute: AdminBugReportsRoute,
   AdminCollectionsRoute: AdminCollectionsRoute,
@@ -1662,6 +2067,9 @@ const rootRouteChildren: RootRouteChildren = {
   CollectionsIdRoute: CollectionsIdRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
+  CompanellaAuthorizeRoute: CompanellaAuthorizeRoute,
+  CompanellaDocsRoute: CompanellaDocsRoute,
+  CompanellaTestCallbackRoute: CompanellaTestCallbackRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
@@ -1671,9 +2079,23 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
+  ApiCompanellaChartRoute: ApiCompanellaChartRoute,
+  ApiCompanellaReplayRoute: ApiCompanellaReplayRoute,
+  CompanellaDocsOpenapiDotyamlRoute: CompanellaDocsOpenapiDotyamlRoute,
+  CompanellaDocsReferenceClientDotmjsRoute:
+    CompanellaDocsReferenceClientDotmjsRoute,
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,
   ApiSignatureTokenVariantRoute: ApiSignatureTokenVariantRoute,
+  ApiIntegrationsCompanellaV1CapabilitiesRoute:
+    ApiIntegrationsCompanellaV1CapabilitiesRoute,
+  ApiIntegrationsCompanellaV1MeRoute: ApiIntegrationsCompanellaV1MeRoute,
+  ApiIntegrationsCompanellaV1SubmissionsRoute:
+    ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren,
+  ApiIntegrationsCompanellaV1OauthRevokeRoute:
+    ApiIntegrationsCompanellaV1OauthRevokeRoute,
+  ApiIntegrationsCompanellaV1OauthTokenRoute:
+    ApiIntegrationsCompanellaV1OauthTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

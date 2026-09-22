@@ -10,7 +10,8 @@
       "#/*": ["./src/*"],
       "@/*": ["./src/*"],
       "#dan/*": ["./live-backend/src/dan/*"],
-      "#leoblack/*": ["./live-backend/vendor/leoblack/*"]
+      "#leoblack/*": ["./live-backend/vendor/leoblack/*"],
+      "#replay-judge/*": ["./live-backend/src/replay-judge/*"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],

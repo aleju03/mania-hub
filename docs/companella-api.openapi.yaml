@@ -1,0 +1,557 @@
+openapi: 3.1.0
+info:
+  title: Mania Hub Companella integration API
+  version: "1.0.0"
+  description: |
+    The public API a Companella installation uses to send completed osu!stable
+    mania plays to Mania Hub.
+
+    Authorization is Mania Tracker's own: authorization code + PKCE S256 +
+    DPoP key binding (RFC 8252, RFC 7636, RFC 9449). No osu! token ever reaches
+    the client, and no website cookie is ever a fallback for a native request.
+
+    Every resource request carries `Authorization: DPoP <access-token>` and a
+    FRESH `DPoP` proof. A proof id (`jti`) is single use; a server-issued nonce
+    is reusable within its short validity window, so parallel uploads do not
+    serialise.
+
+    Nothing in this API affects public rankings, pp, snipes or rewards.
+servers:
+  - url: https://mania-tracker.com/api/integrations/companella/v1
+    description: Production (enabled per deployment; see /capabilities)
+  - url: http://localhost:3000/api/integrations/companella/v1
+    description: Local development
+
+security:
+  - dpop: []
+
+paths:
+  /capabilities:
+    get:
+      summary: Protocol version, supported clients and mods, limits, endpoints
+      description: |
+        Public. Carries no account data and answers even while the integration
+        is switched off, with `enabled: false`.
+      security: []
+      responses:
+        "200":
+          description: Capability document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+
+  /oauth/token:
+    post:
+      summary: Exchange an authorization code, or refresh
+      description: |
+        Requires a fresh DPoP proof bound to the key the grant was issued to.
+        The proof carries no `ath` here, because there is no access token yet.
+
+        Errors keep the OAuth response shape and are not wrapped in the
+        resource error envelope.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/AuthorizationCodeGrant"
+                - $ref: "#/components/schemas/RefreshGrant"
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/AuthorizationCodeGrant"
+                - $ref: "#/components/schemas/RefreshGrant"
+      responses:
+        "200":
+          description: Credentials
+          headers:
+            DPoP-Nonce:
+              $ref: "#/components/headers/DPoPNonce"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: |
+            `invalid_grant`, `invalid_client`, `invalid_dpop_proof`,
+            `unsupported_grant_type`, `unauthorized_client`, `use_dpop_nonce`.
+          headers:
+            DPoP-Nonce:
+              $ref: "#/components/headers/DPoPNonce"
+            WWW-Authenticate:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth/revoke:
+    post:
+      summary: Disconnect this installation
+      description: |
+        Revokes the requesting installation's own grant and nothing else, not
+        even another installation on the same account. Answers 200 whether or
+        not the credential existed (RFC 7009).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+              required: [token]
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: { type: boolean }
+
+  /me:
+    get:
+      summary: The connected account and installation
+      responses:
+        "200":
+          description: Identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /submissions:
+    post:
+      summary: Reserve (or re-read) one idempotent submission
+      description: |
+        The manifest carries digests and lengths only. Identity-setting fields
+        are REJECTED rather than ignored: `user_id`, `username`, `accuracy`,
+        `msd`, `dan`, `rating`, `pp`, `beatmap_id`, `score`, `rate`, `mods`.
+
+        `needs_beatmap: false` is answered only when the exact bytes are
+        verified to exist and are reusable by this account.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: A persistent id for this local play, stable across retries.
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9._:-]{8,128}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmissionManifest"
+      responses:
+        "201":
+          description: Reserved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "200":
+          description: An existing reservation for the same key and manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`account_not_allowed`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: "`idempotency_conflict`: the same key with different content."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: A budget was reached. Honour `Retry-After`.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /submissions/{id}:
+    get:
+      summary: The durable receipt
+      description: A foreign id answers exactly like a missing one.
+      parameters:
+        - $ref: "#/components/parameters/SubmissionId"
+      responses:
+        "200":
+          description: Receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /submissions/{id}/replay:
+    put:
+      summary: Upload the replay as raw bytes
+      description: |
+        `application/octet-stream`, exactly the bytes the manifest hashed. Do
+        not base64, gzip, or rewrite anything. Reuploading identical bytes is
+        idempotent; different bytes for a committed asset are a conflict.
+      parameters:
+        - $ref: "#/components/parameters/SubmissionId"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`asset_conflict` or `wrong_state`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: "`payload_too_large`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: "`digest_mismatch` or `length_mismatch`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /submissions/{id}/beatmap:
+    put:
+      summary: Upload the single exact .osu, when the server asked for it
+      description: |
+        Raw bytes, original encoding, CRLF and BOM preserved: the `.osr`
+        header's MD5 is over exactly these bytes. Requires the
+        `companella:charts:upload` scope and chart-sharing consent.
+      parameters:
+        - $ref: "#/components/parameters/SubmissionId"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`account_not_allowed`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: "`digest_mismatch`, `not_mania`, `invalid_file`, `parse_failed`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /submissions/{id}/complete:
+    post:
+      summary: Finalize the assets and queue validation
+      description: |
+        `202` means accepted for processing, never analyzed. Repeating it
+        returns the existing receipt.
+      parameters:
+        - $ref: "#/components/parameters/SubmissionId"
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`assets_missing` or `wrong_state`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+components:
+  securitySchemes:
+    dpop:
+      type: http
+      scheme: DPoP
+      description: |
+        `Authorization: DPoP <access-token>` plus a `DPoP: <proof>` header
+        carrying a fresh ES256 JWS over `htm`, `htu` (the PUBLIC endpoint URL,
+        query stripped), `iat`, `jti` and `ath`.
+
+  headers:
+    DPoPNonce:
+      description: A server nonce to include in the next proof. Reusable within its window.
+      schema: { type: string }
+
+  parameters:
+    SubmissionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_-]{8,64}$"
+
+  responses:
+    Unauthorized:
+      description: |
+        Missing, expired, replayed or wrongly-bound credentials. Never downgrade
+        to bearer or to a cookie; refresh once, then retry with a fresh proof.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+        DPoP-Nonce:
+          $ref: "#/components/headers/DPoPNonce"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Forbidden:
+      description: "`insufficient_scope` or `account_not_allowed`."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: No such submission, or it belongs to another account.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    BadRequest:
+      description: |
+        `invalid_manifest`, `invalid_digest`, `forbidden_field`,
+        `unsupported_protocol_version`, `unsupported_game_client`,
+        `unsupported_capture_kind`, `invalid_idempotency_key`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            retryable: { type: boolean }
+          required: [code, message, retryable]
+        request_id: { type: string }
+        submission_id:
+          type: [string, "null"]
+      required: [error]
+
+    OAuthError:
+      type: object
+      properties:
+        error: { type: string }
+      required: [error]
+
+    Capabilities:
+      type: object
+      properties:
+        protocol_version: { type: integer, const: 1 }
+        enabled: { type: boolean }
+        environment: { type: string }
+        issuer: { type: string }
+        authorization_endpoint: { type: string }
+        token_endpoint: { type: string }
+        revocation_endpoint: { type: string }
+        api_prefix: { type: string }
+        scopes_supported:
+          type: array
+          items: { type: string }
+        dpop_signing_alg_values_supported:
+          type: array
+          items: { type: string, const: ES256 }
+        code_challenge_methods_supported:
+          type: array
+          items: { type: string, const: S256 }
+        clients_supported:
+          type: array
+          items: { type: string }
+        game_clients_supported:
+          type: array
+          items: { type: string, const: stable }
+        rulesets_supported:
+          type: array
+          items: { type: string, const: mania }
+        analysis:
+          type: object
+          properties:
+            key_counts_supported:
+              type: array
+              items: { type: integer }
+            mods_supported:
+              type: array
+              items: { type: string }
+            mods_rejected:
+              type: array
+              items: { type: string }
+            mods_stored_unrated:
+              type: array
+              items: { type: string }
+        limits:
+          type: object
+          additionalProperties: { type: integer }
+        rating_policy: { type: string, const: experimental_only }
+        public_effects: { type: string, const: none }
+        storage:
+          type: string
+          enum: [r2, local, unavailable]
+
+    AuthorizationCodeGrant:
+      type: object
+      properties:
+        grant_type: { type: string, const: authorization_code }
+        code: { type: string }
+        code_verifier: { type: string, minLength: 43, maxLength: 128 }
+        client_id: { type: string }
+        redirect_uri: { type: string }
+      required: [grant_type, code, code_verifier, client_id, redirect_uri]
+
+    RefreshGrant:
+      type: object
+      properties:
+        grant_type: { type: string, const: refresh_token }
+        refresh_token: { type: string }
+      required: [grant_type, refresh_token]
+
+    TokenResponse:
+      type: object
+      description: |
+        The refresh credential is sender-constrained and is NOT rotated on use,
+        so a lost response is recoverable by retrying with the same one.
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: DPoP }
+        expires_in: { type: integer }
+        refresh_token: { type: string }
+        scope: { type: string }
+        installation_id: { type: string }
+        user_id: { type: integer }
+        username: { type: string }
+      required: [access_token, token_type, expires_in, refresh_token, scope]
+
+    Identity:
+      type: object
+      properties:
+        user_id: { type: integer }
+        username: { type: string }
+        installation_id: { type: string }
+        client_id: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        environment: { type: string }
+
+    SubmissionManifest:
+      type: object
+      properties:
+        protocol_version: { type: integer, const: 1 }
+        client_version: { type: string, maxLength: 64 }
+        game_client: { type: string, const: stable }
+        capture_kind:
+          type: string
+          enum: [automatic_completed_play, manual_import, beta_test]
+        replay:
+          type: object
+          properties:
+            sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+            byte_length: { type: integer, minimum: 1 }
+          required: [sha256, byte_length]
+        chart:
+          type: object
+          properties:
+            md5: { type: string, pattern: "^[0-9a-f]{32}$" }
+            sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+            byte_length: { type: integer, minimum: 1 }
+          required: [md5, sha256, byte_length]
+        observed:
+          type: object
+          description: Optional client telemetry. Not authenticated gameplay evidence.
+          properties:
+            finished_at: { type: string, format: date-time }
+            pause_count: { type: integer, minimum: 0 }
+      required: [protocol_version, game_client, capture_kind, replay, chart]
+
+    Reservation:
+      type: object
+      properties:
+        submission_id: { type: string }
+        state:
+          type: string
+          enum: [awaiting_assets, queued, validating, analyzing, accepted, deferred, rejected, expired, deleted]
+        created: { type: boolean }
+        needs_replay: { type: boolean }
+        needs_beatmap: { type: boolean }
+        replay_upload_path: { type: [string, "null"] }
+        beatmap_upload_path: { type: [string, "null"] }
+        expires_at: { type: string, format: date-time }
+        local_score_id: { type: [string, "null"] }
+        error:
+          type: [object, "null"]
+          properties:
+            code: { type: string }
+            message: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      required: [submission_id, state]

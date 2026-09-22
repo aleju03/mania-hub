@@ -7,7 +7,7 @@ import {
   getScoreScaleToReal,
   getStableManiaScoreModFactors,
 } from "./mania-score-simulation";
-import type { Judgment } from "./mania-replay-judgement";
+import type { Judgment } from "#replay-judge/mania-replay-judgement";
 
 function runAll(sim: ReturnType<typeof createManiaScoreSimulator>, judgments: Judgment[]) {
   for (const judgment of judgments) sim.applyJudgment(judgment);

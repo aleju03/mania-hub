@@ -15,6 +15,7 @@
 export const SALVAGEABLE_ROUTES = [
   "bbcode",
   "communities",
+  "companella",
   "dan-estimates",
   "discord",
   "dynamic-renders",

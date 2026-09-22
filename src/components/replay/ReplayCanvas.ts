@@ -1,8 +1,8 @@
 import { Application, Assets, CanvasRenderer, Container, FillGradient, Graphics, GraphicsPath, Matrix, Rectangle, Sprite, Text, Texture, WebGLRenderer } from "pixi.js";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity, ManiaTimingPoint } from "../../lib/beatmap-parser";
-import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
-import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
+import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "#replay-judge/mania-replay-judgement";
+import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "#replay-judge/mania-replay-judgement";
 import { calculateManiaPp, getManiaPpModMultiplier } from "../../lib/mania-pp";
 import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScoreScaleToReal } from "../../lib/mania-score-simulation";
 import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";

@@ -17,6 +17,7 @@ This file is the condensed guide. `docs/` holds the maintained reference; read t
 - `docs/discord.md`: maniabot Discord bot, `/communities` server directory.
 - `docs/admin.md`: admin surfaces - ghost overlay, todos, analytics, BBCode image audit, `bugs:pull` setup.
 - `docs/frontend.md`: route/component map, live data flow (SSE client, cross-tab sharing), client state, on-device replay video export, OG images, BBCode editor.
+- `docs/companella-integration.md`: the Companella score-import beta (`/companella`), off by default. `docs/companella-api.openapi.yaml`, `docs/companella-client-guide.md` and `docs/companella-operations.md` are its API spec, client contract and runbook.
 
 Keep one-off audits, investigation notes, and capture reports in `local-notes/` (gitignored), not in `docs/`. Do not commit them.
 
@@ -49,12 +50,13 @@ In order of preference for live surfaces:
 
 Client state: one Zustand store in `src/store.ts`, persisted to localStorage as `mania-hub-cache-v5` (bump the version on breaking shape changes). Data is country-keyed with `fetchedAt` + TTL constants from `src/lib/cache.ts`. Persistence is debounced, has quota-eviction handling, and keeps critical prefs (theme, hidden users, avatar accents) in separate storage keys. Check `useHasHydrated()` before trusting persisted state during SSR hydration.
 
-## Shared dan estimator
+## Shared dan estimator and replay judge
 
 There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/` (features, scoring, family choice, LN subsystem, courses, labels) with `live-backend/src/dan/dan-estimator.ts` as entry, and one copy of the vendored LeoBlack engine at `live-backend/vendor/leoblack`. The frontend reaches them through the `#dan/*` and `#leoblack/*` aliases. Both live under `live-backend/` because the backend compiles with `rootDir: "src"` and prod runs the flat `dist/` layout (`node dist/server.js` plus `dist/maintenance/*.js`), so shared sources cannot sit outside it.
 
 - Each alias is declared in three places that must move together: `paths` in `tsconfig.json`, `imports` in `package.json`, and `vitest.config.ts` (which deliberately does not load `vite.config.ts`).
 - Tests for the shared estimator live in `live-backend/tests/dan-*.test.ts`, so edits there need the backend suite, and the root `npx tsc --noEmit` covers both sides. The chart classifier (`#dan/chart-classifier`) is shared on the same terms.
+- The mania replay judge is shared on the same terms: `live-backend/src/replay-judge/` (`mania-replay-judgement.ts`, and `stable-frames.ts` for decoding .osr rows), reached as `#replay-judge/*`. The replay viewer draws with it and the backend rates Companella imports from the offsets it finds. Its tests are `live-backend/tests/replay-judge.test.ts`. Keep its imports type-only: the root `replay:*` scripts load it under plain node, which does not map `.js` specifiers onto `.ts`.
 - `src/lib/daniel-estimator.ts` is an alternative algorithm, not a copy. `companella.ts` is the one deliberately divergent pair: the backend routes MSD through `msd.ts` so MinaCalc stays serialized against the job lanes, so it stays hand-synced.
 
 ## Hard rules
@@ -66,6 +68,8 @@ There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/`
 - Replay video export is on-device only. The ordinary export path must not upload the video, queue a render job, or call `/api/replay-video-job`; the backend's `ENABLE_REPLAY_VIDEO` half stays off and is not a fallback for an unsupported browser. Details in `docs/frontend.md`.
 - Uploaded replays (`/replay` Upload tab) are unlisted, not private: the `.osr` sits in R2 and its share link is public by design. What is owned is the row in the backend's `uploaded_replays` index, consulted for both the `/replay/uploads` page and every delete; the file names no uploader, so any surface that lists or deletes one goes through `src/lib/uploaded-replays.ts`, never the R2 key. Deletes drop the index row before the objects; admins get the same page over every uploader's files.
 - Skins carry a `visibility` (`public`/`private`) alongside `status`. A private skin is off `/skins`, off the duplicate guard, has no counted download or view, and 404s for anyone but its uploader (a true admin can still read it, and their private shelf on `/skins` lists every uploader's via `allPrivate=1` on `/api/skins/list`). Its R2 objects live under a `p-<secret>` key segment, never get a public bucket URL, and only answer to `?t=<secret>`, which `toSkinSummary(row, { asOwner })` attaches for owner-scoped reads only; any endpoint that serves a skin goes through that serializer, not the row. Replay viewers never receive a private `.osk`: `/api/replay-skin/bundle` zips only the assets the player's stored settings draw (`live-backend/src/skins/replay-bundle.ts`). This protects the file and the page, not the pixels a replay puts on screen.
+- Companella-imported replays are owner-only and separate again: they are read through `/api/companella/replay` and never through the public upload flow.
+- The Companella integration never writes to an official projection. It reads `beatmap_chart_families` and `player_skill_ratings`; it writes only its own `companella_*` tables. Do not route local score evidence into the official score ingestor, `writePlayerSkillRatingWithHistory`, ranking invalidation, pp, goals, packs or snipes.
 - Some admin controls (reset-local-db, delete-country) are destructive; treat with care.
 - Secrets live in `.env` (root) and `live-backend/.env`; never commit them.
 

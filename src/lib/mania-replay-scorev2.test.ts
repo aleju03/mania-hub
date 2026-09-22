@@ -5,7 +5,7 @@ import {
   getManiaReplayHitWindows,
   getManiaReplayRuleset,
   simulateManiaReplayJudgements,
-} from "./mania-replay-judgement";
+} from "#replay-judge/mania-replay-judgement";
 import { getManiaAccuracyFromCounts, scoreUsesLazerScoring } from "./score";
 
 const hold: ManiaNote = { column: 0, time: 1000, endTime: 2000, isHold: true };

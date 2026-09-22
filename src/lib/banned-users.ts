@@ -1,0 +1,110 @@
+import { createServerFn } from "@tanstack/react-start";
+
+import { adminAuthHeaders } from "./live-backend-tokens";
+import { getServerLiveBackendUrl } from "./live-backend";
+
+/* The admin banned-users page (/admin/banned-users): every account osu! stopped
+   serving. Nothing reaches this list by being deleted; the backend only ever
+   deactivates, and removing someone's content is the admin's call from here,
+   through the ordinary wipe preview and confirmation. */
+
+export type BannedUserStatus = "restricted" | "missing";
+export type BannedUsersFilter = "all" | "new" | "restricted";
+
+export interface BannedUser {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string | null;
+  pp: number | null;
+  /* restricted: osu! said so when they signed in. missing: osu! 404s the id,
+     which a deleted account does too. */
+  status: BannedUserStatus;
+  reason: string | null;
+  deactivatedAt: string | null;
+  restrictedAt: string | null;
+  lastLoginAt: string | null;
+  reviewedAt: string | null;
+  hasProfile: boolean;
+  companellaPlays: number;
+  displayName: string | null;
+}
+
+export interface BannedUsersPage {
+  total: number;
+  unreviewed: number;
+  entries: BannedUser[];
+}
+
+async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+  return fetch(`${base}${path}`, {
+    ...init,
+    headers: { ...adminAuthHeaders(init.method === "POST"), connection: "close", ...(init.headers ?? {}) },
+  });
+}
+
+export const listBannedUsers = createServerFn({ method: "GET" })
+  .validator((data: { filter?: BannedUsersFilter; limit?: number; offset?: number } | undefined) => ({
+    filter: data?.filter === "new" || data?.filter === "restricted" ? data.filter : "all",
+    limit: Math.min(200, Math.max(1, Math.floor(Number(data?.limit) || 50))),
+    offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
+  }))
+  .handler(async ({ data }): Promise<BannedUsersPage> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("List banned users");
+    const query = new URLSearchParams({ filter: data.filter, limit: String(data.limit), offset: String(data.offset) });
+    const response = await adminFetch(`/api/admin/inactive-users?${query.toString()}`);
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/inactive-users`);
+    return await response.json() as BannedUsersPage;
+  });
+
+/** Clears the admin badge for these accounts, or for all of them. Returns what is still unseen. */
+export const markBannedUsersReviewed = createServerFn({ method: "POST" })
+  .validator((data: { userIds?: number[]; all?: boolean } | undefined) => ({
+    userIds: Array.isArray(data?.userIds) ? data.userIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, 500) : [],
+    all: data?.all === true,
+  }))
+  .handler(async ({ data }): Promise<number> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Mark banned users seen");
+    const response = await adminFetch("/api/admin/inactive-users/reviewed", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/inactive-users/reviewed`);
+    return Number(((await response.json()) as { unreviewed?: unknown }).unreviewed ?? 0);
+  });
+
+/** The badge on the admin menu. Zero for anyone who is not an admin. */
+export const getBannedUsersAlert = createServerFn({ method: "GET" }).handler(async (): Promise<number> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const { readCurrentAuth } = await import("./auth-server");
+  if (!(await readCurrentAuth()).canUseAdminFeatures) return 0;
+  try {
+    const response = await adminFetch("/api/admin/inactive-users/count");
+    if (!response.ok) return 0;
+    return Number(((await response.json()) as { unreviewed?: unknown }).unreviewed ?? 0);
+  } catch {
+    return 0;
+  }
+});
+
+/** Drops a player's display name (moderation). Their weekly clock keeps running. */
+export const clearBannedUserDisplayName = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user id.");
+    return { userId };
+  })
+  .handler(async ({ data }): Promise<void> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Clear banned user display name");
+    const response = await adminFetch("/api/admin/inactive-users/clear-name", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/inactive-users/clear-name`);
+  });

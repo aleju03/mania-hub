@@ -5,7 +5,8 @@
   "imports": {
     "#/*": "./src/*",
     "#dan/*": "./live-backend/src/dan/*",
-    "#leoblack/*": "./live-backend/vendor/leoblack/*"
+    "#leoblack/*": "./live-backend/vendor/leoblack/*",
+    "#replay-judge/*": "./live-backend/src/replay-judge/*"
   },
   "scripts": {
     "postinstall": "node scripts/prune-onnxruntime-web.mjs",
@@ -22,6 +23,7 @@
     "live-db:sync-from-vps": "npm --prefix live-backend run db:sync-from-vps --",
     "live-db:update": "npm --prefix live-backend run db:sync-from-vps -- --fresh",
     "bugs:pull": "node scripts/fetch-prod-bug-reports.mjs",
+    "companella:test-client": "node scripts/companella-test-client.mjs",
     "replay:capture-stable": "node --env-file-if-exists=.env scripts/replay-capture-stable.ts",
     "replay:compare-capture": "node --env-file-if-exists=.env scripts/replay-compare-capture.ts",
     "replay:convert-capture": "node scripts/replay-capture-convert.mjs",
