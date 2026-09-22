@@ -46,6 +46,22 @@ Budgets: `COMPANELLA_MAX_REPLAY_BYTES` (25 MiB),
 Frontend side: nothing new. It reuses `LIVE_BACKEND_URL`, `LIVE_BRIDGE_TOKEN`
 and, for the trusted edge country, the existing `TRUST_PROXY_HEADERS`.
 
+Set `LIVE_BRIDGE_TOKEN` on both sides before enabling the beta in production.
+While it is unset, the frontend's Companella hop reaches the backend on the
+admin token. Nothing on the Companella surface reads admin-ness from that
+token, and the backend charges the hop the bridge rate bucket
+(`BRIDGE_RATE_PER_MINUTE`) itself because the router's rate gate exempts admin
+requests, but a separate token keeps the hop from carrying admin rights at all.
+
+The frontend proxy has its own ceilings, independent of the backend's: 64 KiB
+for the token, revoke and reservation bodies, 32 MiB for each file upload, no
+body forwarded on the other routes, 4 minutes for an upload hop and 30 seconds
+for the rest. Setting `COMPANELLA_MAX_REPLAY_BYTES` above 32 MiB or
+`COMPANELLA_MAX_JSON_BYTES` above 64 KiB has no effect past the proxy. The
+upload hop stays under Node's 5-minute `requestTimeout`, which the frontend's
+Nitro server applies with no setting to raise it and the backend pins
+(`server.ts`); raise the hop only after raising both.
+
 ### Fail-closed rules
 
 - No issuer origin: disabled, whatever `COMPANELLA_MODE` says.
@@ -112,8 +128,11 @@ assume it does.
 
 1. Set `COMPANELLA_MODE=disabled` and restart. New authorization and submission
    attempts stop immediately; `/companella` answers "not switched on".
-2. Owner data stays readable for inspection and deletion if the mode is instead
-   narrowed to an allowlist of one.
+2. Narrowing the allowlist instead stops everyone taken off it from connecting,
+   refreshing or submitting, and takes their imports off the public profile
+   route, while `/companella` still shows them their installations and plays to
+   revoke and delete. Membership only gates starting a connection on the
+   manage surface.
 3. Accepted records are durable and are not dropped. No official migration needs
    reverting: every table this integration owns is additive and unrelated to the
    official projections.
@@ -123,10 +142,39 @@ assume it does.
 - One worker lane (`companella`, `claimLimit: 1`) runs both submission
   processing and the maintenance sweep, so housekeeping can never overlap an
   import on that process.
-- The maintenance job self-chains every 15 minutes: prunes proof ids and
-  expired grants, expires abandoned reservations, re-enqueues completions whose
-  job insert was lost, removes expired test scores, prunes security events, and
-  reconciles staged artifacts older than an hour.
+- The maintenance job self-chains every 15 minutes for the life of the
+  process. Each link's dedupe key is `companella_maintenance:<due epoch ms>`;
+  at most one link waits at a time, and the boot seed is skipped when one is
+  already pending. A pass prunes proof ids, authorization requests and codes,
+  and credentials; expires abandoned reservations; re-enqueues completions
+  whose job insert was lost, and submissions left `queued`, `deferred`,
+  `validating` or `analyzing` with nothing touching them for an hour (their
+  job is gone, for example cleared from the admin page after failing); removes
+  expired test scores and
+  hard-deletes score rows deleted more than 30 days ago; prunes security
+  events; reconciles staged objects older than an hour; and collects committed
+  objects nothing has referenced for 24 hours (counted from the later of the
+  last write and the end of the last reference: a chart whose last score was
+  deleted an hour ago waits another 23), walking the registry by key with a
+  cursor. Every prune drains in batches for up to 1.5 s per table per pass,
+  and a failed sweep logs `companella_maintenance_sweep_failed` without stopping
+  the others. The `companella_maintenance` log line reports `proofIds`,
+  `authorizationRequests`, `authorizationCodes`, `credentials`,
+  `expiredSubmissions`, `recoveredSubmissions`, `expiredTestScores`,
+  `purgedScores`, `securityEvents`, `orphanedArtifacts` and
+  `unreferencedArtifacts`.
+- A failed submission run is retried by the job queue after 1, 2, 4, 8 and 16
+  minutes, with the receipt saying `deferred` and a fixed message; the error
+  itself is only in the `companella_submission_failed` log line, and each retry
+  also shows up as a `job_failed` warning. The sixth attempt ends it as
+  `rejected` / `processing_failed`. A long chart lookup continues in follow-up jobs keyed
+  `companella:<submission>:match:<cursor>` and logs
+  `companella_chart_lookup_continues`.
+- A dev database copied from production can hold chart rows under the
+  production environment; uploading one of those charts answers `409
+  chart_environment_conflict` and logs `companella_chart_environment_conflict`.
+- `PUT beatmap` still parses the chart on the serving process: linear, about
+  100-300 ms for a maximum-size 8 MiB chart.
 - MinaCalc stays serialized through `dan/msd.ts`; this integration adds no
   parallel calculator.
 - Private responses are `no-store` end to end. If a CDN rule is ever added in
@@ -138,19 +186,44 @@ assume it does.
 
 ## Reviewing a held play
 
-A play is quarantined when the name on the replay is not the account's, or when
-its header's judgements are not in its key presses (a `judgements_disagree_with_inputs`
-security event with both accuracies and the gap). There is no admin page for
-this yet. With the admin token:
+A play is quarantined when its header's judgements are not in its key presses
+(`judgements_disagree_with_inputs`, with both accuracies and the gap). The
+event is recorded once per score and its detail carries `localScoreId`, which
+is the id to review. There is no admin page for this
+yet. Call the backend directly with the admin token. The route reads no actor
+header, and a separate `LIVE_BRIDGE_TOKEN` does not open it:
 
 ```
-POST /api/integrations/companella/manage/admin/review
-{"score_id": "<local score id>", "review_state": "clear" | "flagged" | "quarantined"}
+curl -s -X POST "$LIVE_BACKEND_URL/api/admin/companella/review" \
+  -H "Authorization: Bearer $LIVE_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"score_id": "<local score id>", "review_state": "clear"}'
 ```
 
-A cleared play counts from the next preview recompute. Honest replays sit well
-inside the threshold (see "The key presses" in `companella-integration.md`),
-so a disagreement is worth reading before clearing it.
+`review_state` is `clear`, `flagged` or `quarantined`. Answers: `200 {"ok":
+true}`; `404 {"ok": false}` for an unknown score; `400 invalid_review_state`;
+`401` without the admin token (the bridge token included); `404` while the
+integration is disabled. Each
+call logs `companella_review_set`. The decision reaches the owner's stored
+preview (and, for an account osu! turned away, its public plays) at once. The
+old `/api/integrations/companella/manage/admin/review` is gone and answers
+`404`.
+
+Honest replays sit well inside the thresholds (see "The key presses" in
+`companella-integration.md`), so a held play is worth reading before clearing
+it.
+
+## Rate flags
+
+A play whose frames do not confirm the speed its mods claim is not held. It
+counts, the player is not told, and `/admin/companella-flags` lists it (each
+one also logs `companella_rate_suspicious`). "Frames read slower" is the one to
+act on: `claimed_rate_too_high` never happened on an honest replay in the
+measurement, and a NoMod replay relabelled DT reads about 1.00x against a 1.50x
+claim. "Unreadable" is mostly honest: about 6% of honest DT plays have too few
+idle frames to read or come from a game at 60 fps or below. Hold takes a play
+out of its owner's preview (`quarantined` through the review route); Count it
+puts it back.
 
 ## What is deliberately NOT logged
 
@@ -165,6 +238,8 @@ kind.
 |---|---|
 | Protocol, parser, matcher, preview | Covered by `live-backend/tests/companella-*.test.ts` with synthetic fixtures. |
 | Rating from key presses | Covered with synthetic inputs, and run over 6,137 cached real stable replays: none held for review, press targets identical to the calibration audit (`local-notes/companella-timing-check/`). |
+| Unpaired-press review rule | Run over 6,128 cached real stable 4K-10K replays: none flagged, at most 0.58 unpaired presses per note and 12.4 per second (`local-notes/companella-anticheat-check/`). |
+| A header edited from NoMod to DT, or from HT to NoMod | Held for review from the frame clock (`replay-rate.ts`). Run over 7,514 cached real stable replays: every relabelled replay held, 0.3% of honest NoMod and 5.8% of honest DT plays held as unreadable, no honest replay read as edited. Respacing the idle frames defeats it. Not yet run on a local `.osr` straight from `Data/r`. |
 | LZMA decoding of a real encoder's stream | Covered (one real stream in the fixtures), and separately checked by hand against 20 real `.osr` files on the owner's machine. |
 | A real Companella capture payload | **Not tested.** Needs a sample from the app. |
 | Production deployment | **Not done.** |

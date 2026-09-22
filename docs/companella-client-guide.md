@@ -82,6 +82,35 @@ If the exchange response is lost, start authorization again. Reconnecting the
 same approved key on the same account reuses the existing installation rather
 than creating a second one.
 
+Refresh at the same endpoint with `{"grant_type":"refresh_token","refresh_token":"…"}`
+and a fresh proof (no `ath`). The answer carries a new access token and the
+**same** refresh token you sent: it is not rotated, so a lost refresh response
+is recovered by refreshing again. An account that has left the beta gets `400
+{"error":"invalid_grant","error_description":"This account is not in the
+beta."}` from refresh and from the code exchange; stop and tell the user. The
+refresh token stays valid, so nothing needs approving again if the account is
+re-admitted.
+
+Token endpoint errors keep the OAuth shape (`{"error": "…"}`, sometimes with
+`error_description`), never the resource envelope.
+
+### Disconnecting
+
+```http
+POST /api/integrations/companella/v1/oauth/revoke
+DPoP: <proof for POST on this URL, no ath>
+Content-Type: application/json
+
+{"token":"<refresh or access token>"}
+```
+
+The proof must be signed by the key the token is bound to. A form body
+(`token=…`) works too. The answer is `200 {"revoked":true}` whether or not the
+token existed (RFC 7009); a token presented with another key's proof is not
+revoked but still gets `200`. Only this installation is revoked. A missing or
+unparseable body is `400 invalid_request`, a bad proof `400
+invalid_dpop_proof`, and a nonce problem `400 use_dpop_nonce` as below.
+
 ## 2. Proofs
 
 Every request carries `Authorization: DPoP <access-token>` and a **fresh**
@@ -98,13 +127,21 @@ Every request carries `Authorization: DPoP <access-token>` and a **fresh**
 `htu` is the public URL your client called. Never a proxy's internal address.
 
 Timing: a proof may be at most 60 seconds old and at most 30 seconds in the
-future. The `jti` is single use. A `DPoP-Nonce` response header should be used
-in the next proof; a nonce stays valid for a few minutes and is reusable in that
-window, so parallel uploads do not have to serialise.
+future, measured when the request starts. The server checks it before reading
+the body, so an upload that takes longer than 60 seconds is fine, as long as it
+finishes within 4 minutes (see Upload). The `jti` is
+single use. A `DPoP-Nonce` response header should be used in the next proof; a
+nonce stays valid for a few minutes and is reusable in that window, so parallel
+uploads do not have to serialise.
 
-On a nonce challenge: re-sign with the nonce and retry once. A retry after a
-network failure uses the **same idempotency key and the same bytes**, but always
-a **new proof**.
+On a nonce challenge: re-sign with the nonce and retry once. Resource endpoints
+challenge with `401` and a `DPoP-Nonce` header. The token and revocation
+endpoints challenge with `400 {"error":"use_dpop_nonce"}`,
+`WWW-Authenticate: DPoP error="use_dpop_nonce"` and a `DPoP-Nonce` header (RFC
+9449 §8), even when the server does not require nonces: a nonce that expired or
+was not issued by this server is always refused there. A retry after a network
+failure uses the **same idempotency key and the same bytes**, but always a
+**new proof**.
 
 ## 3. Submitting a play
 
@@ -144,19 +181,45 @@ The response tells you what is still needed:
  "beatmap_upload_path":null,"expires_at":"…"}
 ```
 
-`needs_beatmap: false` means the server already holds that exact file. Only ever
-follow a path the server returned, and only on this origin.
+`needs_beatmap: false` means the server already holds that exact file (same
+SHA-256, MD5 and length). Only ever follow a path the server returned, and only
+on this origin.
+
+Reserving again under the same idempotency key, even concurrently, returns the
+same submission with `created: false`. The byte budgets count the replay, the
+chart when `needs_beatmap` is true, and whatever your other open reservations
+still expect.
 
 ### Upload
 
 `PUT` the replay, and the chart if asked, as `application/octet-stream` with the
 exact bytes. No base64, no gzip, no rewriting. Identical bytes can be re-sent
-safely; different bytes for a committed asset are a `409`.
+safely; different bytes for a committed asset are a `409`. The limits that
+apply are the ones in `/capabilities`: `limits.max_replay_bytes`,
+`max_beatmap_bytes` and `max_json_bytes` (25 MiB, 8 MiB and 16 KiB by default);
+a file over its limit is `413 payload_too_large`. The site's proxy also has
+outer ceilings (32 MiB per upload, 64 KiB for JSON bodies), which only matter
+if the server is configured above them. An upload must finish within 4
+minutes; a slower one is cut off with `504 integration_unavailable`, and
+retrying it over the same slow link will not help. The byte budgets are
+checked again when new bytes arrive (`429 daily_upload_quota_exceeded` /
+`retention_quota_exceeded`, retryable); re-sending bytes the server already
+stored is never refused.
 
 ### Complete
 
-`POST …/complete`. A `202` means it is queued, not analyzed. Poll
-`GET …/{id}` with backoff until the state is terminal.
+`POST …/complete`. A `202` means it is queued, not analyzed. If a file the
+server had is gone by then, it answers `409 assets_missing` and sets
+`needs_replay` / `needs_beatmap` back to true: re-read the receipt and send
+that file again. Poll `GET …/{id}` with backoff until the state is terminal.
+Repeating `POST …/complete` is safe and returns the receipt as it stands; it
+does not speed up a submission that is `queued`, `validating` or `analyzing`.
+
+`deferred` means a retry is queued (after 1, 2, 4, 8 and 16 minutes); its
+`error.message` says so and does not describe the failure. Repeating
+`POST …/complete` on a deferred submission runs the retry now. After the last
+attempt the receipt ends `rejected` with `processing_failed`. While a long chart
+lookup continues, the state stays `analyzing`.
 
 ## 4. Errors and what to do
 
@@ -165,13 +228,22 @@ safely; different bytes for a committed asset are a `409`.
 | `401` token expired | Refresh once, retry with a fresh proof. |
 | `401` invalid proof or wrong key | Stop. Never fall back to bearer or a cookie. |
 | `401` + `DPoP-Nonce` | Re-sign with the nonce, retry once. |
+| `400 use_dpop_nonce` + `DPoP-Nonce` on token or revoke | Re-sign with the nonce, retry once. |
+| `400 invalid_grant` "This account is not in the beta." | Stop uploading and say so. Nothing is lost; no reconnect is needed if the account is re-admitted. |
+| `403 account_not_allowed` | Same: the account is not in the beta right now. |
 | Installation revoked | Stop uploading; ask the user to approve again. |
 | `error=access_denied` on the callback | The user declined on the consent screen. Nothing was connected; offer Connect again. |
 | `needs_beatmap: true` | Send the one `.osu`. Not a failure. Maps the site already holds (ranked and most known charts) come back `false` and need no upload. |
 | Connection lost mid-upload | Re-read the receipt, then re-send the same bytes. |
+| `409 assets_missing` on complete | Re-read the receipt and send the file it asks for again. |
+| `413 payload_too_large` | Permanent for this file. |
+| `504 integration_unavailable` on an upload | The upload took longer than 4 minutes, or the site could not reach the server. Retry later, not in a tight loop. |
 | `429` | Honour `Retry-After`. Keep the queue; do not retry in parallel. |
 | `503` / `deferred` | Retryable. Never substitute a zero-valued result. |
+| `409 chart_environment_conflict` | A server-side data problem, not your file. Leave the play queued and report it. |
 | `digest_mismatch`, `not_mania`, malformed file | Permanent for this input. Do not retry unchanged. |
+| Rejected with `contradictory_mods`, `replay_header_too_long`, `replay_malformed` or `beatmap_checksum_mismatch` | Permanent for this replay. Do not retry unchanged. |
+| Rejected with `processing_failed` | The server gave up after six attempts. Show it; the same idempotency key keeps returning this receipt. |
 | `404` on a submission | Treat as gone. Do not probe for other ids. |
 | Quarantined receipt | Show the server's guidance. Do not re-attribute the play. |
 
@@ -197,16 +269,21 @@ and is not treated as suspicious. Name them so the user can tell them apart on
 
 ## 7. What the server will and will not say
 
-It will say whether the file was intact, whether the name on the replay is the
-account's, whether the judgement total is consistent with finishing the chart,
+It will say whether the file was intact, which name the replay carries (a
+different one, from an offline or private-server client, is fine), whether the
+judgement total is consistent with finishing the chart,
 what the chart is a version of and at what relative rate, what the play rates
 at, and why a play is or is not counted in the experimental preview.
 
 The rating is read from the replay's key presses: each press is paired with
-its note and scored on Wife3 by how many milliseconds it was off. The replay therefore has to carry the play's real input frames; a
-file rebuilt from local score data without them cannot be rated. The header's
-judgements are what the site displays, and a header its own key presses do not
-support is held for review rather than counted.
+its note and scored on Wife3 by how many milliseconds it was off. The replay
+therefore has to carry the play's real input frames; a file rebuilt from local
+score data without them cannot be rated. The header's judgements are what the
+site displays, and a header its own key presses do not support is held for
+review rather than counted. Send the `.osr` exactly as osu! saved it, without removing,
+merging or re-timing frames. Only 4K to 10K is judged and rated; wider keymodes are stored
+unrated. Mod combinations stable cannot produce (listed as
+`mod_pairs_rejected` in `/capabilities`) are refused.
 
 Only plays on a chart the site already knows count toward the preview, rate
 copies included. A copy whose scroll speed differs from its original, or a

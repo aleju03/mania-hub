@@ -19,6 +19,7 @@ import {
   fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
+  fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
   type LivePlayerSkills,
   type LivePlayerActivityPatterns,
@@ -30,6 +31,7 @@ import {
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
   type LivePlayerProfileSnapshot,
+  type RestrictedPpPlayer,
 } from "../../lib/live-backend";
 import {
   formatNumber,
@@ -82,6 +84,7 @@ import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
+import { buildRestrictedBestList } from "../../components/player/restricted-best-scores";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
 import { buildTrackedPlayScore, getTrackedPlayRank } from "../../lib/tracked-play-score";
@@ -144,6 +147,11 @@ const PLAYER_SNAPSHOT_CLIENT_CACHE_TTL = 5 * 60 * 1000;
 const PLAYER_ABOUT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
 const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
+const RESTRICTED_PP_LIVE_TIMEOUT_MS = 8_000;
+// The backend rebuilds these standings at most once a minute.
+const RESTRICTED_PP_CLIENT_CACHE_TTL = 60_000;
+const restrictedPpDataCache = new Map<number, { data: RestrictedPpPlayer | null; expiresAt: number }>();
+const restrictedPpRequestCache = new Map<number, Promise<RestrictedPpPlayer | null>>();
 // Mirrors PROFILE_SECTION_TTL_MS in the live backend. The response's fetchedAt
 // anchors this cooldown, so a cached response only disables the remaining time.
 const PLAYER_RECENT_OSU_REFRESH_COOLDOWN_MS = 2 * 60_000;
@@ -317,6 +325,7 @@ const EMPTY_PLAYER_BEST_FILTERS: PlayerBestFilterMetadata = {
   keyModes: [],
   mods: [],
 };
+const NO_SCORES: OsuScore[] = [];
 
 // The cached snapshot is dehydrated into the SSR HTML, so every byte here is
 // document weight and hydration work (~580KB raw for a 200-score snapshot,
@@ -849,6 +858,8 @@ export function resetPlayerSnapshotCachesForTests(): void {
   playerSnapshotMetadataRetryStartedAt.clear();
   userDataCache.clear();
   userBestWindowDataCache.clear();
+  restrictedPpDataCache.clear();
+  restrictedPpRequestCache.clear();
 }
 
 export function loadPlayerSnapshotCached(
@@ -1013,6 +1024,37 @@ function readCachedPlayerAbout(userId: number): PlayerAboutData | undefined {
   return cachedData.data;
 }
 
+function loadRestrictedPpCached(userId: number): Promise<RestrictedPpPlayer | null> {
+  const cached = restrictedPpRequestCache.get(userId);
+  if (cached) return cached;
+
+  const request = withTimeout(fetchRestrictedPpPlayerDirect(userId), RESTRICTED_PP_LIVE_TIMEOUT_MS)
+    .then((standing) => {
+      restrictedPpDataCache.set(userId, {
+        data: standing,
+        expiresAt: Date.now() + RESTRICTED_PP_CLIENT_CACHE_TTL,
+      });
+      return standing;
+    })
+    .finally(() => {
+      restrictedPpRequestCache.delete(userId);
+    });
+
+  restrictedPpRequestCache.set(userId, request);
+  return request;
+}
+
+/** Undefined when nothing is cached; null is a cached "no standing". */
+function readCachedRestrictedPp(userId: number): RestrictedPpPlayer | null | undefined {
+  const cachedData = restrictedPpDataCache.get(userId);
+  if (!cachedData) return undefined;
+  if (cachedData.expiresAt <= Date.now()) {
+    restrictedPpDataCache.delete(userId);
+    return undefined;
+  }
+  return cachedData.data;
+}
+
 function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
   const now = Date.now();
   const cachedData = userBestWindowDataCache.get(userId);
@@ -1121,7 +1163,7 @@ export function PlayerProfilePage({
   const [aboutHtml, setAboutHtml] = useState<string | null>(null);
   const [aboutRaw, setAboutRaw] = useState<string | null>(null);
   const [aboutEditing, setAboutEditing] = useState(false);
-  const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() => loaderProfileInsights);
+  const [storedProfileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() => loaderProfileInsights);
   const [loadingUser, setLoadingUser] = useState(() => !loaderSnapshot?.user);
   // The player shell seeded from a ranking row carries no rank history or peak
   // rank, so the hero card waits for the snapshot rather than reflowing.
@@ -1201,9 +1243,46 @@ export function PlayerProfilePage({
      which is the 6,150 -> 5,010 flip. */
   const keyPpTailRef = useRef<LivePlayerKeymodePpTail | null>(null);
   const recentOsuRequestRef = useRef(0);
+  /* An account osu! turned away can have a stand-in for what osu! stopped
+     serving: its Companella imports on ranked maps, priced the way osu!
+     prices a stable score. Where there is one, the hero, the Best tab and the
+     insights read it instead of the stored list, and none of the stored plays
+     join it. Only an answer about this user counts, so the stored list never
+     shows while it is being asked for; a null one (nothing priced, the account
+     is back, a failed call) leaves the profile as it always was. */
+  const [restrictedPp, setRestrictedPp] = useState<{ userId: number; standing: RestrictedPpPlayer | null } | null>(() => {
+    const seededUser = loaderSnapshot?.user;
+    const cached = seededUser?.account_status ? readCachedRestrictedPp(seededUser.id) : undefined;
+    return seededUser && cached !== undefined ? { userId: seededUser.id, standing: cached } : null;
+  });
+  const restrictedPpPending = !!user?.account_status && restrictedPp?.userId !== user.id;
+  const restrictedStanding = user?.account_status && restrictedPp?.userId === user.id ? restrictedPp.standing : null;
+  const restrictedBest = useMemo(
+    () => restrictedStanding
+      ? buildRestrictedBestList(restrictedStanding.best, {
+        id: restrictedStanding.userId,
+        username: user?.username ?? "",
+        avatar_url: user?.avatar_url ?? "",
+        country_code: user?.country_code ?? "",
+      })
+      : null,
+    [restrictedStanding, user?.avatar_url, user?.country_code, user?.username],
+  );
+  const storedProfileHidden = restrictedPpPending || restrictedBest != null;
+  const shownBest = restrictedPpPending ? NO_SCORES : restrictedBest?.scores ?? best;
+  const restrictedBestFilters = useMemo(
+    () => restrictedBest ? buildPlayerBestFilterMetadata(restrictedBest.scores) : null,
+    [restrictedBest],
+  );
+  const shownBestFilters = restrictedPpPending ? EMPTY_PLAYER_BEST_FILTERS : restrictedBestFilters ?? bestFilters;
+  const restrictedInsights = useMemo(
+    () => restrictedBest ? calculateUserProfileInsights(restrictedBest.scores) : null,
+    [restrictedBest],
+  );
+  const profileInsights = restrictedInsights ?? storedProfileInsights;
   const ppManiaBestScores = useMemo(
-    () => best.filter((score) => score.beatmap?.mode === "mania"),
-    [best],
+    () => shownBest.filter((score) => score.beatmap?.mode === "mania"),
+    [shownBest],
   );
   const ppAvailableKeyModes = useMemo(
     () => getAvailableKeyModes(ppManiaBestScores),
@@ -1270,7 +1349,8 @@ export function PlayerProfilePage({
      window-only totals it always had. */
   const loadKeyPpTail = useCallback(() => {
     const userId = user?.id;
-    if (!userId || !isLiveBackendConfigured()) {
+    // The stored plays never join a stand-in list, so it has no tail.
+    if (!userId || !isLiveBackendConfigured() || storedProfileHidden) {
       setKeyPpTailState("unavailable");
       return;
     }
@@ -1290,7 +1370,7 @@ export function PlayerProfilePage({
         keyPpTailRequestedRef.current = null;
         setKeyPpTailState("unavailable");
       });
-  }, [user?.id]);
+  }, [storedProfileHidden, user?.id]);
 
   useEffect(() => {
     if (keyPpModalOpen) loadKeyPpTail();
@@ -1336,7 +1416,7 @@ export function PlayerProfilePage({
      would label a play the window does hold as "tracked here" and then drop
      the row when the rest arrives. */
   const trackedPlaysForKeyFilter = useMemo(() => {
-    if (keyFilter === "all" || !keyPpTail || !bestWindowComplete) return [];
+    if (keyFilter === "all" || !keyPpTail || !bestWindowComplete || storedProfileHidden) return [];
     const keyCount = Number(keyFilter.replace("k", ""));
     if (!Number.isFinite(keyCount) || keyCount <= 0) return [];
     const inWindow = new Set(
@@ -1345,7 +1425,7 @@ export function PlayerProfilePage({
         .map((score) => Number(score.beatmap?.id)),
     );
     return keyPpTail.plays.filter((play) => play.keyCount === keyCount && !inWindow.has(play.beatmapId));
-  }, [best, bestWindowComplete, keyFilter, keyPpTail]);
+  }, [best, bestWindowComplete, keyFilter, keyPpTail, storedProfileHidden]);
 
   /* Picking a keymode is a request for that keymode's whole list, so it pays
      for the tail the same way opening the Key Split modal does. */
@@ -1572,7 +1652,8 @@ export function PlayerProfilePage({
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
-    // osu! 404s a restricted or missing account; the stored list is all there is.
+    // osu! 404s a restricted or missing account; the stored list is all there
+    // is, unless its imports stand in for it (the effect below).
     if (user.account_status) {
       setBestWindowLoaded(true);
       setBestWindowComplete(true);
@@ -1618,6 +1699,29 @@ export function PlayerProfilePage({
       if (timeout != null) window.clearTimeout(timeout);
     };
   }, [bestWindowLoaded, tab, user, waitingForSnapshotBest]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId || !user?.account_status) return;
+    const cached = readCachedRestrictedPp(userId);
+    if (cached !== undefined) {
+      setRestrictedPp((current) => current?.userId === userId && current.standing === cached ? current : { userId, standing: cached });
+      return;
+    }
+
+    let cancelled = false;
+    loadRestrictedPpCached(userId)
+      .then((standing) => {
+        if (!cancelled) setRestrictedPp({ userId, standing });
+      })
+      .catch(() => {
+        if (!cancelled) setRestrictedPp({ userId, standing: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.account_status, user?.id]);
 
   useEffect(() => {
     if (!user || tab !== "recent" || recent.length > 0) return;
@@ -1734,14 +1838,14 @@ export function PlayerProfilePage({
     }
   }, [loadingOsuRecent, user]);
 
-  const relevantBestMods = bestFilters.mods;
+  const relevantBestMods = shownBestFilters.mods;
   const bestPositionByIdentity = useMemo(() => {
     const positions = new Map<string, number>();
-    best.forEach((score, index) => {
+    shownBest.forEach((score, index) => {
       positions.set(getScoreIdentity(score), index + 1);
     });
     return positions;
-  }, [best]);
+  }, [shownBest]);
 
   /* How much of this profile each keymode actually is, used to decide which
      chips are worth a tap when there are more keymodes than fit. The tail's own
@@ -1753,18 +1857,18 @@ export function PlayerProfilePage({
      this site tracked the player, where the tail has less of it than osu! does. */
   const keyModePlayCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const score of best) {
+    for (const score of shownBest) {
       const keyCount = getBeatmapKeyCount(score.beatmap);
       if (keyCount == null) continue;
       const key = `${keyCount}k`;
       counts[key] = (counts[key] ?? 0) + 1;
     }
-    for (const bucket of keyPpPlayCounts ?? []) {
+    for (const bucket of storedProfileHidden ? [] : keyPpPlayCounts ?? []) {
       const key = `${bucket.keyCount}k`;
       counts[key] = Math.max(counts[key] ?? 0, bucket.count);
     }
     return counts;
-  }, [best, keyPpPlayCounts]);
+  }, [keyPpPlayCounts, shownBest, storedProfileHidden]);
 
   /* Recent ranks its own chips by what the player has actually been playing.
      The pp counts above are the wrong order here: a keymode whose plays are
@@ -1793,14 +1897,16 @@ export function PlayerProfilePage({
      lists are different sets of plays, so one strip over both puts up a chip
      that filters to nothing on whichever tab does not have that keymode. */
   const bestAvailableKeyModes = useMemo(() => {
-    const modes = new Set(bestFilters.keyModes);
+    const modes = new Set(shownBestFilters.keyModes);
     // A keymode can exist entirely below the osu! window (every 5K play worth
     // less than the 200th), and the chip has to be there or the list this site
     // can show has no way to be asked for.
-    for (const keyCount of keyPpKeyCounts ?? []) modes.add(`${keyCount}k`);
-    for (const play of keyPpTail?.plays ?? []) modes.add(`${play.keyCount}k`);
+    if (!storedProfileHidden) {
+      for (const keyCount of keyPpKeyCounts ?? []) modes.add(`${keyCount}k`);
+      for (const play of keyPpTail?.plays ?? []) modes.add(`${play.keyCount}k`);
+    }
     return [...modes].sort((a, b) => Number(a.replace("k", "")) - Number(b.replace("k", "")));
-  }, [bestFilters.keyModes, keyPpKeyCounts, keyPpTail]);
+  }, [keyPpKeyCounts, keyPpTail, shownBestFilters.keyModes, storedProfileHidden]);
   /* Recent is only what is on the page. A keymode nobody has played lately is
      not a filter here even when the profile is full of it, and an unranked
      play still counts, which is why the pp keymodes have no say. */
@@ -1887,7 +1993,7 @@ export function PlayerProfilePage({
   }
 
   const stats = user.statistics;
-  const currentScores = tab === "best" ? best : recent;
+  const currentScores = tab === "best" ? shownBest : recent;
   const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
   const keyFilteredScores = currentScores.filter((score) =>
     tab === "best" ? matchesBestKeyFilter(score, keyFilter) : matchesKeyFilter(score, keyFilter));
@@ -1934,7 +2040,7 @@ export function PlayerProfilePage({
       keymodeListPositions.set(bestListRowKey(row), index + 1);
     });
   }
-  const loadingBest = best.length === 0 && !bestWindowLoaded && !bestError;
+  const loadingBest = restrictedPpPending || (shownBest.length === 0 && !bestWindowLoaded && !bestError);
   const loadingScores = tab === "best" ? loadingBest : loadingRecent;
   const scoresError = tab === "best" ? bestError : recentError;
   const currentHasMore = tab === "best" ? !bestWindowLoaded : recentHasMore;
@@ -1956,6 +2062,7 @@ export function PlayerProfilePage({
   const isWaitingForTrackedPlays =
     tab === "best" &&
     keyFilter !== "all" &&
+    !storedProfileHidden &&
     (keyPpTailState === "idle" || keyPpTailState === "loading" || !bestWindowComplete);
   const scoreListState = loadingScores
     ? "loading"
@@ -1993,10 +2100,16 @@ export function PlayerProfilePage({
   const showTungTungSahur = user.username.toLowerCase() === "sebasrj";
   // The tab strip sits flush on the section edge unless a filter/sort bar
   // follows it, which then needs the breathing room back.
-  const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && best.length > 0);
+  const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && shownBest.length > 0);
   const ppVariants = (stats.variants ?? [])
     .filter((variant) => variant.mode === "mania" && variant.pp > 0)
     .sort((a, b) => a.variant.localeCompare(b.variant));
+  // A stand-in standing takes osu!'s place in the headline numbers, and the
+  // 90-day trend and per-keymode pp under them describe numbers no longer shown.
+  const shownGlobalRank = restrictedStanding ? restrictedStanding.globalRank : stats.global_rank;
+  const shownCountryRank = restrictedStanding ? restrictedStanding.countryRank : stats.country_rank;
+  const shownPp = restrictedStanding ? restrictedStanding.pp : stats.pp;
+  const heroValueSkeleton = <span className="skeleton-pulse block h-[26px] w-24 rounded sm:h-[34px] sm:w-32" />;
 
   // osu! 404s a restricted or missing account, so its profile link would too.
   // A frozen account's owner can name their profile (DisplayNameEditor).
@@ -2670,7 +2783,11 @@ export function PlayerProfilePage({
       {/* Score details modal */}
       <AnimatePresence>
         {detailScore && (
-          <ScoreDetailModal score={detailScore} onClose={() => setDetailScore(null)} />
+          <ScoreDetailModal
+            score={detailScore}
+            importId={restrictedBest?.importIds.get(detailScore)}
+            onClose={() => setDetailScore(null)}
+          />
         )}
       </AnimatePresence>
 
@@ -2764,8 +2881,8 @@ export function PlayerProfilePage({
           <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${showTungTungSahur ? "pr-16" : ""}`}>
             <HeroStat
               label={t`Global`}
-              value={stats.global_rank ? `#${formatNumber(stats.global_rank)}` : "-"}
-              sub={rankDelta90d != null && rankDelta90d !== 0 ? (
+              value={restrictedPpPending ? heroValueSkeleton : shownGlobalRank ? `#${formatNumber(shownGlobalRank)}` : "-"}
+              sub={!storedProfileHidden && rankDelta90d != null && rankDelta90d !== 0 ? (
                 <span className={`inline-flex items-center gap-1 ${rankDelta90d > 0 ? "text-osu-green-light" : "text-osu-red-light"}`}>
                   <svg width="7" height="6" viewBox="0 0 7 6" className="flex-shrink-0" aria-hidden>
                     <path d={rankDelta90d > 0 ? "M3.5 0 L7 6 L0 6 Z" : "M3.5 6 L0 0 L7 0 Z"} fill="currentColor" />
@@ -2777,21 +2894,21 @@ export function PlayerProfilePage({
             />
             <HeroStat
               label={t`Country`}
-              value={stats.country_rank ? `#${formatNumber(stats.country_rank)}` : "-"}
+              value={restrictedPpPending ? heroValueSkeleton : shownCountryRank ? `#${formatNumber(shownCountryRank)}` : "-"}
               valueClassName="text-osu-pink-light"
               sub={profileCountryName ?? (user.country_code || null)}
             />
             <HeroStat
               label={t`Peak`}
-              value={awaitingPeak ? <span className="skeleton-pulse block h-[26px] w-24 rounded sm:h-[34px] sm:w-32" /> : peakRank ? `#${formatNumber(peakRank)}` : "-"}
+              value={awaitingPeak ? heroValueSkeleton : peakRank ? `#${formatNumber(peakRank)}` : "-"}
               valueClassName={peakRank ? getRankTierClass(peakRank) || "text-white" : "text-white"}
               sub={peakRank && peakRankDate ? t`achieved ${formatDate(peakRankDate)}` : null}
             />
             <HeroStat
               label={t`Performance`}
-              value={`${formatNumber(Math.round(stats.pp))}pp`}
+              value={restrictedPpPending ? heroValueSkeleton : `${formatNumber(Math.round(shownPp))}pp`}
               valueClassName="text-osu-yellow"
-              sub={ppVariants.length >= 2 ? (
+              sub={!storedProfileHidden && ppVariants.length >= 2 ? (
                 <span className="inline-flex items-center gap-2.5 tabular-nums">
                   {ppVariants.map((variant) => (
                     <span
@@ -2819,7 +2936,14 @@ export function PlayerProfilePage({
               the numbers with a hairline under them. */}
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
             {showTungTungSahur && <TungTungSahurKeycap />}
-            <RailStat label={t`Accuracy`} value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
+            <RailStat
+              label={t`Accuracy`}
+              value={restrictedPpPending
+                ? <Skeleton className="h-[19px] w-16" />
+                : restrictedStanding
+                  ? formatAccuracy(restrictedStanding.accuracy)
+                  : profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)}
+            />
             <RailStat label={t`Play Count`} value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
             <RailStat label={t`Play Time`} value={profileStatsProjectedOnly || stats.play_time == null ? "-" : t`${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
             {/* One quiet line rather than two label/value blocks: at rail-stat
@@ -2854,7 +2978,7 @@ export function PlayerProfilePage({
 
           {/* Profile insights */}
           <div className="py-5">
-            {loadingInsights ? (
+            {loadingInsights || restrictedPpPending ? (
               <InsightsSkeleton />
             ) : insightsError ? (
               <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3 text-sm text-osu-f1">
@@ -3018,7 +3142,7 @@ export function PlayerProfilePage({
             )}
           </div>
 
-          {tab === "best" && bestWindowLoaded && best.length > 0 && (
+          {tab === "best" && bestWindowLoaded && shownBest.length > 0 && (
             <BestScoresControlBar
               availableKeyModes={availableKeyModes}
               keyFilter={keyFilter}
@@ -3200,6 +3324,7 @@ export function PlayerProfilePage({
                         score={row.score}
                         position={position}
                         layout={scoreRowLayout}
+                        importId={restrictedBest?.importIds.get(row.score)}
                         onOpenDetails={setDetailScore}
                       />
                     ) : (
@@ -5663,7 +5788,7 @@ function formatRecentRefreshWait(waitMs: number): string {
 
 // A stat on the flat rail under the hero: quiet label, the number carrying the
 // weight. No box, the rail's hairline does the separating.
-function RailStat({ label, value }: { label: string; value: string }) {
+function RailStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1">{label}</div>
@@ -6254,18 +6379,22 @@ function ScoreRow({
   score,
   position,
   layout = EMPTY_SCORE_ROW_LAYOUT,
+  importId,
   onOpenDetails,
 }: {
   score: OsuScore;
   position: number;
   layout?: ScoreRowLayout;
+  /** The Companella import a stand-in best play came from; its replay opens by this. */
+  importId?: string;
   onOpenDetails: (score: OsuScore) => void;
 }) {
   const locale = useLocale();
   const { t } = useLingui();
   const scoreFallbackLabel = t`score`;
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
-  const canReplay = scoreHasReplay(score);
+  const canReplay = importId != null || scoreHasReplay(score);
+  const replaySearch = importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id };
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
 
@@ -6322,7 +6451,7 @@ function ScoreRow({
             {canReplay && (
               <Link
                 to="/replay"
-                search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+                search={replaySearch}
                 title={t`Watch replay`}
                 aria-label={t`Watch replay`}
                 className="pointer-events-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-osu-pink/20 text-[9px] font-semibold leading-none text-osu-pink-light transition-colors hover:bg-osu-pink/30"
@@ -6387,7 +6516,7 @@ function ScoreRow({
       {canReplay ? (
         <Link
           to="/replay"
-          search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+          search={replaySearch}
           title={t`Watch replay`}
           aria-label={t`Watch replay`}
           className={`pointer-events-auto transition-colors hover:bg-osu-pink/25 ${REPLAY_BUTTON_CLASS}`}
@@ -6423,7 +6552,7 @@ function ScoreDetailStat({ label, value, color }: { label: string; value: ReactN
 
 /** Everything the row can't fit: total score, judgement spread, map metadata,
  *  and the links (osu! page, replay) the row used to navigate to on its own. */
-function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => void }) {
+function ScoreDetailModal({ score, importId, onClose }: { score: OsuScore; importId?: string; onClose: () => void }) {
   const { t } = useLingui();
   const locale = useLocale();
   const scoreTitleFallback = t`Score`;
@@ -6437,7 +6566,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const scoreUrl = getScoreUrl(score);
   const beatmapUrl = getBeatmapUrl(score);
-  const canReplay = scoreHasReplay(score);
+  const canReplay = importId != null || scoreHasReplay(score);
   const hasPp = score.pp != null;
   const playedAt = getScoreTimestamp(score);
   const viewerTimeZone = useViewerTimeZone();
@@ -6613,7 +6742,7 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
                 {canReplay && (
                   <Link
                     to="/replay"
-                    search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+                    search={importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
                     className="rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25"
                   >
                     {t`Watch replay`}

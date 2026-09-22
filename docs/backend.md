@@ -2,7 +2,7 @@
 
 Deep reference for `live-backend/`: module map, ingest flow, job queue, HTTP surface, replay video export, retention and storage. The condensed guides are `AGENTS.md` at the repo root and `live-backend/AGENTS.md`. Per-feature models live in `docs/features.md`, `docs/packs.md`, `docs/discord.md`.
 
-The Companella score-import beta has its own reference, `docs/companella-integration.md`: `live-backend/src/integrations/companella/` (its own `companella_*` tables, its own `companella` worker lane, `/api/integrations/companella/{native,manage}/*`), off unless `COMPANELLA_MODE` is set. It reads official tables and never writes them.
+The Companella score-import beta has its own reference, `docs/companella-integration.md`: `live-backend/src/integrations/companella/` (its own `companella_*` tables, its own `companella` worker lane, `/api/integrations/companella/{native,manage}/*`, plus the admin-token-only `POST /api/admin/companella/review`), off unless `COMPANELLA_MODE` is set. It reads official tables and never writes them.
 
 ## Module map
 

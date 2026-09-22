@@ -13,7 +13,30 @@ info:
     Every resource request carries `Authorization: DPoP <access-token>` and a
     FRESH `DPoP` proof. A proof id (`jti`) is single use; a server-issued nonce
     is reusable within its short validity window, so parallel uploads do not
-    serialise.
+    serialise. A proof must be fresh when the request starts: the server checks
+    it before reading the body, so a slow upload still authenticates. An upload
+    must still finish within 4 minutes; a slower one gets `504`
+    `integration_unavailable`.
+
+    Nonce challenges: resource endpoints answer `401` with a `DPoP-Nonce`
+    header; `/oauth/token` and `/oauth/revoke` answer `400
+    {"error":"use_dpop_nonce"}` with `WWW-Authenticate: DPoP
+    error="use_dpop_nonce"` and a `DPoP-Nonce` header (RFC 9449 section 8).
+    Re-sign with the nonce and retry once.
+
+    The size limits that apply are the ones `/capabilities` reports in
+    `limits`: `max_replay_bytes`, `max_beatmap_bytes` and `max_json_bytes`
+    (25 MiB, 8 MiB and 16 KiB by default). The site's proxy also has outer
+    ceilings, which only matter if the server is configured above them: 64 KiB
+    on `/oauth/token`, `/oauth/revoke` and `POST /submissions`, 32 MiB on each
+    file upload, and no body on the other routes. A request over the proxy's
+    ceiling gets `413`, and so does a file or manifest over the server's
+    limit. A server failure that is not one of the documented error envelopes
+    comes back as `internal_error` (resource routes) or `server_error` (OAuth
+    routes), with its status and `Retry-After` kept. When the site cannot reach
+    the backend the answer is `502`, `503` or `504` with
+    `integration_unavailable`, in the route's own error shape. All of these are
+    retryable.
 
     Nothing in this API affects public rankings, pp, snipes or rewards.
 servers:
@@ -48,9 +71,24 @@ paths:
         Requires a fresh DPoP proof bound to the key the grant was issued to.
         The proof carries no `ath` here, because there is no access token yet.
 
+        A refresh answers a new access token and echoes the SAME
+        `refresh_token` it was sent: refresh credentials are not rotated.
+
+        A proof whose nonce is missing (when the server requires one), expired
+        or not issued by this server gets `400 use_dpop_nonce` with a fresh
+        `DPoP-Nonce`, even when nonces are optional. Re-sign with it and retry
+        once. A server that cannot issue nonces answers `invalid_dpop_proof`
+        instead.
+
+        An account that has left the beta gets `400 invalid_grant` with
+        `error_description: "This account is not in the beta."` on both
+        grants. On refresh the refresh credential stays valid.
+
         Errors keep the OAuth response shape and are not wrapped in the
         resource error envelope.
       security: []
+      parameters:
+        - $ref: "#/components/parameters/DPoPProof"
       requestBody:
         required: true
         content:
@@ -76,13 +114,21 @@ paths:
                 $ref: "#/components/schemas/TokenResponse"
         "400":
           description: |
-            `invalid_grant`, `invalid_client`, `invalid_dpop_proof`,
-            `unsupported_grant_type`, `unauthorized_client`, `use_dpop_nonce`.
+            `invalid_request`, `invalid_grant`, `invalid_client`,
+            `invalid_dpop_proof`, `unsupported_grant_type`,
+            `unauthorized_client`, `use_dpop_nonce`.
           headers:
             DPoP-Nonce:
               $ref: "#/components/headers/DPoPNonce"
             WWW-Authenticate:
+              description: '`DPoP error="use_dpop_nonce"` on a nonce challenge, `DPoP` otherwise.'
               schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "413":
+          description: "The body is over 64 KiB: `invalid_request`."
           content:
             application/json:
               schema:
@@ -95,25 +141,51 @@ paths:
         Revokes the requesting installation's own grant and nothing else, not
         even another installation on the same account. Answers 200 whether or
         not the credential existed (RFC 7009).
+
+        Requires a fresh DPoP proof (`htm` POST, `htu` the public revoke URL,
+        no `ath`) signed by the key the token is bound to, with the same nonce
+        handling as `/oauth/token`. A token presented with another key's proof
+        is not revoked, and still gets 200.
       security: []
+      parameters:
+        - $ref: "#/components/parameters/DPoPProof"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                token: { type: string }
-              required: [token]
+              $ref: "#/components/schemas/RevokeRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/RevokeRequest"
       responses:
         "200":
-          description: Revoked
+          description: Revoked, or nothing to revoke
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  revoked: { type: boolean }
+                  revoked: { type: boolean, const: true }
+        "400":
+          description: |
+            `invalid_request` (missing or unparseable body),
+            `invalid_dpop_proof`, `use_dpop_nonce`.
+          headers:
+            DPoP-Nonce:
+              $ref: "#/components/headers/DPoPNonce"
+            WWW-Authenticate:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "413":
+          description: "The body is over 64 KiB: `invalid_request`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
 
   /me:
     get:
@@ -139,7 +211,17 @@ paths:
         `msd`, `dan`, `rating`, `pp`, `beatmap_id`, `score`, `rate`, `mods`.
 
         `needs_beatmap: false` is answered only when the exact bytes are
-        verified to exist and are reusable by this account.
+        verified to exist and are reusable by this account, with the stored
+        chart's SHA-256, MD5 and length all equal to the manifest's.
+
+        Concurrent requests under one idempotency key return the one stored
+        submission (`created: false` for the others). A budget refusal returns
+        the existing receipt instead if a reservation under the same key got
+        in first.
+
+        The byte budgets count the replay, the chart when `needs_beatmap` is
+        true, and the bytes this account's other unexpired reservations still
+        expect. Expired reservations do not count toward the incomplete cap.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -183,8 +265,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "413":
+          description: "`payload_too_large`: the manifest is over the JSON limit."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "429":
-          description: A budget was reached. Honour `Retry-After`.
+          description: |
+            A budget was reached, all retryable: `rate_limited` (with
+            `Retry-After`), `too_many_incomplete_submissions`,
+            `daily_upload_quota_exceeded`, `retention_quota_exceeded`.
           headers:
             Retry-After:
               schema: { type: integer }
@@ -218,6 +309,9 @@ paths:
         `application/octet-stream`, exactly the bytes the manifest hashed. Do
         not base64, gzip, or rewrite anything. Reuploading identical bytes is
         idempotent; different bytes for a committed asset are a conflict.
+
+        The byte budgets are checked again here for bytes not already stored,
+        so an identical retry is never refused.
       parameters:
         - $ref: "#/components/parameters/SubmissionId"
       requestBody:
@@ -256,6 +350,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "429":
+          $ref: "#/components/responses/UploadQuota"
 
   /submissions/{id}/beatmap:
     put:
@@ -264,6 +360,10 @@ paths:
         Raw bytes, original encoding, CRLF and BOM preserved: the `.osr`
         header's MD5 is over exactly these bytes. Requires the
         `companella:charts:upload` scope and chart-sharing consent.
+
+        The file joins the shared pool but its bytes are charged to the
+        uploader's budgets, which are checked again here for bytes not already
+        stored.
       parameters:
         - $ref: "#/components/parameters/SubmissionId"
       requestBody:
@@ -290,19 +390,46 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/NotFound"
-        "422":
-          description: "`digest_mismatch`, `not_mania`, `invalid_file`, `parse_failed`."
+        "409":
+          description: |
+            `asset_conflict`, `wrong_state`, or `chart_environment_conflict`:
+            the server holds this chart under a different environment (a data
+            problem on the server side, not the file).
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "413":
+          description: "`payload_too_large`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: "`digest_mismatch`, `length_mismatch`, `not_mania`, `invalid_file`, `parse_failed`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          $ref: "#/components/responses/UploadQuota"
 
   /submissions/{id}/complete:
     post:
       summary: Finalize the assets and queue validation
       description: |
         `202` means accepted for processing, never analyzed. Repeating it
-        returns the existing receipt.
+        returns the existing receipt; on a `deferred` submission it also runs
+        the queued retry now. It does not speed up a submission that is
+        `queued`, `validating` or `analyzing`.
+
+        The server confirms the replay and chart objects themselves, not only
+        its records of them.
+
+        The replay and chart must still be stored when this is called. If one
+        is gone, the answer is `409 assets_missing` and the receipt's
+        `needs_replay` / `needs_beatmap` is set back to true: re-read it and
+        upload that file again.
       parameters:
         - $ref: "#/components/parameters/SubmissionId"
       responses:
@@ -339,6 +466,12 @@ components:
       schema: { type: string }
 
   parameters:
+    DPoPProof:
+      name: DPoP
+      in: header
+      required: true
+      description: A fresh proof for this request, without `ath`.
+      schema: { type: string }
     SubmissionId:
       name: id
       in: path
@@ -350,8 +483,16 @@ components:
   responses:
     Unauthorized:
       description: |
-        Missing, expired, replayed or wrongly-bound credentials. Never downgrade
-        to bearer or to a cookie; refresh once, then retry with a fresh proof.
+        Missing, expired, replayed or wrongly-bound credentials: a credential
+        code (`invalid_token`, `token_expired`, `token_revoked`,
+        `installation_revoked`, `key_mismatch`, `wrong_environment`), a proof
+        code (`invalid_dpop_proof`, `proof_expired`, `htu_mismatch`,
+        `ath_mismatch`, `use_dpop_nonce`, ...) or `proof_replayed`. Never
+        downgrade to bearer or to a cookie; on `token_expired` refresh once,
+        then retry with a fresh proof; with a `DPoP-Nonce` header, re-sign
+        with it and retry once. A request that carries a body and has no DPoP access token
+        or no proof is refused by the site before any of the body is read. A
+        pruned credential answers `invalid_token`.
       headers:
         WWW-Authenticate:
           schema: { type: string }
@@ -362,7 +503,7 @@ components:
           schema:
             $ref: "#/components/schemas/ApiError"
     Forbidden:
-      description: "`insufficient_scope` or `account_not_allowed`."
+      description: "`insufficient_scope` or `account_not_allowed` (the account is not in the beta right now)."
       content:
         application/json:
           schema:
@@ -378,6 +519,14 @@ components:
         `invalid_manifest`, `invalid_digest`, `forbidden_field`,
         `unsupported_protocol_version`, `unsupported_game_client`,
         `unsupported_capture_kind`, `invalid_idempotency_key`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    UploadQuota:
+      description: |
+        `daily_upload_quota_exceeded` or `retention_quota_exceeded`, both
+        retryable. Bytes the server already stored never count again.
       content:
         application/json:
           schema:
@@ -403,7 +552,18 @@ components:
       type: object
       properties:
         error: { type: string }
+        error_description:
+          type: string
+          description: Present on some errors, e.g. "This account is not in the beta." with `invalid_grant`.
       required: [error]
+
+    RevokeRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          description: The refresh or access token to revoke.
+      required: [token]
 
     Capabilities:
       type: object
@@ -439,6 +599,7 @@ components:
           properties:
             key_counts_supported:
               type: array
+              description: Keymodes that are judged and rated, 4 to 10 today. Wider plays are stored unrated.
               items: { type: integer }
             mods_supported:
               type: array
@@ -446,6 +607,17 @@ components:
             mods_rejected:
               type: array
               items: { type: string }
+            mod_pairs_rejected:
+              type: array
+              description: |
+                Pairs stable cannot select together. A replay carrying one is
+                rejected with `contradictory_mods`, as is one carrying more
+                than one key mod.
+              items:
+                type: array
+                items: { type: string }
+                minItems: 2
+                maxItems: 2
             mods_stored_unrated:
               type: array
               items: { type: string }
@@ -478,8 +650,10 @@ components:
     TokenResponse:
       type: object
       description: |
-        The refresh credential is sender-constrained and is NOT rotated on use,
-        so a lost response is recoverable by retrying with the same one.
+        The refresh credential is sender-constrained and is NOT rotated on use:
+        a refresh answers a new access token and echoes the refresh token it
+        was sent, so a lost response is recoverable by retrying with the same
+        one.
       properties:
         access_token: { type: string }
         token_type: { type: string, const: DPoP }
@@ -539,6 +713,11 @@ components:
         submission_id: { type: string }
         state:
           type: string
+          description: |
+            `deferred` means a retry is queued (after 1, 2, 4, 8 and 16
+            minutes); after the last attempt the receipt ends `rejected` with
+            `processing_failed`. A long chart lookup keeps `analyzing` while it
+            continues.
           enum: [awaiting_assets, queued, validating, analyzing, accepted, deferred, rejected, expired, deleted]
         created: { type: boolean }
         needs_replay: { type: boolean }
@@ -549,6 +728,16 @@ components:
         local_score_id: { type: [string, "null"] }
         error:
           type: [object, "null"]
+          description: |
+            Why a submission was rejected, or why it is deferred
+            (`processing_deferred`, whose message only says a retry is coming
+            and never describes the failure). Rejection codes include
+            `automated_play_mods`, `contradictory_mods`, `replay_malformed`,
+            `replay_header_too_long`, `replay_truncated`, `replay_no_frames`,
+            `replay_too_large`, `replay_too_many_frames`, `replay_unknown_size`,
+            `wrong_ruleset`, `beatmap_checksum_mismatch`, `chart_parse_failed`, `chart_missing`,
+            `replay_missing`, `duplicate_play`, `installation_revoked` and
+            `processing_failed`. Show `message`; codes may be added.
           properties:
             code: { type: string }
             message: { type: [string, "null"] }

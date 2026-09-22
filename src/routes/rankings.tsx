@@ -20,7 +20,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
-import type { RankingsResponse } from "../lib/types";
+import type { LeanRankingEntry, RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
 import { PageTabs } from "../components/layout/PageTabs";
 import { SkillLeaderboardBoard } from "../components/rankings/SkillLeaderboardBoard";
@@ -44,8 +44,9 @@ import {
 } from "../lib/skill-leaderboards";
 import { pageSeo } from "../lib/seo";
 import { fetchLiveGlobalRankings, fetchLiveRankDeltas, fetchLiveRankingsSnapshot, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
-import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
+import { seedPlayerShellFromRankingEntry } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
+import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
@@ -335,6 +336,26 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   const [globalRankingsTotal, setGlobalRankingsTotal] = useState(0);
   const [globalRankingsLoading, setGlobalRankingsLoading] = useState(false);
   const globalTotalPages = Math.max(1, Math.ceil(globalRankingsTotal / GLOBAL_RANKINGS_PAGE_SIZE));
+  const restrictedEntries = useRestrictedPpRankings(boardScope ? null : selectedCountry);
+  const restrictedUserIds = useMemo(() => new Set(restrictedEntries.map((entry) => entry.user.id)), [restrictedEntries]);
+
+  // The osu! pages leave out accounts osu! turned away; their simulated
+  // standings go in by pp across both pages, so one entering page 1 pushes
+  // its last row onto page 2 and the positions renumber from the index.
+  const pageRanking = useMemo(() => {
+    if (!pageData) return null;
+    const rows = pageData.ranking.slice(0, 50);
+    if (restrictedEntries.length === 0) return rows;
+    if (page === 1) return mergeRestrictedPpRanking(rows, restrictedEntries, 50);
+    if (!cachedPageOneData) return rows;
+    return mergeRestrictedPpRanking([...cachedPageOneData.ranking.slice(0, 50), ...rows], restrictedEntries, 100).slice(50);
+  }, [cachedPageOneData, page, pageData, restrictedEntries]);
+
+  // A shell cannot carry the account status a simulated player's profile
+  // needs, so those rows seed none and the profile loads them itself.
+  const seedRowShell = (entry: LeanRankingEntry, rank: number) => {
+    if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, rank);
+  };
 
   useEffect(() => {
     if (!boardScope) return;
@@ -397,9 +418,25 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   }, [boardScope, navigate, page, selectedCountry]);
 
   useEffect(() => {
-    if (!pageData) return;
-    seedPlayerShellsFromRankingEntries(pageData.ranking.slice(0, 50), (page - 1) * 50 + 1);
-  }, [page, pageData]);
+    if (!pageRanking) return;
+    pageRanking.forEach((entry, i) => {
+      if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, (page - 1) * 50 + i + 1);
+    });
+  }, [page, pageRanking, restrictedUserIds]);
+
+  // Page 2 starts where page 1's merged list ends, so landing on it directly
+  // loads page 1 once there is anyone to merge. Without it page 2 stays as
+  // osu! has it.
+  useEffect(() => {
+    if (boardScope || page !== 2 || cachedPageOneData || !pageTwoData || restrictedEntries.length === 0) return;
+    let cancelled = false;
+    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
+      .then((result) => {
+        if (!cancelled) setRankings(selectedCountry, result);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [boardScope, cachedPageOneData, page, pageTwoData, restrictedEntries.length, selectedCountry, setRankings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -451,9 +488,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   }, [cachedPageOneData, page, pageData, pageTwoData, pageTwoFetchedAt, rankingsFetchedAt, selectedCountry, setRankings, countryName]);
 
   useEffect(() => {
-    if (!pageData) return;
+    if (!pageRanking) return;
     let cancelled = false;
-    const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
+    const userIds = pageRanking.filter((e) => !restrictedUserIds.has(e.user.id)).map((e) => e.user.id);
 
     // The live backend is the only source for these. There is deliberately no
     // osu! fallback: rank_history only exists on the single-user endpoint, so
@@ -497,7 +534,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     // not a dep: re-running on every delta arrival would re-request the rows
     // the backend just told us it has no snapshot for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageData, selectedCountry]);
+  }, [pageRanking, selectedCountry]);
 
   const liveCountryRankChanges = useMemo(() => (
     Object.fromEntries(
@@ -508,12 +545,11 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   ), [liveRankDeltas]);
 
   const sortedRankings = useMemo(() => {
-    if (!pageData) return [];
+    if (!pageRanking) return [];
     const startRank = (page - 1) * 50;
     // originalRank is taken from the unfiltered index so hiding a player
     // leaves a gap (e.g. #4 then #6) rather than renumbering the leaderboard.
-    const entries = pageData.ranking
-      .slice(0, 50)
+    const entries = pageRanking
       .map((entry, i) => ({ entry, originalRank: startRank + i + 1 }))
       .filter(({ entry }) => !hiddenUserIds.has(entry.user.id));
     if (sortBy === "rank") return sortDir === "desc" ? entries : [...entries].reverse();
@@ -566,7 +602,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
       }
       return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
-  }, [pageData, page, sortBy, sortDir, liveRankDeltas, liveCountryRankChanges, hiddenUserIds]);
+  }, [pageRanking, page, sortBy, sortDir, liveRankDeltas, liveCountryRankChanges, hiddenUserIds]);
 
   const visibleGlobalRankings = useMemo(
     () => (globalRankings ?? [])
@@ -1003,7 +1039,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     key={entry.user.id}
                     to="/player/$username"
                     params={{ username: entry.user.username }}
-                    onClick={() => seedPlayerShellFromRankingEntry(entry, originalRank)}
+                    onClick={() => seedRowShell(entry, originalRank)}
                     className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
                   >
                     <div className="flex items-center gap-3">
@@ -1093,11 +1129,11 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
                         style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
                         onClick={() => {
-                          seedPlayerShellFromRankingEntry(entry, originalRank);
+                          seedRowShell(entry, originalRank);
                           navigate({ to: "/player/$username", params: { username: entry.user.username } });
                         }}
                         onAuxClick={(event) => {
-                          seedPlayerShellFromRankingEntry(entry, originalRank);
+                          seedRowShell(entry, originalRank);
                           handlePlayerAuxClick(event, entry.user.username);
                         }}
                       >
@@ -1106,7 +1142,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                           <Link
                             to="/player/$username"
                             params={{ username: entry.user.username }}
-                            onClick={() => seedPlayerShellFromRankingEntry(entry, originalRank)}
+                            onClick={() => seedRowShell(entry, originalRank)}
                             className="flex items-center gap-3 min-w-0"
                           >
                             <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />

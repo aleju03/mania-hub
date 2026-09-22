@@ -3,17 +3,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CountryFlag } from "../../components/ui/CountryFlag";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
+import { GradeImg } from "../../components/ui/GradeImg";
 import { Skeleton } from "../../components/ui/LoadingSkeleton";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
   clearBannedUserDisplayName,
+  getRestrictedPpPlays,
   listBannedUsers,
   markBannedUsersReviewed,
+  setRestrictedPpPlaysRemoved,
   type BannedUser,
   type BannedUsersFilter,
+  type RestrictedPpAdminPlay,
+  type RestrictedPpAdminView,
+  type RestrictedPpRemovalScope,
 } from "../../lib/banned-users";
 import { publishBannedUsersAlert } from "../../lib/banned-users-alert";
-import { formatNumber } from "../../lib/format";
+import { formatAccuracy, formatNumber } from "../../lib/format";
 import {
   previewLiveBackendUserWipe,
   setLiveBackendUserActive,
@@ -30,6 +36,10 @@ import {
  * the same preview and purge as the Monitoring page's wipe card. That purge
  * still refuses accounts with login-owned data (goals, packs, skins, Companella
  * imports and the rest), because those are the player's own, not tracking.
+ *
+ * While osu! has them gone, their Companella imports on ranked maps price into
+ * a simulated pp that ranks like anyone's. The Plays panel is where a play
+ * leaves it: removal is the ordinary review hold, so Restore undoes it.
  */
 
 export const Route = createFileRoute("/admin/banned-users")({
@@ -77,6 +87,15 @@ function formatWhen(iso: string | null): string {
   return date.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function plural(count: number, noun: string): string {
+  return `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function playChartText(play: RestrictedPpAdminPlay): string {
+  const name = [play.artist, play.title].filter(Boolean).join(" - ") || `Beatmap ${play.beatmapId}`;
+  return play.version ? `${name} [${play.version}]` : name;
+}
+
 /* The worker writes "<job>: osu! API 404 for /users/<id>/..."; the job name is
    the only part worth reading. */
 function readableReason(reason: string | null): string | null {
@@ -89,23 +108,32 @@ function BannedUserRow({
   entry,
   busy,
   preview,
+  plays,
   onPreview,
   onWipe,
   onReactivate,
   onSeen,
   onClearName,
+  onTogglePlays,
+  onChangePlays,
 }: {
   entry: BannedUser;
   busy: boolean;
   preview: LiveBackendUserWipePreview | null;
+  /* Undefined while the panel is closed; null when nothing is priced. */
+  plays: RestrictedPpAdminView | null | undefined;
   onPreview: () => void;
   onWipe: () => void;
   onReactivate: () => void;
   onSeen: () => void;
   onClearName: () => void;
+  onTogglePlays: () => void;
+  onChangePlays: (scope: RestrictedPpRemovalScope, restore: boolean, play?: RestrictedPpAdminPlay) => void;
 }) {
   const isNew = entry.reviewedAt == null;
   const reason = readableReason(entry.reason);
+  // Removing every play drops the simulated pp to nothing, so the panel stays reachable through the imports.
+  const hasPlays = entry.simulatedPp != null || entry.companellaPlays > 0;
   return (
     <div className="px-3 py-3 space-y-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -138,12 +166,22 @@ function BannedUserRow({
             {reason ? <span>{reason}</span> : null}
             {entry.lastLoginAt ? <span>signed in {formatWhen(entry.lastLoginAt)}</span> : null}
             {entry.companellaPlays > 0 ? <span className="text-osu-l2">{formatNumber(entry.companellaPlays)} Companella plays</span> : null}
+            {entry.simulatedPp != null ? (
+              <span className="text-osu-l2">
+                {formatNumber(Math.round(entry.simulatedPp))}pp simulated from {plural(entry.simulatedPlays, "ranked play")}
+              </span>
+            ) : null}
             {!entry.hasProfile ? <span>no stored profile</span> : null}
           </div>
         </div>
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           {isNew ? <button disabled={busy} onClick={onSeen} className={ACTION_CLASS}>Seen</button> : null}
           {entry.displayName ? <button disabled={busy} onClick={onClearName} className={ACTION_CLASS}>Clear name</button> : null}
+          {hasPlays ? (
+            <button disabled={busy} onClick={onTogglePlays} className={ACTION_CLASS}>
+              {plays === undefined ? "Plays" : "Hide plays"}
+            </button>
+          ) : null}
           <button disabled={busy} onClick={onReactivate} className={ACTION_CLASS}>Reactivate</button>
           <button disabled={busy} onClick={onPreview} className={DANGER_CLASS}>Preview removal</button>
         </div>
@@ -167,6 +205,77 @@ function BannedUserRow({
           )}
         </div>
       ) : null}
+
+      {plays !== undefined ? <RestrictedPpPanel view={plays} busy={busy} onChange={onChangePlays} /> : null}
+    </div>
+  );
+}
+
+function RestrictedPpPanel({
+  view,
+  busy,
+  onChange,
+}: {
+  view: RestrictedPpAdminView | null;
+  busy: boolean;
+  onChange: (scope: RestrictedPpRemovalScope, restore: boolean, play?: RestrictedPpAdminPlay) => void;
+}) {
+  if (!view || view.plays.length === 0) {
+    return <p className="ml-12 text-[11px] text-osu-f1">No priced plays.</p>;
+  }
+  const counted = view.plays.filter((play) => play.reviewState === "clear");
+  const removed = view.plays.length - counted.length;
+  const flagged = counted.filter((play) => play.rateSuspicious).length;
+  return (
+    <div className="ml-12 space-y-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-osu-f1">
+        <span>{formatNumber(counted.length)} counted</span>
+        {removed > 0 ? <span>{formatNumber(removed)} removed</span> : null}
+        {flagged > 0 ? <span className="text-osu-red-light">{formatNumber(flagged)} speed unconfirmed</span> : null}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button disabled={busy || flagged === 0} onClick={() => onChange("flagged", false)} className={DANGER_CLASS}>Remove flagged</button>
+          <button disabled={busy || counted.length === 0} onClick={() => onChange("all", false)} className={DANGER_CLASS}>Remove all</button>
+          <button disabled={busy || removed === 0} onClick={() => onChange("all", true)} className={ACTION_CLASS}>Restore all</button>
+        </div>
+      </div>
+      <div className="divide-y divide-osu-b3/15">
+        {view.plays.map((play) => {
+          const isRemoved = play.reviewState !== "clear";
+          return (
+            <div key={play.scoreId} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className={`min-w-0 flex-1 flex items-center gap-2.5 ${isRemoved ? "opacity-60" : ""}`}>
+                <GradeImg grade={play.grade} size={22} className="flex-shrink-0" />
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="truncate text-[12px] text-osu-l2">{playChartText(play)}</div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
+                    <span className="rounded bg-osu-b4/80 px-1.5 py-0.5 font-semibold text-osu-l2">
+                      {play.mods.length ? play.mods.join("") : "NM"}
+                    </span>
+                    <span className="text-white">{play.pp.toFixed(2)}pp</span>
+                    <span>{formatAccuracy(play.accuracy)}</span>
+                    {play.rateSuspicious ? <span className="text-osu-red-light">Speed unconfirmed</span> : null}
+                    {isRemoved ? <span className="text-amber-300">Removed</span> : null}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                {!isRemoved ? (
+                  <Link to="/replay" search={{ importId: play.scoreId }} target="_blank" rel="noreferrer" className={ACTION_CLASS}>
+                    Replay
+                  </Link>
+                ) : null}
+                <button
+                  disabled={busy}
+                  onClick={() => onChange("plays", isRemoved, play)}
+                  className={isRemoved ? ACTION_CLASS : DANGER_CLASS}
+                >
+                  {isRemoved ? "Restore" : "Remove"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -180,6 +289,9 @@ function BannedUsersAdminPage() {
   const [busyId, setBusyId] = useState<number | "all" | null>(null);
   const [previews, setPreviews] = useState<Record<number, LiveBackendUserWipePreview>>({});
   const [wipeAsk, setWipeAsk] = useState<LiveBackendUserWipePreview | null>(null);
+  // Present while a row's Plays panel is open.
+  const [playViews, setPlayViews] = useState<Record<number, RestrictedPpAdminView | null>>({});
+  const [playsAsk, setPlaysAsk] = useState<{ entry: BannedUser; scope: "flagged" | "all"; count: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
@@ -222,6 +334,46 @@ function BannedUsersAdminPage() {
     const result = await previewLiveBackendUserWipe({ data: { query: `#${entry.userId}` } });
     setPreviews((current) => ({ ...current, [entry.userId]: result }));
   });
+
+  const loadPlays = async (userId: number) => {
+    const view = await getRestrictedPpPlays({ data: { userId } });
+    setPlayViews((current) => ({ ...current, [userId]: view }));
+  };
+
+  const togglePlays = (entry: BannedUser) => {
+    if (entry.userId in playViews) {
+      setPlayViews((current) => {
+        const next = { ...current };
+        delete next[entry.userId];
+        return next;
+      });
+      return;
+    }
+    void act(entry.userId, () => loadPlays(entry.userId));
+  };
+
+  const changePlays = (entry: BannedUser, scope: RestrictedPpRemovalScope, restore: boolean, play?: RestrictedPpAdminPlay) =>
+    act(entry.userId, async () => {
+      const changed = await setRestrictedPpPlaysRemoved({
+        data: { userId: entry.userId, scope, scoreIds: play ? [play.scoreId] : undefined, restore },
+      });
+      if (!play) {
+        setMessage(restore
+          ? `Restored ${plural(changed, "play")} to ${entry.username}'s simulated pp.`
+          : `Removed ${plural(changed, "play")} from ${entry.username}'s simulated pp.`);
+      }
+      await loadPlays(entry.userId);
+    });
+
+  const askChangePlays = (entry: BannedUser, scope: RestrictedPpRemovalScope, restore: boolean, play?: RestrictedPpAdminPlay) => {
+    if (scope === "plays" || restore) {
+      void changePlays(entry, scope, restore, play);
+      return;
+    }
+    const counted = (playViews[entry.userId]?.plays ?? []).filter((item) => item.reviewState === "clear");
+    const count = scope === "flagged" ? counted.filter((item) => item.rateSuspicious).length : counted.length;
+    setPlaysAsk({ entry, scope, count });
+  };
 
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + PAGE_SIZE, total);
@@ -286,6 +438,7 @@ function BannedUsersAdminPage() {
                     entry={entry}
                     busy={busyId === entry.userId || busyId === "all"}
                     preview={previews[entry.userId] ?? null}
+                    plays={playViews[entry.userId]}
                     onPreview={() => void preview(entry)}
                     onWipe={() => setWipeAsk(previews[entry.userId] ?? null)}
                     onReactivate={() => void act(
@@ -301,6 +454,8 @@ function BannedUsersAdminPage() {
                     onSeen={() => void act(entry.userId, async () => {
                       publishBannedUsersAlert(await markBannedUsersReviewed({ data: { userIds: [entry.userId] } }));
                     })}
+                    onTogglePlays={() => togglePlays(entry)}
+                    onChangePlays={(scope, restore, play) => askChangePlays(entry, scope, restore, play)}
                   />
                 ))}
               </div>
@@ -342,6 +497,19 @@ function BannedUsersAdminPage() {
             `Removed ${wipeAsk.username}'s content.`,
           )}
           onClose={() => setWipeAsk(null)}
+        />
+      ) : null}
+
+      {playsAsk ? (
+        <ConfirmModal
+          title={playsAsk.scope === "flagged"
+            ? `Remove ${plural(playsAsk.count, "flagged play")} from ${playsAsk.entry.username}'s simulated pp?`
+            : `Remove all ${plural(playsAsk.count, "play")} from ${playsAsk.entry.username}'s simulated pp?`}
+          body="They leave the pp, the rankings and the public replays. Restore puts them back."
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => void changePlays(playsAsk.entry, playsAsk.scope, false)}
+          onClose={() => setPlaysAsk(null)}
         />
       ) : null}
     </div>

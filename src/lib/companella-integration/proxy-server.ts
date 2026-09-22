@@ -15,16 +15,63 @@
  *    bridge token alone authorizes nothing.
  *  - Redirects are never followed: a 30x with credentials attached is how a
  *    proxy leaks a token to somewhere else.
+ *  - The body is streamed, never buffered. The backend checks the proof the
+ *    moment the request arrives, before it reads the body, so an upload that
+ *    takes longer than a proof's lifetime still authenticates. A body is
+ *    carried only on the routes that take one, up to that route's ceiling, and
+ *    a request missing the credentials its route needs is refused here before
+ *    a byte of it is read.
+ *  - A backend failure that is not one of our error envelopes (an unhandled
+ *    exception's message, say) never reaches the client: it is replaced with
+ *    a generic one.
  */
 
 import { liveBridgeToken } from "../live-backend-tokens";
 import { COMPANELLA_NATIVE_ROUTES } from "./shared";
 
+const MIB = 1024 * 1024;
+/** Manifests and token requests are a few hundred bytes. */
+const JSON_BODY_BYTES = 64 * 1024;
+/**
+ * Upload ceilings for the hop itself. The backend enforces its own configured
+ * limits (25 MiB replays and 8 MiB charts by default) on the same stream; these
+ * only stop something absurd from being carried at all.
+ */
+const REPLAY_BODY_BYTES = 32 * MIB;
+const BEATMAP_BODY_BYTES = 32 * MIB;
+
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Hard ceiling so a proxy hop cannot be used to buffer something enormous. */
-const MAX_PROXY_BODY_BYTES = 32 * 1024 * 1024;
+/** The backend answers an upload only once it has the whole file, so a slow
+    connection needs longer than a JSON call does. It must stay under Node's
+    request timeout (5 minutes, counted from the first byte), which both this
+    server and the backend apply to the inbound upload: Nitro's node-server
+    entry offers no way to raise it here, and past it the socket is cut with
+    a 408 instead of this hop's own 504. */
+const UPLOAD_TIMEOUT_MS = 4 * 60_000;
 
 export type NativeRouteId = keyof typeof COMPANELLA_NATIVE_ROUTES;
+
+interface RouteRule {
+  /** Largest body carried to the backend; 0 means none is forwarded. */
+  maxBodyBytes: number;
+  /** What a request carrying a body must present before any of it is read. */
+  requires: "nothing" | "proof" | "token_and_proof";
+  /** OAuth endpoints answer in the OAuth error shape, not the envelope. */
+  oauth: boolean;
+  timeoutMs: number;
+}
+
+const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
+  capabilities: { maxBodyBytes: 0, requires: "nothing", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  token: { maxBodyBytes: JSON_BODY_BYTES, requires: "proof", oauth: true, timeoutMs: REQUEST_TIMEOUT_MS },
+  revoke: { maxBodyBytes: JSON_BODY_BYTES, requires: "proof", oauth: true, timeoutMs: REQUEST_TIMEOUT_MS },
+  me: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  submissions: { maxBodyBytes: JSON_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  submissionRead: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  submissionReplay: { maxBodyBytes: REPLAY_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
+  submissionBeatmap: { maxBodyBytes: BEATMAP_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
+  submissionComplete: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+};
 
 function backendBase(): string | null {
   return (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/+$/, "") || null;
@@ -50,40 +97,77 @@ function resolveSubpath(route: NativeRouteId, params: Record<string, string>): s
   return resolved.includes(":") ? null : resolved;
 }
 
-async function readBounded(request: Request): Promise<Buffer | null | "too_large"> {
-  if (request.method === "GET" || request.method === "HEAD") return null;
-  const declared = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_PROXY_BODY_BYTES) return "too_large";
-  const reader = request.body?.getReader();
-  if (!reader) {
-    const buffer = Buffer.from(await request.arrayBuffer());
-    return buffer.length > MAX_PROXY_BODY_BYTES ? "too_large" : buffer;
-  }
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.length;
-    if (total > MAX_PROXY_BODY_BYTES) {
-      await reader.cancel().catch(() => {});
-      return "too_large";
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks);
+function errorResponse(
+  status: number,
+  code: string,
+  message: string,
+  options: { retryable?: boolean; oauth?: boolean; headers?: Record<string, string> } = {},
+): Response {
+  const body = options.oauth
+    ? { error: code }
+    : { error: { code, message, retryable: options.retryable ?? false }, request_id: "", submission_id: null };
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      ...(options.headers ?? {}),
+    },
+  });
 }
 
-function errorResponse(status: number, code: string, message: string, retryable = false): Response {
-  return new Response(JSON.stringify({
-    error: { code, message, retryable },
-    request_id: "",
-    submission_id: null,
-  }), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-  });
+/**
+ * The credentials a route cannot work without, checked before its body is
+ * touched. Only presence and shape: whether they are valid is the backend's
+ * call, made on the same request before it reads the body.
+ */
+function missingCredentials(request: Request, rule: RouteRule): Response | null {
+  if (rule.requires === "nothing") return null;
+  const challenge = { "www-authenticate": "DPoP" };
+  if (rule.requires === "token_and_proof" && !/^DPoP\s+\S+$/i.test(request.headers.get("authorization")?.trim() ?? "")) {
+    return errorResponse(401, "invalid_token", "A DPoP access token is required.", { headers: challenge });
+  }
+  if (!request.headers.get("dpop")?.trim()) {
+    return rule.oauth
+      ? errorResponse(400, "invalid_dpop_proof", "", { oauth: true, headers: challenge })
+      : errorResponse(401, "invalid_dpop_proof", "A DPoP proof is required.", { headers: challenge });
+  }
+  return null;
+}
+
+function tooLargeResponse(rule: RouteRule): Response {
+  return rule.oauth
+    ? errorResponse(413, "invalid_request", "", { oauth: true })
+    : errorResponse(413, "payload_too_large", "The request body is too large.");
+}
+
+/** The request body as a stream that errors once it passes `limit` bytes. */
+function boundedBody(request: Request, limit: number, onTooLarge: () => void): ReadableStream<Uint8Array> | null {
+  if (limit <= 0 || !request.body || request.method === "GET" || request.method === "HEAD") return null;
+  let total = 0;
+  return request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      total += chunk.byteLength;
+      if (total > limit) {
+        onTooLarge();
+        controller.error(new Error("payload_too_large"));
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  }));
+}
+
+/** Whether a failure body is one of the backend's deliberate error envelopes. */
+function isErrorEnvelope(payload: ArrayBuffer): boolean {
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(payload)) as { error?: { code?: unknown } } | null;
+    return Boolean(parsed && typeof parsed.error === "object" && parsed.error
+      && typeof parsed.error.code === "string" && /^[a-z_]{1,64}$/.test(parsed.error.code));
+  } catch {
+    return false;
+  }
 }
 
 /** Response headers worth passing back to a native client. */
@@ -94,18 +178,30 @@ export async function forwardNativeRequest(
   route: NativeRouteId,
   params: Record<string, string> = {},
 ): Promise<Response> {
+  const rule = ROUTE_RULES[route];
   const base = backendBase();
   const token = liveBridgeToken();
   if (!base || !token) {
-    return errorResponse(503, "integration_unavailable", "The integration backend is not configured.", true);
+    return errorResponse(503, "integration_unavailable", "The integration backend is not configured.", { retryable: true, oauth: rule.oauth });
   }
   const subpath = resolveSubpath(route, params);
   if (!subpath) return errorResponse(400, "invalid_request", "Malformed request path.");
 
-  const body = await readBounded(request);
-  if (body === "too_large") {
-    return errorResponse(413, "payload_too_large", "The uploaded file is too large.");
+  // Both refusals below read headers only; not a byte of the body has moved.
+  const declared = Number(request.headers.get("content-length"));
+  if (rule.maxBodyBytes > 0 && Number.isFinite(declared) && declared > rule.maxBodyBytes) {
+    return tooLargeResponse(rule);
   }
+  // Only where a body would be carried: a bodiless request costs nothing to
+  // pass on, and the backend's own refusal carries a fresh DPoP nonce.
+  if (rule.maxBodyBytes > 0) {
+    const refused = missingCredentials(request, rule);
+    if (refused) return refused;
+  }
+  let tooLarge = false;
+  const body = boundedBody(request, rule.maxBodyBytes, () => {
+    tooLarge = true;
+  });
 
   // Built from scratch. Nothing the caller sent becomes an internal header.
   const headers: Record<string, string> = {
@@ -113,7 +209,7 @@ export async function forwardNativeRequest(
     accept: "application/json",
   };
   const contentType = request.headers.get("content-type");
-  if (contentType) headers["content-type"] = contentType;
+  if (contentType && body) headers["content-type"] = contentType;
   const clientAuthorization = request.headers.get("authorization");
   if (clientAuthorization) headers["x-companella-authorization"] = clientAuthorization;
   const proof = request.headers.get("dpop");
@@ -124,18 +220,23 @@ export async function forwardNativeRequest(
   if (country) headers["x-companella-country"] = country;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), rule.timeoutMs);
   try {
-    const response = await fetch(`${base}/api/integrations/companella/native/${subpath}`, {
+    const init: RequestInit & { duplex?: "half" } = {
       method: request.method,
       headers,
-      body: (body ?? undefined) as BodyInit | undefined,
       // A redirect would carry the bridge token somewhere we did not choose.
       redirect: "manual",
       signal: controller.signal,
-    });
+    };
+    if (body) {
+      init.body = body;
+      // Required by fetch for a streamed request body.
+      init.duplex = "half";
+    }
+    const response = await fetch(`${base}/api/integrations/companella/native/${subpath}`, init);
     if (response.status >= 300 && response.status < 400) {
-      return errorResponse(502, "integration_unavailable", "The integration backend answered unexpectedly.", true);
+      return errorResponse(502, "integration_unavailable", "The integration backend answered unexpectedly.", { retryable: true, oauth: rule.oauth });
     }
     const payload = await response.arrayBuffer();
     const out = new Headers();
@@ -143,13 +244,20 @@ export async function forwardNativeRequest(
       const value = response.headers.get(name);
       if (value) out.set(name, value);
     }
+    if (response.status >= 500 && (rule.oauth || !isErrorEnvelope(payload))) {
+      const retryAfter = response.headers.get("retry-after");
+      return errorResponse(response.status, rule.oauth ? "server_error" : "internal_error", "The server could not handle this request.", {
+        retryable: true, oauth: rule.oauth, headers: retryAfter ? { "retry-after": retryAfter } : {},
+      });
+    }
     // Private in every case: receipts, tokens and identity must not be cached
     // by a CDN, a shared proxy, or the browser.
     out.set("cache-control", "no-store");
     out.set("x-content-type-options", "nosniff");
     return new Response(payload, { status: response.status, headers: out });
   } catch {
-    return errorResponse(504, "integration_unavailable", "The integration backend did not answer.", true);
+    if (tooLarge) return tooLargeResponse(rule);
+    return errorResponse(504, "integration_unavailable", "The integration backend did not answer.", { retryable: true, oauth: rule.oauth });
   } finally {
     clearTimeout(timer);
   }

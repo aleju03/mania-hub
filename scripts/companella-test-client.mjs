@@ -138,8 +138,17 @@ async function call(state, path, init = {}) {
   let response = await send(state.nonce);
   const challenge = response.headers.get("dpop-nonce");
   if (challenge) state.nonce = challenge;
-  if (response.status === 401 && challenge) response = await send(challenge);
+  // Resources challenge with a 401; the token and revocation endpoints answer
+  // a 400 whose error is use_dpop_nonce (RFC 9449 §8). Either way, once.
+  if (challenge && (response.status === 401 || (response.status === 400 && await asksForNonce(response)))) {
+    response = await send(challenge);
+  }
   return response;
+}
+
+async function asksForNonce(response) {
+  const body = await response.clone().json().catch(() => null);
+  return body?.error === "use_dpop_nonce";
 }
 
 function openBrowser(url) {

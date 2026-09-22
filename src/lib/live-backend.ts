@@ -1605,6 +1605,93 @@ export async function fetchCompanellaPublicProfileDirect(userId: number): Promis
   }
 }
 
+/* Simulated pp for accounts osu! turned away (live-backend
+   integrations/companella/restricted-pp.ts): imported plays on the exact file
+   of a ranked mania map, priced the way osu! prices a stable score. It stands
+   in for the osu! numbers while the account is gone and ranks like them. */
+export interface RestrictedPpPlay {
+  /** The Companella import id; its replay opens at /replay?importId=. */
+  scoreId: string;
+  userId: number;
+  beatmapId: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  version: string;
+  creator: string | null;
+  keyCount: number | null;
+  mods: string[];
+  rate: number;
+  starRating: number;
+  pp: number;
+  weightedPp: number | null;
+  /** stable's 300-weighted accuracy, 0..1. */
+  accuracy: number;
+  grade: "XH" | "X" | "SH" | "S" | "A" | "B" | "C" | "D";
+  totalScore: number;
+  maxCombo: number;
+  counts: { countGeki: number; count300: number; countKatu: number; count100: number; count50: number; countMiss: number };
+  playedAt: string | null;
+  receivedAt: string;
+}
+
+export interface RestrictedPpPlayer {
+  userId: number;
+  pp: number;
+  /** osu!'s weighted accuracy over the best list, 0..1. */
+  accuracy: number;
+  globalRank: number;
+  countryRank: number | null;
+  rankedPlays: number;
+  playCount: number;
+  rankedScore: number;
+  gradeCounts: { ss: number; ssh: number; s: number; sh: number; a: number };
+  /** Best play per beatmap, best first, at most 200. */
+  best: RestrictedPpPlay[];
+}
+
+/** Shaped like an osu! ranking row. */
+export interface RestrictedPpRankingEntry {
+  user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string };
+  pp: number;
+  global_rank: number;
+  country_rank: number | null;
+  /** Percent, as osu! reports it. */
+  hit_accuracy: number;
+  play_count: number;
+  ranked_score: number;
+  grade_counts: { ss: number; ssh: number; s: number; sh: number; a: number };
+}
+
+/** Null when the account is not one osu! turned away, or has nothing priced. */
+export async function fetchRestrictedPpPlayerDirect(userId: number): Promise<RestrictedPpPlayer | null> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  try {
+    return await fetchLiveJson<RestrictedPpPlayer>(`/api/integrations/companella/public/players/${userId}/pp`);
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Every simulated standing in one country (or everywhere), best pp first. Empty when Companella is off. */
+export async function fetchRestrictedPpRankingsDirect(country?: string | null): Promise<RestrictedPpRankingEntry[]> {
+  const query = country && /^[A-Za-z]{2}$/.test(country) ? `?country=${country.toUpperCase()}` : "";
+  try {
+    return (await fetchLiveJson<{ entries: RestrictedPpRankingEntry[] }>(`/api/integrations/companella/public/rankings${query}`)).entries;
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return [];
+    throw error;
+  }
+}
+
+/** The public .osr of a play that counts toward a gone account; 404 otherwise. */
+export function restrictedPpReplayUrl(scoreId: string): string | null {
+  const base = getLiveBackendUrl();
+  if (!base || !/^[A-Za-z0-9_-]{8,64}$/.test(scoreId)) return null;
+  return `${base}/api/integrations/companella/public/replays/${scoreId}`;
+}
+
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/about`);

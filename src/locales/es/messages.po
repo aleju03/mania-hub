@@ -12821,6 +12821,10 @@ msgstr "Enlace del replay"
 msgid "Replay loaded"
 msgstr "Replay cargado"
 
+#: src/routes/replay.tsx
+msgid "Replay not found"
+msgstr "No se encontró el replay"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Replay settings"

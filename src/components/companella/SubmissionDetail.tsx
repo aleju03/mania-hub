@@ -23,17 +23,32 @@ import { ActionButton, Field, Pill, type PillTone } from "./primitives";
  * labelled as the uploader's own metadata, because that is all it is.
  */
 
-const IDENTITY_TONES: Record<string, PillTone> = {
-  name_matches_account: "good",
-  name_mismatch: "bad",
-  identity_unresolved: "warn",
-};
-
 const COMPLETION_TONES: Record<string, PillTone> = {
   consistent_with_completed_play: "good",
   incomplete: "warn",
   unknown: "warn",
 };
+
+/** Why a stored play has no rating, in plain words. Unknown codes show as they are. */
+const UNRATED_TEXT: Record<string, string> = {
+  keymode_unsupported: "This keymode is not rated",
+  rate_vibro: "Vibro is not rated",
+  chart_vibro: "Vibro is not rated",
+  vibro_check_failed: "The vibro check could not read this chart",
+  analysis_failed: "The calculation kept failing, so this play is not rated",
+  accuracy_below_calc_floor: "The accuracy is too low to rate",
+  replay_timing_unavailable: "The key presses could not be judged",
+  calculator_returned_nothing: "The calculator gave no rating for this chart",
+  column_rewriting_mod: "Mirror and Random are not rated",
+  key_conversion_mod: "Key conversion mods are not rated",
+  unsupported_mod: "This mod is not rated",
+  unknown_mod_bits: "The replay has mods the site does not know",
+};
+
+export function unratedReasonText(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  return UNRATED_TEXT[reason] ?? reason;
+}
 
 export function SubmissionDetail({
   row,
@@ -110,10 +125,7 @@ export function SubmissionDetail({
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label={<Trans>Processing</Trans>}>{row.state}</Field>
-            <Field label={<Trans>Name on the replay</Trans>}>
-              {score?.playerName ?? "-"}{" "}
-              {score && <Pill tone={IDENTITY_TONES[score.identityState] ?? "warn"}>{score.identityState}</Pill>}
-            </Field>
+            <Field label={<Trans>Name on the replay</Trans>}>{score?.playerName || "-"}</Field>
             <Field label={<Trans>Completion</Trans>}>
               {score && <Pill tone={COMPLETION_TONES[score.completionState] ?? "warn"}>{score.completionState}</Pill>}
             </Field>
@@ -201,7 +213,7 @@ export function SubmissionDetail({
               <div className="text-sm text-amber-300">
                 {analysis.state === "failed_retryable"
                   ? t`The calculation could not run; it will be retried.`
-                  : (analysis.unratedReason ?? t`Not rated.`)}
+                  : (unratedReasonText(analysis.unratedReason) ?? t`Not rated.`)}
               </div>
             )}
           </div>

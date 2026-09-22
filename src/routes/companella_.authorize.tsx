@@ -227,6 +227,14 @@ function AuthorizePage() {
       case "request_not_found":
       case "invalid_consent_token":
       case "unsupported_code_challenge_method":
+      // Opening the request refuses parameters the app sent wrong.
+      case "unknown_client":
+      case "invalid_redirect_uri":
+      case "invalid_state":
+      case "invalid_code_challenge":
+      case "invalid_scope":
+      case "invalid_key_binding":
+      case "integration_disabled":
         return { text: t`This request is not valid any more. Start the connection again from the app.`, signIn: false };
       default:
         return { text: t`Could not reach the server. Try again.`, signIn: false };
@@ -282,6 +290,27 @@ function AuthorizePage() {
 
   if (loading) {
     return shell(<div className="h-72 animate-pulse rounded-2xl bg-osu-b4/40" />);
+  }
+
+  // Opening the request failed, so there is no request to describe: say why
+  // (a session that ended, an account outside the beta) rather than "expired".
+  if (!detail && errorInfo) {
+    return shell(
+      <>
+        {identityRow}
+        <p className="text-center text-sm text-rose-300">
+          {errorInfo.text}
+          {errorInfo.signIn && (
+            <>
+              {" "}
+              <a href={signInHref} className="font-semibold underline underline-offset-2 hover:text-white">
+                <Trans>Sign in with osu!</Trans>
+              </a>
+            </>
+          )}
+        </p>
+      </>,
+    );
   }
 
   if (!detail || detail.outcome) {

@@ -205,10 +205,18 @@ async function call(
   });
   const response = await send();
   // A nonce challenge is answered once with a fresh proof; the queue is not
-  // rebuilt and nothing is retried beyond that.
+  // rebuilt and nothing is retried beyond that. Resources challenge with a
+  // 401, the token and revocation endpoints with a 400 `use_dpop_nonce`
+  // (RFC 9449 §8).
   const nonce = response.headers.get("dpop-nonce");
-  if (response.status === 401 && nonce) return send(nonce);
+  if (!nonce) return response;
+  if (response.status === 401 || (response.status === 400 && await asksForNonce(response))) return send(nonce);
   return response;
+}
+
+async function asksForNonce(response: Response): Promise<boolean> {
+  const body = await response.clone().json().catch(() => null) as { error?: unknown } | null;
+  return body?.error === "use_dpop_nonce";
 }
 
 export async function exchangeCode(key: TestKeyPair, code: string, verifier: string, redirectUri: string, clientId: string): Promise<TestCredentials | null> {

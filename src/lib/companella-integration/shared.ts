@@ -105,6 +105,8 @@ export interface CompanellaChartMatch {
   maxTimingErrorMs: number | null;
   gameplaySettingDifferences: string[];
   notes: string | null;
+  /** The upload's relative rate against each family member it matched, by beatmap id. */
+  memberRates?: Record<string, number>;
 }
 
 /** What the replay's key presses say, beside what its header says. */
@@ -184,8 +186,11 @@ export interface CompanellaSecurityEvent {
 export interface CompanellaAccess {
   /** The integration is switched on for this deployment at all. */
   enabled: boolean;
-  /** This viewer may use it. */
+  /** This viewer may connect installations: current beta membership. */
   allowed: boolean;
+  /** This viewer has approved an installation before, so has plays and
+      installations to manage even after leaving the beta. */
+  hasData: boolean;
   signedIn: boolean;
   /** The beta-only browser test client is registered. */
   testClientEnabled: boolean;
@@ -212,4 +217,11 @@ export function describeMatchOutcome(match: CompanellaChartMatch | null): string
     default:
       return "Not found in the index";
   }
+}
+
+/** The signed-in name as the manage hop's header value. Cut to length first,
+    then percent-encoded, so the cut can never land inside an escape sequence;
+    the backend decodes it once on arrival. */
+export function encodeActorName(username: string): string {
+  return encodeURIComponent(Array.from(username.trim()).slice(0, 60).join(""));
 }

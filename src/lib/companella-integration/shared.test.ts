@@ -5,6 +5,7 @@ import {
   COMPANELLA_NATIVE_ROUTES,
   describeMatchOutcome,
   effectiveSpeed,
+  encodeActorName,
 } from "./shared";
 
 describe("shared contract", () => {
@@ -39,5 +40,13 @@ describe("shared contract", () => {
     expect(describeMatchOutcome({ ...base, outcome: "unmatched_in_index" })).toBe("Not found in the index");
     expect(describeMatchOutcome({ ...base, outcome: "matched", relationship: "strict_note_rate_copy" }))
       .toBe("Rate copy of a known chart");
+  });
+
+  it("encodes the actor name whole, so the backend decodes the name the player has", () => {
+    expect(encodeActorName("Some Player")).toBe("Some%20Player");
+    expect(decodeURIComponent(encodeActorName("[Bracket] name_"))).toBe("[Bracket] name_");
+    // Cut before encoding: a long name never ends in half an escape sequence.
+    const long = encodeActorName("é".repeat(100));
+    expect(decodeURIComponent(long)).toBe("é".repeat(60));
   });
 });

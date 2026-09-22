@@ -34,7 +34,7 @@ type Method = "GET" | "POST" | "PUT";
 const ENDPOINTS: Array<[Method, string, string]> = [
   ["GET", "/capabilities", "Endpoints, limits and supported mods. No auth."],
   ["POST", "/oauth/token", "Exchange the sign-in code for tokens, or refresh."],
-  ["POST", "/oauth/revoke", "Disconnect this installation."],
+  ["POST", "/oauth/revoke", "Disconnect this installation. Needs a proof too."],
   ["GET", "/me", "The connected account and installation."],
   ["POST", "/submissions", "Reserve a play."],
   ["PUT", "/submissions/{id}/replay", "Upload the replay."],
@@ -47,13 +47,19 @@ const ERRORS: Array<[string, string]> = [
   ["401, token expired", "Refresh once and retry with a new proof."],
   ["401, invalid proof or wrong key", "Stop. Don't fall back to a bearer token or a cookie."],
   ["401 with a DPoP-Nonce header", "Sign again with that nonce and retry once."],
+  ["400 use_dpop_nonce from /oauth/token or /oauth/revoke", "Sign again with the nonce from the DPoP-Nonce header and retry once."],
+  ["400 invalid_grant, \"This account is not in the beta.\"", "Stop sending plays and tell the player. If they're let back in, the same tokens work again."],
   ["Installation revoked", "Stop uploading and ask the player to connect again."],
   ["error=access_denied on the callback", "The player cancelled, so nothing was connected."],
   ["needs_beatmap: true", "Upload the .osu file."],
   ["Connection dropped during an upload", "Read the submission again, then resend the same bytes."],
+  ["409 assets_missing on complete", "Read the submission again and upload the file it asks for."],
+  ["413", "The file is too big. Don't retry it."],
+  ["504 on an upload", "The upload took more than 4 minutes, or the server was unreachable. Retry later."],
   ["429", "Wait for Retry-After. Keep the queue and don't retry in parallel."],
   ["503, or state deferred", "Retry later. Don't show a zero result in the meantime."],
   ["digest_mismatch, not_mania, broken file", "Don't retry the same file."],
+  ["Rejected with contradictory_mods, replay_header_too_long or beatmap_checksum_mismatch", "Don't retry the same replay."],
   ["404 on a submission", "Treat it as deleted. Don't try other ids."],
   ["Quarantined", "Show the server's message. Don't move the play to another account."],
 ];
@@ -169,13 +175,26 @@ Content-Type: application/json
 }`}</CodeBlock>
             <P>
               The response has an access token (valid for 5 minutes), a refresh token, the scope and the installation
-              id. The refresh token doesn't rotate. Refresh at the same URL with:
+              id. Refresh at the same URL with:
             </P>
             <CodeBlock label="refresh">{`{ "grant_type": "refresh_token", "refresh_token": "..." }`}</CodeBlock>
             <P>
-              If the token response gets lost, run the authorization again. Connecting the same key to the same account
-              reuses the existing installation.
+              A refresh gives you a new access token and the same refresh token back. The refresh token doesn't rotate,
+              so if a refresh response gets lost, refresh again.
             </P>
+            <P>
+              If the token response from the code exchange gets lost, run the authorization again. Connecting the same
+              key to the same account reuses the existing installation.
+            </P>
+            <P>
+              To disconnect, send the refresh token to <Code>/oauth/revoke</Code> with a proof from the same key. The
+              server answers <Code>{`{ "revoked": true }`}</Code> even if the token was already gone.
+            </P>
+            <CodeBlock label="disconnect">{`POST ${base}${API}/oauth/revoke
+DPoP: <proof, without ath>
+Content-Type: application/json
+
+{ "token": "..." }`}</CodeBlock>
           </Section>
 
           <Section n={2} title="Signing requests">
@@ -197,9 +216,13 @@ Content-Type: application/json
               <li><Code>htu</Code> is the URL you called, without the query string or fragment.</li>
               <li><Code>ath</Code> goes on every request except the token endpoint.</li>
               <li>
-                Each proof can be used once, within 60 seconds. When a response includes a <Code>DPoP-Nonce</Code>{" "}
-                header, put that nonce in your next proofs. A nonce stays valid for a few minutes, so parallel uploads
-                can share one.
+                Each proof can be used once, within 60 seconds of when the request starts. A slow upload is fine as
+                long as it started in time and finishes within 4 minutes.
+              </li>
+              <li>
+                When a response includes a <Code>DPoP-Nonce</Code> header, put that nonce in your next proofs. A nonce
+                stays valid for a few minutes, so parallel uploads can share one. The token and revoke endpoints ask for
+                a nonce with a 400 and <Code>use_dpop_nonce</Code>. Everything else asks with a 401.
               </li>
               <li>The <Code>jwk</Code> in the header is the public key only, without the <Code>d</Code> field.</li>
             </ul>
@@ -245,8 +268,12 @@ Content-Type: application/json
 }`}</CodeBlock>
             <P>
               Upload each file the server asks for with <Code>PUT</Code> to the path it returned, as{" "}
-              <Code>application/octet-stream</Code> with the raw bytes (no base64 or gzip). Sending the same bytes twice
-              is safe. Then call <Code>POST .../complete</Code>, which returns <Code>202</Code> once the play is queued.
+              <Code>application/octet-stream</Code> with the raw bytes (no base64 or gzip). The size limits are in{" "}
+              <Code>/capabilities</Code> under <Code>limits</Code>: 25 MiB for a replay, 8 MiB for a chart and 16 KiB
+              for JSON by default. An upload has to finish within 4 minutes. Sending the same bytes twice is safe. Then
+              call <Code>POST .../complete</Code>, which returns{" "}
+              <Code>202</Code> once the play is queued. If a file went missing on the server in the meantime, it answers{" "}
+              <Code>409 assets_missing</Code> and the submission asks for that file again.
             </P>
             <P>Poll the submission with backoff. The state goes through:</P>
             <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2 font-mono text-[13px]">
@@ -263,7 +290,9 @@ Content-Type: application/json
               <State tone="bad">rejected</State>
             </div>
             <P>
-              <Code>deferred</Code> means the server will retry the play by itself. <Code>expired</Code> and{" "}
+              <Code>deferred</Code> means the server will retry the play by itself. It tries up to six times over about
+              half an hour, then marks the play <Code>rejected</Code> with <Code>processing_failed</Code>. Calling{" "}
+              <Code>POST .../complete</Code> again on a deferred play retries it right away. <Code>expired</Code> and{" "}
               <Code>deleted</Code> are also final states.
             </P>
           </Section>
@@ -302,11 +331,16 @@ Content-Type: application/json
             <P>
               The rating is computed from the key presses in the replay. Every press is matched to its note and scored
               by how many milliseconds it was off, so the replay has to contain the real input of the play. A replay
-              rebuilt from score data without the key presses can't be rated.
+              rebuilt from score data without the key presses can't be rated. Send the .osr exactly as osu! saved
+              it.
             </P>
             <P>
               The judgement counts in the header are what the site displays. If the key presses don't back them up, the
               play is held for review.
+            </P>
+            <P>
+              Plays from 4K to 10K are rated. Wider keymodes are stored without a rating. Mods that can't be played
+              together, like DT with HT, get the play rejected. <Code>/capabilities</Code> lists them.
             </P>
             <P>
               Only plays on charts the site already knows count toward the rating, rate-changed copies included. A copy

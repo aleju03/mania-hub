@@ -41,6 +41,7 @@ import { Route as AdminBannedUsersRouteImport } from './routes/admin/banned-user
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
 import { Route as AdminBugReportsRouteImport } from './routes/admin/bug-reports'
 import { Route as AdminCollectionsRouteImport } from './routes/admin/collections'
+import { Route as AdminCompanellaFlagsRouteImport } from './routes/admin/companella-flags'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-renders'
@@ -262,6 +263,11 @@ const AdminBugReportsRoute = AdminBugReportsRouteImport.update({
 const AdminCollectionsRoute = AdminCollectionsRouteImport.update({
   id: '/admin/collections',
   path: '/admin/collections',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCompanellaFlagsRoute = AdminCompanellaFlagsRouteImport.update({
+  id: '/admin/companella-flags',
+  path: '/admin/companella-flags',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
@@ -621,6 +627,7 @@ export interface FileRoutesByFullPath {
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
+  '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
@@ -717,6 +724,7 @@ export interface FileRoutesByTo {
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
+  '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
@@ -814,6 +822,7 @@ export interface FileRoutesById {
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
+  '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
@@ -912,6 +921,7 @@ export interface FileRouteTypes {
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
+    | '/admin/companella-flags'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
@@ -1008,6 +1018,7 @@ export interface FileRouteTypes {
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
+    | '/admin/companella-flags'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
@@ -1104,6 +1115,7 @@ export interface FileRouteTypes {
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
+    | '/admin/companella-flags'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
@@ -1201,6 +1213,7 @@ export interface RootRouteChildren {
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
   AdminBugReportsRoute: typeof AdminBugReportsRoute
   AdminCollectionsRoute: typeof AdminCollectionsRoute
+  AdminCompanellaFlagsRoute: typeof AdminCompanellaFlagsRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminDynamicRendersRoute: typeof AdminDynamicRendersRoute
@@ -1477,6 +1490,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/collections'
       fullPath: '/admin/collections'
       preLoaderRoute: typeof AdminCollectionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/companella-flags': {
+      id: '/admin/companella-flags'
+      path: '/admin/companella-flags'
+      fullPath: '/admin/companella-flags'
+      preLoaderRoute: typeof AdminCompanellaFlagsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/dan-classifier': {
@@ -2041,6 +2061,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
   AdminBugReportsRoute: AdminBugReportsRoute,
   AdminCollectionsRoute: AdminCollectionsRoute,
+  AdminCompanellaFlagsRoute: AdminCompanellaFlagsRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminDynamicRendersRoute: AdminDynamicRendersRoute,

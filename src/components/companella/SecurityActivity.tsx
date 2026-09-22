@@ -17,7 +17,6 @@ const EVENT_TEXT: Record<string, string> = {
   installation_revoked: "An installation was revoked",
   new_country_observed: "A request arrived from a country this account had not used before",
   rapid_country_change: "Requests arrived from two countries close together, so this was flagged for a look",
-  identity_mismatch: "A replay carried a different player name",
   duplicate_replay_rejected: "The same play was submitted twice",
   judgements_disagree_with_inputs: "A replay's saved judgements did not match its key presses, so it was held for review",
   review_decision: "A reviewer made a decision",

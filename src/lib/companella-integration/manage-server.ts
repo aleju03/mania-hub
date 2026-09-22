@@ -24,13 +24,15 @@ import type {
   CompanellaSecurityEvent,
   CompanellaSubmissionRow,
 } from "./shared";
+import { encodeActorName } from "./shared";
 
 const TIMEOUT_MS = 15_000;
 
+/** Who the request acts as. Deliberately no admin flag: nothing on the manage
+    surface is decided by the viewer being an admin. */
 interface Actor {
   userId: number;
   username: string;
-  isAdmin: boolean;
 }
 
 function backendBase(): string | null {
@@ -44,7 +46,6 @@ async function readActor(): Promise<Actor | null> {
   return {
     userId: auth.viewer.id,
     username: auth.viewer.username,
-    isAdmin: auth.isAdmin,
   };
 }
 
@@ -59,7 +60,7 @@ async function requireSameOrigin(): Promise<void> {
 
 async function callManage(
   path: string,
-  options: { method?: "GET" | "POST"; actor: Actor; body?: unknown; search?: Record<string, string> } = { actor: { userId: 0, username: "", isAdmin: false } },
+  options: { method?: "GET" | "POST"; actor: Actor; body?: unknown; search?: Record<string, string> },
 ): Promise<Response | null> {
   const base = backendBase();
   const token = liveBridgeToken();
@@ -76,7 +77,7 @@ async function callManage(
         // The actor the site verified. Built here; never forwarded from the
         // incoming request.
         "x-companella-actor": String(options.actor.userId),
-        "x-companella-actor-name": encodeURIComponent(options.actor.username).slice(0, 120),
+        "x-companella-actor-name": encodeActorName(options.actor.username),
         ...(options.body ? { "content-type": "application/json" } : {}),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
@@ -106,6 +107,12 @@ async function readJsonBody<T>(response: Response | null, fallback: T): Promise<
   }
 }
 
+/** A backend refusal code to hand the page. Only a code: an unhandled error's
+    raw message (a driver string naming tables, say) stays on the server. */
+function refusalCode(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^[a-z_]{1,64}$/.test(value) ? value : fallback;
+}
+
 async function noStore(): Promise<void> {
   const { setResponseHeader } = await import("@tanstack/react-start/server");
   // Receipts, installations and previews are per-viewer and must never reach a
@@ -121,7 +128,7 @@ export const fetchCompanellaAccess = createServerFn({ method: "GET" })
     const actor = await readActor();
     const base = backendBase();
     const unavailable: CompanellaAccess = {
-      enabled: false, allowed: false, signedIn: Boolean(actor), testClientEnabled: false,
+      enabled: false, allowed: false, hasData: false, signedIn: Boolean(actor), testClientEnabled: false,
       environment: "", storageReady: false, backendReachable: false,
     };
     if (!base) return unavailable;
@@ -138,13 +145,22 @@ export const fetchCompanellaAccess = createServerFn({ method: "GET" })
     if (!capabilities) return unavailable;
     const enabled = capabilities.enabled === true;
     // Whether this account is allowed is the backend's answer, not a list the
-    // frontend keeps: hiding the page is not the access control.
-    const installations = actor && enabled
+    // frontend keeps: hiding the page is not the access control. The list
+    // answers members and former members alike and says which this is; an
+    // older backend refused non-members with a 403 instead.
+    const response = actor && enabled
       ? await callManage("installations", { actor })
       : null;
+    const listed = response?.ok
+      ? await readJsonBody<{ installations?: unknown; allowed?: unknown } | null>(response, null)
+      : null;
+    const member = listed
+      ? (typeof listed.allowed === "boolean" ? listed.allowed : true)
+      : response?.status !== 403;
     return {
       enabled,
-      allowed: Boolean(actor) && enabled && installations?.status !== 403,
+      allowed: Boolean(actor) && enabled && member,
+      hasData: Array.isArray(listed?.installations) && listed.installations.length > 0,
       signedIn: Boolean(actor),
       testClientEnabled: Array.isArray(capabilities.clients_supported)
         && (capabilities.clients_supported as string[]).some((id) => id.endsWith("-test")),
@@ -296,7 +312,7 @@ async function streamOwnedArtifact(
   });
   if (!viewer || !/^[A-Za-z0-9_-]{8,64}$/.test(scoreId)) return deny();
   const response = await callManage(`scores/${encodeURIComponent(scoreId)}/${kind}`, {
-    actor: { userId: viewer.id, username: viewer.username, isAdmin: false },
+    actor: { userId: viewer.id, username: viewer.username },
   });
   if (!response || !response.ok) return deny();
   return new Response(await response.arrayBuffer(), {
@@ -361,7 +377,7 @@ export const approveCompanellaAuthorization = createServerFn({ method: "POST" })
       },
     });
     const payload = await readJsonBody<{ code?: string; state?: string; redirect_uri?: string; error?: string }>(response, {});
-    if (!payload.code || !payload.redirect_uri) return { ok: false, error: payload.error ?? "approve_failed" };
+    if (!payload.code || !payload.redirect_uri) return { ok: false, error: refusalCode(payload.error, "approve_failed") };
     // The backend validated this redirect when the request was created and
     // froze it on the grant; the code and state are the only things added.
     const target = new URL(payload.redirect_uri);
@@ -389,9 +405,10 @@ export const denyCompanellaAuthorization = createServerFn({ method: "POST" })
   });
 
 /**
- * Starts an authorization transaction for a client that cannot reach the
- * backend itself (the browser test client). The native client calls
- * /companella/authorize directly with its own parameters instead.
+ * Opens the authorization transaction behind the consent page, from the OAuth
+ * parameters a client put on /companella/authorize. Only for a signed-in
+ * viewer: the backend writes no request row for an anonymous visitor, so the
+ * page signs in first and comes back with the same parameters.
  */
 export const createCompanellaAuthorizationRequest = createServerFn({ method: "POST" })
   .validator((data: {
@@ -408,13 +425,11 @@ export const createCompanellaAuthorizationRequest = createServerFn({ method: "PO
   .handler(async ({ data }): Promise<{ requestId?: string; consentToken?: string; error?: string }> => {
     await noStore();
     await requireSameOrigin();
-    const base = backendBase();
-    const token = liveBridgeToken();
-    if (!base || !token) return { error: "integration_unavailable" };
-    const response = await fetch(`${base}/api/integrations/companella/manage/authorize/request`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({
+    const actor = await readActor();
+    if (!actor) return { error: "not_signed_in" };
+    const response = await callManage("authorize/request", {
+      actor, method: "POST",
+      body: {
         client_id: data.clientId,
         redirect_uri: data.redirectUri,
         state: data.state,
@@ -422,11 +437,12 @@ export const createCompanellaAuthorizationRequest = createServerFn({ method: "PO
         code_challenge_method: "S256",
         scope: data.scope,
         dpop_jkt: data.dpopJkt,
-      }),
-      redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    }).catch(() => null);
-    const payload = await readJson<{ request_id?: string; consent_token?: string; error?: string }>(response, {});
-    if (!payload.request_id || !payload.consent_token) return { error: payload.error ?? "request_failed" };
+      },
+    });
+    if (!response) return { error: "integration_unavailable" };
+    const payload = await readJsonBody<{ request_id?: string; consent_token?: string; error?: string }>(response, {});
+    if (!payload.request_id || !payload.consent_token) {
+      return { error: refusalCode(payload.error, "request_failed") };
+    }
     return { requestId: payload.request_id, consentToken: payload.consent_token };
   });

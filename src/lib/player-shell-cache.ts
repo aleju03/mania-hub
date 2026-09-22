@@ -40,10 +40,6 @@ export function seedPlayerShellFromRankingEntry(entry: LeanRankingEntry, country
   writePlayerShell(buildPlayerShellFromRankingEntry(entry, countryRank));
 }
 
-export function seedPlayerShellsFromRankingEntries(entries: LeanRankingEntry[], startRank: number): void {
-  entries.forEach((entry, index) => seedPlayerShellFromRankingEntry(entry, startRank + index));
-}
-
 export function readPlayerShell(username: string): OsuUser | null {
   const key = normalizeUsernameKey(username);
   if (!key) return null;

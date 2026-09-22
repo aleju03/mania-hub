@@ -12830,6 +12830,10 @@ msgstr "回放链接"
 msgid "Replay loaded"
 msgstr "回放已加载"
 
+#: src/routes/replay.tsx
+msgid "Replay not found"
+msgstr "未找到回放"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Replay settings"

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { adminAuthHeaders } from "./live-backend-tokens";
-import { getServerLiveBackendUrl } from "./live-backend";
+import { getServerLiveBackendUrl, type RestrictedPpPlay } from "./live-backend";
 
 /* The admin banned-users page (/admin/banned-users): every account osu! stopped
    serving. Nothing reaches this list by being deleted; the backend only ever
@@ -28,6 +28,10 @@ export interface BannedUser {
   hasProfile: boolean;
   companellaPlays: number;
   displayName: string | null;
+  /* The pp their counted Companella imports price to while osu! has them
+     gone (restricted-pp.ts); null when nothing counts. */
+  simulatedPp: number | null;
+  simulatedPlays: number;
 }
 
 export interface BannedUsersPage {
@@ -36,6 +40,23 @@ export interface BannedUsersPage {
   entries: BannedUser[];
 }
 
+export interface RestrictedPpAdminPlay extends RestrictedPpPlay {
+  /* The replay frames did not confirm the speed its DT/HT mods claim. */
+  rateSuspicious: boolean;
+  /* "clear" counts; anything else is a review hold, from here or the review route. */
+  reviewState: string;
+}
+
+export interface RestrictedPpAdminView {
+  userId: number;
+  pp: number;
+  rankedPlays: number;
+  /* Every priced play in the current window, held ones included, best first. */
+  plays: RestrictedPpAdminPlay[];
+}
+
+export type RestrictedPpRemovalScope = "plays" | "flagged" | "all";
+
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const base = getServerLiveBackendUrl();
   if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
@@ -43,6 +64,12 @@ async function adminFetch(path: string, init: RequestInit = {}): Promise<Respons
     ...init,
     headers: { ...adminAuthHeaders(init.method === "POST"), connection: "close", ...(init.headers ?? {}) },
   });
+}
+
+function validUserId(value: unknown): number {
+  const userId = Number(value);
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user id.");
+  return userId;
 }
 
 export const listBannedUsers = createServerFn({ method: "GET" })
@@ -94,11 +121,7 @@ export const getBannedUsersAlert = createServerFn({ method: "GET" }).handler(asy
 
 /** Drops a player's display name (moderation). Their weekly clock keeps running. */
 export const clearBannedUserDisplayName = createServerFn({ method: "POST" })
-  .validator((data: { userId?: unknown }) => {
-    const userId = Number(data?.userId);
-    if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Invalid user id.");
-    return { userId };
-  })
+  .validator((data: { userId?: unknown }) => ({ userId: validUserId(data?.userId) }))
   .handler(async ({ data }): Promise<void> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Clear banned user display name");
@@ -107,4 +130,38 @@ export const clearBannedUserDisplayName = createServerFn({ method: "POST" })
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/inactive-users/clear-name`);
+  });
+
+/** A gone account's priced Companella plays, held ones included. Null when they have none. */
+export const getRestrictedPpPlays = createServerFn({ method: "GET" })
+  .validator((data: { userId?: unknown }) => ({ userId: validUserId(data?.userId) }))
+  .handler(async ({ data }): Promise<RestrictedPpAdminView | null> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Read simulated pp plays");
+    const response = await adminFetch(`/api/admin/companella/restricted-pp/${data.userId}`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/restricted-pp`);
+    return await response.json() as RestrictedPpAdminView;
+  });
+
+/** Takes plays out of a gone account's simulated pp (a review hold), or puts them back. Returns how many changed. */
+export const setRestrictedPpPlaysRemoved = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; scope?: unknown; scoreIds?: unknown; restore?: unknown }) => {
+    const scope = data?.scope;
+    if (scope !== "plays" && scope !== "flagged" && scope !== "all") throw new Error("Invalid scope.");
+    const scoreIds = Array.isArray(data?.scoreIds)
+      ? data.scoreIds.map(String).filter((id) => /^[A-Za-z0-9_-]{8,64}$/.test(id)).slice(0, 1000)
+      : [];
+    if (scope === "plays" && scoreIds.length === 0) throw new Error("No plays given.");
+    return { userId: validUserId(data?.userId), scope: scope as RestrictedPpRemovalScope, scoreIds, restore: data?.restore === true };
+  })
+  .handler(async ({ data }): Promise<number> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess(data.restore ? "Restore simulated pp plays" : "Remove simulated pp plays");
+    const response = await adminFetch(`/api/admin/companella/restricted-pp/${data.userId}`, {
+      method: "POST",
+      body: JSON.stringify({ scope: data.scope, score_ids: data.scope === "plays" ? data.scoreIds : undefined, restore: data.restore }),
+    });
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/restricted-pp`);
+    return Number(((await response.json()) as { changed?: unknown }).changed ?? 0);
   });

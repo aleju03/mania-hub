@@ -4,6 +4,7 @@ import { formatAccuracy, formatTimeAgo } from "#/lib/format";
 import { useLocale } from "#/lib/locale-context";
 import { effectiveSpeed, type CompanellaSubmissionRow } from "#/lib/companella-integration/shared";
 import { ActionButton, Empty, Panel, Pill, type PillTone } from "./primitives";
+import { unratedReasonText } from "./SubmissionDetail";
 
 /*
  * Submission history.
@@ -102,7 +103,7 @@ export function SubmissionList({
                 {!row.error && analysis && analysis.state !== "supported" && (
                   <p className="mt-1 text-xs text-amber-300">
                     <Trans>Stored, but not rated:</Trans>{" "}
-                    {analysis.unratedReason ?? analysis.state}
+                    {unratedReasonText(analysis.unratedReason) ?? analysis.state}
                   </p>
                 )}
               </button>

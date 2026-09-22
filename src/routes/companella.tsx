@@ -43,7 +43,9 @@ import type {
  */
 
 /** Rows still moving are re-read on one coalesced poll, paused when hidden. */
-const ACTIVE_STATES = new Set(["awaiting_assets", "queued", "validating", "analyzing", "deferred"]);
+const ACTIVE_STATES = new Set(["awaiting_assets", "queued", "validating", "analyzing"]);
+/** A deferred row waits minutes for its next retry, so it is re-read at the slow pace. */
+const RETRYING_STATES = new Set(["deferred"]);
 const POLL_MIN_MS = 4_000;
 const POLL_MAX_MS = 30_000;
 
@@ -105,7 +107,8 @@ function CompanellaPage() {
       .then(async (result) => {
         if (cancelled) return;
         setAccess(result);
-        if (result.allowed) await loadAll();
+        // A former member keeps a view of what they have, to revoke or delete it.
+        if (result.allowed || result.hasData) await loadAll();
       })
       .catch(() => {
         if (!cancelled) setAccess(null);
@@ -121,15 +124,19 @@ function CompanellaPage() {
   // One poll for the whole visible page, backing off while nothing moves and
   // stopping entirely in a hidden tab.
   useEffect(() => {
-    if (!access?.allowed) return;
+    if (!access?.allowed && !access?.hasData) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     const tick = async () => {
       if (stopped) return;
       if (document.visibilityState === "visible") {
         const active = submissions.some((row) => ACTIVE_STATES.has(row.state));
+        const retrying = submissions.some((row) => RETRYING_STATES.has(row.state));
         if (active) {
           pollDelay.current = POLL_MIN_MS;
+          await loadAll().catch(() => {});
+        } else if (retrying) {
+          pollDelay.current = POLL_MAX_MS;
           await loadAll().catch(() => {});
         } else {
           pollDelay.current = Math.min(pollDelay.current * 1.5, POLL_MAX_MS);
@@ -142,7 +149,7 @@ function CompanellaPage() {
       stopped = true;
       if (timer) clearTimeout(timer);
     };
-  }, [access?.allowed, loadAll, submissions]);
+  }, [access?.allowed, access?.hasData, loadAll, submissions]);
 
   const activeInstallations = installations.filter((installation) => installation.status === "active").length;
 
@@ -192,7 +199,7 @@ function CompanellaPage() {
     );
   }
 
-  if (!access.allowed) {
+  if (!access.allowed && !access.hasData) {
     return (
       <Shell>
         <Panel title={<Trans>Companella</Trans>}>
@@ -206,6 +213,9 @@ function CompanellaPage() {
     <Shell>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
         {notice && <p className="text-center text-xs text-osu-f1">{notice}</p>}
+        {!access.allowed && (
+          <p className="text-center text-xs text-osu-f1"><Trans>This account is not in the Companella beta.</Trans></p>
+        )}
 
         <Panel title={<Trans>Connection</Trans>}>
           {/* Being signed in to the site is not the same as having connected
@@ -284,7 +294,8 @@ function CompanellaPage() {
 
         <SecurityActivity events={events} />
 
-        {access.testClientEnabled && <TestClientPanel onSubmitted={() => void loadAll()} />}
+        {/* Creating a test installation starts a connection, which is for current members only. */}
+        {access.testClientEnabled && access.allowed && <TestClientPanel onSubmitted={() => void loadAll()} />}
       </motion.div>
     </Shell>
   );

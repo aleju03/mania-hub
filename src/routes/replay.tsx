@@ -163,6 +163,7 @@ import {
   type RecentReplayEntry,
 } from "../lib/replay-recent";
 import { deleteUploadedReplay, fetchUploadedReplayPermissions } from "../lib/uploaded-replays";
+import { fetchRestrictedPpReplay, pickRestrictedPpReplayChart } from "../lib/restricted-pp-replay";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
@@ -177,6 +178,8 @@ interface ReplaySearch {
   scoreId?: number;
   beatmapsetId?: number;
   uploadId?: string;
+  /** A Companella import that counts toward simulated pp (restricted-pp.ts); its replay is public. */
+  importId?: string;
   t?: number; // timestamp in seconds to seek to on load
   tab?: ReplayBrowseTab;
   player?: string; // selected player username (for URL state)
@@ -447,12 +450,14 @@ export const Route = createFileRoute("/replay")({
     }
   },
   head: ({ match, loaderData }) => {
-    const { scoreId, beatmapsetId, uploadId, player } = match.search;
+    const { scoreId, beatmapsetId, uploadId, importId, player } = match.search;
     const hasSharedScore = typeof scoreId === "number";
     const hasSharedUpload = typeof uploadId === "string" && uploadId.length > 0;
     const playerName = typeof player === "string" ? player.trim() : "";
+    // An import link keeps the landing title and card, just unindexed.
     const isReplayLanding = !hasSharedScore
       && !hasSharedUpload
+      && !importId
       && typeof beatmapsetId !== "number"
       && !playerName
       && !match.search.tab
@@ -474,6 +479,7 @@ export const Route = createFileRoute("/replay")({
         scoreId,
         beatmapsetId,
         uploadId,
+        importId,
         player: playerName || undefined,
       }),
       origin: match.context.origin,
@@ -498,16 +504,20 @@ export const Route = createFileRoute("/replay")({
     const compareA = Number(s.compareA) || (legacyCompareId ? scoreId : undefined);
     const compareB = Number(s.compareB) || legacyCompareId;
     const comparing = Boolean(compareA && compareB);
-    return {
+    const search: ReplaySearch = {
       scoreId: comparing ? undefined : scoreId,
       beatmapsetId: Number(s.beatmapsetId) || undefined,
       uploadId: typeof s.uploadId === "string" && UPLOADED_REPLAY_ID_PATTERN.test(s.uploadId) ? s.uploadId : undefined,
+      importId: typeof s.importId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(s.importId) ? s.importId : undefined,
       t: Number(s.t) || undefined,
       tab: isReplayBrowseTab(s.tab) ? s.tab : undefined,
       player: (s.player as string) || undefined,
       compareA: comparing ? compareA : undefined,
       compareB: comparing ? compareB : undefined,
     };
+    // A score, an upload or a comparison in the same link wins over an import.
+    if (scoreId || search.uploadId || comparing) search.importId = undefined;
+    return search;
   },
 });
 
@@ -572,7 +582,7 @@ function ReplayPage() {
   const { t, i18n } = useLingui();
   // The search param `t` (start timestamp) is renamed on the way in so it
   // doesn't shadow the translation macro above.
-  const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam, compareA, compareB } = Route.useSearch();
+  const { scoreId, beatmapsetId, uploadId, importId, t: initialTime, tab, player: playerParam, compareA, compareB } = Route.useSearch();
   const sideBySide = compareA != null && compareB != null ? { left: compareA, right: compareB } : null;
   const loaderData = Route.useLoaderData();
   const navigate = useNavigate();
@@ -881,7 +891,7 @@ function ReplayPage() {
       void loadReplay(scoreId, loaderData.score, controller.signal);
       return () => controller.abort();
     }
-    if (uploadId) return;
+    if (uploadId || importId) return;
 
     setLoading(false);
     setReplay(null);
@@ -898,7 +908,7 @@ function ReplayPage() {
     setScorePreviewLoading(false);
     setScorePreviewError(null);
     setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
-  }, [scoreId, uploadId, loadReplay, loaderData.score]);
+  }, [scoreId, uploadId, importId, loadReplay, loaderData.score]);
 
   useEffect(() => {
     if (scoreId) return;
@@ -1464,6 +1474,65 @@ function ReplayPage() {
     void loadSharedUploadedReplay(uploadId);
   }, [loadedUploadId, loadSharedUploadedReplay, pendingBeatmapUpload, replay, scoreId, uploadId]);
 
+  // A Companella import that counts toward simulated pp opens like a local
+  // .osr: parsed in the browser and charted by its checksum, never through
+  // the upload store. Its link is its own ?importId= URL.
+  const loadImportedReplay = useCallback(async (id: string, signal: AbortSignal) => {
+    preloadReplayRenderer();
+    setError(null);
+    setReplayLoadingStep("shared-upload");
+    setReplayBeatmapFileStatus("unknown");
+    setReplayLoadingStartedAt(Date.now());
+    setReplayLoadingElapsedMs(0);
+    setLoading(true);
+    setReplay(null);
+    setBeatmap(null);
+    setBeatmapFileContent(null);
+    setScoreInfo(null);
+    setUploadedReplayMods([]);
+    setUploadedBeatmapsetId(undefined);
+    setUploadedReplayShareUrl(null);
+    setLoadedUploadId(null);
+    setPendingBeatmapUpload(null);
+    setLocalBeatmapError(null);
+    applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
+
+    try {
+      const uploaded = await fetchRestrictedPpReplay(id, signal);
+      if (signal.aborted) return;
+      if (!uploaded) throw new Error(t`Replay not found`);
+      const checksum = uploaded.replay.header.beatmapHash;
+      if (!checksum) throw new Error(t`This replay does not include a beatmap checksum.`);
+      const resolved = await getUploadedReplayBeatmapResolution({ data: { checksum } });
+      if (signal.aborted) return;
+      const content = pickRestrictedPpReplayChart(resolved);
+      if (!content) throw new Error(t`Failed to load replay`);
+      // No osu! score stands behind an import, so the viewer reads the play
+      // from the replay's own header.
+      await finishBeatmapLoad({ content, beatmapMeta: resolved.meta, uploaded, scorePromise: Promise.resolve(null) });
+      setUploadedReplayShareUrl(new URL(`/replay?importId=${encodeURIComponent(id)}`, window.location.origin).toString());
+    } catch (e) {
+      if (signal.aborted) return;
+      setReplay(null);
+      setBeatmap(null);
+      setBeatmapFileContent(null);
+      setScoreInfo(null);
+      setUploadedReplayMods([]);
+      setUploadedBeatmapsetId(undefined);
+      setUploadedReplayShareUrl(null);
+      setError(e instanceof Error ? e.message : t`Failed to load replay`);
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, [applyLocalBeatmapAssets, finishBeatmapLoad]);
+
+  useEffect(() => {
+    if (!importId) return;
+    const controller = new AbortController();
+    void loadImportedReplay(importId, controller.signal);
+    return () => controller.abort();
+  }, [importId, loadImportedReplay]);
+
   // Start this from the URL while the replay bytes and beatmap are still
   // loading. Uploader attribution is public on upload cards, and resolving it
   // early usually lets ReplayViewer hold its first paint for the uploader's
@@ -1818,18 +1887,18 @@ function ReplayPage() {
     navigate({ to: "/replay", search: backNavigation.search });
   };
 
-  // The link the Share controls hand out: an uploaded replay's own shared URL,
-  // or a clean ?scoreId= link for a score (the address bar usually still holds
-  // the browse tab and player the viewer was opened from).
+  // The link the Share controls hand out: an uploaded or imported replay's own
+  // URL, or a clean ?scoreId= link for a score (the address bar usually still
+  // holds the browse tab and player the viewer was opened from).
   const replayShareUrl = useMemo(() => {
     if (typeof window === "undefined" || !replay) return null;
-    const uploaded = loadedUploadId != null || uploadId != null;
+    const uploaded = loadedUploadId != null || uploadId != null || importId != null;
     return buildReplayShareUrl({
       origin: window.location.origin,
       scoreId: uploaded ? undefined : scoreId,
       uploadShareUrl: uploaded ? uploadedReplayShareUrl : null,
     });
-  }, [replay, loadedUploadId, uploadId, uploadedReplayShareUrl, scoreId]);
+  }, [replay, loadedUploadId, uploadId, importId, uploadedReplayShareUrl, scoreId]);
 
   // For uploaded files, uploader identity wins even when the embedded score id
   // happens to resolve to a different osu! player. Ordinary score replays keep

@@ -14,9 +14,10 @@ import { Empty, Panel, Pill } from "./primitives";
 const EXCLUSION_TEXT: Record<string, string> = {
   analysis_pending: "Still being analyzed",
   analysis_failed: "The calculation could not run",
-  analysis_unsupported: "This mod or keymode is not rated",
+  analysis_unsupported: "This play has no rating (the play itself says why)",
+  vibro_excluded: "Vibro is not rated",
+  vibro_check_failed: "The vibro check could not read this chart",
   under_review: "Held for review",
-  identity_unresolved: "The name on the replay is not yours",
   completion_unconfirmed: "The play does not look completed",
   relationship_ambiguous: "The chart matches more than one known chart",
   chart_not_recognized: "The chart is not one the site knows",

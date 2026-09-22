@@ -152,6 +152,7 @@ const ADMIN_TOOLS = [
   { to: "/admin/og-preview", label: "OG preview", accent: "#fda4af", adminOnly: false },
   { to: "/admin/dynamic-renders", label: "Dynamic renders", accent: "#e879f9", adminOnly: true },
   { to: "/admin/banned-users", label: "Banned users", accent: "#fb7185", adminOnly: true },
+  { to: "/admin/companella-flags", label: "Companella flags", accent: "#fcd34d", adminOnly: true },
 ] as const;
 
 type AdminTool = (typeof ADMIN_TOOLS)[number];

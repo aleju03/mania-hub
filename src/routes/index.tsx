@@ -26,7 +26,8 @@ import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore,
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo } from "../lib/seo";
 import { getI18n } from "../lib/i18n";
-import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
+import { seedPlayerShellFromRankingEntry } from "../lib/player-shell-cache";
+import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { useWindowActive } from "../lib/window-activity";
@@ -381,6 +382,15 @@ function HomePage() {
   const rankings = (hydrated && (storeRankingsAreNewer || !loaderSnapshot?.rankings) ? storeRankings : null)
     ?? loaderSnapshot?.rankings
     ?? null;
+  // osu! leaves out accounts it turned away; their simulated standings go in
+  // by pp like any other row. Fetched after hydration, so the SSR paint is
+  // the osu! list.
+  const restrictedEntries = useRestrictedPpRankings(boardScope ? null : selectedCountry);
+  const restrictedUserIds = useMemo(() => new Set(restrictedEntries.map((entry) => entry.user.id)), [restrictedEntries]);
+  const ranking = useMemo(
+    () => (rankings ? mergeRestrictedPpRanking(rankings.ranking, restrictedEntries, 50) : null),
+    [rankings, restrictedEntries],
+  );
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
   const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAtByCountry[selectedCountry]) ?? null;
   const trackerFeedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_TRACKER_SCORES;
@@ -459,9 +469,13 @@ function HomePage() {
   ]);
 
   useEffect(() => {
-    if (!rankings) return;
-    seedPlayerShellsFromRankingEntries(rankings.ranking, 1);
-  }, [rankings]);
+    if (!ranking) return;
+    // A shell cannot carry the account status a simulated player's profile
+    // needs, so those rows seed none.
+    ranking.forEach((entry, i) => {
+      if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, i + 1);
+    });
+  }, [ranking, restrictedUserIds]);
 
   // Global's left panel shows the combined top players (the same board as the
   // Rankings page), instead of a single country's leaderboard. A region shows
@@ -647,8 +661,8 @@ function HomePage() {
   ]);
 
   const visibleRanking = useMemo(
-    () => (rankings?.ranking ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
-    [rankings, hiddenUserIds],
+    () => (ranking ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
+    [ranking, hiddenUserIds],
   );
   const effectiveGlobalTopPlayers = globalTopPlayers ?? loaderSnapshot?.globalRanking ?? null;
   const visibleGlobalTopPlayers = useMemo(
@@ -745,7 +759,7 @@ function HomePage() {
                     <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
                       onClick={() => {
-                        seedPlayerShellFromRankingEntry(entry, i + 1);
+                        if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, i + 1);
                         navigate({ to: "/player/$username", params: { username: entry.user.username } });
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
@@ -764,7 +778,7 @@ function HomePage() {
                     <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.035 }}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
                       onClick={() => {
-                        seedPlayerShellFromRankingEntry(entry, i + 1);
+                        if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, i + 1);
                         navigate({ to: "/player/$username", params: { username: entry.user.username } });
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
