@@ -54,8 +54,11 @@ export function SettingsDrawer({ open, onClose, onBackdropClose }: SettingsDrawe
         className={`fixed top-[60px] right-0 bottom-0 z-[60] w-[min(420px,90vw)] border-l border-osu-b3/30 bg-osu-b5 transform-gpu will-change-transform transition-transform duration-250 ease-out ${
           open ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
-        role="dialog"
-        aria-modal="true"
+        // Only the open drawer claims the modal role: it stays mounted off
+        // screen, and anything that asks the page whether a dialog is open
+        // (the replay overlay editor's arrow keys) would read a closed one.
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? "true" : undefined}
         aria-label={t`Settings`}
         aria-hidden={!open}
       >

@@ -66,6 +66,18 @@ const OVERLAY_NUDGE_KEYS: Record<string, { x: number; y: number }> = {
   ArrowUp: { x: 0, y: -1 },
   ArrowDown: { x: 0, y: 1 },
 };
+// The nav keeps its settings drawer mounted and off-screen, so an
+// aria-modal node in the DOM is not proof a dialog is open; only one that is
+// not aria-hidden owns the keyboard.
+function isModalOpen(): boolean {
+  if (typeof document === "undefined") return false;
+  const modals = document.querySelectorAll('[aria-modal="true"], dialog[open]');
+  for (const modal of modals) {
+    if (modal.getAttribute("aria-hidden") !== "true") return true;
+  }
+  return false;
+}
+
 const LEADERBOARD_EXPLOSION_DURATION_MS = 700;
 const LEADERBOARD_STREAK_EXPAND_MS = 200;
 const LEADERBOARD_STREAK_FADE_MS = 400;
@@ -832,6 +844,7 @@ export class ManiaReplayRenderer {
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
   private previousCanvasTouchAction = "";
   private previousCanvasTabIndex: string | null = null;
+  private previousCanvasOutline = "";
   private draggingOverlay: {
     id: ReplayOverlayId;
     pointerId: number;
@@ -2840,6 +2853,11 @@ export class ManiaReplayRenderer {
     this.canvas.style.touchAction = "none";
     this.previousCanvasTabIndex = this.canvas.getAttribute("tabindex");
     if (this.previousCanvasTabIndex == null) this.canvas.tabIndex = -1;
+    // The canvas only takes focus so it can receive overlay keys; the first
+    // key press would otherwise draw the browser's focus ring around the
+    // whole stage.
+    this.previousCanvasOutline = this.canvas.style.outline;
+    this.canvas.style.outline = "none";
     this.canvas.addEventListener("pointerdown", this.handleOverlayPointerDown);
     this.canvas.addEventListener("pointermove", this.handleOverlayPointerMove);
     this.canvas.addEventListener("pointerup", this.handleOverlayPointerEnd);
@@ -2856,6 +2874,7 @@ export class ManiaReplayRenderer {
 
   private removeOverlayPointerHandlers() {
     this.canvas.style.touchAction = this.previousCanvasTouchAction;
+    this.canvas.style.outline = this.previousCanvasOutline;
     if (this.previousCanvasTabIndex == null) this.canvas.removeAttribute("tabindex");
     else this.canvas.setAttribute("tabindex", this.previousCanvasTabIndex);
     this.canvas.removeEventListener("pointerdown", this.handleOverlayPointerDown);
@@ -3375,7 +3394,7 @@ export class ManiaReplayRenderer {
     if (target?.isContentEditable || target?.closest?.(
       'input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="listbox"], [role="combobox"], [role="option"], [role="slider"], [role="menu"], [role="tablist"], [role="dialog"], dialog',
     )) return false;
-    if (typeof document !== "undefined" && document.querySelector('[aria-modal="true"], dialog[open]')) return false;
+    if (isModalOpen()) return false;
     if (!this.canEditOverlays()) return false;
     this.pruneSelectedOverlays();
     if (this.selectedOverlayIds.size === 0) return false;

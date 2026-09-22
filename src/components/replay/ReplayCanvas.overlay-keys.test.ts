@@ -134,6 +134,15 @@ describe("arrow keys nudge the selected overlays", () => {
     expect(placementOf(renderer, "judgements").y).toBeCloseTo(301);
   });
 
+  it("ignores the nav's closed settings drawer, which stays mounted", () => {
+    const renderer = keyboardRenderer([box("judgements", 400, 300)]);
+    renderer.selectedOverlayIds.add("judgements");
+    document.body.innerHTML = '<div role="dialog" aria-modal="true" aria-hidden="true"></div>';
+
+    expect(renderer.applyOverlayNudgeKey({ key: "ArrowDown", target: document.body })).toBe(true);
+    expect(placementOf(renderer, "judgements").y).toBeCloseTo(301);
+  });
+
   it("drops an overlay that was closed while selected", () => {
     const renderer = keyboardRenderer([box("judgements", 400, 300)]);
     renderer.selectedOverlayIds.add("judgements");
