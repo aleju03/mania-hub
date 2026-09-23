@@ -491,8 +491,8 @@ msgstr "{0} icon"
 
 #. placeholder {0}: mode.contributingLocalPlays
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "{0} imported plays counted"
-msgstr "{0} imported plays counted"
+#~ msgid "{0} imported plays counted"
+#~ msgstr "{0} imported plays counted"
 
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
@@ -6246,16 +6246,16 @@ msgstr "Exit fullscreen"
 #~ msgstr "Experimental"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Experimental local evidence"
-msgstr "Experimental local evidence"
+#~ msgid "Experimental local evidence"
+#~ msgstr "Experimental local evidence"
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 #~ msgstr "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Experimental rating preview"
-msgstr "Experimental rating preview"
+#~ msgid "Experimental rating preview"
+#~ msgstr "Experimental rating preview"
 
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
@@ -8333,8 +8333,8 @@ msgid "Left click for highest star rating first, right click for lowest first"
 msgstr "Left click for highest star rating first, right click for lowest first"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Left out"
-msgstr "Left out"
+#~ msgid "Left out"
+#~ msgstr "Left out"
 
 #: src/routes/replay.tsx
 msgid "Left thumb"
@@ -10018,8 +10018,8 @@ msgid "No key data"
 msgstr "No key data"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "No keymode has enough evidence yet."
-msgstr "No keymode has enough evidence yet."
+#~ msgid "No keymode has enough evidence yet."
+#~ msgstr "No keymode has enough evidence yet."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
@@ -10685,7 +10685,6 @@ msgstr "Nothing qualifies under this filter at the moment, but other reasons sti
 msgid "Nothing recorded yet."
 msgstr "Nothing recorded yet."
 
-#: src/components/companella/RatingPreviewPanel.tsx
 #: src/components/player/bbcode/BBCodePreview.tsx
 msgid "Nothing to preview yet."
 msgstr "Nothing to preview yet."
@@ -16745,8 +16744,8 @@ msgstr "This invite stopped working, so your server is hidden. Paste a new link 
 #~ msgstr "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted."
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
-msgstr "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
+#~ msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
+#~ msgstr "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it."
@@ -18626,8 +18625,8 @@ msgid "your marks"
 msgstr "your marks"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
-msgstr "Your official rating has not been computed yet, so the comparison below is incomplete."
+#~ msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
+#~ msgstr "Your official rating has not been computed yet, so the comparison below is incomplete."
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."

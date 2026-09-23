@@ -2,9 +2,8 @@
 
 The Companella score-import beta: a native osu! companion app sends completed
 osu!stable mania plays to Mania Tracker over an authenticated HTTPS API. The owner
-of the account sees them, and their effect on an experimental rating preview, on
-`/companella`; plays that pass every check also show on the tracker and on the
-player's profile Recent tab (see "Privacy").
+of the account sees them on `/companella`; plays that pass every check also
+show on the tracker and on the player's profile Recent tab (see "Privacy").
 
 **Status: off by default.** `COMPANELLA_MODE` is `disabled` unless a deployment
 sets it, and nothing in this integration affects snipes, packs, goals or any
@@ -470,6 +469,9 @@ baked rate is display and deduplication only; multiplying it into an
 already-retimed file would rate a chart nobody played.
 
 ## Analysis and the experimental preview
+
+The preview is computed and served (`GET .../manage/preview`) but no page shows
+it: `/companella` dropped the panel on 2026-09-23.
 
 `analysis.ts` drives the existing engines: `computeMsd` through `dan/msd.ts`
 (which keeps MinaCalc serialized against the job lanes),

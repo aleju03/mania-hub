@@ -491,8 +491,8 @@ msgstr "Ícono de {0}"
 
 #. placeholder {0}: mode.contributingLocalPlays
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "{0} imported plays counted"
-msgstr ""
+#~ msgid "{0} imported plays counted"
+#~ msgstr ""
 
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
@@ -6215,16 +6215,16 @@ msgstr "Salir de pantalla completa"
 #~ msgstr "Experimental"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Experimental local evidence"
-msgstr ""
+#~ msgid "Experimental local evidence"
+#~ msgstr ""
 
 #: src/components/player/SkillBreakdown.tsx
 #~ msgid "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
 #~ msgstr "Estimación LN experimental de Mania Hub: precisión al soltar, coordinación con dedos mantenidos y recuperación. Un modelo independiente junto a MinaCalc."
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Experimental rating preview"
-msgstr ""
+#~ msgid "Experimental rating preview"
+#~ msgstr ""
 
 #: src/routes/snipes.tsx
 msgid "Explore Global maps"
@@ -8298,8 +8298,8 @@ msgid "Left click for highest star rating first, right click for lowest first"
 msgstr "Clic izquierdo para la SR más alta primero, clic derecho para la más baja primero"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Left out"
-msgstr ""
+#~ msgid "Left out"
+#~ msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Left thumb"
@@ -9983,8 +9983,8 @@ msgid "No key data"
 msgstr "Sin datos de keymodes"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "No keymode has enough evidence yet."
-msgstr ""
+#~ msgid "No keymode has enough evidence yet."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
@@ -10650,7 +10650,6 @@ msgstr "Nada cumple este filtro por ahora, pero otras razones todavía tienen ma
 msgid "Nothing recorded yet."
 msgstr ""
 
-#: src/components/companella/RatingPreviewPanel.tsx
 #: src/components/player/bbcode/BBCodePreview.tsx
 msgid "Nothing to preview yet."
 msgstr "Aún no hay nada que previsualizar."
@@ -16702,8 +16701,8 @@ msgstr "Esta invitación dejó de funcionar, así que tu servidor está oculto. 
 #~ msgstr ""
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
-msgstr ""
+#~ msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
+#~ msgstr ""
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it."
@@ -18583,8 +18582,8 @@ msgid "your marks"
 msgstr "tus marcas"
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
-msgstr ""
+#~ msgid "Your official rating has not been computed yet, so the comparison below is incomplete."
+#~ msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Your only copy. It leaves your collection when they accept."

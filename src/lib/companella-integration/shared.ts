@@ -158,24 +158,6 @@ export interface CompanellaSubmissionRow {
   play: LeanTrackerScore | null;
 }
 
-export interface CompanellaPreviewMode {
-  keyCount: number;
-  official: Record<string, number>;
-  preview: Record<string, number>;
-  contributingLocalPlays: number;
-}
-
-export interface CompanellaPreview {
-  policy: string;
-  version: number;
-  baselineVersion: number | null;
-  baselineComplete: boolean;
-  modes: CompanellaPreviewMode[];
-  excluded: Array<{ localScoreId: string; reason: string; detail?: string }>;
-  contributing: Array<{ localScoreId: string; keyCount: number; rate: number; overall: number; familyIdentity: string }>;
-  computedAt: string;
-}
-
 export interface CompanellaSecurityEvent {
   id: number;
   kind: string;

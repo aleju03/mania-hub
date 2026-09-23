@@ -10,7 +10,6 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
 import { InstallationList } from "../components/companella/InstallationList";
-import { RatingPreviewPanel } from "../components/companella/RatingPreviewPanel";
 import { SecurityActivity } from "../components/companella/SecurityActivity";
 import { SubmissionDetail } from "../components/companella/SubmissionDetail";
 import { SubmissionList } from "../components/companella/SubmissionList";
@@ -22,7 +21,6 @@ import {
   clearRevokedCompanellaInstallations,
   fetchCompanellaAccess,
   fetchCompanellaInstallations,
-  fetchCompanellaPreview,
   fetchCompanellaSecurityEvents,
   fetchCompanellaSubmissions,
   renameCompanellaInstallation,
@@ -32,7 +30,6 @@ import {
 import type {
   CompanellaAccess,
   CompanellaInstallation,
-  CompanellaPreview,
   CompanellaSecurityEvent,
   CompanellaSubmissionRow,
 } from "../lib/companella-integration/shared";
@@ -86,7 +83,6 @@ function CompanellaPage() {
   // The cursor each visited page was read with; the last one is the page shown.
   const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
   const [pageLoading, setPageLoading] = useState(false);
-  const [preview, setPreview] = useState<CompanellaPreview | null>(null);
   const [events, setEvents] = useState<CompanellaSecurityEvent[]>([]);
   const [selected, setSelected] = useState<CompanellaSubmissionRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,16 +92,14 @@ function CompanellaPage() {
 
   const pageCursor = pageCursors[pageCursors.length - 1] ?? null;
   const loadAll = useCallback(async () => {
-    const [installationsResult, submissionsResult, previewResult, eventsResult] = await Promise.all([
+    const [installationsResult, submissionsResult, eventsResult] = await Promise.all([
       fetchCompanellaInstallations().catch(() => ({ installations: [] })),
       fetchCompanellaSubmissions({ data: { limit: PAGE_SIZE, cursor: pageCursor } }).catch(() => ({ submissions: [], next_cursor: null })),
-      fetchCompanellaPreview({ data: {} }).catch(() => ({ preview: null })),
       fetchCompanellaSecurityEvents().catch(() => ({ events: [] })),
     ]);
     setInstallations(installationsResult.installations);
     setSubmissions(submissionsResult.submissions);
     setNextCursor(submissionsResult.next_cursor);
-    setPreview(previewResult.preview);
     setEvents(eventsResult.events);
   }, [pageCursor]);
 
@@ -330,8 +324,6 @@ function CompanellaPage() {
             />
           )}
         </AnimatePresence>
-
-        <RatingPreviewPanel preview={preview} />
 
         <SecurityActivity events={events} />
 

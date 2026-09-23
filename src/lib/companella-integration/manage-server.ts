@@ -18,7 +18,6 @@ import type {
   CompanellaChartMatch,
   CompanellaAnalysis,
   CompanellaInstallation,
-  CompanellaPreview,
   CompanellaScore,
   CompanellaScoreTiming,
   CompanellaSecurityEvent,
@@ -271,17 +270,6 @@ export const deleteCompanellaScore = createServerFn({ method: "POST" })
     return readJson(await callManage(`scores/${encodeURIComponent(data.scoreId)}/delete`, {
       actor, method: "POST",
     }), { ok: false });
-  });
-
-export const fetchCompanellaPreview = createServerFn({ method: "GET" })
-  .validator((data: { refresh?: boolean } | undefined) => ({ refresh: data?.refresh === true }))
-  .handler(async ({ data }): Promise<{ preview: CompanellaPreview | null }> => {
-    await noStore();
-    const actor = await readActor();
-    if (!actor) return { preview: null };
-    return readJson(await callManage("preview", {
-      actor, search: data.refresh ? { refresh: "1" } : {},
-    }), { preview: null });
   });
 
 export const fetchCompanellaSecurityEvents = createServerFn({ method: "GET" })
