@@ -561,10 +561,14 @@ negative id derived from the import id and a `companella: { importId, replay }`
 mark. It uses the official beatmap and set when the import's chart is the exact
 official file (the priced beatmap id, else the same md5 match
 `resolveExactBeatmap` makes), and otherwise a beatmap built from
-`companella_local_charts` with id 0 and no link. Its art is the covers of the
-set the file names in its own `BeatmapSetID` (osu!'s asset URLs, set still
-unlinked); with none, the profile shows the blurred generic header art, its
-hue and framing picked per chart. The player comes from `users`,
+`companella_local_charts` with id 0 and no link. Its stars and BPM are the
+file's own, measured when the chart is stored (nomod star rating and main
+BPM, so a 1.2x rate edit reads at 1.2x; charts stored earlier are filled by
+the maintenance sweep). Its art is the covers of the official set the chart
+matcher tied it to (a rate edit or other copy), else of the set the file
+names in its own `BeatmapSetID` (osu!'s asset URLs either way, set still
+unlinked); with neither, the profile shows the blurred generic header art,
+its hue and framing picked per chart. The player comes from `users`,
 else the installation's latest username; never the replay's player name. The
 time is the play time clamped to the receipt time. The pp is the play's own
 `companella_local_score_pp` value at the current pp version, shown for every
