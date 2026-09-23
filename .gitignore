@@ -51,3 +51,6 @@ scripts/ln-axis/labels-draft.json
 
 # development replay uploads (prod uses R2)
 data/replay-uploads/
+
+# Companella reference client profiles (hold a private key)
+/.companella-profiles/

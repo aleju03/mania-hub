@@ -103,8 +103,9 @@ npm run companella:test-client -- disconnect --profile windows-test
 ```
 
 Approve `windows-test` and `linux-test` as two profiles to exercise dual boot.
-Profiles live in the gitignored `local-notes/companella-test-client/`; the key
-file there is test tooling, not production-grade storage.
+Profiles live in the gitignored `.companella-profiles/` of the directory it
+runs from (`COMPANELLA_PROFILE_DIR` moves them); the key file there is test
+tooling, not production-grade storage.
 
 ## Rollout
 

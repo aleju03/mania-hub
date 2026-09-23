@@ -1,37 +1,29 @@
 #!/usr/bin/env node
-/*
- * A reference client for the Companella integration.
- *
- * It exercises the PUBLIC HTTP contract and nothing else: no backend imports,
- * no bridge token, no database access, no privileged bypass. If this can
- * connect and submit a play, so can a native client written from the guide in
- * docs/companella-client-guide.md.
- *
- * It is test tooling, not a model of production key storage. The signing key
- * is a plain file under a gitignored directory; a real client owns that part
- * (see the guide's note on native key protection).
- *
- * Usage:
- *   npm run companella:test-client -- connect --origin http://localhost:3000 --profile windows-test
- *   npm run companella:test-client -- me --profile windows-test
- *   npm run companella:test-client -- submit --profile windows-test --replay play.osr --beatmap chart.osu
- *   npm run companella:test-client -- status --profile windows-test --submission <id>
- *   npm run companella:test-client -- disconnect --profile windows-test
- */
+// Companella API reference client. Node 18+, no dependencies.
+//
+// Talks to the public API only, so it doubles as a working example of the
+// whole flow: connect, sign requests, send a play, check on it. The signing
+// key sits in a plain JSON file, which is fine for testing and not what a real
+// app should do.
+//
+//   node companella-reference-client.mjs connect --origin https://mania-tracker.com --profile test
+//   node companella-reference-client.mjs me --profile test
+//   node companella-reference-client.mjs submit --profile test --replay play.osr --beatmap chart.osu
+//   node companella-reference-client.mjs status --profile test --submission <id>
+//   node companella-reference-client.mjs disconnect --profile test
+//
+// Profiles go in ./.companella-profiles, or COMPANELLA_PROFILE_DIR.
 
 import { createHash, createSign, generateKeyPairSync, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-// Gitignored, and per-profile so two "installations" can coexist on one
-// machine the way a dual boot would.
-const PROFILE_ROOT = resolve(HERE, "..", "local-notes", "companella-test-client");
+// One file per profile, so two connections can live on one machine.
+const PROFILE_ROOT = resolve(process.env.COMPANELLA_PROFILE_DIR || ".companella-profiles");
 const API_PREFIX = "/api/integrations/companella/v1";
-const CLIENT_ID = process.env.COMPANELLA_TEST_CLIENT_ID || "companella-test";
+const CLIENT_ID = process.env.COMPANELLA_CLIENT_ID || "companella";
 const CALLBACK_PATH = "/companella/callback";
 
 function parseArgs(argv) {
@@ -70,7 +62,7 @@ async function readProfile(profile) {
 
 async function writeProfile(profile, data) {
   await mkdir(PROFILE_ROOT, { recursive: true });
-  // 0600 where the platform honours it. This is a key file, even a test one.
+  // It holds a private key, so owner-only where the OS supports that.
   await writeFile(profilePath(profile), JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 
@@ -138,8 +130,8 @@ async function call(state, path, init = {}) {
   let response = await send(state.nonce);
   const challenge = response.headers.get("dpop-nonce");
   if (challenge) state.nonce = challenge;
-  // Resources challenge with a 401; the token and revocation endpoints answer
-  // a 400 whose error is use_dpop_nonce (RFC 9449 §8). Either way, once.
+  // API routes ask for a nonce with a 401, the token and revoke routes with a
+  // 400 use_dpop_nonce (RFC 9449 section 8). Retry once with it.
   if (challenge && (response.status === 401 || (response.status === 400 && await asksForNonce(response)))) {
     response = await send(challenge);
   }
@@ -156,7 +148,7 @@ function openBrowser(url) {
   try {
     spawn(command, [url], { detached: true, stdio: "ignore" }).unref();
   } catch {
-    // Opening is a convenience; the URL is printed either way.
+    // The URL is printed too, in case no browser opens.
   }
 }
 
@@ -228,6 +220,7 @@ async function connect(options) {
   authorizeUrl.searchParams.set("code_challenge_method", "S256");
   authorizeUrl.searchParams.set("scope", "companella:scores:submit companella:submissions:read companella:charts:upload companella:installation:read");
   authorizeUrl.searchParams.set("dpop_jkt", key.thumbprint);
+  authorizeUrl.searchParams.set("app_name", "Reference client");
 
   console.log(`Open this to approve:\n  ${authorizeUrl}`);
   openBrowser(authorizeUrl.toString());
@@ -274,7 +267,7 @@ async function loadState(profile) {
     stored,
     profile,
   };
-  // Refresh a little early rather than discovering expiry mid-upload.
+  // Refresh a bit early so the token can't expire mid-upload.
   if (Date.now() > stored.accessExpiresAt - 30_000) await refresh(state);
   return state;
 }
@@ -295,8 +288,7 @@ async function refresh(state) {
   state.accessToken = payload.access_token;
   state.stored.accessToken = payload.access_token;
   state.stored.accessExpiresAt = Date.now() + (payload.expires_in ?? 300) * 1000;
-  // The refresh credential is sender-constrained and not rotated, so the
-  // stored one stays valid; re-saving keeps the access token fresh on disk.
+  // The refresh token doesn't rotate, so only the new access token needs saving.
   await writeProfile(state.profile, state.stored);
 }
 
@@ -321,9 +313,8 @@ async function submit(options) {
   const replay = await readFile(resolve(options.replay));
   const chart = await readFile(resolve(options.beatmap));
 
-  // The queue entry is written BEFORE the first request and is bound to the
-  // account and origin that authorized it. A later connect under a different
-  // account must never retarget it.
+  // Save the play before the first request, tied to the account and site that
+  // approved it, so a retry after a crash can't send it somewhere else.
   const idempotencyKey = options.key ?? `cli-${randomUUID()}`;
   state.stored.queue = [
     ...(state.stored.queue ?? []).filter((item) => item.idempotencyKey !== idempotencyKey),

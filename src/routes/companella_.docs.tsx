@@ -86,7 +86,7 @@ function CompanellaDocsPage() {
             </div>
           </header>
 
-          <Section title="The short version">
+          <Section title="Overview">
             <ol className="mt-3 divide-y divide-osu-b3/30 rounded-xl border border-osu-b3/30 bg-osu-b4/40 px-4">
               <Step n={1} title="Connect" call="POST /oauth/token">
                 The player signs in with osu! in the browser and approves Companella. You get an access token and a
@@ -226,11 +226,16 @@ Content-Type: application/json
                 stays valid for a few minutes, so parallel uploads can share one. The token and revoke endpoints ask for
                 a nonce with a 400 and <Code>use_dpop_nonce</Code>. Everything else asks with a 401.
               </li>
-              <li>The <Code>jwk</Code> in the header is the public key only, without the <Code>d</Code> field.</li>
+              <li>
+                The <Code>jwk</Code> in the header is your public key only. Leave out the private part (the{" "}
+                <Code>d</Code> field).
+              </li>
             </ul>
             <Note>
-              The ES256 signature must be the raw 64-byte <Code>r || s</Code> value. Many crypto libraries output DER by
-              default, which the server rejects. If every request returns 401, check this first.
+              The signature has to be exactly 64 bytes long. Some crypto libraries give a longer format (called DER,
+              around 70 bytes) by default, and the server refuses it. If every request comes back 401, check this
+              first. In .NET, sign with BouncyCastle's <Code>ECDsaSigner</Code> rather than <Code>ECDsa</Code>: under
+              Wine, which is how Linux players run osu!, <Code>ECDsa</Code> can't sign with this kind of key at all.
             </Note>
           </Section>
 
