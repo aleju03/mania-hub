@@ -97,6 +97,8 @@ export interface OsuUser {
   display_name?: string;
   /* When that player may rename again; absent once they can. */
   display_name_next_change_at?: string;
+  /* The player's profiles on private servers, in the backend's server order. */
+  server_links?: Array<{ server: string; url: string }>;
 }
 
 export interface OsuCovers {

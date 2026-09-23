@@ -24,10 +24,16 @@
 //   - A profile that was not read, failed to read, or was read too long ago
 //     proves nothing. Its images stay `unknown` rather than `unused`, so no
 //     gap in the evidence can present a live image as safe to delete.
+//
+// osu! profiles are not the only pages, either: a restricted player can save an
+// About page on this site (own-about-admin.ts), and one it embeds is in use
+// whatever osu! says. Those are read from the backend on every audit, and when
+// they cannot be read nothing is `unused`.
 
 import { osuFetch } from "./api";
 import { scanR2AdminPrefixWithMetadata, deleteR2AdminObject } from "./r2-cache";
 import { getPublicBucketBaseUrl } from "./public-image-store";
+import { readSavedAboutPages } from "./own-about-admin";
 import type { OsuUser } from "./types";
 
 const BBCODE_PREFIX = "bbcode/";
@@ -243,7 +249,9 @@ export function clearBbcodeProfileReads(): void {
   profileReads.clear();
 }
 
-function buildAudit(listing: Listing): BbcodeImageAudit {
+type SavedPages = Array<{ userId: number; raw: string }> | null;
+
+function buildAudit(listing: Listing, savedPages: SavedPages): BbcodeImageAudit {
   const now = Date.now();
   if (!listing.configured) {
     return {
@@ -263,7 +271,7 @@ function buildAudit(listing: Listing): BbcodeImageAudit {
   // "Unused" is a claim about every profile that could be embedding a shared
   // file, so it takes a current read of all of them - not just this file's own
   // uploader, and not a read from an hour ago.
-  const fullyCovered = uploaderIds.every((id) => isCurrent(profileReads.get(id), now));
+  const fullyCovered = savedPages !== null && uploaderIds.every((id) => isCurrent(profileReads.get(id), now));
   const usedCounts = new Map<number, number>();
 
   const objects: BbcodeImageRow[] = listing.staged.map((row) => {
@@ -271,6 +279,9 @@ function buildAudit(listing: Listing): BbcodeImageAudit {
       const read = profileReads.get(id);
       return isCurrent(read, now) && profileEmbeds(read.raw, row.fileName);
     });
+    for (const page of savedPages ?? []) {
+      if (!usedBy.includes(page.userId) && profileEmbeds(page.raw, row.fileName)) usedBy.push(page.userId);
+    }
     for (const id of usedBy) usedCounts.set(id, (usedCounts.get(id) ?? 0) + 1);
 
     // An upload whose metadata names nobody has no profile that could vouch for
@@ -337,7 +348,8 @@ function buildAudit(listing: Listing): BbcodeImageAudit {
 export async function auditBbcodeImages(
   options: { fresh?: boolean } = {},
 ): Promise<BbcodeImageAudit> {
-  return buildAudit(await listBbcodeObjects(options.fresh === true));
+  const [listing, savedPages] = await Promise.all([listBbcodeObjects(options.fresh === true), readSavedAboutPages()]);
+  return buildAudit(listing, savedPages);
 }
 
 /**
@@ -357,7 +369,7 @@ export async function checkBbcodeUploaderProfile(userId: number): Promise<Bbcode
   }
 
   profileReads.set(userId, await fetchProfileSource(userId));
-  return buildAudit(listing);
+  return buildAudit(listing, await readSavedAboutPages());
 }
 
 export interface BbcodeImageDeleteResult {
@@ -381,7 +393,8 @@ export async function deleteUnusedBbcodeImages(keys: string[]): Promise<BbcodeIm
   const result: BbcodeImageDeleteResult = { deleted: [], refused: [], freedBytes: 0 };
   if (wanted.length === 0) return result;
 
-  const audit = buildAudit(await listBbcodeObjects(true));
+  const [listing, savedPages] = await Promise.all([listBbcodeObjects(true), readSavedAboutPages()]);
+  const audit = buildAudit(listing, savedPages);
   const byKey = new Map(audit.objects.map((object) => [object.key, object]));
 
   for (const key of wanted) {

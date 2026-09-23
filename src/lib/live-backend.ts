@@ -550,6 +550,8 @@ export interface LivePlayerAboutPayload {
   html: string | null;
   /** Raw BBCode source of the page; absent on payloads cached before it was added. */
   raw?: string | null;
+  /** A restricted player's own page, written here: no html, render `raw`. */
+  own?: boolean;
 }
 
 /** Pattern id -> 0..1 intensity. Ids come from the backend's dan estimator

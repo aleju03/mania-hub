@@ -54,6 +54,9 @@ import { useAuth } from "../../lib/auth-context";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
 import { DisplayNameButton, DisplayNameForm, pendingRenameDate } from "../../components/player/DisplayNameEditor";
+import { ServerLinkPill, ServerLinksButton } from "../../components/player/ServerLinks";
+import { BBCodePreview } from "../../components/player/bbcode/BBCodePreview";
+import { setMyOwnAbout } from "../../lib/own-profile";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
@@ -128,6 +131,8 @@ const playerSnapshotRequestCache = new Map<string, Promise<PlayerSnapshotData | 
 interface PlayerAboutData {
   html: string | null;
   raw: string | null;
+  /** A restricted player's own page, written here: render `raw`. */
+  own?: boolean;
 }
 const playerAboutDataCache = new Map<number, { data: PlayerAboutData; expiresAt: number }>();
 const playerAboutRequestCache = new Map<string, Promise<PlayerAboutData>>();
@@ -408,6 +413,7 @@ function slimLoaderUser(user: OsuUser): OsuUser {
     ...(user.account_status ? { account_status: user.account_status } : {}),
     ...(user.display_name ? { display_name: user.display_name } : {}),
     ...(user.display_name_next_change_at ? { display_name_next_change_at: user.display_name_next_change_at } : {}),
+    ...(user.server_links?.length ? { server_links: user.server_links } : {}),
   };
 }
 
@@ -788,6 +794,7 @@ function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
     a.account_status === b.account_status &&
     a.display_name === b.display_name &&
     a.display_name_next_change_at === b.display_name_next_change_at &&
+    JSON.stringify(a.server_links ?? []) === JSON.stringify(b.server_links ?? []) &&
     a.statistics?.pp === b.statistics?.pp &&
     a.statistics?.play_count === b.statistics?.play_count &&
     a.statistics?.global_rank === b.statistics?.global_rank &&
@@ -995,6 +1002,7 @@ function loadPlayerAboutCached(userId: number, username: string): Promise<Player
     .then((section): PlayerAboutData => ({
       html: section?.payload.html ?? null,
       raw: section?.payload.raw ?? null,
+      own: section?.payload.own === true,
     }))
     .finally(() => {
       playerAboutRequestCache.delete(requestKey);
@@ -1158,6 +1166,7 @@ export function PlayerProfilePage({
   const [recent, setRecent] = useState<OsuScore[]>([]);
   const [aboutHtml, setAboutHtml] = useState<string | null>(null);
   const [aboutRaw, setAboutRaw] = useState<string | null>(null);
+  const [aboutOwn, setAboutOwn] = useState(false);
   const [aboutEditing, setAboutEditing] = useState(false);
   const [storedProfileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() => loaderProfileInsights);
   const [loadingUser, setLoadingUser] = useState(() => !loaderSnapshot?.user);
@@ -1491,6 +1500,7 @@ export function PlayerProfilePage({
     }
     setRecent([]);
     setAboutHtml(null);
+    setAboutOwn(false);
     setTab(normalizePlayerTab(initialTab));
     setKeyFilter("all");
     setBestModFilter({});
@@ -1761,7 +1771,7 @@ export function PlayerProfilePage({
   }, [recent.length, tab, user]);
 
   useEffect(() => {
-    if (!user || tab !== "about" || aboutHtml != null) return;
+    if (!user || tab !== "about" || aboutHtml != null || aboutOwn) return;
     if (user.page?.html) {
       setAboutHtml(user.page.html);
       setAboutRaw(user.page.raw ?? null);
@@ -1771,6 +1781,7 @@ export function PlayerProfilePage({
     if (cachedAbout !== undefined) {
       setAboutHtml(cachedAbout.html);
       setAboutRaw(cachedAbout.raw);
+      setAboutOwn(cachedAbout.own === true);
       return;
     }
 
@@ -1783,6 +1794,7 @@ export function PlayerProfilePage({
         if (cancelled) return;
         setAboutHtml(about.html);
         setAboutRaw(about.raw);
+        setAboutOwn(about.own === true);
       })
       .catch(() => {
         if (cancelled) return;
@@ -1796,7 +1808,7 @@ export function PlayerProfilePage({
     return () => {
       cancelled = true;
     };
-  }, [aboutHtml, tab, user]);
+  }, [aboutHtml, aboutOwn, tab, user]);
 
   useEffect(() => {
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
@@ -1948,6 +1960,7 @@ export function PlayerProfilePage({
   const cachedAboutFallback = user ? readCachedPlayerAbout(user.id) : undefined;
   const displayedAboutHtml = aboutHtml ?? cachedAboutFallback?.html;
   const displayedAboutRaw = aboutRaw ?? cachedAboutFallback?.raw ?? null;
+  const displayedAboutOwn = aboutOwn || (aboutHtml == null && cachedAboutFallback?.own === true);
   const profileStatsProjectedOnly = user ? hasProjectedOnlyProfileStats(user) : false;
 
   const cycleBestMod = useCallback((mod: string) => {
@@ -2140,10 +2153,46 @@ export function PlayerProfilePage({
   // osu! 404s a restricted or missing account, so its profile link would too.
   // A frozen account's owner can name their profile (DisplayNameEditor).
   const canRename = !!user.account_status && auth.viewer?.id === user.id;
+  // Any player can link their private server profiles (ServerLinks).
+  const canLinkServers = auth.viewer?.id === user.id;
+  const serverLinkMeta: ReactNode[] = [
+    ...(user.server_links ?? []).map((link) => <ServerLinkPill key={`server-${link.server}`} link={link} />),
+    ...(canLinkServers ? [
+      <ServerLinksButton
+        key="server-links"
+        links={user.server_links ?? []}
+        onSaved={(links) => {
+          playerSnapshotDataCache.clear();
+          userDataCache.clear();
+          setUser((current) => {
+            if (!current) return current;
+            const { server_links: _previous, ...rest } = current;
+            return links.length ? { ...rest, server_links: links } : rest;
+          });
+        }}
+      />,
+    ] : []),
+  ];
+  // The same owner can replace their frozen About page (own-about.ts).
+  const saveOwnAbout = async (raw: string): Promise<string | null> => {
+    const result = await setMyOwnAbout({ data: { raw } }).catch(() => null);
+    if (!result?.ok) {
+      return result?.error === "too_long"
+        ? t`The page is over osu!'s 60,000 character limit.`
+        : t`Couldn't save your page right now.`;
+    }
+    playerAboutDataCache.delete(user.id);
+    setAboutHtml(null);
+    setAboutRaw(result.raw);
+    setAboutOwn(result.raw != null);
+    setAboutEditing(false);
+    return null;
+  };
   const heroMeta: ReactNode[] = user.account_status ? [
     <span key="status" className="rounded-full bg-osu-red/20 px-2 py-0.5 font-semibold text-osu-red-light">
       {user.account_status === "restricted" ? <Trans>Restricted on osu!</Trans> : <Trans>Not on osu! anymore</Trans>}
     </span>,
+    ...serverLinkMeta,
     // A display name is the player's own label; the osu! name stays in view
     // so it can never pass for someone else's.
     ...(user.display_name ? [
@@ -2168,6 +2217,7 @@ export function PlayerProfilePage({
       <Trans>osu! profile</Trans>
       <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 1.5h7v7" /><path d="M10.5 1.5 1.5 10.5" /></svg>
     </a>,
+    ...serverLinkMeta,
   ];
   if (!isOnlineNow && user.last_visit) {
     heroMeta.push(
@@ -3259,6 +3309,7 @@ export function PlayerProfilePage({
                       username={user.username}
                       initialSource={displayedAboutRaw}
                       onClose={() => setAboutEditing(false)}
+                      onSave={canRename ? saveOwnAbout : undefined}
                     />
                   </Suspense>
                 ) : loadingAbout ? (
@@ -3269,6 +3320,8 @@ export function PlayerProfilePage({
                   </div>
                 ) : aboutError ? (
                   <div className="text-center py-8 text-osu-f1 text-sm">{aboutError}</div>
+                ) : displayedAboutOwn && displayedAboutRaw ? (
+                  <OwnAboutCard raw={displayedAboutRaw} onEdit={() => setAboutEditing(true)} />
                 ) : displayedAboutHtml ? (
                   <PlayerAboutCard html={displayedAboutHtml} onEdit={() => setAboutEditing(true)} />
                 ) : (
@@ -5405,6 +5458,28 @@ function formatActivityMonth(date: string): string {
   return parseLocalDateKey(date).toLocaleDateString("en-US", {
     month: "short",
   });
+}
+
+/* A restricted player's own page, drawn from its BBCode the same way the
+   editor preview draws it. */
+function OwnAboutCard({ raw, onEdit }: { raw: string; onEdit: () => void }) {
+  const { t } = useLingui();
+  return (
+    <div className="relative bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={onEdit}
+        title={t`Open in the BBCode editor`}
+        aria-label={t`Open in the BBCode editor`}
+        className="absolute top-2.5 right-2.5 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-osu-b3/80 text-osu-l2 border border-osu-b3/40 hover:bg-osu-b2 hover:text-osu-c1 transition-colors cursor-pointer"
+      >
+        <Pencil size={14} />
+      </button>
+      <div className="bbcode-content bbcode-content--capped px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto">
+        <BBCodePreview source={raw} />
+      </div>
+    </div>
+  );
 }
 
 function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void }) {

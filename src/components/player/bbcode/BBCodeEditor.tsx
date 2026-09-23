@@ -723,11 +723,15 @@ export function BBCodeEditor({
   enableLoadFromUser = false,
   enableLoadOwnPage = false,
   layout = "card",
+  onSave,
 }: {
   userId: number | null;
   username?: string;
   initialSource: string | null;
   onClose?: () => void;
+  /** A restricted player's own profile: saves the page here instead of
+      copying it for osu!. Resolves to an error message, or null once saved. */
+  onSave?: (source: string) => Promise<string | null>;
   enableLoadFromUser?: boolean;
   enableLoadOwnPage?: boolean;
   /** "card" is a bordered box with fixed-height panes; "page" drops the
@@ -752,6 +756,7 @@ export function BBCodeEditor({
   // narrow to read, so measuring the pane again never overrides it.
   const zoomChosenRef = useRef(false);
   const [copied, setCopied] = useState(false);
+  const [savingPage, setSavingPage] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [loadingUserPage, setLoadingUserPage] = useState(false);
   const [loadStatus, setLoadStatus] = useState<{ kind: "loaded" | "empty" | "error"; name?: string } | null>(null);
@@ -769,7 +774,7 @@ export function BBCodeEditor({
   // "resizing" is not an upload: re-cutting an image only re-reads the original
   // bytes and stages the result locally. Nothing leaves the browser until Copy
   // BBCode, so saying "uploading" here would be a lie about where the file is.
-  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "copying" | "resizing" | "error"; message?: string } | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "copying" | "saving" | "resizing" | "error"; message?: string } | null>(null);
   // Kept separate from the delayed resize status: mutations must lock Copy and
   // the resize handle immediately, even when they finish too fast to show UI.
   const [imageMutationBusy, setImageMutationBusy] = useState(false);
@@ -2021,6 +2026,47 @@ export function BBCodeEditor({
       : selectionRef.current.text;
   }, [editMode]);
 
+  // Uploads one pasted/dropped image that was deferred until now, and swaps
+  // its blob: URL for the hosted URL everywhere the editor holds it.
+  const hostPendingImage = useCallback(async (blobUrl: string) => {
+    const blob = pendingUploadsRef.current.get(blobUrl);
+    if (!blob) {
+      throw new Error(t`A pasted image is no longer available. Paste it again before copying.`);
+    }
+    const uploadedUrl = await uploadImageToCatbox(blob);
+    visualRef.current
+      ?.querySelectorAll<HTMLImageElement>("img")
+      .forEach((img) => {
+        if (img.getAttribute("src") !== blobUrl) return;
+        img.setAttribute("src", uploadedUrl);
+        if (imageElementRef.current === img) {
+          setImageSelection((selection) => selection ? { ...selection, src: uploadedUrl } : selection);
+        }
+      });
+    visualRef.current
+      ?.querySelectorAll<HTMLElement>('.imagemap[data-bb="imagemap"]')
+      .forEach((mapEl) => {
+        if (mapEl.getAttribute("data-src") !== blobUrl) return;
+        mapEl.setAttribute("data-src", uploadedUrl);
+        updateImagemapRaw(mapEl);
+      });
+    // Follow the resize original over to the hosted URL, so an image can
+    // still be dragged back up to full resolution after it is copied.
+    const origin = resizeOriginsRef.current.get(blobUrl);
+    if (origin) {
+      resizeOriginsRef.current.delete(blobUrl);
+      resizeOriginsRef.current.set(uploadedUrl, origin);
+    }
+    pendingUploadsRef.current.delete(blobUrl);
+    URL.revokeObjectURL(blobUrl);
+    // Keep each successful replacement durable even if a later image fails.
+    // This is essential in code mode, where there is no live DOM for the next
+    // Copy attempt to serialize and recover the already-hosted URL from.
+    if (editMode === "visual") flushVisual();
+    else updateSource(sourceRef.current.split(blobUrl).join(uploadedUrl));
+    return uploadedUrl;
+  }, [editMode, flushVisual, t, updateSource]);
+
   const copyBBCode = useCallback(async () => {
     if (copyInFlightRef.current) return;
     if (imageMutationInFlightRef.current) {
@@ -2050,44 +2096,7 @@ export function BBCodeEditor({
     }
 
     setUploadStatus({ kind: "uploading" });
-    const resolvedValuePromise = resolvePendingBlobUrls(initialValue, async (blobUrl) => {
-      const blob = pendingUploadsRef.current.get(blobUrl);
-      if (!blob) {
-        throw new Error(t`A pasted image is no longer available. Paste it again before copying.`);
-      }
-      const uploadedUrl = await uploadImageToCatbox(blob);
-      visualRef.current
-        ?.querySelectorAll<HTMLImageElement>("img")
-        .forEach((img) => {
-          if (img.getAttribute("src") !== blobUrl) return;
-          img.setAttribute("src", uploadedUrl);
-          if (imageElementRef.current === img) {
-            setImageSelection((selection) => selection ? { ...selection, src: uploadedUrl } : selection);
-          }
-        });
-      visualRef.current
-        ?.querySelectorAll<HTMLElement>('.imagemap[data-bb="imagemap"]')
-        .forEach((mapEl) => {
-          if (mapEl.getAttribute("data-src") !== blobUrl) return;
-          mapEl.setAttribute("data-src", uploadedUrl);
-          updateImagemapRaw(mapEl);
-        });
-      // Follow the resize original over to the hosted URL, so an image can
-      // still be dragged back up to full resolution after it is copied.
-      const origin = resizeOriginsRef.current.get(blobUrl);
-      if (origin) {
-        resizeOriginsRef.current.delete(blobUrl);
-        resizeOriginsRef.current.set(uploadedUrl, origin);
-      }
-      pendingUploadsRef.current.delete(blobUrl);
-      URL.revokeObjectURL(blobUrl);
-      // Keep each successful replacement durable even if a later image fails.
-      // This is essential in code mode, where there is no live DOM for the next
-      // Copy attempt to serialize and recover the already-hosted URL from.
-      if (editMode === "visual") flushVisual();
-      else updateSource(sourceRef.current.split(blobUrl).join(uploadedUrl));
-      return uploadedUrl;
-    });
+    const resolvedValuePromise = resolvePendingBlobUrls(initialValue, hostPendingImage);
 
     let clipboardWrite: Promise<void> | null = null;
     if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
@@ -2142,7 +2151,38 @@ export function BBCodeEditor({
     } finally {
       copyInFlightRef.current = false;
     }
-  }, [editMode, flushVisual, t, updateSource]);
+  }, [editMode, flushVisual, hostPendingImage, t, updateSource]);
+
+  const saveToProfile = useCallback(async () => {
+    if (!onSave || copyInFlightRef.current) return;
+    if (imageMutationInFlightRef.current) {
+      setUploadStatus({ kind: "error", message: t`Wait for the image resize to finish, then save again.` });
+      return;
+    }
+    copyInFlightRef.current = true;
+    setSavingPage(true);
+    try {
+      let value = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
+      if (pendingBlobUrls(value).length > 0) {
+        setUploadStatus({ kind: "uploading" });
+        value = await resolvePendingBlobUrls(value, hostPendingImage);
+        updateSource(value);
+      }
+      setUploadStatus({ kind: "saving" });
+      const error = await onSave(value);
+      if (error) {
+        setUploadStatus({ kind: "error", message: error });
+      } else {
+        setUploadStatus(null);
+        clearStored(draftKey);
+      }
+    } catch (error) {
+      setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : t`Image upload failed.` });
+    } finally {
+      copyInFlightRef.current = false;
+      setSavingPage(false);
+    }
+  }, [draftKey, editMode, flushVisual, hostPendingImage, onSave, t, updateSource]);
 
   const resetToProfile = useCallback(() => {
     if (!confirmReset) {
@@ -3803,7 +3843,9 @@ export function BBCodeEditor({
             {/* Two messages rather than one with a placeholder, so the link text
                 is part of what gets translated. The plain branch is the same
                 message the /bbcode skeleton renders. */}
-            {userId != null && username ? (
+            {onSave ? (
+              <Trans>Saving puts this page on your profile here.</Trans>
+            ) : userId != null && username ? (
               <Trans>
                 Edits stay in this browser. Copy the result and paste it into the me! editor on{" "}
                 <a
@@ -3821,24 +3863,39 @@ export function BBCodeEditor({
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={copyBBCode}
-            // Also while resizing: that swaps an image's src when it lands, and
-            // copying mid-swap would put the pre-resize file on the clipboard.
-            disabled={imageMutationBusy
-              || uploadStatus?.kind === "uploading"
-              || uploadStatus?.kind === "copying"
-              || uploadStatus?.kind === "resizing"}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait ${
-              copied
-                ? "bg-osu-green/20 border border-osu-green/40 text-osu-green"
-                : "bg-osu-h1/20 border border-osu-h1/40 text-osu-c1 hover:bg-osu-h1/30"
-            }`}
-          >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? <Trans>Copied</Trans> : <Trans>Copy BBCode</Trans>}
-          </button>
+          {onSave ? (
+            <button
+              type="button"
+              onClick={saveToProfile}
+              disabled={imageMutationBusy
+                || uploadStatus?.kind === "uploading"
+                || uploadStatus?.kind === "saving"
+                || uploadStatus?.kind === "resizing"}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait bg-osu-h1/20 border border-osu-h1/40 text-osu-c1 hover:bg-osu-h1/30"
+            >
+              <Check size={14} />
+              <Trans>Save to profile</Trans>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={copyBBCode}
+              // Also while resizing: that swaps an image's src when it lands, and
+              // copying mid-swap would put the pre-resize file on the clipboard.
+              disabled={imageMutationBusy
+                || uploadStatus?.kind === "uploading"
+                || uploadStatus?.kind === "copying"
+                || uploadStatus?.kind === "resizing"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait ${
+                copied
+                  ? "bg-osu-green/20 border border-osu-green/40 text-osu-green"
+                  : "bg-osu-h1/20 border border-osu-h1/40 text-osu-c1 hover:bg-osu-h1/30"
+              }`}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {copied ? <Trans>Copied</Trans> : <Trans>Copy BBCode</Trans>}
+            </button>
+          )}
           {onClose ? (
             <button
               type="button"
@@ -3895,6 +3952,9 @@ export function BBCodeEditor({
         </div>
       ) : null}
 
+      {/* Locked while Save to profile runs: the editor closes on success and
+          drops the draft, so anything typed meanwhile would be lost. */}
+      <div className="contents" inert={savingPage}>
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-3 py-2 border-b border-osu-b3/30 overflow-x-auto">
         <ToolButton label={t`Bold`} active={editMode === "visual" && inlineStates.bold} onClick={() => applyInline("bold", "b", "text")}><Bold size={15} /></ToolButton>
@@ -3988,14 +4048,16 @@ export function BBCodeEditor({
                   uploadStatus.kind === "error" ? "text-osu-red" : "text-osu-l2"
                 }`}
               >
-                {uploadStatus.kind === "uploading" || uploadStatus.kind === "copying" || uploadStatus.kind === "resizing" ? (
+                {uploadStatus.kind === "uploading" || uploadStatus.kind === "copying" || uploadStatus.kind === "saving" || uploadStatus.kind === "resizing" ? (
                   <>
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
                     {uploadStatus.kind === "resizing"
                       ? t`Resizing image...`
                       : uploadStatus.kind === "copying"
                         ? t`Copying BBCode...`
-                        : t`Uploading image...`}
+                        : uploadStatus.kind === "saving"
+                          ? t`Saving...`
+                          : t`Uploading image...`}
                   </>
                 ) : (
                   <>
@@ -4122,13 +4184,19 @@ export function BBCodeEditor({
       )}
       </div>
 
+      </div>
+
       {/* Footer */}
       <div className="flex items-center gap-3 px-4 py-2 border-t border-osu-b3/30 text-[12px] text-osu-f1">
         <span><Trans>{charCount.toLocaleString("en-US")} characters</Trans></span>
         <span className="hidden sm:inline"><Trans>Draft autosaves locally</Trans></span>
         {pendingImageCount > 0 ? (
           <span className="text-osu-c1">
-            <Plural value={pendingImageCount} one="# image uploads on copy" other="# images upload on copy" />
+            {onSave ? (
+              <Plural value={pendingImageCount} one="# image uploads on save" other="# images upload on save" />
+            ) : (
+              <Plural value={pendingImageCount} one="# image uploads on copy" other="# images upload on copy" />
+            )}
           </span>
         ) : null}
         {hasCapturedFormat ? (

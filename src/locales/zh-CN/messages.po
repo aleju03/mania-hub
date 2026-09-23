@@ -1463,6 +1463,10 @@ msgstr "还有 {pending} 个正在分析"
 msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 msgstr "{pendingImageCount, plural, other {# 张图片将在复制时上传}}"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{pendingImageCount, plural, one {# image uploads on save} other {# images upload on save}}"
+msgstr "{pendingImageCount, plural, other {# 张图片将在保存时上传}}"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{pendingPlays} plays"
 msgstr "{pendingPlays} 个成绩"
@@ -5034,9 +5038,17 @@ msgstr "保存失败。请稍后再试。"
 msgid "Couldn't save the collection."
 msgstr "无法保存这个收藏册。"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Couldn't save the link right now."
+msgstr "暂时无法保存链接。"
+
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Couldn't save your name right now."
 msgstr "暂时无法保存你的名字。"
+
+#: src/routes/player/$username.tsx
+msgid "Couldn't save your page right now."
+msgstr "暂时无法保存你的页面。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
@@ -8381,6 +8393,10 @@ msgstr "限制"
 msgid "Link"
 msgstr "链接"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Link a private server profile"
+msgstr "关联私服个人资料"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Link copied"
 msgstr "链接已复制"
@@ -10463,6 +10479,10 @@ msgstr "挪威语"
 msgid "not a bug"
 msgstr "并非问题"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Not a server we know yet."
+msgstr "暂不支持这个服务器。"
+
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
 msgstr ""
@@ -11406,6 +11426,10 @@ msgstr "粘贴"
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Paste a link to one of {username}'s scores on the osu! website."
 #~ msgstr "粘贴 {username} 在 osu! 网站上的成绩链接。"
+
+#: src/components/player/ServerLinks.tsx
+msgid "Paste a private server profile link"
+msgstr "粘贴私服个人资料链接"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "paste a score link for {username}"
@@ -12802,6 +12826,11 @@ msgstr "移除"
 msgid "Remove"
 msgstr "移除"
 
+#. placeholder {0}: server.name
+#: src/components/player/ServerLinks.tsx
+msgid "Remove {0}"
+msgstr "移除 {0}"
+
 #. placeholder {0}: player.username
 #: src/routes/farm-helper.tsx
 msgid "Remove {0} from recent"
@@ -13303,6 +13332,7 @@ msgstr "周六"
 #: src/components/companella/InstallationList.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Save"
 msgstr "保存"
@@ -13340,6 +13370,10 @@ msgstr "保存展示柜"
 msgid "Save this editor version as the skin everyone sees on your replays"
 msgstr "把编辑器里的这一版保存为所有人在你回放里看到的皮肤"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Save to profile"
+msgstr "保存到个人资料"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Save your osu! account so every other command knows who you are."
 msgstr "保存你的 osu! 账号，其他命令就都知道你是谁了。"
@@ -13372,6 +13406,10 @@ msgstr "原样保存当前草稿；看你回放的人都会看到"
 msgid "Saving maps..."
 msgstr "正在保存谱面..."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Saving puts this page on your profile here."
+msgstr "保存后，这个页面会显示在你在本站的个人资料上。"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Saving the name and description failed. Try again."
 msgstr "保存名称和简介失败。请重试。"
@@ -13393,6 +13431,7 @@ msgstr "正在保存回放皮肤…"
 msgid "Saving."
 msgstr "正在保存。"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Saving..."
 msgstr "正在保存..."
@@ -14353,6 +14392,10 @@ msgstr ""
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Sign in to like collections"
 msgstr "登录后才能喜欢收藏册"
+
+#: src/components/player/ServerLinks.tsx
+msgid "Sign in to link your private server profiles."
+msgstr "登录后即可关联你的私服个人资料。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Sign in to post a collection."
@@ -15493,6 +15536,10 @@ msgstr "今日的碎片额度已用完。连胜仍然有效。"
 msgid "That is your own listing."
 msgstr "这是你自己的条目。"
 
+#: src/components/player/ServerLinks.tsx
+msgid "That isn't a profile link."
+msgstr "这不是个人资料链接。"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link did not load."
 msgstr "这个链接加载不出来。"
@@ -16172,6 +16219,10 @@ msgstr "无法打开卡包，请稍后重试。"
 #: src/routes/__root.tsx
 msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
 msgstr "页面遇到意外错误，未能完成渲染。重新加载通常可以解决；如果反复出现，请尝试禁用浏览器扩展。"
+
+#: src/routes/player/$username.tsx
+msgid "The page is over osu!'s 60,000 character limit."
+msgstr "页面超过了 osu! 的 60,000 字符上限。"
 
 #: src/routes/farm-helper.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
@@ -17896,6 +17947,10 @@ msgstr "vs"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "请等图片缩放完成后再复制。"
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Wait for the image resize to finish, then save again."
+msgstr "请等图片调整大小完成后再保存。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"

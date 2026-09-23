@@ -13,7 +13,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import { clampBBSizePercent, findBBNodePathAtOffset, parseBBCode, type BBNode, type BBSourceSpan } from "../../../lib/bbcode";
+import { clampBBSizePercent, findBBNodePathAtOffset, MAX_BB_TITLE_NESTING, parseBBCode, type BBNode, type BBSourceSpan } from "../../../lib/bbcode";
 
 // Renders the parsed BBCode tree with the same markup/classes osu! emits for
 // profile pages, so the existing .bbcode-content styles apply 1:1 and the
@@ -28,6 +28,8 @@ interface HighlightCtx {
   target: BBNode | null;
   targetRef: (el: HTMLElement | null) => void;
   onSelectSourceSpan?: (span: BBSourceSpan) => void;
+  /** How many box titles this render sits inside (MAX_BB_TITLE_NESTING). */
+  titleDepth?: number;
 }
 
 function shortenUrlText(href: string): string {
@@ -205,9 +207,12 @@ function renderNodeContent(node: BBNode, key: string, ctx: HighlightCtx): ReactN
       );
     case "box": {
       // A box title can carry nested bbcode (e.g. [color]); render it too.
-      const title: ReactNode = node.title != null
-        ? renderNodes(parseBBCode(node.title), `${key}-title`, { target: null, targetRef: () => {} })
-        : "SPOILER";
+      const titleDepth = ctx.titleDepth ?? 0;
+      const title: ReactNode = node.title == null
+        ? "SPOILER"
+        : titleDepth >= MAX_BB_TITLE_NESTING
+          ? node.title
+          : renderNodes(parseBBCode(node.title), `${key}-title`, { target: null, targetRef: () => {}, titleDepth: titleDepth + 1 });
       return (
         <SpoilerBox key={key} title={title} highlighted={node === ctx.target} highlightRef={ctx.targetRef}>
           {renderNodes(node.children, key, ctx)}

@@ -105,6 +105,16 @@ const BLOCK_TAGS = new Set([
  */
 const NESTABLE_TAGS = new Set(["box", "spoilerbox", "quote", "list"]);
 
+/* How deep tags may nest before a further opener prints as its literal text.
+   The renderers recurse once per level, and a saved About page is drawn for
+   every visitor: 1,500 nested [quote]s overflowed the stack. No real page
+   comes near this. */
+export const MAX_BB_NESTING = 64;
+
+/* Box titles are parsed again when drawn, and a title can hold another box.
+   Past this many titles inside titles, a title is drawn as its plain text. */
+export const MAX_BB_TITLE_NESTING = 2;
+
 export function isBlockBBTag(tag: string): boolean {
   return BLOCK_TAGS.has(tag);
 }
@@ -471,6 +481,10 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     if (!CONTAINER_TAGS.has(name)) { emitLiteral(); continue; }
 
     if (!isClose) {
+      if (stack.length > MAX_BB_NESTING) {
+        emitLiteral();
+        continue;
+      }
       // A tag that cannot nest is only a tag while none of its own is open.
       if (!NESTABLE_TAGS.has(name) && findOpenFrame(stack, closeAliases(name)) !== -1) {
         emitLiteral();

@@ -1477,6 +1477,10 @@ msgstr "{pending} still analyzing"
 msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 msgstr "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{pendingImageCount, plural, one {# image uploads on save} other {# images upload on save}}"
+msgstr "{pendingImageCount, plural, one {# image uploads on save} other {# images upload on save}}"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{pendingPlays} plays"
 msgstr "{pendingPlays} plays"
@@ -5052,9 +5056,17 @@ msgstr "Couldn't save that. Try again in a moment."
 msgid "Couldn't save the collection."
 msgstr "Couldn't save the collection."
 
+#: src/components/player/ServerLinks.tsx
+msgid "Couldn't save the link right now."
+msgstr "Couldn't save the link right now."
+
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Couldn't save your name right now."
 msgstr "Couldn't save your name right now."
+
+#: src/routes/player/$username.tsx
+msgid "Couldn't save your page right now."
+msgstr "Couldn't save your page right now."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
@@ -8407,6 +8419,10 @@ msgstr "Limitations"
 msgid "Link"
 msgstr "Link"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Link a private server profile"
+msgstr "Link a private server profile"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Link copied"
 msgstr "Link copied"
@@ -10489,6 +10505,10 @@ msgstr "Norwegian"
 msgid "not a bug"
 msgstr "not a bug"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Not a server we know yet."
+msgstr "Not a server we know yet."
+
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
 msgstr "Not analyzed yet."
@@ -11432,6 +11452,10 @@ msgstr "Paste"
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Paste a link to one of {username}'s scores on the osu! website."
 #~ msgstr "Paste a link to one of {username}'s scores on the osu! website."
+
+#: src/components/player/ServerLinks.tsx
+msgid "Paste a private server profile link"
+msgstr "Paste a private server profile link"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "paste a score link for {username}"
@@ -12828,6 +12852,11 @@ msgstr "remove"
 msgid "Remove"
 msgstr "Remove"
 
+#. placeholder {0}: server.name
+#: src/components/player/ServerLinks.tsx
+msgid "Remove {0}"
+msgstr "Remove {0}"
+
 #. placeholder {0}: player.username
 #: src/routes/farm-helper.tsx
 msgid "Remove {0} from recent"
@@ -13329,6 +13358,7 @@ msgstr "Saturdays"
 #: src/components/companella/InstallationList.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Save"
 msgstr "Save"
@@ -13366,6 +13396,10 @@ msgstr "Save showcase"
 msgid "Save this editor version as the skin everyone sees on your replays"
 msgstr "Save this editor version as the skin everyone sees on your replays"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Save to profile"
+msgstr "Save to profile"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Save your osu! account so every other command knows who you are."
 msgstr "Save your osu! account so every other command knows who you are."
@@ -13398,6 +13432,10 @@ msgstr "Saves the current draft as-is; everyone watching your replays sees it"
 msgid "Saving maps..."
 msgstr "Saving maps..."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Saving puts this page on your profile here."
+msgstr "Saving puts this page on your profile here."
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Saving the name and description failed. Try again."
 msgstr "Saving the name and description failed. Try again."
@@ -13419,6 +13457,7 @@ msgstr "Saving your replay skin…"
 msgid "Saving."
 msgstr "Saving."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Saving..."
 msgstr "Saving..."
@@ -14379,6 +14418,10 @@ msgstr "Sign in to connect {appNameInline}"
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Sign in to like collections"
 msgstr "Sign in to like collections"
+
+#: src/components/player/ServerLinks.tsx
+msgid "Sign in to link your private server profiles."
+msgstr "Sign in to link your private server profiles."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Sign in to post a collection."
@@ -15519,6 +15562,10 @@ msgstr "That is today's shard allowance spent. The streak still counts."
 msgid "That is your own listing."
 msgstr "That is your own listing."
 
+#: src/components/player/ServerLinks.tsx
+msgid "That isn't a profile link."
+msgstr "That isn't a profile link."
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link did not load."
 msgstr "That link did not load."
@@ -16206,6 +16253,10 @@ msgstr "The pack could not be opened. Please try again in a moment."
 #: src/routes/__root.tsx
 msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
 msgstr "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
+
+#: src/routes/player/$username.tsx
+msgid "The page is over osu!'s 60,000 character limit."
+msgstr "The page is over osu!'s 60,000 character limit."
 
 #: src/routes/farm-helper.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
@@ -17930,6 +17981,10 @@ msgstr "vs"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "Wait for the image resize to finish, then copy again."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Wait for the image resize to finish, then save again."
+msgstr "Wait for the image resize to finish, then save again."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"

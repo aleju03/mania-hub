@@ -37,6 +37,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as ValleyRouteImport } from './routes/valley'
+import { Route as AdminAboutPagesRouteImport } from './routes/admin/about-pages'
 import { Route as AdminBannedUsersRouteImport } from './routes/admin/banned-users'
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
 import { Route as AdminBugReportsRouteImport } from './routes/admin/bug-reports'
@@ -243,6 +244,11 @@ const TrackerRoute = TrackerRouteImport.update({
 const ValleyRoute = ValleyRouteImport.update({
   id: '/valley',
   path: '/valley',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAboutPagesRoute = AdminAboutPagesRouteImport.update({
+  id: '/admin/about-pages',
+  path: '/admin/about-pages',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminBannedUsersRoute = AdminBannedUsersRouteImport.update({
@@ -623,6 +629,7 @@ export interface FileRoutesByFullPath {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/about-pages': typeof AdminAboutPagesRoute
   '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
@@ -720,6 +727,7 @@ export interface FileRoutesByTo {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/about-pages': typeof AdminAboutPagesRoute
   '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
@@ -818,6 +826,7 @@ export interface FileRoutesById {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/valley': typeof ValleyRoute
+  '/admin/about-pages': typeof AdminAboutPagesRoute
   '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
@@ -917,6 +926,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/about-pages'
     | '/admin/banned-users'
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
@@ -1014,6 +1024,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/about-pages'
     | '/admin/banned-users'
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
@@ -1111,6 +1122,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/valley'
+    | '/admin/about-pages'
     | '/admin/banned-users'
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
@@ -1209,6 +1221,7 @@ export interface RootRouteChildren {
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   ValleyRoute: typeof ValleyRoute
+  AdminAboutPagesRoute: typeof AdminAboutPagesRoute
   AdminBannedUsersRoute: typeof AdminBannedUsersRoute
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
   AdminBugReportsRoute: typeof AdminBugReportsRoute
@@ -1462,6 +1475,13 @@ declare module '@tanstack/react-router' {
       path: '/valley'
       fullPath: '/valley'
       preLoaderRoute: typeof ValleyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/about-pages': {
+      id: '/admin/about-pages'
+      path: '/admin/about-pages'
+      fullPath: '/admin/about-pages'
+      preLoaderRoute: typeof AdminAboutPagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/banned-users': {
@@ -2057,6 +2077,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   ValleyRoute: ValleyRoute,
+  AdminAboutPagesRoute: AdminAboutPagesRoute,
   AdminBannedUsersRoute: AdminBannedUsersRoute,
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
   AdminBugReportsRoute: AdminBugReportsRoute,

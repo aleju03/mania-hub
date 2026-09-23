@@ -14,6 +14,10 @@ vi.mock("./public-image-store", () => ({
 vi.mock("./api", () => ({
   osuFetch: (...args: unknown[]) => osuFetch(...args),
 }));
+const readSavedAboutPages = vi.fn();
+vi.mock("./own-about-admin", () => ({
+  readSavedAboutPages: (...args: unknown[]) => readSavedAboutPages(...args),
+}));
 
 const {
   auditBbcodeImages,
@@ -55,6 +59,7 @@ const embeds = (hash: string) => `[img]https://cdn.mania-tracker.com/bbcode/${ha
 
 beforeEach(() => {
   vi.clearAllMocks();
+  readSavedAboutPages.mockResolvedValue([]);
   // Both are process-wide, so without this each test would be judging the
   // previous test's listing against the previous test's checks.
   invalidateBbcodeImageListing();
@@ -123,6 +128,20 @@ describe("checkBbcodeUploaderProfile", () => {
     const full = await checkBbcodeUploaderProfile(2);
     expect(full.objects.every((row) => row.status === "unused")).toBe(true);
     expect(full.totals).toMatchObject({ unusedObjects: 2, unusedBytes: 2000 });
+  });
+
+  it("keeps an image a saved About page embeds in use, and claims nothing when those can't be read", async () => {
+    scanReturns([object(HASH_A, "user:1"), object(HASH_B, "user:1")]);
+    profilesReturn({ 1: { username: "one", raw: "nothing" } });
+    readSavedAboutPages.mockResolvedValue([{ userId: 9, raw: embeds(HASH_A) }]);
+
+    const audit = await checkBbcodeUploaderProfile(1);
+    expect(audit.objects.find((row) => row.key === `bbcode/${HASH_A}.png`)).toMatchObject({ status: "in-use", usedBy: [9] });
+    expect(audit.objects.find((row) => row.key === `bbcode/${HASH_B}.png`)).toMatchObject({ status: "unused" });
+
+    readSavedAboutPages.mockResolvedValue(null);
+    const blind = await auditBbcodeImages();
+    expect(blind.objects.find((row) => row.key === `bbcode/${HASH_B}.png`)).toMatchObject({ status: "unknown" });
   });
 
   it("credits a shared file to the other uploader who still embeds it", async () => {

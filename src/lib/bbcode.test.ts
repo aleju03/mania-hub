@@ -5,6 +5,7 @@ import {
   containsBBCode,
   findBBNodePathAtOffset,
   gradientCharColors,
+  MAX_BB_NESTING,
   normalizeHexColor,
   parseBBCode,
   parseYoutubeInput,
@@ -474,5 +475,22 @@ describe("buildGradientBBCode", () => {
     const mid = visible[Math.floor(visible.length / 2)];
     expect(green(mid)).toBeGreaterThan(0xd0);
     expect(green(mid)).toBeGreaterThan(green(visible[0]));
+  });
+});
+
+describe("nesting limits", () => {
+  function depth(nodes: BBNode[]): number {
+    let max = 0;
+    for (const node of nodes) {
+      if ("children" in node && Array.isArray(node.children)) max = Math.max(max, 1 + depth(node.children as BBNode[]));
+    }
+    return max;
+  }
+
+  it("prints openers past the nesting limit as text", () => {
+    const source = "[quote]".repeat(1500) + "deep" + "[/quote]".repeat(1500);
+    const nodes = parseBBCode(source);
+    expect(depth(nodes)).toBeLessThanOrEqual(MAX_BB_NESTING);
+    expect(collectPlainText(nodes)).toContain("deep");
   });
 });

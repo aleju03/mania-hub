@@ -1454,6 +1454,10 @@ msgstr "{pending} aún en análisis"
 msgid "{pendingImageCount, plural, one {# image uploads on copy} other {# images upload on copy}}"
 msgstr "{pendingImageCount, plural, one {# imagen se sube al copiar} other {# imágenes se suben al copiar}}"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "{pendingImageCount, plural, one {# image uploads on save} other {# images upload on save}}"
+msgstr "{pendingImageCount, plural, one {# imagen se sube al guardar} other {# imágenes se suben al guardar}}"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{pendingPlays} plays"
 msgstr "{pendingPlays} plays"
@@ -5025,9 +5029,17 @@ msgstr "No se pudo guardar. Inténtalo de nuevo en un momento."
 msgid "Couldn't save the collection."
 msgstr "No se pudo guardar la colección."
 
+#: src/components/player/ServerLinks.tsx
+msgid "Couldn't save the link right now."
+msgstr "No se pudo guardar el enlace ahora mismo."
+
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Couldn't save your name right now."
 msgstr "No se pudo guardar tu nombre en este momento."
+
+#: src/routes/player/$username.tsx
+msgid "Couldn't save your page right now."
+msgstr "No se pudo guardar tu página ahora mismo."
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
@@ -8372,6 +8384,10 @@ msgstr "Limitaciones"
 msgid "Link"
 msgstr "Enlace"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Link a private server profile"
+msgstr "Enlazar un perfil de servidor privado"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Link copied"
 msgstr "Enlace copiado"
@@ -10454,6 +10470,10 @@ msgstr "Noruego"
 msgid "not a bug"
 msgstr "no es un error"
 
+#: src/components/player/ServerLinks.tsx
+msgid "Not a server we know yet."
+msgstr "Todavía no conocemos ese servidor."
+
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
 msgstr ""
@@ -11397,6 +11417,10 @@ msgstr "Pegar"
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Paste a link to one of {username}'s scores on the osu! website."
 #~ msgstr "Pega un enlace a un score de {username} en el sitio de osu!."
+
+#: src/components/player/ServerLinks.tsx
+msgid "Paste a private server profile link"
+msgstr "Pega un enlace de perfil de un servidor privado"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "paste a score link for {username}"
@@ -12793,6 +12817,11 @@ msgstr "eliminar"
 msgid "Remove"
 msgstr "Eliminar"
 
+#. placeholder {0}: server.name
+#: src/components/player/ServerLinks.tsx
+msgid "Remove {0}"
+msgstr "Quitar {0}"
+
 #. placeholder {0}: player.username
 #: src/routes/farm-helper.tsx
 msgid "Remove {0} from recent"
@@ -13294,6 +13323,7 @@ msgstr "sábados"
 #: src/components/companella/InstallationList.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DisplayNameEditor.tsx
+#: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Save"
 msgstr "Guardar"
@@ -13331,6 +13361,10 @@ msgstr "Guardar showcase"
 msgid "Save this editor version as the skin everyone sees on your replays"
 msgstr "Guarda esta versión del editor como el skin que todos ven en tus replays"
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Save to profile"
+msgstr "Guardar en el perfil"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "Save your osu! account so every other command knows who you are."
 msgstr "Guarda tu cuenta de osu! para que los demás comandos sepan quién eres."
@@ -13363,6 +13397,10 @@ msgstr "Guarda el borrador actual tal como está; todos los que vean tus replays
 msgid "Saving maps..."
 msgstr "Guardando mapas..."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Saving puts this page on your profile here."
+msgstr "Al guardar, esta página aparece en tu perfil de aquí."
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Saving the name and description failed. Try again."
 msgstr "No se pudo guardar el nombre ni la descripción. Inténtalo de nuevo."
@@ -13384,6 +13422,7 @@ msgstr "Guardando tu skin de replay…"
 msgid "Saving."
 msgstr "Guardando."
 
+#: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Saving..."
 msgstr "Guardando..."
@@ -14344,6 +14383,10 @@ msgstr ""
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Sign in to like collections"
 msgstr "Inicia sesión para dar me gusta a colecciones"
+
+#: src/components/player/ServerLinks.tsx
+msgid "Sign in to link your private server profiles."
+msgstr "Inicia sesión para enlazar tus perfiles de servidores privados."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Sign in to post a collection."
@@ -15484,6 +15527,10 @@ msgstr "Eso es todo el límite de fragmentos de hoy. La racha igual cuenta."
 msgid "That is your own listing."
 msgstr "Ese listado es tuyo."
 
+#: src/components/player/ServerLinks.tsx
+msgid "That isn't a profile link."
+msgstr "Ese no es un enlace de perfil."
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "That link did not load."
 msgstr "Ese enlace no cargó."
@@ -16163,6 +16210,10 @@ msgstr "No se pudo abrir el sobre. Inténtalo de nuevo en un momento."
 #: src/routes/__root.tsx
 msgid "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."
 msgstr "La página tuvo un error inesperado y no pudo terminar de renderizarse. Recargar normalmente lo soluciona. Si sigue pasando, prueba desactivando las extensiones del navegador."
+
+#: src/routes/player/$username.tsx
+msgid "The page is over osu!'s 60,000 character limit."
+msgstr "La página supera el límite de 60.000 caracteres de osu!."
 
 #: src/routes/farm-helper.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
@@ -17887,6 +17938,10 @@ msgstr "vs"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "Espera a que termine el cambio de tamaño de la imagen y copia de nuevo."
+
+#: src/components/player/bbcode/BBCodeEditor.tsx
+msgid "Wait for the image resize to finish, then save again."
+msgstr "Espera a que termine de redimensionarse la imagen y vuelve a guardar."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"

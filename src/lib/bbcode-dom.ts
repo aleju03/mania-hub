@@ -7,7 +7,7 @@
 //
 // Client-only: the serializer walks live DOM nodes.
 
-import { clampBBSizePercent, parseBBCode, type BBAlign, type BBBlockSpacing, type BBNode } from "./bbcode";
+import { clampBBSizePercent, MAX_BB_TITLE_NESTING, parseBBCode, type BBAlign, type BBBlockSpacing, type BBNode } from "./bbcode";
 
 export function escapeBBHtml(value: string): string {
   return value
@@ -121,12 +121,27 @@ export function editableWrapMarkup(kind: EditableWrapKind, param?: string): { op
   }
 }
 
+// Titles rendered inside titles right now; past MAX_BB_TITLE_NESTING a title
+// is escaped text. Rendering is synchronous, so a counter is enough.
+let titleDepth = 0;
+
 function boxButtonHtml(title: string): string {
   // Titles may carry nested bbcode (osu allows e.g. [box=[color=#fff]Hi[/color]]),
   // so render them rather than escaping to text; serializeBox walks them back.
+  let titleHtml: string;
+  if (titleDepth >= MAX_BB_TITLE_NESTING) {
+    titleHtml = escapeBBHtml(title);
+  } else {
+    titleDepth += 1;
+    try {
+      titleHtml = bbcodeToEditableHtml(title);
+    } finally {
+      titleDepth -= 1;
+    }
+  }
   return '<button type="button" class="js-spoilerbox__link bbcode-spoilerbox__link" contenteditable="false" data-bb-skip="1" tabindex="-1">'
     + '<span class="bbcode-spoilerbox__link-icon"></span>'
-    + `<span class="bbcode-spoilerbox__link-text" data-bb-role="box-title" contenteditable="true">${bbcodeToEditableHtml(title)}</span>`
+    + `<span class="bbcode-spoilerbox__link-text" data-bb-role="box-title" contenteditable="true">${titleHtml}</span>`
     + "</button>";
 }
 
