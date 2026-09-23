@@ -348,9 +348,9 @@ Content-Type: application/json
               count.
             </P>
             <P>
-              The server also checks that the files are intact, that the name in the replay matches the connected
-              account, and that the judgements add up to a finished chart. It can't confirm that a person set the score,
-              since the key only shows which installation sent it and a replay file can be edited.
+              The server also checks that the files are intact and that the judgements add up to a finished chart. It
+              can't confirm that a person set the score, since the key only shows which installation sent it and a replay
+              file can be edited. Plays that pass the checks show on the tracker and the player's profile.
             </P>
           </Section>
 

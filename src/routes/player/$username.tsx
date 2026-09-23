@@ -61,10 +61,10 @@ import {
 import { useAuth } from "../../lib/auth-context";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
-import { ProfileImportedPlays } from "../../components/companella/ProfileImportedPlays";
 import { DisplayNameButton, DisplayNameForm, pendingRenameDate } from "../../components/player/DisplayNameEditor";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
+import { CompanellaMark } from "../../components/ui/CompanellaMark";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { SortArrow } from "../../components/ui/SortArrow";
 import { OsuLogo } from "../../components/ui/OsuLogo";
@@ -85,6 +85,7 @@ import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
 import { buildRestrictedBestList } from "../../components/player/restricted-best-scores";
+import { companellaImportsToScores, companellaReplayImportId, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
 import { buildTrackedPlayScore, getTrackedPlayRank } from "../../lib/tracked-play-score";
@@ -766,8 +767,10 @@ function sortRecentScores(scores: OsuScore[]): OsuScore[] {
   return [...scores].sort((a, b) => getScoreTimeMs(b) - getScoreTimeMs(a));
 }
 
+/* An import and the osu! row for the same play never share an identity, so
+   an osu! row arriving later takes the import's place here. */
 function mergeRecentScores(current: OsuScore[], fetched: OsuScore[]): OsuScore[] {
-  return sortRecentScores(dedupeScores([...fetched, ...current]));
+  return sortRecentScores(dropCompanellaOsuTwins(dedupeScores([...fetched, ...current])));
 }
 
 function getScoreListSignature(scores: OsuScore[]): string {
@@ -945,9 +948,9 @@ function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
   if (cached) return cached;
 
   const request = withTimeout(fetchLivePlayerRecentScoresDirect(userId), PLAYER_RECENT_LIVE_TIMEOUT_MS)
-    .then((section) => section.payload)
-    .then((scores) => {
-      const dedupedScores = sortRecentScores(dedupeScores(scores));
+    // The Companella imports ride next to the osu! plays and are cached with them.
+    .then((section) => mergeRecentScores(section.payload, companellaImportsToScores(section.imports)))
+    .then((dedupedScores) => {
       userRecentDataCache.set(userId, {
         data: dedupedScores,
         expiresAt: Date.now() + USER_RECENT_CLIENT_CACHE_TTL,
@@ -1269,17 +1272,23 @@ export function PlayerProfilePage({
     [restrictedStanding, user?.avatar_url, user?.country_code, user?.username],
   );
   const storedProfileHidden = restrictedPpPending || restrictedBest != null;
-  const shownBest = restrictedPpPending ? NO_SCORES : restrictedBest?.scores ?? best;
+  const shownBest = restrictedPpPending ? NO_SCORES : restrictedBest ?? best;
   const restrictedBestFilters = useMemo(
-    () => restrictedBest ? buildPlayerBestFilterMetadata(restrictedBest.scores) : null,
+    () => restrictedBest ? buildPlayerBestFilterMetadata(restrictedBest) : null,
     [restrictedBest],
   );
   const shownBestFilters = restrictedPpPending ? EMPTY_PLAYER_BEST_FILTERS : restrictedBestFilters ?? bestFilters;
   const restrictedInsights = useMemo(
-    () => restrictedBest ? calculateUserProfileInsights(restrictedBest.scores) : null,
+    () => restrictedBest ? calculateUserProfileInsights(restrictedBest) : null,
     [restrictedBest],
   );
   const profileInsights = restrictedInsights ?? storedProfileInsights;
+  /* Recent follows Best there: the stored osu! plays stay hidden and only the
+     account's Companella imports show, in the same list as anyone's. */
+  const shownRecent = useMemo(
+    () => user?.account_status ? recent.filter((score) => score.companella != null) : recent,
+    [recent, user?.account_status],
+  );
   const ppManiaBestScores = useMemo(
     () => shownBest.filter((score) => score.beatmap?.mode === "mania"),
     [shownBest],
@@ -1825,7 +1834,10 @@ export function PlayerProfilePage({
         PLAYER_RECENT_LIVE_TIMEOUT_MS,
       );
       if (recentOsuRequestRef.current !== requestId) return;
-      const fetched = Array.isArray(section.payload) ? section.payload : [];
+      const fetched = [
+        ...(Array.isArray(section.payload) ? section.payload : []),
+        ...companellaImportsToScores(section.imports),
+      ];
       setRecent((current) => mergeRecentScores(current, fetched));
       setRecentHasMore(false);
       setRecentOsuLoaded(true);
@@ -1876,14 +1888,14 @@ export function PlayerProfilePage({
      day it is every play on the page. */
   const recentKeyModePlayCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const score of recent) {
+    for (const score of shownRecent) {
       const keyCount = getBeatmapKeyCount(score.beatmap);
       if (keyCount == null) continue;
       const key = `${keyCount}k`;
       counts[key] = (counts[key] ?? 0) + 1;
     }
     return counts;
-  }, [recent]);
+  }, [shownRecent]);
 
   /* Five keeps All plus the mains on one phone row. Past that the strip is
      wider than the screen and the chips at the end are unreachable without a
@@ -1910,7 +1922,7 @@ export function PlayerProfilePage({
   /* Recent is only what is on the page. A keymode nobody has played lately is
      not a filter here even when the profile is full of it, and an unranked
      play still counts, which is why the pp keymodes have no say. */
-  const recentAvailableKeyModes = useMemo(() => getAvailableKeyModes(recent), [recent]);
+  const recentAvailableKeyModes = useMemo(() => getAvailableKeyModes(shownRecent), [shownRecent]);
   const availableKeyModes = tab === "recent" ? recentAvailableKeyModes : bestAvailableKeyModes;
 
   /* The filter carries across tabs, so opening one with no plays in that
@@ -1993,7 +2005,7 @@ export function PlayerProfilePage({
   }
 
   const stats = user.statistics;
-  const currentScores = tab === "best" ? shownBest : recent;
+  const currentScores = tab === "best" ? shownBest : shownRecent;
   const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
   const keyFilteredScores = currentScores.filter((score) =>
     tab === "best" ? matchesBestKeyFilter(score, keyFilter) : matchesKeyFilter(score, keyFilter));
@@ -2785,7 +2797,6 @@ export function PlayerProfilePage({
         {detailScore && (
           <ScoreDetailModal
             score={detailScore}
-            importId={restrictedBest?.importIds.get(detailScore)}
             onClose={() => setDetailScore(null)}
           />
         )}
@@ -3274,16 +3285,6 @@ export function PlayerProfilePage({
               >
                 <PlayerActivityPanel user={user} />
               </motion.div>
-            ) : tab === "recent" && user.account_status ? (
-              <motion.div
-                key="imported"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.14 }}
-              >
-                <ProfileImportedPlays userId={user.id} />
-              </motion.div>
             ) : tab === "skills" ? (
               <motion.div
                 key="skills"
@@ -3324,7 +3325,6 @@ export function PlayerProfilePage({
                         score={row.score}
                         position={position}
                         layout={scoreRowLayout}
-                        importId={restrictedBest?.importIds.get(row.score)}
                         onOpenDetails={setDetailScore}
                       />
                     ) : (
@@ -3346,7 +3346,7 @@ export function PlayerProfilePage({
             )}
           </AnimatePresence>
 
-          {tab !== "about" && tab !== "card" && tab !== "activity" && !(tab === "recent" && user.account_status) && !loadingScores && !scoresError && canShowMore && (
+          {tab !== "about" && tab !== "card" && tab !== "activity" && !loadingScores && !scoresError && canShowMore && (
             <div className="pt-3 flex justify-center">
               <button
                 type="button"
@@ -6226,7 +6226,7 @@ export function getScoreRowLayout(rows: BestListRow[]): ScoreRowLayout {
     const { score } = row;
     layout.modColumns = Math.max(layout.modColumns, getModDisplayList(score.mods).length);
     if (score.pp != null) layout.showPp = true;
-    if (scoreHasReplay(score)) layout.showReplay = true;
+    if (scoreHasReplay(score) || companellaReplayImportId(score) != null) layout.showReplay = true;
   }
   return layout;
 }
@@ -6379,20 +6379,19 @@ function ScoreRow({
   score,
   position,
   layout = EMPTY_SCORE_ROW_LAYOUT,
-  importId,
   onOpenDetails,
 }: {
   score: OsuScore;
   position: number;
   layout?: ScoreRowLayout;
-  /** The Companella import a stand-in best play came from; its replay opens by this. */
-  importId?: string;
   onOpenDetails: (score: OsuScore) => void;
 }) {
   const locale = useLocale();
   const { t } = useLingui();
   const scoreFallbackLabel = t`score`;
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
+  // A Companella play opens by its import, and only when its replay is public.
+  const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
   const replaySearch = importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id };
   const display = getScoreDisplayValues(score);
@@ -6415,6 +6414,7 @@ function ScoreRow({
               {keymodeLabel}
             </span>
           )}
+          {score.companella && <CompanellaMark />}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="text-[11px] text-osu-f1">
@@ -6552,7 +6552,7 @@ function ScoreDetailStat({ label, value, color }: { label: string; value: ReactN
 
 /** Everything the row can't fit: total score, judgement spread, map metadata,
  *  and the links (osu! page, replay) the row used to navigate to on its own. */
-function ScoreDetailModal({ score, importId, onClose }: { score: OsuScore; importId?: string; onClose: () => void }) {
+function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => void }) {
   const { t } = useLingui();
   const locale = useLocale();
   const scoreTitleFallback = t`Score`;
@@ -6566,6 +6566,7 @@ function ScoreDetailModal({ score, importId, onClose }: { score: OsuScore; impor
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const scoreUrl = getScoreUrl(score);
   const beatmapUrl = getBeatmapUrl(score);
+  const importId = companellaReplayImportId(score);
   const canReplay = importId != null || scoreHasReplay(score);
   const hasPp = score.pp != null;
   const playedAt = getScoreTimestamp(score);
@@ -6639,6 +6640,7 @@ function ScoreDetailModal({ score, importId, onClose }: { score: OsuScore; impor
                       {keymodeLabel}
                     </span>
                   )}
+                  {score.companella && <CompanellaMark />}
                   <DanBadge score={score} />
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">

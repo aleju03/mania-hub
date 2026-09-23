@@ -16,6 +16,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
+import { CompanellaMark } from "../components/ui/CompanellaMark";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -220,6 +221,7 @@ function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
     keyCount: getBeatmapKeyCount(score.beatmap) ?? 0,
     keymodeLabel: getBeatmapKeymodeLabel(score.beatmap) ?? "",
     beatmapsetId: score.beatmapset.id,
+    ...(score.companella ? { companella: true } : {}),
     user: {
       id: score.user.id,
       username: score.user.username,
@@ -575,14 +577,17 @@ function HomePage() {
     if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
-    source.addEventListener("tracker_score", (event) => {
+    // Companella imports arrive on their own event with the same row shape.
+    const onLiveScore = (event: MessageEvent) => {
       const score = JSON.parse(event.data) as LeanTrackerScore;
       if (!getScoreDisplayValues(score).passed) return;
       addFeedScores(selectedCountry, [score]);
       const current = useAppStore.getState().homeRecentScoresByCountry[selectedCountry] ?? EMPTY_SCORES;
       setHomeRecentScores(selectedCountry, mergeHomeRecentScores(current, [score]));
       setLoadingScores(false);
-    });
+    };
+    source.addEventListener("tracker_score", onLiveScore);
+    source.addEventListener("companella_score", onLiveScore);
     source.addEventListener("top_play", (event) => {
       const play = JSON.parse(event.data) as CountryTopPlay;
       const popoff = countryTopPlayToHomePopoff(play);
@@ -945,6 +950,7 @@ function HomePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {s.companella && <CompanellaMark className="h-3.5 w-3.5" />}
                     {s.mods.length > 0 && (
                       <div className="flex items-center gap-0.5">
                         {s.mods.map((m) => (

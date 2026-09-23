@@ -234,8 +234,9 @@ function CompanellaPage() {
           </p>
           <p className="mt-2 text-xs text-osu-f1">
             <Trans>
-              Imported replays are private to you. Public rankings, pp, snipes and rewards are not affected by anything on
-              this page.
+              Imported plays that pass the checks show on the tracker and your profile. Their replays stay private to you
+              unless your osu! account is restricted. Public rankings, pp, snipes and rewards are not affected by anything
+              on this page.
             </Trans>
           </p>
           {!access.storageReady && (

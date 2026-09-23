@@ -434,7 +434,7 @@ function AuthorizePage() {
           <Trans>This does not give the app your osu! account. You can revoke it any time on your Companella page.</Trans>
         </p>
         <p>
-          <Trans>If your osu! account is restricted, imported plays show on your Mania Tracker profile.</Trans>
+          <Trans>Imported plays that pass the checks show on the tracker and your Mania Tracker profile.</Trans>
         </p>
       </div>
     </>,

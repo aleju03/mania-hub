@@ -75,6 +75,22 @@ describe("detectTrackerMultis", () => {
     expect(group?.rounds.map((round) => round.scores)).toEqual([[r1a, r1b], [r2a, r2b]]);
   });
 
+  it("never groups a Companella import into a lobby", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = { ...makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) }), companella: { importId: "import-r1b", replay: false } };
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = { ...makeScore({ userId: 2, beatmapId: 200, endedAt: at(184) }), companella: { importId: "import-r2b", replay: true } };
+    expect(detectTrackerMultis([r1a, r1b, r2a, r2b]).size).toBe(0);
+
+    // A third player keeps the lobby alive; the Companella rows stay out of it.
+    const r1c = makeScore({ userId: 3, beatmapId: 100, endedAt: at(4) });
+    const r2c = makeScore({ userId: 3, beatmapId: 200, endedAt: at(185) });
+    const multis = detectTrackerMultis([r1a, r1b, r1c, r2a, r2b, r2c]);
+    expect(multis.get(getScoreIdentity(r1a))?.rounds.map((round) => round.scores)).toEqual([[r1a, r1c], [r2a, r2c]]);
+    expect(multis.has(getScoreIdentity(r1b))).toBe(false);
+    expect(multis.has(getScoreIdentity(r2b))).toBe(false);
+  });
+
   it("requires co-finish gaps of at most the window", () => {
     const gapSeconds = TRACKER_MULTI_WINDOW_MS / 1000 + 2;
     const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });

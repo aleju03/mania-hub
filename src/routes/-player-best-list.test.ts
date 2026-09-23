@@ -129,6 +129,18 @@ describe("Best Performance rows with tracked plays", () => {
     // No stored replay id, so no button and no reserved slot for one.
     expect(layout.showReplay).toBe(false);
   });
+
+  it("reserves the replay slot for a Companella play whose replay is public, and only that one", () => {
+    const withMark = (replay: boolean): BestListRow => {
+      const row = windowRow(3, 300, "2026-01-01T00:00:00Z");
+      if (row.kind === "score") row.score.companella = { importId: "import-0001", replay };
+      return row;
+    };
+
+    expect(getScoreRowLayout([withMark(true)]).showReplay).toBe(true);
+    // Every other import shows without Watch.
+    expect(getScoreRowLayout([withMark(false)]).showReplay).toBe(false);
+  });
 });
 
 describe("selectVisibleKeyModes", () => {

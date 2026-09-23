@@ -40,8 +40,9 @@ import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
+import { CompanellaMark } from "../components/ui/CompanellaMark";
 import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
-import type { LeanTrackerScore } from "../lib/types";
+import type { LeanTrackerScore, OsuCovers } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
@@ -101,6 +102,9 @@ const DEV_FEED_SIM_INTERVAL_MS = 2_500;
 const DEV_FEED_SIM_MAX_SCORES = 120;
 const DEV_FEED_SIM_LOBBY_CHANCE = 0.45;
 const DEV_FEED_SIM_USER_COUNT = 10;
+// Chance a tick also emits a Companella solo play: 1 in 5 ticks makes about
+// 1 in 6 simulated scores a Companella row.
+const DEV_FEED_SIM_COMPANELLA_CHANCE = 1 / 5;
 
 type DevSimUser = LeanTrackerScore["user"];
 
@@ -138,6 +142,14 @@ const DEV_SIM_MAPS: DevSimMap[] = [
 // getScoreIdentity falls back to its composite key, which stays unique
 // per simulated play.
 let devSimNextScoreId = -8_000_000_000;
+let devSimNextImportNumber = 1;
+
+// A fake Companella mark for a solo sim play. Watch alternates so both row
+// variants show up; the fake import id opens nothing on /replay.
+function makeDevSimCompanellaMark(): NonNullable<LeanTrackerScore["companella"]> {
+  const number = devSimNextImportNumber++;
+  return { importId: `devsim-import-${String(number).padStart(6, "0")}`, replay: number % 2 === 1 };
+}
 
 function makeDevSimUsers(count: number): DevSimUser[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -148,7 +160,13 @@ function makeDevSimUsers(count: number): DevSimUser[] {
   }));
 }
 
-function makeDevSimScore(user: DevSimUser, map: DevSimMap, modAcronyms: string[], endedAtMs: number): LeanTrackerScore {
+function makeDevSimScore(
+  user: DevSimUser,
+  map: DevSimMap,
+  modAcronyms: string[],
+  endedAtMs: number,
+  companella?: LeanTrackerScore["companella"],
+): LeanTrackerScore {
   const total = map.noteCount;
   const miss = Math.round(total * Math.random() * 0.015);
   const meh = Math.round(total * Math.random() * 0.003);
@@ -162,14 +180,17 @@ function makeDevSimScore(user: DevSimUser, map: DevSimMap, modAcronyms: string[]
   const rank = accuracy >= 1 ? (silver ? "XH" : "X") : accuracy > 0.95 ? (silver ? "SH" : "S") : accuracy > 0.9 ? "A" : "B";
   const mapIndex = DEV_SIM_MAPS.indexOf(map);
   const coverUrl = makeDevCoverUrl(mapIndex);
-  return {
+  const totalScore = Math.round(1_000_000 * accuracy ** 4);
+  const score: LeanTrackerScore = {
     id: devSimNextScoreId--,
     legacy_score_id: null,
     user_id: user.id,
     accuracy,
     mods: modAcronyms.map((acronym) => ({ acronym })),
-    score: Math.round(1_000_000 * accuracy ** 4),
-    total_score: Math.round(1_000_000 * accuracy ** 4),
+    score: totalScore,
+    total_score: totalScore,
+    // Companella rows are stable plays: legacy_total_score marks them so.
+    ...(companella ? { legacy_total_score: totalScore, companella } : {}),
     max_combo: miss === 0 ? total : Math.round(total * (0.25 + Math.random() * 0.6)),
     passed: true,
     rank,
@@ -206,6 +227,15 @@ function makeDevSimScore(user: DevSimUser, map: DevSimMap, modAcronyms: string[]
     user,
     ended_at: new Date(endedAtMs).toISOString(),
     has_replay: false,
+  };
+  if (!companella || companella.replay) return score;
+  // A Companella play without Watch previews the chart osu! does not have:
+  // no link, no cover, zero stars and bpm, like the backend synthesizes it.
+  return {
+    ...score,
+    pp: null,
+    beatmap: { ...score.beatmap, id: 0, beatmapset_id: 0, difficulty_rating: 0, bpm: 0, max_combo: 0 },
+    beatmapset: { ...score.beatmapset, id: 0, covers: {} as OsuCovers },
   };
 }
 
@@ -311,21 +341,29 @@ function getBackendTrackerFilters(filters: { filter: ScoreFilter; gradeFilter: G
   };
 }
 
-function getStarRating(score: LeanTrackerScore): number {
-  return score.beatmap?.difficulty_rating ?? -1;
+// A Companella import on a chart osu! does not have carries a star rating of
+// 0: unknown, like a missing one, so it sorts last in both directions.
+function getKnownStarRating(score: LeanTrackerScore): number | null {
+  const stars = score.beatmap?.difficulty_rating;
+  return stars != null && stars > 0 ? stars : null;
 }
 
-function compareTrackerScores(a: LeanTrackerScore, b: LeanTrackerScore, sort: TrackerSort, direction: TrackerSortDirection): number {
+export function compareTrackerScores(a: LeanTrackerScore, b: LeanTrackerScore, sort: TrackerSort, direction: TrackerSortDirection): number {
   if (sort === "stars") {
-    const starDelta = direction === "asc"
-      ? (a.beatmap?.difficulty_rating ?? Number.MAX_SAFE_INTEGER) - (b.beatmap?.difficulty_rating ?? Number.MAX_SAFE_INTEGER)
-      : getStarRating(b) - getStarRating(a);
-    if (starDelta !== 0) return starDelta;
+    const aStars = getKnownStarRating(a);
+    const bStars = getKnownStarRating(b);
+    if (aStars == null || bStars == null) {
+      if (aStars != null) return -1;
+      if (bStars != null) return 1;
+    } else {
+      const starDelta = direction === "asc" ? aStars - bStars : bStars - aStars;
+      if (starDelta !== 0) return starDelta;
+    }
   }
   return getScoreTimeMs(b) - getScoreTimeMs(a);
 }
 
-function sortTrackerScores(scores: LeanTrackerScore[], sort: TrackerSort, direction: TrackerSortDirection): LeanTrackerScore[] {
+export function sortTrackerScores(scores: LeanTrackerScore[], sort: TrackerSort, direction: TrackerSortDirection): LeanTrackerScore[] {
   if (sort === "recent") return scores;
   return [...scores].sort((a, b) => compareTrackerScores(a, b, sort, direction));
 }
@@ -584,7 +622,8 @@ function ScoresPage() {
         // Malformed heartbeat: leave the indicator as-is.
       }
     });
-    source.addEventListener("tracker_score", (event) => {
+    // Companella imports arrive on their own event with the same row shape.
+    const onLiveScore = (event: MessageEvent) => {
       setLiveFeedState((current) => current === "live" ? current : "live");
       const score = JSON.parse(event.data) as LeanTrackerScore;
       if (!isDisplayedPassed(score)) return;
@@ -603,7 +642,9 @@ function ScoresPage() {
           setLiveFilteredScores((current) => page === 0 ? sortTrackerScores([score, ...current], trackerSort, trackerSortDirection).slice(0, TRACKER_PAGE_SIZE) : current);
         }
       }
-    });
+    };
+    source.addEventListener("tracker_score", onLiveScore);
+    source.addEventListener("companella_score", onLiveScore);
     source.addEventListener("score_gain", (event) => {
       const data = JSON.parse(event.data) as { scoreId?: number; ppGain?: number };
       if (data.scoreId != null && data.ppGain != null) {
@@ -688,7 +729,7 @@ function ScoresPage() {
       ...seedLobby.map((user, index) => makeDevSimScore(user, seedMap1, [], now - 100_000 + index * 3_000)),
       ...seedLobby.map((user, index) => makeDevSimScore(user, seedMap2, [], now - 40_000 + index * 4_000)),
       makeDevSimScore(users[4], DEV_SIM_MAPS[2], ["DT"], now - 24_000),
-      makeDevSimScore(users[5], DEV_SIM_MAPS[3], [], now - 11_000),
+      makeDevSimScore(users[5], DEV_SIM_MAPS[3], [], now - 11_000, makeDevSimCompanellaMark()),
     ];
     setSimFeedScores(seed);
 
@@ -727,8 +768,15 @@ function ScoresPage() {
       if (pending.length === 0) scheduleEvent();
       const next = pending.shift();
       if (!next) return;
-      const score = makeDevSimScore(next.user, next.map, next.mods, Date.now());
-      setSimFeedScores((current) => [score, ...current].slice(0, DEV_FEED_SIM_MAX_SCORES));
+      const now = Date.now();
+      const scores = [makeDevSimScore(next.user, next.map, next.mods, now)];
+      // A Companella import rides along as an extra solo play in the same
+      // tick, so lobby rounds keep their cadence (the detector skips it).
+      if (Math.random() < DEV_FEED_SIM_COMPANELLA_CHANCE) {
+        const user = users[Math.floor(Math.random() * users.length)];
+        scores.unshift(makeDevSimScore(user, pickMap(), withHdMaybe(pickRateMods()), now, makeDevSimCompanellaMark()));
+      }
+      setSimFeedScores((current) => [...scores, ...current].slice(0, DEV_FEED_SIM_MAX_SCORES));
     }, DEV_FEED_SIM_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [simulateFeedActivity]);
@@ -1930,7 +1978,14 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const judgementStats = getManiaJudgementStats(score);
   const lazer = isLazerScore(score);
   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
-  const canReplay = scoreHasReplay(score);
+  // A Companella row only carries a replay when the backend says so (a
+  // restricted player's counted best), and it opens by import id.
+  const canReplay = score.companella ? score.companella.replay : scoreHasReplay(score);
+  const replaySearch = score.companella
+    ? { importId: score.companella.importId }
+    : getReplaySearch(score.id, score.beatmapset?.id);
+  const stars = score.beatmap?.difficulty_rating;
+  const bpm = score.beatmap?.bpm;
   const showPpGain = approxPpGain != null && approxPpGain >= 0.05;
 
   return (
@@ -2024,6 +2079,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
+              {score.companella && <CompanellaMark />}
               {getModDisplayList(score.mods).map((m) => (
                 <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
               ))}
@@ -2039,7 +2095,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate({ to: "/replay", search: getReplaySearch(score.id, score.beatmapset?.id) });
+                    navigate({ to: "/replay", search: replaySearch });
                   }}
                   className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                   title={t`Watch replay`}
@@ -2053,7 +2109,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         </div>
         {/* Desktop metadata */}
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-          <div className="flex gap-0.5">
+          <div className="flex items-center gap-0.5">
+            {score.companella && <CompanellaMark className="mr-1 h-4 w-4" />}
             {getModDisplayList(score.mods).map((m) => (
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
@@ -2074,7 +2131,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                navigate({ to: "/replay", search: getReplaySearch(score.id, score.beatmapset?.id) });
+                navigate({ to: "/replay", search: replaySearch });
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title={t`Watch replay`}
@@ -2104,15 +2161,17 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 {judgementStats.map((judgement, i) => (
                   <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} className={JUDGEMENT_MOBILE_ORDER_CLASS[i]} />
                 ))}
-                {score.beatmap?.difficulty_rating != null && (
+                {/* A chart osu! does not have (a Companella import) reads 0
+                    for both: no rating, not a zero-star map. */}
+                {stars != null && (
                   <StatCell
                     label={t`Stars`}
-                    value={<StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.2} />}
+                    value={stars > 0 ? <StarRatingBadge stars={stars} size={1.2} /> : "-"}
                     className="max-sm:order-8"
                   />
                 )}
-                {score.beatmap?.bpm != null && (
-                  <StatCell label="BPM" value={String(Math.round(score.beatmap.bpm))} className="max-sm:order-9" />
+                {bpm != null && (
+                  <StatCell label="BPM" value={bpm > 0 ? String(Math.round(bpm)) : "-"} className="max-sm:order-9" />
                 )}
                 {/* On mobile (2-col) PP gets its own centered full-width row as the headline stat; on sm+ it's a normal trailing cell. */}
                 {score.pp != null && score.pp > 0 && (

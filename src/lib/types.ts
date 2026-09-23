@@ -177,6 +177,13 @@ export interface OsuMod {
   settings?: Record<string, string | number | boolean>;
 }
 
+/** A play imported through Companella rather than received from osu!. Only a
+ *  restricted player's counted plays (their top 200) have a public replay. */
+export interface CompanellaScoreMark {
+  importId: string;
+  replay: boolean;
+}
+
 export interface OsuScore {
   id: number;
   legacy_score_id?: number | null;
@@ -219,6 +226,7 @@ export interface OsuScore {
   processed?: boolean;
   type?: string;
   weight?: { percentage: number; pp: number };
+  companella?: CompanellaScoreMark;
 }
 
 // Only the user fields the rankings and home pages actually read. The raw
@@ -268,6 +276,7 @@ export interface LeanHomeScore {
   keyCount: number;
   keymodeLabel?: string;
   beatmapsetId?: number;
+  companella?: boolean;
   user: {
     id: number;
     username: string;
@@ -311,6 +320,7 @@ export interface LeanTrackerScore {
   replay?: boolean;
   has_replay?: boolean;
   type?: string;
+  companella?: CompanellaScoreMark;
 }
 
 export interface BeatmapsetSearchResponse {

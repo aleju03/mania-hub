@@ -2,7 +2,7 @@
 
 Deep reference for `live-backend/`: module map, ingest flow, job queue, HTTP surface, replay video export, retention and storage. The condensed guides are `AGENTS.md` at the repo root and `live-backend/AGENTS.md`. Per-feature models live in `docs/features.md`, `docs/packs.md`, `docs/discord.md`.
 
-The Companella score-import beta has its own reference, `docs/companella-integration.md`: `live-backend/src/integrations/companella/` (its own `companella_*` tables, its own `companella` worker lane, `/api/integrations/companella/{native,manage}/*`, plus the admin-token-only `POST /api/admin/companella/review`), off unless `COMPANELLA_MODE` is set. It reads official tables and never writes them.
+The Companella score-import beta has its own reference, `docs/companella-integration.md`: `live-backend/src/integrations/companella/` (its own `companella_*` tables, its own `companella` worker lane, `/api/integrations/companella/{native,manage}/*`, plus the admin-token-only `POST /api/admin/companella/review`), off unless `COMPANELLA_MODE` is set. It reads official tables and never writes them. Its checked imports reach the tracker snapshot and the profile recent section (`imports`) as a read-time merge from `public-feed.ts`, and new ones go out as their own `companella_score` SSE event.
 
 ## Module map
 
@@ -40,7 +40,7 @@ Ingest flow:
 1. Scores arrive from three sources: the oSC Socket.IO feed (real-time), oSC JSON backfill (catch-up after downtime), and an osu! API recent-scores fallback poller (safety net, own rate bucket).
 2. Scores are filtered to mania. Country detection uses `country_rosters` plus enriched user data, because oSC payloads do not include country.
 3. Raw rows land in `score_events`; user/beatmap/beatmapset metadata is upserted; projections and follow-up jobs fan out according to the country's feature tier.
-4. The backend emits SSE events (`tracker_score`, `top_play`, `snipe`, `maps_farmed_update`, `goal_completed`, `job_status`, `status`, `replay_video_export`), plus a `hello` event on connect and `heartbeat` keepalives. Reconnecting clients replay missed events via `Last-Event-ID` against `live_event_log`. Two high-volume types are stored as a reference rather than a payload (`compactLiveEventPayload` in `live/event-log.ts`): a `tracker_score` keeps its score identity and a `pack_pull` its event id, and both rehydrate from their durable table on replay, so the log does not carry a second copy of data it can look up.
+4. The backend emits SSE events (`tracker_score`, `companella_score`, `top_play`, `snipe`, `maps_farmed_update`, `goal_completed`, `job_status`, `status`, `replay_video_export`), plus a `hello` event on connect and `heartbeat` keepalives. Reconnecting clients replay missed events via `Last-Event-ID` against `live_event_log`. Two high-volume types are stored as a reference rather than a payload (`compactLiveEventPayload` in `live/event-log.ts`): a `tracker_score` keeps its score identity and a `pack_pull` its event id, and both rehydrate from their durable table on replay, so the log does not carry a second copy of data it can look up.
 
 Rosters are warmed from osu! mania performance rankings on a schedule; roster refreshes also capture `country_rank_snapshots` used for 7-day rank deltas.
 

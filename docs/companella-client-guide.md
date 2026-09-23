@@ -287,8 +287,9 @@ unrated. Mod combinations stable cannot produce (listed as
 
 Only plays on a chart the site already knows count toward the preview, rate
 copies included. A copy whose scroll speed differs from its original, or a
-chart the site does not know, is still analyzed and shown to its owner, but
-does not move the number.
+chart the site does not know, is still analyzed and shown per play, but
+does not move the number. A play that passes the checks shows on the tracker
+and on the player's profile, marked as sent through Companella.
 
 It will not say that a human set the score. An installation credential proves
 possession of a key. A complete replay is an editable file. Please keep client

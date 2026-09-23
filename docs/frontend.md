@@ -2,7 +2,7 @@
 
 Deep reference for the frontend: route/component map, live data flow, client state, replay video export, OG images, the BBCode editor. The condensed guide is `AGENTS.md` at the repo root.
 
-`/companella` and its routes (`companella_.authorize`, `companella_.test-callback`, `src/routes/api/integrations/companella/v1/*`, `src/routes/api/companella/*`, `src/lib/companella-integration/`, `src/components/companella/`) belong to the Companella score-import beta and are documented in `docs/companella-integration.md`. They are gated end to end and are deliberately not linked from the navigation while the beta is off.
+`/companella` and its routes (`companella_.authorize`, `companella_.test-callback`, `src/routes/api/integrations/companella/v1/*`, `src/routes/api/companella/*`, `src/lib/companella-integration/`, `src/components/companella/`) belong to the Companella score-import beta and are documented in `docs/companella-integration.md`. They are gated end to end and are deliberately not linked from the navigation while the beta is off. Imports shown on the tracker and the profile Recent tab are `LeanTrackerScore` rows carrying `companella: { importId, replay }` (`CompanellaScoreMark` in `src/lib/types.ts`), keyed `companella:<importId>` by `getScoreIdentity`, drawn with `CompanellaMark` (`src/components/ui/CompanellaMark.tsx`), and offer Watch only when `replay` is true.
 
 ## Route and component map
 

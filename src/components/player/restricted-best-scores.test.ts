@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { RestrictedPpPlay } from "../../lib/live-backend";
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
-import { getBeatmapUrl, getScoreDisplayValues, getScoreUrl, scoreHasReplay } from "../../lib/score";
+import { companellaReplayImportId } from "../../lib/companella-scores";
+import { getBeatmapUrl, getScoreDisplayValues, getScoreIdentity, getScoreUrl, scoreHasReplay } from "../../lib/score";
 import { buildRestrictedBestList } from "./restricted-best-scores";
 
 const owner = { id: 7, username: "someone", avatar_url: "", country_code: "CR" };
@@ -36,7 +37,7 @@ function play(overrides: Partial<RestrictedPpPlay> = {}): RestrictedPpPlay {
 
 describe("buildRestrictedBestList", () => {
   it("reads as a stable play with its own accuracy, grade and total", () => {
-    const { scores } = buildRestrictedBestList([play()], owner);
+    const scores = buildRestrictedBestList([play()], owner);
     const display = getScoreDisplayValues(scores[0]);
     expect(display.isLazer).toBe(false);
     expect(display.accuracy).toBeCloseTo(0.9966666666666667, 10);
@@ -45,7 +46,7 @@ describe("buildRestrictedBestList", () => {
   });
 
   it("keeps the weight osu! gives each place in the list", () => {
-    const { scores } = buildRestrictedBestList([
+    const scores = buildRestrictedBestList([
       play({ scoreId: "import-0001", pp: 300, weightedPp: 300 }),
       play({ scoreId: "import-0002", beatmapId: 101, pp: 200, weightedPp: 190 }),
       play({ scoreId: "import-0003", beatmapId: 102, pp: 100, weightedPp: null }),
@@ -56,24 +57,30 @@ describe("buildRestrictedBestList", () => {
     expect(scores[2].weight).toBeUndefined();
   });
 
-  it("maps each score to the import its replay opens", () => {
-    const { scores, importIds } = buildRestrictedBestList([
+  it("marks each score with the import its replay opens", () => {
+    const scores = buildRestrictedBestList([
       play({ scoreId: "import-0001" }),
       play({ scoreId: "import-0002", beatmapId: 101 }),
     ], owner);
-    expect(scores.map((score) => importIds.get(score))).toEqual(["import-0001", "import-0002"]);
+    expect(scores.map((score) => score.companella)).toEqual([
+      { importId: "import-0001", replay: true },
+      { importId: "import-0002", replay: true },
+    ]);
+    expect(scores.map(companellaReplayImportId)).toEqual(["import-0001", "import-0002"]);
+    // Two plays with no osu! id still read as two rows.
+    expect(new Set(scores.map(getScoreIdentity)).size).toBe(2);
     // The osu! replay path never applies: there is no osu! score to open.
     expect(scores.every((score) => !scoreHasReplay(score))).toBe(true);
   });
 
   it("links the map, never an osu! score page", () => {
-    const { scores } = buildRestrictedBestList([play()], owner);
+    const scores = buildRestrictedBestList([play()], owner);
     expect(getScoreUrl(scores[0])).toBeNull();
     expect(getBeatmapUrl(scores[0])).toBe("https://osu.ppy.sh/beatmaps/100");
   });
 
   it("drops the played-rate stars on a rate-modded play", () => {
-    const { scores } = buildRestrictedBestList([
+    const scores = buildRestrictedBestList([
       play({ mods: ["HD"], grade: "SH" }),
       play({ beatmapId: 101, mods: ["DT"], rate: 1.5, starRating: 6.1 }),
     ], owner);
@@ -83,12 +90,12 @@ describe("buildRestrictedBestList", () => {
   });
 
   it("dates a play without a played time by when it arrived", () => {
-    const { scores } = buildRestrictedBestList([play({ playedAt: null })], owner);
+    const scores = buildRestrictedBestList([play({ playedAt: null })], owner);
     expect(scores[0].ended_at).toBe("2026-09-01T10:05:00.000Z");
   });
 
   it("feeds the profile insights like a window list", () => {
-    const { scores } = buildRestrictedBestList([
+    const scores = buildRestrictedBestList([
       play({ pp: 300, weightedPp: 300 }),
       play({ beatmapId: 101, keyCount: 7, mods: ["HD"], grade: "SH", pp: 200, weightedPp: 190 }),
     ], owner);

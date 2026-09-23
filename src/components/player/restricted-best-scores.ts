@@ -3,13 +3,6 @@ import { getScoreSpeedBucket } from "../../lib/score";
 import type { TrackedPlayViewer } from "../../lib/tracked-play-score";
 import type { OsuScore } from "../../lib/types";
 
-export interface RestrictedBestList {
-  /** Best first, as the profile's rows, filters and insights read a window. */
-  scores: OsuScore[];
-  /** The import behind each score, which is what its replay link opens. */
-  importIds: Map<OsuScore, string>;
-}
-
 /**
  * The best list of an account osu! turned away, rebuilt from the plays it
  * imported (live-backend restricted-pp.ts) as the score objects the profile
@@ -20,13 +13,16 @@ export interface RestrictedBestList {
  * card on the map rather than on a score page osu! never had. Stars arrive at
  * the played rate while the card reads a map's 1.0x stars, so a rate-modded
  * play drops them, as tracked plays do.
+ *
+ * Best first, as the profile's rows, filters and insights read a window. Each
+ * score carries the Companella mark with its import, which is what the row's
+ * replay link opens: every play here counts, so every one has a public replay.
  */
-export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: TrackedPlayViewer): RestrictedBestList {
-  const importIds = new Map<OsuScore, string>();
-  const scores = plays.map((play, index) => {
+export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: TrackedPlayViewer): OsuScore[] {
+  return plays.map((play, index) => {
     const playedAt = play.playedAt ?? play.receivedAt;
     const cover = play.beatmapsetId ? `/api/background?beatmapsetId=${play.beatmapsetId}` : null;
-    const score = {
+    return {
       id: 0,
       legacy_score_id: null,
       legacy_total_score: play.totalScore,
@@ -63,6 +59,7 @@ export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: Tracke
         cs: play.keyCount ?? undefined,
         version: play.version,
         difficulty_rating: getScoreSpeedBucket(play.mods) === "normal" ? play.starRating : undefined,
+        bpm: play.bpm ?? undefined,
       },
       beatmapset: {
         id: play.beatmapsetId || undefined,
@@ -71,10 +68,8 @@ export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: Tracke
         creator: play.creator ?? undefined,
         covers: cover ? { cover, "cover@2x": cover } : {},
       },
+      companella: { importId: play.scoreId, replay: true },
       // Absent fields stay absent, which no full OsuScore shape can express.
     } as unknown as OsuScore;
-    importIds.set(score, play.scoreId);
-    return score;
   });
-  return { scores, importIds };
 }

@@ -127,11 +127,12 @@ assume it does.
 ### Rollback
 
 1. Set `COMPANELLA_MODE=disabled` and restart. New authorization and submission
-   attempts stop immediately; `/companella` answers "not switched on".
+   attempts stop immediately; `/companella` answers "not switched on", and
+   imports leave the tracker and profiles.
 2. Narrowing the allowlist instead stops everyone taken off it from connecting,
-   refreshing or submitting, and takes their imports off the public profile
-   route, while `/companella` still shows them their installations and plays to
-   revoke and delete. Membership only gates starting a connection on the
+   refreshing or submitting, and takes their imports off the tracker, the
+   profile Recent tab and the public profile route, while `/companella` still
+   shows them their installations and plays to revoke and delete. Membership only gates starting a connection on the
    manage surface.
 3. Accepted records are durable and are not dropped. No official migration needs
    reverting: every table this integration owns is additive and unrelated to the
@@ -205,7 +206,8 @@ true}`; `404 {"ok": false}` for an unknown score; `400 invalid_review_state`;
 `401` without the admin token (the bridge token included); `404` while the
 integration is disabled. Each
 call logs `companella_review_set`. The decision reaches the owner's stored
-preview (and, for an account osu! turned away, its public plays) at once. The
+preview (and, for an account osu! turned away, its public plays) at once, and
+the play's tracker and Recent rows on their next read. The
 old `/api/integrations/companella/manage/admin/review` is gone and answers
 `404`.
 

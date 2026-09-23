@@ -263,6 +263,7 @@ export const LIVE_EVENT_NAMES = [
   "heartbeat",
   "status",
   "tracker_score",
+  "companella_score",
   "score_gain",
   "top_play",
   "maps_farmed_update",
@@ -531,6 +532,9 @@ export interface LivePlayerProfileSection<T> {
   payload: T;
   fetchedAt: string;
   isStale: boolean;
+  /** Recent only: the player's Companella imports, newest first. Kept apart
+   *  from `payload` so nothing that reads osu! plays picks them up. */
+  imports?: LeanTrackerScore[];
 }
 
 export interface LivePlayerReplayScoresPage {
@@ -1620,6 +1624,7 @@ export interface RestrictedPpPlay {
   version: string;
   creator: string | null;
   keyCount: number | null;
+  bpm?: number | null;
   mods: string[];
   rate: number;
   starRating: number;
@@ -3700,7 +3705,7 @@ export function openReplayPresenceEventSource(
   return new EventSource(`${base}/api/replay/presence?${query.toString()}`);
 }
 
-const AVATAR_LIVE_EVENT_NAMES: LiveEventName[] = ["tracker_score", "score_gain", "top_play", "snipe"];
+const AVATAR_LIVE_EVENT_NAMES: LiveEventName[] = ["tracker_score", "companella_score", "score_gain", "top_play", "snipe"];
 
 const liveEventSourcePool = new SharedEventSourcePool((url) => {
   // One live connection per browser, not per tab: tabs elect a leader via Web

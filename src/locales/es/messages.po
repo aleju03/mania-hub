@@ -4814,8 +4814,8 @@ msgid "Couldn't load collections."
 msgstr "No se pudieron cargar las colecciones."
 
 #: src/components/companella/ProfileImportedPlays.tsx
-msgid "Couldn't load imported plays right now."
-msgstr "No se pudieron cargar las plays importadas en este momento."
+#~ msgid "Couldn't load imported plays right now."
+#~ msgstr "No se pudieron cargar las plays importadas en este momento."
 
 #: src/routes/snipes.tsx
 msgid "Couldn't load live snipes."
@@ -7462,8 +7462,8 @@ msgid "If you sign in with osu!, the site receives the osu! account details allo
 msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes de OAuth identify y public, como el ID de usuario, el nombre de usuario, la URL del avatar y el país. El sitio guarda una cookie de sesión firmada y HTTP-only para poder reconocerte mientras la sesión esté activa."
 
 #: src/routes/companella_.authorize.tsx
-msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
-msgstr "Si tu cuenta de osu! está restringida, las plays importadas aparecen en tu perfil de Mania Tracker."
+#~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
+#~ msgstr "Si tu cuenta de osu! está restringida, las plays importadas aparecen en tu perfil de Mania Tracker."
 
 #: src/routes/dan-estimates.tsx
 msgid "If your recorded plays show that you passed a dan course, your estimate for that side <0>cannot read below that course</0>, whatever your skills average to. Clear EXTRA-EPSILON and you read as epsilon even if your skills average out to delta. The rest of this page works a number out from your plays. A course hands you one directly, so it wins."
@@ -7536,9 +7536,17 @@ msgstr "Se importó el escalado de altura de las imágenes de notas."
 msgid "Imported plays"
 msgstr ""
 
+#: src/routes/companella_.authorize.tsx
+msgid "Imported plays that pass the checks show on the tracker and your Mania Tracker profile."
+msgstr "Las plays importadas que pasan las comprobaciones aparecen en el tracker y en tu perfil de Mania Tracker."
+
 #: src/routes/companella.tsx
-msgid "Imported replays are private to you. Public rankings, pp, snipes and rewards are not affected by anything on this page."
+msgid "Imported plays that pass the checks show on the tracker and your profile. Their replays stay private to you unless your osu! account is restricted. Public rankings, pp, snipes and rewards are not affected by anything on this page."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Imported replays are private to you. Public rankings, pp, snipes and rewards are not affected by anything on this page."
+#~ msgstr ""
 
 #: src/components/player/AddScoreModal.tsx
 msgid "importing"
@@ -8644,7 +8652,6 @@ msgstr "Cargando tus datos…"
 msgid "loading..."
 msgstr "cargando..."
 
-#: src/components/companella/ProfileImportedPlays.tsx
 #: src/components/companella/SubmissionList.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
@@ -9999,8 +10006,8 @@ msgid "No plays match these filters"
 msgstr "Ninguna jugada coincide con estos filtros"
 
 #: src/components/companella/ProfileImportedPlays.tsx
-msgid "No plays sent through Companella yet."
-msgstr "Todavía no hay plays enviadas con Companella."
+#~ msgid "No plays sent through Companella yet."
+#~ msgstr "Todavía no hay plays enviadas con Companella."
 
 #: src/routes/farm-helper.tsx
 msgid "no pp range"
@@ -10776,13 +10783,17 @@ msgstr "Por ahora solo hay mapas skillboost"
 msgid "only you"
 msgstr "solo tú"
 
+#: src/components/companella/SubmissionDetail.tsx
+msgid "Only you can download this unless your osu! account is restricted. The play shows on the tracker and your profile if it passes the checks."
+msgstr ""
+
 #: src/routes/skins.tsx
 msgid "only you can open these"
 msgstr "solo tú puedes abrirlas"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Only you can open this. It is not listed anywhere and has no share link."
-msgstr ""
+#~ msgid "Only you can open this. It is not listed anywhere and has no share link."
+#~ msgstr ""
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Only your two best rate plays on the same chart count toward Dan. This play is outside those two."
@@ -11642,8 +11653,8 @@ msgstr "Los plays se registran automáticamente para el top 100 de cada país. A
 #~ msgstr "Plays por sesión"
 
 #: src/components/companella/ProfileImportedPlays.tsx
-msgid "Plays sent through Companella"
-msgstr "Plays enviadas con Companella"
+#~ msgid "Plays sent through Companella"
+#~ msgstr "Plays enviadas con Companella"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated."
@@ -13674,6 +13685,10 @@ msgstr "Enviando…"
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "Se envía también:"
+
+#: src/components/ui/CompanellaMark.tsx
+msgid "Sent through Companella"
+msgstr "Enviada con Companella"
 
 #. placeholder {0}: recipient?.username ?? ""
 #: src/components/packs/GiftSpareDialog.tsx
@@ -16525,7 +16540,11 @@ msgid "This invite stopped working, so your server is hidden. Paste a new link t
 msgstr "Esta invitación dejó de funcionar, así que tu servidor está oculto. Pega un enlace nuevo para que vuelva a aparecer."
 
 #: src/components/companella/RatingPreviewPanel.tsx
-msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted."
+#~ msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted."
+#~ msgstr ""
+
+#: src/components/companella/RatingPreviewPanel.tsx
+msgid "This is a private preview computed from files your own client sent. It is not an osu! result, it does not change any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that pass the checks still show on the tracker and your profile."
 msgstr ""
 
 #: src/components/companella/RatingPreviewPanel.tsx
@@ -17237,8 +17256,8 @@ msgid "Unstable rate"
 msgstr "Unstable rate"
 
 #: src/components/companella/ProfileImportedPlays.tsx
-msgid "Untitled chart"
-msgstr "Chart sin título"
+#~ msgid "Untitled chart"
+#~ msgstr "Chart sin título"
 
 #: src/lib/bug-report-screenshots.ts
 msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."

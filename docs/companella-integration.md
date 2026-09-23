@@ -1,14 +1,16 @@
 # Companella integration
 
 The Companella score-import beta: a native osu! companion app sends completed
-osu!stable mania plays to Mania Hub over an authenticated HTTPS API, and the
-owner of the account sees them, and their effect on an experimental rating
-preview, on `/companella`.
+osu!stable mania plays to Mania Hub over an authenticated HTTPS API. The owner
+of the account sees them, and their effect on an experimental rating preview, on
+`/companella`; plays that pass every check also show on the tracker and on the
+player's profile Recent tab (see "Privacy").
 
 **Status: off by default.** `COMPANELLA_MODE` is `disabled` unless a deployment
 sets it, and nothing in this integration affects snipes, packs, goals or any
-official projection. The one public number it produces is simulated pp for
-accounts osu! turned away (see "Simulated pp for restricted players"). See
+official projection. The one public total it produces is simulated pp for
+accounts osu! turned away (see "Simulated pp for restricted players"); a public
+row may show the play's own pp beside it. See
 `companella-operations.md` for the rollout switch and
 `companella-client-guide.md` for the client contract.
 
@@ -85,6 +87,7 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `security-events.ts` | What the server observed. Not a cheating score. |
 | `lifecycle.ts` | One self-chaining maintenance job: retention, recovery, object collection. |
 | `public-profile.ts` | The imports of an account osu! turned away, for its public profile. |
+| `public-feed.ts` | Every account's checked imports as tracker and profile Recent rows, merged at read time. |
 
 The replay judge itself is shared with the replay viewer: one copy under
 `live-backend/src/replay-judge/`, reached from the frontend as `#replay-judge/*`
@@ -525,7 +528,7 @@ the way official ratings only take ranked and loved maps: a chart built to be
 overrated would otherwise be the easiest way to move the number. A recognised
 copy whose scroll speed differs from its original is left out too, because MSD
 cannot see scroll speed and an easier-to-read copy would rate the same.
-Everything else is still analyzed and shown to its owner per play.
+Everything else is still analyzed and shown per play.
 
 Every ineligible play is explained: `analysis_pending`, `analysis_failed`,
 `analysis_unsupported`, `vibro_excluded`, `vibro_check_failed` (the vibro check
@@ -540,22 +543,49 @@ decision, not a config flag someone can flip by accident.
 
 ## Privacy
 
-One exception to owner scoping: an account osu! itself turned away shows its
-imports on its public profile, because nothing else can add a play to that
-page. That means `isAccountGoneOnOsu`: inactive, and either restricted at
-sign-in (`restricted_at`) or recorded missing from an osu! 404 lookup. An admin
+Imports are owner-scoped, with two public read-time views.
+
+Every account's imports that pass the checks show on the tracker and on the
+profile Recent tab (`public-feed.ts`), marked with the Companella icon. A play
+shows only when it is in this environment, not deleted, from the native client,
+with a `clear` review, `consistent_with_completed_play`, and its submission
+`accepted`, while the mode is on and the beta admits the account, and while the
+owner is active (or has no `users` row) or gone on osu! per `accountGoneOnOsu`.
+An admin deactivation or wipe hides them. An import whose `online_score_id`
+equals one of the same user's `score_events` score ids is skipped, so a play
+osu! also sent is listed once. The row is a lean tracker score with a stable
+negative id derived from the import id and a `companella: { importId, replay }`
+mark. It uses the official beatmap and set when the import's chart is the exact
+official file (the priced beatmap id, else the same md5 match
+`resolveExactBeatmap` makes), and otherwise a beatmap built from
+`companella_local_charts` with id 0 and no link. The player comes from `users`,
+else the installation's latest username; never the replay's player name. The
+time is the play time clamped to the receipt time. The pp is the play's own
+`companella_local_score_pp` value at the current pp version, shown for every
+account; it enters no total except the restricted simulated pp. Tracker
+snapshots merge these rows on read, new ones go out live as their own
+`companella_score` SSE event, and profile recent sections carry them in
+`imports`. Nothing is written to `score_events`, a `live_event_log` score ref,
+`users`, rosters or any official projection. Only a restricted player's play in
+their current top-200 list has `replay: true` and a Watch button; every other
+row shows without one, since the site may not have the map's audio or
+background.
+
+An account osu! itself turned away also shows its imports on its public
+profile, because nothing else can add a play to that page. That means
+`isAccountGoneOnOsu`: inactive, and either restricted at sign-in
+(`restricted_at`) or recorded missing from an osu! 404 lookup. An admin
 deactivation on this site (`admin:` reasons) and the permanent wipe are this
 site's own decisions, so those imports stay private.
 `GET /api/integrations/companella/public/players/<id>` (`public-profile.ts`,
 no bridge token) answers only for such an account that is also still admitted
 by the beta allowlist, and only with plays that passed every check the preview
-requires, read from the stored preview: identity match, completed, clear
-review, supported analysis, a recognised chart. A weaker repeat of a counted
-play still shows; it only lost the deduplication. It pages newest first until
+requires, read from the stored preview: completed, clear review, supported
+analysis, a recognised chart. A weaker repeat of a counted play still shows;
+it only lost the deduplication. It pages newest first until
 it has up to 100 counted plays, and sends the play, its MSD/SSR and the
 preview's per-keymode overall, never the replay, the chart bytes, the
-installation, or any private explanation. An active account's imports stay
-owner-only.
+installation, or any private explanation.
 
 Beta membership gates starting a connection only: `authorize/request`,
 `authorize/detail` and `authorize/approve`. An account taken off the allowlist
@@ -572,9 +602,10 @@ the private replay-cache bucket, behind unguessable content-addressed keys, and
 are read only through the owner-scoped `/api/companella/replay` route, which
 authorizes before a byte moves and answers `404` for a foreign id (a `403`
 would confirm the score exists). They never enter the public upload flow, the
-community listing, the public SSE feed, or any shared cache: every private
-response is `no-store`. The exception is a play that counts toward simulated
-pp right now (next section), whose replay is public.
+community listing, or any shared cache, and the `companella_score` SSE event
+carries the play, never the replay: every private response is `no-store`. The
+exception is a restricted player's play in their current top-200 list (next
+section), whose replay is public.
 
 ## Simulated pp for restricted players
 
@@ -609,7 +640,9 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
 - **Ranks.** The global rank is one below the lowest-pp active player osu!
   ranks at or above the total (plus any simulated player above); the country
   rank counts the country's ranked roster and simulated players above.
-- **Where it shows.** Totals are computed on read (cached a minute) and merged
+- **Where it shows.** Each play's own pp shows on its tracker and Recent row
+  for every account (see "Privacy"); only the restricted total adds it up.
+  Totals are computed on read (cached a minute) and merged
   into the global and region boards in the snapshot routes
   (`withExtraEntries`, only when the player would sit inside their country's
   roster), never into the cached board, the pack pool or `users`. Public,
@@ -618,7 +651,7 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   `GET /api/integrations/companella/public/rankings?country=XX` (the site's
   country board merges these into osu!'s list), and
   `GET /api/integrations/companella/public/replays/<id>` (the .osr, only for a
-  play that counts right now), opened at `/replay?importId=`.
+  play in the current top-200 list), opened at `/replay?importId=`.
 - **Control.** `/admin/banned-users` shows each account's simulated pp and its
   plays, and removes flagged, chosen or all plays (the ordinary `quarantined`
   review hold, reversible) through

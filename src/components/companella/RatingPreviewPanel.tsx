@@ -100,7 +100,8 @@ export function RatingPreviewPanel({ preview }: { preview: CompanellaPreview | n
       <p className="mt-3 text-xs text-osu-f1">
         <Trans>
           This is a private preview computed from files your own client sent. It is not an osu! result, it does not change
-          any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted.
+          any ranking, pp, snipe or reward, and nobody else can see it unless your osu! account is restricted. Plays that
+          pass the checks still show on the tracker and your profile.
         </Trans>
       </p>
     </Panel>

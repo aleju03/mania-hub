@@ -67,6 +67,9 @@ export function detectTrackerMultis(scores: LeanTrackerScore[]): Map<string, Tra
   // The pool may merge overlapping sources (SSE feed + page snapshots).
   const byIdentity = new Map<string, LeanTrackerScore>();
   for (const score of scores) {
+    // A Companella import is a local play sent after the fact, never a
+    // lobby round, and its chart may not be an osu! beatmap at all.
+    if (score.companella) continue;
     if (getScoreBeatmapId(score) == null || getScoreTimeMs(score) <= 0) continue;
     byIdentity.set(getScoreIdentity(score), score);
   }

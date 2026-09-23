@@ -219,6 +219,9 @@ export function getBoardLaneKey(mods: string[], isLazer: boolean): string {
 }
 
 export function getScoreIdentity(score: ScoreLike): string {
+  if (score.companella) {
+    return `companella:${score.companella.importId}`;
+  }
   if (score.id > 0) {
     return `id:${score.id}`;
   }

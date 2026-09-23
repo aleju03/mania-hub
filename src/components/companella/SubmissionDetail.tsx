@@ -227,7 +227,7 @@ export function SubmissionDetail({
                 <Trans>Download replay</Trans>
               </a>
               <span className="text-xs text-osu-f1">
-                <Trans>Only you can open this. It is not listed anywhere and has no share link.</Trans>
+                <Trans>Only you can download this unless your osu! account is restricted. The play shows on the tracker and your profile if it passes the checks.</Trans>
               </span>
             </div>
           )}
