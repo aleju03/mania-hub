@@ -106,6 +106,7 @@ import { ScoreDetailModal, ScoreRow, TrackedScoreRow, getScoreRowLayout, type Be
 // The BBCode editor (toolbar + parser + preview) only loads when someone
 // actually opens it; the about tab itself stays light.
 const BBCodeEditorLazy = lazy(() => import("../../components/player/bbcode/BBCodeEditor"));
+const GUEST_AVATAR_URL = "https://osu.ppy.sh/images/layout/avatar-guest@2x.png";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -2096,7 +2097,9 @@ export function PlayerProfilePage({
           ? "error"
           : "empty";
 
-  const avatarSrc = user.avatar_url;
+  // A player osu! no longer returns has no avatar_url; show osu!'s own guest
+  // avatar rather than a broken image.
+  const avatarSrc = user.avatar_url || GUEST_AVATAR_URL;
   const profileCountryCode = isSupportedCountryCode(user.country_code)
     ? user.country_code.trim().toUpperCase()
     : null;
