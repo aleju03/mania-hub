@@ -42,8 +42,10 @@ async function callRosterAction(action: "self-add" | "self-remove"): Promise<Ros
     response = await fetch(`${base}/api/roster/${action}`, {
       method: "POST",
       headers,
-      // userId comes from the verified cookie, not from anything the browser sent.
-      body: JSON.stringify({ userId: auth.viewer.id, country }),
+      // Identity comes from the verified cookie, not from anything the browser sent. The name and
+      // avatar let the backend store who opted in before its first osu! lookup, which 404s for a
+      // restricted account.
+      body: JSON.stringify({ userId: auth.viewer.id, country, username: auth.viewer.username, avatarUrl: auth.viewer.avatarUrl }),
     });
   } catch {
     return { ok: false, status: "unavailable", country };
