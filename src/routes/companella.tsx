@@ -248,9 +248,6 @@ function CompanellaPage() {
                 ? <Trans>Signed in as {auth.viewer.username}. Nothing is connected yet.</Trans>
                 : <Trans>Signed in as {auth.viewer.username}. {activeInstallations} connected.</Trans>}
             </p>
-            <p className="mt-0.5 text-[12px] text-osu-f1">
-              <Trans>Plays Companella sends show on the tracker and your profile. Their replays stay private to you.</Trans>
-            </p>
             {!access.storageReady && (
               <p className="mt-1 text-[12px] text-rose-300">
                 <Trans>Storage is not configured, so uploads will fail until it is.</Trans>

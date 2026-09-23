@@ -2228,8 +2228,8 @@ msgid "a collector"
 msgstr "a collector"
 
 #: src/components/companella/SecurityActivity.tsx
-msgid "A country change is not a problem on its own. VPNs, mobile networks and dual boot all move it, and nothing here bans an account or deletes a score."
-msgstr "A country change is not a problem on its own. VPNs, mobile networks and dual boot all move it, and nothing here bans an account or deletes a score."
+#~ msgid "A country change is not a problem on its own. VPNs, mobile networks and dual boot all move it, and nothing here bans an account or deletes a score."
+#~ msgstr "A country change is not a problem on its own. VPNs, mobile networks and dual boot all move it, and nothing here bans an account or deletes a score."
 
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "A customizable picture for your osu! profile that keeps itself updated."
@@ -11801,8 +11801,8 @@ msgid "Plays are recorded automatically for the top 100 of each country. You're 
 msgstr "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 
 #: src/routes/companella.tsx
-msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
-msgstr "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
+#~ msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
+#~ msgstr "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"

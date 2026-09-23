@@ -40,12 +40,6 @@ export function SecurityActivity({ events }: { events: CompanellaSecurityEvent[]
           ))}
         </ul>
       )}
-      <p className="mt-3 text-xs text-osu-f1">
-        <Trans>
-          A country change is not a problem on its own. VPNs, mobile networks and dual boot all move it, and nothing here
-          bans an account or deletes a score.
-        </Trans>
-      </p>
     </Panel>
   );
 }
