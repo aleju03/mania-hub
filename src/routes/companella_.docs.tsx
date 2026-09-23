@@ -164,6 +164,11 @@ function CompanellaDocsPage() {
               the callback gets <Code>error=access_denied</Code> instead. A request nobody answers expires after 10
               minutes without calling back, so add a timeout on your side as well.
             </P>
+            <P>
+              While you're testing, use <Code>client_id=companella-test</Code> here and in the code exchange. Plays sent
+              through a test connection only show on your own <A href="/companella">/companella</A> page and are
+              deleted after 7 days. Real plays need a connection made with <Code>companella</Code>.
+            </P>
             <CodeBlock label="exchange the code">{`POST ${base}${API}/oauth/token
 DPoP: <proof, without ath>
 Content-Type: application/json

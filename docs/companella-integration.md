@@ -315,7 +315,9 @@ OD written in the chart file, which is editable too. So nothing is rated from
 them. `replay-timing.ts` decodes the frames the way the replay viewer does and
 runs the shared judge over them, which pairs every press with its note. Each
 note is then scored on Etterna's Wife3 curve from how many real milliseconds it
-was off, giving the two targets the count calibration was fitted to
+was off (a press osu! judged a miss still scores its offset when it is under
+Wife3's 180 ms, as in Etterna; only a note nobody pressed scores the full
+-2.75), giving the two targets the count calibration was fitted to
 (`docs/wife-calibration.md`): press/hold Wife3 (taps and heads, minus 2.25 per
 failed hold) and LN action Wife3. `goalsFromMeasuredWife` applies the same caps
 and 0.8 floor as `calibrateScoreForMsd`. A play whose presses cannot be judged

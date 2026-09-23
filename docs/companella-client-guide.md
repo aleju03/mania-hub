@@ -61,6 +61,11 @@ scopes and algorithms, and the current limits.
    (printable, one line, up to 40 characters). Without it the screen says "An
    external application".
 
+   While testing, send `client_id=companella-test` here and in the code
+   exchange (only when the server sets `COMPANELLA_ENABLE_TEST_CLIENT`). Plays
+   from a test connection show only on the owner's `/companella` page and are
+   deleted after 7 days. Real plays need a connection made with `companella`.
+
 5. The user signs in with osu! if needed, names the installation, and approves.
    Approval covers both the plays and, when the site does not already hold a
    chart, the `.osu` behind them.
