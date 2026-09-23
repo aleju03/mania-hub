@@ -8050,9 +8050,9 @@ msgstr "打出一个价值 <0/> 的成绩"
 msgid "lane cover"
 msgstr "轨道遮罩"
 
-#: src/components/maps/LnStructurePanel.tsx
-#~ msgid "Lanes"
-#~ msgstr "列"
+#: src/lib/signature-shared.ts
+msgid "Lanes"
+msgstr "列"
 
 #: src/routes/communities.tsx
 msgid "language"
@@ -10767,6 +10767,7 @@ msgstr ""
 msgid "Only me"
 msgstr "仅自己"
 
+#: src/components/packs/collections/CardMarks.tsx
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Only one"
 msgstr "唯一一张"
@@ -13094,6 +13095,7 @@ msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data,
 msgstr "osu!、osu!mania、osu! 游戏品牌标识、模式名称、成绩数据、回放数据、用户资料数据，以及相关 osu! 资源的权利，仍归 ppy Pty Ltd 或相应的权利持有人所有。"
 
 #: src/lib/replay-overlays.ts
+#: src/lib/signature-shared.ts
 msgid "Rings"
 msgstr "圆环"
 
@@ -13116,6 +13118,10 @@ msgstr "罗马尼亚语"
 #: src/components/layout/ThemePicker.tsx
 msgid "rose"
 msgstr "玫瑰红"
+
+#: src/lib/signature-shared.ts
+msgid "Rose"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Rotate every color in the selection"
@@ -13326,6 +13332,10 @@ msgstr "成绩 #{scoreId}"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "score, combo and ranking fonts, health bar"
 msgstr "分数、连击和评级字体，血条"
+
+#: src/lib/signature-shared.ts
+msgid "Scoreline"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ScorePosition"

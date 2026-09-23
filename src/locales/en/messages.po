@@ -8076,9 +8076,9 @@ msgstr "Land a play worth <0/>"
 msgid "lane cover"
 msgstr "lane cover"
 
-#: src/components/maps/LnStructurePanel.tsx
-#~ msgid "Lanes"
-#~ msgstr "Lanes"
+#: src/lib/signature-shared.ts
+msgid "Lanes"
+msgstr "Lanes"
 
 #: src/routes/communities.tsx
 msgid "language"
@@ -10793,6 +10793,7 @@ msgstr "Only approve a request you started yourself. If someone sent you this li
 msgid "Only me"
 msgstr "Only me"
 
+#: src/components/packs/collections/CardMarks.tsx
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Only one"
 msgstr "Only one"
@@ -13120,6 +13121,7 @@ msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data,
 msgstr "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data, replay data, user profile data, and related osu! assets remain with ppy Pty Ltd or the applicable rightsholders."
 
 #: src/lib/replay-overlays.ts
+#: src/lib/signature-shared.ts
 msgid "Rings"
 msgstr "Rings"
 
@@ -13142,6 +13144,10 @@ msgstr "Romanian"
 #: src/components/layout/ThemePicker.tsx
 msgid "rose"
 msgstr "rose"
+
+#: src/lib/signature-shared.ts
+msgid "Rose"
+msgstr "Rose"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Rotate every color in the selection"
@@ -13352,6 +13358,10 @@ msgstr "Score #{scoreId}"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "score, combo and ranking fonts, health bar"
 msgstr "score, combo and ranking fonts, health bar"
+
+#: src/lib/signature-shared.ts
+msgid "Scoreline"
+msgstr "Scoreline"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ScorePosition"

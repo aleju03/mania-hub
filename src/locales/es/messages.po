@@ -8041,9 +8041,9 @@ msgstr "Consigue un play de <0/>"
 msgid "lane cover"
 msgstr "lane cover"
 
-#: src/components/maps/LnStructurePanel.tsx
-#~ msgid "Lanes"
-#~ msgstr "Columnas"
+#: src/lib/signature-shared.ts
+msgid "Lanes"
+msgstr "Columnas"
 
 #: src/routes/communities.tsx
 msgid "language"
@@ -10758,6 +10758,7 @@ msgstr ""
 msgid "Only me"
 msgstr "Solo yo"
 
+#: src/components/packs/collections/CardMarks.tsx
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Only one"
 msgstr "La única"
@@ -13085,6 +13086,7 @@ msgid "Rights in osu!, osu!mania, osu! game branding, ruleset names, score data,
 msgstr "Los derechos sobre osu!, osu!mania, la identidad de marca del juego osu!, los nombres de modos de juego, los datos de puntuaciones, los datos de replays, los datos de perfil de usuario y demás recursos relacionados de osu! siguen perteneciendo a ppy Pty Ltd o a los titulares de derechos correspondientes."
 
 #: src/lib/replay-overlays.ts
+#: src/lib/signature-shared.ts
 msgid "Rings"
 msgstr "Anillos"
 
@@ -13107,6 +13109,10 @@ msgstr "Rumano"
 #: src/components/layout/ThemePicker.tsx
 msgid "rose"
 msgstr "rosa"
+
+#: src/lib/signature-shared.ts
+msgid "Rose"
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Rotate every color in the selection"
@@ -13317,6 +13323,10 @@ msgstr "Score #{scoreId}"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "score, combo and ranking fonts, health bar"
 msgstr "fuentes de score, combo y ranking, barra de vida"
+
+#: src/lib/signature-shared.ts
+msgid "Scoreline"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ScorePosition"

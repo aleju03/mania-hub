@@ -58,6 +58,11 @@ export const SIGNATURE_DESIGNS: Record<SignatureType, SignatureDesign[]> = {
     { design: 1, slug: "radar-and-axes", label: msg`Radar and axes`, width: 880, height: 260 },
     { design: 2, slug: "bars", label: msg`Bars`, width: 700, height: 220 },
     { design: 3, slug: "radar", label: msg`Radar`, width: 320, height: 320 },
+    { design: 4, slug: "lanes", label: msg`Lanes`, width: 880, height: 180 },
+    { design: 5, slug: "scoreline", label: msg`Scoreline`, width: 880, height: 110 },
+    /* Wider than tall for the radar's reason: the side labels need the room. */
+    { design: 6, slug: "rose", label: msg`Rose`, width: 420, height: 320 },
+    { design: 7, slug: "rings", label: msg`Rings`, width: 560, height: 220 },
   ],
   dan: [
     { design: 1, slug: "rice-and-ln", label: msg`Regular and LN`, width: 880, height: 200 },

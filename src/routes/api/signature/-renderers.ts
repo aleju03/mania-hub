@@ -36,6 +36,7 @@ import {
   ringPolygon,
   RADAR_RINGS,
   skillModeEntries,
+  type SkillAxisEntry,
 } from "../../../lib/skill-axes";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../../lib/my-data";
 import { getDanImageSrc } from "../../../lib/dan-images";
@@ -1086,6 +1087,291 @@ function radarSvg(entries: ReturnType<typeof skillModeEntries>, width: number, h
     + `</svg>`;
 }
 
+/* Everything the skills layouts share once the data is known to be drawable. */
+interface SkillsScene {
+  width: number;
+  height: number;
+  mode: MyDataSkillMode;
+  entries: SkillAxisEntry[];
+  accent: string;
+  dim: string;
+  overall: number;
+  keyChip: ReactNode;
+  layers: ReactNode[];
+}
+
+/* The mark as an ordinary flow child, for a layout whose corners all hold data. */
+function flowWordmark(style: SignatureStyle): ReactNode {
+  if (!style.watermark) return null;
+  return h("div", {
+    key: "mark",
+    style: { fontSize: "11px", color: "rgba(255,255,255,0.28)", letterSpacing: "0.02em" },
+  }, "mania-tracker.com");
+}
+
+/* Design 4: each skillset is a column on a playfield, its rating a hold note
+   rising from the judgement line. Heights are relative to the top skill, the
+   same scale the bars use. */
+function skillsLanes(ctx: SignatureRenderContext, scene: SkillsScene): ReactElement {
+  const { width, height, mode, entries, accent, dim } = scene;
+  const shown = entries.slice(0, 8);
+  const top = shown[0]!.value || 1;
+  const leftWidth = 190;
+  const gap = 8;
+  const laneArea = width - 48 - leftWidth - 16;
+  const laneWidth = Math.floor((laneArea - gap * (shown.length - 1)) / shown.length);
+  const laneHeight = height - 30 - 34;
+  const maxFill = laneHeight - 30;
+  const labelSize = laneWidth >= 76 ? 12 : 11;
+
+  const lanes = shown.map((entry) => {
+    const fill = Math.max(12, Math.round(maxFill * (entry.value / top)));
+    return h("div", {
+      key: entry.key,
+      style: {
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+        width: `${laneWidth}px`, height: `${laneHeight}px`,
+        background: "rgba(255,255,255,0.04)", borderRadius: "4px 4px 0 0",
+      },
+    }, [
+      h("div", { key: "v", style: { fontSize: "15px", fontWeight: 900, marginBottom: "5px" } }, entry.value.toFixed(1)),
+      h("div", {
+        key: "note",
+        style: { display: "flex", flexDirection: "column", width: `${laneWidth}px`, height: `${fill}px` },
+      }, [
+        h("div", { key: "head", style: { height: "8px", background: entry.color, borderRadius: "2px" } }),
+        h("div", { key: "body", style: { flex: 1, background: hexAlpha(entry.color, 0.32) } }),
+      ]),
+    ]);
+  });
+
+  const labels = shown.map((entry) => {
+    const percentile = mode.percentiles?.[entry.axis];
+    return h("div", {
+      key: entry.key,
+      style: { display: "flex", flexDirection: "column", alignItems: "center", width: `${laneWidth}px` },
+    }, [
+      h("div", {
+        key: "l",
+        style: { fontSize: `${labelSize}px`, fontWeight: 700, color: "rgba(255,255,255,0.80)", whiteSpace: "nowrap" },
+      }, entry.label),
+      h("div", { key: "p", style: { fontSize: "11px", color: dim, whiteSpace: "nowrap" } },
+        percentile ? formatTopShare(percentile) : ""),
+    ]);
+  });
+
+  return frame(width, height, [
+    ...scene.layers,
+    h("div", { key: "row", style: { display: "flex", width: "100%", padding: "16px 24px 14px", gap: "16px" } }, [
+      h("div", {
+        key: "left",
+        style: { display: "flex", flexDirection: "column", justifyContent: "space-between", width: `${leftWidth}px` },
+      }, [
+        h("div", { key: "who", style: { display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" } }, [
+          h("div", { key: "n", style: { fontSize: "18px", fontWeight: 900 } }, clamp(ctx.resolved.username, 16)),
+          scene.keyChip,
+        ]),
+        h("div", { key: "overall", style: { display: "flex", flexDirection: "column" } }, [
+          h("div", { key: "v", style: { fontSize: "40px", fontWeight: 900, color: accent, lineHeight: 1 } }, scene.overall.toFixed(2)),
+          h("div", { key: "l", style: { fontSize: "11px", color: dim, marginTop: "4px" } }, "Overall"),
+          flowWordmark(ctx.style),
+        ]),
+      ]),
+      h("div", { key: "field", style: { display: "flex", flexDirection: "column", flex: 1 } }, [
+        h("div", { key: "lanes", style: { display: "flex", gap: `${gap}px` } }, lanes),
+        h("div", { key: "judge", style: { height: "2px", background: "rgba(255,255,255,0.30)" } }),
+        h("div", { key: "labels", style: { display: "flex", gap: `${gap}px`, marginTop: "5px" } }, labels),
+      ]),
+    ]),
+  ]);
+}
+
+/* Design 5: no chart, just the numbers large, each skill underlined in its
+   colour to the length its value bears to the top one. */
+function skillsScoreline(ctx: SignatureRenderContext, scene: SkillsScene): ReactElement {
+  const { width, height, mode, entries, accent, dim } = scene;
+  const shown = entries.slice(0, 8);
+  const top = shown[0]!.value || 1;
+  const overallWidth = 124;
+  const cellWidth = Math.floor((width - 48 - overallWidth) / shown.length);
+  const underline = cellWidth - 18;
+
+  const cell = (key: string, value: string, label: string, color: string, size: number, line: number, cellW: number) =>
+    h("div", { key, style: { display: "flex", flexDirection: "column", width: `${cellW}px` } }, [
+      h("div", { key: "v", style: { fontSize: `${size}px`, fontWeight: 900, lineHeight: 1, color: key === "overall" ? accent : "#ffffff" } }, value),
+      h("div", {
+        key: "l",
+        style: { fontSize: "12px", fontWeight: 700, marginTop: "6px", whiteSpace: "nowrap", color: key === "overall" ? dim : "rgba(255,255,255,0.80)" },
+      }, label),
+      h("div", { key: "u", style: { width: `${Math.max(4, line)}px`, height: "3px", marginTop: "6px", borderRadius: "2px", background: key === "overall" ? "transparent" : color } }),
+    ]);
+
+  return frame(width, height, [
+    ...scene.layers,
+    h("div", { key: "body", style: { display: "flex", flexDirection: "column", width: "100%", padding: "14px 24px", gap: "10px" } }, [
+      h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" } }, [
+        h("div", { key: "n", style: { fontWeight: 900 } }, clamp(ctx.resolved.username, 24)),
+        h("div", { key: "k", style: { color: dim } }, `${mode.keyCount}K${mode.provisional ? " · provisional" : ""}`),
+      ]),
+      h("div", { key: "cells", style: { display: "flex", alignItems: "flex-end" } }, [
+        cell("overall", scene.overall.toFixed(2), "Overall", accent, 36, 0, overallWidth),
+        ...shown.map((entry) => cell(entry.key, entry.value.toFixed(1), entry.label, entry.color, 26,
+          Math.round(underline * (entry.value / top)), cellWidth)),
+      ]),
+    ]),
+    headerWordmark(ctx.style),
+  ]);
+}
+
+function annularSector(cx: number, cy: number, rIn: number, rOut: number, a0: number, a1: number): string {
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  const pt = (r: number, a: number) => `${(cx + Math.cos(a) * r).toFixed(2)} ${(cy + Math.sin(a) * r).toFixed(2)}`;
+  return `M ${pt(rOut, a0)} A ${rOut} ${rOut} 0 ${large} 1 ${pt(rOut, a1)} L ${pt(rIn, a1)} A ${rIn} ${rIn} 0 ${large} 0 ${pt(rIn, a0)} Z`;
+}
+
+/* Design 6: a polar area chart. Each skill is a wedge in its own colour on
+   the radar's spoke angles, so the value labels land where the radar's would. */
+function skillsRose(ctx: SignatureRenderContext, scene: SkillsScene): ReactElement {
+  const { width, height, entries, accent, dim } = scene;
+  const top = entries[0]!.value || 1;
+  const labelBox = 32;
+  const longest = entries.reduce((max, entry) => Math.max(max, entry.label.length), 0);
+  const labelWidth = Math.max(44, Math.ceil(longest * 11 * 0.6));
+  const labelR = Math.min(width / 2 - labelWidth - 6, height / 2 - labelBox - 6);
+  const geo = radarGeometry({ width, height, maxR: labelR - 10, labelR });
+  const inner = 40;
+  const span = (Math.PI * 2) / entries.length;
+  const pad = 0.035;
+  const points = radarPoints(entries, top, geo);
+
+  const wedges = points.map((point) => {
+    const a0 = point.angle - span / 2 + pad;
+    const a1 = point.angle + span / 2 - pad;
+    const r = inner + (geo.maxR - inner) * (point.entry.value / top);
+    return `<path d="${annularSector(geo.cx, geo.cy, inner, geo.maxR, a0, a1)}" fill="rgba(255,255,255,0.06)"/>`
+      + `<path d="${annularSector(geo.cx, geo.cy, inner, r, a0, a1)}" fill="${point.entry.color}" fill-opacity="0.88"/>`;
+  }).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${wedges}</svg>`;
+
+  const labels = points.map((point) => {
+    const anchor = radarAnchor(point.angle);
+    const sin = Math.sin(point.angle);
+    const left = anchor === "start" ? point.labelX
+      : anchor === "end" ? point.labelX - labelWidth
+      : point.labelX - labelWidth / 2;
+    const topY = sin < -0.35 ? point.labelY - labelBox : sin > 0.35 ? point.labelY : point.labelY - labelBox / 2;
+    const align = anchor === "start" ? "flex-start" : anchor === "end" ? "flex-end" : "center";
+    return h("div", {
+      key: point.entry.key,
+      style: {
+        position: "absolute", left: `${Math.round(left)}px`, top: `${Math.round(topY)}px`,
+        width: `${labelWidth}px`, height: `${labelBox}px`,
+        display: "flex", flexDirection: "column", alignItems: align, justifyContent: "center",
+      },
+    }, [
+      h("div", { key: "v", style: { fontSize: "15px", fontWeight: 900, lineHeight: 1 } }, point.entry.value.toFixed(1)),
+      h("div", { key: "l", style: { fontSize: "11px", fontWeight: 700, color: RADAR_LABEL_COLOR, marginTop: "3px", whiteSpace: "nowrap" } }, point.entry.label),
+    ]);
+  });
+
+  return frame(width, height, [
+    ...scene.layers,
+    h("img", {
+      key: "rose",
+      src: svgDataUrl(svg),
+      width,
+      height,
+      style: { position: "absolute", top: "0", left: "0", width: `${width}px`, height: `${height}px` },
+    }),
+    ...labels,
+    h("div", {
+      key: "centre",
+      style: {
+        position: "absolute", top: "0", left: "0", width: `${width}px`, height: `${height}px`,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      },
+    }, [
+      h("div", { key: "v", style: { fontSize: "22px", fontWeight: 900, color: accent, lineHeight: 1 } }, scene.overall.toFixed(2)),
+      h("div", { key: "l", style: { fontSize: "11px", color: dim, marginTop: "2px" } }, "Overall"),
+    ]),
+    h("div", { key: "chip", style: { position: "absolute", left: "12px", top: "12px", display: "flex" } }, [scene.keyChip]),
+    headerWordmark(ctx.style, 12, 12),
+  ]);
+}
+
+/* Design 7: one ring per skill, filled to the share of rated players below
+   it, so a fuller ring means higher in the population. A mode without a
+   baseline falls back to the top-skill scale for every ring, never a mix. */
+function skillsRings(ctx: SignatureRenderContext, scene: SkillsScene): ReactElement {
+  const { width, height, mode, entries, accent, dim } = scene;
+  const shown = entries.slice(0, 6);
+  const top = shown[0]!.value || 1;
+  const byPercentile = shown.every((entry) => mode.percentiles?.[entry.axis]);
+  const fraction = (entry: SkillAxisEntry) => byPercentile
+    ? mode.percentiles![entry.axis]!.value / 100
+    : entry.value / top;
+
+  const size = height - 36;
+  const c = size / 2;
+  const outer = c - 2;
+  const pitch = Math.min(13, (outer - 42) / shown.length);
+  const stroke = Math.round(pitch * 0.7);
+  const rings = shown.map((entry, index) => {
+    const r = outer - stroke / 2 - index * pitch;
+    const f = Math.max(0.02, Math.min(1, fraction(entry)));
+    const track = `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="${stroke}"/>`;
+    if (f >= 0.999) return `${track}<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${entry.color}" stroke-width="${stroke}"/>`;
+    const end = -Math.PI / 2 + f * Math.PI * 2;
+    const arc = `M ${c} ${(c - r).toFixed(2)} A ${r} ${r} 0 ${f > 0.5 ? 1 : 0} 1 ${(c + Math.cos(end) * r).toFixed(2)} ${(c + Math.sin(end) * r).toFixed(2)}`;
+    return `${track}<path d="${arc}" fill="none" stroke="${entry.color}" stroke-width="${stroke}" stroke-linecap="round"/>`;
+  }).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${rings}</svg>`;
+
+  const rows = shown.map((entry) => {
+    const percentile = mode.percentiles?.[entry.axis];
+    return h("div", { key: entry.key, style: { display: "flex", alignItems: "center", gap: "10px" } }, [
+      h("div", { key: "d", style: { width: "8px", height: "8px", borderRadius: "4px", background: entry.color } }),
+      h("div", { key: "l", style: { flex: 1, fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.82)" } }, entry.label),
+      h("div", { key: "v", style: { width: "48px", fontSize: "15px", fontWeight: 900, textAlign: "right" } }, entry.value.toFixed(1)),
+      h("div", { key: "p", style: { width: "68px", fontSize: "11px", color: dim, textAlign: "right" } },
+        percentile ? formatTopShare(percentile) : ""),
+    ]);
+  });
+
+  return frame(width, height, [
+    ...scene.layers,
+    h("div", { key: "row", style: { display: "flex", width: "100%", padding: "18px 22px 18px 18px", gap: "24px" } }, [
+      h("div", { key: "rings", style: { position: "relative", display: "flex", width: `${size}px`, height: `${size}px`, flexShrink: 0 } }, [
+        h("img", {
+          key: "svg",
+          src: svgDataUrl(svg),
+          width: size,
+          height: size,
+          style: { position: "absolute", top: "0", left: "0", width: `${size}px`, height: `${size}px` },
+        }),
+        h("div", {
+          key: "centre",
+          style: {
+            position: "absolute", top: "0", left: "0", width: `${size}px`, height: `${size}px`,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          },
+        }, [
+          h("div", { key: "v", style: { fontSize: "20px", fontWeight: 900, color: accent, lineHeight: 1 } }, scene.overall.toFixed(2)),
+          h("div", { key: "l", style: { fontSize: "11px", color: dim, marginTop: "2px" } }, "Overall"),
+        ]),
+      ]),
+      h("div", { key: "legend", style: { display: "flex", flexDirection: "column", flex: 1, gap: "7px", minWidth: "0" } }, [
+        h("div", { key: "head", style: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "5px" } }, [
+          h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, clamp(ctx.resolved.username, 18)),
+          scene.keyChip,
+        ]),
+        ...rows,
+      ]),
+    ]),
+    headerWordmark(ctx.style),
+  ]);
+}
+
 async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
   const spec = signatureDesign(ctx.type, ctx.design)!;
   const skills = await fetchSkills(ctx.resolved.userId);
@@ -1111,6 +1397,14 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
       fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.78)",
     },
   }, `${mode.keyCount}K${mode.provisional ? " · provisional" : ""}`);
+
+  const scene: SkillsScene = {
+    width: spec.width, height: spec.height, mode, entries, accent, dim, overall, keyChip, layers: background.layers,
+  };
+  if (ctx.design === 4) return renderPng(ctx, skillsLanes(ctx, scene));
+  if (ctx.design === 5) return renderPng(ctx, skillsScoreline(ctx, scene));
+  if (ctx.design === 6) return renderPng(ctx, skillsRose(ctx, scene));
+  if (ctx.design === 7) return renderPng(ctx, skillsRings(ctx, scene));
 
   if (ctx.design === 3) {
     return renderPng(ctx, frame(spec.width, spec.height, [
