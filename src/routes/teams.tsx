@@ -205,6 +205,9 @@ function TeamsPage() {
                 className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/40 py-1.5 pl-8 pr-3 text-[13px] text-white placeholder:text-osu-f1/70 outline-none transition-colors focus:border-osu-pink/40"
               />
             </div>
+            <p className="text-[11px] text-osu-f1">
+              {t`Ranks can differ from osu! because some teams' pp only counts tracked members.`}
+            </p>
             <div className="hidden sm:block sm:ml-auto">{totalLabel}</div>
           </div>
 

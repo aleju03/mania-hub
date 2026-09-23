@@ -3460,6 +3460,8 @@ export interface LivePackPullFeedEntry {
   isNew: boolean;
   isFirstGlobal: boolean;
   pulledAt: number;
+  /* Set on a team card's pull; cardUsername is then the team's name. */
+  team?: { teamId: number; flagUrl: string | null } | null;
 }
 
 /* Community ownership counts for a hand of cards ("owned by N collectors").

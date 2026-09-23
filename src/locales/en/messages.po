@@ -7141,6 +7141,7 @@ msgstr "Give the set a name."
 msgid "global"
 msgstr "global"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/index.tsx
 #: src/routes/player/$username.tsx
 msgid "Global"
@@ -9175,8 +9176,8 @@ msgstr "manager"
 #~ msgstr "Mania Hub just updated"
 
 #: src/components/team/TeamProfilePage.tsx
-msgid "Mania Hub rank"
-msgstr "Mania Hub rank"
+#~ msgid "Mania Hub rank"
+#~ msgstr "Mania Hub rank"
 
 #: src/routes/maps.tsx
 msgid "Mania maps"
@@ -11781,13 +11782,14 @@ msgstr "pause overlay, fail and section screens, countdown"
 msgid "Pause preview"
 msgstr "Pause preview"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Peak"
 msgstr "Peak"
 
 #: src/components/team/TeamProfilePage.tsx
-msgid "Peak Mania Hub rank"
-msgstr "Peak Mania Hub rank"
+#~ msgid "Peak Mania Hub rank"
+#~ msgstr "Peak Mania Hub rank"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
@@ -12674,6 +12676,18 @@ msgstr "rankings"
 #: src/routes/index.tsx
 msgid "Rankings"
 msgstr "Rankings"
+
+#: src/routes/teams.tsx
+msgid "Ranks can differ from osu! because some teams' pp only counts tracked members."
+msgstr "Ranks can differ from osu! because some teams' pp only counts tracked members."
+
+#: src/routes/teams.tsx
+#~ msgid "Ranks can differ from osu! because team pp here only counts the members we track."
+#~ msgstr "Ranks can differ from osu! because team pp here only counts the members we track."
+
+#: src/routes/teams.tsx
+#~ msgid "Ranks can differ from osu! because team pp here only counts tracked members."
+#~ msgstr "Ranks can differ from osu! because team pp here only counts tracked members."
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "rarest"
@@ -17866,6 +17880,10 @@ msgstr "unreadable"
 #: src/lib/replay-overlays.ts
 msgid "Unstable rate"
 msgstr "Unstable rate"
+
+#: src/routes/teams.tsx
+#~ msgid "Until someone opens a team's page, its pp only counts tracked members."
+#~ msgstr "Until someone opens a team's page, its pp only counts tracked members."
 
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "Untitled chart"

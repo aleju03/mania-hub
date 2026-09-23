@@ -326,8 +326,10 @@ function OgPreviewPage() {
     if (kind !== "pull" || recentPulls.length > 0) return;
     let cancelled = false;
     fetchLivePackRecentPulls(12, { includeAll: true })
-      .then((pulls) => {
+      .then((allPulls) => {
         if (cancelled) return;
+        // The pull permalink renders player cards only.
+        const pulls = allPulls.filter((pull) => !pull.team);
         setRecentPulls(pulls);
         setPullsError(pulls.length === 0 ? "the live pull feed is empty" : "");
         const first = pulls[0];

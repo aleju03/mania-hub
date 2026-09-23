@@ -588,54 +588,85 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                   {/* The rail itself stays anonymous (it shows what was pulled,
                       not who pulled it), but each entry links to that exact
                       event on the card's durable permalink. The pull page names
-                      the owner and can distinguish a new card from a duplicate. */}
-                  <Link
-                    to="/pull/$ownerId/$cardId"
-                    params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
-                    search={{ pull: pull.id }}
-                    className="pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100"
-                    aria-label={`${pull.cardUsername} was pulled`}
-                  >
-                    {pull.cardAvatarUrl ? (
-                      <img
-                        src={pull.cardAvatarUrl}
-                        alt=""
-                        className="h-6 w-6 shrink-0 rounded-full object-cover"
-                        style={{ boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` }}
-                        loading="lazy"
-                        draggable={false}
-                      />
-                    ) : (
-                      <span
-                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-osu-b3"
-                        style={{ boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` }}
-                      >
-                        <CountryFlag code={pull.cardCountryCode} size="xs" decorative />
-                      </span>
-                    )}
-                    <span className="flex min-w-0 flex-col">
-                      <span className="flex items-center gap-1 leading-tight">
-                        <span className="truncate text-[11px] font-semibold text-white/90">{pull.cardUsername}</span>
-                        {pull.isFirstGlobal && (
-                          <span title={t`First time anyone pulled this card`} className="flex shrink-0">
-                            <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label={t`first time anyone pulled this card`} />
-                          </span>
-                        )}
-                      </span>
-                      <span className="truncate text-[9px] leading-tight">
-                        {style ? (
-                          <span className="font-bold uppercase tracking-wide" style={{ color: `rgba(${accent}, 0.9)` }}>
-                            {style.label}
-                          </span>
+                      the owner and can distinguish a new card from a duplicate.
+                      A team card has no permalink, so it links to the team. */}
+                  {(() => {
+                    const ring = { boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` };
+                    const body = (
+                      <>
+                        {pull.team ? (
+                          pull.team.flagUrl ? (
+                            <img
+                              src={pull.team.flagUrl}
+                              alt=""
+                              className="h-4 w-8 shrink-0 rounded-[3px] object-cover"
+                              style={ring}
+                              loading="lazy"
+                              draggable={false}
+                            />
+                          ) : (
+                            <span className="h-4 w-8 shrink-0 rounded-[3px] bg-osu-b3" style={ring} />
+                          )
+                        ) : pull.cardAvatarUrl ? (
+                          <img
+                            src={pull.cardAvatarUrl}
+                            alt=""
+                            className="h-6 w-6 shrink-0 rounded-full object-cover"
+                            style={ring}
+                            loading="lazy"
+                            draggable={false}
+                          />
                         ) : (
-                          <span className="text-osu-f1/70">{t`pulled`}</span>
+                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-osu-b3" style={ring}>
+                            <CountryFlag code={pull.cardCountryCode} size="xs" decorative />
+                          </span>
                         )}
-                        {pull.pulledAt > 0 && (
-                          <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
-                        )}
-                      </span>
-                    </span>
-                  </Link>
+                        <span className="flex min-w-0 flex-col">
+                          <span className="flex items-center gap-1 leading-tight">
+                            <span className="truncate text-[11px] font-semibold text-white/90">{pull.cardUsername}</span>
+                            {pull.isFirstGlobal && (
+                              <span title={t`First time anyone pulled this card`} className="flex shrink-0">
+                                <Sparkles className="h-2.5 w-2.5 text-osu-pink" aria-label={t`first time anyone pulled this card`} />
+                              </span>
+                            )}
+                          </span>
+                          <span className="truncate text-[9px] leading-tight">
+                            {style ? (
+                              <span className="font-bold uppercase tracking-wide" style={{ color: `rgba(${accent}, 0.9)` }}>
+                                {style.label}
+                              </span>
+                            ) : (
+                              <span className="text-osu-f1/70">{t`pulled`}</span>
+                            )}
+                            {pull.pulledAt > 0 && (
+                              <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
+                            )}
+                          </span>
+                        </span>
+                      </>
+                    );
+                    const linkClass = "pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100";
+                    return pull.team ? (
+                      <Link
+                        to="/team/$teamId"
+                        params={{ teamId: String(pull.team.teamId) }}
+                        className={linkClass}
+                        aria-label={`${pull.cardUsername} was pulled`}
+                      >
+                        {body}
+                      </Link>
+                    ) : (
+                      <Link
+                        to="/pull/$ownerId/$cardId"
+                        params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
+                        search={{ pull: pull.id }}
+                        className={linkClass}
+                        aria-label={`${pull.cardUsername} was pulled`}
+                      >
+                        {body}
+                      </Link>
+                    );
+                  })()}
                 </motion.div>
               );
             })}

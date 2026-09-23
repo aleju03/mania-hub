@@ -238,6 +238,8 @@ export function mergePulls(
   for (const entry of entries) {
     if (!Number.isFinite(entry?.id) || !Number.isFinite(entry?.pulledAt)) continue;
     if (entry.pulledAt <= computedAt || seen.has(entry.id)) continue;
+    // Team cards sit outside every total this page prints.
+    if (entry.team) continue;
     seen.add(entry.id);
     added.push({ id: entry.id, ownerUserId: entry.ownerUserId, pulledAt: entry.pulledAt, isNew: entry.isNew });
   }
@@ -354,7 +356,7 @@ export function StatsTab({ active }: { active: boolean }) {
     const onPackPull = (event: MessageEvent) => {
       try {
         const pull = JSON.parse(event.data) as LivePackPullFeedEntry;
-        if (!Number.isFinite(pull?.id) || !Number.isFinite(pull?.pulledAt)) return;
+        if (!Number.isFinite(pull?.id) || !Number.isFinite(pull?.pulledAt) || pull.team) return;
         const current = pullsRef.current;
         if (current.some((seen) => seen.id === pull.id)) return;
         takePulls(

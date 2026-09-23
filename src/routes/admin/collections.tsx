@@ -1244,6 +1244,32 @@ function TeamCardsPanel({
     }
   }, [onDone, onError, ownerUserId]);
 
+  /* A typed name that was never clicked in the dropdown still counts when it
+     names exactly one team, by name, tag or id. */
+  const resolveTeam = useCallback(async (): Promise<AdminTeamSearchResult | null> => {
+    if (picked) return picked;
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return null;
+    const teams = results.length > 0 ? results : await searchAdminTeams({ data: { query: trimmed } });
+    const match = teams.find((team) =>
+      team.name.toLowerCase() === trimmed || team.shortName.toLowerCase() === trimmed || String(team.teamId) === trimmed);
+    if (!match) {
+      onError(`No team named ${query.trim()}.`);
+      return null;
+    }
+    pickTeam(match);
+    return match;
+  }, [onError, picked, query, results]);
+
+  const submit = useCallback(async (mode: "add" | "set") => {
+    try {
+      const team = await resolveTeam();
+      if (team) await send(team.teamId, team.name, count, mode);
+    } catch (caught) {
+      onError(errMessage(caught));
+    }
+  }, [count, onError, resolveTeam, send]);
+
   const pickedStyle = teamTierStyle(picked?.tier ?? null);
 
   return (
@@ -1254,6 +1280,7 @@ function TeamCardsPanel({
           <input
             value={query}
             onChange={(event) => { setQuery(event.target.value); setPicked(null); }}
+            onKeyDown={(event) => { if (event.key === "Enter" && count > 0) void submit("add"); }}
             placeholder="Search a team or type its id"
             className={INPUT}
           />
@@ -1285,16 +1312,16 @@ function TeamCardsPanel({
           <input type="number" min={0} value={copies} onChange={(event) => setCopies(event.target.value)} className={INPUT} />
         </div>
         <button
-          disabled={busy || sending || !picked || count === 0}
-          onClick={() => picked && void send(picked.teamId, picked.name, count, "add")}
+          disabled={busy || sending || !query.trim() || count === 0}
+          onClick={() => void submit("add")}
           className={PRIMARY}
         >
           Give
         </button>
         {advanced ? (
           <button
-            disabled={busy || sending || !picked}
-            onClick={() => picked && void send(picked.teamId, picked.name, count, "set")}
+            disabled={busy || sending || !query.trim()}
+            onClick={() => void submit("set")}
             className={BUTTON}
           >
             Set copies

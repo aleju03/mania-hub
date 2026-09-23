@@ -178,7 +178,7 @@ msgstr "{0, plural, other {# 个谱面集}}"
 #. placeholder {0}: data.total
 #: src/routes/teams.tsx
 msgid "{0, plural, one {# matching team} other {# matching teams}}"
-msgstr ""
+msgstr "{0, plural, other {# 个匹配的战队}}"
 
 #. placeholder {0}: community.memberCount
 #: src/components/communities/CommunityCard.tsx
@@ -243,7 +243,7 @@ msgstr "{0, plural, other {# 次狙击}}"
 #. placeholder {0}: data.total
 #: src/routes/teams.tsx
 msgid "{0, plural, one {# team} other {# teams}}"
-msgstr ""
+msgstr "{0, plural, other {# 个战队}}"
 
 #. placeholder {0}: report.distinctOwners - collectors.length
 #: src/components/packs/GoatHoldersButton.tsx
@@ -270,7 +270,7 @@ msgstr "{0, plural, other {收藏者}}"
 #. placeholder {2}: snapshot.memberCount
 #: src/components/player/ActivityPanel.tsx
 msgid "{0, plural, one {from # tracked member of {1}} other {from # tracked members of {2}}}"
-msgstr ""
+msgstr "{0, plural, other {来自 {2} 名成员中的 # 名已追踪成员}}"
 
 #. placeholder {0}: toast.count
 #: src/components/me/GoalToasts.tsx
@@ -624,7 +624,7 @@ msgstr "已统计 {1} 名成员中的 {0} 名"
 #. placeholder {1}: skills.memberCount
 #: src/components/team/TeamProfilePage.tsx
 msgid "{0} of {1} members rated"
-msgstr ""
+msgstr "{1} 名成员中有 {0} 名已评分"
 
 #. placeholder {0}: formatNumber(activeKeyMode.analyzedPlays)
 #. placeholder {1}: formatNumber(activeKeyMode.totalPlays)
@@ -866,7 +866,7 @@ msgstr "{0} 赞成 · {1} 反对"
 #. placeholder {1}: formatDate(playerPeak.updated_at)
 #: src/components/team/TeamProfilePage.tsx
 msgid "{0}, {1}"
-msgstr ""
+msgstr "{0}，{1}"
 
 #. placeholder {0}: inviteCheck.preview.name
 #. placeholder {1}: inviteCheck.preview.memberCount.toLocaleString("en-US")
@@ -926,7 +926,7 @@ msgstr "{0} 的收藏册"
 #. placeholder {0}: team.name
 #: src/components/team/TeamProfilePage.tsx
 msgid "{0}'s flag"
-msgstr ""
+msgstr "{0} 的旗帜"
 
 #. placeholder {0}: loadStatus.name
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -1357,7 +1357,7 @@ msgstr "{0} 挑选的 {maps} 张 osu!mania 谱面。"
 
 #: src/routes/teams.tsx
 msgid "{members} members"
-msgstr ""
+msgstr "{members} 名成员"
 
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
@@ -1588,7 +1588,7 @@ msgstr "第 {rangeStart}–{pageEnd} 名 / 共 {totalText} 名玩家"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "{rated, plural, one {# member} other {# members}}"
-msgstr ""
+msgstr "{rated, plural, other {# 名成员}}"
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{releases} release groups"
@@ -1608,7 +1608,7 @@ msgstr "{score} Ranked 分数"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "{scoreCount, plural, one {# play} other {# plays}}"
-msgstr ""
+msgstr "{scoreCount, plural, other {# 次游玩}}"
 
 #: src/lib/format.ts
 msgid "{secs}s ago"
@@ -2639,7 +2639,7 @@ msgstr "活跃度只记录每个已追踪国家/地区的前 100 名。如果这
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Activity is recorded for tracked players, and no one in this team is tracked yet."
-msgstr ""
+msgstr "活跃度只记录已追踪的玩家，这个战队还没有成员被追踪。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Actual size"
@@ -5026,7 +5026,7 @@ msgstr "暂时无法加载资料洞察。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load recent plays right now."
-msgstr ""
+msgstr "暂时无法加载最近游玩。"
 
 #: src/routes/player/$username.tsx
 msgid "Couldn't load recent scores right now."
@@ -5038,7 +5038,7 @@ msgstr "无法加载搜索结果。请重试。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load skills right now."
-msgstr ""
+msgstr "暂时无法加载技能。"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't load that image."
@@ -5067,7 +5067,7 @@ msgstr "无法加载这一天的完整详情。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load the Maniacard right now."
-msgstr ""
+msgstr "暂时无法加载 Maniacard。"
 
 #: src/routes/replay.tsx
 msgid "Couldn't load the song audio for this replay."
@@ -5075,7 +5075,7 @@ msgstr "无法加载这个回放的歌曲音频。"
 
 #: src/routes/teams.tsx
 msgid "Couldn't load the team rankings."
-msgstr ""
+msgstr "无法加载战队排行榜。"
 
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
@@ -5103,7 +5103,7 @@ msgstr "现在无法加载这名玩家的成绩。卡片已经在你的收藏册
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load this team right now."
-msgstr ""
+msgstr "暂时无法加载这个战队。"
 
 #: src/routes/farm-helper.tsx
 msgid "couldn't load this view"
@@ -5290,7 +5290,7 @@ msgstr "已创建 {0}"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Created <0>{createdValue}</0>"
-msgstr ""
+msgstr "创建于 <0>{createdValue}</0>"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Creating"
@@ -6694,7 +6694,7 @@ msgstr "查找卡组"
 
 #: src/routes/teams.tsx
 msgid "find a team..."
-msgstr ""
+msgstr "搜索战队..."
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "find an album"
@@ -7119,6 +7119,7 @@ msgstr "给卡组起个名字。"
 msgid "global"
 msgstr "全球"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/index.tsx
 #: src/routes/player/$username.tsx
 msgid "Global"
@@ -8430,7 +8431,7 @@ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Leader"
-msgstr ""
+msgstr "队长"
 
 #: src/lib/replay-overlays.ts
 #: src/routes/snipes.tsx
@@ -9149,8 +9150,8 @@ msgstr "管理员"
 #~ msgstr "Mania Hub 刚刚更新了"
 
 #: src/components/team/TeamProfilePage.tsx
-msgid "Mania Hub rank"
-msgstr "Mania Hub 排名"
+#~ msgid "Mania Hub rank"
+#~ msgstr "Mania Hub 排名"
 
 #: src/routes/maps.tsx
 msgid "Mania maps"
@@ -9167,7 +9168,7 @@ msgstr "mania 面板"
 
 #: src/routes/teams.tsx
 msgid "Mania team rankings"
-msgstr ""
+msgstr "Mania 战队排行榜"
 
 #: src/routes/legal.tsx
 msgid "Mania Tracker"
@@ -9467,7 +9468,7 @@ msgstr "成员数"
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/teams.tsx
 msgid "Members"
-msgstr ""
+msgstr "成员"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
@@ -10248,7 +10249,7 @@ msgstr "无匹配"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No member of this team has a Maniacard yet."
-msgstr ""
+msgstr "这个战队还没有成员拥有 Maniacard。"
 
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
@@ -10461,7 +10462,7 @@ msgstr "未找到卡组。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No skill ratings for this team's members yet."
-msgstr ""
+msgstr "这个战队的成员还没有技能评分。"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
@@ -10497,11 +10498,11 @@ msgstr "这次没有连胜。"
 
 #: src/routes/teams.tsx
 msgid "No teams match \"{query}\"."
-msgstr ""
+msgstr "没有与“{query}”匹配的战队。"
 
 #: src/routes/teams.tsx
 msgid "No teams yet."
-msgstr ""
+msgstr "还没有战队。"
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "No teams yet. Open a Team pack to start collecting them."
@@ -10513,7 +10514,7 @@ msgstr "未找到最佳成绩"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No top plays from this team's members yet."
-msgstr ""
+msgstr "这个战队的成员还没有最佳成绩。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No top plays match those controls."
@@ -10529,7 +10530,7 @@ msgstr "没有追踪到的成绩"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No tracked plays from this team's members yet."
-msgstr ""
+msgstr "这个战队的成员还没有已追踪的游玩记录。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays match those controls."
@@ -10698,7 +10699,7 @@ msgstr "暂不支持这个服务器。"
 
 #: src/routes/team/$teamId.tsx
 msgid "Not a team id."
-msgstr ""
+msgstr "不是有效的战队 ID。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
@@ -11393,7 +11394,7 @@ msgstr "osu! 没有响应，请一分钟后再试。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "osu! has no team with this id."
-msgstr ""
+msgstr "osu! 上没有这个 ID 的战队。"
 
 #: src/routes/terms.tsx
 msgid "osu! Login"
@@ -11435,7 +11436,7 @@ msgstr "osu! 成绩链接"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "osu! team"
-msgstr ""
+msgstr "osu! 战队"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -11477,7 +11478,7 @@ msgstr "Mania Tracker 上的 osu!mania 皮肤。"
 
 #: src/routes/teams.tsx
 msgid "osu!mania teams ranked by performance"
-msgstr ""
+msgstr "按表现分排名的 osu!mania 战队"
 
 #: src/components/communities/field-options.tsx
 #: src/routes/skins.tsx
@@ -11755,13 +11756,14 @@ msgstr "暂停界面、失败与段落画面、倒计时"
 msgid "Pause preview"
 msgstr "暂停试听"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Peak"
 msgstr "最高"
 
 #: src/components/team/TeamProfilePage.tsx
-msgid "Peak Mania Hub rank"
-msgstr "Mania Hub 最高排名"
+#~ msgid "Peak Mania Hub rank"
+#~ msgstr "Mania Hub 最高排名"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
@@ -11815,7 +11817,7 @@ msgstr "表现分"
 
 #: src/routes/teams.tsx
 msgid "Performance rank"
-msgstr ""
+msgstr "表现分排名"
 
 #: src/components/communities/field-options.tsx
 msgid "Persian"
@@ -12000,7 +12002,7 @@ msgstr "找不到该玩家。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Player Peak"
-msgstr ""
+msgstr "玩家最高排名"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -12607,7 +12609,7 @@ msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，�
 
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by the cards of the team's strongest members."
-msgstr ""
+msgstr "卡片评级由战队中最强成员的卡片决定。"
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Rank trajectory"
@@ -12648,6 +12650,18 @@ msgstr "排行榜"
 #: src/routes/index.tsx
 msgid "Rankings"
 msgstr "排行榜"
+
+#: src/routes/teams.tsx
+msgid "Ranks can differ from osu! because some teams' pp only counts tracked members."
+msgstr "排名可能与 osu! 不同，因为部分战队的 pp 只计算已追踪的成员。"
+
+#: src/routes/teams.tsx
+#~ msgid "Ranks can differ from osu! because team pp here only counts the members we track."
+#~ msgstr "排名可能与 osu! 不同，因为这里的战队 pp 只计算我们追踪的成员。"
+
+#: src/routes/teams.tsx
+#~ msgid "Ranks can differ from osu! because team pp here only counts tracked members."
+#~ msgstr "排名可能与 osu! 不同，因为这里的战队 pp 只计算已追踪的成员。"
 
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "rarest"
@@ -13579,7 +13593,7 @@ msgstr "玫瑰红"
 
 #: src/lib/signature-shared.ts
 msgid "Rose"
-msgstr ""
+msgstr "玫瑰图"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Rotate every color in the selection"
@@ -13802,7 +13816,7 @@ msgstr "分数、连击和评级字体，血条"
 
 #: src/lib/signature-shared.ts
 msgid "Scoreline"
-msgstr ""
+msgstr "分数条"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "ScorePosition"
@@ -15683,11 +15697,11 @@ msgstr "蓝绿"
 
 #: src/routes/teams.tsx
 msgid "Team"
-msgstr ""
+msgstr "战队"
 
 #: src/components/layout/Nav.tsx
 msgid "teams"
-msgstr ""
+msgstr "战队"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -15698,7 +15712,7 @@ msgstr "战队"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Teams need the server to be configured."
-msgstr ""
+msgstr "战队功能需要先配置服务端。"
 
 #: src/lib/packs.ts
 msgid "Teams only, new teams first"
@@ -17271,7 +17285,7 @@ msgstr "此标签页已切到后台，导出可能会被暂停。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "This team has no description."
-msgstr ""
+msgstr "这个战队没有简介。"
 
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
@@ -17829,6 +17843,10 @@ msgstr "无法读取"
 msgid "Unstable rate"
 msgstr "UR"
 
+#: src/routes/teams.tsx
+#~ msgid "Until someone opens a team's page, its pp only counts tracked members."
+#~ msgstr "在有人打开战队页面之前，它的 pp 只计算已追踪的成员。"
+
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "Untitled chart"
 #~ msgstr "无标题谱面"
@@ -18150,7 +18168,7 @@ msgstr "查看 {0} 的卡片"
 #. placeholder {0}: team.name
 #: src/components/team/TeamProfilePage.tsx
 msgid "View {0}'s flag"
-msgstr ""
+msgstr "查看 {0} 的旗帜"
 
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
@@ -18214,7 +18232,7 @@ msgstr "查看 osu! 主页"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "View osu! team"
-msgstr ""
+msgstr "查看 osu! 战队"
 
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/CardSpotlight.tsx

@@ -426,11 +426,11 @@ export function TeamProfilePage({
 
           <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12">
             <HeroStat
-              label={t`Mania Hub rank`}
+              label={t`Global`}
               value={statistics.global_rank ? `#${formatNumber(statistics.global_rank)}` : "-"}
             />
             <HeroStat
-              label={t`Peak Mania Hub rank`}
+              label={t`Peak`}
               value={statistics.peak ? `#${formatNumber(statistics.peak.rank)}` : "-"}
               sub={statistics.peak ? formatDate(statistics.peak.ranked_at) : null}
             />
