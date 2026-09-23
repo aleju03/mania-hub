@@ -558,14 +558,22 @@ negative id derived from the import id and a `companella: { importId, replay }`
 mark. It uses the official beatmap and set when the import's chart is the exact
 official file (the priced beatmap id, else the same md5 match
 `resolveExactBeatmap` makes), and otherwise a beatmap built from
-`companella_local_charts` with id 0 and no link. The player comes from `users`,
+`companella_local_charts` with id 0 and no link. Its art is the covers of the
+set the file names in its own `BeatmapSetID` (osu!'s asset URLs, set still
+unlinked); with none, the profile shows the blurred generic header art, its
+hue and framing picked per chart. The player comes from `users`,
 else the installation's latest username; never the replay's player name. The
 time is the play time clamped to the receipt time. The pp is the play's own
 `companella_local_score_pp` value at the current pp version, shown for every
 account; it enters no total except the restricted simulated pp. Tracker
 snapshots merge these rows on read, new ones go out live as their own
 `companella_score` SSE event, and profile recent sections carry them in
-`imports`. Nothing is written to `score_events`, a `live_event_log` score ref,
+`imports`. A reconnecting browser's replay of those events runs the same
+listing rules again, so a play or owner hidden since is not sent. A play osu!
+also delivered is listed once, as the osu! row: matched by online score id
+when the replay has one, else by player, official map and total score within
+5 minutes (a stable replay saved locally carries no id). The tracker applies
+the same match to rows arriving live in either order. Nothing is written to `score_events`, a `live_event_log` score ref,
 `users`, rosters or any official projection. Only a restricted player's play in
 their current top-200 list has `replay: true` and a Watch button; every other
 row shows without one, since the site may not have the map's audio or
@@ -656,6 +664,21 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   plays, and removes flagged, chosen or all plays (the ordinary `quarantined`
   review hold, reversible) through
   `GET`/`POST /api/admin/companella/restricted-pp/<id>`.
+- **Play count and time.** The standing's play count and play time (shown on
+  the profile rail beside the simulated pp) count every checked import in the
+  window, priced or not: each chart's length at the played rate. An account
+  with no priced play still gets them, with pp 0 and no rank.
+- **Skills and Activity.** For a gone account the profile's Skills and Activity
+  endpoints answer from the checked imports in the same window
+  (`restricted-profile.ts`), never from osu! and without queueing anything: an
+  import placed on the official beatmap it is (its exact file, or a clean rate
+  copy on the family's lowest id) goes through the official skill fold, plays
+  lists, dan evidence and unrated list with its own SSR and chart dan, and the
+  calendar buckets imports by their feed display time. Skill history is empty.
+  A beatmap with no official chart analysis takes its dan facts from the
+  imports' own analysis (eligibility, OD, the verdict at each played rate), so
+  its clears still count; it has no pattern tags. The cached read is dropped by
+  every delete, quarantine and restore, as the standings are.
 
 Chart files are different: they are the site's own map data, not a score. A
 reservation first looks for the exact bytes in the pool, then in the site's own
@@ -742,7 +765,9 @@ site's own copy are free. The reservation counts the replay, the chart when
 reservations still expect (each digest once). The same check runs again when
 the bytes arrive (`429 daily_upload_quota_exceeded` /
 `retention_quota_exceeded`, retryable), except for bytes already committed, so
-an identical retry is never refused.
+an identical retry is never refused. The daily budget reads its own ledger
+(`companella_upload_ledger`, two days kept), not the stored objects, so
+deleting a play does not give the day's bytes back.
 
 The site's proxy caps what it carries before any of this: 64 KiB for token,
 revoke and the reservation, 32 MiB for each file upload, no body on the other

@@ -3,7 +3,7 @@ import type { RestrictedPpPlay } from "../../lib/live-backend";
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { companellaReplayImportId } from "../../lib/companella-scores";
 import { getBeatmapUrl, getScoreDisplayValues, getScoreIdentity, getScoreUrl, scoreHasReplay } from "../../lib/score";
-import { buildRestrictedBestList } from "./restricted-best-scores";
+import { buildRestrictedBestList, profileRailTotals } from "./restricted-best-scores";
 
 const owner = { id: 7, username: "someone", avatar_url: "", country_code: "CR" };
 
@@ -104,5 +104,20 @@ describe("buildRestrictedBestList", () => {
     expect(insights.keySplit.map((entry) => entry.keyCount).sort()).toEqual([4, 7]);
     expect(insights.ppRange).toMatchObject({ top: 300, bottom: 200 });
     expect(insights.newestTopPlay?.scoreUrl).toBeNull();
+  });
+});
+
+describe("profileRailTotals", () => {
+  const stats = { play_count: 12_000, play_time: 3_600_000, grade_counts: { ss: 1, ssh: 2, s: 3, sh: 4, a: 5 } };
+
+  it("puts a standing's imports in place of osu!'s totals", () => {
+    const standing = { playCount: 6, playTime: 680, gradeCounts: { ss: 0, ssh: 0, s: 4, sh: 1, a: 0 } };
+    expect(profileRailTotals(stats, standing, true)).toEqual({ playCount: 6, playTime: 680, gradeCounts: standing.gradeCounts });
+    expect(profileRailTotals(stats, { ...standing, playTime: undefined }, false).playTime).toBeNull();
+  });
+
+  it("keeps osu!'s totals otherwise, and prints nothing for a projected-only profile", () => {
+    expect(profileRailTotals(stats, null, false)).toEqual({ playCount: 12_000, playTime: 3_600_000, gradeCounts: stats.grade_counts });
+    expect(profileRailTotals(stats, null, true)).toEqual({ playCount: null, playTime: null, gradeCounts: null });
   });
 });

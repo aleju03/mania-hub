@@ -1645,10 +1645,14 @@ export interface RestrictedPpPlayer {
   pp: number;
   /** osu!'s weighted accuracy over the best list, 0..1. */
   accuracy: number;
-  globalRank: number;
+  /** Null, with pp 0 and an empty list, until a ranked play is imported. */
+  globalRank: number | null;
   countryRank: number | null;
   rankedPlays: number;
+  /** Every checked import in the window, priced or not. */
   playCount: number;
+  /** Seconds those imports lasted. Absent on a backend older than the field. */
+  playTime?: number;
   rankedScore: number;
   gradeCounts: { ss: number; ssh: number; s: number; sh: number; a: number };
   /** Best play per beatmap, best first, at most 200. */
@@ -2817,6 +2821,9 @@ export interface LiveGlobalRankingEntry {
   rank: number;
   user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string; avatar_accent: string | null };
   pp: number;
+  /* osu!'s per-keymode pp; null when the backend has never seen the variants. */
+  pp_4k?: number | null;
+  pp_7k?: number | null;
   global_rank: number | null;
   country_rank: number | null;
   hit_accuracy: number | null;
@@ -2924,6 +2931,8 @@ function normalizeLiveGlobalRankingEntry(value: unknown, index: number): LiveGlo
       avatar_accent: typeof user.avatar_accent === "string" && user.avatar_accent ? user.avatar_accent : null,
     },
     pp: readFiniteNumber(entry.pp) ?? 0,
+    pp_4k: readFiniteNumber(entry.pp_4k),
+    pp_7k: readFiniteNumber(entry.pp_7k),
     global_rank: readPositiveInteger(entry.global_rank),
     country_rank: readPositiveInteger(entry.country_rank),
     hit_accuracy: readFiniteNumber(entry.hit_accuracy),

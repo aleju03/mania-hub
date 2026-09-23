@@ -139,7 +139,10 @@ function CompanellaPage() {
           pollDelay.current = POLL_MAX_MS;
           await loadAll().catch(() => {});
         } else {
+          // Still fetched while idle: a play sent from the desktop client
+          // shows up only through this poll.
           pollDelay.current = Math.min(pollDelay.current * 1.5, POLL_MAX_MS);
+          await loadAll().catch(() => {});
         }
       }
       timer = setTimeout(() => void tick(), pollDelay.current);

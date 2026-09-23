@@ -1,7 +1,7 @@
-import type { RestrictedPpPlay } from "../../lib/live-backend";
+import type { RestrictedPpPlay, RestrictedPpPlayer } from "../../lib/live-backend";
 import { getScoreSpeedBucket } from "../../lib/score";
 import type { TrackedPlayViewer } from "../../lib/tracked-play-score";
-import type { OsuScore } from "../../lib/types";
+import type { OsuGradeCounts, OsuScore, OsuUserStatistics } from "../../lib/types";
 
 /**
  * The best list of an account osu! turned away, rebuilt from the plays it
@@ -72,4 +72,21 @@ export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: Tracke
       // Absent fields stay absent, which no full OsuScore shape can express.
     } as unknown as OsuScore;
   });
+}
+
+/**
+ * The play totals the profile rail shows. A standing stands in for osu!'s
+ * numbers as it does for pp and accuracy: its imports' play count, play time
+ * and grades. Null where there is nothing honest to print ("-"): osu!'s own
+ * totals on a profile built from projections only, or a play time a backend
+ * older than the field never sent.
+ */
+export function profileRailTotals(
+  stats: Pick<OsuUserStatistics, "play_count" | "play_time" | "grade_counts">,
+  standing: Pick<RestrictedPpPlayer, "playCount" | "playTime" | "gradeCounts"> | null,
+  projectedOnly: boolean,
+): { playCount: number | null; playTime: number | null; gradeCounts: OsuGradeCounts | null } {
+  if (standing) return { playCount: standing.playCount, playTime: standing.playTime ?? null, gradeCounts: standing.gradeCounts };
+  if (projectedOnly) return { playCount: null, playTime: null, gradeCounts: null };
+  return { playCount: stats.play_count, playTime: stats.play_time ?? null, gradeCounts: stats.grade_counts };
 }

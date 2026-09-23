@@ -48,7 +48,7 @@ import { seedPlayerShellFromRankingEntry } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
 
-type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
+type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "combined" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
 
 // Both 7d columns render the same dash whether the player did not move or the
@@ -116,6 +116,25 @@ function formatKnownAccuracy(percent: number | null | undefined): string {
 
 function formatKnownCount(value: number | null | undefined): string {
   return value != null && Number.isFinite(value) ? formatNumber(value) : "-";
+}
+
+type VariantPp = Pick<LiveGlobalRankingEntry, "pp_4k" | "pp_7k">;
+
+// 4K + 7K pp, null when the backend has neither variant for the player.
+function getCombinedPp(entry: VariantPp | undefined): number | null {
+  if (!entry) return null;
+  if (entry.pp_4k == null && entry.pp_7k == null) return null;
+  return (entry.pp_4k ?? 0) + (entry.pp_7k ?? 0);
+}
+
+function formatCombinedPp(entry: VariantPp | undefined): string {
+  const combined = getCombinedPp(entry);
+  return combined == null ? "-" : formatNumber(Math.round(combined));
+}
+
+function variantPpTitle(entry: VariantPp | undefined): string | undefined {
+  if (!entry || (entry.pp_4k == null && entry.pp_7k == null)) return undefined;
+  return `4K ${formatNumber(Math.round(entry.pp_4k ?? 0))} / 7K ${formatNumber(Math.round(entry.pp_7k ?? 0))}`;
 }
 
 function getGlobalGradeTotal(
@@ -318,6 +337,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   const [sortBy, setSortBy] = useState<SortField>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [liveRankDeltas, setLiveRankDeltas] = useState<Record<number, LiveRankDelta>>({});
+  const [countryVariantPp, setCountryVariantPp] = useState<Record<number, VariantPp>>({});
   const [rankDeltasReady, setRankDeltasReady] = useState(false);
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
@@ -330,13 +350,17 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const selectedIsRegion = isRegionScope(selectedCountry);
   // Global and regions share the live-backend board UI (the osu! API has no
-  // leaderboard for either); only the fetcher differs.
-  const boardScope = selectedIsGlobal || selectedIsRegion;
+  // leaderboard for either); only the fetcher differs. A country joins them
+  // while sorted by combined pp, which the osu! pages cannot order.
+  const boardScope = selectedIsGlobal || selectedIsRegion || sortBy === "combined";
   const [globalRankings, setGlobalRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [globalRankingsTotal, setGlobalRankingsTotal] = useState(0);
   const [globalRankingsLoading, setGlobalRankingsLoading] = useState(false);
+  // A country switching to combined keeps its osu! table on screen, dimmed,
+  // until the backend board arrives, rather than dropping to skeletons.
+  const boardView = selectedIsGlobal || selectedIsRegion || (sortBy === "combined" && globalRankings != null);
   const globalTotalPages = Math.max(1, Math.ceil(globalRankingsTotal / GLOBAL_RANKINGS_PAGE_SIZE));
-  const restrictedEntries = useRestrictedPpRankings(boardScope ? null : selectedCountry);
+  const restrictedEntries = useRestrictedPpRankings(selectedIsGlobal || selectedIsRegion ? null : selectedCountry);
   const restrictedUserIds = useMemo(() => new Set(restrictedEntries.map((entry) => entry.user.id)), [restrictedEntries]);
 
   // The osu! pages leave out accounts osu! turned away; their simulated
@@ -358,9 +382,14 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   };
 
   useEffect(() => {
-    if (!boardScope) return;
+    // A country leaving the combined board drops its rows, so coming back
+    // waits on the osu! table instead of flashing the last combined order.
+    if (!boardScope) {
+      setGlobalRankings(null);
+      return;
+    }
     let cancelled = false;
-    setGlobalRankings(null);
+    // The previous rows stay up, dimmed, while a re-sort or page loads.
     setGlobalRankingsLoading(true);
     const params = {
       page,
@@ -387,10 +416,29 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardScope, page, selectedCountry, selectedIsGlobal, sortBy, sortDir]);
 
+  // The osu! country pages carry no per-keymode pp; the backend's roster page
+  // at the same position covers the same players for the 4K+7K column.
+  useEffect(() => {
+    if (boardScope) return;
+    let cancelled = false;
+    fetchLiveRankingsSnapshot(selectedCountry, { page, pageSize: 50 })
+      .then((snapshot) => {
+        if (cancelled) return;
+        setCountryVariantPp((current) => ({
+          ...current,
+          ...Object.fromEntries(snapshot.ranking.map((entry) => [entry.user.id, { pp_4k: entry.pp_4k, pp_7k: entry.pp_7k }])),
+        }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [boardScope, page, selectedCountry]);
+
   useEffect(() => {
     setPageTwoData(null);
     setPageTwoFetchedAt(null);
     setLiveRankDeltas({});
+    setCountryVariantPp({});
+    setGlobalRankings(null);
     setRankDeltasReady(false);
     setError(null);
   }, [selectedCountry]);
@@ -604,11 +652,17 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     });
   }, [pageRanking, page, sortBy, sortDir, liveRankDeltas, liveCountryRankChanges, hiddenUserIds]);
 
+  // Combined pp is a board of its own, so its rows number by their place on
+  // it and keep the pp rank beside it. Other sorts reorder the pp board.
   const visibleGlobalRankings = useMemo(
     () => (globalRankings ?? [])
-      .map((entry) => ({ entry, originalRank: entry.rank }))
+      .map((entry, index) => ({
+        entry,
+        originalRank: sortBy === "combined" ? (page - 1) * GLOBAL_RANKINGS_PAGE_SIZE + index + 1 : entry.rank,
+        ppRank: sortBy === "combined" ? entry.rank : null,
+      }))
       .filter(({ entry }) => !hiddenUserIds.has(entry.user.id)),
-    [globalRankings, hiddenUserIds],
+    [globalRankings, hiddenUserIds, page, sortBy],
   );
 
   const handleSort = (field: SortField) => {
@@ -628,7 +682,12 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
   ) : null;
 
-  if (boardScope) {
+  const boardDimmed = globalRankingsLoading && globalRankings != null;
+  // Only reachable while the combined board is still loading for a country.
+  const countryDimmed = sortBy === "combined";
+  const dimClass = (dimmed: boolean) => `transition-opacity duration-150 ${dimmed ? "opacity-50" : ""}`;
+
+  if (boardView) {
     return (
       <div className="flex-1">
         <PageHeader
@@ -649,6 +708,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                 { field: "cr7d" as SortField, label: t`7d Country` },
                 { field: "accuracy" as SortField, label: t`Acc` },
                 { field: "playcount" as SortField, label: t`Plays` },
+                { field: "combined" as SortField, label: "4K+7K" },
               ]).map(({ field, label }) => {
                 const active = sortBy === field;
                 return (
@@ -691,7 +751,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
               })}
             </div>
 
-            <div className="space-y-2">
+            <div className={`space-y-2 ${dimClass(boardDimmed)}`}>
               {(globalRankings == null || globalRankingsLoading) && visibleGlobalRankings.length === 0 ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <div key={i} className="space-y-2 rounded-lg bg-osu-b4/50 p-3">
@@ -707,7 +767,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                   </div>
                 ))
               ) : visibleGlobalRankings.length > 0 ? (
-                visibleGlobalRankings.map(({ entry, originalRank }) => {
+                visibleGlobalRankings.map(({ entry, originalRank, ppRank }) => {
                   const sortedValue = (() => {
                     switch (sortBy) {
                       case "playcount": {
@@ -716,6 +776,10 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       }
                       case "accuracy":
                         return <>{formatKnownAccuracy(entry.hit_accuracy)}</>;
+                      case "combined": {
+                        const combined = formatCombinedPp(entry);
+                        return combined === "-" ? <>{combined}</> : <>{combined}pp</>;
+                      }
                       case "ss":
                         return <div className="flex items-center gap-1">
                           <img src="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" width={16} height={16} />
@@ -744,7 +808,10 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
+                        <span className="text-sm font-bold text-osu-f1 w-8">
+                          #{originalRank}
+                          <PpRankNote rank={ppRank} />
+                        </span>
                         <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
@@ -782,6 +849,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                   <col className="w-[10%]" />
                   <col className="w-[11%]" />
                   <col className="w-[7%]" />
+                  <col className="w-[8%]" />
                   <col className="w-[5%]" />
                   <col className="w-[5%]" />
                   <col className="w-[5%]" />
@@ -795,6 +863,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     <SortableHeader field="accuracy" label={t`Accuracy`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                     <SortableHeader field="playcount" label={t`Play Count`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                     <th className="py-2.5 px-3 text-right">PP</th>
+                    <SortableHeader field="combined" label={"4K+7K"} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                     <SortableGradeHeader field="ss" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
                       img="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" />
                     <SortableGradeHeader field="s" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
@@ -803,17 +872,17 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       img="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className={dimClass(boardDimmed)}>
                   {(globalRankings == null || globalRankingsLoading) && visibleGlobalRankings.length === 0 ? (
                     Array.from({ length: 10 }).map((_, i) => (
                       <tr key={i} className="border-t border-osu-b3/20">
-                        <td colSpan={10} className="px-3 py-1.5">
+                        <td colSpan={11} className="px-3 py-1.5">
                           <RankingRowSkeleton />
                         </td>
                       </tr>
                     ))
                   ) : visibleGlobalRankings.length > 0 ? (
-                    visibleGlobalRankings.map(({ entry, originalRank }, i) => (
+                    visibleGlobalRankings.map(({ entry, originalRank, ppRank }, i) => (
                       <tr
                         key={entry.user.id}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
@@ -821,7 +890,10 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                         onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
                         onAuxClick={(event) => handlePlayerAuxClick(event, entry.user.username)}
                       >
-                        <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{originalRank}</td>
+                        <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">
+                          #{originalRank}
+                          <PpRankNote rank={ppRank} />
+                        </td>
                         <td className="py-2.5 px-3">
                           <Link
                             to="/player/$username"
@@ -846,6 +918,12 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                         <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatKnownAccuracy(entry.hit_accuracy)}</td>
                         <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatKnownCount(entry.play_count)}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
+                        <td
+                          className={`py-2.5 px-3 text-sm text-right ${sortBy === "combined" ? "text-white font-semibold" : "text-osu-f1"}`}
+                          title={variantPpTitle(entry)}
+                        >
+                          {formatCombinedPp(entry)}
+                        </td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
                           {formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["ss", "ssh"]))}
                         </td>
@@ -859,7 +937,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={10} className="px-4 py-10 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></td>
+                      <td colSpan={11} className="px-4 py-10 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></td>
                     </tr>
                   )}
                 </tbody>
@@ -916,6 +994,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
               { field: "7d" as SortField, label: t`7d` },
               { field: "cr7d" as SortField, label: selectedCountry },
               { field: "playcount" as SortField, label: t`Plays` },
+              { field: "combined" as SortField, label: "4K+7K" },
             ]).map(({ field, label }) => {
               const active = sortBy === field;
               return (
@@ -959,7 +1038,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
           </div>
 
           {/* Mobile card layout */}
-          <div className="space-y-2">
+          <div className={`space-y-2 ${dimClass(countryDimmed)}`}>
             {error ? (
               <div className="px-4 py-8 text-center text-sm text-osu-f1">{error}</div>
             ) : pageData ? (
@@ -1088,6 +1167,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                 <col className="w-[10%]" />
                 <col className="w-[11%]" />
                 <col className="w-[7%]" />
+                <col className="w-[8%]" />
                 <col className="w-[5%]" />
                 <col className="w-[5%]" />
                 <col className="w-[5%]" />
@@ -1101,6 +1181,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                   <SortableHeader field="accuracy" label={t`Accuracy`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableHeader field="playcount" label={t`Play Count`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableHeader field="pp" label="PP" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortableHeader field="combined" label={"4K+7K"} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableGradeHeader field="ss" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
                     img="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" />
                   <SortableGradeHeader field="s" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
@@ -1109,10 +1190,10 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     img="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={dimClass(countryDimmed)}>
                 {error ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-sm text-osu-f1">
+                    <td colSpan={11} className="px-4 py-8 text-center text-sm text-osu-f1">
                       {error}
                     </td>
                   </tr>
@@ -1162,6 +1243,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                         <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
                         <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
+                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right" title={variantPpTitle(countryVariantPp[entry.user.id])}>
+                          {formatCombinedPp(countryVariantPp[entry.user.id])}
+                        </td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
                           {entry.grade_counts.ss + entry.grade_counts.ssh}
                         </td>
@@ -1177,7 +1261,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                 ) : (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-t border-osu-b3/20">
-                      <td colSpan={10} className="px-3 py-1.5">
+                      <td colSpan={11} className="px-3 py-1.5">
                         <RankingRowSkeleton />
                       </td>
                     </tr>
@@ -1244,6 +1328,12 @@ function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean
       {change > 0 ? `+${change}` : change}
     </div>
   );
+}
+
+function PpRankNote({ rank }: { rank: number | null }) {
+  const { t } = useLingui();
+  if (rank == null) return null;
+  return <span className="block text-[11px] font-normal text-osu-f1/70" title={t`pp rank`}>#{rank}</span>;
 }
 
 function RankDeltaLabel({ label, change }: { label: string; change: number | null }) {

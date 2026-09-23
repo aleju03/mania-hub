@@ -944,7 +944,7 @@ msgstr "{0}% weighted"
 msgid "{0}d"
 msgstr "{0}d"
 
-#. placeholder {0}: formatNumber(Math.floor(stats.play_time / 3600))
+#. placeholder {0}: formatNumber(Math.floor(railTotals.playTime / 3600))
 #: src/routes/player/$username.tsx
 msgid "{0}h"
 msgstr "{0}h"
@@ -11849,6 +11849,10 @@ msgstr "PP Gained"
 #: src/routes/player/$username.tsx
 msgid "PP Range"
 msgstr "PP Range"
+
+#: src/routes/rankings.tsx
+msgid "pp rank"
+msgstr "pp rank"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "PP-gain map recommendations tuned to a player."

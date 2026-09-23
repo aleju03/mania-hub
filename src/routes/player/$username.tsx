@@ -84,7 +84,7 @@ import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
-import { buildRestrictedBestList } from "../../components/player/restricted-best-scores";
+import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, companellaReplayImportId, dropCompanellaOsuTwins } from "../../lib/companella-scores";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
@@ -965,6 +965,12 @@ function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
   return request;
 }
 
+/** Drops the cached recent list, so the next load reads the backend again. */
+function forgetUserRecent(userId: number): void {
+  userRecentDataCache.delete(userId);
+  userRecentRequestCache.delete(userId);
+}
+
 function readCachedUserRecent(userId: number): OsuScore[] | undefined {
   const cachedData = userRecentDataCache.get(userId);
   if (!cachedData) return undefined;
@@ -1823,6 +1829,24 @@ export function PlayerProfilePage({
     setRecentVisibleCount((count) => count + SHOW_MORE_BATCH_SIZE);
   }, [tab]);
 
+  // A restricted account's Recent is its Companella imports alone, so the
+  // refresh just reads them again: new plays come in and withdrawn ones leave.
+  const [refreshingImports, setRefreshingImports] = useState(false);
+  const handleRefreshImports = useCallback(async () => {
+    if (!user || refreshingImports) return;
+    setRefreshingImports(true);
+    forgetUserRecent(user.id);
+    try {
+      setRecent(await loadUserRecentCached(user.id));
+      setRecentHasMore(false);
+      setRecentError(null);
+    } catch {
+      setRecentError(t`Couldn't load recent scores right now.`);
+    } finally {
+      setRefreshingImports(false);
+    }
+  }, [refreshingImports, user]);
+
   const handleFetchOsuRecent = useCallback(async () => {
     if (!user || loadingOsuRecent) return;
     const requestId = ++recentOsuRequestRef.current;
@@ -2121,6 +2145,7 @@ export function PlayerProfilePage({
   const shownGlobalRank = restrictedStanding ? restrictedStanding.globalRank : stats.global_rank;
   const shownCountryRank = restrictedStanding ? restrictedStanding.countryRank : stats.country_rank;
   const shownPp = restrictedStanding ? restrictedStanding.pp : stats.pp;
+  const railTotals = profileRailTotals(stats, restrictedStanding, profileStatsProjectedOnly);
   const heroValueSkeleton = <span className="skeleton-pulse block h-[26px] w-24 rounded sm:h-[34px] sm:w-32" />;
 
   // osu! 404s a restricted or missing account, so its profile link would too.
@@ -2952,11 +2977,19 @@ export function PlayerProfilePage({
               value={restrictedPpPending
                 ? <Skeleton className="h-[19px] w-16" />
                 : restrictedStanding
-                  ? formatAccuracy(restrictedStanding.accuracy)
+                  ? restrictedStanding.rankedPlays > 0 ? formatAccuracy(restrictedStanding.accuracy) : "-"
                   : profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)}
             />
-            <RailStat label={t`Play Count`} value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
-            <RailStat label={t`Play Time`} value={profileStatsProjectedOnly || stats.play_time == null ? "-" : t`${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
+            <RailStat
+              label={t`Play Count`}
+              value={restrictedPpPending ? <Skeleton className="h-[19px] w-12" /> : railTotals.playCount == null ? "-" : formatNumber(railTotals.playCount)}
+            />
+            <RailStat
+              label={t`Play Time`}
+              value={restrictedPpPending
+                ? <Skeleton className="h-[19px] w-10" />
+                : railTotals.playTime == null ? "-" : t`${formatNumber(Math.floor(railTotals.playTime / 3600))}h`}
+            />
             {/* One quiet line rather than two label/value blocks: at rail-stat
                 weight these claimed a whole row to themselves on mobile, which
                 is more than a join date and a playstyle are worth. */}
@@ -2973,15 +3006,15 @@ export function PlayerProfilePage({
             )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:ml-auto">
               {([
-                ["SSH", stats.grade_counts.ssh],
-                ["SS", stats.grade_counts.ss],
-                ["SH", stats.grade_counts.sh],
-                ["S", stats.grade_counts.s],
-                ["A", stats.grade_counts.a],
-              ] as [string, number][]).map(([grade, count]) => (
+                ["SSH", railTotals.gradeCounts?.ssh],
+                ["SS", railTotals.gradeCounts?.ss],
+                ["SH", railTotals.gradeCounts?.sh],
+                ["S", railTotals.gradeCounts?.s],
+                ["A", railTotals.gradeCounts?.a],
+              ] as [string, number | undefined][]).map(([grade, count]) => (
                 <div key={grade} className="flex items-center gap-1.5">
                   <GradeImg grade={grade} size={26} />
-                  <span className="text-xs font-semibold tabular-nums text-osu-f1">{profileStatsProjectedOnly ? "-" : formatNumber(count)}</span>
+                  <span className="text-xs font-semibold tabular-nums text-osu-f1">{count == null ? "-" : formatNumber(count)}</span>
                 </div>
               ))}
             </div>
@@ -3135,6 +3168,9 @@ export function PlayerProfilePage({
                     onFetch={handleFetchOsuRecent}
                   />
                 )}
+                {tab === "recent" && user.account_status && (
+                  <RecentRefreshButton loading={refreshingImports} onRefresh={handleRefreshImports} />
+                )}
                 {availableKeyModes.length > 1 && (
                   /* Recent's overflow opens the rest of the strip in place, not
                      the PP by Keymode modal: that modal only knows keymodes that
@@ -3178,7 +3214,9 @@ export function PlayerProfilePage({
             <div className={`mt-3 flex flex-wrap items-center gap-2 lg:hidden ${
               availableKeyModes.length > 1 ? "justify-between" : "justify-end"
             }`}>
-              {!user.account_status && (
+              {user.account_status ? (
+                <RecentRefreshButton loading={refreshingImports} onRefresh={handleRefreshImports} />
+              ) : (
                 <RecentOsuSourceButton
                   loading={loadingOsuRecent}
                   loaded={recentOsuLoaded}
@@ -3793,8 +3831,11 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   // until a remount.
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0);
   const liveConfigured = isLiveBackendConfigured();
+  /* osu! turned this account away, so its ratings come from its Companella
+     imports alone: no osu! score can be added, and tracking says nothing. */
+  const restricted = !!user.account_status;
 
-  const addScoreButton = (
+  const addScoreButton = restricted ? null : (
     <button
       type="button"
       onClick={() => setAddScoreOpen(true)}
@@ -3804,7 +3845,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       <Trans>Add a missing score</Trans>
     </button>
   );
-  const addScoreModal = addScoreOpen
+  const addScoreModal = addScoreOpen && !restricted
     ? (
       <AddScoreModal
         userId={user.id}
@@ -3814,7 +3855,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       />
     )
     : null;
-  const addScoreRow = <div className="mt-3 flex justify-end">{addScoreButton}</div>;
+  const addScoreRow = addScoreButton ? <div className="mt-3 flex justify-end">{addScoreButton}</div> : null;
 
   useEffect(() => {
     if (!liveConfigured) return;
@@ -3903,7 +3944,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   /* Said before anything is read, in every view: a reader who lands here
      looking for a loved or graveyard play would otherwise take its absence
      for a bug. Older backends omit the flag, and then nothing is claimed. */
-  const untrackedNote = skills?.tracked === false ? (
+  const untrackedNote = skills?.tracked === false && !restricted ? (
     <div className={`mb-4 ${view === "ratings" || !rated ? SKILLS_COLUMN_CLASS : ""}`}>
       <SkillsUntrackedNotice
         username={user.username}
@@ -4039,7 +4080,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           backfill, so the button rides that state too - but not the states
           where there is nothing to read yet. The ratings view draws its own
           inside the height reserve, so it is excluded here. */}
-      {skills && !skillsError && !(rated && view === "ratings") ? (
+      {addScoreButton && skills && !skillsError && !(rated && view === "ratings") ? (
         <div className={`mt-3 flex ${rated ? "justify-end" : "justify-center"}`}>{addScoreButton}</div>
       ) : null}
       {addScoreModal}
@@ -4226,8 +4267,10 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
   }
 
   if (snapshot && !snapshot.available) {
-    const optInMode: "self" | "other" | "anon" =
-      auth.viewer == null ? "anon" : auth.viewer.id === user.id ? "self" : "other";
+    // Tracking an account osu! turned away would only queue osu! calls that 404.
+    const optInMode: "self" | "other" | "anon" = user.account_status
+      ? "other"
+      : auth.viewer == null ? "anon" : auth.viewer.id === user.id ? "self" : "other";
     return (
       <ActivityOptInEmptyState
         mode={optInMode}
@@ -5700,6 +5743,37 @@ function KeyModeControl({
   );
 }
 
+function RecentRefreshButton({ loading, onRefresh }: { loading: boolean; onRefresh: () => void }) {
+  const { t } = useLingui();
+  // The read usually lands in a few milliseconds, so the icon spins for a
+  // moment on every press regardless, as the Skills plays refresh does.
+  const [spinning, setSpinning] = useState(false);
+  const spinTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (spinTimerRef.current != null) window.clearTimeout(spinTimerRef.current);
+  }, []);
+  const press = () => {
+    setSpinning(true);
+    if (spinTimerRef.current != null) window.clearTimeout(spinTimerRef.current);
+    spinTimerRef.current = window.setTimeout(() => {
+      spinTimerRef.current = null;
+      setSpinning(false);
+    }, 700);
+    onRefresh();
+  };
+  return (
+    <button
+      type="button"
+      onClick={press}
+      title={t`Refresh`}
+      aria-label={t`Refresh`}
+      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-osu-b3/25 bg-osu-b4/55 text-osu-f1 transition-colors hover:text-osu-l1"
+    >
+      <RefreshCw size={12} className={spinning || loading ? "animate-spin" : ""} />
+    </button>
+  );
+}
+
 function RecentOsuSourceButton({
   loading,
   loaded,
@@ -6159,9 +6233,23 @@ function PlayerScoreRowSkeleton() {
   );
 }
 
+/** The art a chart with no cover gets: the blurred generic header, turned to
+ *  a hue and framed at a spot picked from its title, artist and difficulty,
+ *  so two such charts do not read as the same map. */
+const FALLBACK_COVER_URL = "/images/headers/generic.jpg";
+
+function fallbackCoverStyle(score: OsuScore): CSSProperties {
+  const key = `${score.beatmapset?.artist ?? ""}\u0000${score.beatmapset?.title ?? ""}\u0000${score.beatmap?.version ?? ""}`;
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) hash = (hash * 31 + key.charCodeAt(index)) | 0;
+  const seed = Math.abs(hash);
+  return { filter: `hue-rotate(${seed % 360}deg)`, objectPosition: `${Math.floor(seed / 360) % 101}% 50%` };
+}
+
 function ScoreThumbnail({ score }: { score: OsuScore }) {
   const [failed, setFailed] = useState(false);
   const coverUrl = score.beatmapset?.covers?.list
+    ?? score.beatmapset?.covers?.cover
     ?? (score.beatmapset?.id ? `/api/background?beatmapsetId=${score.beatmapset.id}` : null);
 
   if (coverUrl && !failed) {
@@ -6176,15 +6264,15 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
     );
   }
 
+  // No art (a chart osu! does not have, or a cover that failed).
   return (
-    <div className="relative w-12 h-8 rounded flex-shrink-0 overflow-hidden border border-osu-b3/50 bg-osu-b4">
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),transparent_48%),radial-gradient(circle_at_85%_20%,rgba(255,102,170,0.16),transparent_38%)]" />
-      <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-65">
-        {[0, 1, 2, 3].map((lane) => (
-          <span key={lane} className="h-3 w-1 rounded-full bg-osu-f1/70" />
-        ))}
-      </div>
-    </div>
+    <img
+      src={FALLBACK_COVER_URL}
+      alt=""
+      className="w-12 h-8 rounded object-cover flex-shrink-0"
+      style={fallbackCoverStyle(score)}
+      loading="lazy"
+    />
   );
 }
 
@@ -6572,6 +6660,8 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
   const playedAt = getScoreTimestamp(score);
   const viewerTimeZone = useViewerTimeZone();
   const cover = score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover;
+  const [coverFailed, setCoverFailed] = useState(false);
+  const fallbackStyle = fallbackCoverStyle(score);
 
   return (
     <motion.div
@@ -6606,12 +6696,20 @@ function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => 
           {/* The cover gets a banner of its own instead of washing over the
               whole card, where it fought every number for contrast. */}
           <div className="relative h-[104px] overflow-hidden">
-            {cover && (
+            {cover && !coverFailed ? (
               <img
                 src={cover}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
                 style={{ filter: "brightness(0.42) saturate(1.1)" }}
+                onError={() => setCoverFailed(true)}
+              />
+            ) : (
+              <img
+                src={FALLBACK_COVER_URL}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{ ...fallbackStyle, filter: `${fallbackStyle.filter} brightness(0.42) saturate(1.1)` }}
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-b from-osu-b4/10 via-osu-b4/55 to-osu-b4" />

@@ -64,7 +64,9 @@ export function companellaReplayImportId(score: Pick<OsuScore, "companella">): s
  * no osu! id), so this is what keeps a play that later arrives from osu! from
  * being listed twice.
  */
-export function isCompanellaOsuTwin(imported: OsuScore, official: OsuScore): boolean {
+type TwinScore = OsuScore | LeanTrackerScore;
+
+export function isCompanellaOsuTwin(imported: TwinScore, official: TwinScore): boolean {
   if (!imported.companella || official.companella) return false;
   const beatmapId = imported.beatmap?.id ?? 0;
   if (beatmapId <= 0 || (official.beatmap?.id ?? official.beatmap_id) !== beatmapId) return false;
@@ -80,7 +82,7 @@ export function isCompanellaOsuTwin(imported: OsuScore, official: OsuScore): boo
 }
 
 /** Drops each import that an osu! row in the same list already stands for. */
-export function dropCompanellaOsuTwins(scores: OsuScore[]): OsuScore[] {
+export function dropCompanellaOsuTwins<T extends TwinScore>(scores: T[]): T[] {
   const official = scores.filter((score) => !score.companella);
   if (official.length === 0 || official.length === scores.length) return scores;
   return scores.filter((score) => !score.companella || !official.some((candidate) => isCompanellaOsuTwin(score, candidate)));

@@ -7,6 +7,7 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { displayCountryName, isGlobalScope } from "../lib/country";
 import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
+import { dropCompanellaOsuTwins } from "../lib/companella-scores";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
   getBeatmapUrl,
@@ -781,8 +782,10 @@ function ScoresPage() {
     return () => window.clearInterval(intervalId);
   }, [simulateFeedActivity]);
 
+  // A play sent through Companella and also delivered by osu! shows once, as
+  // the osu! row, whichever of the two live events came first.
   const feedScoresWithSim = useMemo(
-    () => (simFeedScores.length > 0 ? [...simFeedScores, ...feedScores] : feedScores),
+    () => dropCompanellaOsuTwins(simFeedScores.length > 0 ? [...simFeedScores, ...feedScores] : feedScores),
     [feedScores, simFeedScores],
   );
 
@@ -1001,9 +1004,9 @@ function ScoresPage() {
       : liveBackendEnabled && !hasActiveScoreFilters && filtered.length < requiredScoreCountForPage;
   const paginatedScores = useMemo(
     () => hasLiveFilteredSnapshot
-      ? liveFilteredScores.slice(0, expectedLivePageSize)
+      ? dropCompanellaOsuTwins(liveFilteredScores).slice(0, expectedLivePageSize)
       : hasLivePageSnapshot
-      ? livePageScores.slice(0, expectedLivePageSize)
+      ? dropCompanellaOsuTwins(livePageScores).slice(0, expectedLivePageSize)
       : filtered.slice(livePageOffset, expectedLivePageEnd),
     [expectedLivePageEnd, expectedLivePageSize, filtered, hasLiveFilteredSnapshot, hasLivePageSnapshot, liveFilteredScores, livePageOffset, livePageScores],
   );
