@@ -33,6 +33,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-22", text: "Added a 4K+7K column to the rankings that adds up each player's 4K and 7K pp, and you can sort by it.", to: "/rankings" },
   { date: "2026-09-22", text: "Added new styles to the Skill radar dynamic render.", to: "/dynamic-renders" },
   { date: "2026-09-22", text: "Fixed the 7K Gamma, Azimuth and Zenith dan emblems showing up empty on dynamic renders.", to: "/dynamic-renders" },
   { date: "2026-09-21", text: "Two new pack options in settings: \"Skip animations\" shows your cards with a quick fade instead of the full reveal, and \"Always reveal all\" deals every card out at once instead of one at a time.", to: "/settings" },
