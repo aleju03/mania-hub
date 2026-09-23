@@ -138,7 +138,7 @@ a loopback redirect (RFC 8252).
 Reconnecting an already-approved key reuses its row (partial unique index on
 `environment, user_id, key_thumbprint` where active), so a reinstall does not
 leave a graveyard, and refreshes the stored username. Two different keys on one
-account are two installations, which is what dual boot looks like.
+account are two installations, like a second PC.
 
 Lifetimes: consent request 10 minutes, code 2 minutes, access token 5 minutes,
 refresh 90 days absolute / 30 days idle. Refresh credentials are

@@ -239,8 +239,7 @@ Content-Type: application/json
             <Note>
               The signature has to be exactly 64 bytes long. Some crypto libraries give a longer format (called DER,
               around 70 bytes) by default, and the server refuses it. If every request comes back 401, check this
-              first. In .NET, sign with BouncyCastle's <Code>ECDsaSigner</Code> rather than <Code>ECDsa</Code>: under
-              Wine, which is how Linux players run osu!, <Code>ECDsa</Code> can't sign with this kind of key at all.
+              first.
             </Note>
           </Section>
 

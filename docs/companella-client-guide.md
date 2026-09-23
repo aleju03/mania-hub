@@ -265,19 +265,12 @@ authorized it.
 
 Never retarget a pending item because a different account connected later. If
 the account no longer matches, stop that item's automatic attribution and show
-the server's guidance. Reconnecting, reinstalling or dual booting must not
+the server's guidance. Reconnecting or reinstalling must not
 produce duplicate credit: the server refuses the same play under a new key, but
 a client that retargets a queue is asking the user to be told "duplicate play"
 on every retry.
 
-## 6. Two installations on one machine
-
-A dual boot approves two keys on the same account. They are independent:
-separate credentials, separate revocation, and switching between them is normal
-and is not treated as suspicious. The player names each one on the consent
-screen.
-
-## 7. What the server will and will not say
+## 6. What the server will and will not say
 
 It will say whether the file was intact, which name the replay carries (a
 different one, from an offline or private-server client, is fine), whether the
@@ -310,8 +303,6 @@ Confirm with the Mania Tracker side:
   is actually available in the app (a file assembled from local score data has
   no key presses to rate),
 - the preferred tested callback arrangement,
-- which native platforms are supported (the API is OS-neutral; that is not a
-  claim that the app runs everywhere),
 - the desired initial score eligibility.
 
 Until an actual capture sample has been tested jointly, "the server accepts a
