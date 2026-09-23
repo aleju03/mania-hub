@@ -950,7 +950,7 @@ function HomePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {s.companella && <CompanellaMark className="h-3.5 w-3.5" />}
+                    {s.companella && <CompanellaMark className="h-4 w-4" />}
                     {s.mods.length > 0 && (
                       <div className="flex items-center gap-0.5">
                         {s.mods.map((m) => (

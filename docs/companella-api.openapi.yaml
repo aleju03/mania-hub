@@ -670,6 +670,11 @@ components:
       properties:
         user_id: { type: integer }
         username: { type: string }
+        avatar_accent:
+          type: [string, "null"]
+          description: >-
+            The site's colour for the player's avatar as a hex string, or null
+            when it has not been measured yet (a later call usually has it).
         installation_id: { type: string }
         client_id: { type: string }
         scopes:

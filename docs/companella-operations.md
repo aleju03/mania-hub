@@ -243,7 +243,7 @@ kind.
 | Unpaired-press review rule | Run over 6,128 cached real stable 4K-10K replays: none flagged, at most 0.58 unpaired presses per note and 12.4 per second (`local-notes/companella-anticheat-check/`). |
 | A header edited from NoMod to DT, or from HT to NoMod | Held for review from the frame clock (`replay-rate.ts`). Run over 7,514 cached real stable replays: every relabelled replay held, 0.3% of honest NoMod and 5.8% of honest DT plays held as unreadable, no honest replay read as edited. Respacing the idle frames defeats it. Not yet run on a local `.osr` straight from `Data/r`. |
 | LZMA decoding of a real encoder's stream | Covered (one real stream in the fixtures), and separately checked by hand against 20 real `.osr` files on the owner's machine. |
-| A real Companella capture payload | **Not tested.** Needs a sample from the app. |
+| A real Companella capture payload | Tested once on a local setup: a play captured by a Companella build with the integration went through end to end and was accepted. |
 | Production deployment | **Not done.** |
 | Hardware-backed native key storage | **Not implemented and not claimed.** A client's declaration about its key store is unverifiable from here. |
 | Public rating admission | **Not implemented.** Policy is fixed at `experimental_only`. |

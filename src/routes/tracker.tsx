@@ -2076,13 +2076,13 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   {keymodeLabel}
                 </span>
               )}
+              {score.companella && <CompanellaMark />}
               <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
             </div>
           )}
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
-              {score.companella && <CompanellaMark />}
               {getModDisplayList(score.mods).map((m) => (
                 <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
               ))}
@@ -2113,7 +2113,6 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         {/* Desktop metadata */}
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-0.5">
-            {score.companella && <CompanellaMark className="mr-1 h-4 w-4" />}
             {getModDisplayList(score.mods).map((m) => (
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}

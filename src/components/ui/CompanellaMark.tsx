@@ -3,7 +3,7 @@ import { useLingui } from "@lingui/react/macro";
 // Marks a score row that came from a Companella import instead of osu!. The
 // icon is full colour on a solid disc, so it is an <img>, not a mask like the
 // mod glyphs. The 48px copy keeps a row from pulling the 256px original.
-export function CompanellaMark({ className = "h-4 w-4" }: { className?: string }) {
+export function CompanellaMark({ className = "h-[18px] w-[18px]" }: { className?: string }) {
   const { t } = useLingui();
   const label = t`Sent through Companella`;
   return (

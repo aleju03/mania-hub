@@ -27,7 +27,7 @@ export const Route = createFileRoute("/companella_/docs")({
 });
 
 const API = "/api/integrations/companella/v1";
-const UPDATED = "September 22, 2026";
+const UPDATED = "September 23, 2026";
 
 type Method = "GET" | "POST" | "PUT";
 
@@ -35,7 +35,7 @@ const ENDPOINTS: Array<[Method, string, string]> = [
   ["GET", "/capabilities", "Endpoints, limits and supported mods. No auth."],
   ["POST", "/oauth/token", "Exchange the sign-in code for tokens, or refresh."],
   ["POST", "/oauth/revoke", "Disconnect this app. Needs a proof too."],
-  ["GET", "/me", "The connected account and app."],
+  ["GET", "/me", "The connected account and app, with the avatar colour when the site has one."],
   ["POST", "/submissions", "Reserve a play."],
   ["PUT", "/submissions/{id}/replay", "Upload the replay."],
   ["PUT", "/submissions/{id}/beatmap", "Upload the .osu, when the server asks for it."],
@@ -353,20 +353,6 @@ Content-Type: application/json
               The server also checks that the files are intact and that the judgements add up to a finished chart. It
               can't confirm that a person set the score, since the key only shows which installation sent it and a replay
               file can be edited. Plays that pass the checks show on the tracker and the player's profile.
-            </P>
-          </Section>
-
-          <Section title="Before release">
-            <P>Things to agree on with us first:</P>
-            <ul className="mt-3 list-disc space-y-2 pl-5 leading-7 marker:text-osu-f1/50">
-              <li>whether the app can capture the full replay with its key presses</li>
-              <li>which callback setup you tested</li>
-              <li>which platforms the app supports</li>
-              <li>which plays should count at first</li>
-            </ul>
-            <P>
-              So far only the reference client's generated replays have been tested. We should also send one real
-              Companella capture through together.
             </P>
           </Section>
 

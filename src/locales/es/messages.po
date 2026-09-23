@@ -420,7 +420,7 @@ msgstr "{0} días"
 #. placeholder {0}: entry.user.username
 #. placeholder {0}: score.beatmapset?.title ?? scoreTitleFallback
 #: src/components/packs/album/AlbumView.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 msgid "{0} details"
 msgstr "Detalles de {0}"
 
@@ -912,7 +912,7 @@ msgid "{0}% weight"
 msgstr "{0}% de peso"
 
 #. placeholder {0}: Math.round(score.weight.percentage)
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 msgid "{0}% weighted"
 msgstr "{0}% ponderado"
 
@@ -2372,8 +2372,8 @@ msgstr "Acerca de"
 
 #. placeholder {0}: match.relativeRate.toFixed(2)
 #: src/components/companella/SubmissionDetail.tsx
-msgid "About {0}x the file this was matched against."
-msgstr ""
+#~ msgid "About {0}x the file this was matched against."
+#~ msgstr ""
 
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -2414,11 +2414,11 @@ msgstr "Menú de cuenta"
 msgid "accuracy"
 msgstr "Acc"
 
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
@@ -2500,7 +2500,6 @@ msgstr "en {usageSampleSize} top plays con mods"
 msgid "across {usageSampleSize} top plays"
 msgstr "en {usageSampleSize} top plays"
 
-#: src/components/companella/InstallationList.tsx
 #: src/components/me/GoalsPanel.tsx
 msgid "Active"
 msgstr "Activo"
@@ -2879,8 +2878,8 @@ msgid "analysis"
 msgstr "análisis"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Analysis"
-msgstr ""
+#~ msgid "Analysis"
+#~ msgstr ""
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "analysis unavailable"
@@ -2984,6 +2983,10 @@ msgstr "¿Algo más que pueda ayudar?"
 msgid "anywhere"
 msgstr "cualquier lugar"
 
+#: src/routes/companella.tsx
+msgid "API docs"
+msgstr ""
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "appearance"
 msgstr "apariencia"
@@ -3022,12 +3025,16 @@ msgid "Approve an app for your osu! account."
 msgstr ""
 
 #: src/components/companella/InstallationList.tsx
-msgid "Approved"
+msgid "approved"
 msgstr ""
 
 #: src/components/companella/InstallationList.tsx
-msgid "Approved connections"
-msgstr ""
+#~ msgid "Approved"
+#~ msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#~ msgid "Approved connections"
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Approved installations"
@@ -3573,6 +3580,7 @@ msgstr "bpm"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/player/$username.tsx
 msgid "BPM"
@@ -3868,6 +3876,7 @@ msgstr "No se pudo cambiar la etiqueta del modo de teclas. Inténtalo de nuevo."
 msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/routes/dan-estimates.tsx
 msgid "Chart"
 msgstr "Chart"
@@ -3886,8 +3895,8 @@ msgid "chart dan"
 msgstr "dan del chart"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Chart dan"
-msgstr ""
+#~ msgid "Chart dan"
+#~ msgstr ""
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Chart Dan"
@@ -3907,8 +3916,8 @@ msgid "Chart estimate: {0}"
 msgstr "Estimación del mapa: {0}"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Chart file"
-msgstr ""
+#~ msgid "Chart file"
+#~ msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Chart loaded. Fetching the replay."
@@ -3936,8 +3945,8 @@ msgid "Chart preview volume"
 msgstr "Volumen de la vista previa del mapa"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Chart relationship"
-msgstr ""
+#~ msgid "Chart relationship"
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Chart sharing is off for this installation, so plays on maps the site does not have will be skipped."
@@ -4053,6 +4062,7 @@ msgstr "Clásico"
 msgid "clear"
 msgstr "limpiar"
 
+#: src/components/companella/InstallationList.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
@@ -4218,7 +4228,6 @@ msgstr "clic para ver"
 msgid "client"
 msgstr "cliente"
 
-#: src/components/companella/InstallationList.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Client"
 msgstr "Cliente"
@@ -4226,7 +4235,6 @@ msgstr "Cliente"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/UserCollectionEditor.tsx
@@ -4240,6 +4248,7 @@ msgstr "Cliente"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -4408,8 +4417,8 @@ msgstr "Inicio de columnas"
 msgid "Column width"
 msgstr "Ancho de columnas"
 
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Combo"
@@ -4465,16 +4474,20 @@ msgid "Companella"
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the installation, and the approval is bound to that installation only."
-msgstr ""
+#~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the connection, and the approval is bound to that connection only."
+#~ msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the installation, and the approval is bound to that installation only."
+#~ msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "compared to {range} pp"
 msgstr "comparado con {range} pp"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Completion"
-msgstr ""
+#~ msgid "Completion"
+#~ msgstr ""
 
 #: src/routes/companella_.authorize.tsx
 msgid "Connect an app"
@@ -4514,7 +4527,6 @@ msgid "Connected, but no new scores have come in for a few minutes. Recent plays
 msgstr "Conectado, pero no han llegado scores nuevos en varios minutos. Las plays recientes aparecerán cuando el feed se ponga al día."
 
 #: src/components/companella/TestClientPanel.tsx
-#: src/routes/companella.tsx
 msgid "Connection"
 msgstr ""
 
@@ -4525,6 +4537,10 @@ msgstr "Conexión perdida; reconectando."
 #: src/components/companella/InstallationList.tsx
 #: src/routes/companella_.authorize.tsx
 msgid "Connection name"
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Connections"
 msgstr ""
 
 #: src/routes/legal.tsx
@@ -4613,6 +4629,10 @@ msgstr "Copiando BBCode..."
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Could not check that invite. Try again."
 msgstr "No se pudo verificar esa invitación. Inténtalo de nuevo."
+
+#: src/routes/companella.tsx
+msgid "Could not clear the revoked connections."
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Could not confirm delivery. Retry to check this same gift."
@@ -5247,6 +5267,7 @@ msgstr "Checo"
 msgid "dan"
 msgstr "dan"
 
+#: src/components/companella/SubmissionDetail.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -7167,6 +7188,11 @@ msgstr "Lista oculta ({0})"
 msgid "Hide"
 msgstr "Ocultar"
 
+#. placeholder {0}: revoked.length
+#: src/components/companella/InstallationList.tsx
+msgid "Hide {0} revoked"
+msgstr ""
+
 #. placeholder {0}: mode.keyCount
 #: src/routes/player/$username.tsx
 #~ msgid "Hide {0}K"
@@ -7575,8 +7601,8 @@ msgid "Imported {0}"
 msgstr "Importado {0}"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Imported from your own client, so it is not an osu! verified score."
-msgstr ""
+#~ msgid "Imported from your own client, so it is not an osu! verified score."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Imported note image height scaling."
@@ -7591,8 +7617,8 @@ msgid "Imported plays that pass the checks show on the tracker and your Mania Tr
 msgstr "Las plays importadas que pasan las comprobaciones aparecen en el tracker y en tu perfil de Mania Tracker."
 
 #: src/routes/companella.tsx
-msgid "Imported plays that pass the checks show on the tracker and your profile. Their replays stay private to you unless your osu! account is restricted. Public rankings, pp, snipes and rewards are not affected by anything on this page."
-msgstr ""
+#~ msgid "Imported plays that pass the checks show on the tracker and your profile. Their replays stay private to you unless your osu! account is restricted. Public rankings, pp, snipes and rewards are not affected by anything on this page."
+#~ msgstr ""
 
 #: src/routes/companella.tsx
 #~ msgid "Imported replays are private to you. Public rankings, pp, snipes and rewards are not affected by anything on this page."
@@ -7981,8 +8007,8 @@ msgid "Key"
 msgstr "Tecla"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Key count"
-msgstr ""
+#~ msgid "Key count"
+#~ msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Key history"
@@ -8141,8 +8167,12 @@ msgid "Last page"
 msgstr "Última página"
 
 #: src/components/companella/InstallationList.tsx
-msgid "Last seen"
+msgid "last seen"
 msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#~ msgid "Last seen"
+#~ msgstr ""
 
 #. placeholder {0}: formatDetailedTimeAgo(user.last_visit, locale)
 #: src/routes/player/$username.tsx
@@ -8702,7 +8732,6 @@ msgstr "Cargando tus datos…"
 msgid "loading..."
 msgstr "cargando..."
 
-#: src/components/companella/SubmissionList.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/GoatHoldersButton.tsx
 #: src/components/packs/SetsView.tsx
@@ -9080,8 +9109,8 @@ msgstr "mapa no disponible"
 #. placeholder {0}: entry.creator
 #. placeholder {0}: fav.creator
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "mapped by {0}"
 msgstr "mapeado por {0}"
 
@@ -9336,7 +9365,6 @@ msgstr "Moderar skin"
 msgid "moderation"
 msgstr "moderación"
 
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
@@ -9583,8 +9611,8 @@ msgid "Name for screenshot {0}"
 msgstr "Nombre para la captura {0}"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Name on the replay"
-msgstr ""
+#~ msgid "Name on the replay"
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Name preset"
@@ -9608,12 +9636,16 @@ msgid "Needs a web.archive.org link to their osu! profile."
 msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
 
 #: src/components/companella/InstallationList.tsx
-msgid "Never"
-msgstr ""
+#~ msgid "Never"
+#~ msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "never loaded here"
 msgstr "nunca cargado aquí"
+
+#: src/components/companella/InstallationList.tsx
+msgid "never seen"
+msgstr ""
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
@@ -9674,6 +9706,7 @@ msgstr "Nuevo set"
 msgid "New top plays will show up here as players set them."
 msgstr "Las nuevas top plays aparecerán aquí cuando los jugadores las consigan."
 
+#: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
 msgid "Newer"
 msgstr "Más reciente"
@@ -9867,8 +9900,8 @@ msgid "No collector found. They need to open a pack first."
 msgstr "No se encontró al coleccionista. Primero debe abrir un pack."
 
 #: src/components/companella/InstallationList.tsx
-msgid "No connection has been approved yet."
-msgstr ""
+#~ msgid "No connection has been approved yet."
+#~ msgstr ""
 
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
@@ -10478,8 +10511,8 @@ msgid "Not signed in"
 msgstr "Sesión no iniciada"
 
 #: src/components/companella/InstallationList.tsx
-msgid "Not stated"
-msgstr ""
+#~ msgid "Not stated"
+#~ msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Not the server it says it is"
@@ -10518,7 +10551,6 @@ msgstr "Forma de las notas"
 msgid "notes"
 msgstr "notas"
 
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -10561,6 +10593,14 @@ msgstr "Todavía no hay nada aquí."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nothing in the loaded plays matches \"{trimmedQuery}\"."
 msgstr "Nada de las plays cargadas coincide con \"{trimmedQuery}\"."
+
+#: src/components/companella/InstallationList.tsx
+msgid "Nothing is connected right now."
+msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+msgid "Nothing is connected yet. Connect from Companella's settings."
+msgstr ""
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
@@ -10634,7 +10674,6 @@ msgstr "Obtenida"
 msgid "Obtained on {dateText}"
 msgstr "Obtenida el {dateText}"
 
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
@@ -10696,6 +10735,7 @@ msgstr "antiguo"
 msgid "old pb"
 msgstr "pb viejo"
 
+#: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
 msgid "Older"
 msgstr "Más antiguo"
@@ -10839,8 +10879,8 @@ msgid "only you"
 msgstr "solo tú"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Only you can download this unless your osu! account is restricted. The play shows on the tracker and your profile if it passes the checks."
-msgstr ""
+#~ msgid "Only you can download this unless your osu! account is restricted. The play shows on the tracker and your profile if it passes the checks."
+#~ msgstr ""
 
 #: src/routes/skins.tsx
 msgid "only you can open these"
@@ -10899,7 +10939,7 @@ msgstr "Abrir el inicio de {profileCountryName}"
 msgid "Open another"
 msgstr "Abrir otro"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -11279,6 +11319,11 @@ msgstr "packs abiertos"
 #~ msgstr "Packs abiertos"
 
 #. placeholder {0}: page + 1
+#: src/components/companella/SubmissionList.tsx
+msgid "Page {0}"
+msgstr ""
+
+#. placeholder {0}: page + 1
 #. placeholder {1}: lastPage + 1
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Page {0} of {1}"
@@ -11540,8 +11585,8 @@ msgid "Pinned"
 msgstr "Fijados"
 
 #: src/components/companella/InstallationList.tsx
-msgid "Platform"
-msgstr ""
+#~ msgid "Platform"
+#~ msgstr ""
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "play"
@@ -11597,14 +11642,13 @@ msgstr "Play de al menos"
 msgid "playback"
 msgstr "reproducción"
 
-#: src/components/companella/SubmissionList.tsx
 #: src/components/replay/ReplayInfo.tsx
 msgid "Played"
 msgstr "Jugado"
 
 #. placeholder {0}: formatDetailedTimeAgo(playedAt, locale)
 #. placeholder {1}: display.isLazer ? "Lazer" : "Stable"
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 msgid "Played {0} on {1}"
 msgstr "Jugó {0} en {1}"
 
@@ -11702,6 +11746,10 @@ msgstr "Los plays solo se registran para el top 100 de cada país trackeado, y e
 #: src/components/me/RosterOptInCard.tsx
 msgid "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "Los plays se registran automáticamente para el top 100 de cada país. Aún no estás, pero puedes agregarte al Tracker."
+
+#: src/routes/companella.tsx
+msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
+msgstr ""
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
@@ -11814,9 +11862,9 @@ msgstr "pp"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
-#: src/routes/player/$username.tsx
 msgid "PP"
 msgstr "PP"
 
@@ -12037,8 +12085,8 @@ msgid "Probably restarting or under maintenance. Try again in a bit."
 msgstr "Probablemente esté reiniciando o en mantenimiento. Inténtalo de nuevo en un rato."
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Processing"
-msgstr ""
+#~ msgid "Processing"
+#~ msgstr ""
 
 #: src/components/me/GoalsPanel.tsx
 msgid "profile"
@@ -12486,7 +12534,6 @@ msgstr "Reconstruir ahora"
 msgid "Rebuilding..."
 msgstr "Reconstruyendo..."
 
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/companella/SubmissionList.tsx
 msgid "Received"
 msgstr ""
@@ -12871,8 +12918,8 @@ msgstr "Reemplazar el borrador con {0}"
 msgid "Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only."
 msgstr "Reemplaza el cursor del mouse por uno estilo osu! en todo el sitio. Solo en escritorio."
 
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayCoverFallback.tsx
-#: src/routes/player/$username.tsx
 msgid "Replay"
 msgstr "Replay"
 
@@ -13087,8 +13134,8 @@ msgstr "Revelando el resto..."
 #~ msgstr "Reverse Shields"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Review"
-msgstr ""
+#~ msgid "Review"
+#~ msgstr ""
 
 #. placeholder {0}: status.cost
 #: src/components/packs/ForgePanel.tsx
@@ -13120,12 +13167,16 @@ msgstr ""
 #~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
-msgid "Revoked"
-msgstr ""
+#~ msgid "Revoked"
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
-msgid "Revoking stops an installation from submitting straight away. Scores it already imported stay in your history until you delete them."
-msgstr ""
+#~ msgid "Revoking stops a connection from submitting straight away. Scores it already imported stay in your history until you delete them."
+#~ msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#~ msgid "Revoking stops an installation from submitting straight away. Scores it already imported stay in your history until you delete them."
+#~ msgstr ""
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Rice"
@@ -13364,15 +13415,14 @@ msgstr "Escala el arte de hitbursts de la skin."
 msgid "Scopes"
 msgstr ""
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 msgid "score"
 msgstr "score"
 
-#: src/components/companella/SubmissionDetail.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -14038,6 +14088,11 @@ msgstr "Mostrar {0} más"
 msgid "Show {0} picks"
 msgstr "Mostrar {0} selecciones"
 
+#. placeholder {0}: revoked.length
+#: src/components/companella/InstallationList.tsx
+msgid "Show {0} revoked"
+msgstr ""
+
 #. placeholder {0}: mode.keyCount
 #: src/routes/player/$username.tsx
 #~ msgid "Show {0}K"
@@ -14077,7 +14132,7 @@ msgstr "Mostrar los {0}"
 
 #. placeholder {0}: play.title || t`score`
 #. placeholder {0}: score.beatmapset?.title || scoreFallbackLabel
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 msgid "Show details for {0}"
 msgstr "Ver detalles de {0}"
 
@@ -14106,7 +14161,6 @@ msgstr "Mostrar menos"
 msgid "show more"
 msgstr "mostrar más"
 
-#: src/components/companella/SubmissionList.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/routes/player/$username.tsx
@@ -14724,8 +14778,8 @@ msgstr "Speed y tech se distinguen por cómo se juega el chart, no por los ratin
 #~ msgstr "Speed y tech se distinguen por las notas, no por los ratings. En charts densos Stream y Technical puntúan a una fracción el uno del otro y cuál se adelanta es casi cara o cruz, así que el análisis del chart mide el movimiento en su lugar: cuánto del chart son trills de dos columnas, minijacks y ritmo irregular, que se juegan girando la muñeca, frente a cuánto rueda entre las manos. Comprobado contra 738 charts de 170 packs de práctica de speed y tech, dejando packs enteros fuera de la comprobación, esa lectura coincide con los nombres de los packs mucho más a menudo que los ratings por sí solos. Cuando no está segura, el chart cuenta como ambas."
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Speed played at"
-msgstr ""
+#~ msgid "Speed played at"
+#~ msgstr ""
 
 #: src/lib/pattern-labels.ts
 msgid "Speedjack"
@@ -14821,8 +14875,8 @@ msgid "stars"
 msgstr "estrellas"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
 msgid "Stars"
@@ -14974,8 +15028,8 @@ msgid "Storage is not configured, so uploads will fail until it is."
 msgstr ""
 
 #: src/components/companella/SubmissionList.tsx
-msgid "Stored, but not rated:"
-msgstr ""
+#~ msgid "Stored, but not rated:"
+#~ msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
@@ -15044,8 +15098,8 @@ msgid "Submission {0} finished."
 msgstr ""
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Submission detail"
-msgstr ""
+#~ msgid "Submission detail"
+#~ msgstr ""
 
 #. placeholder {0}: result.error ?? "unknown"
 #: src/components/companella/TestClientPanel.tsx
@@ -15295,7 +15349,7 @@ msgstr "Términos"
 msgid "Terms of Service"
 msgstr "Términos del servicio"
 
-#: src/components/companella/SubmissionList.tsx
+#: src/components/companella/SubmissionDetail.tsx
 msgid "Test"
 msgstr ""
 
@@ -15886,8 +15940,8 @@ msgid "The Companella beta is not switched on for this site yet."
 msgstr ""
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "The comparison budget ran out; this is still being checked."
-msgstr ""
+#~ msgid "The comparison budget ran out; this is still being checked."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, by beatmap: Dan ~ REFORM ~ on 4K regular, the 4K LN dan courses through 17th, Jinjin's 7K regular and LN phases, Arkman's 6K regular courses and sunnyxxy's 6K LN bands. Re-uploads of those packs by other people are not counted, and nothing about this changes how a chart is rated - it only changes what your own passes are worth."
@@ -15984,8 +16038,8 @@ msgstr "La exportación se interrumpió antes de terminar."
 
 #. placeholder {0}: chart.declaredBeatmapId
 #: src/components/companella/SubmissionDetail.tsx
-msgid "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
-msgstr ""
+#~ msgid "The file names beatmap {0}. That is metadata inside the upload, not a verified identity."
+#~ msgstr ""
 
 #: src/routes/skins.tsx
 msgid "The first uploaded skin lands here."
@@ -16261,8 +16315,8 @@ msgstr "El sitio almacena en caché, encola y reutiliza datos para evitar pedir 
 #~ msgstr "El sitio descarga el archivo del chart, lee las notas y pasa el patrón por un algoritmo de rating. Cuál depende del modo de teclas, porque ninguno es el mejor en todos:"
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "The site has no matching chart indexed. That does not mean this chart is new, only that nothing here matched it."
-msgstr ""
+#~ msgid "The site has no matching chart indexed. That does not mean this chart is new, only that nothing here matched it."
+#~ msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "The site notices you are playing through osu!'s feed of new scores, and that feed only lists scores on charts with a leaderboard, so a play on a graveyarded chart never shows up in it. Your recent plays are a separate lookup that does include graveyarded charts, but it has to be asked per player, so the site only starts asking once a leaderboard score shows you are playing, and keeps asking every few minutes until you stop, meaning 30 minutes pass without a new play. Everything it finds during that time counts, including unranked charts. <0>If you only play unranked charts, nothing is recorded automatically.</0>"
@@ -16608,8 +16662,8 @@ msgid "This file is {size}. The limit is 50 MB."
 msgstr "Este archivo pesa {size}. El límite es 50 MB."
 
 #: src/components/companella/SubmissionDetail.tsx
-msgid "This file looks like more than one known chart, so it is left out of the preview until that is resolved."
-msgstr ""
+#~ msgid "This file looks like more than one known chart, so it is left out of the preview until that is resolved."
+#~ msgstr ""
 
 #. placeholder {0}: communityInviteExpiryLabel(inviteCheck.preview.expiresAt)
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -17255,6 +17309,7 @@ msgstr "Dejar de ocultar"
 msgid "unknown"
 msgstr "desconocido"
 
+#: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/player/$username.tsx
@@ -17705,7 +17760,7 @@ msgstr "Modo de vista"
 msgid "View on a {label} background"
 msgstr "Ver sobre un fondo {label}"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 msgid "View on osu!"
 msgstr "Ver en osu!"
 
@@ -17836,8 +17891,8 @@ msgid "Waiting for audio to load..."
 msgstr "Esperando a que cargue el audio..."
 
 #: src/components/companella/SubmissionList.tsx
-msgid "Waiting for files"
-msgstr ""
+#~ msgid "Waiting for files"
+#~ msgstr ""
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "Waiting for new scores"
@@ -17871,7 +17926,7 @@ msgstr "Ver"
 msgid "Watch osu!mania replays in your browser."
 msgstr "Mira replays de osu!mania en tu navegador."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ScoreRows.tsx
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -18058,8 +18113,8 @@ msgstr "Ancho de la imagen exportada, en píxeles"
 
 #. placeholder {0}: analysis.runtimeRate
 #: src/components/companella/SubmissionDetail.tsx
-msgid "Wife3 is measured from the replay's key presses at {0}x."
-msgstr ""
+#~ msgid "Wife3 is measured from the replay's key presses at {0}x."
+#~ msgstr ""
 
 #: src/lib/packs.ts
 msgid "Wild"

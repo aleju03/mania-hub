@@ -18,7 +18,7 @@ Left alone deliberately: GOAT poll nominations, since that board is meant to hol
 
 ## Banned users
 
-Nothing deletes a player by itself. When osu! 404s a user id, the worker's missing-user path (`markUserMissing`) only deactivates them, and `/admin/banned-users` lists every inactive, not-purged account so a purge is always a person's call. The admin menu badge counts the ones nobody has marked seen yet (`inactive_user_reviews.reviewed_at`); a later deactivation of an account that was reactivated in between counts as new again, a repeat 404 on an already inactive one does not.
+Nothing deletes a player by itself. When osu! 404s a user id, the worker's missing-user path (`markUserMissing`) only deactivates them, and `/admin/banned-users` lists every inactive, not-purged account so a purge is always a person's call. The admin menu badge counts the ones nobody has marked seen yet (`inactive_user_reviews.reviewed_at`); a later deactivation of an account that was reactivated in between counts as new again, a repeat 404 on an already inactive one does not. A row marked "site user" has signed in on this site at some point (`analytics_viewers` in the analytics DB, matched by osu! id), with its latest signed-in visit beside it.
 
 Each row is `restricted` or `missing`. osu! answers a restricted account and a deleted one with the same 404, so the only way to tell them apart is the player signing in: the login callback forwards osu!'s `/me` to `POST /api/session/login` (bridge), and `is_restricted: true` there deactivates them if needed and stamps `restricted_at`. A clean sign-in brings back an account the 404 path deactivated; a manual admin deactivation (`reason` starting `admin:`) and a purge are left alone.
 

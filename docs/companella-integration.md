@@ -610,7 +610,14 @@ preview, security events), and `/companella` shows it that data under "This
 account is not in the Companella beta." so it can revoke and delete. `GET
 manage/installations` returns `{installations, allowed}` for that page. Its
 native requests are refused with `403 account_not_allowed` and its refreshes
-with `invalid_grant`.
+with `invalid_grant`. `manage/installations/clear-revoked` takes the owner's
+revoked connections off that list (`cleared_at`); the rows stay, since imports
+and security events still name them. `GET manage/submissions` carries each
+stored play as `play`, the same row the profile's Recent tab draws
+(`readOwnCompanellaScoreRows`), test and held imports included, so the page
+lists them ten at a time with the profile's row and popup. Native `GET /me`
+also returns `avatar_accent`, the site's colour for the player's avatar, or
+null until it has been measured.
 
 Replays live under `integrations/companella/<environment>/replays/<owner>/…` in
 the private replay-cache bucket, behind unguessable content-addressed keys, and

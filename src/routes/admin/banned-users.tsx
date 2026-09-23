@@ -207,6 +207,14 @@ function BannedUserRow({
             >
               {entry.status}
             </span>
+            {entry.siteLastSeenAt ? (
+              <span
+                className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-300"
+                title={`Signed in on Mania Tracker, last ${formatTimeAgo(entry.siteLastSeenAt)} (${plural(entry.siteEvents, "event")})`}
+              >
+                site user
+              </span>
+            ) : null}
             {entry.displayName ? <span className="text-[12px] text-osu-l2">as {entry.displayName}</span> : null}
             <span className="font-mono text-[11px] text-osu-f1">#{entry.userId}</span>
           </div>
@@ -221,6 +229,7 @@ function BannedUserRow({
             {entry.deactivatedAt ? <When iso={entry.deactivatedAt} prefix="deactivated" /> : null}
             {reason ? <span>{reason}</span> : null}
             {entry.lastLoginAt ? <When iso={entry.lastLoginAt} prefix="signed in" /> : null}
+            {entry.siteLastSeenAt ? <When iso={entry.siteLastSeenAt} prefix="on site" /> : null}
             {!entry.hasProfile ? <span>no stored profile</span> : null}
           </div>
         </div>

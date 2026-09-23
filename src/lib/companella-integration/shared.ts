@@ -4,6 +4,8 @@
  * into the browser bundle.
  */
 
+import type { LeanTrackerScore } from "../types";
+
 /** What can cross a server-function boundary: plain JSON, nothing else. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -152,6 +154,8 @@ export interface CompanellaSubmissionRow {
   chart_md5: string;
   score: CompanellaScore | null;
   analysis: CompanellaAnalysis | null;
+  /* The row the profile's Recent tab draws for this play, once it is stored. */
+  play: LeanTrackerScore | null;
 }
 
 export interface CompanellaPreviewMode {

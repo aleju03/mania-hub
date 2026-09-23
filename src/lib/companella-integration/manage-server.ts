@@ -217,6 +217,15 @@ export const revokeAllCompanellaInstallations = createServerFn({ method: "POST" 
     return readJson(await callManage("installations/revoke-all", { actor, method: "POST" }), { revoked: 0 });
   });
 
+export const clearRevokedCompanellaInstallations = createServerFn({ method: "POST" })
+  .handler(async (): Promise<{ cleared: number }> => {
+    await noStore();
+    await requireSameOrigin();
+    const actor = await readActor();
+    if (!actor) return { cleared: 0 };
+    return readJson(await callManage("installations/clear-revoked", { actor, method: "POST" }), { cleared: 0 });
+  });
+
 // ── Submissions and scores ────────────────────────────────────────────────
 
 export const fetchCompanellaSubmissions = createServerFn({ method: "GET" })

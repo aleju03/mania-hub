@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "framer-motion";
+import { BookOpen } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 
@@ -13,9 +14,12 @@ import { RatingPreviewPanel } from "../components/companella/RatingPreviewPanel"
 import { SecurityActivity } from "../components/companella/SecurityActivity";
 import { SubmissionDetail } from "../components/companella/SubmissionDetail";
 import { SubmissionList } from "../components/companella/SubmissionList";
+import { ScoreDetailModal } from "../components/player/ScoreRows";
+import { companellaRowToOsuScore } from "../lib/companella-scores";
 import { TestClientPanel } from "../components/companella/TestClientPanel";
 import { Empty, Panel } from "../components/companella/primitives";
 import {
+  clearRevokedCompanellaInstallations,
   fetchCompanellaAccess,
   fetchCompanellaInstallations,
   fetchCompanellaPreview,
@@ -48,6 +52,7 @@ const ACTIVE_STATES = new Set(["awaiting_assets", "queued", "validating", "analy
 const RETRYING_STATES = new Set(["deferred"]);
 const POLL_MIN_MS = 4_000;
 const POLL_MAX_MS = 30_000;
+const PAGE_SIZE = 10;
 
 export const Route = createFileRoute("/companella")({
   // The test client's callback hands its grant back through these, and the
@@ -77,7 +82,10 @@ function CompanellaPage() {
   const [access, setAccess] = useState<CompanellaAccess | null>(null);
   const [installations, setInstallations] = useState<CompanellaInstallation[]>([]);
   const [submissions, setSubmissions] = useState<CompanellaSubmissionRow[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // The cursor each visited page was read with; the last one is the page shown.
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null]);
+  const [pageLoading, setPageLoading] = useState(false);
   const [preview, setPreview] = useState<CompanellaPreview | null>(null);
   const [events, setEvents] = useState<CompanellaSecurityEvent[]>([]);
   const [selected, setSelected] = useState<CompanellaSubmissionRow | null>(null);
@@ -86,19 +94,23 @@ function CompanellaPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const pollDelay = useRef(POLL_MIN_MS);
 
+  const pageCursor = pageCursors[pageCursors.length - 1] ?? null;
   const loadAll = useCallback(async () => {
     const [installationsResult, submissionsResult, previewResult, eventsResult] = await Promise.all([
       fetchCompanellaInstallations().catch(() => ({ installations: [] })),
-      fetchCompanellaSubmissions({ data: { limit: 20 } }).catch(() => ({ submissions: [], next_cursor: null })),
+      fetchCompanellaSubmissions({ data: { limit: PAGE_SIZE, cursor: pageCursor } }).catch(() => ({ submissions: [], next_cursor: null })),
       fetchCompanellaPreview({ data: {} }).catch(() => ({ preview: null })),
       fetchCompanellaSecurityEvents().catch(() => ({ events: [] })),
     ]);
     setInstallations(installationsResult.installations);
     setSubmissions(submissionsResult.submissions);
-    setCursor(submissionsResult.next_cursor);
+    setNextCursor(submissionsResult.next_cursor);
     setPreview(previewResult.preview);
     setEvents(eventsResult.events);
-  }, []);
+  }, [pageCursor]);
+
+  const loadAllRef = useRef(loadAll);
+  loadAllRef.current = loadAll;
 
   useEffect(() => {
     let cancelled = false;
@@ -108,7 +120,7 @@ function CompanellaPage() {
         if (cancelled) return;
         setAccess(result);
         // A former member keeps a view of what they have, to revoke or delete it.
-        if (result.allowed || result.hasData) await loadAll();
+        if (result.allowed || result.hasData) await loadAllRef.current();
       })
       .catch(() => {
         if (!cancelled) setAccess(null);
@@ -119,7 +131,7 @@ function CompanellaPage() {
     return () => {
       cancelled = true;
     };
-  }, [loadAll]);
+  }, []);
 
   // One poll for the whole visible page, backing off while nothing moves and
   // stopping entirely in a hidden tab.
@@ -156,13 +168,28 @@ function CompanellaPage() {
 
   const activeInstallations = installations.filter((installation) => installation.status === "active").length;
 
-  const loadMore = useCallback(async () => {
-    if (!cursor) return;
-    const page = await fetchCompanellaSubmissions({ data: { limit: 20, cursor } }).catch(() => null);
+  const turnPage = useCallback(async (direction: -1 | 1) => {
+    const cursors = direction === 1
+      ? (nextCursor ? [...pageCursors, nextCursor] : pageCursors)
+      : pageCursors.slice(0, Math.max(1, pageCursors.length - 1));
+    if (cursors === pageCursors) return;
+    setPageLoading(true);
+    const page = await fetchCompanellaSubmissions({ data: { limit: PAGE_SIZE, cursor: cursors[cursors.length - 1] ?? null } }).catch(() => null);
+    setPageLoading(false);
     if (!page) return;
-    setSubmissions((previous) => [...previous, ...page.submissions]);
-    setCursor(page.next_cursor);
-  }, [cursor]);
+    setPageCursors(cursors);
+    setSubmissions(page.submissions);
+    setNextCursor(page.next_cursor);
+  }, [nextCursor, pageCursors]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
 
   if (loading && !access) {
     return (
@@ -214,40 +241,36 @@ function CompanellaPage() {
 
   return (
     <Shell>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-7">
         {notice && <p className="text-center text-xs text-osu-f1">{notice}</p>}
         {!access.allowed && (
           <p className="text-center text-xs text-osu-f1"><Trans>This account is not in the Companella beta.</Trans></p>
         )}
 
-        <Panel title={<Trans>Connection</Trans>}>
-          {/* Being signed in to the site is not the same as having connected
-              an installation, and the first line has to say which it is. */}
-          <p className="text-sm text-white">
-            {activeInstallations === 0
-              ? <Trans>Signed in as {auth.viewer.username}. Nothing is connected yet.</Trans>
-              : <Trans>Signed in as {auth.viewer.username}. {activeInstallations} connected.</Trans>}
-          </p>
-          <p className="mt-2 text-xs text-osu-f1">
-            <Trans>
-              Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it
-              opens this site in your browser, you name the installation, and the approval is bound to that installation
-              only.
-            </Trans>
-          </p>
-          <p className="mt-2 text-xs text-osu-f1">
-            <Trans>
-              Imported plays that pass the checks show on the tracker and your profile. Their replays stay private to you
-              unless your osu! account is restricted. Public rankings, pp, snipes and rewards are not affected by anything
-              on this page.
-            </Trans>
-          </p>
-          {!access.storageReady && (
-            <p className="mt-2 text-xs text-rose-300">
-              <Trans>Storage is not configured, so uploads will fail until it is.</Trans>
+        <section className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-white">
+              {activeInstallations === 0
+                ? <Trans>Signed in as {auth.viewer.username}. Nothing is connected yet.</Trans>
+                : <Trans>Signed in as {auth.viewer.username}. {activeInstallations} connected.</Trans>}
             </p>
-          )}
-        </Panel>
+            <p className="mt-0.5 text-[12px] text-osu-f1">
+              <Trans>Plays Companella sends show on the tracker and your profile. Their replays stay private to you.</Trans>
+            </p>
+            {!access.storageReady && (
+              <p className="mt-1 text-[12px] text-rose-300">
+                <Trans>Storage is not configured, so uploads will fail until it is.</Trans>
+              </p>
+            )}
+          </div>
+          <Link
+            to="/companella/docs"
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-osu-b4 px-3 py-1.5 text-[12px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            <BookOpen size={13} />
+            <Trans>API docs</Trans>
+          </Link>
+        </section>
 
         <InstallationList
           installations={installations}
@@ -273,26 +296,40 @@ function CompanellaPage() {
               setNotice(t`Could not revoke the connections.`);
             });
           }}
+          onClearRevoked={() => {
+            void clearRevokedCompanellaInstallations().then(() => loadAll()).catch(() => {
+              setNotice(t`Could not clear the revoked connections.`);
+            });
+          }}
         />
 
         <SubmissionList
           rows={submissions}
-          hasMore={Boolean(cursor)}
-          loading={loading}
-          onLoadMore={() => void loadMore()}
+          loading={loading || pageLoading}
+          page={pageCursors.length - 1}
+          hasNext={Boolean(nextCursor)}
+          onPage={(direction) => void turnPage(direction)}
           onOpen={setSelected}
         />
 
-        {selected && (
-          <SubmissionDetail
-            row={selected}
-            onClose={() => setSelected(null)}
-            onDeleted={() => {
-              setSelected(null);
-              void loadAll();
-            }}
-          />
-        )}
+        <AnimatePresence>
+          {selected?.play && (
+            <ScoreDetailModal
+              key={selected.submission_id}
+              score={companellaRowToOsuScore(selected.play)}
+              onClose={() => setSelected(null)}
+              extra={(
+                <SubmissionDetail
+                  row={selected}
+                  onDeleted={() => {
+                    setSelected(null);
+                    void loadAll();
+                  }}
+                />
+              )}
+            />
+          )}
+        </AnimatePresence>
 
         <RatingPreviewPanel preview={preview} />
 

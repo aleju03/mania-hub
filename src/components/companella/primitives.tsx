@@ -1,8 +1,8 @@
 /*
  * Small shared pieces for the /companella beta page.
  *
- * Kept deliberately flat: one bordered panel per section, no nested cards, no
- * glows, and the data itself carries the weight rather than a subtitle
+ * Kept deliberately flat: sections are a heading over a hairline, not boxes,
+ * no glows, and the data itself carries the weight rather than a subtitle
  * explaining it.
  */
 
@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 
 export function Panel({ title, right, children }: { title: ReactNode; right?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-osu-b3/30 bg-osu-b4/40 p-4">
+    <section className="border-t border-white/[0.07] pt-5">
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{title}</h3>
         {right ? <div className="ml-auto">{right}</div> : null}
