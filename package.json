@@ -9,7 +9,8 @@
     "#replay-judge/*": "./live-backend/src/replay-judge/*"
   },
   "scripts": {
-    "postinstall": "node scripts/prune-onnxruntime-web.mjs",
+    "postinstall": "node scripts/prune-onnxruntime-web.mjs && node scripts/patch-vite-module-runner.mjs",
+    "predev": "node scripts/patch-vite-module-runner.mjs",
     "dev": "vite dev --port 3000",
     "dev:all": "node scripts/dev/run-dev-stack.mjs",
     "dev:all:host": "node scripts/dev/run-dev-stack.mjs --host",
@@ -88,7 +89,7 @@
     "@vitejs/plugin-react": "^5.1.4",
     "jsdom": "^28.1.0",
     "typescript": "^5.7.2",
-    "vite": "^7.3.1",
+    "vite": "7.3.6",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.5"
   },
