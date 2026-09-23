@@ -291,8 +291,8 @@ Mods:
 |---|---|---|
 | Rejected | AT, CN, RX, AP, TP | submission refused (`automated_play_mods`) |
 | Contradictory | DT or NC with HT, EZ with HR, NF with SD or PF, HD with FI, two key mods | submission refused (`contradictory_mods`): stable cannot produce them, so the header was edited |
-| Stored unrated | MR, RD, key conversion, CO, unknown bits | accepted, explicit reason |
-| Supported | NF, EZ, HD, HR, SD, PF, DT, NC, HT, FL, FI, V2, TD, SO | analyzed |
+| Stored unrated | RD, key conversion, CO, unknown bits | accepted, explicit reason |
+| Supported | NF, EZ, HD, HR, SD, PF, DT, NC, HT, FL, FI, MR, V2, TD, SO | analyzed; the judge flips a Mirror play's columns back, and its ratings read the original chart as the official pipeline's do |
 
 An unrecognised bit is never read as NoMod. Playback rate and hit windows come
 from the header mods, and `replay-rate.ts` checks that rate against the frames
@@ -585,8 +585,8 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
 - **Pricing.** During processing, an import whose chart is the exact file of a
   mania map (the md5 equals the checksum osu! gave us for the declared or
   matched beatmap id, or a cached official file with that md5), played under
-  ranked mods only (NF, EZ, HD, HR, SD, PF, DT, NC, HT, FL, FI; not ScoreV2,
-  key mods, RD, CO or MR, which the judge does not mirror), gets its star
+  ranked mods only (NF, EZ, HD, HR, SD, PF, DT, NC, HT, FL, FI, MR; not
+  ScoreV2, key mods, RD or CO), gets its star
   rating at the played rate (`dan/mania-star-rating.ts`, lazer's
   calculator) and its pp (`dan/mania-pp.ts`) stored in
   `companella_local_score_pp`, whatever the map's status. The pp is the lower

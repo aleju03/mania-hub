@@ -39,7 +39,7 @@ const UNRATED_TEXT: Record<string, string> = {
   accuracy_below_calc_floor: "The accuracy is too low to rate",
   replay_timing_unavailable: "The key presses could not be judged",
   calculator_returned_nothing: "The calculator gave no rating for this chart",
-  column_rewriting_mod: "Mirror and Random are not rated",
+  column_rewriting_mod: "Random is not rated",
   key_conversion_mod: "Key conversion mods are not rated",
   unsupported_mod: "This mod is not rated",
   unknown_mod_bits: "The replay has mods the site does not know",
