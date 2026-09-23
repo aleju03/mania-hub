@@ -49,7 +49,7 @@ const ERRORS: Array<[string, string]> = [
   ["401 with a DPoP-Nonce header", "Sign again with that nonce and retry once."],
   ["400 use_dpop_nonce from /oauth/token or /oauth/revoke", "Sign again with the nonce from the DPoP-Nonce header and retry once."],
   ["400 invalid_grant, \"This account is not in the beta.\"", "Stop sending plays and tell the player. If they're let back in, the same tokens work again."],
-  ["Installation revoked", "Stop uploading and ask the player to connect again."],
+  ["installation_revoked", "The player disconnected. Stop uploading and ask them to connect again."],
   ["error=access_denied on the callback", "The player cancelled, so nothing was connected."],
   ["needs_beatmap: true", "Upload the .osu file."],
   ["Connection dropped during an upload", "Read the submission again, then resend the same bytes."],
@@ -181,8 +181,8 @@ Content-Type: application/json
   "redirect_uri": "http://127.0.0.1:{port}/companella/callback"
 }`}</CodeBlock>
             <P>
-              The response has an access token (valid for 5 minutes), a refresh token, the scope and the installation
-              id. Refresh at the same URL with:
+              The response has an access token (valid for 5 minutes), a refresh token, the scope and the connection's
+              id (<Code>installation_id</Code>). Refresh at the same URL with:
             </P>
             <CodeBlock label="refresh">{`{ "grant_type": "refresh_token", "refresh_token": "..." }`}</CodeBlock>
             <P>
@@ -191,7 +191,7 @@ Content-Type: application/json
             </P>
             <P>
               If the token response from the code exchange gets lost, run the authorization again. Connecting the same
-              key to the same account reuses the existing installation.
+              key to the same account reuses the existing connection.
             </P>
             <P>
               To disconnect, send the refresh token to <Code>/oauth/revoke</Code> with a proof from the same key. The
@@ -208,7 +208,7 @@ Content-Type: application/json
             <P>
               Every request after sign-in carries <Code>{"Authorization: DPoP <access token>"}</Code> and a{" "}
               <Code>DPoP</Code> header created for that request alone. The DPoP header is a JWT signed with the
-              installation's private key.
+              connection's private key.
             </P>
             <CodeBlock label="dpop header">{`{ "typ": "dpop+jwt", "alg": "ES256", "jwk": { your public key } }`}</CodeBlock>
             <CodeBlock label="dpop payload">{`{
@@ -326,16 +326,12 @@ Content-Type: application/json
 
           <Section n={5} title="The queue">
             <P>
-              Save each play and its Idempotency-Key before the first request, along with the account and installation
+              Save each play and its Idempotency-Key before the first request, along with the account and connection
               it was captured under. Retries reuse the same key and the same bytes, with a new proof.
             </P>
             <P>
               If a different account connects later, don't move old pending plays to it. The server refuses the same
               play under a new key, so every retry would come back as a duplicate.
-            </P>
-            <P>
-              Two installs on the same PC, for example with dual boot, are two installations on one account, each with
-              its own key. Give them names the player can tell apart on <A href="/companella">/companella</A>.
             </P>
           </Section>
 
@@ -355,14 +351,8 @@ Content-Type: application/json
               together, like DT with HT, get the play rejected. <Code>/capabilities</Code> lists them.
             </P>
             <P>
-              Only plays on charts the site already knows count toward the rating, rate-changed copies included. A copy
-              with different scroll speed changes, or a chart the site doesn't know, is still rated per play but doesn't
-              count.
-            </P>
-            <P>
-              The server also checks that the files are intact and that the judgements add up to a finished chart. It
-              can't confirm that a person set the score, since the key only shows which installation sent it and a replay
-              file can be edited. Plays that pass the checks show on the tracker and the player's profile.
+              The server also checks that the files are intact and that the judgements add up to a finished chart.
+              Plays that pass the checks show on the tracker and the player's profile.
             </P>
           </Section>
 

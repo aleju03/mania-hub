@@ -274,16 +274,16 @@ on every retry.
 
 A dual boot approves two keys on the same account. They are independent:
 separate credentials, separate revocation, and switching between them is normal
-and is not treated as suspicious. Name them so the user can tell them apart on
-`/companella`.
+and is not treated as suspicious. The player names each one on the consent
+screen.
 
 ## 7. What the server will and will not say
 
 It will say whether the file was intact, which name the replay carries (a
 different one, from an offline or private-server client, is fine), whether the
 judgement total is consistent with finishing the chart,
-what the chart is a version of and at what relative rate, what the play rates
-at, and why a play is or is not counted in the experimental preview.
+what the chart is a version of and at what relative rate, and what the play
+rates at.
 
 The rating is read from the replay's key presses: each press is paired with
 its note and scored on Wife3 by how many milliseconds it was off. The replay
@@ -295,10 +295,7 @@ merging or re-timing frames. Only 4K to 10K is judged and rated; wider keymodes 
 unrated. Mod combinations stable cannot produce (listed as
 `mod_pairs_rejected` in `/capabilities`) are refused.
 
-Only plays on a chart the site already knows count toward the preview, rate
-copies included. A copy whose scroll speed differs from its original, or a
-chart the site does not know, is still analyzed and shown per play, but
-does not move the number. A play that passes the checks shows on the tracker
+A play that passes the checks shows on the tracker
 and on the player's profile, marked as sent through Companella.
 
 It will not say that a human set the score. An installation credential proves
