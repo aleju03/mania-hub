@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { isLikelyBeatmapFile } from "./osu-file-shape";
 
 import {
   type CommunityBeatmapAssetKind,
@@ -22,13 +23,6 @@ import {
 // A single .osu difficulty is tiny (well under a MB); this is a sanity bound so a
 // bad payload can't wedge a huge blob into the store.
 const MAX_COMMUNITY_BEATMAP_BYTES = 8 * 1024 * 1024;
-
-// Same shape guard used elsewhere for fetched .osu files: it must look like a
-// real beatmap, not an error page or an unrelated text file.
-function isLikelyBeatmapFile(content: string): boolean {
-  const trimmed = content.trimStart();
-  return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
-}
 
 function md5Hex(content: string): string {
   return crypto.createHash("md5").update(content, "utf8").digest("hex");

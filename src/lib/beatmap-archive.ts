@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { BEATMAP_MIRRORS, type BeatmapMirrorName } from "./beatmap-mirrors";
+import { hasOsuFileHeader } from "./osu-file-shape";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
 const ARCHIVE_CACHE_MAX_ENTRIES = 6;
@@ -507,7 +508,7 @@ export async function extractBeatmapArchiveOsuFile(beatmapsetId: string, beatmap
   const file = matched ?? fallback;
   if (!file) throw new Error(`No .osu file found in beatmapset ${beatmapsetId}`);
   const content = await file.async("string");
-  if (!content.trimStart().startsWith("osu file format")) {
+  if (!hasOsuFileHeader(content)) {
     throw new Error(`Archive .osu file for beatmap ${beatmapId} is invalid`);
   }
   return content;

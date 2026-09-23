@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
 import { trackServerEvent } from "./server-track";
 import { liveBridgeToken } from "./live-backend-tokens";
+import { isLikelyBeatmapFile } from "./osu-file-shape";
 
 const LIVE_BACKEND_OSU_TIMEOUT_MS = 120_000;
 const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -423,11 +424,6 @@ export async function fetchBeatmapFileWithMeta(beatmapId: number, beatmapsetId?:
 
 export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number | null): Promise<string> {
   return (await fetchBeatmapFileWithMeta(beatmapId, beatmapsetId)).content;
-}
-
-function isLikelyBeatmapFile(content: string): boolean {
-  const trimmed = content.trimStart();
-  return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
 }
 
 function normalizeBeatmapFileChecksum(value: unknown): string | null {

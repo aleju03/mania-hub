@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireDevFeatureAccess } from "./auth";
 import { getServerLiveBackendUrl } from "./live-backend";
 import { bridgeAuthHeaders } from "./live-backend-tokens";
+import { hasOsuFileHeader } from "./osu-file-shape";
 
 // Server fns for the /admin/dan-classifier page. All chart data comes from the
 // live backend's local projections (beatmap_osu_files / beatmaps / beatmapsets):
@@ -99,7 +100,7 @@ export const getDanClassifierChartFile = createServerFn({ method: "POST" })
       throw new Error(`Beatmap file request failed (${response.status}).`);
     }
     const content = await response.text();
-    if (!content.startsWith("osu file format")) {
+    if (!hasOsuFileHeader(content)) {
       throw new Error("Live backend returned an invalid .osu file.");
     }
     return { content, notCached: false };
