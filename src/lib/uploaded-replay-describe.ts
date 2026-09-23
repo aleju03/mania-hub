@@ -27,7 +27,13 @@ async function putDescriptionArtifact(normalized: string, description: UploadedR
   await putJsonArtifact(getUploadedReplayDescStorageKey(normalized), description);
 }
 const DESCRIPTION_UNRESOLVED_CACHE_TTL = 24 * 60 * 60 * 1000;
+// The retry window doubles with each lookup osu! answers 404 (1, 2, 4... days,
+// capped at 30): most unknown checksums are local or unsubmitted charts that
+// never arrive, so a flat daily retry spent the same ~90 calls every day. Each
+// id also waits a fixed fraction of a day extra, so replays that missed
+// together stop retrying as one burst.
 const UNRESOLVED_BEATMAP_RETRY_MS = 24 * 60 * 60 * 1000;
+const UNRESOLVED_BEATMAP_MAX_RETRY_MS = 30 * 24 * 60 * 60 * 1000;
 // A stored description otherwise lives forever, so bump this whenever the
 // derived fields change shape and each artifact re-parses its .osr once.
 // v2: mods come from a lazer replay's own list, so they carry a custom rate and
@@ -85,6 +91,8 @@ export type UploadedReplayDescription = {
   // re-reading the .osr; computedAt is when that lookup last ran.
   beatmapHash?: string;
   computedAt?: number;
+  /** Retries in a row that osu! answered 404; paces the next one. */
+  lookupMisses?: number;
   /** The chart's star rating at the rate the play ran at, which is what the
    *  viewer shows once it opens. Only stored for a rate-changing play; at 1.0x
    *  the map's own `beatmap.starRating` already is the rating. */
@@ -139,21 +147,29 @@ export function toUploadedReplayBeatmap(lookup: BeatmapChecksumLookupResult): Up
   };
 }
 
-async function lookupUploadedReplayBeatmap(checksum: string): Promise<UploadedReplayBeatmap | null> {
+// null: osu! does not know the checksum (unsubmitted or deleted map).
+// undefined: the lookup failed for another reason and says nothing about it.
+// Either way the card shows the player + score without the map.
+async function lookupUploadedReplayBeatmap(checksum: string): Promise<UploadedReplayBeatmap | null | undefined> {
   if (!checksum) return null;
   try {
     const lookup = await osuFetch<BeatmapChecksumLookupResult>(
       "/beatmaps/lookup",
       { checksum },
-      { caller: "describeUploadedReplay" },
+      { caller: "describeUploadedReplay", expectedStatuses: [404] },
     );
     if (!lookup) return null;
     return toUploadedReplayBeatmap(lookup);
-  } catch {
-    // 404 means the checksum is unknown to osu! (unsubmitted or deleted map);
-    // any lookup failure just means we show the player + score without the map.
-    return null;
+  } catch (error) {
+    return /\]\s+404\s/.test(error instanceof Error ? error.message : String(error)) ? null : undefined;
   }
+}
+
+function unresolvedRetryMs(description: UploadedReplayDescription): number {
+  const base = Math.min(UNRESOLVED_BEATMAP_RETRY_MS * 2 ** (description.lookupMisses ?? 0), UNRESOLVED_BEATMAP_MAX_RETRY_MS);
+  let hash = 0;
+  for (const char of description.id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return base + (hash % 1000) / 1000 * UNRESOLVED_BEATMAP_RETRY_MS;
 }
 
 // A chart that would not rate (deleted map, a .osu that never arrives) is tried
@@ -241,17 +257,19 @@ async function upgradeStoredDescription(
 // An unresolved stored description: retry just the beatmap lookup once the
 // retry window has passed, never the .osr parse. On success the artifact
 // upgrades in place; on another miss the timestamp advances so the next
-// window's read retries again.
+// window's read retries again, and a 404 also widens that window.
 async function refreshStoredDescription(
   normalized: string,
   stored: UploadedReplayDescription,
 ): Promise<UploadedReplayDescription> {
   if (stored.beatmap || !stored.beatmapHash) return stored;
-  if (Date.now() - (stored.computedAt ?? 0) < UNRESOLVED_BEATMAP_RETRY_MS) return stored;
+  if (Date.now() - (stored.computedAt ?? 0) < unresolvedRetryMs(stored)) return stored;
+  const beatmap = await lookupUploadedReplayBeatmap(stored.beatmapHash);
   const refreshed: UploadedReplayDescription = {
     ...stored,
-    beatmap: await lookupUploadedReplayBeatmap(stored.beatmapHash),
+    beatmap: beatmap ?? null,
     computedAt: Date.now(),
+    ...(beatmap === null ? { lookupMisses: (stored.lookupMisses ?? 0) + 1 } : {}),
   };
   await putDescriptionArtifact(normalized, refreshed);
   return refreshed;
@@ -364,7 +382,7 @@ async function buildUploadedReplayDescription(
     originalFilename,
     ...(modRate != null ? { modRate } : {}),
     beatmap: resolvedBeatmap === undefined
-      ? await lookupUploadedReplayBeatmap(header.beatmapHash ?? "")
+      ? await lookupUploadedReplayBeatmap(header.beatmapHash ?? "") ?? null
       : resolvedBeatmap && toUploadedReplayBeatmap(resolvedBeatmap),
     beatmapHash: header.beatmapHash ?? "",
     computedAt: Date.now(),

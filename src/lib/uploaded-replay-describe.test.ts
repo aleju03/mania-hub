@@ -173,7 +173,7 @@ describe("describeUploadedReplayById caching", () => {
     const oldComputedAt = Date.now() - 2 * DAY_MS;
     const stored = unresolvedStored({ computedAt: oldComputedAt });
     getJsonArtifact.mockResolvedValue(stored as never);
-    osuFetch.mockRejectedValue(new Error("404"));
+    osuFetch.mockRejectedValue(new Error("[liveBackendOsu:describeUploadedReplay] 404 /beatmaps/lookup - <empty body>"));
 
     const result = await describeUploadedReplayById(VALID_ID);
 
@@ -181,6 +181,36 @@ describe("describeUploadedReplayById caching", () => {
     expect(putJsonArtifact).toHaveBeenCalledTimes(1);
     const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
     expect(written.computedAt).toBeGreaterThan(oldComputedAt);
+    expect(written.lookupMisses).toBe(1);
+  });
+
+  it("waits longer after each lookup osu! answers 404", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: false });
+    // Three misses make the next window 8 days (plus under a day of spread).
+    getJsonArtifact.mockResolvedValue(unresolvedStored({ computedAt: Date.now() - 5 * DAY_MS, lookupMisses: 3 }) as never);
+
+    await describeUploadedReplayById(VALID_ID);
+    expect(osuFetch).not.toHaveBeenCalled();
+
+    getJsonArtifact.mockResolvedValue(unresolvedStored({ computedAt: Date.now() - 10 * DAY_MS, lookupMisses: 3 }) as never);
+    osuFetch.mockRejectedValue(new Error("[liveBackendOsu:describeUploadedReplay] 404 /beatmaps/lookup - <empty body>"));
+
+    await describeUploadedReplayById(VALID_ID);
+    expect(osuFetch).toHaveBeenCalledTimes(1);
+    const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+    expect(written.lookupMisses).toBe(4);
+  });
+
+  it("does not widen the window when the lookup fails for another reason", async () => {
+    getPersistentCacheEntry.mockResolvedValue({ hit: false });
+    getJsonArtifact.mockResolvedValue(unresolvedStored({ computedAt: Date.now() - 10 * DAY_MS, lookupMisses: 3 }) as never);
+    osuFetch.mockRejectedValue(new Error("[liveBackendOsu:describeUploadedReplay] 503 /beatmaps/lookup - <empty body>"));
+
+    await describeUploadedReplayById(VALID_ID);
+
+    const [, written] = putJsonArtifact.mock.calls[0] as unknown as [string, UploadedReplayDescription];
+    expect(written.beatmap).toBeNull();
+    expect(written.lookupMisses).toBe(3);
   });
 
   // Artifacts written before mods came from the lazer block would otherwise
