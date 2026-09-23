@@ -2212,10 +2212,13 @@ export function PlayerProfilePage({
       href={`https://osu.ppy.sh/users/${user.id}/mania`}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1 rounded-full bg-osu-pink/20 px-2 py-0.5 font-semibold text-osu-pink-light transition-colors duration-150 hover:bg-osu-pink/35"
+      // Same shape as the private server pills beside it (ServerLinkPill).
+      className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-0.5 pl-0.5 pr-2 font-semibold text-white/80 transition-colors duration-150 hover:bg-white/20 hover:text-white"
     >
+      <span className="h-4 w-4 rounded-full bg-osu-pink text-white">
+        <OsuLogo className="h-4 w-4" />
+      </span>
       <Trans>osu! profile</Trans>
-      <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 1.5h7v7" /><path d="M10.5 1.5 1.5 10.5" /></svg>
     </a>,
     ...serverLinkMeta,
   ];
