@@ -35,6 +35,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-23", text: "Player dan + and - steps used to be uneven, so a plain level like gamma covered a much bigger part of the level than the other steps, and -- almost never showed up. They are five equal steps per level now, so some player dans show one step lower (like gamma- instead of gamma), but the level itself stays the same as it was before.", to: "/dan-estimates" },
   { date: "2026-09-23", text: "Added a Follow SV changes option to the Mania Replay Master overlay in replays.", label: "Follow SV changes", to: "/replay" },
   { date: "2026-09-23", text: "Added a 4K+7K column to the rankings that adds up each player's 4K and 7K pp, and you can sort by it.", to: "/rankings" },
   { date: "2026-09-23", text: "Added new styles to the Skill radar dynamic render.", to: "/dynamic-renders" },

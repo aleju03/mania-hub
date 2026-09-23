@@ -4,7 +4,7 @@ import type { I18n, MessageDescriptor } from "@lingui/core";
 import { msg, plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MyDataSkillBreakdown, MyDataSkillMode, MyDataSkillQueue } from "../../lib/my-data";
-import { danBareLabel } from "../../lib/dan-images";
+import { danBareLabel, danTierName } from "../../lib/dan-images";
 import { formatAccuracy, formatNumber } from "../../lib/format";
 import { useLocale } from "../../lib/locale-context";
 import { useNoDans } from "../../store";
@@ -131,7 +131,7 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
         const beyond = entry.side!.beyondTable === true;
         const label = beyond ? danBareLabel(entry.side!.label) : entry.side!.label;
         const sideLabel = i18n._(entry.label);
-        const chip = formatDanChip(label);
+        const chip = beyond ? formatDanChip(label) : danTierName(label, formatDanChip);
         const clears = entry.side!.clears;
         // A course clear can floor the estimate above every rated pass the
         // player has, which leaves `clears` at 0 - true, and unreadable next

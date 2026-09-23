@@ -72,6 +72,21 @@ export function danTierSuffix(displayName: string): string {
   return displayName.trim().match(/[+-]+$/)?.[0] ?? "";
 }
 
+// LeoBlack's own names for the five tiers of a level, which the suffixes stand for.
+const DAN_TIER_WORDS: Record<string, string> = {
+  "--": "low",
+  "-": "mid/low",
+  "": "mid",
+  "+": "mid/high",
+  "++": "high",
+};
+
+/** A display name in LeoBlack's words: "gamma--" -> "gamma low", "gamma" -> "gamma mid". */
+export function danTierName(displayName: string, formatLevel: (level: string) => string = (level) => level): string {
+  const level = displayName.trim().replace(/[+-]+$/, "");
+  return `${formatLevel(level)} ${DAN_TIER_WORDS[danTierSuffix(displayName)] ?? DAN_TIER_WORDS[""]}`;
+}
+
 // Where inside its level a verdict sits. The sign picks the hue - below the
 // level's middle reads cool, above it reads warm - and doubling the marker
 // pushes that hue further out, so "-" and "--" never read as two unrelated

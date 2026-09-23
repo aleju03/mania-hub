@@ -1662,7 +1662,7 @@ msgstr "{typeName} pack, {typeBlurb}"
 msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 msgstr "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 
-#. placeholder {0}: formatDan(danLabel)
+#. placeholder {0}: danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is around <0>{0}</0>"
 msgstr "{username} is around <0>{0}</0>"
@@ -1768,6 +1768,11 @@ msgstr "+ bpm & length"
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "+{0} more (list capped at {1})"
 msgstr "+{0} more (list capped at {1})"
+
+#. placeholder {0}: (step.start - rawDan).toFixed(2)
+#: src/components/player/DanStepRail.tsx
+msgid "+{0} to go"
+msgstr "+{0} to go"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "+{gap}pp to go"
@@ -6209,6 +6214,11 @@ msgstr "everything"
 msgid "everything else the archive ships"
 msgstr "everything else the archive ships"
 
+#. placeholder {0}: dan.rawDan.toFixed(2)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Exact estimate: {0}"
+msgstr "Exact estimate: {0}"
+
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
 #~ msgstr "Excluded sections"
@@ -8200,6 +8210,11 @@ msgstr "Last 24h · {0} scores"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Last collection page"
 msgstr "Last collection page"
+
+#. placeholder {0}: formatDate(LAST_EDITED, "UTC", locale)
+#: src/routes/dan-estimates.tsx
+msgid "Last edited: {0}"
+msgstr "Last edited: {0}"
 
 #: src/components/ui/Pagination.tsx
 msgid "Last page"

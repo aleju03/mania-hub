@@ -1,8 +1,9 @@
 import { skillPlaySharePath } from "../../lib/skill-play-share";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, CircleHelp, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleHelp, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   fetchLivePlayerDanEvidenceDirect,
@@ -17,7 +18,8 @@ import {
   type LivePlayerSkillPlay,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatTimeAgo } from "../../lib/format";
-import { danBareLabel, danTierColor, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
+import { danBareLabel, danScaleContextFor, danTierColor, danTierName, danTierSuffix, getDanImageSrc } from "../../lib/dan-images";
+import { DanStepRail } from "./DanStepRail";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { ModBadge } from "../ui/ModBadge";
@@ -159,6 +161,34 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // named ladders already read as one (same rule as the chip).
   const formatDan = (label: string): string => (/^\d/.test(label) ? t`${label} dan` : label);
   const dan = evidence?.dan ?? null;
+  // The step rail opens under the exact estimate. It is portalled with a fixed
+  // position because the header clips its overflow.
+  const [stepsAt, setStepsAt] = useState<{ left: number; top: number } | null>(null);
+  const stepsButtonRef = useRef<HTMLButtonElement>(null);
+  const stepsPopoverRef = useRef<HTMLDivElement>(null);
+  const toggleSteps = () => {
+    const box = stepsButtonRef.current?.getBoundingClientRect();
+    setStepsAt((open) => (open || !box ? null : { left: box.left, top: box.bottom + 8 }));
+  };
+  useEffect(() => {
+    if (!stepsAt) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      const target = event.target as Node | null;
+      if (event.type === "pointerdown" && target && (stepsPopoverRef.current?.contains(target) || stepsButtonRef.current?.contains(target))) return;
+      // Escape closes the rail first and leaves the modal open.
+      if (event instanceof KeyboardEvent) event.stopImmediatePropagation();
+      setStepsAt(null);
+    };
+    document.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [stepsAt]);
   // At the ladder's ceiling the level is a floor, not a reading (6K regular
   // ends at 9th), so the headline says "beyond" and drops the tier suffix.
   const beyond = dan?.beyondTable === true;
@@ -291,11 +321,48 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     {dan && beyond ? (
                       <Trans>{username} is beyond <span style={{ color }}>{formatDan(danLabel)}</span></Trans>
                     ) : dan ? (
-                      <Trans>{username} is around <span style={{ color }}>{formatDan(danLabel)}</span></Trans>
+                      <Trans>{username} is around <span style={{ color }}>{danTierName(danLabel, formatDan)}</span></Trans>
                     ) : (
                       <Trans>{username}'s {sideLabel} dan estimate</Trans>
                     )}
                   </h2>
+                  {dan && !beyond ? (
+                    <div className="mt-1">
+                      <button
+                        ref={stepsButtonRef}
+                        type="button"
+                        onClick={toggleSteps}
+                        aria-expanded={stepsAt != null}
+                        className="inline-flex cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white"
+                      >
+                        <Trans>Exact estimate: {dan.rawDan.toFixed(2)}</Trans>
+                        <ChevronDown size={12} className={`transition-transform ${stepsAt ? "rotate-180" : ""}`} />
+                      </button>
+                      {/* A popover, so opening it never pushes the clears list down. */}
+                      {typeof document !== "undefined" ? createPortal(
+                        <AnimatePresence>
+                          {stepsAt ? (
+                            <motion.div
+                              ref={stepsPopoverRef}
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -4 }}
+                              transition={{ duration: 0.12 }}
+                              className="fixed z-[60] rounded-lg bg-osu-b3 px-3 py-3 shadow-xl shadow-black/50"
+                              style={{ left: stepsAt.left, top: stepsAt.top }}
+                            >
+                              <DanStepRail
+                                rawDan={dan.rawDan}
+                                context={danScaleContextFor(keyCount, side === "ln" ? "ln" : null)}
+                                formatDan={formatDan}
+                              />
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>,
+                        document.body,
+                      ) : null}
+                    </div>
+                  ) : null}
                   {beyond ? (
                     <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-white/70 sm:text-xs">
                       <Trans>

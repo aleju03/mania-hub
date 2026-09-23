@@ -8,7 +8,8 @@ import { getDanImageSrc } from "../lib/dan-images";
 import { DanLevelBadge } from "../components/player/DanLevelBadge";
 import { creditedDanFor, danCreditOptionsFor, danCreditOffset, type DanCreditClearContext } from "#dan/dan-credit";
 import { danLabelFor } from "#dan/chart-classifier";
-import { formatNumber } from "../lib/format";
+import { formatDate, formatNumber } from "../lib/format";
+import { useLocale } from "../lib/locale-context";
 import { ModBadge } from "../components/ui/ModBadge";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
@@ -138,8 +139,13 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
   { level: "eta", players: 1 },
 ];
 
+// Set by hand whenever this page or the dan rules it explains change: the
+// deploy checkout is shallow, so git cannot supply the date at build time.
+const LAST_EDITED = "2026-09-23";
+
 function DanEstimatesPage() {
   const { t } = useLingui();
+  const locale = useLocale();
   const navigate = useNavigate();
   const hydrated = useHasHydrated();
   const noDans = useNoDans();
@@ -201,6 +207,9 @@ function DanEstimatesPage() {
           <h1 className="text-2xl font-black text-white sm:text-3xl">
             <Trans>How dan levels are estimated</Trans>
           </h1>
+          <p className="text-[11px] text-osu-f1">
+            <Trans>Last edited: {formatDate(LAST_EDITED, "UTC", locale)}</Trans>
+          </p>
           <p className="text-[15px] leading-7 text-osu-f1">
             <Trans>
               Every chart gets a dan level of its own, and your level is read from the

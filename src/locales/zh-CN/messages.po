@@ -1648,7 +1648,7 @@ msgstr "{typeName} 卡包，{typeBlurb}"
 msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 msgstr "至少 {USER_COLLECTION_MIN_ITEMS} 张谱面"
 
-#. placeholder {0}: formatDan(danLabel)
+#. placeholder {0}: danTierName(danLabel, formatDan)
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{username} is around <0>{0}</0>"
 msgstr "{username} 大约在 <0>{0}</0>"
@@ -1754,6 +1754,11 @@ msgstr "+ BPM 与时长"
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "+{0} more (list capped at {1})"
 msgstr "还有 {0} 位(列表上限 {1})"
+
+#. placeholder {0}: (step.start - rawDan).toFixed(2)
+#: src/components/player/DanStepRail.tsx
+msgid "+{0} to go"
+msgstr "还差 +{0}"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "+{gap}pp to go"
@@ -6187,6 +6192,11 @@ msgstr "全部"
 msgid "everything else the archive ships"
 msgstr "压缩包里的其他所有文件"
 
+#. placeholder {0}: dan.rawDan.toFixed(2)
+#: src/components/player/DanEvidenceModal.tsx
+msgid "Exact estimate: {0}"
+msgstr "精确估计：{0}"
+
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
 #~ msgstr ""
@@ -8174,6 +8184,11 @@ msgstr "最近 24 小时 · {0} 个成绩"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Last collection page"
 msgstr "收藏册末页"
+
+#. placeholder {0}: formatDate(LAST_EDITED, "UTC", locale)
+#: src/routes/dan-estimates.tsx
+msgid "Last edited: {0}"
+msgstr "最后编辑：{0}"
 
 #: src/components/ui/Pagination.tsx
 msgid "Last page"
