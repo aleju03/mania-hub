@@ -1,4 +1,4 @@
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Film, RefreshCw, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
@@ -49,6 +49,12 @@ import {
  */
 
 export const Route = createFileRoute("/admin/banned-users")({
+  // The tab and page live in the URL, so coming back from a profile lands on the same list.
+  validateSearch: (search: Record<string, unknown>): { filter?: BannedUsersFilter; page?: number } => {
+    const filter = search.filter === "restricted" || search.filter === "all" ? search.filter : undefined;
+    const page = Number(search.page);
+    return { filter, page: Number.isInteger(page) && page > 1 ? page : undefined };
+  },
   head: () => ({
     meta: [
       { title: "Banned users - admin" },
@@ -551,8 +557,10 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 function BannedUsersAdminPage() {
-  const [filter, setFilter] = useState<BannedUsersFilter>("new");
-  const [offset, setOffset] = useState(0);
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const filter: BannedUsersFilter = search.filter ?? "new";
+  const offset = ((search.page ?? 1) - 1) * PAGE_SIZE;
   const [entries, setEntries] = useState<BannedUser[] | null>(null);
   const [total, setTotal] = useState(0);
   // Each tab's last known count, so a tab switch never shows one list's count on another's tab.
@@ -638,13 +646,12 @@ function BannedUsersAdminPage() {
   };
 
   const changeFilter = (next: BannedUsersFilter) => {
-    setFilter(next);
-    setOffset(0);
+    void navigate({ search: { filter: next === "new" ? undefined : next, page: undefined }, replace: true });
     setOpenId(null);
   };
 
   const changePage = (page: number) => {
-    setOffset(page * PAGE_SIZE);
+    void navigate({ search: (current) => ({ ...current, page: page > 0 ? page + 1 : undefined }), replace: true });
     setOpenId(null);
     window.scrollTo({ top: 0 });
   };
