@@ -139,9 +139,9 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
   { level: "eta", players: 1 },
 ];
 
-// Set by hand whenever this page or the dan rules it explains change: the
-// deploy checkout is shallow, so git cannot supply the date at build time.
-const LAST_EDITED = "2026-09-23";
+// Set by hand whenever this page's own text changes: the deploy checkout is
+// shallow, so git cannot supply the date at build time.
+const LAST_EDITED = "2026-09-16";
 
 function DanEstimatesPage() {
   const { t } = useLingui();
