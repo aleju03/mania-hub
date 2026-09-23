@@ -935,22 +935,24 @@ function HomePage() {
                     <GradeImg grade={s.displayRank} size={22} />
                   <Avatar url={s.user.avatar_url} size={26} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs truncate">
-                      <Trans>
-                        <UsernameText
-                          username={s.user.username}
-                          avatarUrl={s.user.avatar_url}
-                          className="font-medium"
-                        />{" "}
-                        <span className="text-osu-f1">on</span> {s.title}
-                      </Trans>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="text-xs truncate">
+                        <Trans>
+                          <UsernameText
+                            username={s.user.username}
+                            avatarUrl={s.user.avatar_url}
+                            className="font-medium"
+                          />{" "}
+                          <span className="text-osu-f1">on</span> {s.title}
+                        </Trans>
+                      </div>
+                      {s.companella && <CompanellaMark className="h-4 w-4" />}
                     </div>
                     <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
                         [{s.version}] {s.keymodeLabel || (s.keyCount > 0 ? `${s.keyCount}K` : "")} &middot; {formatTimeAgo(s.timestamp, locale)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {s.companella && <CompanellaMark className="h-4 w-4" />}
                     {s.mods.length > 0 && (
                       <div className="flex items-center gap-0.5">
                         {s.mods.map((m) => (

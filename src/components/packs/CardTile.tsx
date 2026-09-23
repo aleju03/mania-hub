@@ -4,14 +4,12 @@ import { useLingui } from "@lingui/react/macro";
 import { resolveManiaTierStyle, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores } from "#/lib/packs";
-import {
-  buildManiaCardRenderData,
-  buildManiaCardRenderDataFromSkills,
-} from "../player/maniacard3d/renderData";
+import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
+  collectedCardRenderData,
   COLLECTION_CARD_THUMB_WIDTH,
   noteCardThumbnailStored,
   rememberCardThumbnailBlob,
@@ -81,13 +79,7 @@ export function cardUserForRender(card: CollectedCard) {
 
 export async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: string; url: string } | null> {
   if (!card.skills) return null;
-  const data = buildManiaCardRenderDataFromSkills({
-    user: cardUserForRender(card),
-    skills: card.skills,
-    tierOverride: collectedCardTier(card),
-    labelOverride: card.customLabel,
-    motifOverride: card.motif,
-  });
+  const data = collectedCardRenderData(card, card.skills);
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
   return { key, url: await rememberCardThumbnailBlob(key, blob) };

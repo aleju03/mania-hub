@@ -91,7 +91,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useNoDans, usePacksRevealAll, usePacksSkipAnimations } from "../../store";
+import { useAppStore, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
 import { Switch } from "../ui/Switch";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -1048,6 +1048,8 @@ function PreferencesPanel() {
   const setPacksSkipAnimations = useAppStore((state) => state.setPacksSkipAnimations);
   const packsRevealAll = usePacksRevealAll();
   const setPacksRevealAll = useAppStore((state) => state.setPacksRevealAll);
+  const recentPlayRatings = useRecentPlayRatings();
+  const setRecentPlayRatings = useAppStore((state) => state.setRecentPlayRatings);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
   const addHiddenUser = useAppStore((state) => state.addHiddenUser);
   const removeHiddenUser = useAppStore((state) => state.removeHiddenUser);
@@ -1110,6 +1112,22 @@ function PreferencesPanel() {
             </div>
           </div>
           <Switch checked={noDans} onChange={setNoDans} label={t`No Dans`} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            {/* No Dans hides the dan half, so the row names only what it still shows. */}
+            <div className="text-[12px] font-semibold text-osu-l1">
+              {noDans ? <Trans>MSD on recent plays</Trans> : <Trans>MSD and dan on recent plays</Trans>}
+            </div>
+            <div className="text-[11px] text-osu-f1">
+              {noDans ? <Trans>Shows the MSD of each play in Recent Plays</Trans> : <Trans>Shows the MSD and dan of each play in Recent Plays</Trans>}
+            </div>
+          </div>
+          <Switch
+            checked={recentPlayRatings}
+            onChange={setRecentPlayRatings}
+            label={noDans ? t`MSD on recent plays` : t`MSD and dan on recent plays`}
+          />
         </div>
       </PanelGroup>
 

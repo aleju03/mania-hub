@@ -123,6 +123,8 @@ export interface PackCollectionFilter {
   query: string;
   duplicatesOnly?: boolean;
   mark?: PackCardMark | null;
+  /* Only the team cards, which a local wallet never holds. */
+  teamsOnly?: boolean;
 }
 
 function collectionCardMatchesFilter(
@@ -134,7 +136,7 @@ function collectionCardMatchesFilter(
   if (filter.duplicatesOnly && card.copies <= 1) return false;
   // Which serial a card was minted at is server knowledge, so a local wallet
   // cannot resolve a mark; the chips only render on a synced collection.
-  if (filter.mark) return false;
+  if (filter.mark || filter.teamsOnly) return false;
   if (filter.tier === "all") return true;
   if (filter.tier === "unrated") return card.tier === null;
   // Pool membership is server knowledge; a local wallet can't resolve it, and
@@ -254,6 +256,7 @@ export function usePackWallet(): PackWalletApi {
           query: filter?.query,
           duplicatesOnly: filter?.duplicatesOnly === true,
           mark: filter?.mark ?? null,
+          teamsOnly: filter?.teamsOnly === true,
         },
       });
       if (!result) {

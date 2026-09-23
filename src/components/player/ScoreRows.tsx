@@ -25,10 +25,14 @@ import {
 } from "../../lib/score";
 import { CompanellaMark } from "../ui/CompanellaMark";
 import { GradeImg } from "../ui/GradeImg";
+import { UsernameText } from "../ui/UsernameText";
 import { StarRatingBadge } from "../ui/StarRating";
 import { getManiaJudgementStats } from "../ui/ManiaJudgementStats";
 import { ModBadge } from "../ui/ModBadge";
 import { DanBadge } from "../ui/DanBadge";
+import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
+import type { RecentPlayRatingView } from "./recent-play-ratings";
+import { useNoDans } from "../../store";
 import { companellaReplayImportId } from "../../lib/companella-scores";
 import type { OsuScore } from "../../lib/types";
 import { getTrackedPlayRank } from "../../lib/tracked-play-score";
@@ -275,11 +279,20 @@ export function ScoreRow({
   position,
   layout = EMPTY_SCORE_ROW_LAYOUT,
   onOpenDetails,
+  showPlayer = false,
+  showRating = false,
+  rating,
 }: {
   score: OsuScore;
   position: number;
   layout?: ScoreRowLayout;
   onOpenDetails: (score: OsuScore) => void;
+  /* Lists that mix players (a team's plays) lead each row with whose it is. */
+  showPlayer?: boolean;
+  /* Recent's optional MSD and dan column. The cell keeps its width while the
+     rating loads or when a play has none, so the columns stay lined up. */
+  showRating?: boolean;
+  rating?: RecentPlayRatingView | null;
 }) {
   const locale = useLocale();
   const { t } = useLingui();
@@ -291,9 +304,20 @@ export function ScoreRow({
   const replaySearch = importId != null ? { importId } : { scoreId: score.id, beatmapsetId: score.beatmapset?.id };
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
+  const noDans = useNoDans();
+  const ratingKeyCount = Math.round(Number(score.beatmap?.cs)) || 4;
 
+  const player = showPlayer ? score.user ?? null : null;
   const content = (
     <>
+      {player ? (
+        <img
+          src={player.avatar_url}
+          alt=""
+          title={player.username}
+          className="hidden h-8 w-8 flex-shrink-0 rounded-md object-cover sm:block"
+        />
+      ) : null}
       <GradeImg grade={display.rank} size={28} />
       <ScoreThumbnail score={score} />
       <div className="flex-1 min-w-0">
@@ -313,6 +337,7 @@ export function ScoreRow({
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="text-[11px] text-osu-f1">
+          {player ? <><span className="font-semibold text-osu-l2">{player.username}</span> &middot;{" "}</> : null}
           {score.beatmapset?.artist} &middot;{" "}
           {/* Fresh scores are minutes old, so this half drifts between SSR and
               hydration; the artist name stays hydration-checked. */}
@@ -338,6 +363,7 @@ export function ScoreRow({
               ))}
             </div>
             <DanBadge score={score} />
+            {showRating && <RecentPlayRatingCells rating={rating} keyCount={ratingKeyCount} hideDan={noDans} compact />}
           </div>
           <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
             <span className="whitespace-nowrap text-xs text-osu-l2 tabular-nums">{formatAccuracy(display.accuracy)}</span>
@@ -369,6 +395,11 @@ export function ScoreRow({
             {getModDisplayList(score.mods).map((m) => (
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
+          </div>
+        )}
+        {showRating && (
+          <div className="flex flex-shrink-0 items-center justify-end gap-2">
+            <RecentPlayRatingCells rating={rating} keyCount={ratingKeyCount} hideDan={noDans} />
           </div>
         )}
         {/* Accuracy, combo and pp read as one cluster, so they sit tighter
@@ -447,8 +478,9 @@ function ScoreDetailStat({ label, value, color }: { label: string; value: ReactN
 
 /** Everything the row can't fit: total score, judgement spread, map metadata,
  *  and the links (osu! page, replay) the row used to navigate to on its own. */
-/** `extra` sits under the play's own stats, for pages that know more about it. */
-export function ScoreDetailModal({ score, onClose, extra }: { score: OsuScore; onClose: () => void; extra?: ReactNode }) {
+/** `extra` sits under the play's own stats, for pages that know more about it.
+ *  `showPlayer` names whose play it is, for lists that mix players. */
+export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: { score: OsuScore; onClose: () => void; extra?: ReactNode; showPlayer?: boolean }) {
   const { t } = useLingui();
   const locale = useLocale();
   const scoreTitleFallback = t`Score`;
@@ -629,9 +661,23 @@ export function ScoreDetailModal({ score, onClose, extra }: { score: OsuScore; o
             </div>
 
             <div className="mt-5 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt, viewerTimeZone)}>
-                <Trans>Played {formatDetailedTimeAgo(playedAt, locale)} on {display.isLazer ? "Lazer" : "Stable"}</Trans>
-              </span>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                {showPlayer && score.user ? (
+                  <Link
+                    to="/player/$username"
+                    params={{ username: score.user.username }}
+                    className="flex min-w-0 items-center gap-2 hover:brightness-110"
+                  >
+                    {score.user.avatar_url ? (
+                      <img src={score.user.avatar_url} alt="" className="h-6 w-6 shrink-0 rounded-md object-cover" />
+                    ) : null}
+                    <UsernameText username={score.user.username} avatarUrl={score.user.avatar_url} className="truncate text-[13px] font-bold text-white" />
+                  </Link>
+                ) : null}
+                <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt, viewerTimeZone)}>
+                  <Trans>Played {formatDetailedTimeAgo(playedAt, locale)} on {display.isLazer ? "Lazer" : "Stable"}</Trans>
+                </span>
+              </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
                 {/* A tracked play whose row never kept a score id has no page
                     on osu! to open, so the link falls back to the map it was

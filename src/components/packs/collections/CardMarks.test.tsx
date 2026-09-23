@@ -42,3 +42,12 @@ it("renders nothing for an ordinary holding", () => {
   const { container } = render(<I18nProvider i18n={getI18n("en")}><CardMarks card={{ ...base, serial: 9, mintedTotal: 30 }} collectorUserId={1} /></I18nProvider>);
   expect(container.innerHTML).toBe("");
 });
+
+it("wears the team's flag on a team card pinned by one of its members", () => {
+  const team = { teamId: 5, name: "Team 5", shortName: "T5", flagUrl: "https://assets.ppy.sh/teams/flag/5/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png", coverUrl: null, tier: "rare" as const, skills: { cardPower: 1, fingerControl: 1, speed: 1, accuracy: 1, starAvg: 1, mainKeyMode: 4 } };
+  const card: CollectedCard = { ...base, userId: -5, cardKey: "team:5", username: "Team 5", team };
+  expect(cardMarksFor({ ...card, ownTeam: false }, 7)).toEqual([]);
+  expect(cardMarksFor({ ...card, ownTeam: true }, 7)).toEqual([{ kind: "team", flagUrl: "/api/team-image?path=teams%2Fflag%2F5%2Faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" }]);
+  render(<I18nProvider i18n={getI18n("en")}><CardMarks card={{ ...card, ownTeam: true }} collectorUserId={7} /></I18nProvider>);
+  expect(screen.getByRole("img", { name: "Own team" })).toBeTruthy();
+});

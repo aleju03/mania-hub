@@ -99,6 +99,15 @@ export interface OsuUser {
   display_name_next_change_at?: string;
   /* The player's profiles on private servers, in the backend's server order. */
   server_links?: Array<{ server: string; url: string }>;
+  /* osu!'s team, absent or null when the player is in none. */
+  team?: OsuTeam | null;
+}
+
+export interface OsuTeam {
+  id: number;
+  name: string;
+  short_name: string;
+  flag_url: string | null;
 }
 
 export interface OsuCovers {

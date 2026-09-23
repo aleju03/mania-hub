@@ -9,7 +9,9 @@ import {
   liveEntryToPackPlayer,
   mapServerPackDraw,
   PACK_SIZE,
+  PACK_SHELF,
   PACK_TYPES,
+  packShelfIdOf,
   packTypeById,
   pickPackEntries,
   pickUnownedPoolEntry,
@@ -518,9 +520,9 @@ describe("pack type lineup", () => {
       if (type.cost.kind === "shards") expect(type.cost.amount).toBeGreaterThan(0);
       expect(packTypeById(type.id)).toBe(type);
     }
-    // Tighter slices cost more shards.
+    // Tighter slices cost more shards. The Team pack deals from its own pool.
     const shardPacks = PACK_TYPES.filter(
-      (type): type is typeof type & { cost: { kind: "shards"; amount: number } } => type.cost.kind === "shards",
+      (type): type is typeof type & { cost: { kind: "shards"; amount: number } } => type.cost.kind === "shards" && !type.teams,
     );
     const sorted = [...shardPacks].sort((a, b) => a.cost.amount - b.cost.amount);
     for (let index = 1; index < sorted.length; index += 1) {
@@ -529,6 +531,20 @@ describe("pack type lineup", () => {
     // Every shard pack protects against duplicates; Standard stays random.
     for (const type of shardPacks) expect(type.guaranteesNew).toBe(true);
     expect(packTypeById("standard").guaranteesNew).toBeUndefined();
+  });
+
+  it("deals teams from the Team pack only, at the backend's price", () => {
+    expect(PACK_TYPES.filter((type) => type.teams).map((type) => type.id)).toEqual(["teams"]);
+    expect(packTypeById("teams").cost).toEqual({ kind: "shards", amount: 120 });
+    expect(packTypeById("teams").cardCount).toBe(5);
+    expect(packTypeById("teams").guaranteesNew).toBe(true);
+  });
+
+  it("shows the two keymode packs as one on the shelf", () => {
+    expect(PACK_SHELF).toEqual(["standard", "wild", "keys", "elite", "teams", "legend"]);
+    expect(packShelfIdOf("4k")).toBe("keys");
+    expect(packShelfIdOf("7k")).toBe("keys");
+    expect(packShelfIdOf("teams")).toBe("teams");
   });
 
   it("keeps the keymode filter on exactly the keymode packs", () => {
@@ -831,6 +847,23 @@ describe("startBoundedPrefetches", () => {
 
 describe("mapServerPackDraw", () => {
   const score = { pp: 321 } as OsuScore;
+
+  it("maps a team slot onto a team card and drops one with an unknown tier", () => {
+    const skills = { cardPower: 70, fingerControl: 60, speed: 65, accuracy: 80, starAvg: 5.5, mainKeyMode: 4 };
+    const mapped = mapServerPackDraw({
+      poolTotal: 12,
+      players: [
+        { userId: -9, isNew: true, team: { teamId: 9, name: "Nine", shortName: "NN", flagUrl: null, coverUrl: null, tier: "mythic", skills } },
+        { userId: -8, isNew: true, team: { teamId: 8, name: "Eight", shortName: "EE", flagUrl: null, coverUrl: null, tier: "constructor", skills } },
+      ],
+      cards: [],
+      wallet: null,
+    });
+    expect(mapped.draw.players).toHaveLength(1);
+    const [team] = mapped.draw.players;
+    expect(team).toMatchObject({ cardKey: "team:9", user: { id: -9, username: "Nine" }, team: { teamId: 9, tier: "mythic", skills } });
+    expect(mapped.isNewByCardKey.get("team:9")).toBe(true);
+  });
 
   it("carries the milestone slot's variant key, badge and motif, and drops a key that is not this player's variant", () => {
     const motif = { url: "https://mania-tracker.com/images/packs/milestone-1m.png", scale: 1.35, opacity: 0.9, palette: "gold" as const };

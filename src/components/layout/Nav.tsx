@@ -11,6 +11,7 @@ import { SettingsDrawer } from "./SettingsDrawer";
 import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
+import { canSeeTeams } from "../../lib/auth-shared";
 import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
@@ -32,6 +33,7 @@ import { useLocale } from "../../lib/locale-context";
 const NAV_LEAVES = {
   home: { id: "home", to: "/", label: "home" },
   rankings: { id: "rankings", to: "/rankings", label: "rankings" },
+  teams: { id: "teams", to: "/teams", label: "teams" },
   "top-plays": { id: "top-plays", to: "/top-plays", label: "top plays" },
   tracker: { id: "tracker", to: "/tracker", label: "tracker" },
   maps: { id: "maps", to: "/maps", label: "maps" },
@@ -59,7 +61,7 @@ type NavTop =
 
 const NAV_TOP: NavTop[] = [
   { kind: "link", id: "home" },
-  { kind: "group", id: "players", label: "players", items: ["tracker", "rankings", "top-plays"] },
+  { kind: "group", id: "players", label: "players", items: ["tracker", "rankings", "teams", "top-plays"] },
   { kind: "link", id: "maps" },
   { kind: "group", id: "packs", label: "packs", items: ["packs", "pack-collections"] },
   { kind: "link", id: "skins" },
@@ -79,6 +81,7 @@ const NAV_TOP: NavTop[] = [
 const NAV_LABELS: Record<NavLeafId, ReturnType<typeof msg>> = {
   home: msg`home`,
   rankings: msg`rankings`,
+  teams: msg`teams`,
   "top-plays": msg`top plays`,
   tracker: msg`tracker`,
   maps: msg`maps`,
@@ -247,6 +250,7 @@ export function Nav() {
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
     if (leaf.id === "snipes") return showSnipesLink;
+    if (leaf.id === "teams") return canSeeTeams(auth);
     return true;
   };
   const visibleLeaves = ALL_LEAVES.filter(isLeafVisible);
@@ -257,7 +261,7 @@ export function Nav() {
   const snipesFiltersForLink = hydrated ? snipesFilters : DEFAULT_SNIPES_FILTERS;
   const settingsActive = location.pathname.startsWith("/settings");
   const current = visibleLeaves.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
-    (location.pathname === "/" ? NAV_LEAVES.home : location.pathname.startsWith("/player") || settingsActive || (location.pathname === "/snipes" && !showSnipesLink) ? null : visibleLeaves[0]);
+    (location.pathname === "/" ? NAV_LEAVES.home : location.pathname.startsWith("/player") || location.pathname.startsWith("/team/") || settingsActive || (location.pathname === "/snipes" && !showSnipesLink) ? null : visibleLeaves[0]);
   // The active page's top-level item; the indicator bar sits under this.
   const activeTopId = current ? (LEAF_TO_TOP[current.id] ?? null) : null;
 

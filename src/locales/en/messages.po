@@ -114,6 +114,7 @@ msgstr "(uploaded by {0})"
 #. placeholder {1}: formatNumber(keyMode.analyzedPlays)
 #. placeholder {2}: formatNumber(bucket.count)
 #. placeholder {2}: formatNumber(keyMode.analyzedPlays)
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, one {{1} play} other {{2} plays}}"
@@ -164,6 +165,11 @@ msgstr "{0, plural, one {# map} other {# maps}}"
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "{0, plural, one {# mapset} other {# mapsets}}"
 msgstr "{0, plural, one {# mapset} other {# mapsets}}"
+
+#. placeholder {0}: data.total
+#: src/routes/teams.tsx
+msgid "{0, plural, one {# matching team} other {# matching teams}}"
+msgstr "{0, plural, one {# matching team} other {# matching teams}}"
 
 #. placeholder {0}: community.memberCount
 #: src/components/communities/CommunityCard.tsx
@@ -225,10 +231,20 @@ msgstr "{0, plural, one {# skin} other {# skins}}"
 msgid "{0, plural, one {# snipe} other {# snipes}}"
 msgstr "{0, plural, one {# snipe} other {# snipes}}"
 
+#. placeholder {0}: data.total
+#: src/routes/teams.tsx
+msgid "{0, plural, one {# team} other {# teams}}"
+msgstr "{0, plural, one {# team} other {# teams}}"
+
 #. placeholder {0}: report.distinctOwners - collectors.length
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
 msgstr "{0, plural, one {+# more collector} other {+# more collectors}}"
+
+#. placeholder {0}: card.core.length
+#: src/components/team/TeamProfilePage.tsx
+#~ msgid "{0, plural, one {Averaged from the team's strongest member} other {Averaged from the team's # strongest members}}"
+#~ msgstr "{0, plural, one {Averaged from the team's strongest member} other {Averaged from the team's # strongest members}}"
 
 #. placeholder {0}: streakShardValue(streak)
 #: src/components/packs/StreakGame.tsx
@@ -239,6 +255,13 @@ msgstr "{0, plural, one {Claim # shard} other {Claim # shards}}"
 #: src/components/packs/CardCollectors.tsx
 msgid "{0, plural, one {collector} other {collectors}}"
 msgstr "{0, plural, one {collector} other {collectors}}"
+
+#. placeholder {0}: snapshot.activeMembers
+#. placeholder {1}: snapshot.memberCount
+#. placeholder {2}: snapshot.memberCount
+#: src/components/player/ActivityPanel.tsx
+msgid "{0, plural, one {from # tracked member of {1}} other {from # tracked members of {2}}}"
+msgstr "{0, plural, one {from # tracked member of {1}} other {from # tracked members of {2}}}"
 
 #. placeholder {0}: toast.count
 #: src/components/me/GoalToasts.tsx
@@ -264,7 +287,8 @@ msgstr "{0, plural, one {map} other {maps}}"
 
 #. placeholder {0}: entry.count
 #. placeholder {0}: map.plays
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
+#: src/components/player/InsightModals.tsx
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, one {play} other {plays}}"
 
@@ -288,14 +312,14 @@ msgstr "{0, plural, other {# online}}"
 #. placeholder {0}: formatActivityTime(first.startAt, timezone)
 #. placeholder {1}: formatActivityTime(last.endAt, timezone)
 #. placeholder {2}: formatNumber(plays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} - {1} · {2} play"
 msgstr "{0} - {1} · {2} play"
 
 #. placeholder {0}: formatActivityTime(first.startAt, timezone)
 #. placeholder {1}: formatActivityTime(last.endAt, timezone)
 #. placeholder {2}: formatNumber(plays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} - {1} · {2} plays"
 msgstr "{0} - {1} · {2} plays"
 
@@ -522,14 +546,14 @@ msgid "{0} maniacard"
 msgstr "{0} maniacard"
 
 #. placeholder {0}: maps.length
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} map"
 msgstr "{0} map"
 
 #. placeholder {0}: formatNumber(currentTotal)
 #. placeholder {0}: maps.length
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "{0} maps"
 msgstr "{0} maps"
 
@@ -575,9 +599,27 @@ msgstr "{0} of {1}"
 msgid "{0} of {1} albums"
 msgstr "{0} of {1} albums"
 
+#. placeholder {0}: snapshot.countedMembers
+#. placeholder {1}: snapshot.memberCount
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0} of {1} members counted"
+msgstr "{0} of {1} members counted"
+
+#. placeholder {0}: snapshot.countedMembers
+#. placeholder {1}: snapshot.memberCount
+#: src/components/team/TeamProfilePage.tsx
+#~ msgid "{0} of {1} members counted so far"
+#~ msgstr "{0} of {1} members counted so far"
+
+#. placeholder {0}: skills.members.length
+#. placeholder {1}: skills.memberCount
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0} of {1} members rated"
+msgstr "{0} of {1} members rated"
+
 #. placeholder {0}: formatNumber(activeKeyMode.analyzedPlays)
 #. placeholder {1}: formatNumber(activeKeyMode.totalPlays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} of {1} plays analyzed"
 msgstr "{0} of {1} plays analyzed"
 
@@ -594,7 +636,7 @@ msgstr "{0} of {1} to pull this"
 #~ msgstr "{0} of {1} today"
 
 #. placeholder {0}: maps.length
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} of {mapCount}"
 msgstr "{0} of {mapCount}"
 
@@ -609,7 +651,7 @@ msgstr "{0} of {maxCards} chosen"
 #~ msgstr "{0} of {PACK_SHOWCASE_MAX_CARDS} chosen"
 
 #. placeholder {0}: focused.count
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "{0} of {usageSampleSize}"
 msgstr "{0} of {usageSampleSize}"
 
@@ -673,7 +715,7 @@ msgstr "{0} person to pull this card"
 
 #. placeholder {0}: formatNumber(entry.playCount)
 #. placeholder {0}: formatNumber(segment.playCount)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} play"
 msgstr "{0} play"
 
@@ -688,10 +730,10 @@ msgstr "{0} players"
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "{0} plays"
 msgstr "{0} plays"
@@ -707,7 +749,7 @@ msgstr "{0} plays"
 #~ msgstr "{0} plays are still being rated."
 
 #. placeholder {0}: formatNumber(activity.totalScores)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} plays in {selectedYear}"
 msgstr "{0} plays in {selectedYear}"
 
@@ -799,8 +841,11 @@ msgstr "{0} stars"
 msgid "{0} subfamilies"
 msgstr "{0} subfamilies"
 
+#. placeholder {0}: Math.round(insights.bpmRange.min)
 #. placeholder {0}: Math.round(profileInsights.bpmRange.min)
+#. placeholder {1}: Math.round(insights.bpmRange.max)
 #. placeholder {1}: Math.round(profileInsights.bpmRange.max)
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "{0} to {1}"
 msgstr "{0} to {1}"
@@ -831,6 +876,12 @@ msgstr "{0} tracked players"
 msgid "{0} up · {1} down"
 msgstr "{0} up · {1} down"
 
+#. placeholder {0}: playerPeakMember.username
+#. placeholder {1}: formatDate(playerPeak.updated_at)
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0}, {1}"
+msgstr "{0}, {1}"
+
 #. placeholder {0}: inviteCheck.preview.name
 #. placeholder {1}: inviteCheck.preview.memberCount.toLocaleString("en-US")
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -846,7 +897,7 @@ msgstr "{0}, an osu!mania skin for {keymodes} uploaded by {1}. Download the .osk
 #. placeholder {0}: formatFullActivityDate(day.date)
 #. placeholder {1}: day.scoreCount
 #. placeholder {2}: day.sessionCount
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0}: {1} plays, {2} sessions"
 msgstr "{0}: {1} plays, {2} sessions"
 
@@ -867,7 +918,7 @@ msgid "{0}: +{1}pp - click to filter"
 msgstr "{0}: +{1}pp - click to filter"
 
 #. placeholder {0}: formatFullActivityDate(day.date)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0}: no tracked plays"
 msgstr "{0}: no tracked plays"
 
@@ -885,6 +936,11 @@ msgstr "{0}'s card, recycled for {recycledFor} shards"
 #: src/routes/packs_.collections.tsx
 msgid "{0}'s collection"
 msgstr "{0}'s collection"
+
+#. placeholder {0}: team.name
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0}'s flag"
+msgstr "{0}'s flag"
 
 #. placeholder {0}: loadStatus.name
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -940,17 +996,19 @@ msgid "{0}% weighted"
 msgstr "{0}% weighted"
 
 #. placeholder {0}: activity.currentStreak
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0}d"
 msgstr "{0}d"
 
 #. placeholder {0}: formatNumber(Math.floor(railTotals.playTime / 3600))
+#. placeholder {0}: formatNumber(Math.floor(statistics.play_time / 3600))
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "{0}h"
 msgstr "{0}h"
 
 #. placeholder {0}: keySplit[0].keyCount
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "{0}K only"
 msgstr "{0}K only"
 
@@ -965,7 +1023,9 @@ msgstr "{0}K skill rating"
 #~ msgid "{0}ms hit window, worth {1}x"
 #~ msgstr "{0}ms hit window, worth {1}x"
 
+#. placeholder {0}: Math.round(insights.ppRange.top - insights.ppRange.bottom)
 #. placeholder {0}: Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "{0}pp spread"
 msgstr "{0}pp spread"
@@ -1209,7 +1269,7 @@ msgstr "{have} / {want} plays"
 msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
 msgstr "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{hiddenCount, plural, one {Show # more map} other {Show # more maps}}"
 msgstr "{hiddenCount, plural, one {Show # more map} other {Show # more maps}}"
 
@@ -1268,6 +1328,7 @@ msgstr "{keys}K thumbnail"
 #: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/team/TeamProfilePage.tsx
 msgid "{label} dan"
 msgstr "{label} dan"
 
@@ -1307,6 +1368,10 @@ msgstr "{mapCount, plural, one {across # map} other {across # maps}}"
 #: src/routes/collections_.$id.tsx
 msgid "{maps} osu!mania maps picked by {0}."
 msgstr "{maps} osu!mania maps picked by {0}."
+
+#: src/routes/teams.tsx
+msgid "{members} members"
+msgstr "{members} members"
 
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
@@ -1503,6 +1568,7 @@ msgstr "{playerName}'s replay loaded, but the chart file for {mapLabel} can't be
 
 #: src/lib/streak-game.ts
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "{plays} plays"
 msgstr "{plays} plays"
 
@@ -1518,6 +1584,10 @@ msgstr "{previousScoreAge} earlier"
 msgid "{progressCounts} players"
 msgstr "{progressCounts} players"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "{progressCounts} teams"
+#~ msgstr "{progressCounts} teams"
+
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
 msgstr "{randomPickCount, plural, one {# pick} other {# possible picks}}"
@@ -1529,6 +1599,10 @@ msgstr "{rangeStart}–{pageEnd} of {totalText} cards"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} of {totalText} players"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "{rated, plural, one {# member} other {# members}}"
+msgstr "{rated, plural, one {# member} other {# members}}"
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{releases} release groups"
@@ -1546,6 +1620,10 @@ msgstr "{sample, plural, one {# player sampled around your pp} other {# players 
 msgid "{score} ranked score"
 msgstr "{score} ranked score"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "{scoreCount, plural, one {# play} other {# plays}}"
+msgstr "{scoreCount, plural, one {# play} other {# plays}}"
+
 #: src/lib/format.ts
 msgid "{secs}s ago"
 msgstr "{secs}s ago"
@@ -1562,7 +1640,7 @@ msgstr "{selectedKeymode}K preview"
 
 #. placeholder {0}: formatNumber(sessionPlays)
 #. placeholder {1}: formatNumber(sessionPlays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgstr "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 
@@ -1626,7 +1704,7 @@ msgstr "{skillsFull} of {skillsTotal} skills have their full {perSkill} weighted
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} speed"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 
@@ -1786,7 +1864,7 @@ msgstr "+{gap}pp to go"
 msgid "+{hidden} more"
 msgstr "+{hidden} more"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "+{stacks} stacked"
 msgstr "+{stacks} stacked"
 
@@ -1998,11 +2076,11 @@ msgstr "1× = original default"
 msgid "100"
 msgstr "100"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "12 AM"
 msgstr "12 AM"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "12 PM"
 msgstr "12 PM"
 
@@ -2062,11 +2140,11 @@ msgstr "4K regular"
 msgid "50"
 msgstr "50"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "6 AM"
 msgstr "6 AM"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "6 PM"
 msgstr "6 PM"
 
@@ -2349,6 +2427,10 @@ msgstr "A pasted image is no longer available. Paste it again before copying."
 msgid "A quick reminder of what a dan is"
 msgstr "A quick reminder of what a dan is"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "A rating is not supported for this chart or mod combination."
+msgstr "A rating is not supported for this chart or mod combination."
+
 #: src/routes/dan-estimates.tsx
 msgid "A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and so does anything that slows the chart down: Half Time, Daycore, or a custom rate under 1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are all fine, because none of them make the course easier. A pass recorded before mod data was stored cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 msgstr "A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and so does anything that slows the chart down: Half Time, Daycore, or a custom rate under 1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are all fine, because none of them make the course easier. A pass recorded before mod data was stored cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
@@ -2372,6 +2454,10 @@ msgstr "A screenshot could not be removed. Try again."
 #: src/components/packs/SetsView.tsx
 msgid "A set can hold up to {BINDER_MAX_CARDS} cards."
 msgstr "A set can hold up to {BINDER_MAX_CARDS} cards."
+
+#: src/components/packs/SetsView.tsx
+msgid "A set holds either players or teams."
+msgstr "A set holds either players or teams."
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
@@ -2398,6 +2484,7 @@ msgstr "a while"
 msgid "A-Z"
 msgstr "A-Z"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "About"
@@ -2410,6 +2497,7 @@ msgstr "About"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Acc"
 msgstr "Acc"
 
@@ -2452,10 +2540,12 @@ msgstr "accuracy"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Accuracy"
 msgstr "Accuracy"
 
@@ -2520,19 +2610,19 @@ msgid "achieved {0}"
 msgstr "achieved {0}"
 
 #. placeholder {0}: profileInsights.sampleSize
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {0} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays"
 msgstr "across {0} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {ppTotal} profile top plays with PP"
 msgstr "across {ppTotal} profile top plays with PP"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {usageSampleSize} modded top plays"
 msgstr "across {usageSampleSize} modded top plays"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {usageSampleSize} top plays"
 msgstr "across {usageSampleSize} top plays"
 
@@ -2544,25 +2634,30 @@ msgstr "Active"
 msgid "active days"
 msgstr "active days"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Activity"
 msgstr "Activity"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity day"
 msgstr "Activity day"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity is only available when the server is configured."
 msgstr "Activity is only available when the server is configured."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker."
 msgstr "Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker."
+
+#: src/components/player/ActivityPanel.tsx
+msgid "Activity is recorded for tracked players, and no one in this team is tracked yet."
+msgstr "Activity is recorded for tracked players, and no one in this team is tracked yet."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Actual size"
@@ -2703,8 +2798,8 @@ msgid "added"
 msgstr "added"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Adding you…"
 msgstr "Adding you…"
 
@@ -2725,7 +2820,7 @@ msgstr "Admin: flood the rail with fake pulls to preview the animation"
 msgid "Advanced"
 msgstr "Advanced"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "Age"
 msgstr "Age"
 
@@ -2758,9 +2853,9 @@ msgid "all"
 msgstr "all"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -2792,7 +2887,7 @@ msgstr "All Discord servers"
 msgid "all keymodes"
 msgstr "all keymodes"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "All keymodes"
 msgstr "All keymodes"
 
@@ -2916,6 +3011,10 @@ msgstr "analysis"
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Analysis"
 #~ msgstr "Analysis"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating."
+msgstr "Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating."
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "analysis unavailable"
@@ -3218,7 +3317,7 @@ msgstr "avatar"
 msgid "Averaged over {windowHave} of {windowNeed} weighted clears, so the estimate is still filling in."
 msgstr "Averaged over {windowHave} of {windowNeed} weighted clears, so the estimate is still filling in."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Avg active day"
 msgstr "Avg active day"
 
@@ -3226,7 +3325,7 @@ msgstr "Avg active day"
 msgid "Avg duration"
 msgstr "Avg duration"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "avg intensity, 0-100"
 msgstr "avg intensity, 0-100"
 
@@ -3294,6 +3393,10 @@ msgstr "Back to skin position"
 msgid "back to skins"
 msgstr "back to skins"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "back to teams"
+#~ msgstr "back to teams"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "Back to the collection"
 #~ msgstr "Back to the collection"
@@ -3335,7 +3438,7 @@ msgstr "Badge"
 msgid "Balance bar"
 msgstr "Balance bar"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Bands"
 msgstr "Bands"
 
@@ -3511,6 +3614,7 @@ msgstr "best {best}%"
 msgid "best {best}pp"
 msgstr "best {best}pp"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
 msgstr "Best Performance"
@@ -3602,7 +3706,7 @@ msgstr "boosts"
 msgid "Bottom"
 msgstr "Bottom"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "bottom pp"
 msgstr "bottom pp"
 
@@ -3616,19 +3720,21 @@ msgstr "bpm"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/InsightModals.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "BPM"
 msgstr "BPM"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "BPM Breakdown"
 msgstr "BPM Breakdown"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/player/$username.tsx
 msgid "Bracket"
 msgstr "Bracket"
 
@@ -4061,11 +4167,11 @@ msgstr "Choose another collector for your gift."
 #~ msgstr "Choose the card you want to craft a special edition of."
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Chordjack"
 msgstr "Chordjack"
 
@@ -4101,10 +4207,10 @@ msgstr "clear"
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Clear"
 msgstr "Clear"
 
@@ -4283,6 +4389,7 @@ msgstr "Client"
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/player/InsightModals.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -4300,7 +4407,7 @@ msgstr "Client"
 msgid "Close"
 msgstr "Close"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Close activity details"
 msgstr "Close activity details"
 
@@ -4895,7 +5002,7 @@ msgstr "Couldn't find that beatmap ID."
 msgid "Couldn't load About right now."
 msgstr "Couldn't load About right now."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Couldn't load Activity right now."
 msgstr "Couldn't load Activity right now."
 
@@ -4935,6 +5042,10 @@ msgstr "Couldn't load osu! recents right now."
 msgid "Couldn't load profile insights right now."
 msgstr "Couldn't load profile insights right now."
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load recent plays right now."
+msgstr "Couldn't load recent plays right now."
+
 #: src/routes/player/$username.tsx
 msgid "Couldn't load recent scores right now."
 msgstr "Couldn't load recent scores right now."
@@ -4942,6 +5053,10 @@ msgstr "Couldn't load recent scores right now."
 #: src/components/maps/MapSearchSection.tsx
 msgid "Couldn't load search results. Try again."
 msgstr "Couldn't load search results. Try again."
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load skills right now."
+msgstr "Couldn't load skills right now."
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't load that image."
@@ -4964,13 +5079,21 @@ msgstr "Couldn't load the board."
 msgid "Couldn't load the farmer list. Try again."
 msgstr "Couldn't load the farmer list. Try again."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Couldn't load the full day detail."
 msgstr "Couldn't load the full day detail."
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load the Maniacard right now."
+msgstr "Couldn't load the Maniacard right now."
 
 #: src/routes/replay.tsx
 msgid "Couldn't load the song audio for this replay."
 msgstr "Couldn't load the song audio for this replay."
+
+#: src/routes/teams.tsx
+msgid "Couldn't load the team rankings."
+msgstr "Couldn't load the team rankings."
 
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
@@ -4995,6 +5118,10 @@ msgstr "Couldn't load this player right now."
 #: src/components/packs/RevealStage.tsx
 msgid "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
 msgstr "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load this team right now."
+msgstr "Couldn't load this team right now."
 
 #: src/routes/farm-helper.tsx
 msgid "couldn't load this view"
@@ -5077,8 +5204,8 @@ msgid "Couldn't start the comparison"
 msgstr "Couldn't start the comparison"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "Couldn't turn on tracking right now. Try again in a moment."
 
@@ -5179,6 +5306,10 @@ msgstr "Create test connection"
 msgid "Created {0}"
 msgstr "Created {0}"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Created <0>{createdValue}</0>"
+msgstr "Created <0>{createdValue}</0>"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Creating"
 msgstr "Creating"
@@ -5209,7 +5340,7 @@ msgstr "crop {0}×{1}"
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "Ctrl/Cmd-click images to add or remove them."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Cumulative"
 msgstr "Cumulative"
 
@@ -5312,6 +5443,7 @@ msgid "dan"
 msgstr "dan"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -6305,6 +6437,10 @@ msgstr "Extra: practice charts set one skill directly"
 msgid "Failed"
 msgstr "Failed"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "Failed plays do not receive an MSD rating."
+msgstr "Failed plays do not receive an MSD rating."
+
 #: src/routes/replay.tsx
 msgid "Failed to load replay"
 msgstr "Failed to load replay"
@@ -6378,7 +6514,7 @@ msgstr "Fast export isn't available in this browser at this size. Try a lower pr
 msgid "Fast single-note runs flowing across the keys."
 msgstr "Fast single-note runs flowing across the keys."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "Fastest"
 
@@ -6577,6 +6713,10 @@ msgstr "Find a player in your collection"
 #: src/components/packs/SetsView.tsx
 msgid "Find a set"
 msgstr "Find a set"
+
+#: src/routes/teams.tsx
+msgid "find a team..."
+msgstr "find a team..."
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "find an album"
@@ -6853,7 +6993,7 @@ msgstr "free"
 msgid "French"
 msgstr "French"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Fri"
 msgstr "Fri"
 
@@ -7158,10 +7298,10 @@ msgid "Handjack"
 msgstr "Handjack"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
-#: src/routes/player/$username.tsx
 msgid "Handstream"
 msgstr "Handstream"
 
@@ -7332,7 +7472,7 @@ msgstr "Higher values move receptors lower."
 #~ msgid "Highest difficulty"
 #~ msgstr "Highest difficulty"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "Highest PP first"
 
@@ -7568,7 +7708,7 @@ msgstr "Hungarian"
 msgid "hybrid"
 msgstr "hybrid"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Hybrid"
 msgstr "Hybrid"
 
@@ -7917,11 +8057,11 @@ msgstr "Italian"
 msgid "Italic"
 msgstr "Italic"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Jack"
 msgstr "Jack"
 
@@ -8022,11 +8162,11 @@ msgid "Jump to a page"
 msgstr "Jump to a page"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Jumpstream"
 msgstr "Jumpstream"
 
@@ -8097,7 +8237,7 @@ msgstr "Key pressed"
 msgid "Key presses play the note's hitsound, like in game. Misses trigger the combo break sound."
 msgstr "Key presses play the note's hitsound, like in game. Misses trigger the combo break sound."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "Key Split"
 msgstr "Key Split"
 
@@ -8314,6 +8454,10 @@ msgstr "Lazer scores are recalculated from their judgements, so the accuracy use
 #~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
 #~ msgstr "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Leader"
+msgstr "Leader"
+
 #: src/lib/replay-overlays.ts
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
@@ -8486,16 +8630,17 @@ msgstr "Live updates on"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
 #: src/components/me/DynamicRendersPanel.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "LN"
 msgstr "LN"
 
@@ -8545,8 +8690,8 @@ msgstr "LN dan est."
 #~ msgid "LN Density"
 #~ msgstr "LN Density"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN General"
 msgstr "LN General"
 
@@ -8566,8 +8711,8 @@ msgstr "LN head color"
 msgid "LN Head color"
 msgstr "LN Head color"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN Inverse"
 msgstr "LN Inverse"
 
@@ -8579,8 +8724,8 @@ msgstr "LN Inverse"
 msgid "LN notes"
 msgstr "LN notes"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN Release"
 msgstr "LN Release"
 
@@ -8605,8 +8750,8 @@ msgstr "LN share"
 msgid "LN tail"
 msgstr "LN tail"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN Tech"
 msgstr "LN Tech"
 
@@ -8673,7 +8818,7 @@ msgstr "Loaded {0}'s me! page into the editor."
 msgid "Loaded the built-in skin"
 msgstr "Loaded the built-in skin"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "loading"
 msgstr "loading"
 
@@ -8778,6 +8923,10 @@ msgstr "Loading skin…"
 msgid "Loading skins…"
 msgstr "Loading skins…"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Loading teams..."
+#~ msgstr "Loading teams..."
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Loading the rest..."
 #~ msgstr "Loading the rest..."
@@ -8815,6 +8964,7 @@ msgstr "loading..."
 msgid "Loading..."
 msgstr "Loading..."
 
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -8846,7 +8996,7 @@ msgstr "Log in to upload"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Log in with osu!"
 msgstr "Log in with osu!"
 
@@ -8861,6 +9011,10 @@ msgstr "Log in with osu! again to update this skin."
 #: src/components/communities/field-options.tsx
 msgid "Log in with osu! first."
 msgstr "Log in with osu! first."
+
+#: src/routes/packs.tsx
+msgid "Log in with osu! to open this pack"
+msgstr "Log in with osu! to open this pack"
 
 #: src/routes/communities.tsx
 msgid "Log in with osu! to post your server"
@@ -8940,7 +9094,7 @@ msgstr "Loved"
 msgid "Low PP"
 msgstr "Low PP"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
 msgstr "Lowest PP first"
 
@@ -9020,6 +9174,10 @@ msgstr "manager"
 #~ msgid "Mania Hub just updated"
 #~ msgstr "Mania Hub just updated"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Mania Hub rank"
+msgstr "Mania Hub rank"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania maps"
@@ -9032,6 +9190,10 @@ msgstr "Mania Replay Master"
 #: src/routes/skins.tsx
 msgid "mania stage"
 msgstr "mania stage"
+
+#: src/routes/teams.tsx
+msgid "Mania team rankings"
+msgstr "Mania team rankings"
 
 #: src/routes/legal.tsx
 msgid "Mania Tracker"
@@ -9097,6 +9259,7 @@ msgstr "maniabot - Mania Tracker for Discord"
 
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Maniacard"
 msgstr "Maniacard"
@@ -9196,7 +9359,7 @@ msgid "maps"
 msgstr "maps"
 
 #: src/components/maps/UserCollectionEditor.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Maps"
 msgstr "Maps"
 
@@ -9208,7 +9371,7 @@ msgstr "Maps boards are built per country, plus one combined board for Global. T
 msgid "Maps build failed."
 msgstr "Maps build failed."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Maps played"
 msgstr "Maps played"
 
@@ -9305,15 +9468,16 @@ msgstr "median {median}pp"
 msgid "median {target}pp"
 msgstr "median {target}pp"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "median BPM"
 msgstr "median BPM"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Median BPM"
 msgstr "Median BPM"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Median by Keymode"
 msgstr "Median by Keymode"
 
@@ -9325,6 +9489,11 @@ msgstr "Median by Keymode"
 #: src/routes/communities.tsx
 msgid "members"
 msgstr "members"
+
+#: src/components/team/TeamProfilePage.tsx
+#: src/routes/teams.tsx
+msgid "Members"
+msgstr "Members"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
@@ -9407,7 +9576,7 @@ msgstr "Missing from your collection."
 #~ msgid "Missing score"
 #~ msgstr "Missing score"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "mixed keys"
 msgstr "mixed keys"
 
@@ -9415,7 +9584,7 @@ msgstr "mixed keys"
 msgid "Mod filter"
 msgstr "Mod filter"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Mod Usage"
 msgstr "Mod Usage"
 
@@ -9423,7 +9592,7 @@ msgstr "Mod Usage"
 msgid "Modded"
 msgstr "Modded"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "modded plays"
 msgstr "modded plays"
 
@@ -9436,13 +9605,13 @@ msgid "moderation"
 msgstr "moderation"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Mods"
 msgstr "Mods"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Mon"
 msgstr "Mon"
 
@@ -9569,6 +9738,7 @@ msgstr "Most played in {countryName}"
 msgid "most unique cards"
 msgstr "most unique cards"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"
 msgstr "Most Used Mod"
@@ -9603,11 +9773,19 @@ msgstr "msd"
 msgid "MSD"
 msgstr "MSD"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "MSD and dan on recent plays"
+msgstr "MSD and dan on recent plays"
+
 #. placeholder {0}: formatRate(playRate)
 #. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
 #: src/components/maps/MapDetailModal.tsx
 msgid "MSD at {0}"
 msgstr "MSD at {0}"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "MSD on recent plays"
+msgstr "MSD on recent plays"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
@@ -9793,11 +9971,12 @@ msgstr "newest"
 msgid "Newest"
 msgstr "Newest"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/routes/replay_.community.tsx
 msgid "Newest first"
 msgstr "Newest first"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Newest Top Play"
 msgstr "Newest Top Play"
@@ -9876,11 +10055,11 @@ msgstr "Next preview"
 msgid "next tier"
 msgstr "next tier"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "NM is excluded from mod usage"
 msgstr "NM is excluded from mod usage"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "NM is included in mod usage"
 msgstr "NM is included in mod usage"
 
@@ -9906,7 +10085,7 @@ msgstr "No {selectedKeymode}K preview yet."
 msgid "No About content found."
 msgstr "No About content found."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "No activity data for this player"
 msgstr "No activity data for this player"
 
@@ -9989,7 +10168,7 @@ msgstr "No Dans"
 msgid "no data"
 msgstr "no data"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "No data"
 msgstr "No data"
 
@@ -10029,7 +10208,7 @@ msgstr "No images or sounds were found in the archive."
 #~ msgid "No installation has been approved yet."
 #~ msgstr "No installation has been approved yet."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "No key data"
 msgstr "No key data"
 
@@ -10093,11 +10272,16 @@ msgstr "no matches"
 msgid "No matches"
 msgstr "No matches"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "No member of this team has a Maniacard yet."
+msgstr "No member of this team has a Maniacard yet."
+
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
 msgid "No missing player matches \"{0}\"."
 msgstr "No missing player matches \"{0}\"."
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "No mod preference"
 msgstr "No mod preference"
@@ -10110,7 +10294,7 @@ msgstr "No mod: {pct}% of plays"
 msgid "No mods"
 msgstr "No mods"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "No mods in top plays"
 msgstr "No mods in top plays"
 
@@ -10130,7 +10314,7 @@ msgstr "No nearby players have farmed this yet."
 msgid "No osu! player named \"{trimmedQuery}\""
 msgstr "No osu! player named \"{trimmedQuery}\""
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "No pattern signal for this keymode yet."
 msgstr "No pattern signal for this keymode yet."
 
@@ -10212,6 +10396,10 @@ msgstr "No rated keymode yet."
 msgid "No rated players here yet."
 msgstr "No rated players here yet."
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "No rating is available, and no analysis is currently scheduled."
+msgstr "No rating is available, and no analysis is currently scheduled."
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No rating system changes yet."
 msgstr "No rating system changes yet."
@@ -10264,6 +10452,7 @@ msgstr "No score found at that link."
 msgid "No score found for #{queryScoreId}."
 msgstr "No score found for #{queryScoreId}."
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "No scores found"
 msgstr "No scores found"
@@ -10295,6 +10484,10 @@ msgstr "No servers yet"
 #: src/components/packs/SetsView.tsx
 msgid "No sets found."
 msgstr "No sets found."
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "No skill ratings for this team's members yet."
+msgstr "No skill ratings for this team's members yet."
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
@@ -10328,9 +10521,25 @@ msgstr "No snipes tracked yet for {countryName}."
 msgid "No streak this time."
 msgstr "No streak this time."
 
+#: src/routes/teams.tsx
+msgid "No teams match \"{query}\"."
+msgstr "No teams match \"{query}\"."
+
+#: src/routes/teams.tsx
+msgid "No teams yet."
+msgstr "No teams yet."
+
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "No teams yet. Open a Team pack to start collecting them."
+#~ msgstr "No teams yet. Open a Team pack to start collecting them."
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "No top plays found"
 msgstr "No top plays found"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "No top plays from this team's members yet."
+msgstr "No top plays from this team's members yet."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No top plays match those controls."
@@ -10343,6 +10552,10 @@ msgstr "No top plays recorded yet. As you set new personal bests while tracked, 
 #: src/routes/player/$username.tsx
 msgid "No tracked plays found"
 msgstr "No tracked plays found"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "No tracked plays from this team's members yet."
+msgstr "No tracked plays from this team's members yet."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays match those controls."
@@ -10508,6 +10721,10 @@ msgstr "not a bug"
 #: src/components/player/ServerLinks.tsx
 msgid "Not a server we know yet."
 msgstr "Not a server we know yet."
+
+#: src/routes/team/$teamId.tsx
+msgid "Not a team id."
+msgstr "Not a team id."
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
@@ -10693,6 +10910,10 @@ msgstr "Nothing matched that"
 msgid "Nothing missing. Every player in the pool is in your collection."
 msgstr "Nothing missing. Every player in the pool is in your collection."
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Nothing missing. Every team in the pool is in your collection."
+#~ msgstr "Nothing missing. Every team in the pool is in your collection."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
@@ -10718,7 +10939,7 @@ msgstr "Nothing uploaded yet."
 msgid "Notice"
 msgstr "Notice"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "now"
 msgstr "now"
 
@@ -10821,7 +11042,7 @@ msgstr "oldest"
 msgid "Oldest"
 msgstr "Oldest"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/routes/replay_.community.tsx
 msgid "Oldest first"
 msgstr "Oldest first"
@@ -10834,6 +11055,7 @@ msgstr "oldest top ?"
 msgid "oldest top {month}"
 msgstr "oldest top {month}"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Oldest Top Play"
 msgstr "Oldest Top Play"
@@ -11004,6 +11226,16 @@ msgstr "Open {0}'s profile in a new tab"
 msgid "Open {0}'s pull of {label}"
 msgstr "Open {0}'s pull of {label}"
 
+#. placeholder {0}: card.player.team.name
+#: src/components/packs/PackSummary.tsx
+msgid "Open {0}'s team page"
+msgstr "Open {0}'s team page"
+
+#. placeholder {0}: current.player.team.name
+#: src/components/packs/RevealStage.tsx
+msgid "Open {0}'s team page in a new tab"
+msgstr "Open {0}'s team page in a new tab"
+
 #: src/routes/player/$username.tsx
 msgid "Open {profileCountryName} home"
 msgstr "Open {profileCountryName} home"
@@ -11072,6 +11304,10 @@ msgstr "open packs"
 msgid "Open profile"
 msgstr "Open profile"
 
+#: src/components/packs/PackSummary.tsx
+msgid "Open team page"
+msgstr "Open team page"
+
 #. placeholder {0}: section.name
 #: src/components/packs/album/AlbumView.tsx
 msgid "Open the {0} album"
@@ -11081,7 +11317,7 @@ msgstr "Open the {0} album"
 msgid "Open the album"
 msgstr "Open the album"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Open the day modal with simulated busy-day data"
 msgstr "Open the day modal with simulated busy-day data"
 
@@ -11181,6 +11417,10 @@ msgstr "osu! Assets And Data"
 msgid "osu! didn't answer. Try again in a minute."
 msgstr "osu! didn't answer. Try again in a minute."
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "osu! has no team with this id."
+msgstr "osu! has no team with this id."
+
 #: src/routes/terms.tsx
 msgid "osu! Login"
 msgstr "osu! Login"
@@ -11218,6 +11458,10 @@ msgstr "osu! score link"
 #: src/routes/player/$username.tsx
 #~ msgid "osu! Supporter"
 #~ msgstr "osu! Supporter"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "osu! team"
+msgstr "osu! team"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -11257,6 +11501,10 @@ msgstr "osu!mania skins"
 msgid "osu!mania skins on Mania Tracker."
 msgstr "osu!mania skins on Mania Tracker."
 
+#: src/routes/teams.tsx
+msgid "osu!mania teams ranked by performance"
+msgstr "osu!mania teams ranked by performance"
+
 #: src/components/communities/field-options.tsx
 #: src/routes/skins.tsx
 msgid "other"
@@ -11264,8 +11512,8 @@ msgstr "other"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/UserCollectionsSection.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
 msgid "Other"
 msgstr "Other"
@@ -11363,6 +11611,10 @@ msgstr "Overview"
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Own card"
 msgstr "Own card"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "Own team"
+msgstr "Own team"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "owner"
@@ -11493,7 +11745,7 @@ msgstr "Pattern"
 #~ msgid "Pattern evidence"
 #~ msgstr "Pattern evidence"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Pattern mix"
 msgstr "Pattern mix"
 
@@ -11533,6 +11785,10 @@ msgstr "Pause preview"
 msgid "Peak"
 msgstr "Peak"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Peak Mania Hub rank"
+msgstr "Peak Mania Hub rank"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "peers farming"
@@ -11547,6 +11803,7 @@ msgstr "pending"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/routes/maps.tsx
 msgid "Pending"
 msgstr "Pending"
@@ -11575,10 +11832,16 @@ msgstr "Per-hand accuracy"
 msgid "percentiles are among tracked players"
 msgstr "percentiles are among tracked players"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Performance"
 msgstr "Performance"
+
+#: src/routes/teams.tsx
+msgid "Performance rank"
+msgstr "Performance rank"
 
 #: src/components/communities/field-options.tsx
 msgid "Persian"
@@ -11681,8 +11944,10 @@ msgstr "Play again"
 msgid "Play both replays"
 msgstr "Play both replays"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Play Count"
 msgstr "Play Count"
 
@@ -11707,6 +11972,7 @@ msgstr "play this"
 msgid "Play this skin in your own replays for everyone who watches them"
 msgstr "Play this skin in your own replays for everyone who watches them"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Play Time"
 msgstr "Play Time"
@@ -11758,6 +12024,10 @@ msgstr "Player details"
 msgid "Player not found."
 msgstr "Player not found."
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Player Peak"
+msgstr "Player Peak"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Player's skin"
@@ -11771,6 +12041,8 @@ msgid "players"
 msgstr "players"
 
 #: src/components/discord/CommandShowcase.tsx
+#: src/components/packs/SetsView.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/routes/maps.tsx
 msgid "Players"
@@ -11798,17 +12070,18 @@ msgstr "Playing"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "plays"
 msgstr "plays"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Plays"
 msgstr "Plays"
 
@@ -11816,7 +12089,7 @@ msgstr "Plays"
 msgid "Plays / session"
 msgstr "Plays / session"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 msgstr "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 
@@ -11933,7 +12206,7 @@ msgstr "Post your server"
 msgid "posted by"
 msgstr "posted by"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "pp"
 msgstr "pp"
 
@@ -11961,12 +12234,12 @@ msgstr "PP count"
 msgid "PP counter"
 msgstr "PP counter"
 
+#: src/components/player/InsightModals.tsx
 #: src/lib/signature-shared.ts
-#: src/routes/player/$username.tsx
 msgid "PP distribution"
 msgstr "PP distribution"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "PP Distribution"
 msgstr "PP Distribution"
 
@@ -11990,6 +12263,7 @@ msgstr "PP gained"
 msgid "PP Gained"
 msgstr "PP Gained"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "PP Range"
 msgstr "PP Range"
@@ -12339,7 +12613,7 @@ msgstr "Random picks globally"
 msgid "Random picks in {countryName}"
 msgstr "Random picks in {countryName}"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 #: src/routes/snipes.tsx
 msgid "Range"
 msgstr "Range"
@@ -12356,6 +12630,10 @@ msgstr "Rank by"
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
+
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
+msgid "Rank is set by the cards of the team's strongest members."
+msgstr "Rank is set by the cards of the team's strongest members."
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Rank trajectory"
@@ -12379,6 +12657,10 @@ msgstr "Ranked (PP)"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
 msgstr "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
+
+#: src/routes/teams.tsx
+#~ msgid "Ranked Score"
+#~ msgstr "Ranked Score"
 
 #. placeholder {0}: entry.ranked_score.toLocaleString("en-US")
 #: src/components/packs/album/AlbumView.tsx
@@ -12517,6 +12799,10 @@ msgstr "Rating your plays failed. It retries automatically, check back in a bit.
 msgid "Ratings"
 msgstr "Ratings"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "Ratings could not be loaded. Tap Retry to try again."
+msgstr "Ratings could not be loaded. Tap Retry to try again."
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Ratio"
 msgstr "Ratio"
@@ -12649,6 +12935,7 @@ msgid "Recent plays"
 msgstr "Recent plays"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Recent Plays"
 msgstr "Recent Plays"
@@ -12725,6 +13012,10 @@ msgstr "Recycle card +{value}"
 msgid "Recycle duplicates +{0}"
 msgstr "Recycle duplicates +{0}"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Recycle duplicates +{duplicateValue}"
+#~ msgstr "Recycle duplicates +{duplicateValue}"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Recycle duplicates +{recyclable}"
 msgstr "Recycle duplicates +{recyclable}"
@@ -12796,6 +13087,7 @@ msgstr "Regions"
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/team/TeamProfilePage.tsx
 msgid "Regular"
 msgstr "Regular"
 
@@ -13196,6 +13488,7 @@ msgstr "Retention And Controls"
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SharedSkillPlay.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
@@ -13346,7 +13639,7 @@ msgstr "Run an osu!mania server? Post it and it shows up here once it is approve
 msgid "Russian"
 msgstr "Russian"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sat"
 msgstr "Sat"
 
@@ -13940,7 +14233,7 @@ msgid "Servers are unavailable right now"
 msgstr "Servers are unavailable right now"
 
 #. placeholder {0}: sessionIndex + 1
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Session {0}"
 msgstr "Session {0}"
 
@@ -13953,7 +14246,7 @@ msgstr "Session {0}"
 #~ msgstr "Session update"
 
 #: src/components/me/MyStatsInsights.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sessions"
 msgstr "Sessions"
 
@@ -14240,7 +14533,7 @@ msgstr "Show export details"
 msgid "show fewer"
 msgstr "show fewer"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "Show fewer"
@@ -14255,6 +14548,7 @@ msgstr "show more"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Show more"
@@ -14369,6 +14663,18 @@ msgstr "Showing the newest {0}."
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "Shows"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the MSD and dan of each play in Recent Plays"
+msgstr "Shows the MSD and dan of each play in Recent Plays"
+
+#: src/components/settings/SettingsPanel.tsx
+#~ msgid "Shows the MSD and dan of each play in Recent Plays, like the Skills tab"
+#~ msgstr "Shows the MSD and dan of each play in Recent Plays, like the Skills tab"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the MSD of each play in Recent Plays"
+msgstr "Shows the MSD of each play in Recent Plays"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -14496,7 +14802,7 @@ msgstr "Signed in as {0}. Nothing is connected yet."
 #~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 #~ msgstr "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sim busy day"
 msgstr "Sim busy day"
 
@@ -14539,7 +14845,7 @@ msgstr "Size"
 msgid "Skill"
 msgstr "Skill"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "Skill analysis is queued for the maps played on this day."
 
@@ -14589,6 +14895,7 @@ msgstr "skillboost {target}pp"
 msgid "skillboost only"
 msgstr "skillboost only"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Skills"
 msgstr "Skills"
@@ -14682,7 +14989,7 @@ msgstr "Slovak"
 msgid "Slower export with more CPU use."
 msgstr "Slower export with more CPU use."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Slowest"
 msgstr "Slowest"
 
@@ -14806,7 +15113,7 @@ msgstr "soon"
 msgid "sort"
 msgstr "sort"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/routes/tracker.tsx
 msgid "Sort"
 msgstr "Sort"
@@ -14943,11 +15250,11 @@ msgid "STAM"
 msgstr "STAM"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Stamina"
 msgstr "Stamina"
 
@@ -15006,7 +15313,7 @@ msgid "Start the connection again from the app."
 msgstr "Start the connection again from the app."
 
 #: src/components/me/RosterOptInCard.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Start tracking your plays"
 msgstr "Start tracking your plays"
 
@@ -15140,16 +15447,16 @@ msgstr "Storyboard…"
 msgid "streak"
 msgstr "streak"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Streak"
 msgstr "Streak"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Stream"
 msgstr "Stream"
 
@@ -15218,7 +15525,7 @@ msgstr "Submit play"
 msgid "Subregions"
 msgstr "Subregions"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sun"
 msgstr "Sun"
 
@@ -15404,15 +15711,38 @@ msgstr "Targets track themselves from your mania plays: a pp number, a play wort
 msgid "teal"
 msgstr "teal"
 
+#: src/routes/teams.tsx
+msgid "Team"
+msgstr "Team"
+
+#: src/components/layout/Nav.tsx
+msgid "teams"
+msgstr "teams"
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/ShowcasePicker.tsx
+#: src/components/packs/SetsView.tsx
+#: src/lib/packs.ts
+msgid "Teams"
+msgstr "Teams"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Teams need the server to be configured."
+msgstr "Teams need the server to be configured."
+
+#: src/lib/packs.ts
+msgid "Teams only, new teams first"
+msgstr "Teams only, new teams first"
+
 #: src/routes/packs.tsx
 msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 msgstr "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Tech"
 msgstr "Tech"
 
@@ -15777,6 +16107,10 @@ msgstr "The chart analyzer is rating the top plays right now."
 #: src/components/player/SkillBreakdown.tsx
 msgid "The chart analyzer is rating your top plays right now."
 msgstr "The chart analyzer is rating your top plays right now."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "The chart changed after this play, so its rating cannot be verified."
+msgstr "The chart changed after this play, so its rating cannot be verified."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
@@ -16504,6 +16838,10 @@ msgstr "The song may need to be downloaded and prepared first."
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 
+#: src/routes/teams.tsx
+#~ msgid "The team rankings haven't been loaded from osu! yet."
+#~ msgstr "The team rankings haven't been loaded from osu! yet."
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
@@ -16658,6 +16996,10 @@ msgstr "This .osk could not be read."
 msgid "This account is not in the Companella beta."
 msgstr "This account is not in the Companella beta."
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+msgstr "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't encode the audio track for this format."
 msgstr "This browser can't encode the audio track for this format."
@@ -16735,8 +17077,8 @@ msgid "This connection request has already been answered."
 msgstr "This connection request has already been answered."
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "This country's opt-in list is full right now. Check back later."
 
@@ -16842,6 +17184,14 @@ msgstr "This page will load automatically once {name} is ready."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play counts for nothing on the dan estimate."
 msgstr "This play counts for nothing on the dan estimate."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is below the accuracy needed for an MSD rating."
+msgstr "This play is below the accuracy needed for an MSD rating."
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is excluded from skill ratings."
+msgstr "This play is excluded from skill ratings."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play is under the minimum accuracy required for dan credit."
@@ -16957,6 +17307,10 @@ msgstr "This special-edition Eternal stays with its collector."
 msgid "This tab went to the background, which can pause the export."
 msgstr "This tab went to the background, which can pause the export."
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "This team has no description."
+msgstr "This team has no description."
+
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "This tool reads cross-country farm data from the server, which isn't configured in this environment."
@@ -16977,7 +17331,7 @@ msgstr "This will allow {appNameInline} to"
 msgid "Those images are no longer available."
 msgstr "Those images are no longer available."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "Thu"
 
@@ -16989,7 +17343,7 @@ msgstr "Thursdays"
 msgid "Tier changed to {tierLabel}"
 msgstr "Tier changed to {tierLabel}"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Time played"
 msgstr "Time played"
 
@@ -17022,6 +17376,7 @@ msgstr "Title"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "to"
@@ -17162,7 +17517,7 @@ msgstr "Top players"
 
 #: src/components/layout/Nav.tsx
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "top plays"
 msgstr "top plays"
 
@@ -17175,7 +17530,7 @@ msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Top plays"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "top pp"
 msgstr "top pp"
 
@@ -17196,8 +17551,8 @@ msgid "tournaments, mapping, casual"
 msgstr "tournaments, mapping, casual"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Track my plays"
 msgstr "Track my plays"
 
@@ -17298,7 +17653,7 @@ msgstr "Try this again"
 msgid "Try turning a filter off."
 msgstr "Try turning a filter off."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Tue"
 msgstr "Tue"
 
@@ -17363,7 +17718,7 @@ msgid "Type a range: 40-60, 50+, <30"
 msgstr "Type a range: 40-60, 50+, <30"
 
 #. placeholder {0}: activity.typicalSession
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Typical session <0>{0} plays</0>"
 msgstr "Typical session <0>{0} plays</0>"
 
@@ -17371,7 +17726,7 @@ msgstr "Typical session <0>{0} plays</0>"
 msgid "Ukrainian"
 msgstr "Ukrainian"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Unanalyzed"
 msgstr "Unanalyzed"
 
@@ -17379,6 +17734,7 @@ msgstr "Unanalyzed"
 msgid "unavailable"
 msgstr "unavailable"
 
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Unavailable"
 msgstr "Unavailable"
@@ -17421,10 +17777,10 @@ msgstr "Unhide"
 msgid "unknown"
 msgstr "unknown"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
-#: src/routes/player/$username.tsx
 msgid "Unknown"
 msgstr "Unknown"
 
@@ -17829,6 +18185,11 @@ msgstr "View"
 msgid "View {0}'s card"
 msgstr "View {0}'s card"
 
+#. placeholder {0}: team.name
+#: src/components/team/TeamProfilePage.tsx
+msgid "View {0}'s flag"
+msgstr "View {0}'s flag"
+
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
 msgid "View {0}'s icon"
@@ -17889,11 +18250,20 @@ msgstr "view on osu! web"
 msgid "View osu! profile"
 msgstr "View osu! profile"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "View osu! team"
+msgstr "View osu! team"
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View profile"
 msgstr "View profile"
+
+#: src/components/packs/CardSpotlight.tsx
+#: src/components/packs/CollectionPanel.tsx
+msgid "View team"
+msgstr "View team"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"
@@ -18100,7 +18470,7 @@ msgstr "We have no run by {0} on this map. Paste a link to their score to use it
 msgid "web.archive.org link to their osu! profile"
 msgstr "web.archive.org link to their osu! profile"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Wed"
 msgstr "Wed"
 
@@ -18511,7 +18881,7 @@ msgid "you're already past {0}"
 msgstr "you're already past {0}"
 
 #: src/components/me/RosterOptInCard.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "You're being tracked now"
 msgstr "You're being tracked now"
 
@@ -18608,8 +18978,8 @@ msgstr "Your collection changed. Nothing was sent. Refresh and try again."
 #~ msgstr "Your collector journal"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
 msgstr "Your country isn't tracked yet, so there's nothing to record your plays against."
 
@@ -18723,7 +19093,7 @@ msgstr "Your private skins are on the shelf above; anything you publish lands he
 #~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
 #~ msgstr "Your recent plays are being pulled in and will be rated here in a few minutes."
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."
 msgstr "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."
 
@@ -18776,6 +19146,10 @@ msgstr "your showcase"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"
 msgstr "Your skin"
+
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Your teams could not be loaded just now. Try again in a moment."
+#~ msgstr "Your teams could not be loaded just now. Try again in a moment."
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."

@@ -32,6 +32,7 @@ import {
 import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
+import { canSeeTeams } from "../lib/auth-shared";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -50,11 +51,13 @@ import {
   writePendingPack,
 } from "../lib/pack-pending";
 import { mintServerPackCollectionCards, recordServerPackPulls } from "../lib/pack-wallet-sync";
+import { recycleServerPackTeamCards } from "../lib/pack-teams";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
   drawPackPlayersFromServer,
   PACK_TYPE_BLURB_LABELS,
+  PACK_SHELF,
   PACK_TYPE_NAME_LABELS,
   PACK_TYPES,
   packTypeById,
@@ -72,7 +75,11 @@ import { track } from "../lib/analytics";
 export const Route = createFileRoute("/packs")({
   validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets"; album?: string } => {
     const view =
-      search.view === "folders" ? "sets" : search.view === "album" || search.view === "streak" || search.view === "sets" ? search.view : undefined;
+      search.view === "folders"
+        ? "sets"
+        : search.view === "album" || search.view === "streak" || search.view === "sets"
+          ? search.view
+          : undefined;
     /* Which album is open on the shelf, so one can be linked to. Album codes
        are country codes plus the two pinned ones (GLOBAL, GOAT); anything
        that is not shaped like one is dropped and the shelf opens instead.
@@ -178,12 +185,15 @@ function scheduleCollectionPanelMount(callback: () => void, reducedMotion: boole
    response; those seed their cards directly and only the players the backend
    had nothing for go through the probe. */
 function buildCardStates(players: PackPlayer[], seededScores?: Map<number, OsuScore[]>): PackCardState[] {
+  // A team card arrives with its numbers and draws from those, not plays.
   const missingIds = players
+    .filter((player) => !player.team)
     .map((player) => player.user.id)
     .filter((id) => !seededScores?.has(id));
   const missingPromises = prefetchPackPlayerScores(missingIds);
   const missPromises = new Map(missingIds.map((id, index) => [id, missingPromises[index]] as const));
   return players.map((player) => {
+    if (player.team) return { player, scoresPromise: Promise.resolve([]) };
     const seeded = seededScores?.get(player.user.id);
     return {
       player,
@@ -356,18 +366,73 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
   return thumbs;
 }
 
+/* Which side of the keymode pack to open, in the gap under the pack itself:
+   the shelf shows it as one pack, and this is where the choice gets seen. */
+function KeyModeToggle({
+  wallet,
+  selectedId,
+  locked,
+  onSelect,
+}: {
+  wallet: PackWallet;
+  selectedId: PackTypeId;
+  locked: boolean;
+  onSelect: (id: PackTypeId) => void;
+}) {
+  const { i18n } = useLingui();
+  return (
+    <div className="flex overflow-hidden rounded-lg bg-osu-b4">
+      {(["4k", "7k"] as const).map((id) => {
+        const type = packTypeById(id);
+        const current = id === selectedId;
+        const affordable = canAffordPack(wallet, type);
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              if (!locked && !current && affordable) onSelect(id);
+            }}
+            disabled={locked || (!current && !affordable)}
+            aria-pressed={current}
+            className={`min-w-[72px] px-5 py-1.5 text-[15px] font-black transition ${
+              current
+                ? "text-white"
+                : affordable && !locked
+                  ? "cursor-pointer text-osu-f1 hover:text-white"
+                  : "text-osu-f1/40"
+            }`}
+            style={current ? { backgroundColor: `rgb(${type.accent.r}, ${type.accent.g}, ${type.accent.b})` } : undefined}
+          >
+            {i18n._(PACK_TYPE_NAME_LABELS[id])}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* The foil now prints its own name, card count and pool slice, so the shelf
    below it only has to answer "can I afford this one". Everything the old
    three-line caption stack under each thumbnail said is on the pack itself. */
 function PackTypeSelector({
   wallet,
   selectedId,
+  keyMode,
+  teamsAvailable,
+  showTeams,
   thumbs,
   locked,
   onSelect,
 }: {
   wallet: PackWallet | null;
   selectedId: PackTypeId;
+  /* Which side of the keymode pack the shelf shows when it is not selected. */
+  keyMode: "4k" | "7k";
+  /* The Team pack is dealt by the server only, so it needs a login. */
+  teamsAvailable: boolean;
+  /* Teams are the owner's preview (canSeeTeams): nobody else sees the pack. */
+  showTeams: boolean;
   thumbs: Partial<Record<PackTypeId, string>>;
   /* A committed slash already bought the selected pack. Keep its type stable
      until PackStage hands it to the reveal. */
@@ -379,9 +444,10 @@ function PackTypeSelector({
     <div>
       {/* wrap: six pack types no longer fit one row on phone widths */}
       <div className="flex flex-wrap items-start justify-center gap-3 sm:gap-5">
-        {PACK_TYPES.map((type) => {
+        {PACK_SHELF.filter((shelfId) => shelfId !== "teams" || showTeams).map((shelfId) => {
+          const type = packTypeById(shelfId === "keys" ? keyMode : shelfId);
           const selected = type.id === selectedId;
-          const affordable = canAffordPack(wallet, type);
+          const affordable = canAffordPack(wallet, type) && (!type.teams || teamsAvailable);
           const accent = `rgb(${type.accent.r}, ${type.accent.g}, ${type.accent.b})`;
           const thumb = thumbs[type.id];
           /* The foil texture keeps the English name (packArt.ts bakes it into
@@ -389,19 +455,19 @@ function PackTypeSelector({
           const typeName = i18n._(PACK_TYPE_NAME_LABELS[type.id]);
           const typeBlurb = i18n._(PACK_TYPE_BLURB_LABELS[type.id]);
           return (
+            <div key={shelfId} className="flex w-[78px] flex-col items-center sm:w-[116px]">
             <button
-              key={type.id}
               type="button"
               onClick={() => {
                 if (!locked && affordable && !selected) onSelect(type.id);
               }}
               disabled={locked || (!affordable && !selected)}
-              className={`flex w-[78px] flex-col items-center sm:w-[116px] ${
+              className={`flex w-full flex-col items-center ${
                 !locked && affordable && !selected ? "cursor-pointer" : ""
               }`}
               aria-pressed={selected}
               aria-label={t`${typeName} pack, ${typeBlurb}`}
-              title={typeBlurb}
+              title={type.teams && !teamsAvailable ? t`Log in with osu! to open this pack` : typeBlurb}
             >
               <div
                 className={`w-full transition-transform duration-150 ${
@@ -449,6 +515,7 @@ function PackTypeSelector({
                 </div>
               )}
             </button>
+            </div>
           );
         })}
       </div>
@@ -481,6 +548,13 @@ function PacksPage() {
   const [phase, setPhase] = useState<PackPhase>("pack");
   const [packId, setPackId] = useState(0);
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
+  /* The side of the keymode pack the shelf shows, kept while another pack
+     is selected so coming back to it lands on the last one opened. */
+  const [keyMode, setKeyMode] = useState<"4k" | "7k">("4k");
+  const selectPackType = (id: PackTypeId) => {
+    if (id === "4k" || id === "7k") setKeyMode(id);
+    setPackTypeId(id);
+  };
   const [cards, setCards] = useState<PackCardState[] | null>(null);
   /* True from the instant the slash commits until PackStage's delayed
      onOpened handoff. A fast server draw can spend the last affordable pack
@@ -688,7 +762,7 @@ function PacksPage() {
       const pending = readPendingPack();
       if (pending) {
         if (isLiveBackendConfigured()) {
-          void warmLivePackPlayers(pending.players.map((player) => player.user.id)).catch(() => {});
+          void warmLivePackPlayers(pending.players.filter((player) => !player.team).map((player) => player.user.id)).catch(() => {});
         }
         preparedPackKeyRef.current = dealKey;
         setCards(buildCardStates(pending.players));
@@ -704,7 +778,7 @@ function PacksPage() {
     const finishDeal = (players: PackPlayer[], poolTotal: number | null, seededScores?: Map<number, OsuScore[]>) => {
       // poolTotal feeds collection progress over the WHOLE pool; a keymode
       // draw reports only its filtered slice, so it must not overwrite it.
-      if (!type.keys) walletApi.notePoolTotal(poolTotal);
+      if (!type.keys && !type.teams) walletApi.notePoolTotal(poolTotal);
       preparedPackKeyRef.current = dealKey;
       dealtPlayersRef.current = players;
       // An Eternal is once per account (the completion reward) or one open
@@ -760,6 +834,8 @@ function PacksPage() {
             return;
           }
         }
+        // The Team pack has no browser-local draw: its tier is the server's.
+        if (type.teams) throw new Error("The Team pack is dealt by the server only.");
         const owned = getDuplicateProtectionOwned(type, currentWallet);
         const draw = await drawPackPlayers(Math.random, {
           topFraction: type.topFraction,
@@ -920,7 +996,9 @@ function PacksPage() {
     setPhase("reveal");
   };
 
-  const canOpen = canAffordPack(wallet, selectedType);
+  /* Team cards are dealt and kept server-side only. */
+  const teamsAvailable = Boolean(auth.viewer) && isLiveBackendConfigured() && canSeeTeams(auth);
+  const canOpen = canAffordPack(wallet, selectedType) && (!selectedType.teams || teamsAvailable);
   /* The game owns the page's middle while it is open, so the collection does
      not sit under it: the point of hosting it here is the ticker and the
      wallet, not a second screen's worth of grid to scroll past. */
@@ -1093,6 +1171,16 @@ function PacksPage() {
                           if (!serverDeals()) dealTriggerRef.current?.();
                         }}
                         packType={selectedType}
+                        controls={
+                          selectedType.keys ? (
+                            <KeyModeToggle
+                              wallet={wallet}
+                              selectedId={packTypeId}
+                              locked={cutCommitted}
+                              onSelect={selectPackType}
+                            />
+                          ) : undefined
+                        }
                       />
                     )}
                     {wallet && (
@@ -1100,9 +1188,12 @@ function PacksPage() {
                         <PackTypeSelector
                           wallet={wallet}
                           selectedId={packTypeId}
+                          keyMode={keyMode}
+                          teamsAvailable={teamsAvailable}
+                          showTeams={canSeeTeams(auth)}
                           thumbs={packThumbs}
                           locked={cutCommitted}
-                          onSelect={setPackTypeId}
+                          onSelect={selectPackType}
                         />
                       </div>
                     )}
@@ -1141,7 +1232,24 @@ function PacksPage() {
                         damage={damage}
                         onRecycleCopies={async (entries) => {
                           await mintPassRef.current;
-                          return walletApi.recycleCopies(entries);
+                          const teamEntries = entries.filter((entry) => entry.cardKey.startsWith("team:"));
+                          const playerEntries = entries.filter((entry) => !entry.cardKey.startsWith("team:"));
+                          let gained = playerEntries.length > 0 ? await walletApi.recycleCopies(playerEntries) : 0;
+                          if (teamEntries.length > 0) {
+                            const result = await recycleServerPackTeamCards({
+                              data: {
+                                entries: teamEntries.map((entry) => ({
+                                  teamId: Number(entry.cardKey.slice("team:".length)),
+                                  copies: entry.copies,
+                                })),
+                              },
+                            }).catch(() => null);
+                            if (result) {
+                              gained += result.gained;
+                              walletApi.applyServerWallet(result.payload, result.rev);
+                            }
+                          }
+                          return gained;
                         }}
                       />
                     ) : cards ? (
@@ -1154,6 +1262,9 @@ function PacksPage() {
                         onCardRevealed={(pull) => {
                           // In the wallet now, so no longer owed by the pending pack.
                           consumePendingPackCard(pull.userId);
+                          /* A team card went into the team collection at the
+                             draw; the player wallet never holds one. */
+                          if (pull.cardKey?.startsWith("team:")) return serverIsNewRef.current?.get(pull.cardKey) ?? false;
                           const localIsNew = walletApi.recordPull(pull);
                           // The synced collection lives server-side, so the
                           // draw's own answer wins; the local wallet only
@@ -1170,8 +1281,19 @@ function PacksPage() {
                              Fire-and-forget - a lost call costs a stat bar
                              until the collection's repair path re-mints it,
                              never a card. */
-                          if (auth.viewer && pulls.length > 0) {
-                            const mints = pulls
+                          /* Team cards are already complete on the server:
+                             no mint pass, and no line in the pull feed. */
+                          const playerPulls = pulls.filter((pull) => !pull.player.team);
+                          // A team card's serial came with the draw, so its
+                          // "Nth to pull this" line is there from the start.
+                          const teamMints = pulls.flatMap((pull) =>
+                            pull.player.team && pull.player.teamMint && pull.player.cardKey
+                              ? [[pull.player.cardKey, pull.player.teamMint] as const]
+                              : [],
+                          );
+                          if (teamMints.length > 0) setSerials(new Map(teamMints));
+                          if (auth.viewer && playerPulls.length > 0) {
+                            const mints = playerPulls
                               .filter((pull) => pull.skills)
                               .map((pull) => ({
                                 cardKey: pull.player.cardKey ?? packCardKey(pull.player.user.id, pull.tier),
@@ -1188,11 +1310,11 @@ function PacksPage() {
                           /* Log the opened pack into the community pull feed.
                              Fire-and-forget: the reveal is already done and
                              the wallet is the source of truth either way. */
-                          if (auth.viewer && pulls.length > 0) {
+                          if (auth.viewer && playerPulls.length > 0) {
                             void recordServerPackPulls({
                               data: {
                                 packType: selectedType.id,
-                                cards: pulls.map((pull) => ({
+                                cards: playerPulls.map((pull) => ({
                                   userId: pull.player.user.id,
                                   ...(pull.player.cardKey ? { cardKey: pull.player.cardKey } : {}),
                                   username: pull.player.user.username,
@@ -1212,16 +1334,17 @@ function PacksPage() {
                                 // summary can print them without asking again.
                                 if (result.mints.length > 0) {
                                   setSerials(
-                                    new Map(
-                                      result.mints.map((mint) => [
+                                    new Map([
+                                      ...teamMints,
+                                      ...result.mints.map((mint) => [
                                         mint.cardKey,
                                         {
                                           serial: mint.serial,
                                           mintedTotal: mint.mintedTotal,
                                           isFirstGlobal: mint.isFirstGlobal,
                                         },
-                                      ]),
-                                    ),
+                                      ] as const),
+                                    ]),
                                   );
                                 }
                               })
@@ -1253,7 +1376,11 @@ function PacksPage() {
                   </div>
                   {(["grid", "album", "binders"] as const).map((mode) => {
                     const active =
-                      mode === "album" ? albumOpen : mode === "binders" ? bindersOpen : !albumOpen && !bindersOpen;
+                      mode === "album"
+                        ? albumOpen
+                        : mode === "binders"
+                          ? bindersOpen
+                          : !albumOpen && !bindersOpen;
                     return (
                       <button
                         key={mode}

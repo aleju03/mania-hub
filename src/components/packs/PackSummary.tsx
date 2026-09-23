@@ -94,6 +94,7 @@ function toSpotlightCard(card: RevealedCard): CollectedCard {
     userId: card.player.user.id,
     ...(card.player.milestone ? { recyclable: false } : {}),
     ...(card.player.cardKey ? { cardKey: card.player.cardKey } : {}),
+    ...(card.player.team ? { team: card.player.team } : {}),
     username: card.player.user.username,
     avatarUrl: card.player.user.avatar_url,
     countryCode: card.player.user.country_code,
@@ -739,15 +740,26 @@ export function PackSummary({
                 className={`mt-2 text-center transition-opacity duration-300 ${isRecycled ? "opacity-40" : ""}`}
                 style={turnDelayStyle}
               >
-                <Link
-                  to="/player/$username"
-                  params={{ username: card.player.user.username }}
-                  className="flex items-center justify-center gap-1.5 hover:underline underline-offset-4 decoration-osu-f1/60"
-                  aria-label={t`Open ${card.player.user.username}'s profile`}
-                >
-                  <CountryFlag code={card.player.user.country_code} size="xs" decorative />
-                  <span className="truncate text-[13px] font-bold text-white">{card.player.user.username}</span>
-                </Link>
+                {card.player.team ? (
+                  <Link
+                    to="/team/$teamId"
+                    params={{ teamId: String(card.player.team.teamId) }}
+                    className="flex items-center justify-center gap-1.5 hover:underline underline-offset-4 decoration-osu-f1/60"
+                    aria-label={t`Open ${card.player.team.name}'s team page`}
+                  >
+                    <span className="truncate text-[13px] font-bold text-white">{card.player.team.name}</span>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/player/$username"
+                    params={{ username: card.player.user.username }}
+                    className="flex items-center justify-center gap-1.5 hover:underline underline-offset-4 decoration-osu-f1/60"
+                    aria-label={t`Open ${card.player.user.username}'s profile`}
+                  >
+                    <CountryFlag code={card.player.user.country_code} size="xs" decorative />
+                    <span className="truncate text-[13px] font-bold text-white">{card.player.user.username}</span>
+                  </Link>
+                )}
                 <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px]">
                   {card.tierLabel && (
                     <span className="font-bold uppercase tracking-wide" style={{ color: tierColor }}>
@@ -910,15 +922,27 @@ export function PackSummary({
                 <span className="truncate text-[12px] font-bold text-white">{card.player.user.username}</span>
               </div>
               <div className="mx-2 my-1 h-px bg-osu-b3/40" />
-              <Link
-                to="/player/$username"
-                params={{ username: card.player.user.username }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
-                role="menuitem"
-                onClick={() => setMenu(null)}
-              >
-                <Trans>Open profile</Trans>
-              </Link>
+              {card.player.team ? (
+                <Link
+                  to="/team/$teamId"
+                  params={{ teamId: String(card.player.team.teamId) }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
+                  role="menuitem"
+                  onClick={() => setMenu(null)}
+                >
+                  <Trans>Open team page</Trans>
+                </Link>
+              ) : (
+                <Link
+                  to="/player/$username"
+                  params={{ username: card.player.user.username }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
+                  role="menuitem"
+                  onClick={() => setMenu(null)}
+                >
+                  <Trans>Open profile</Trans>
+                </Link>
+              )}
               <button
                 type="button"
                 role="menuitem"

@@ -312,6 +312,7 @@ interface AppState {
   noDans: boolean;
   packsSkipAnimations: boolean;
   packsRevealAll: boolean;
+  recentPlayRatings: boolean;
   hiddenUsers: Record<number, HiddenUser>;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
@@ -337,6 +338,7 @@ interface AppState {
   setNoDans: (hidden: boolean) => void;
   setPacksSkipAnimations: (skip: boolean) => void;
   setPacksRevealAll: (revealAll: boolean) => void;
+  setRecentPlayRatings: (show: boolean) => void;
   addHiddenUser: (user: HiddenUser) => void;
   removeHiddenUser: (userId: number) => void;
   resetThemeHue: () => void;
@@ -595,6 +597,7 @@ export const useAppStore = create<AppState>()(
       noDans: false,
       packsSkipAnimations: false,
       packsRevealAll: false,
+      recentPlayRatings: false,
       hiddenUsers: initialClientHiddenUsers,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
@@ -634,6 +637,7 @@ export const useAppStore = create<AppState>()(
       setNoDans: (hidden) => set({ noDans: hidden }),
       setPacksSkipAnimations: (skip) => set({ packsSkipAnimations: skip }),
       setPacksRevealAll: (revealAll) => set({ packsRevealAll: revealAll }),
+      setRecentPlayRatings: (show) => set({ recentPlayRatings: show }),
       addHiddenUser: (user) =>
         set((state) => {
           // Re-adding an existing entry refreshes its stored username/avatar
@@ -1004,6 +1008,9 @@ export const useAppStore = create<AppState>()(
           packsRevealAll: typeof nextState.packsRevealAll === "boolean"
             ? nextState.packsRevealAll
             : currentState.packsRevealAll,
+          recentPlayRatings: typeof nextState.recentPlayRatings === "boolean"
+            ? nextState.recentPlayRatings
+            : currentState.recentPlayRatings,
           // Dedicated key wins. The legacy blob fallback only matters for
           // returning users whose accents still live in `mania-hub-cache-v5`
           // and haven't been re-fetched since this migration landed; those
@@ -1064,6 +1071,7 @@ export const useAppStore = create<AppState>()(
         noDans: state.noDans,
         packsSkipAnimations: state.packsSkipAnimations,
         packsRevealAll: state.packsRevealAll,
+        recentPlayRatings: state.recentPlayRatings,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
         // drop a theme change on the floor.
@@ -1186,6 +1194,12 @@ export function usePacksRevealAll(): boolean {
   const revealAll = useAppStore((state) => state.packsRevealAll);
   const hydrated = useHasHydrated();
   return hydrated && revealAll;
+}
+
+export function useRecentPlayRatings(): boolean {
+  const show = useAppStore((state) => state.recentPlayRatings);
+  const hydrated = useHasHydrated();
+  return hydrated && show;
 }
 
 // Read the currently-selected country with no SSR/hydration flash.

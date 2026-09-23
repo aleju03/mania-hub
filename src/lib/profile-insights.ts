@@ -259,7 +259,7 @@ export function buildPpCumulativeDistribution(scores: OsuScore[]): PpCumulativeD
   return rows;
 }
 
-function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
+export function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
   const display = getScoreDisplayValues(score);
 
   return {

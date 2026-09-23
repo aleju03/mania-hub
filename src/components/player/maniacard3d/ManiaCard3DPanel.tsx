@@ -108,6 +108,7 @@ export function ManiaCard3DPanel({
   loading,
   isOwnProfile = false,
   tierOverride,
+  team,
 }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -121,9 +122,9 @@ export function ManiaCard3DPanel({
   const reducedMotion = useReducedMotion();
   const data = useMemo(
     () => precomputedSkills
-      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride })
+      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride, team })
       : buildManiaCardRenderData({ user, scores, tierOverride }),
-    [precomputedSkills, scores, tierOverride, user],
+    [precomputedSkills, scores, team, tierOverride, user],
   );
   const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
   const rendererReady = readySignature === dataSignature;
@@ -284,6 +285,7 @@ export function ManiaCard3DPanel({
             cardRating={data.skills.cardPower}
             isOwnProfile={isOwnProfile}
             onClose={() => setRatingModalOpen(false)}
+            team={team != null}
           />
         )}
       </AnimatePresence>
@@ -300,7 +302,7 @@ function TierProgress({
   nextTier: NextManiaCardTier | null;
   cardRating: number;
   tierLabel: string;
-  onExplain: () => void;
+  onExplain?: () => void;
 }) {
   const { t } = useLingui();
   if (!nextTier) return (
@@ -308,7 +310,9 @@ function TierProgress({
       <span className="text-2xl font-bold tabular-nums text-white">{cardRating}</span>
       <div className="mt-2 flex items-center gap-2 text-[11px] text-osu-f1">
         <span>{tierLabel}</span>
-        <button type="button" onClick={onExplain} aria-label={t`How card rating is calculated`} className="cursor-pointer text-osu-f1/70 transition-colors hover:text-osu-f1">(?)</button>
+        {onExplain ? (
+          <button type="button" onClick={onExplain} aria-label={t`How card rating is calculated`} className="cursor-pointer text-osu-f1/70 transition-colors hover:text-osu-f1">(?)</button>
+        ) : null}
       </div>
     </div>
   );
@@ -339,14 +343,16 @@ function TierProgress({
         <span className="font-bold tabular-nums" style={{ color: toColor }}>+{nextTier.remaining}</span>
         <span className="text-osu-f1">{t`to`}</span>
         <span className={`font-semibold ${TIER_TEXT_COLOR[nextTier.tier] ?? "text-osu-l2"}`}>{nextTier.label}</span>
-        <button
-          type="button"
-          onClick={onExplain}
-          className="ml-0.5 text-osu-f1/70 hover:text-osu-f1 cursor-pointer transition-colors"
-          aria-label={t`How card rating is calculated`}
-        >
-          (?)
-        </button>
+        {onExplain ? (
+          <button
+            type="button"
+            onClick={onExplain}
+            className="ml-0.5 text-osu-f1/70 hover:text-osu-f1 cursor-pointer transition-colors"
+            aria-label={t`How card rating is calculated`}
+          >
+            (?)
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ describe("pack thumbnail storage keys", () => {
       "v2-w240-u4242-0123456789abcdef",
       "v2-w600-u17-fedcba9876543210",
       "v3-w240-u999999-00000000000000ff",
+      "v2-w240-t4242-0123456789abcdef",
     ]) {
       expect(await browserStorageKey(cacheKey)).toBe(getPackCardThumbnailStorageKey(cacheKey));
     }
@@ -34,6 +35,11 @@ describe("pack thumbnail storage keys", () => {
     expect(getPackCardThumbnailStorageKey("v2-w240-u4242-0123456789abcdef")).toMatch(
       /^maniacards\/v2\/4242\/[0-9a-f]{40}\.webp$/,
     );
+  });
+
+  it("keeps team assets separate from a player's assets with the same numeric id", () => {
+    expect(getPackCardThumbnailStorageKey("v2-w240-t4242-0123456789abcdef")).toMatch(/^maniacards\/v2\/teams\/4242\/[0-9a-f]{40}\.webp$/);
+    expect(getPackCardThumbnailStorageKey("v2-w240-t4242-0123456789abcdef")).not.toBe(getPackCardThumbnailStorageKey("v2-w240-u4242-0123456789abcdef"));
   });
 
   it("rejects malformed cache keys instead of minting an address for them", () => {

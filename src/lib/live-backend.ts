@@ -1931,6 +1931,55 @@ export async function fetchLivePlayerUnratedPlaysDirect(
   });
 }
 
+/** A recent play's own MSD (null unless the skill pool rated it) and its chart's dan at the played rate. */
+export interface LiveRecentPlayRating {
+  msd: number | null;
+  dan: { rawDan: number; side: "rc" | "ln"; label: string | null } | null;
+  missing?: { msd?: LiveRecentRatingMissingReason; dan?: LiveRecentRatingMissingReason };
+  /** A missing value backed by a real analysis job. */
+  pending?: true;
+  jobs?: Array<{ id: number; runAfter: string }>;
+}
+
+export type LiveRecentRatingMissingReason = "pending" | "not_retained" | "below_floor" | "excluded" | "not_analyzed" | "unsupported" | "failed_play" | "chart_changed";
+
+export interface LiveRecentPlayRatingRequest {
+  scoreId: number;
+  beatmapId: number;
+  keyCount: number;
+  rate: number;
+  mods: string[];
+  playedAt?: number;
+  passed?: boolean;
+}
+
+/** `items` keyed by the requested score id, `imports` by Companella import id; at most 100 of each per call. */
+export async function fetchLiveRecentPlayRatingsDirect(
+  userId: number,
+  plays: LiveRecentPlayRatingRequest[],
+  importIds: string[],
+  options: { signal?: AbortSignal; fresh?: boolean } = {},
+): Promise<{ items: Record<string, LiveRecentPlayRating>; imports: Record<string, LiveRecentPlayRating> }> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (plays.length === 0 && importIds.length === 0) return { items: {}, imports: {} };
+  const query = new URLSearchParams();
+  if (plays.length > 0) {
+    query.set("plays", plays.slice(0, 100)
+      .map((play) => [play.scoreId, play.beatmapId, play.keyCount, Math.round(play.rate * 100), play.mods.join("+"), play.playedAt ?? 0, play.passed === false ? 0 : 1].join("."))
+      .join(","));
+  }
+  if (importIds.length > 0) query.set("imports", importIds.slice(0, 100).join(","));
+  const page = await fetchLiveJson<{ items?: Record<string, LiveRecentPlayRating>; imports?: Record<string, LiveRecentPlayRating> }>(
+    `/api/profiles/${userId}/recent-ratings?${query.toString()}`,
+    {
+      ...(options.signal ? { signal: options.signal } : {}),
+      // A re-ask for a play still being rated must not get the 60s browser copy.
+      ...(options.fresh ? { cache: "no-cache" as const } : {}),
+    },
+  );
+  return { items: page.items ?? {}, imports: page.imports ?? {} };
+}
+
 export async function fetchLivePlayerDanEvidenceDirect(
   userId: number,
   keyCount: number,
@@ -1994,6 +2043,222 @@ export async function fetchLivePlayerActivityDayDirect(
     date,
   });
   return fetchLiveJson(`/api/profiles/${userId}/activity-day?${query.toString()}`);
+}
+
+// ---------------------------------------------------------------------------
+// Teams (live-backend features/teams.ts): an osu! team as a profile, every
+// number built from its members.
+// ---------------------------------------------------------------------------
+
+export interface LiveTeamMember {
+  id: number;
+  username: string;
+  avatar_url: string;
+  country_code: string;
+  is_leader: boolean;
+  /* False while the backend has no stored profile for them yet. */
+  counted: boolean;
+  pp: number | null;
+  global_rank: number | null;
+  accuracy: number | null;
+  play_count: number | null;
+}
+
+export interface LiveTeamProfileSnapshot {
+  team: {
+    id: number;
+    name: string;
+    short_name: string;
+    flag_url: string | null;
+    cover_url: string | null;
+    description: string | null;
+    created_at: string | null;
+    is_open: boolean;
+    leader_id: number | null;
+  };
+  statistics: {
+    performance: number | null;
+    global_rank: number | null;
+    pp_4k: number | null;
+    pp_7k: number | null;
+    accuracy: number | null;
+    play_count: number | null;
+    play_time: number | null;
+    ranked_score: number | null;
+    grade_counts: { ss: number; ssh: number; s: number; sh: number; a: number };
+    peak: { rank: number; ranked_at: string } | null;
+    player_peak: { rank: number; updated_at: string | null; user_id: number } | null;
+  };
+  keySplit?: Array<{ keyCount: number; count: number }>;
+  members: LiveTeamMember[];
+  memberCount: number;
+  countedMembers: number;
+  bestScores: OsuScore[];
+  newestTopPlay: OsuScore | null;
+  oldestTopPlay: OsuScore | null;
+  fetchedAt: string;
+  isStale: boolean;
+}
+
+export interface LiveTeamSkillMember {
+  userId: number;
+  modes: Array<{
+    keyCount: number;
+    overall: number | null;
+    rc: { label: string; rawDan: number } | null;
+    ln: { label: string; rawDan: number } | null;
+  }>;
+}
+
+export interface LiveTeamSkills {
+  teamId: number;
+  memberCount: number;
+  members: LiveTeamSkillMember[];
+}
+
+export interface LiveTeamActivityDay {
+  date: string;
+  scoreCount: number;
+  passedCount: number;
+  sessionCount: number;
+  mapCount: number;
+  skills: LivePlayerActivitySkillReadout | null;
+  members: Array<{ userId: number; scoreCount: number }>;
+}
+
+export interface LiveTeamActivitySnapshot {
+  teamId: number;
+  year: number;
+  availableYears: number[];
+  totalScores: number;
+  activeDays: number;
+  totalSessions: number;
+  typicalSession: number;
+  currentStreak: number;
+  activeMembers: number;
+  memberCount: number;
+  generatedAt: string;
+  days: LiveTeamActivityDay[];
+}
+
+export interface LiveTeamActivityDayDetail {
+  teamId: number;
+  date: string;
+  members: Array<{ userId: number; day: LivePlayerActivityDay }>;
+}
+
+/* The team's maniacard: its strongest members' cards averaged (features/teams.ts). */
+export interface LiveTeamCard {
+  teamId: number;
+  cardPower: number;
+  tier: string;
+  fingerControl: number;
+  speed: number;
+  accuracy: number;
+  starAvg: number;
+  mainKeyMode: number;
+  coreSize: number;
+}
+
+function teamPath(teamId: number, section: string): string {
+  if (!Number.isInteger(teamId) || teamId <= 0) throw new Error("Invalid team ID.");
+  return `/api/teams/${teamId}/${section}`;
+}
+
+/* SSR read of a team someone has opened before. Never reaches osu!: an
+   unknown team renders client-side, where the snapshot call fetches it. */
+export const fetchLiveTeamStoredSnapshot = createServerFn({ method: "GET" })
+  .validator((data: { teamId?: unknown }) => {
+    const teamId = Number(data?.teamId);
+    if (!Number.isInteger(teamId) || teamId <= 0) throw new Error("Invalid team ID.");
+    return { teamId };
+  })
+  .handler(async ({ data }): Promise<LiveTeamProfileSnapshot | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/teams/${data.teamId}/snapshot?stored=1`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Server ${response.status} for stored team snapshot`);
+    const snapshot = await response.json() as LiveTeamProfileSnapshot;
+    // The page fetches the full list itself; the SSR payload only needs the
+    // header and the first rows.
+    return { ...snapshot, bestScores: snapshot.bestScores.slice(0, 5) };
+  });
+
+/* Null when osu! has no such team. */
+export async function fetchLiveTeamSnapshotDirect(teamId: number): Promise<LiveTeamProfileSnapshot | null> {
+  try {
+    return await fetchLiveJson<LiveTeamProfileSnapshot>(teamPath(teamId, "snapshot"));
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export type LiveTeamTopPlayDates = Pick<LiveTeamProfileSnapshot, "newestTopPlay" | "oldestTopPlay"> & { teamId: number };
+
+export function fetchLiveTeamTopPlayDatesDirect(teamId: number, signal?: AbortSignal): Promise<LiveTeamTopPlayDates> {
+  return fetchLiveJson(teamPath(teamId, "top-play-dates"), { signal });
+}
+
+export async function fetchLiveTeamRecentDirect(teamId: number): Promise<{ teamId: number; scores: OsuScore[] }> {
+  return fetchLiveJson(teamPath(teamId, "recent"));
+}
+
+export async function fetchLiveTeamCardDirect(teamId: number): Promise<{ card: LiveTeamCard | null }> {
+  return fetchLiveJson(teamPath(teamId, "card"));
+}
+
+export async function fetchLiveTeamSkillsDirect(teamId: number): Promise<LiveTeamSkills> {
+  return fetchLiveJson(teamPath(teamId, "skills"));
+}
+
+export async function fetchLiveTeamActivityDirect(teamId: number, year: number): Promise<LiveTeamActivitySnapshot> {
+  return fetchLiveJson(`${teamPath(teamId, "activity")}?year=${Math.floor(year)}`);
+}
+
+export async function fetchLiveTeamActivityDayDirect(teamId: number, date: string): Promise<LiveTeamActivityDayDetail> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid activity date.");
+  return fetchLiveJson(`${teamPath(teamId, "activity-day")}?date=${date}`);
+}
+
+export type LiveTeamRankingsSort = "performance" | "members" | "plays" | "accuracy" | "combined" | "ss" | "s" | "a";
+
+/* Every number is over the team's tracked members (features/teams.ts). */
+export interface LiveTeamRankingEntry {
+  rank: number;
+  /** Place on the sort column; null on the performance sort. */
+  placement: number | null;
+  team: { id: number; name: string; short_name: string; flag_url: string | null };
+  tracked_members: number;
+  performance: number;
+  play_count: number;
+  accuracy: number | null;
+  pp_4k: number | null;
+  pp_7k: number | null;
+  grade_counts: { ss: number; s: number; a: number };
+}
+
+/* The team board, rebuilt on visits at most hourly from stored players. */
+export interface LiveTeamRankingsPage {
+  ranking: LiveTeamRankingEntry[];
+  total: number;
+  updatedAt: string | null;
+}
+
+export async function fetchLiveTeamRankings(params: {
+  page: number;
+  pageSize?: number;
+  query?: string;
+  sort?: LiveTeamRankingsSort;
+  dir?: "asc" | "desc";
+}): Promise<LiveTeamRankingsPage> {
+  const search = new URLSearchParams({ page: String(params.page) });
+  if (params.pageSize) search.set("pageSize", String(params.pageSize));
+  if (params.query?.trim()) search.set("q", params.query.trim());
+  if (params.sort && params.sort !== "performance") search.set("sort", params.sort);
+  if (params.dir === "asc") search.set("dir", "asc");
+  return fetchLiveJson(`/api/teams/rankings?${search.toString()}`);
 }
 
 export interface LiveTrackerSnapshotFilters {

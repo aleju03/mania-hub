@@ -151,6 +151,7 @@ const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/tracker": "the tracker",
   "/top-plays": "top plays",
   "/snipes": "snipes",
+  "/teams": "team rankings",
   "/packs": "card packs",
   "/settings": "settings",
   "/bbcode": "the BBCode editor",

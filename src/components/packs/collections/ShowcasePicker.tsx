@@ -7,6 +7,8 @@ import { formatNumber } from "#/lib/format";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { packCardKeyOf } from "#/lib/pack-collection";
 import { fetchLivePackCollectorCards, type LivePackCommunityCollectionPage } from "#/lib/live-backend";
+import { fetchServerPackTeamCollection, teamCollectedCard } from "#/lib/pack-teams";
+import { teamImageProxyUrl } from "#/lib/team-image";
 import { PACK_SHOWCASE_MAX_CARDS } from "#/lib/pack-showcase";
 import { useBodyScrollLock } from "#/lib/use-body-scroll-lock";
 import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
@@ -24,12 +26,16 @@ import { useDebounced } from "./useDebounced";
 
 const PAGE_SIZE = 18;
 
+const isTeamKey = (key: string) => key.startsWith("team:");
+
 export function ShowcasePicker({
   userId,
   initialKeys,
   maxCards = PACK_SHOWCASE_MAX_CARDS,
   allowReorder = false,
   initialCards = [],
+  includeTeams = false,
+  oneKind = false,
   title,
   saveLabel,
   onCancel,
@@ -42,6 +48,12 @@ export function ShowcasePicker({
   maxCards?: number;
   allowReorder?: boolean;
   initialCards?: LivePackCommunityCollectionPage["cards"];
+  /* The showcase also takes team cards, listed above the players with
+     independent totals and the same page/search controls. Sets hold players only. */
+  includeTeams?: boolean;
+  /* Players or teams, not both: a set holds one kind. The first card picked
+     decides, and the other kind greys out until it is unpicked. */
+  oneKind?: boolean;
   title?: string;
   saveLabel?: string;
   onCancel: () => void;
@@ -58,8 +70,10 @@ export function ShowcasePicker({
   const [showArrangement, setShowArrangement] = useState(initialKeys.length > 0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [saveError, setSaveError] = useState(false);
-  const seenCards = useRef(new Map(initialCards.map((card) => [card.cardKey ?? String(card.userId), card])));
-  for (const card of result?.cards ?? []) seenCards.current.set(card.cardKey ?? String(card.userId), card);
+  const [teamTotal, setTeamTotal] = useState(0);
+  const [teamCards, setTeamCards] = useState<CollectedCard[]>([]);
+  const seenCards = useRef(new Map<string, CollectedCard>(initialCards.map((card) => [card.cardKey ?? String(card.userId), card as CollectedCard])));
+  for (const card of [...teamCards, ...(result?.cards ?? []) as CollectedCard[]]) seenCards.current.set(card.cardKey ?? String(card.userId), card);
   const movePicked = (index: number, direction: number) => {
     setPicked((current) => {
       const next = [...current];
@@ -119,11 +133,32 @@ export function ShowcasePicker({
     };
   }, [userId, page, debounced]);
 
+  useEffect(() => {
+    if (!includeTeams) return;
+    let cancelled = false;
+    fetchServerPackTeamCollection({ data: { page: page + 1, query: debounced } })
+      .then((collection) => {
+        if (!cancelled && collection) {
+          setTeamCards(collection.cards.map(teamCollectedCard));
+          setTeamTotal(collection.totalOwned);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [includeTeams, page, debounced]);
+
+  const fitsKind = useCallback(
+    (current: string[], cardKey: string) => !oneKind || current.length === 0 || isTeamKey(current[0]) === isTeamKey(cardKey),
+    [oneKind],
+  );
+
   const toggle = (cardKey: string) => {
     if (saving) return;
     setPicked((current) => {
       if (current.includes(cardKey)) return current.filter((key) => key !== cardKey);
-      if (current.length >= maxCards) return current;
+      if (current.length >= maxCards || !fitsKind(current, cardKey)) return current;
       return [...current, cardKey];
     });
   };
@@ -133,14 +168,16 @@ export function ShowcasePicker({
     setPicked((current) => {
       if (on === current.includes(cardKey)) return current;
       if (!on) return current.filter((key) => key !== cardKey);
-      return current.length < maxCards ? [...current, cardKey] : current;
+      return current.length < maxCards && fitsKind(current, cardKey) ? [...current, cardKey] : current;
     });
-  }, [maxCards, saving]);
+  }, [maxCards, saving, fitsKind]);
+  const lockedToTeams = oneKind && picked.length > 0 ? isTeamKey(picked[0]) : null;
 
   const total = result?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE), includeTeams ? Math.ceil(teamTotal / 50) : 1);
   const currentPage = Math.min(page, totalPages - 1);
   const full = picked.length >= maxCards;
+  const shownTeams = includeTeams ? teamCards : [];
 
   if (typeof document === "undefined") return null;
 
@@ -203,9 +240,10 @@ export function ShowcasePicker({
                 {picked.map((key, index) => {
                   const card = seenCards.current.get(key);
                   const name = card?.username ?? key;
+                  const face = card?.team ? teamImageProxyUrl(card.team.flagUrl) : card?.avatarUrl;
                   return <li key={key} className="w-[94px] shrink-0 rounded-lg bg-white/5 p-2">
                     <div className="flex items-center gap-1.5"><span className="text-[10px] text-osu-f1">{index + 1}</span>
-                      {card && <img src={card.avatarUrl} alt="" className="h-8 w-8 rounded-lg object-cover" />}
+                      {face && <img src={face} alt="" className="h-8 w-8 rounded-lg object-cover" />}
                     </div>
                     <div className="mt-1 truncate text-[10px] text-osu-l2">{name}</div>
                     <div className="mt-1 flex justify-between">
@@ -217,8 +255,24 @@ export function ShowcasePicker({
               </ol>
             </div>
           )}
+          {shownTeams.length > 0 && (
+            <div className="mb-5">
+              <p className="mb-2 text-[11px] text-osu-f1">{t`Teams`}</p>
+              <PickerGrid
+                cards={shownTeams}
+                loading={false}
+                picked={picked}
+                full={full}
+                saving={saving}
+                onToggle={toggle}
+                onSelect={select}
+                onDragChange={setDragging}
+                lockedToTeams={lockedToTeams}
+              />
+            </div>
+          )}
           <PickerGrid
-            page={result}
+            cards={(result?.cards ?? null) as CollectedCard[] | null}
             loading={loading}
             picked={picked}
             full={full}
@@ -226,6 +280,7 @@ export function ShowcasePicker({
             onToggle={toggle}
             onSelect={select}
             onDragChange={setDragging}
+            lockedToTeams={lockedToTeams}
           />
         </div>
 
@@ -284,7 +339,7 @@ export function ShowcasePicker({
 }
 
 function PickerGrid({
-  page,
+  cards: pageCards,
   loading,
   picked,
   full,
@@ -292,8 +347,9 @@ function PickerGrid({
   onToggle,
   onSelect,
   onDragChange,
+  lockedToTeams = null,
 }: {
-  page: LivePackCommunityCollectionPage | null;
+  cards: CollectedCard[] | null;
   loading: boolean;
   picked: string[];
   full: boolean;
@@ -301,9 +357,12 @@ function PickerGrid({
   onToggle: (cardKey: string) => void;
   onSelect: (cardKey: string, on: boolean) => void;
   onDragChange: (dragging: boolean) => void;
+  /* Set when the picker takes one kind and a card is already picked: true
+     keeps it to teams, false to players. */
+  lockedToTeams?: boolean | null;
 }) {
   const { t } = useLingui();
-  const cards = (page?.cards ?? []) as CollectedCard[];
+  const cards = pageCards ?? [];
   const { onThumbnailError } = useCardThumbnails(cards);
   const gridRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; on: boolean } | null>(null);
@@ -342,7 +401,7 @@ function PickerGrid({
     };
   }, [onSelect, onDragChange]);
 
-  if (!page && loading) {
+  if (!pageCards && loading) {
     return (
       <div className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-5 md:grid-cols-6">
         {Array.from({ length: PAGE_SIZE }, (_, index) => (
@@ -362,7 +421,7 @@ function PickerGrid({
       {cards.map((card) => {
         const cardKey = packCardKeyOf(card);
         const chosen = picked.includes(cardKey);
-        const blocked = saving || (full && !chosen);
+        const blocked = saving || (!chosen && (full || (lockedToTeams !== null && isTeamKey(cardKey) !== lockedToTeams)));
         return (
           <button
             key={cardKey}

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-const THUMBNAIL_KEY_PATTERN = /^v\d+-w\d+-u\d+-[a-f0-9]{16}$/;
+import { PACK_THUMBNAIL_KEY_PATTERN as THUMBNAIL_KEY_PATTERN } from "./pack-thumbnail-shared";
 const MAX_THUMBNAIL_BYTES = 350_000;
 const MAX_THUMBNAIL_BATCH = 60;
 

@@ -14,6 +14,23 @@ export interface ManiaCardPanelProps {
   isOwnProfile?: boolean;
   /** Forces a tier instead of deriving it from cardPower. Preview-only. */
   tierOverride?: ManiaCardTier;
+  /** A team card: the banner face, and a rating explainer with only the ladder. */
+  team?: ManiaCardTeamInput;
+}
+
+export interface ManiaCardTeamInput {
+  /* The team flag and header, already CORS-safe (/api/team-image). */
+  flagUrl: string | null;
+  coverUrl: string | null;
+  tag: string;
+}
+
+/* What the banner face draws for a team beyond the player card's fields. */
+export interface ManiaCardTeamFace {
+  tag: string;
+  /* The team header for the banner; the flag (avatarUrl) then sits over the
+     banner's edge. Null draws the flag as the banner. */
+  coverUrl: string | null;
 }
 
 export interface ManiaCardStat {
@@ -50,6 +67,8 @@ export interface ManiaCardReadyData {
      triangle flecks, or the cosmic tiers' starfield - with one image. Only a
      holding granted from /admin/collections has one. */
   motif: CardMotif | null;
+  /* Set on a team card, which draws the banner face instead of the player's. */
+  team?: ManiaCardTeamFace | null;
 }
 
 export interface ManiaCardEmptyData {

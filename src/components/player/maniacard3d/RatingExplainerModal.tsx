@@ -47,12 +47,15 @@ export function RatingExplainerModal({
   cardRating,
   isOwnProfile,
   onClose,
+  team = false,
 }: {
   userId: number;
   nextTier: NextManiaCardTier | null;
   cardRating: number;
   isOwnProfile: boolean;
   onClose: () => void;
+  /* A team card: the ladder only, since no history is kept for teams. */
+  team?: boolean;
 }) {
   const { t } = useLingui();
   const titleId = useId();
@@ -138,7 +141,7 @@ export function RatingExplainerModal({
             </span> : null}
           </div>
         </header>
-        <div role="tablist" aria-label={t`Maniacard details`} className="relative z-10 flex shrink-0 gap-5 border-b border-osu-b3/40 px-5 sm:px-6">
+        {team ? <div className="relative z-10 shrink-0 border-b border-osu-b3/40" /> : <div role="tablist" aria-label={t`Maniacard details`} className="relative z-10 flex shrink-0 gap-5 border-b border-osu-b3/40 px-5 sm:px-6">
           {(["rank", "progression"] as const).map((value) => (
             <button key={value} type="button" role="tab" id={`${titleId}-${value}-tab`} aria-selected={tab === value} aria-controls={`${titleId}-${value}`} tabIndex={tab === value ? 0 : -1}
               onClick={() => { setTab(value); if (value === "progression") setHistoryOpened(true); }}
@@ -153,7 +156,7 @@ export function RatingExplainerModal({
               className={`-mb-px cursor-pointer border-b-2 py-3 text-[13px] font-semibold transition-colors focus-visible:outline-osu-pink-light ${tab === value ? "border-osu-pink-light text-osu-l1" : "border-transparent text-osu-f1 hover:text-white"}`}
             >{value === "rank" ? t`Card rank` : t`Progression`}</button>
           ))}
-        </div>
+        </div>}
         <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 [scrollbar-gutter:stable]">
           <div role="tabpanel" id={`${titleId}-rank`} aria-labelledby={`${titleId}-rank-tab`} hidden={tab !== "rank"}>
             <div className="relative">
@@ -225,7 +228,9 @@ export function RatingExplainerModal({
             </div>
 
             <p className="mt-4 text-[11px] leading-snug text-osu-f1/55">
-              {t`Rank is set by ${isOwnProfile ? t`your` : t`the player's`} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.`}
+              {team
+                ? t`Rank is set by the cards of the team's strongest members.`
+                : t`Rank is set by ${isOwnProfile ? t`your` : t`the player's`} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.`}
             </p>
           </div>
           <div role="tabpanel" id={`${titleId}-progression`} aria-labelledby={`${titleId}-progression-tab`} hidden={tab !== "progression"}>

@@ -1,6 +1,6 @@
 import { CanvasTexture, ClampToEdgeWrapping, LinearFilter, SRGBColorSpace, Texture } from "three";
 import { CARD_CORNER_RADIUS, CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./layout";
-import { buildFaceLayout } from "./textureLayout";
+import { buildFaceLayout, TEAM_FLAG_RADIUS, type Rect } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 import { cardMotifImageSrc, type CardMotif } from "#/lib/card-motif";
@@ -140,15 +140,16 @@ export async function createCardTextures(
   };
   const layout = buildFaceLayout(data, measure);
   const [avatar, laurel, motif] = await Promise.all([
-    loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null),
+    data.avatarUrl ? loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null) : Promise.resolve(null),
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
     // A motif that will not load is simply not drawn: the card falls back to
     // the flecks or starfield its tier already had, which is a card that looks
     // ordinary rather than one that looks broken.
     data.motif ? loadImage(cardMotifImageSrc(data.motif)).catch(() => null) : Promise.resolve(null),
   ]);
+  const teamCover = data.team?.coverUrl ? await loadImage(data.team.coverUrl).catch(() => null) : null;
 
-  drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true);
+  drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover);
   if (!options.frontOnly) drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
@@ -215,6 +216,7 @@ function drawFront(
   /* True when the overlay shader draws the drifting copies, so the only thing
      the motif does here is take the tier's own pattern away. */
   driftingMotif = false,
+  teamCover: HTMLImageElement | null = null,
 ) {
   /* A motif takes the place of whichever background pattern this tier would
      have drawn - the triangle flecks below, or the cosmic starfield inside
@@ -238,12 +240,175 @@ function drawFront(
   } else if (!cosmic) {
     drawTrianglePattern(context, 0.18);
   }
+  if (data.team && layout.front.team) {
+    dimTeamColumn(context, data, layout);
+    drawTeamSpine(context, data, layout, teamCover);
+    drawTeamFlag(context, layout.front.team.flag, avatar);
+    drawTeamTag(context, data, layout);
+    drawTeamName(context, layout);
+    drawTierLabel(context, data, layout);
+    drawTeamStats(context, layout);
+    drawStars(context, layout);
+    context.restore();
+    return;
+  }
   drawModeBadge(context, data);
   drawUsername(context, layout);
   drawTierLabel(context, data, layout);
   drawAvatar(context, layout, avatar);
   drawStats(context, layout);
   drawStars(context, layout);
+  context.restore();
+}
+
+/* A player card hides most of its tier under the avatar and the stats box; a
+   team card shows it behind the whole column, which on the pale tiers is a
+   wall of near-white under white text. Those get dimmed by how bright their
+   palette is, so the dark tiers keep their colour untouched. */
+function dimTeamColumn(context: CanvasRenderingContext2D, data: ManiaCardReadyData, layout: FaceLayout) {
+  const stops = data.badgeGradientStops;
+  if (stops.length === 0) return;
+  const brightness = stops.reduce((sum, stop) => sum + colorLuminance(stop.color), 0) / stops.length;
+  const alpha = Math.min(0.42, Math.max(0, (brightness - 0.35) * 1.2));
+  if (alpha <= 0) return;
+  const left = layout.front.team!.spine.x + layout.front.team!.spine.width;
+  context.save();
+  context.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
+  context.fillRect(left, 0, CARD_TEXTURE_WIDTH - left, CARD_TEXTURE_HEIGHT);
+  context.restore();
+}
+
+function colorLuminance(color: string): number {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1];
+  if (!hex) return 0;
+  const value = Number.parseInt(hex, 16);
+  return (0.2126 * ((value >> 16) & 255) + 0.7152 * ((value >> 8) & 255) + 0.0722 * (value & 255)) / 255;
+}
+
+/* The header turned a quarter counter-clockwise, so it reads bottom to top
+   like a book's spine, covering the strip. osu! headers are 4:1, the strip's 1400px
+   height takes their width, and only a sliver of their height is trimmed. A
+   team with no header gets its tier's own gradient, darker. The card's clip
+   rounds the outer corners. */
+function drawTeamSpine(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  layout: FaceLayout,
+  cover: HTMLImageElement | null,
+) {
+  const spine = layout.front.team!.spine;
+  context.save();
+  context.beginPath();
+  context.rect(spine.x, spine.y, spine.width, spine.height);
+  context.clip();
+  if (cover) {
+    const width = cover.naturalWidth || spine.height;
+    const height = cover.naturalHeight || spine.width;
+    // Turned, the header's width runs down the strip and its height across.
+    const scale = Math.max(spine.height / width, spine.width / height);
+    context.save();
+    context.translate(spine.x + spine.width / 2, spine.y + spine.height / 2);
+    context.rotate(-Math.PI / 2);
+    context.drawImage(cover, (-width * scale) / 2, (-height * scale) / 2, width * scale, height * scale);
+    context.restore();
+    // Dark enough that the tag reads over a header with its own lettering.
+    context.fillStyle = "rgba(0,0,0,0.44)";
+    context.fillRect(spine.x, spine.y, spine.width, spine.height);
+  } else {
+    const gradient = context.createLinearGradient(0, spine.y, 0, spine.y + spine.height);
+    for (const stop of data.badgeGradientStops) gradient.addColorStop(stop.offset, stop.color);
+    context.fillStyle = gradient;
+    context.fillRect(spine.x, spine.y, spine.width, spine.height);
+    context.fillStyle = "rgba(0,0,0,0.38)";
+    context.fillRect(spine.x, spine.y, spine.width, spine.height);
+  }
+  context.restore();
+  // A hairline where the spine meets the card.
+  context.save();
+  context.fillStyle = "rgba(255,255,255,0.28)";
+  context.fillRect(spine.x + spine.width - 2, spine.y, 2, spine.height);
+  context.restore();
+}
+
+function drawTeamFlag(context: CanvasRenderingContext2D, rect: Rect, flag: HTMLImageElement | null) {
+  const radius = TEAM_FLAG_RADIUS;
+  context.save();
+  context.shadowColor = "rgba(0,0,0,0.45)";
+  context.shadowBlur = 18;
+  context.shadowOffsetY = 8;
+  roundedRect(context, rect.x - 6, rect.y - 6, rect.width + 12, rect.height + 12, radius + 6);
+  context.fillStyle = "rgba(255,255,255,0.22)";
+  context.fill();
+  context.restore();
+  context.save();
+  roundedRect(context, rect.x, rect.y, rect.width, rect.height, radius);
+  context.clip();
+  if (flag) {
+    const width = flag.naturalWidth || rect.width;
+    const height = flag.naturalHeight || rect.height;
+    const scale = Math.max(rect.width / width, rect.height / height);
+    context.drawImage(flag, rect.x + (rect.width - width * scale) / 2, rect.y + (rect.height - height * scale) / 2, width * scale, height * scale);
+  } else {
+    context.fillStyle = "rgba(0,0,0,0.42)";
+    context.fillRect(rect.x, rect.y, rect.width, rect.height);
+  }
+  context.restore();
+}
+
+/* Each letter centred on its own row by its ink, not its baseline, so a
+   lowercase tag stacks as evenly as a capital one. */
+function drawTeamTag(context: CanvasRenderingContext2D, data: ManiaCardReadyData, layout: FaceLayout) {
+  const tag = layout.front.team!.tag;
+  context.save();
+  context.font = `900 ${tag.fontSize}px ${FONT}`;
+  context.textAlign = "center";
+  context.textBaseline = "alphabetic";
+  context.fillStyle = "white";
+  for (const letter of tag.letters) {
+    const metrics = context.measureText(letter.text);
+    const ascent = metrics.actualBoundingBoxAscent || tag.fontSize * 0.7;
+    const descent = metrics.actualBoundingBoxDescent || 0;
+    const baseline = letter.y + (ascent - descent) / 2;
+    context.shadowColor = "rgba(0,0,0,0.7)";
+    context.shadowBlur = 12;
+    context.shadowOffsetY = 6;
+    context.fillText(letter.text, letter.x, baseline);
+    context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.55)`;
+    context.shadowBlur = 28;
+    context.shadowOffsetY = 0;
+    context.fillText(letter.text, letter.x, baseline);
+  }
+  context.restore();
+}
+
+function drawTeamName(context: CanvasRenderingContext2D, layout: FaceLayout) {
+  const name = layout.front.team!.name;
+  context.save();
+  context.font = `800 ${name.fontSize}px ${FONT}`;
+  context.textAlign = "left";
+  context.fillStyle = "white";
+  context.shadowColor = "rgba(0,0,0,0.55)";
+  context.shadowBlur = 5;
+  context.shadowOffsetY = 3;
+  name.lines.forEach((line, index) => context.fillText(line, name.x, name.y + index * name.lineHeight));
+  context.restore();
+}
+
+function drawTeamStats(context: CanvasRenderingContext2D, layout: FaceLayout) {
+  const team = layout.front.team!;
+  context.save();
+  context.textAlign = "center";
+  context.shadowColor = "rgba(0,0,0,0.6)";
+  context.shadowBlur = 8;
+  context.shadowOffsetY = 4;
+  for (const stat of layout.front.stats) {
+    context.font = `900 ${team.statValueSize}px ${FONT}`;
+    context.fillStyle = "white";
+    context.fillText(String(stat.value), stat.x, stat.y);
+    context.font = `800 ${team.statLabelSize}px ${FONT}`;
+    context.fillStyle = "rgba(255,255,255,0.8)";
+    context.fillText(stat.label, stat.x, stat.y + 50);
+  }
   context.restore();
 }
 
@@ -1190,7 +1355,7 @@ function drawTierLabel(
   const label = layout.front.tierLabel;
   context.save();
   context.font = `italic 900 ${label.fontSize}px ${FONT}`;
-  context.textAlign = "right";
+  context.textAlign = label.align;
 
   // First pass: dark drop shadow for legibility against any background.
   context.fillStyle = "rgba(255,255,255,0.95)";
@@ -1252,10 +1417,11 @@ function drawStats(context: CanvasRenderingContext2D, layout: FaceLayout) {
 }
 
 function drawStars(context: CanvasRenderingContext2D, layout: FaceLayout) {
-  const starSize = 64;
-  const starSpacing = 70;
-  const starY = 1252;
-  const startX = 500 - ((layout.front.stars.length - 1) * starSpacing) / 2;
+  const row = layout.front.starRow;
+  const starSize = row.size;
+  const starSpacing = row.spacing;
+  const starY = row.y;
+  const startX = row.x - ((layout.front.stars.length - 1) * starSpacing) / 2;
   const fullColor = "#fcd34d";
 
   context.save();
@@ -1301,7 +1467,7 @@ function drawStars(context: CanvasRenderingContext2D, layout: FaceLayout) {
   context.shadowColor = "rgba(0,0,0,0.45)";
   context.shadowBlur = 4;
   context.shadowOffsetY = 2;
-  context.fillText(layout.front.starAverage, 500, 1320);
+  context.fillText(layout.front.starAverage, row.x, row.averageY);
   context.restore();
 }
 

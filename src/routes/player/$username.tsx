@@ -1,18 +1,16 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Pencil, Plus, RefreshCw, X } from "lucide-react";
+import { Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import type { I18n, MessageDescriptor } from "@lingui/core";
+import type { MessageDescriptor } from "@lingui/core";
 import {
   getUser,
   getUserScoresBestWindow,
 } from "../../lib/osu";
 import {
   fetchLivePlayerCachedProfileSnapshot,
-  fetchLivePlayerActivityDirect,
-  fetchLivePlayerActivityDayDirect,
   fetchLivePlayerAboutDirect,
   fetchLivePlayerKeymodePpDirect,
   fetchLivePlayerKeymodePpKeysDirect,
@@ -22,12 +20,6 @@ import {
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
   type LivePlayerSkills,
-  type LivePlayerActivityPatterns,
-  type LivePlayerActivityPrimarySkill,
-  type LivePlayerActivitySnapshot,
-  type LivePlayerActivitySkillReadout,
-  type LivePlayerActivitySkillVector,
-  type LivePlayerActivityTimelineSegment,
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
   type LivePlayerProfileSnapshot,
@@ -36,35 +28,29 @@ import {
 import {
   formatNumber,
   formatAccuracy,
-  formatTimeAgo,
   formatDetailedTimeAgo,
   formatDate,
-  formatPP,
 } from "../../lib/format";
-import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
-import { refreshPlayerActivitySnapshot } from "../../lib/player-activity-refresh";
-import { useHasHydrated, useNoDans } from "../../store";
+import { useHasHydrated, useNoDans, useRecentPlayRatings } from "../../store";
+import { recentPlayRatingKey, useRecentPlayRatingLookup } from "../../components/player/recent-play-ratings";
 import {
   getBeatmapKeyCount,
-  getModAcronyms,
+  
   getScoreIdentity,
   getScoreTimeMs,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
+import { canSeeTeams } from "../../lib/auth-shared";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
 import { DisplayNameButton, DisplayNameForm, pendingRenameDate } from "../../components/player/DisplayNameEditor";
 import { ServerLinkPill, ServerLinksButton } from "../../components/player/ServerLinks";
 import { BBCodePreview } from "../../components/player/bbcode/BBCodePreview";
 import { setMyOwnAbout } from "../../lib/own-profile";
-import { addSelfToRoster } from "../../lib/roster-self-track";
-import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
-import { SortArrow } from "../../components/ui/SortArrow";
 import { OsuLogo } from "../../components/ui/OsuLogo";
 import { CountryFlag } from "../../components/ui/CountryFlag";
 import { ModBadge } from "../../components/ui/ModBadge";
-import { ModFilterChip } from "../../components/ui/ModFilterChip";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel, preloadManiaCard3DPanel } from "../../components/player/maniacard3d/LazyManiaCard3DPanel";
@@ -77,8 +63,8 @@ import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
-import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
-import { buildPpCumulativeDistribution, buildPpDistribution, calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
+import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import { calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
 import { buildTrackedPlayScore } from "../../lib/tracked-play-score";
 import {
   playedWithinOnlineWindow,
@@ -91,11 +77,11 @@ import { getRankTierClass } from "../../lib/rankings";
 import { displayCountryName, isSupportedCountryCode } from "../../lib/country";
 import { useLocale } from "../../lib/locale-context";
 import {
-  NO_MOD_KEY,
+  
   cycleModFilterMode,
-  getModFilterGroup,
+  
   matchesModAcronymFilter,
-  relevantModFilterKeys,
+  
   reverseCycleModFilterMode,
   type ModFilterMode,
   type ModFilterState,
@@ -105,6 +91,42 @@ import {
 export { cycleModFilterMode, matchesModAcronymFilter, reverseCycleModFilterMode, type ModFilterMode };
 import { preservePlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { ScoreDetailModal, ScoreRow, TrackedScoreRow, getScoreRowLayout, type BestListRow } from "../../components/player/ScoreRows";
+import { PlayerActivityPanel } from "../../components/player/ActivityPanel";
+import { BpmBreakdownModal, ModUsageModal, PpDistributionModal } from "../../components/player/InsightModals";
+import {
+  BestScoresControlBar,
+  KeyModeControl,
+  getAvailableKeyModes,
+  getRelevantMods,
+  getSortablePp,
+  matchesBestKeyFilter,
+  matchesKeyFilter,
+  matchesModFilter,
+  selectVisibleKeyModes,
+  sortBestScores,
+  type BestAgeSort,
+  type BestPpSort,
+  type BestSort,
+  type KeyFilter,
+} from "../../components/player/BestScoresControls";
+// The keymode helpers keep their old home in the route's public surface: the
+// best-list tests import them from here.
+export { matchesBestKeyFilter, selectVisibleKeyModes };
+import {
+  ExpandHint,
+  HeroStat,
+  INSIGHT_CELL_CLASS,
+  INSIGHT_CELL_INTERACTIVE_CLASS,
+  INSIGHT_LABEL_CLASS,
+  INSIGHT_PANEL_CLASS,
+  InsightsSkeleton,
+  KEYMODE_BAR_COLORS,
+  KEYMODE_TEXT_COLORS,
+  KeySplitCard,
+  PlayerScoreRowSkeleton,
+  RailStat,
+  TopPlayCard,
+} from "../../components/player/ProfileParts";
 
 // The BBCode editor (toolbar + parser + preview) only loads when someone
 // actually opens it; the about tab itself stays light.
@@ -199,58 +221,7 @@ const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
 const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
 const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
 export type PlayerTab = "best" | "recent" | "card" | "about" | "activity" | "skills";
-type ActivityDay = {
-  date: string;
-  scoreCount: number;
-  passedCount: number;
-  sessionCount: number;
-  mapCount: number;
-  level: 0 | 1 | 2 | 3 | 4;
-  maps: ActivityPlayedMap[];
-  skills: ActivitySkillReadout | null;
-  timeline: ActivityTimelineSegment[];
-};
-
-type ActivityPlayedMap = {
-  key: string;
-  beatmapId: number;
-  beatmapsetId: number | null;
-  title: string;
-  artist: string;
-  version: string;
-  coverUrl: string | null;
-  plays: number;
-  accuracy: number | null;
-  pp: number | null;
-  rank: string | null;
-  keyCount: number | null;
-  skills: LivePlayerActivitySkillVector | null;
-};
-
-type ActivitySkillReadout = LivePlayerActivitySkillReadout;
-
-type ActivityTimelineSegment = LivePlayerActivityTimelineSegment;
-
-type ActivityWeek = {
-  key: string;
-  days: (ActivityDay | null)[];
-};
-
-type ActivitySummary = {
-  days: ActivityDay[];
-  weeks: ActivityWeek[];
-  totalScores: number;
-  activeDays: number;
-  totalSessions: number;
-  currentStreak: number;
-  typicalSession: number;
-  availableYears: number[];
-  timezone: string;
-};
-
 const PLAYER_TABS: PlayerTab[] = ["best", "recent", "skills", "about", "card", "activity"];
-const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
-const PLAYER_ACTIVITY_COUNTRY_SCOPE = "GLOBAL";
 
 function normalizePlayerTab(tab: PlayerTab): PlayerTab {
   return tab;
@@ -414,6 +385,7 @@ function slimLoaderUser(user: OsuUser): OsuUser {
     ...(user.display_name ? { display_name: user.display_name } : {}),
     ...(user.display_name_next_change_at ? { display_name_next_change_at: user.display_name_next_change_at } : {}),
     ...(user.server_links?.length ? { server_links: user.server_links } : {}),
+    ...(user.team ? { team: user.team } : {}),
   };
 }
 
@@ -516,123 +488,6 @@ export const Route = createFileRoute("/player/$username")({
   component: PlayerDefaultRoute,
 });
 
-type KeyFilter = "all" | string;
-type BestPpSort = "pp-desc" | "pp-asc";
-type BestAgeSort = "newest" | "oldest";
-type BestSort = BestPpSort | BestAgeSort;
-type PpDistributionMode = "bands" | "cumulative";
-const PP_DISTRIBUTION_MODE_STORAGE_KEY = "mania-hub-pp-distribution-mode-v1";
-
-function isPpDistributionMode(value: unknown): value is PpDistributionMode {
-  return value === "bands" || value === "cumulative";
-}
-
-function readPpDistributionModePreference(): PpDistributionMode {
-  if (typeof window === "undefined") return "bands";
-
-  try {
-    const stored = window.localStorage.getItem(PP_DISTRIBUTION_MODE_STORAGE_KEY);
-    return isPpDistributionMode(stored) ? stored : "bands";
-  } catch {
-    return "bands";
-  }
-}
-
-function writePpDistributionModePreference(mode: PpDistributionMode): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(PP_DISTRIBUTION_MODE_STORAGE_KEY, mode);
-  } catch {
-    // Preference storage is best-effort; the modal still works normally.
-  }
-}
-
-const MOD_USAGE_COLORS: Record<string, string> = {
-  NM: "#4d8dff",
-  NC: "#aa88ff",
-  DT: "#ff6666",
-  HR: "#ff6666",
-  SD: "#ff6666",
-  PF: "#ffcc22",
-  AC: "#ff6666",
-  BL: "#ff6666",
-  ST: "#ff6666",
-  MU: "#ff6666",
-  EZ: "#b3d944",
-  NF: "#b3d944",
-  HT: "#b3d944",
-  DC: "#b3d944",
-  NR: "#b3d944",
-  HD: "#ffcc22",
-  FL: "#ffcc22",
-  FI: "#ffcc22",
-  AP: "#66ccff",
-  RX: "#66ccff",
-  SO: "#66ccff",
-  RD: "#66ccff",
-  AT: "#66ccff",
-  CN: "#66ccff",
-  MR: "#66ccff",
-  AS: "#66ccff",
-  CS: "#66ccff",
-  TD: "#ff66aa",
-  CL: "#aa88ff",
-  CO: "#ffcc22",
-  SV2: "#ffcc22",
-};
-
-function getModUsageColor(mod: string, fallbackIndex: number): string {
-  const fallbackPalette = ["#ff66aa", "#ffcc22", "#34d399", "#fb923c", "#f472b6", "#22d3ee"];
-  return MOD_USAGE_COLORS[mod] ?? fallbackPalette[fallbackIndex % fallbackPalette.length];
-}
-
-function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
-  if (keyFilter === "all") return true;
-  return getBeatmapKeyCount(score.beatmap) === Number(keyFilter.replace("k", ""));
-}
-
-/* A keymode list is the plays behind that keymode's pp, and osu! grows its
-   keymode statistics from natively-mania maps only, which is what the Key
-   Split modal already tells the reader it leaves out. So a convert is a play
-   under "All", where osu! does rank it, and not a row in one keymode's list:
-   listing it there would put a play on screen that the total beside it never
-   counted. Recent keeps the plain filter; nothing there is a total. */
-export function matchesBestKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
-  if (keyFilter === "all") return true;
-  return !score.beatmap?.convert && matchesKeyFilter(score, keyFilter);
-}
-
-function getAvailableKeyModes(scores: OsuScore[]): string[] {
-  const keys = new Set<number>();
-  for (const score of scores) {
-    const keyCount = getBeatmapKeyCount(score.beatmap);
-    if (keyCount != null) keys.add(keyCount);
-  }
-  return Array.from(keys).sort((a, b) => a - b).map((k) => `${k}k`);
-}
-
-function matchesModFilter(score: OsuScore, modFilter: ModFilterState): boolean {
-  const entries = Object.entries(modFilter);
-  if (entries.length === 0) return true;
-
-  const scoreMods = new Set(getModAcronyms(score.mods));
-  const hasNoMods = scoreMods.size === 0;
-
-  for (const [key, mode] of entries) {
-    let present: boolean;
-    if (key === NO_MOD_KEY) {
-      present = hasNoMods;
-    } else {
-      const group = getModFilterGroup(key);
-      present = group ? group.some((m) => scoreMods.has(m)) : scoreMods.has(key);
-    }
-    if (mode === "include" && !present) return false;
-    if (mode === "exclude" && present) return false;
-  }
-  return true;
-}
-
 export type { BestListRow };
 export { getScoreRowLayout };
 
@@ -680,31 +535,6 @@ export function bestListRowMatchesModFilter(row: BestListRow, modFilter: ModFilt
 }
 
 
-function getSortablePp(score: OsuScore): number | null {
-  return typeof score.pp === "number" && Number.isFinite(score.pp) ? score.pp : null;
-}
-
-function sortBestScores(scores: OsuScore[], sort: BestSort): OsuScore[] {
-  const copy = [...scores];
-  if (sort === "pp-desc" || sort === "pp-asc") {
-    copy.sort((a, b) => {
-      const aPp = getSortablePp(a);
-      const bPp = getSortablePp(b);
-      if (aPp == null && bPp == null) return 0;
-      if (aPp == null) return 1;
-      if (bPp == null) return -1;
-      return sort === "pp-desc" ? bPp - aPp : aPp - bPp;
-    });
-    return copy;
-  }
-
-  copy.sort((a, b) => {
-    const diff = getScoreTimeMs(b) - getScoreTimeMs(a);
-    return sort === "newest" ? diff : -diff;
-  });
-  return copy;
-}
-
 function hasProjectedOnlyProfileStats(user: OsuUser): boolean {
   const stats = user.statistics;
   const gradeCount =
@@ -729,10 +559,6 @@ function hasProjectedOnlyProfileStats(user: OsuUser): boolean {
 function hasValidDate(value: string | null | undefined): value is string {
   if (!value) return false;
   return Number.isFinite(Date.parse(value));
-}
-
-function getRelevantMods(scores: OsuScore[]): string[] {
-  return relevantModFilterKeys(scores.map((score) => getModAcronyms(score.mods)));
 }
 
 function buildPlayerBestFilterMetadata(scores: OsuScore[]): PlayerBestFilterMetadata {
@@ -795,6 +621,7 @@ function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
     a.display_name === b.display_name &&
     a.display_name_next_change_at === b.display_name_next_change_at &&
     JSON.stringify(a.server_links ?? []) === JSON.stringify(b.server_links ?? []) &&
+    JSON.stringify(a.team ?? null) === JSON.stringify(b.team ?? null) &&
     a.statistics?.pp === b.statistics?.pp &&
     a.statistics?.play_count === b.statistics?.play_count &&
     a.statistics?.global_rank === b.statistics?.global_rank &&
@@ -1223,15 +1050,9 @@ export function PlayerProfilePage({
   const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(() => loaderBestScores.length === 0);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
-  const [includeNoModUsage, setIncludeNoModUsage] = useState(false);
-  const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [ppModalOpen, setPpModalOpen] = useState(false);
   const [keyPpModalOpen, setKeyPpModalOpen] = useState(false);
-  const [ppDistributionMode, setPpDistributionModeState] = useState<PpDistributionMode>(() =>
-    readPpDistributionModePreference(),
-  );
-  const [ppKeyFilter, setPpKeyFilter] = useState<KeyFilter>("all");
   // The score a row was clicked on; its details take over the modal layer
   // instead of the row sending everyone off to osu!.
   const [detailScore, setDetailScore] = useState<OsuScore | null>(null);
@@ -1291,33 +1112,6 @@ export function PlayerProfilePage({
     () => user?.account_status ? recent.filter((score) => score.companella != null) : recent,
     [recent, user?.account_status],
   );
-  const ppManiaBestScores = useMemo(
-    () => shownBest.filter((score) => score.beatmap?.mode === "mania"),
-    [shownBest],
-  );
-  const ppAvailableKeyModes = useMemo(
-    () => getAvailableKeyModes(ppManiaBestScores),
-    [ppManiaBestScores],
-  );
-  const ppKeyFilterActive: KeyFilter =
-    ppKeyFilter !== "all" && !ppAvailableKeyModes.includes(ppKeyFilter) ? "all" : ppKeyFilter;
-  const ppModalDistribution = useMemo(() => {
-    const scoped = ppManiaBestScores.filter((score) => matchesKeyFilter(score, ppKeyFilterActive));
-    const ppValues = scoped
-      .map((score) => score.pp)
-      .filter((pp): pp is number => pp != null && pp > 0)
-      .sort((a, b) => b - a);
-    return {
-      bands: buildPpDistribution(ppValues),
-      cumulative: buildPpCumulativeDistribution(scoped),
-      top: ppValues[0] ?? null,
-      bottom: ppValues.length ? ppValues[ppValues.length - 1] : null,
-    };
-  }, [ppManiaBestScores, ppKeyFilterActive]);
-  const setPpDistributionMode = useCallback((mode: PpDistributionMode) => {
-    setPpDistributionModeState(mode);
-    writePpDistributionModePreference(mode);
-  }, []);
 
   // Read after mount so SSR and hydration stay byte-identical; a locally seeded
   // tracked play only takes over once the client can read the navigation cache.
@@ -2014,21 +1808,6 @@ export function PlayerProfilePage({
     }
   }, []);
 
-  if (loadingUser && !user) {
-    return <PlayerPageSkeleton tab={tab} onTabChange={handleTabChange} />;
-  }
-
-  if (userError || !user) {
-    return (
-      <div className="flex-1 bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-16 text-center text-sm text-osu-f1">
-          {userError ?? t`Player not found.`}
-        </div>
-      </div>
-    );
-  }
-
-  const stats = user.statistics;
   const currentScores = tab === "best" ? shownBest : shownRecent;
   const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
   const keyFilteredScores = currentScores.filter((score) =>
@@ -2065,6 +1844,30 @@ export function PlayerProfilePage({
     : filteredScores.map((score) => ({ kind: "score" as const, score }));
   const visibleRows = bestListRows.slice(0, currentVisibleCount);
   const scoreRowLayout = getScoreRowLayout(visibleRows);
+  // Navigation first renders without a user. Keep both rating hooks above
+  // the loading/error returns so the resolved snapshot cannot add hooks.
+  const showRecentRatings = useRecentPlayRatings() && tab === "recent";
+  const recentRatings = useRecentPlayRatingLookup(
+    user?.id,
+    showRecentRatings ? visibleRows.flatMap((row) => (row.kind === "score" ? [row.score] : [])) : [],
+    showRecentRatings,
+  );
+
+  if (loadingUser && !user) {
+    return <PlayerPageSkeleton tab={tab} onTabChange={handleTabChange} />;
+  }
+
+  if (userError || !user) {
+    return (
+      <div className="flex-1 bg-osu-b5">
+        <div className="max-w-[1200px] mx-auto px-5 py-16 text-center text-sm text-osu-f1">
+          {userError ?? t`Player not found.`}
+        </div>
+      </div>
+    );
+  }
+
+  const stats = user.statistics;
   /* A keymode's rows are numbered within that keymode's own list, whether or
      not tracked plays joined it: a window play's place in the profile-wide top
      200 would read as a different scale from the tracked row beside it, and it
@@ -2207,6 +2010,21 @@ export function PlayerProfilePage({
       />,
     ] : []),
   ] : [
+    ...(user.team && canSeeTeams(auth) ? [
+      <Link
+        key="team"
+        to="/team/$teamId"
+        params={{ teamId: String(user.team.id) }}
+        title={user.team.short_name}
+        className="inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-white/85 transition-colors duration-150 hover:text-white"
+      >
+        {user.team.flag_url ? (
+          // osu! team flags are 2:1.
+          <img src={user.team.flag_url} alt="" className="h-4 w-8 shrink-0 rounded-[3px] object-cover ring-1 ring-white/20" />
+        ) : null}
+        <span className="max-w-[16rem] truncate">{user.team.name}</span>
+      </Link>,
+    ] : []),
     <a
       key="osu"
       href={`https://osu.ppy.sh/users/${user.id}/mania`}
@@ -2285,435 +2103,21 @@ export function PlayerProfilePage({
       {/* Mod breakdown modal */}
       <AnimatePresence>
         {modModalOpen && profileInsights?.modBreakdown && profileInsights.modBreakdown.length > 0 && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/75 cursor-pointer"
-            onClick={() => { setModModalOpen(false); setHoveredMod(null); }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <motion.div
-              className="relative bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[380px] max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
-              onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", damping: 30, stiffness: 500 }}
-            >
-              <button
-                type="button"
-                onClick={() => { setModModalOpen(false); setHoveredMod(null); }}
-                aria-label={t`Close`}
-                className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M1 1l12 12M13 1L1 13" />
-                </svg>
-              </button>
-              {(() => {
-                const noModCount = profileInsights.sampleSize - (profileInsights.mostUsedMod?.total ?? 0);
-                const usageSampleSize = includeNoModUsage
-                  ? profileInsights.sampleSize
-                  : Math.max(profileInsights.sampleSize - noModCount, 0);
-                const entries = [
-                  ...profileInsights.modBreakdown,
-                  ...(includeNoModUsage && noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
-                ].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-
-                const colored = entries.map((e, index) => ({
-                  ...e,
-                  color: getModUsageColor(e.label, index),
-                  pct: usageSampleSize > 0 ? (e.count / usageSampleSize) * 100 : 0,
-                }));
-
-                const cx = 110, cy = 110, ro = 96, ri = 62;
-                const polar = (r: number, deg: number) => {
-                  const rad = ((deg - 90) * Math.PI) / 180;
-                  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-                };
-                const slicePath = (start: number, end: number, ringOuter: number, ringInner: number) => {
-                  const so = polar(ringOuter, end);
-                  const eo = polar(ringOuter, start);
-                  const si = polar(ringInner, start);
-                  const ei = polar(ringInner, end);
-                  const large = end - start <= 180 ? 0 : 1;
-                  return `M ${so.x} ${so.y} A ${ringOuter} ${ringOuter} 0 ${large} 0 ${eo.x} ${eo.y} L ${si.x} ${si.y} A ${ringInner} ${ringInner} 0 ${large} 1 ${ei.x} ${ei.y} Z`;
-                };
-                const fullDonut = `M ${cx - ro} ${cy} A ${ro} ${ro} 0 1 0 ${cx + ro} ${cy} A ${ro} ${ro} 0 1 0 ${cx - ro} ${cy} Z M ${cx - ri} ${cy} A ${ri} ${ri} 0 1 1 ${cx + ri} ${cy} A ${ri} ${ri} 0 1 1 ${cx - ri} ${cy} Z`;
-
-                // Normalize slice angles by total mod-usages (not sampleSize): plays
-                // can stack mods so counts can sum to >100%. Without this the last
-                // slice wraps past 360° and overlaps the first one.
-                const totalCount = colored.reduce((sum, e) => sum + e.count, 0) || 1;
-                let acc = 0;
-                const slices = colored.map((entry) => {
-                  const start = (acc / totalCount) * 360;
-                  acc += entry.count;
-                  const end = (acc / totalCount) * 360;
-                  return { ...entry, start, end };
-                });
-                const singleSlice = slices.length === 1;
-                const focused = hoveredMod ? slices.find((s) => s.label === hoveredMod) : null;
-                const HOVER_OFFSET = 8;
-                const stacks = totalCount - usageSampleSize;
-
-                return (
-                  <>
-                    <div className="pr-8 flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`Mod Usage`}</div>
-                        <div className="mt-0.5 text-[11px] text-osu-f1/60 flex items-center gap-1.5 flex-wrap">
-                          <span>{includeNoModUsage
-                            ? t`across ${usageSampleSize} top plays`
-                            : t`across ${usageSampleSize} modded top plays`}</span>
-                          {stacks > 0 && (
-                            <span
-                              className="px-1.5 py-[1px] rounded bg-osu-b3/40 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 cursor-help"
-                              title={t`${stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays.`}
-                            >
-                              <Trans>+{stacks} stacked</Trans>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {noModCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIncludeNoModUsage((value) => !value);
-                            setHoveredMod(null);
-                          }}
-                          aria-pressed={includeNoModUsage}
-                          title={includeNoModUsage ? t`NM is included in mod usage` : t`NM is excluded from mod usage`}
-                          className={`mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-1.5 text-[9px] font-semibold uppercase tracking-wider transition-colors hover:text-white ${includeNoModUsage
-                              ? "border-osu-green-light/45 bg-osu-green-light/12 text-osu-green-light hover:border-osu-green-light/65 hover:bg-osu-green-light/18"
-                              : "border-osu-b2/60 bg-osu-b3/30 text-osu-f1 hover:border-osu-b1/80 hover:bg-osu-b3/50"
-                            }`}
-                        >
-                          <span>NM</span>
-                          <span
-                            className={`relative h-3.5 w-7 rounded-full transition-colors ${includeNoModUsage ? "bg-osu-green-light/80 shadow-[0_0_0_1px_rgba(179,217,68,0.28)]" : "bg-osu-b2"
-                              }`}
-                            aria-hidden="true"
-                          >
-                            <span
-                              className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-white/95 transition-transform"
-                              style={{ transform: includeNoModUsage ? "translateX(14px)" : "translateX(0)" }}
-                            />
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                    <div className="mt-3 flex justify-center">
-                      <svg viewBox="0 0 220 220" className="w-52 h-52" onMouseLeave={() => setHoveredMod(null)}>
-                        {singleSlice ? (
-                          <path d={fullDonut} fill={slices[0].color} fillRule="evenodd" />
-                        ) : (
-                          slices.map((s) => {
-                            const isFocused = hoveredMod === s.label;
-                            const dimmed = hoveredMod != null && !isFocused;
-                            const midRad = (((s.start + s.end) / 2 - 90) * Math.PI) / 180;
-                            const dx = isFocused ? Math.cos(midRad) * HOVER_OFFSET : 0;
-                            const dy = isFocused ? Math.sin(midRad) * HOVER_OFFSET : 0;
-                            return (
-                              <path
-                                key={s.label}
-                                d={slicePath(s.start, s.end, ro, ri)}
-                                fill={s.color}
-                                stroke="var(--color-osu-b4)"
-                                strokeWidth={2}
-                                strokeLinejoin="round"
-                                transform={`translate(${dx} ${dy})`}
-                                style={{
-                                  opacity: dimmed ? 0.25 : 1,
-                                  transition: "opacity 150ms, transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-                                  cursor: "pointer",
-                                }}
-                                onMouseEnter={() => setHoveredMod(s.label)}
-                              />
-                            );
-                          })
-                        )}
-                        {focused ? (
-                          <>
-                            <text x={cx} y={cy - 14} textAnchor="middle" fill={focused.color} style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>
-                              {focused.label}
-                            </text>
-                            <text x={cx} y={cy + 8} textAnchor="middle" fill="#fff" style={{ fontSize: 26, fontWeight: 800 }}>
-                              {Math.round(focused.pct)}%
-                            </text>
-                            <text x={cx} y={cy + 24} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 10 }}>
-                              <Trans>{focused.count} of {usageSampleSize}</Trans>
-                            </text>
-                          </>
-                        ) : (
-                          <>
-                            <text x={cx} y={cy + 2} textAnchor="middle" fill="#fff" style={{ fontSize: 28, fontWeight: 800 }}>
-                              {usageSampleSize}
-                            </text>
-                            <text x={cx} y={cy + 20} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>
-                              {includeNoModUsage ? t`top plays` : t`modded plays`}
-                            </text>
-                          </>
-                        )}
-                      </svg>
-                    </div>
-                    <div className="mt-4 flex flex-col gap-1">
-                      {slices.map((entry) => {
-                        const isFocused = hoveredMod === entry.label;
-                        const dimmed = hoveredMod != null && !isFocused;
-                        return (
-                          <button
-                            key={entry.label}
-                            type="button"
-                            onMouseEnter={() => setHoveredMod(entry.label)}
-                            onMouseLeave={() => setHoveredMod(null)}
-                            className="group flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-osu-b3/30"
-                            style={{ opacity: dimmed ? 0.4 : 1, transition: "opacity 150ms, background-color 150ms" }}
-                          >
-                            <span
-                              className="h-7 w-1 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: entry.color, boxShadow: isFocused ? `0 0 8px ${entry.color}` : undefined }}
-                            />
-                            <ModBadge mod={entry.label} size={0.85} color={entry.color} />
-                            <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${entry.pct}%`, backgroundColor: entry.color }} />
-                            </div>
-                            <div className="flex items-baseline gap-1.5 tabular-nums w-16 justify-end">
-                              <span className="text-sm font-bold text-white">{Math.round(entry.pct)}%</span>
-                              <span className="text-[10px] text-osu-f1/70">{entry.count}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
-            </motion.div>
-          </motion.div>
+          <ModUsageModal insights={profileInsights} onClose={() => setModModalOpen(false)} />
         )}
       </AnimatePresence>
 
       {/* BPM breakdown modal */}
       <AnimatePresence>
         {bpmModalOpen && profileInsights && profileInsights.medianBpm != null && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 sm:backdrop-blur-sm cursor-pointer p-4"
-            onClick={() => setBpmModalOpen(false)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <motion.div
-              className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
-              onClick={(e) => e.stopPropagation()}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-            >
-              <div className="pointer-events-none absolute inset-0 bg-osu-b4" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={() => setBpmModalOpen(false)}
-                aria-label={t`Close`}
-                className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M1 1l12 12M13 1L1 13" />
-                </svg>
-              </button>
-              <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
-                <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`BPM Breakdown`}</div>
-                <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                  <Trans>across {profileInsights.sampleSize} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays</Trans>
-                </div>
-
-                <div className="mt-4 flex items-baseline gap-2">
-                  <span className="text-2xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
-                  <span className="text-[11px] text-osu-f1">{t`median BPM`}</span>
-                </div>
-
-                {profileInsights.bpmByKeyMode && profileInsights.bpmByKeyMode.length > 1 && (
-                  <div className="mt-4">
-                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">{t`Median by Keymode`}</div>
-                    <div className="space-y-2">
-                      {(() => {
-                        const maxMedian = Math.max(...profileInsights.bpmByKeyMode.map((b) => b.median));
-                        return profileInsights.bpmByKeyMode.map((bucket) => {
-                          const pct = maxMedian > 0 ? (bucket.median / maxMedian) * 100 : 0;
-                          return (
-                            <div key={bucket.keyCount} className="flex items-center gap-2.5">
-                              <span className="text-xs font-semibold text-white w-8 tabular-nums">{bucket.keyCount}K</span>
-                              <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
-                                <div className="h-full rounded-full bg-osu-yellow" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="text-[11px] text-osu-f1 tabular-nums w-20 text-right">
-                                {Math.round(bucket.median)} ({bucket.count})
-                              </span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-                )}
-
-                {profileInsights.bpmRange?.minScore && profileInsights.bpmRange?.maxScore && (
-                  <div className="mt-4">
-                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">{t`Range`}</div>
-                    <div className="space-y-2">
-                      <BpmExtremeRow label={t`Slowest`} bpm={profileInsights.bpmRange.min} snapshot={profileInsights.bpmRange.minScore} />
-                      <BpmExtremeRow label={t`Fastest`} bpm={profileInsights.bpmRange.max} snapshot={profileInsights.bpmRange.maxScore} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
+          <BpmBreakdownModal insights={profileInsights} onClose={() => setBpmModalOpen(false)} />
         )}
       </AnimatePresence>
 
       {/* PP distribution modal */}
       <AnimatePresence>
         {ppModalOpen && profileInsights?.ppRange && profileInsights.ppDistribution.length > 0 && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 sm:backdrop-blur-sm cursor-pointer p-4"
-            onClick={() => setPpModalOpen(false)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label={t`PP distribution`}
-              className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
-              onClick={(e) => e.stopPropagation()}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-            >
-              <div className="pointer-events-none absolute inset-0 bg-osu-b4" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={() => setPpModalOpen(false)}
-                aria-label={t`Close`}
-                className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
-              >
-                <X size={14} />
-              </button>
-              <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
-                {(() => {
-                  const ppDistribution = ppModalDistribution.bands;
-                  const ppCumulativeDistribution = ppModalDistribution.cumulative;
-                  const ppTotal = ppDistribution[0]?.total ?? 0;
-                  const ppTop = ppModalDistribution.top ?? profileInsights.ppRange.top;
-                  const ppBottom = ppModalDistribution.bottom ?? profileInsights.ppRange.bottom;
-                  const showCumulative = ppDistributionMode === "cumulative" && ppCumulativeDistribution.length > 0;
-                  const ppRows = showCumulative
-                    ? ppCumulativeDistribution.map((entry, index) => ({
-                        key: `cumulative:${entry.threshold}`,
-                        label: formatPpCumulativeDistributionLabel(entry.threshold),
-                        count: entry.count,
-                        total: entry.total,
-                        color: getPpDistributionColor(index, false),
-                      }))
-                    : ppDistribution.map((entry, index) => ({
-                        key: `${entry.min ?? "below"}:${entry.max ?? "up"}`,
-                        label: formatPpDistributionLabel(entry),
-                        count: entry.count,
-                        total: ppTotal,
-                        color: getPpDistributionColor(index, entry.min == null),
-                      }));
-
-                  return (
-                    <>
-                      <div className="pr-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">{t`PP Distribution`}</div>
-                          <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                            <Trans>across {ppTotal} profile top plays with PP</Trans>
-                          </div>
-                        </div>
-                        <div className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-osu-b3/20 bg-osu-b4/60 p-0.5">
-                          {(["bands", "cumulative"] as const).map((mode) => {
-                            const active = ppDistributionMode === mode;
-                            return (
-                              <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setPpDistributionMode(mode)}
-                                aria-pressed={active}
-                                className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer ${active
-                                  ? "bg-osu-pink/15 text-osu-pink-light"
-                                  : "text-osu-f1 hover:bg-osu-b3/40 hover:text-osu-l2"
-                                }`}
-                              >
-                                {mode === "bands" ? t`Bands` : t`Cumulative`}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {ppAvailableKeyModes.length > 1 && (
-                        <div className="mt-3">
-                          <KeyModeControl
-                            availableKeyModes={ppAvailableKeyModes}
-                            keyFilter={ppKeyFilterActive}
-                            onChangeKeyFilter={setPpKeyFilter}
-                          />
-                        </div>
-                      )}
-
-                      <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="text-2xl font-bold text-osu-pink-light tabular-nums">{Math.round(ppTop)}</span>
-                        <span className="text-[11px] text-osu-f1">{t`top pp`}</span>
-                        <span className="text-osu-f1/40">/</span>
-                        <span className="text-xl font-bold text-white tabular-nums">{Math.round(ppBottom)}</span>
-                        <span className="text-[11px] text-osu-f1">{t`bottom pp`}</span>
-                      </div>
-
-                      <div className="mt-4 space-y-2">
-                        {ppRows.map((entry) => {
-                          const pct = entry.total > 0 ? (entry.count / entry.total) * 100 : 0;
-                          const fillWidth = entry.count > 0 ? Math.max(4, pct) : 0;
-
-                          return (
-                            <div key={entry.key} className="rounded-lg px-2.5 py-2 transition-colors hover:bg-osu-b3/25">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-baseline gap-1.5">
-                                  <span className="text-sm font-bold text-white tabular-nums">{entry.label}</span>
-                                  <span className="text-[10px] text-osu-f1">pp</span>
-                                </div>
-                                <div className="flex items-baseline gap-1.5 tabular-nums">
-                                  <span className="text-sm font-bold text-white">{entry.count}</span>
-                                  <span className="text-[10px] text-osu-f1"><Plural value={entry.count} one="play" other="plays" /></span>
-                                  <span className="text-[10px] text-osu-f1/60">({formatPpDistributionPercent(entry.count, entry.total)})</span>
-                                </div>
-                              </div>
-                              <div className="mt-1.5 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{ width: `${fillWidth}%`, backgroundColor: entry.color }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </motion.div>
-          </motion.div>
+          <PpDistributionModal insights={profileInsights} scores={shownBest} onClose={() => setPpModalOpen(false)} />
         )}
       </AnimatePresence>
 
@@ -3409,6 +2813,8 @@ export function PlayerProfilePage({
                         position={position}
                         layout={scoreRowLayout}
                         onOpenDetails={setDetailScore}
+                        showRating={showRecentRatings}
+                        rating={showRecentRatings ? recentRatings.get(recentPlayRatingKey(row.score)) : undefined}
                       />
                     ) : (
                       <TrackedScoreRow
@@ -3690,107 +3096,6 @@ function PlayerPageSkeleton({
 // becomes an opt-in: they can add themselves to their country's roster instead of being locked
 // out for not being in the top 100. Anonymous visitors get a login nudge; other people's
 // untracked profiles keep the plain explanation (you can only ever add yourself).
-function ActivityOptInEmptyState({
-  mode,
-  loginAvailable,
-  onTracked,
-}: {
-  mode: "self" | "other" | "anon";
-  loginAvailable: boolean;
-  onTracked?: () => void;
-}) {
-  const location = useLocation();
-  const { t } = useLingui();
-  const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-  const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
-
-  const handleTrack = useCallback(async () => {
-    setStatus("pending");
-    setMessage(null);
-    try {
-      const result = await addSelfToRoster();
-      if (result.ok) {
-        setStatus("done");
-        showTrackingStartedToast();
-        onTracked?.();
-        return;
-      }
-      setStatus("error");
-      setMessage(
-        result.status === "country_not_tracked"
-          ? t`Your country isn't tracked yet, so there's nothing to record your plays against.`
-          : result.status === "country_full"
-            ? t`This country's opt-in list is full right now. Check back later.`
-            : t`Couldn't turn on tracking right now. Try again in a moment.`,
-      );
-    } catch {
-      setStatus("error");
-      setMessage(t`Couldn't turn on tracking right now. Try again in a moment.`);
-    }
-  }, [onTracked]);
-
-  if (mode === "self" && status === "done") {
-    return (
-      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">{t`You're being tracked now`}</div>
-        <div className="mt-1.5 text-[13px] text-osu-f1">
-          {t`Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play.`}
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === "self") {
-    return (
-      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">{t`Start tracking your plays`}</div>
-        <div className="mt-1.5 text-[13px] text-osu-f1">
-          {t`Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker.`}
-        </div>
-        <button
-          type="button"
-          onClick={handleTrack}
-          disabled={status === "pending"}
-          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-60 disabled:cursor-default"
-        >
-          {status === "pending" ? t`Adding you…` : t`Track my plays`}
-        </button>
-        {message ? <div className="mt-3 text-[12px] text-osu-f1">{message}</div> : null}
-      </div>
-    );
-  }
-
-  if (mode === "anon") {
-    return (
-      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">{t`No activity data for this player`}</div>
-        <div className="mt-1.5 text-[13px] text-osu-f1">
-          {t`Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker.`}
-        </div>
-        {loginAvailable ? (
-          <a
-            href={loginHref}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 px-4 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white"
-          >
-            <OsuLogo className="h-4 w-4" />
-            {t`Log in with osu!`}
-          </a>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-      <div className="text-sm font-semibold text-osu-l2">{t`No activity data for this player`}</div>
-      <div className="mt-1.5 text-[13px] text-osu-f1">
-        {t`Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.`}
-      </div>
-    </div>
-  );
-}
-
 function PlayerSkillCard({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
@@ -3949,9 +3254,6 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     setCourseScore(null);
   }, [noDans]);
 
-  if (!liveConfigured) {
-    return <div className="py-8 text-center text-sm text-osu-f1">{t`Skill ratings are unavailable right now.`}</div>;
-  }
   const modes = qualifyingSkillModes(skills);
   /* `modes` arrives ranked by rated plays, most first, and the strip keeps
      that order: the keymode someone plays leads, and its panel is the one that
@@ -3982,6 +3284,11 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   }, [heldHeight, skills, skillsError, view]);
 
   const releaseHeldHeight = useCallback(() => setHeldHeight(null), []);
+
+  if (!liveConfigured) {
+    return <div className="py-8 text-center text-sm text-osu-f1">{t`Skill ratings are unavailable right now.`}</div>;
+  }
+
   /* Every state of the panel is one tree, not a return each: a submission
      queues a recompute that can flip the panel between them while the dialog
      is open, and a second mount point would tear the dialog down mid-paste. */
@@ -4188,1283 +3495,6 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   );
 }
 
-function PlayerActivityPanel({ user }: { user: OsuUser }) {
-  const auth = useAuth();
-  const { t, i18n } = useLingui();
-  const currentYear = new Date().getFullYear();
-  const [requestedYear, setRequestedYear] = useState(currentYear);
-  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
-  const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
-  // Dev-only simulated day; kept out of selectedDay so the day-sync and
-  // detail-fetch effects below never race it against real backend data.
-  const [devDay, setDevDay] = useState<ActivityDay | null>(null);
-  const [selectedDayDetail, setSelectedDayDetail] = useState<ActivityDay | null>(null);
-  const [dayDetailLoading, setDayDetailLoading] = useState(false);
-  const [dayDetailError, setDayDetailError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<LivePlayerActivitySnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  // Draw the year the loaded snapshot actually holds: picking a new year starts a
-  // fetch, and building the grid from the old snapshot against the new year gives
-  // an empty range, so the heatmap would blank out until the new one lands.
-  const selectedYear = snapshot?.year ?? requestedYear;
-  const yearPending = loading && selectedYear !== requestedYear;
-  const activity = useMemo(() => buildActivityFromSnapshot(snapshot, selectedYear), [selectedYear, snapshot]);
-  const yearOptions = useMemo(() => {
-    const years = new Set([currentYear, requestedYear, selectedYear, ...activity.availableYears]);
-    return [...years].sort((a, b) => b - a);
-  }, [activity.availableYears, currentYear, requestedYear, selectedYear]);
-  const averageActiveDay = activity.activeDays > 0 ? Math.round(activity.totalScores / activity.activeDays) : 0;
-  const selectedDayDate = selectedDay?.date;
-  const modalDay = devDay ?? (selectedDayDetail?.date === selectedDayDate ? selectedDayDetail : selectedDay);
-  const modalPlayedLabel = modalDay ? formatActivityDuration(getActivityDayPlayedMs(modalDay)) : null;
-  const closeDayModal = useCallback(() => {
-    setSelectedDay(null);
-    setDevDay(null);
-  }, []);
-  const activityGridStyle = useMemo(
-    () => ({ "--activity-weeks": String(activity.weeks.length) }) as CSSProperties,
-    [activity.weeks.length],
-  );
-
-  useEffect(() => {
-    if (!isLiveBackendConfigured()) {
-      setLoading(false);
-      setSnapshot(null);
-      setError(t`Activity is only available when the server is configured.`);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    return refreshPlayerActivitySnapshot({
-      load: () => fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, requestedYear),
-      onSnapshot: setSnapshot,
-      onInitialError: () => {
-        setSnapshot(null);
-        setError(t`Couldn't load Activity right now.`);
-      },
-      onInitialSettled: () => setLoading(false),
-    });
-  }, [activityRefreshKey, requestedYear, user.id]);
-
-  useEffect(() => {
-    if (!selectedDayDate) return;
-    setSelectedDay(activity.days.find((day) => day.date === selectedDayDate) ?? null);
-  }, [activity, selectedDayDate]);
-
-  useEffect(() => {
-    if (!selectedDayDate) {
-      setSelectedDayDetail(null);
-      setDayDetailLoading(false);
-      setDayDetailError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setSelectedDayDetail(null);
-    setDayDetailLoading(true);
-    setDayDetailError(null);
-
-    fetchLivePlayerActivityDayDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, selectedDayDate)
-      .then((day) => {
-        if (cancelled) return;
-        setSelectedDayDetail(normalizeActivityDay(day, activity.typicalSession));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setDayDetailError(t`Couldn't load the full day detail.`);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setDayDetailLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activity.typicalSession, selectedDayDate, user.id]);
-
-  if (loading && !snapshot) {
-    return (
-      <div className="space-y-4 py-2">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-44" />
-            <Skeleton className="h-3 w-36" />
-          </div>
-          <Skeleton className="h-10 w-28" />
-        </div>
-        <div className="grid grid-cols-[32px_minmax(0,1fr)] gap-2">
-          <Skeleton className="h-32 w-8" />
-          <Skeleton className="h-32 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !snapshot) {
-    return (
-      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-5 text-center text-sm text-osu-f1">
-        {error}
-      </div>
-    );
-  }
-
-  if (snapshot && !snapshot.available) {
-    // Tracking an account osu! turned away would only queue osu! calls that 404.
-    const optInMode: "self" | "other" | "anon" = user.account_status
-      ? "other"
-      : auth.viewer == null ? "anon" : auth.viewer.id === user.id ? "self" : "other";
-    return (
-      <ActivityOptInEmptyState
-        mode={optInMode}
-        loginAvailable={auth.loginAvailable}
-        onTracked={() => setActivityRefreshKey((key) => key + 1)}
-      />
-    );
-  }
-
-  return (
-    <>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_130px]">
-        <section className="min-w-0 px-1 py-2 sm:px-0">
-          {/* Year switches crossfade instead of snapping: the old year dims while
-              its replacement loads, and the new grid fades up once it is here. */}
-          <motion.div
-            key={selectedYear}
-            initial={{ opacity: 0.35 }}
-            animate={{ opacity: yearPending ? 0.55 : 1 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-          >
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-white">
-                  <Trans>{formatNumber(activity.totalScores)} plays in {selectedYear}</Trans>
-                </h2>
-              </div>
-              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-                <ActivityInlineMetric label={t`Avg active day`} value={formatNumber(averageActiveDay)} detail={t`plays`} />
-                <ActivityInlineMetric label={t`Streak`} value={t`${activity.currentStreak}d`} detail={t`now`} />
-              </div>
-            </div>
-
-            <div className="mt-6 sm:mt-7">
-              <div className="flex gap-2">
-                {/* Row pitch must match the cells: fixed 12px rows on mobile (cells are
-                    12px), 1fr rows on sm+ where pt-5 equals the month-label row (h-3 +
-                    mt-2) so the stretched height equals the heatmap grid exactly. */}
-                <div className="grid w-8 shrink-0 grid-rows-[repeat(7,12px)] gap-1 pt-5 text-[10px] leading-none text-osu-f1 sm:grid-rows-7">
-                  {ACTIVITY_WEEKDAY_LABELS.map((day, index) => (
-                    <span key={index} className="flex items-center">{i18n._(day)}</span>
-                  ))}
-                </div>
-                <div className="min-w-0 max-w-full flex-1 overflow-x-auto pb-2 scrollbar-hide sm:overflow-visible sm:pb-0">
-                  <div className="w-max sm:w-full">
-                    <ActivityMonthLabels weeks={activity.weeks} gridStyle={activityGridStyle} />
-                    <div
-                      className="activity-heatmap-grid mt-2 grid gap-1"
-                      style={activityGridStyle}
-                    >
-                      {activity.weeks.map((week) => (
-                        <div key={week.key} className="grid min-w-0 grid-rows-7 gap-1">
-                          {week.days.map((day, index) => (
-                            day ? (
-                              day.scoreCount > 0 ? (
-                                <button
-                                  key={day.date}
-                                  type="button"
-                                  title={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
-                                  onClick={() => setSelectedDay(day)}
-                                  className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
-                                  style={getActivityCellStyle(day, activity.typicalSession)}
-                                />
-                              ) : (
-                                <span
-                                  key={day.date}
-                                  title={t`${formatFullActivityDate(day.date)}: no tracked plays`}
-                                  className={`aspect-square w-full min-w-0 rounded-[3px] border ${ACTIVITY_EMPTY_CELL_CLASS}`}
-                                />
-                              )
-                            ) : (
-                              <span key={`empty-${index}`} className="aspect-square w-full min-w-0" />
-                            )
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[11px] text-osu-f1">
-                <Trans>Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span></Trans>
-              </span>
-              {import.meta.env.DEV && (
-                <button
-                  type="button"
-                  onClick={() => setDevDay(createDevActivityDay(activity.timezone))}
-                  className="rounded-lg border border-osu-pink/25 bg-osu-pink/10 px-2 py-1 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20"
-                  title={t`Open the day modal with simulated busy-day data`}
-                >
-                  {t`Sim busy day`}
-                </button>
-              )}
-            </div>
-          </motion.div>
-        </section>
-
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide lg:block lg:space-y-2 lg:overflow-visible">
-          {yearOptions.map((year) => (
-            <button
-              key={year}
-              type="button"
-              onClick={() => {
-                setRequestedYear(year);
-                setSelectedDay(null);
-              }}
-              className={`min-w-24 rounded-lg px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out lg:w-full ${requestedYear === year
-                  ? "bg-osu-pink text-white"
-                  : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
-                }`}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {modalDay && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 backdrop-blur-sm sm:p-4"
-            onClick={closeDayModal}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.14 }}
-          >
-            <motion.div
-              className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[34rem] flex-col overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.55)] sm:max-h-[calc(100vh-2rem)] sm:max-w-xl sm:p-5"
-              onClick={(event) => event.stopPropagation()}
-              initial={{ opacity: 0, y: 10, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.97 }}
-              transition={{ duration: 0.16 }}
-            >
-              <div className="flex shrink-0 items-start justify-between gap-4">
-                <div>
-                  <div className="text-[9px] font-black uppercase tracking-wide text-osu-pink-light sm:text-[10px]">{t`Activity day`}</div>
-                  <h3 className="mt-1 text-xl font-black text-white sm:text-2xl">{formatFullActivityDate(modalDay.date)}</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeDayModal}
-                  aria-label={t`Close activity details`}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M1 1l12 12M13 1L1 13" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-                <div className={`mt-4 grid gap-2 sm:mt-5 ${modalPlayedLabel ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
-                  <ActivityDetailMetric label={t`Plays`} value={formatNumber(modalDay.scoreCount)} />
-                  <ActivityDetailMetric label={t`Sessions`} value={formatNumber(modalDay.sessionCount)} />
-                  {modalPlayedLabel ? <ActivityDetailMetric label={t`Time played`} value={modalPlayedLabel} /> : null}
-                  <ActivityDetailMetric label={t`Maps`} value={formatNumber(modalDay.mapCount)} />
-                </div>
-
-                <ActivitySessionFlow day={modalDay} timezone={activity.timezone} />
-
-                <ActivityDayMaps
-                  key={modalDay.date}
-                  maps={modalDay.maps}
-                  mapCount={modalDay.mapCount}
-                  loading={dayDetailLoading}
-                  error={dayDetailError}
-                />
-
-                <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Pattern mix`}</div>
-                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">{t`avg intensity, 0-100`}</div>
-                  </div>
-                  {modalDay.skills && modalDay.skills.analyzedPlays > 0 ? (
-                    <ActivityPatternMix key={modalDay.date} skills={modalDay.skills} />
-                  ) : dayDetailLoading ? (
-                    <div className="mt-3 space-y-2">
-                      <Skeleton className="h-3 rounded-full" />
-                      <Skeleton className="h-3 rounded-full" />
-                      <Skeleton className="h-3 rounded-full" />
-                      <Skeleton className="h-3 rounded-full" />
-                    </div>
-                  ) : (
-                    <div className="mt-3 text-[11px] text-osu-f1">
-                      {t`Skill analysis is queued for the maps played on this day.`}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-}
-
-function ActivityDetailMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-osu-b3/20 bg-osu-b5/45 px-3 py-2">
-      <div className="text-[10px] font-bold uppercase text-osu-f1">{label}</div>
-      <div className="mt-1 text-lg font-black text-white sm:text-xl">{value}</div>
-    </div>
-  );
-}
-
-function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
-  const keyModes = skills.keyModes.length > 0
-    ? skills.keyModes
-    : [{
-      keyCount: null,
-      patterns: skills.patterns,
-      analyzedPlays: skills.analyzedPlays,
-      totalPlays: skills.totalPlays,
-    }];
-  const { t, i18n } = useLingui();
-  const [selectedKeyModeIndex, setSelectedKeyModeIndex] = useState(0);
-  const activeIndex = Math.min(selectedKeyModeIndex, keyModes.length - 1);
-  const activeKeyMode = keyModes[activeIndex];
-  const entries = getActivityPatternEntries(activeKeyMode.patterns, activeKeyMode.keyCount, i18n).slice(0, 6);
-  return (
-    <div className="mt-3">
-      {keyModes.length > 1 && (
-        <div className="mb-3 flex flex-wrap gap-1">
-          {keyModes.map((keyMode, index) => {
-            const selected = index === activeIndex;
-            return (
-              <button
-                key={`${keyMode.keyCount ?? "unknown"}:${index}`}
-                type="button"
-                onClick={() => setSelectedKeyModeIndex(index)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-colors ${selected
-                    ? "bg-osu-pink text-white"
-                    : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
-                  }`}
-              >
-                {formatActivityKeyCount(keyMode.keyCount) ?? t`Other`}
-                <span className={`ml-1 font-semibold ${selected ? "text-white/75" : "text-osu-f1/80"}`}>
-                  <Plural value={keyMode.analyzedPlays} one={`${formatNumber(keyMode.analyzedPlays)} play`} other={`${formatNumber(keyMode.analyzedPlays)} plays`} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {entries.length > 0 ? (
-        <div className="space-y-2.5">
-          {entries.map(({ key, label, value }) => (
-            <div key={key}>
-              <div className="mb-1 flex items-baseline justify-between gap-3">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-osu-l2">
-                  <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: getActivitySkillColor(key) }} />
-                  {label}
-                </span>
-                <span className="text-xs font-black text-white">{value}</span>
-              </div>
-              <div className="h-2 rounded-full bg-osu-b3/35">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${value}%`, backgroundColor: getActivitySkillColor(key) }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-[11px] text-osu-f1">{t`No pattern signal for this keymode yet.`}</div>
-      )}
-      {activeKeyMode.analyzedPlays < activeKeyMode.totalPlays && (
-        <div className="mt-2 text-[10px] text-osu-f1">
-          <Trans>{formatNumber(activeKeyMode.analyzedPlays)} of {formatNumber(activeKeyMode.totalPlays)} plays analyzed</Trans>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: string }) {
-  const { t, i18n } = useLingui();
-  if (day.timeline.length === 0) return null;
-  const sessions = groupActivityTimelineBySession(day.timeline).map(mergeActivitySessionSegments);
-  const flowLabel = formatActivityKeyFlow(day.timeline, t`mixed keys`);
-  const timezoneHint = getActivityTimezoneHint(timezone, day.timeline[0]?.startAt);
-  const multiKeymode = new Set(day.timeline.map((segment) => segment.keyCount ?? 0)).size > 1;
-  return (
-    <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">
-          {t`Sessions`}
-          {timezoneHint ? <span className="ml-1.5 font-semibold normal-case text-osu-f1/70">{timezoneHint}</span> : null}
-        </div>
-        <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
-      </div>
-      <ActivityDayClock sessions={sessions} timezone={timezone} dayKey={day.date} />
-      <div className="mt-4 space-y-3.5">
-        {sessions.map((session, sessionIndex) => {
-          const sessionPlays = session.reduce((sum, segment) => sum + segment.playCount, 0);
-          const first = session[0];
-          const last = session[session.length - 1];
-          const startDateLabel = formatActivitySessionDate(first.startAt, day.date, timezone);
-          const elapsed = Date.parse(last.endAt) - Date.parse(first.startAt);
-          const durationLabel = formatActivityDuration(Number.isFinite(elapsed) ? elapsed : 0);
-          const breakdown = aggregateActivitySessionBreakdown(session);
-          return (
-            <div key={first.key}>
-              <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                <span className="text-[11px] font-semibold text-osu-l2">
-                  {sessions.length > 1 ? <span className="text-osu-f1"><Trans>Session {sessionIndex + 1}</Trans> · </span> : null}
-                  {startDateLabel ? `${startDateLabel} · ` : null}
-                  {formatActivityTime(first.startAt, timezone)} - {formatActivityTime(last.endAt, timezone)}
-                  {durationLabel ? <span className="font-normal text-osu-f1"> · {durationLabel}</span> : null}
-                </span>
-                <span className="text-[10px] text-osu-f1">
-                  <Plural value={sessionPlays} one={`${formatNumber(sessionPlays)} play`} other={`${formatNumber(sessionPlays)} plays`} />
-                </span>
-              </div>
-              <div className="flex h-2.5 overflow-hidden rounded-full bg-osu-b4/70">
-                {session.map((segment) => (
-                  <div
-                    key={segment.key}
-                    title={formatActivitySegmentTitle(segment, timezone, i18n)}
-                    className="min-w-0 border-r border-black/25 last:border-r-0"
-                    style={{
-                      flexBasis: 0,
-                      flexGrow: Math.max(1, segment.playCount),
-                      backgroundColor: getActivityTimelineSegmentColor(segment),
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {breakdown.map((entry) => {
-                  const known = entry.skill !== "unknown";
-                  const label = known ? getActivitySkillLabel(entry.skill, entry.keyCount, i18n) : t`Unanalyzed`;
-                  const keyLabel = multiKeymode ? formatActivityKeyCount(entry.keyCount) : null;
-                  return (
-                    <span
-                      key={`${entry.skill}:${entry.keyCount ?? "x"}`}
-                      title={entry.playCount === 1 ? t`${formatNumber(entry.playCount)} play` : t`${formatNumber(entry.playCount)} plays`}
-                      className="flex items-center gap-1 rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-none"
-                    >
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: getActivitySkillColor(entry.skill) }}
-                      />
-                      <span className={`font-semibold ${known ? "text-osu-l2" : "text-osu-f1"}`}>
-                        {label}
-                        {keyLabel ? ` ${keyLabel}` : null}
-                      </span>
-                      {entry.playCount > 1 ? <span className="text-osu-f1">×{formatNumber(entry.playCount)}</span> : null}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// Marks where each session sits in the player's local day so "played in the
-// evening" is visible without reading the time labels. Sessions bleeding past
-// the day boundary (stale pre-timezone data) clamp to the day's edges.
-function ActivityDayClock({ sessions, timezone, dayKey }: {
-  sessions: ActivityTimelineSegment[][];
-  timezone: string;
-  dayKey: string;
-}) {
-  const { t } = useLingui();
-  const blocks = sessions
-    .map((session) => {
-      const first = session[0];
-      const last = session[session.length - 1];
-      const startKey = getZonedDateKey(new Date(first.startAt), timezone);
-      const endKey = getZonedDateKey(new Date(last.endAt), timezone);
-      const startMin = startKey === dayKey
-        ? getZonedMinutesOfDay(first.startAt, timezone)
-        : startKey < dayKey ? 0 : null;
-      const endMin = endKey === dayKey
-        ? getZonedMinutesOfDay(last.endAt, timezone)
-        : endKey > dayKey ? ACTIVITY_MINUTES_PER_DAY : null;
-      if (startMin == null || endMin == null) return null;
-      let end = Math.max(startMin, endMin);
-      let start = startMin;
-      if (end - start < ACTIVITY_DAY_CLOCK_MIN_MINUTES) {
-        end = Math.min(ACTIVITY_MINUTES_PER_DAY, start + ACTIVITY_DAY_CLOCK_MIN_MINUTES);
-        start = end - ACTIVITY_DAY_CLOCK_MIN_MINUTES;
-      }
-      const plays = session.reduce((sum, segment) => sum + segment.playCount, 0);
-      return {
-        key: first.key,
-        left: (start / ACTIVITY_MINUTES_PER_DAY) * 100,
-        width: ((end - start) / ACTIVITY_MINUTES_PER_DAY) * 100,
-        title: plays === 1
-          ? t`${formatActivityTime(first.startAt, timezone)} - ${formatActivityTime(last.endAt, timezone)} · ${formatNumber(plays)} play`
-          : t`${formatActivityTime(first.startAt, timezone)} - ${formatActivityTime(last.endAt, timezone)} · ${formatNumber(plays)} plays`,
-      };
-    })
-    .filter((block): block is NonNullable<typeof block> => block != null);
-  if (blocks.length === 0) return null;
-  return (
-    <div className="mt-3">
-      <div className="relative h-2 rounded-full bg-osu-b4/70">
-        {[25, 50, 75].map((percent) => (
-          <span key={percent} className="absolute inset-y-0 w-px bg-osu-b3/40" style={{ left: `${percent}%` }} />
-        ))}
-        {blocks.map((block) => (
-          <span
-            key={block.key}
-            title={block.title}
-            className="absolute inset-y-0 rounded-full bg-osu-pink"
-            style={{ left: `${block.left}%`, width: `${block.width}%` }}
-          />
-        ))}
-      </div>
-      <div className="mt-1 flex justify-between text-[9px] leading-none text-osu-f1">
-        <span>{t`12 AM`}</span>
-        <span>{t`6 AM`}</span>
-        <span>{t`12 PM`}</span>
-        <span>{t`6 PM`}</span>
-        <span>{t`12 AM`}</span>
-      </div>
-    </div>
-  );
-}
-
-// Below this the list renders in full; above it the tail collapses behind an
-// inline "show more" so the modal has a single scrollbar instead of a nested one.
-const ACTIVITY_DAY_MAPS_PREVIEW = 6;
-
-function ActivityDayMaps({ maps, mapCount, loading, error }: {
-  maps: ActivityPlayedMap[];
-  mapCount: number;
-  loading: boolean;
-  error: string | null;
-}) {
-  const { t } = useLingui();
-  const [expanded, setExpanded] = useState(false);
-  const visibleMaps = expanded ? maps : maps.slice(0, ACTIVITY_DAY_MAPS_PREVIEW);
-  const hiddenCount = maps.length - visibleMaps.length;
-  return (
-    <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">{t`Maps played`}</div>
-        <div className="text-[10px] text-osu-f1 sm:text-[11px]">
-          {loading
-            ? t`loading`
-            : mapCount > maps.length
-              ? t`${maps.length} of ${mapCount}`
-              : maps.length === 1
-                ? t`${maps.length} map`
-                : t`${maps.length} maps`}
-        </div>
-      </div>
-      <div className="mt-2 space-y-1.5 sm:mt-3 sm:space-y-2">
-        {loading && maps.length === 0 ? (
-          <>
-            <Skeleton className="h-16 rounded-md" />
-            <Skeleton className="h-16 rounded-md" />
-            <Skeleton className="h-16 rounded-md" />
-          </>
-        ) : (
-          visibleMaps.map((map) => (
-            <ActivityMapRow key={map.key} map={map} />
-          ))
-        )}
-        {error ? (
-          <div className="rounded-md bg-osu-b4/70 px-3 py-2 text-[11px] text-osu-f1">
-            {error}
-          </div>
-        ) : null}
-      </div>
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="mt-2 w-full rounded-md bg-osu-b4/60 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l2"
-        >
-          <Plural value={hiddenCount} one="Show # more map" other="Show # more maps" />
-        </button>
-      ) : expanded ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className="mt-2 w-full rounded-md bg-osu-b4/60 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l2"
-        >
-          {t`Show fewer`}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
-  return (
-    <a
-      href={`https://osu.ppy.sh/beatmaps/${map.beatmapId}`}
-      target="_blank"
-      rel="noreferrer"
-      className="grid grid-cols-[42px_minmax(0,1fr)_2.25rem] items-center gap-2 rounded-md bg-osu-b4/70 px-2 py-1.5 transition-colors hover:bg-osu-b3/45 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3 sm:rounded-lg sm:p-2"
-    >
-      {map.coverUrl ? (
-        <img
-          src={map.coverUrl}
-          alt=""
-          className="h-8 w-[42px] rounded object-cover sm:h-9 sm:w-12"
-          loading="lazy"
-        />
-      ) : (
-        <div className="flex h-8 w-[42px] items-center justify-center rounded bg-osu-b3/60 text-xs font-black text-osu-l2 sm:h-9 sm:w-12">
-          {map.title.slice(0, 1).toUpperCase()}
-        </div>
-      )}
-      <div className="min-w-0">
-        <div className="truncate text-[13px] font-bold text-white sm:text-sm">{map.title}</div>
-        <div className="truncate text-[10px] text-osu-f1 sm:text-[11px]">
-          {map.artist} [{map.version}]
-        </div>
-        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-osu-f1">
-          {map.keyCount ? <span>{map.keyCount}K</span> : null}
-          {map.accuracy != null ? <span>{formatAccuracy(map.accuracy)}</span> : null}
-          {map.pp != null ? <span>{formatPP(map.pp)}</span> : null}
-        </div>
-        <ActivityMapPatternTag skills={map.skills} keyCount={map.keyCount} />
-      </div>
-      <div className="text-right">
-        <div className="text-[13px] font-black text-osu-l2 sm:text-sm">{formatNumber(map.plays)}</div>
-        <div className="text-[10px] text-osu-f1"><Plural value={map.plays} one="play" other="plays" /></div>
-      </div>
-    </a>
-  );
-}
-
-// One clear primary-pattern tag instead of a row of abbreviated score pills;
-// the full breakdown stays reachable via the tooltip.
-function ActivityMapPatternTag({ skills, keyCount }: { skills: LivePlayerActivitySkillVector | null; keyCount: number | null }) {
-  const { i18n } = useLingui();
-  if (!skills) return null;
-  const primary = getActivityPrimarySkill(skills);
-  if (primary === "unknown") return null;
-  const entries = getActivityPatternEntries(skills.patterns, keyCount, i18n);
-  const secondary = entries.filter(({ key }) => key !== primary).slice(0, 2);
-  const tooltip = entries.slice(0, 5).map(({ label, value }) => `${label} ${value}`).join(" · ");
-  return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5" title={tooltip}>
-      <span
-        className="rounded px-1.5 py-0.5 text-[9px] font-black leading-none text-white"
-        style={{ backgroundColor: primary === "mixed" ? "rgba(255,255,255,0.14)" : getActivitySkillColor(primary) }}
-      >
-        {getActivitySkillLabel(primary, keyCount, i18n)}
-      </span>
-      {secondary.length > 0 ? (
-        <span className="text-[9px] leading-none text-osu-f1">
-          + {secondary.map(({ label }) => label).join(", ")}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function ActivityInlineMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="min-w-20 border-l border-osu-b3/30 pl-4 first:border-l-0 first:pl-0">
-      <div className="text-[10px] font-bold uppercase text-osu-f1">{label}</div>
-      <div className="text-lg font-black leading-tight text-white">{value}</div>
-      <div className="text-[10px] text-osu-f1">{detail}</div>
-    </div>
-  );
-}
-
-function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; gridStyle: CSSProperties }) {
-  let lastMonth = "";
-  return (
-    <div
-      className="activity-heatmap-grid grid h-3 gap-1 text-[10px] leading-none text-osu-f1"
-      style={gridStyle}
-    >
-      {weeks.map((week) => {
-        const firstDay = week.days.find((day): day is ActivityDay => day != null);
-        const month = firstDay ? formatActivityMonth(firstDay.date) : "";
-        const label = month && month !== lastMonth ? month : "";
-        if (month) lastMonth = month;
-        return (
-          <span key={week.key} className="min-w-0 whitespace-nowrap">
-            {label}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, year: number): ActivitySummary {
-  const today = startOfLocalDay(new Date());
-  const { start, end } = getActivityHeatmapRange(snapshot, year);
-  const activeDays = new Map((snapshot?.days ?? []).map((day) => [day.date, day]));
-  const typicalSession = Math.max(1, snapshot?.typicalSession ?? 1);
-  const days: ActivityDay[] = [];
-
-  for (let date = startOfLocalDay(start); date <= end; date = addLocalDays(date, 1)) {
-    const dateKey = toDateKey(date);
-    const active = activeDays.get(dateKey);
-    const scoreCount = active?.scoreCount ?? 0;
-
-    days.push(normalizeActivityDay({
-      date: dateKey,
-      scoreCount,
-      passedCount: active?.passedCount ?? 0,
-      sessionCount: active?.sessionCount ?? 0,
-      mapCount: active?.mapCount ?? active?.maps.length ?? 0,
-      maps: active?.maps ?? [],
-      skills: active?.skills ?? null,
-      timeline: active?.timeline ?? [],
-    }, typicalSession));
-  }
-
-  const weeks = buildActivityWeeks(days);
-
-  return {
-    days,
-    weeks,
-    totalScores: snapshot?.totalScores ?? 0,
-    activeDays: snapshot?.activeDays ?? 0,
-    totalSessions: snapshot?.totalSessions ?? 0,
-    currentStreak: snapshot?.currentStreak ?? 0,
-    typicalSession,
-    availableYears: snapshot?.availableYears ?? [today.getFullYear()],
-    timezone: snapshot?.timezone ?? "UTC",
-  };
-}
-
-// Skip the empty months before a player's first tracked play: the heatmap
-// starts at the first active month and always runs through December.
-function getActivityHeatmapRange(
-  snapshot: LivePlayerActivitySnapshot | null,
-  year: number,
-): { start: Date; end: Date } {
-  const firstActiveDate = (snapshot?.days ?? [])
-    .filter((day) => day.scoreCount > 0)
-    .map((day) => day.date)
-    .sort()[0];
-  const first = firstActiveDate ? parseLocalDateKey(firstActiveDate) : new Date(year, 0, 1);
-  return {
-    start: new Date(first.getFullYear(), first.getMonth(), 1),
-    end: new Date(year, 11, 31),
-  };
-}
-
-function normalizeActivityDay(day: Omit<ActivityDay, "level">, typicalSession: number): ActivityDay {
-  return {
-    ...day,
-    level: getActivityLevel(day.scoreCount, typicalSession),
-  };
-}
-
-function buildActivityWeeks(days: ActivityDay[]): ActivityWeek[] {
-  const weeks: ActivityWeek[] = [];
-  let current: (ActivityDay | null)[] = [];
-
-  const leadingBlanks = days[0] ? parseLocalDateKey(days[0].date).getDay() : 0;
-  for (let index = 0; index < leadingBlanks; index++) current.push(null);
-
-  for (const day of days) {
-    current.push(day);
-    if (current.length === 7) {
-      weeks.push({ key: day.date, days: current });
-      current = [];
-    }
-  }
-
-  if (current.length > 0) {
-    const key = current.find((day): day is ActivityDay => day != null)?.date ?? `week-${weeks.length}`;
-    while (current.length < 7) current.push(null);
-    weeks.push({ key, days: current });
-  }
-
-  return weeks;
-}
-
-function getActivityLevel(scoreCount: number, typicalSession: number): 0 | 1 | 2 | 3 | 4 {
-  if (scoreCount <= 0) return 0;
-  if (scoreCount < typicalSession * 0.5) return 1;
-  if (scoreCount < typicalSession) return 2;
-  if (scoreCount < typicalSession * 2) return 3;
-  return 4;
-}
-
-function getActivityCellStyle(day: ActivityDay, typicalSession: number) {
-  const ratio = Math.min(1, day.scoreCount / Math.max(1, typicalSession * 2.4));
-  const eased = Math.sqrt(ratio);
-  const saturation = Math.round(58 + eased * 42);
-  const lightness = Math.round(20 + eased * 55);
-  const alpha = (0.62 + eased * 0.38).toFixed(2);
-  const borderAlpha = (0.08 + eased * 0.22).toFixed(2);
-  return {
-    backgroundColor: `hsl(var(--theme-hue) calc(${saturation}% * var(--theme-sat)) ${lightness}% / ${alpha})`,
-    borderColor: `hsl(var(--theme-hue) calc(100% * var(--theme-sat)) 82% / ${borderAlpha})`,
-    boxShadow: "none",
-  };
-}
-
-function groupActivityTimelineBySession(segments: ActivityTimelineSegment[]): ActivityTimelineSegment[][] {
-  const groups = new Map<number, ActivityTimelineSegment[]>();
-  for (const segment of segments) {
-    groups.set(segment.sessionIndex, [...(groups.get(segment.sessionIndex) ?? []), segment]);
-  }
-  return [...groups.values()]
-    .sort((a, b) => Date.parse(a[0].startAt) - Date.parse(b[0].startAt));
-}
-
-// Time actually spent inside sessions (first to last play of each one), not
-// the wall-clock span of the day.
-function getActivityDayPlayedMs(day: ActivityDay): number {
-  return groupActivityTimelineBySession(day.timeline).reduce((sum, session) => {
-    const elapsed = Date.parse(session[session.length - 1].endAt) - Date.parse(session[0].startAt);
-    return sum + Math.max(0, Number.isFinite(elapsed) ? elapsed : 0);
-  }, 0);
-}
-
-// One entry per skill+keymode with summed plays: the session bar already
-// carries the chronology, so the chip list reads as "what was played",
-// most-played first, instead of one chip per timeline segment.
-function aggregateActivitySessionBreakdown(session: ActivityTimelineSegment[]): {
-  skill: LivePlayerActivityPrimarySkill;
-  keyCount: number | null;
-  playCount: number;
-}[] {
-  const groups = new Map<string, { skill: LivePlayerActivityPrimarySkill; keyCount: number | null; playCount: number }>();
-  for (const segment of session) {
-    const key = `${segment.primarySkill}:${segment.keyCount ?? "x"}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.playCount += segment.playCount;
-    } else {
-      groups.set(key, { skill: segment.primarySkill, keyCount: segment.keyCount, playCount: segment.playCount });
-    }
-  }
-  return [...groups.values()].sort((left, right) => right.playCount - left.playCount);
-}
-
-function getActivityPrimarySkill(skills: LivePlayerActivitySkillVector | null): LivePlayerActivityPrimarySkill {
-  return skills?.primary ?? "unknown";
-}
-
-// Pattern ids come from the backend's dan estimator families; unknown ids get
-// a derived label and a palette color so future families render unchanged.
-const ACTIVITY_PATTERN_META: Record<string, { label: MessageDescriptor; shortLabel: string; color: string }> = {
-  stream: { label: msg`Stream`, shortLabel: "S", color: "#8f6bd8" },
-  jumpstream: { label: msg`Jumpstream`, shortLabel: "JS", color: "#6f87d8" },
-  handstream: { label: msg`Handstream`, shortLabel: "HS", color: "#b06bc0" },
-  jack: { label: msg`Jack`, shortLabel: "J", color: "#c66f84" },
-  chordjack: { label: msg`Chordjack`, shortLabel: "CJ", color: "#c59a5c" },
-  stamina: { label: msg`Stamina`, shortLabel: "ST", color: "#ad6b5d" },
-  tech: { label: msg`Tech`, shortLabel: "T", color: "#83a86f" },
-  ln: { label: msg`LN`, shortLabel: "LN", color: "#57aeba" },
-  lnGeneral: { label: msg`LN General`, shortLabel: "LNG", color: "#63bf98" },
-  lnRelease: { label: msg`LN Release`, shortLabel: "LNR", color: "#58b7d9" },
-  lnInverse: { label: msg`LN Inverse`, shortLabel: "LNI", color: "#7fbed2" },
-  lnTech: { label: msg`LN Tech`, shortLabel: "LNT", color: "#9f78df" },
-  unknown: { label: msg`Unknown`, shortLabel: "", color: "#5f596b" },
-};
-
-const ACTIVITY_WEEKDAY_LABELS: MessageDescriptor[] = [
-  msg`Sun`,
-  msg`Mon`,
-  msg`Tue`,
-  msg`Wed`,
-  msg`Thu`,
-  msg`Fri`,
-  msg`Sat`,
-];
-
-const ACTIVITY_PATTERN_FALLBACK_COLORS = ["#8c7fb8", "#b88a7f", "#7fb89a", "#b8a87f", "#7f9ab8"];
-
-function getActivityPatternColor(patternId: string): string {
-  const meta = ACTIVITY_PATTERN_META[patternId];
-  if (meta) return meta.color;
-  let hash = 0;
-  for (let index = 0; index < patternId.length; index++) hash = (hash * 31 + patternId.charCodeAt(index)) | 0;
-  return ACTIVITY_PATTERN_FALLBACK_COLORS[Math.abs(hash) % ACTIVITY_PATTERN_FALLBACK_COLORS.length];
-}
-
-function getActivityPatternMeta(patternId: string, keyCount: number | null, i18n: I18n): { label: string; shortLabel: string; color: string } {
-  // The estimator's handstream family reads as brackets in 7K+ vocabulary;
-  // the score is the same, only the label follows the keymode.
-  if (patternId === "handstream" && keyCount != null && keyCount >= 7) {
-    return { label: i18n._(msg`Bracket`), shortLabel: "B", color: ACTIVITY_PATTERN_META.handstream.color };
-  }
-  const meta = ACTIVITY_PATTERN_META[patternId];
-  if (meta) return { label: i18n._(meta.label), shortLabel: meta.shortLabel, color: meta.color };
-  return {
-    label: patternId.charAt(0).toUpperCase() + patternId.slice(1),
-    shortLabel: patternId.slice(0, 2).toUpperCase(),
-    color: getActivityPatternColor(patternId),
-  };
-}
-
-function getActivityPatternEntries(patterns: LivePlayerActivityPatterns | null | undefined, keyCount: number | null, i18n: I18n) {
-  return Object.entries(patterns ?? {})
-    .map(([key, raw]) => {
-      const meta = getActivityPatternMeta(key, keyCount, i18n);
-      return { key, label: meta.label, shortLabel: meta.shortLabel, value: Math.round(clamp01(Number(raw)) * 100) };
-    })
-    .filter(({ value }) => value >= 5)
-    .sort((left, right) => right.value - left.value);
-}
-
-function getActivitySkillColor(skill: LivePlayerActivityPrimarySkill): string {
-  return getActivityPatternColor(skill);
-}
-
-function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): string {
-  return getActivitySkillColor(segment.primarySkill);
-}
-
-function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null, i18n: I18n): string {
-  if (skill === "mixed") return i18n._(msg`Hybrid`);
-  return getActivityPatternMeta(skill, keyCount, i18n).label;
-}
-
-function formatActivityKeyFlow(segments: ActivityTimelineSegment[], mixedLabel: string): string {
-  const labels = [...new Set(segments
-    .map((segment) => formatActivityKeyCount(segment.keyCount))
-    .filter((label): label is string => label != null))];
-  if (labels.length === 0) return mixedLabel;
-  return labels.join(" / ");
-}
-
-// Adjacent same-keymode same-skill segments read as one block; merging them
-// frees enough width for the survivors' labels.
-function mergeActivitySessionSegments(session: ActivityTimelineSegment[]): ActivityTimelineSegment[] {
-  const merged: ActivityTimelineSegment[] = [];
-  for (const segment of session) {
-    const prev = merged[merged.length - 1];
-    if (prev && prev.keyCount === segment.keyCount && prev.primarySkill === segment.primarySkill) {
-      merged[merged.length - 1] = {
-        ...prev,
-        endAt: segment.endAt,
-        playCount: prev.playCount + segment.playCount,
-        patterns: mergeActivityPatterns(prev.patterns, prev.playCount, segment.patterns, segment.playCount),
-      };
-    } else {
-      merged.push(segment);
-    }
-  }
-  return merged;
-}
-
-function mergeActivityPatterns(
-  left: LivePlayerActivityPatterns,
-  leftPlays: number,
-  right: LivePlayerActivityPatterns,
-  rightPlays: number,
-): LivePlayerActivityPatterns {
-  const total = Math.max(1, leftPlays + rightPlays);
-  const out: LivePlayerActivityPatterns = {};
-  for (const key of new Set([...Object.keys(left ?? {}), ...Object.keys(right ?? {})])) {
-    out[key] = ((Number(left?.[key]) || 0) * leftPlays + (Number(right?.[key]) || 0) * rightPlays) / total;
-  }
-  return out;
-}
-
-function createDevActivityPatterns(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): LivePlayerActivityPatterns {
-  if (skill === "unknown") return {};
-  const base: LivePlayerActivityPatterns = keyCount != null && keyCount >= 7
-    ? { ln: 0.46, lnRelease: 0.34, handstream: 0.3, stream: 0.36, tech: 0.32 }
-    : { stream: 0.42, jumpstream: 0.31, tech: 0.38, jack: 0.26, chordjack: 0.24, stamina: 0.45 };
-  if (skill === "mixed") return { ...base, stream: 0.64, chordjack: 0.6, tech: 0.58 };
-  return { ...base, [skill]: 0.88 };
-}
-
-function createDevActivityMap(
-  index: number,
-  title: string,
-  artist: string,
-  version: string,
-  keyCount: number,
-  plays: number,
-  accuracy: number,
-  pp: number,
-  primary: LivePlayerActivityPrimarySkill | null,
-): ActivityPlayedMap {
-  return {
-    key: `dev-map-${index}`,
-    beatmapId: 4000000 + index,
-    beatmapsetId: 1900000 + index,
-    title,
-    artist,
-    version,
-    coverUrl: null,
-    plays,
-    accuracy,
-    pp,
-    rank: "S",
-    keyCount,
-    skills: primary ? { primary, patterns: createDevActivityPatterns(primary, keyCount) } : null,
-  };
-}
-
-// Dev-only fixture for previewing the day modal with a busy multi-keymode day;
-// local setups usually run without osu! API jobs, so real days stay sparse.
-// Covers: adjacent merge candidates, sub-threshold segments, unanalyzed
-// segments, 7K bracket relabeling, hybrid, partial analysis, map overflow.
-function createDevActivityDay(timezone: string): ActivityDay {
-  const sessionSpecs: { keyCount: number | null; skill: LivePlayerActivityPrimarySkill; plays: number; minutes: number }[][] = [
-    [
-      { keyCount: 4, skill: "chordjack", plays: 5, minutes: 14 },
-      { keyCount: 4, skill: "stream", plays: 1, minutes: 3 },
-      { keyCount: 4, skill: "stream", plays: 3, minutes: 9 },
-      { keyCount: 4, skill: "tech", plays: 2, minutes: 6 },
-      { keyCount: 4, skill: "unknown", plays: 1, minutes: 3 },
-      { keyCount: 4, skill: "jack", plays: 1, minutes: 2 },
-      { keyCount: 4, skill: "chordjack", plays: 6, minutes: 16 },
-      { keyCount: 4, skill: "mixed", plays: 4, minutes: 11 },
-      { keyCount: 7, skill: "jumpstream", plays: 3, minutes: 8 },
-    ],
-    [
-      { keyCount: 7, skill: "ln", plays: 6, minutes: 18 },
-      { keyCount: 7, skill: "handstream", plays: 2, minutes: 7 },
-      { keyCount: 7, skill: "unknown", plays: 1, minutes: 3 },
-      { keyCount: 7, skill: "lnRelease", plays: 4, minutes: 12 },
-      { keyCount: 7, skill: "mixed", plays: 5, minutes: 13 },
-    ],
-    [
-      { keyCount: 4, skill: "stamina", plays: 7, minutes: 19 },
-      { keyCount: 4, skill: "stream", plays: 2, minutes: 5 },
-    ],
-  ];
-  const start = new Date();
-  start.setHours(13, 40, 0, 0);
-  let cursor = start.getTime();
-  const timeline: ActivityTimelineSegment[] = [];
-  sessionSpecs.forEach((session, sessionIndex) => {
-    session.forEach((spec, segmentIndex) => {
-      const startAt = new Date(cursor).toISOString();
-      cursor += spec.minutes * 60_000;
-      timeline.push({
-        key: `dev:${sessionIndex}:${segmentIndex}`,
-        sessionIndex,
-        startAt,
-        endAt: new Date(cursor).toISOString(),
-        playCount: spec.plays,
-        keyCount: spec.keyCount,
-        primarySkill: spec.skill,
-        patterns: createDevActivityPatterns(spec.skill, spec.keyCount),
-      });
-    });
-    cursor += 75 * 60_000;
-  });
-  const scoreCount = timeline.reduce((sum, segment) => sum + segment.playCount, 0);
-  const playsForKeyCount = (keyCount: number) => timeline
-    .filter((segment) => segment.keyCount === keyCount)
-    .reduce((sum, segment) => sum + segment.playCount, 0);
-  const maps = [
-    createDevActivityMap(1, "Quantum Surgery", "Camellia", "[4K] Lasersweep", 4, 6, 0.9641, 412, "chordjack"),
-    createDevActivityMap(2, "Snow Crystals", "yuki.", "[4K] Hyper", 4, 5, 0.9893, 121, "stream"),
-    createDevActivityMap(3, "Lights of Muse", "xi", "[7K] LN Master", 7, 4, 0.9712, 287, "ln"),
-    createDevActivityMap(4, "Backbeat Maniac", "Eternal", "[4K] SHD", 4, 4, 0.9534, 198, "stamina"),
-    createDevActivityMap(5, "Brain Power", "NOMA", "[4K] Another", 4, 3, 0.9477, 233, "mixed"),
-    createDevActivityMap(6, "Future Dominators", "technoplanet", "[7K] 4 Dimensions", 7, 3, 0.9588, 305, "handstream"),
-    createDevActivityMap(7, "Grand Thaw", "Aoi", "[7K] Release", 7, 3, 0.9821, 176, "lnRelease"),
-    createDevActivityMap(8, "Pure Ruby", "DJ Sharpnel", "[4K] Lunatic", 4, 2, 0.9312, 264, "jack"),
-    createDevActivityMap(9, "Cicadidae", "t+pazolite", "[4K] Extra", 4, 2, 0.9665, 209, "tech"),
-    createDevActivityMap(10, "Unknown Signal", "Various Artists", "[4K] ???", 4, 1, 0.9402, 88, null),
-  ];
-  return {
-    date: getZonedDateKey(start, timezone),
-    scoreCount,
-    passedCount: Math.round(scoreCount * 0.7),
-    sessionCount: sessionSpecs.length,
-    mapCount: maps.length + 4,
-    level: 4,
-    maps,
-    skills: {
-      patterns: { stream: 0.74, chordjack: 0.72, tech: 0.66, stamina: 0.62, jack: 0.48 },
-      analyzedPlays: scoreCount - 2,
-      totalPlays: scoreCount,
-      keyModes: [
-        {
-          keyCount: 4,
-          patterns: { stream: 0.86, chordjack: 0.72, tech: 0.71, stamina: 0.7, jack: 0.61 },
-          analyzedPlays: playsForKeyCount(4) - 1,
-          totalPlays: playsForKeyCount(4),
-        },
-        {
-          keyCount: 7,
-          patterns: { ln: 0.82, lnRelease: 0.66, handstream: 0.58, stream: 0.4 },
-          analyzedPlays: playsForKeyCount(7) - 1,
-          totalPlays: playsForKeyCount(7),
-        },
-      ],
-    },
-    timeline,
-  };
-}
-
-function formatActivitySegmentTitle(segment: ActivityTimelineSegment, timeZone: string, i18n: I18n): string {
-  const scores = getActivityPatternEntries(segment.patterns, segment.keyCount, i18n)
-    .slice(0, 4)
-    .map(({ shortLabel, value }) => `${shortLabel} ${value}%`)
-    .join(" / ");
-  return [
-    `${formatActivityTime(segment.startAt, timeZone)} - ${formatActivityTime(segment.endAt, timeZone)}`,
-    segment.playCount === 1
-      ? i18n._(msg`${formatNumber(segment.playCount)} play`)
-      : i18n._(msg`${formatNumber(segment.playCount)} plays`),
-    formatActivityKeyCount(segment.keyCount),
-    getActivitySkillLabel(segment.primarySkill, segment.keyCount, i18n),
-    scores,
-  ].filter(Boolean).join(" • ");
-}
-
-function formatActivityKeyCount(keyCount: number | null): string | null {
-  if (keyCount == null || !Number.isFinite(keyCount) || keyCount <= 0) return null;
-  return `${Math.round(keyCount)}K`;
-}
-
-// Safety net: with player-timezone bucketing a session always falls on its
-// heatmap date, but stale data from an older backend can still cross over;
-// label those sessions with their date so the order stays legible.
-function formatActivitySessionDate(startAt: string, dayKey: string, timeZone: string): string | null {
-  const date = new Date(startAt);
-  if (!Number.isFinite(date.getTime())) return null;
-  if (getZonedDateKey(date, timeZone) === dayKey) return null;
-  try {
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone });
-  } catch {
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-}
-
-// en-CA formats as YYYY-MM-DD, matching the backend's day keys.
-function getZonedDateKey(date: Date, timeZone: string): string {
-  try {
-    return date.toLocaleDateString("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-  } catch {
-    return toDateKey(date);
-  }
-}
-
-function formatActivityTime(value: string, timeZone: string): string {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  try {
-    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
-  } catch {
-    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  }
-}
-
-const ACTIVITY_MINUTES_PER_DAY = 24 * 60;
-// Below this a session block on the day clock is an invisible sliver.
-const ACTIVITY_DAY_CLOCK_MIN_MINUTES = 8;
-
-function formatActivityDuration(ms: number): string | null {
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 1) return "<1m";
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}m`;
-  if (rest === 0) return `${hours}h`;
-  return `${hours}h ${rest}m`;
-}
-
-function getZonedMinutesOfDay(value: string, timeZone: string): number | null {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return null;
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" })
-      .formatToParts(date);
-    const hour = Number(parts.find((part) => part.type === "hour")?.value);
-    const minute = Number(parts.find((part) => part.type === "minute")?.value);
-    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-    return hour * 60 + minute;
-  } catch {
-    return date.getHours() * 60 + date.getMinutes();
-  }
-}
-
-// Shown only when the viewer's clock differs from the player's timezone, so
-// the session times don't read as broken to foreign visitors.
-function getActivityTimezoneHint(timeZone: string, referenceIso: string | undefined): string | null {
-  const reference = referenceIso ? new Date(referenceIso) : new Date();
-  if (!Number.isFinite(reference.getTime())) return null;
-  try {
-    const zoned = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" })
-      .formatToParts(reference)
-      .find((part) => part.type === "timeZoneName")?.value ?? null;
-    const local = new Intl.DateTimeFormat("en-US", { timeZoneName: "shortOffset" })
-      .formatToParts(reference)
-      .find((part) => part.type === "timeZoneName")?.value ?? null;
-    if (!zoned || zoned === local) return null;
-    return zoned;
-  } catch {
-    return null;
-  }
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
-
-function startOfLocalDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function addLocalDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function toDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseLocalDateKey(date: string): Date {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, day || 1);
-}
-
-function formatFullActivityDate(date: string): string {
-  return parseLocalDateKey(date).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatActivityMonth(date: string): string {
-  return parseLocalDateKey(date).toLocaleDateString("en-US", {
-    month: "short",
-  });
-}
-
-/* A restricted player's own page, drawn from its BBCode the same way the
-   editor preview draws it. */
 function OwnAboutCard({ raw, onEdit }: { raw: string; onEdit: () => void }) {
   const { t } = useLingui();
   return (
@@ -5567,245 +3597,6 @@ function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void })
         className="bbcode-content bbcode-content--capped px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto"
         dangerouslySetInnerHTML={{ __html: html }}
       />
-    </div>
-  );
-}
-
-function BestScoresControlBar({
-  availableKeyModes,
-  keyFilter,
-  onChangeKeyFilter,
-  maxInlineKeyModes,
-  keyModePlayCounts,
-  onKeyModeOverflow,
-  mods,
-  modFilter,
-  onCycleMod,
-  onReverseCycleMod,
-  onClearMods,
-  sort,
-  ppSort,
-  ageSort,
-  onChangeSort,
-}: {
-  availableKeyModes: string[];
-  keyFilter: KeyFilter;
-  onChangeKeyFilter: (keyFilter: KeyFilter) => void;
-  maxInlineKeyModes: number;
-  keyModePlayCounts: Record<string, number>;
-  onKeyModeOverflow?: () => void;
-  mods: string[];
-  modFilter: ModFilterState;
-  onCycleMod: (mod: string) => void;
-  onReverseCycleMod: (mod: string) => void;
-  onClearMods: () => void;
-  sort: BestSort;
-  ppSort: BestPpSort;
-  ageSort: BestAgeSort;
-  onChangeSort: (sort: BestSort) => void;
-}) {
-  const { t } = useLingui();
-  const hasActiveFilter = Object.keys(modFilter).length > 0;
-
-  return (
-    <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-      <div className="order-2 flex items-center gap-2 flex-wrap min-w-0 lg:order-1">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{t`Mods`}</span>
-        {mods.length === 0 ? (
-          <span className="text-[11px] text-osu-f1">{t`No mods in top plays`}</span>
-        ) : (
-          <>
-            <div className="flex items-center gap-1 flex-wrap">
-              {mods.map((mod) => (
-                <ModFilterChip
-                  key={mod}
-                  mod={mod}
-                  mode={modFilter[mod]}
-                  onClick={() => onCycleMod(mod)}
-                  onContextMenu={() => onReverseCycleMod(mod)}
-                />
-              ))}
-            </div>
-            {hasActiveFilter && (
-              <button
-                type="button"
-                onClick={onClearMods}
-                className="text-[10px] font-semibold text-osu-f1 hover:text-osu-l2 underline underline-offset-2 cursor-pointer"
-              >
-                {t`Clear`}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-      <div className="order-1 flex w-full min-w-0 flex-nowrap items-center justify-between gap-2 lg:order-2 lg:w-auto lg:flex-col lg:items-end lg:justify-start">
-        {availableKeyModes.length > 1 && (
-          // Shrinks so the keymode strip scrolls inside itself instead of pushing
-          // the sort buttons off the right edge (a 4K-to-18K player overflows).
-          <div className="min-w-0 flex-1 lg:hidden">
-            <KeyModeControl
-              availableKeyModes={availableKeyModes}
-              keyFilter={keyFilter}
-              onChangeKeyFilter={onChangeKeyFilter}
-              maxVisible={maxInlineKeyModes}
-              playCounts={keyModePlayCounts}
-              onOverflow={onKeyModeOverflow}
-            />
-          </div>
-        )}
-        <BestSortControl sort={sort} ppSort={ppSort} ageSort={ageSort} onChangeSort={onChangeSort} />
-      </div>
-    </div>
-  );
-}
-
-function BestSortControl({
-  sort,
-  ppSort,
-  ageSort,
-  onChangeSort,
-}: {
-  sort: BestSort;
-  ppSort: BestPpSort;
-  ageSort: BestAgeSort;
-  onChangeSort: (sort: BestSort) => void;
-}) {
-  const { t } = useLingui();
-  const ppActive = sort === "pp-desc" || sort === "pp-asc";
-  const ppDirection = ppSort === "pp-asc" ? "asc" : "desc";
-  const nextPpSort: BestPpSort = ppActive
-    ? (ppSort === "pp-desc" ? "pp-asc" : "pp-desc")
-    : ppSort;
-  const ageActive = sort === "newest" || sort === "oldest";
-  const ageDirection = ageSort === "oldest" ? "asc" : "desc";
-  const nextAgeSort: BestAgeSort = ageActive
-    ? (ageSort === "newest" ? "oldest" : "newest")
-    : ageSort;
-
-  return (
-    <div className="flex items-center gap-1 shrink-0">
-      <span className="hidden text-[9px] uppercase tracking-wider text-osu-f1 font-semibold sm:inline">{t`Sort`}</span>
-      <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1">
-        <button
-          type="button"
-          onClick={() => onChangeSort(nextPpSort)}
-          title={ppSort === "pp-asc" ? t`Lowest PP first` : t`Highest PP first`}
-          className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ppActive
-              ? "bg-osu-pink/15 text-osu-pink-light"
-              : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
-            }`}
-        >
-          <span>PP</span>
-          <SortArrow direction={ppDirection} />
-        </button>
-        <button
-          type="button"
-          onClick={() => onChangeSort(nextAgeSort)}
-          title={ageSort === "oldest" ? t`Oldest first` : t`Newest first`}
-          className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ageActive
-              ? "bg-osu-pink/15 text-osu-pink-light"
-              : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
-            }`}
-        >
-          <Trans>Age</Trans>
-          <SortArrow direction={ageDirection} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Which keymodes a crowded strip keeps inline, and which fall to the overflow.
- *
- * A profile with 4K through 18K on it has more chips than a phone row holds,
- * and they are not worth the same: two 18K plays are a novelty beside a 200
- * play 7K list. So the strip keeps the keymodes with the most plays, and the
- * rest go behind one chip. What is kept is still drawn in numeric order, since
- * ranking the chips themselves would move 4K around per profile.
- *
- * The active filter is always kept, or picking a keymode from the overflow
- * would hide the chip that says which one is on.
- */
-export function selectVisibleKeyModes(
-  availableKeyModes: string[],
-  keyFilter: KeyFilter,
-  playCounts: Record<string, number>,
-  maxVisible: number,
-): string[] {
-  if (availableKeyModes.length <= maxVisible) return availableKeyModes;
-  const ranked = [...availableKeyModes].sort((a, b) =>
-    (playCounts[b] ?? 0) - (playCounts[a] ?? 0)
-    || Number(a.replace("k", "")) - Number(b.replace("k", "")));
-  const kept = new Set(ranked.slice(0, Math.max(1, maxVisible)));
-  if (keyFilter !== "all") kept.add(keyFilter);
-  return availableKeyModes.filter((keyMode) => kept.has(keyMode));
-}
-
-function KeyModeControl({
-  availableKeyModes,
-  keyFilter,
-  onChangeKeyFilter,
-  maxVisible,
-  playCounts,
-  onOverflow,
-}: {
-  availableKeyModes: string[];
-  keyFilter: KeyFilter;
-  onChangeKeyFilter: (keyFilter: KeyFilter) => void;
-  /** Chips to keep inline before the rest collapse. Unset keeps all of them. */
-  maxVisible?: number;
-  playCounts?: Record<string, number>;
-  /** Opens a fuller picker instead of unfolding the rest of the strip in place. */
-  onOverflow?: () => void;
-}) {
-  const { t } = useLingui();
-  const [expanded, setExpanded] = useState(false);
-  const visibleKeyModes = useMemo(() => (
-    maxVisible == null || expanded
-      ? availableKeyModes
-      : selectVisibleKeyModes(availableKeyModes, keyFilter, playCounts ?? {}, maxVisible)
-  ), [availableKeyModes, expanded, keyFilter, maxVisible, playCounts]);
-  const hiddenCount = availableKeyModes.length - visibleKeyModes.length;
-
-  return (
-    // Someone who plays every keymode makes this strip wider than a phone. It
-    // scrolls inside its own box rather than running off the screen, and the
-    // box never grows past its parent, so the sort buttons beside it stay put.
-    // Unfolded it holds more chips than the row it sits in is wide, so it wraps
-    // onto as many lines as it needs instead of scrolling: a scrolling strip
-    // clips its last chip against the edge, and the point of unfolding is to
-    // see every keymode. It also gives up its desktop shrink-0 there, so it
-    // takes the width it can rather than squeezing the tabs beside it.
-    <div className={`inline-flex max-w-full min-w-0 items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1 ${
-      expanded ? "flex-wrap" : "overflow-x-auto scrollbar-hide lg:shrink-0"
-    }`}>
-      {[["all", t`All`] as const, ...visibleKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
-        <button
-          key={value}
-          onClick={() => onChangeKeyFilter(value)}
-          className={`shrink-0 px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${keyFilter === value
-              ? "bg-osu-pink/15 text-osu-pink-light"
-              : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
-            }`}
-        >
-          {label}
-        </button>
-      ))}
-      {hiddenCount > 0 && (
-        /* On Best the rest live in the PP by Keymode modal, which lists every
-           keymode with what it is worth and how many plays it holds - more to
-           go on than a menu of the same chips would give. Everywhere else the
-           strip just unfolds, since a keymode with no pp still has plays. */
-        <button
-          type="button"
-          onClick={onOverflow ?? (() => setExpanded(true))}
-          title={t`All keymodes`}
-          className="shrink-0 px-2 py-1.5 rounded-md text-[10px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l2 hover:bg-osu-b3/50 sm:px-3 sm:text-[11px]"
-        >
-          +{hiddenCount}
-        </button>
-      )}
     </div>
   );
 }
@@ -5929,38 +3720,6 @@ function formatRecentRefreshWait(waitMs: number): string {
 
 // A stat on the flat rail under the hero: quiet label, the number carrying the
 // weight. No box, the rail's hairline does the separating.
-function RailStat({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1">{label}</div>
-      <div className="mt-1.5 text-[19px] font-bold leading-none tabular-nums text-white">{value}</div>
-    </div>
-  );
-}
-
-// A headline figure inside the hero, sitting over the cover art.
-function HeroStat({
-  label,
-  value,
-  valueClassName = "text-white",
-  sub,
-}: {
-  label: string;
-  value: ReactNode;
-  valueClassName?: string;
-  sub?: ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/40">{label}</div>
-      <div className={`mt-2 text-[26px] font-black leading-none tabular-nums sm:text-[34px] ${valueClassName}`}>
-        {value}
-      </div>
-      <div className="mt-2 min-h-[13px] text-[10px] leading-none text-white/45">{sub}</div>
-    </div>
-  );
-}
-
 // The 90-day global rank history, drawn edge to edge along the bottom of the
 // hero. Higher rank number = worse = lower on the chart.
 function RankTrendline({ history }: { history: number[] }) {
@@ -6005,22 +3764,6 @@ function RankTrendline({ history }: { history: number[] }) {
   );
 }
 
-// The insight cells live in one panel: 1px gaps let the parent colour through
-// as hairlines, so four readings read as a single object instead of four boxes.
-const INSIGHT_PANEL_CLASS = "grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-osu-b3/30 lg:grid-cols-4";
-const INSIGHT_CELL_CLASS = "flex min-h-[108px] flex-col bg-osu-b4 p-4";
-const INSIGHT_CELL_INTERACTIVE_CLASS = "cursor-pointer transition-colors duration-150 hover:bg-osu-b3/40";
-const INSIGHT_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1";
-
-// Fixed hues only: osu-pink is derived from --theme-hue, so on a blue or
-// purple theme it collapsed onto 4K's blue or 6K's purple. Keymode identity
-// has to read the same under every theme, and 4K/7K (the pair that almost
-// always appears together) get complementary ends of the range.
-// The two-stage keymodes (12K up) take the other shade of the keymode each one
-// doubles, so 18K reads as 9K's deeper red and nothing above 10K falls back to
-// a colourless bar. 10K already worked this way against 5K.
-const KEYMODE_BAR_COLORS: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green", 12: "bg-osu-purple", 14: "bg-osu-orange-dark", 16: "bg-osu-yellow-light", 18: "bg-osu-red" };
-const KEYMODE_TEXT_COLORS: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light", 12: "text-osu-purple", 14: "text-osu-orange-dark", 16: "text-osu-yellow-light", 18: "text-osu-red" };
 // A keymode total counts only what the top-200 window still holds, so mark it
 // as a floor once the plays below the cutoff could move it by more than this.
 const KEY_PP_FLOOR_RATIO = 0.02;
@@ -6028,278 +3771,3 @@ const KEY_PP_FLOOR_RATIO = 0.02;
 function isKeyPpFloor(bucket: UserProfileInsights["keyPp"][number]): boolean {
   return bucket.missingBound > bucket.weightedPp * KEY_PP_FLOOR_RATIO;
 }
-
-function KeySplitCard({ keySplit, sampleSize, onOpen, onPrefetch }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number; onOpen?: () => void; onPrefetch?: () => void }) {
-  const { t } = useLingui();
-  const colors = KEYMODE_BAR_COLORS;
-  const textColors = KEYMODE_TEXT_COLORS;
-  // keySplit stays in keymode order, so the dominant share has to be found.
-  const dominantCount = keySplit.reduce((top, entry) => Math.max(top, entry.count), 0);
-
-  return (
-    <button
-      type="button"
-      className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${onOpen ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
-      onClick={onOpen}
-      // Hovering or tabbing to the card is the earliest honest signal that the
-      // totals are about to be read, and it buys the fetch a head start.
-      onPointerEnter={onPrefetch}
-      onFocus={onPrefetch}
-      disabled={!onOpen}
-    >
-      <div className="flex items-center justify-between">
-        <div className={INSIGHT_LABEL_CLASS}>{t`Key Split`}</div>
-        {onOpen && <ExpandHint />}
-      </div>
-      {keySplit.length === 0 ? (
-        <div className="mt-2 text-sm text-osu-f1">{t`No key data`}</div>
-      ) : keySplit.length === 1 ? (
-        // A single keymode carries no split to show, so the keymode itself is
-        // the reading.
-        <div className={`mt-2 text-[26px] font-black leading-none ${textColors[keySplit[0].keyCount] ?? "text-white"}`}>
-          <Trans>{keySplit[0].keyCount}K only</Trans>
-        </div>
-      ) : (
-        <>
-          {/* The keymode someone actually plays gets the big number; the rest
-              stay legible without competing with it. */}
-          <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            {keySplit.map((b) => (
-              <div key={b.keyCount} className="flex items-baseline gap-1">
-                <span
-                  className={`font-black leading-none tabular-nums ${b.count === dominantCount ? "text-[26px]" : "text-[17px]"} ${textColors[b.keyCount] ?? "text-white"}`}
-                >
-                  {Math.round((b.count / sampleSize) * 100)}
-                  <span className="text-[13px]">%</span>
-                </span>
-                <span className={`text-[11px] font-bold ${textColors[b.keyCount] ?? "text-osu-f1"}`}>{b.keyCount}K</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-auto w-full pt-3">
-            <div className="flex h-1 overflow-hidden rounded-full bg-osu-b3/50">
-              {keySplit.map((b) => (
-                <div
-                  key={b.keyCount}
-                  className={`${colors[b.keyCount] ?? "bg-osu-b1"} transition-all duration-300`}
-                  style={{ width: `${(b.count / sampleSize) * 100}%` }}
-                />
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </button>
-  );
-}
-
-function ExpandHint() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="text-osu-f1/30 group-hover:text-osu-f1 group-hover:translate-x-0.5 transition-all duration-150 flex-shrink-0"
-      aria-hidden
-    >
-      <path d="M3.5 2 6.5 5 3.5 8" />
-    </svg>
-  );
-}
-
-const PP_DISTRIBUTION_COLORS = [
-  "var(--color-osu-purple-light)",
-  "var(--color-osu-pink-light)",
-  "var(--color-osu-orange)",
-  "var(--color-osu-yellow)",
-  "var(--color-osu-blue)",
-  "var(--color-osu-green-light)",
-];
-
-function getPpDistributionColor(index: number, isBelowBucket: boolean): string {
-  if (isBelowBucket) return "var(--color-osu-f1)";
-  return PP_DISTRIBUTION_COLORS[Math.min(index, PP_DISTRIBUTION_COLORS.length - 1)];
-}
-
-function formatPpDistributionLabel(entry: UserProfileInsights["ppDistribution"][number]): string {
-  if (entry.min == null) return `below ${(entry.max ?? 399) + 1}`;
-  if (entry.max == null) return `${entry.min}+`;
-  return `${entry.min}-${entry.max}`;
-}
-
-function formatPpCumulativeDistributionLabel(threshold: number): string {
-  return `${threshold}+`;
-}
-
-function formatPpDistributionPercent(count: number, total: number): string {
-  if (total <= 0) return "0%";
-  return `${((count / total) * 100).toLocaleString("en-US", {
-    maximumFractionDigits: 1,
-    minimumFractionDigits: 0,
-  })}%`;
-}
-
-function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; snapshot: InsightScoreSnapshot }) {
-  const { t } = useLingui();
-  const backgroundImage = snapshot.coverUrl
-    ? `linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.60) 50%, rgba(0,0,0,0.80) 100%), url(${JSON.stringify(snapshot.coverUrl)})`
-    : "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.60) 50%, rgba(0,0,0,0.80) 100%)";
-
-  return (
-    <a
-      href={snapshot.beatmapUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="block relative rounded-lg overflow-hidden border border-osu-b3/20 hover:border-osu-pink/30 transition-colors"
-      style={{ backgroundImage, backgroundSize: "cover", backgroundPosition: "center" }}
-    >
-      <div className="relative p-2.5 flex items-center gap-2.5">
-        <div className="flex-shrink-0 text-center w-14">
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
-          <div className="text-lg font-bold text-white leading-none tabular-nums mt-0.5">{Math.round(bpm)}</div>
-          <div className="text-[9px] text-osu-f1">{t`BPM`}</div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-bold text-white truncate">{snapshot.title}</div>
-          <div className="text-[10px] text-osu-l2 truncate">{snapshot.artist} [{snapshot.version}]</div>
-          {snapshot.mods.length > 0 && (
-            <div className="mt-1 flex items-center gap-1 flex-wrap">
-              {snapshot.mods.map((mod) => (
-                <ModBadge key={mod} mod={mod} size={0.7} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </a>
-  );
-}
-
-function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
-  const locale = useLocale();
-  const { t } = useLingui();
-  const viewerTimeZone = useViewerTimeZone();
-  if (!snapshot) {
-    return (
-      <div className="h-[120px] rounded-xl bg-osu-b4 p-4">
-        <div className={INSIGHT_LABEL_CLASS}>{label}</div>
-        <div className="mt-2 text-sm text-osu-f1">{t`No data`}</div>
-      </div>
-    );
-  }
-
-  const href = snapshot.scoreUrl ?? snapshot.beatmapUrl;
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="group/topplay relative block h-[120px] overflow-hidden rounded-xl bg-osu-b4 ring-1 ring-inset ring-white/[0.06] transition duration-150 hover:ring-osu-pink/40"
-    >
-      {snapshot.coverUrl && (
-        <img
-          src={snapshot.coverUrl}
-          alt=""
-          className="absolute -inset-px h-[calc(100%+2px)] w-[calc(100%+2px)] max-w-none object-cover brightness-[0.38] transition-transform duration-500 group-hover/topplay:scale-[1.03]"
-        />
-      )}
-      <div className="absolute -inset-px bg-gradient-to-r from-black/60 via-black/20 to-black/45" />
-      <div className="relative flex h-full items-center gap-3 p-4">
-        <div className="min-w-0 flex-1">
-          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">{label}</div>
-          <div className="mt-1.5 truncate text-[15px] font-bold text-white">{snapshot.title}</div>
-          <div className="truncate text-[10px] text-white/55">{snapshot.artist} [{snapshot.version}]</div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <GradeImg grade={snapshot.rank} size={18} />
-            {snapshot.mods.map((mod) => (
-              <ModBadge key={mod} mod={mod} />
-            ))}
-            {/* Relative to Date.now(): the newest top play is usually minutes old,
-                so SSR and hydration routinely land on different sides of a minute
-                boundary. Let the client text win. */}
-            <span className="text-[10px] text-white/45" suppressHydrationWarning>{formatTimeAgo(snapshot.date, locale)}</span>
-            {/* The viewer's own day, like the score page this links to. A play
-                set at 20:28 in Costa Rica is 02:28 UTC the next morning, and
-                the UTC day dated it one day after osu! did. No
-                suppressHydrationWarning needed: useViewerTimeZone holds UTC
-                through the hydration render and the real zone arrives on the
-                next one, as a normal diff. */}
-            {snapshot.date && (
-              <span className="hidden text-[10px] text-white/45 sm:inline">
-                {formatDate(snapshot.date, viewerTimeZone)}
-              </span>
-            )}
-          </div>
-        </div>
-        {snapshot.pp != null && (
-          <div className="flex-shrink-0 text-right">
-            <div className="text-[28px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(snapshot.pp)}</div>
-            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">{t`pp`}</div>
-          </div>
-        )}
-      </div>
-    </a>
-  );
-}
-
-function InsightsSkeleton() {
-  return (
-    <div className="space-y-3">
-      <div className={INSIGHT_PANEL_CLASS}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className={INSIGHT_CELL_CLASS}>
-            <Skeleton className="h-2.5 w-20" />
-            <Skeleton className="mt-3 h-7 w-24" />
-            <Skeleton className="mt-auto h-2.5 w-20" />
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="h-[120px] rounded-xl bg-osu-b4 p-4">
-            <Skeleton className="h-2.5 w-24" />
-            <Skeleton className="mt-3 h-4 w-40" />
-            <Skeleton className="mt-2 h-3 w-32" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PlayerScoreRowSkeleton() {
-  return (
-    <div className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 min-h-[63px]">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Skeleton className="w-7 h-7 rounded-full flex-shrink-0" />
-        <Skeleton className="w-12 h-8 rounded flex-shrink-0" />
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-64 max-w-[55%]" />
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="h-4 w-5 rounded" />
-          </div>
-          <Skeleton className="h-3 w-40" />
-        </div>
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="flex gap-0.5 justify-end w-24">
-          <Skeleton className="h-5 w-14 rounded" />
-        </div>
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-4 w-10" />
-        <Skeleton className="h-5 w-16" />
-      </div>
-    </div>
-  );
-}
-
-/** The art a chart with no cover gets: the blurred generic header, turned to
- *  a hue and framed at a spot picked from its title, artist and difficulty,
- *  so two such charts do not read as the same map. */

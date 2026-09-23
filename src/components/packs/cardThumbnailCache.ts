@@ -7,6 +7,7 @@ import {
   uploadR2PackCardThumbnail,
 } from "#/lib/pack-card-thumbnails";
 import { buildPackThumbnailStorageKey } from "#/lib/pack-thumbnail-shared";
+import { teamCardFace, teamCardSkills, teamCardUser } from "#/lib/team-cards";
 import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData } from "../player/maniacard3d/types";
 
@@ -358,7 +359,7 @@ async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
 
 export function cardThumbnailKeyForData(data: ManiaCardReadyData, width = COLLECTION_CARD_THUMB_WIDTH): string {
   const sourceSignature = getCardThumbnailRenderSignature(data);
-  return `${CACHE_VERSION}-w${width}-u${data.user.id}-${hashString(sourceSignature)}`;
+  return `${CACHE_VERSION}-w${width}-${data.team ? `t${Math.abs(data.user.id)}` : `u${data.user.id}`}-${hashString(sourceSignature)}`;
 }
 
 /* Deliberately narrower than getManiaCardRenderDataSignature: the thumbnail
@@ -391,6 +392,9 @@ function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
      but a handful of cards. The leading token is the scatter's own version:
      bump it when drawMotifPattern changes, and only cards with art re-render. */
   if (data.motif) parts.push(`motif4:${cardMotifSignature(data.motif)}`);
+  // A team card's face (the flag rides as avatarUrl already). The leading
+  // token is the face's version: bump it when the team face's drawing changes.
+  if (data.team) parts.push(`team3:${data.team.tag}:${data.team.coverUrl ?? ""}`);
   const avatarRepair = AVATAR_REPAIR_REVISIONS[data.user.id];
   if (avatarRepair) parts.push(`avatar-repair:${avatarRepair}`);
   return parts.join("|");
@@ -434,22 +438,34 @@ function buildCollectionCardKey(
   skills: NonNullable<CollectedCard["skills"]>,
   width: number,
 ): string {
-  return cardThumbnailKeyForData(
-    buildManiaCardRenderDataFromSkills({
-      user: {
-        id: card.userId,
-        username: card.username,
-        avatar_url: card.avatarUrl,
-        country_code: card.countryCode,
-        statistics: { global_rank: card.globalRank, pp: card.pp },
-      },
-      skills,
-      tierOverride: collectedCardTier(card),
-      labelOverride: card.customLabel,
-      motifOverride: card.motif,
-    }),
-    width,
-  );
+  return cardThumbnailKeyForData(collectedCardRenderData(card, skills), width);
+}
+
+/* How a collected card is drawn, wherever it is drawn: a team card (one
+   pinned to a showcase) draws the team's banner face at the tier it was
+   pulled at, every other card the player's face. */
+export function collectedCardRenderData(card: CollectedCard, skills: NonNullable<CollectedCard["skills"]>) {
+  if (card.team) {
+    return buildManiaCardRenderDataFromSkills({
+      user: teamCardUser(card.team),
+      skills: teamCardSkills(card.team),
+      tierOverride: card.team.tier,
+      team: teamCardFace(card.team),
+    });
+  }
+  return buildManiaCardRenderDataFromSkills({
+    user: {
+      id: card.userId,
+      username: card.username,
+      avatar_url: card.avatarUrl,
+      country_code: card.countryCode,
+      statistics: { global_rank: card.globalRank, pp: card.pp },
+    },
+    skills,
+    tierOverride: collectedCardTier(card),
+    labelOverride: card.customLabel,
+    motifOverride: card.motif,
+  });
 }
 
 export function getMemoryCardThumbnail(key: string | null): string | null {

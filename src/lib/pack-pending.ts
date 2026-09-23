@@ -1,5 +1,5 @@
 import { sanitizePackDamage, type PackDamage } from "./pack-damage";
-import { packPlayerVariantFields, type PackPlayer } from "./packs";
+import { packPlayerVariantFields, parsePackTeamCard, teamPackCardKey, type PackPlayer } from "./packs";
 
 /* The pack a viewer paid for but has not fully revealed yet. The charge is
    spent the moment the pack is slashed, so the unrevealed cards must survive
@@ -60,7 +60,15 @@ function sanitizePlayer(value: unknown): PackPlayer | null {
        already minted the holding, so this only decides what the resumed
        reveal draws and which key its mint pass names. */
     ...packPlayerVariantFields({ userId: user.id, ...raw }),
+    /* A team card resumes as the team it was dealt as; the server already
+       wrote it into the team collection. */
+    ...teamFields(raw.team),
   };
+}
+
+function teamFields(value: unknown): Pick<PackPlayer, "team" | "cardKey"> {
+  const team = parsePackTeamCard(value);
+  return team ? { team, cardKey: teamPackCardKey(team.teamId) } : {};
 }
 
 export function readPendingPack(): PendingPack | null {

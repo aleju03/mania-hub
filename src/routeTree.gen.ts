@@ -33,6 +33,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkinsRouteImport } from './routes/skins'
 import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as StreakRouteImport } from './routes/streak'
+import { Route as TeamsRouteImport } from './routes/teams'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
@@ -66,6 +67,7 @@ import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
 import { Route as CollectionsIdRouteImport } from './routes/collections_.$id'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
@@ -73,11 +75,13 @@ import { Route as CompanellaAuthorizeRouteImport } from './routes/companella_.au
 import { Route as CompanellaDocsRouteImport } from './routes/companella_.docs'
 import { Route as CompanellaTestCallbackRouteImport } from './routes/companella_.test-callback'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
+import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ReplayCommunityRouteImport } from './routes/replay_.community'
 import { Route as ReplayUploadsRouteImport } from './routes/replay_.uploads'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
+import { Route as TeamTeamIdRouteImport } from './routes/team/$teamId'
 import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
@@ -224,6 +228,11 @@ const SnipesRoute = SnipesRouteImport.update({
 const StreakRoute = StreakRouteImport.update({
   id: '/streak',
   path: '/streak',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamsRoute = TeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -392,6 +401,11 @@ const ApiSyncRoute = ApiSyncRouteImport.update({
   path: '/api/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTeamImageRoute = ApiTeamImageRouteImport.update({
+  id: '/api/team-image',
+  path: '/api/team-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CollectionsIdRoute = CollectionsIdRouteImport.update({
   id: '/collections_/$id',
   path: '/collections/$id',
@@ -427,6 +441,11 @@ const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   path: '/dev/opt-in-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevRecentRatingsPreviewRoute = DevRecentRatingsPreviewRouteImport.update({
+  id: '/dev/recent-ratings-preview',
+  path: '/dev/recent-ratings-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacksCollectionsRoute = PacksCollectionsRouteImport.update({
   id: '/packs_/collections',
   path: '/packs/collections',
@@ -450,6 +469,11 @@ const ReplayUploadsRoute = ReplayUploadsRouteImport.update({
 const SkinsIdRoute = SkinsIdRouteImport.update({
   id: '/skins_/$id',
   path: '/skins/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamTeamIdRoute = TeamTeamIdRouteImport.update({
+  id: '/team/$teamId',
+  path: '/team/$teamId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthDiscordRoute = ApiAuthDiscordRouteImport.update({
@@ -625,6 +649,7 @@ export interface FileRoutesByFullPath {
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/streak': typeof StreakRoute
+  '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -658,6 +683,7 @@ export interface FileRoutesByFullPath {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
+  '/api/team-image': typeof ApiTeamImageRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -665,11 +691,13 @@ export interface FileRoutesByFullPath {
   '/companella/docs': typeof CompanellaDocsRoute
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/community': typeof ReplayCommunityRoute
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
+  '/team/$teamId': typeof TeamTeamIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
@@ -723,6 +751,7 @@ export interface FileRoutesByTo {
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/streak': typeof StreakRoute
+  '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -756,6 +785,7 @@ export interface FileRoutesByTo {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
+  '/api/team-image': typeof ApiTeamImageRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -763,11 +793,13 @@ export interface FileRoutesByTo {
   '/companella/docs': typeof CompanellaDocsRoute
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/community': typeof ReplayCommunityRoute
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
+  '/team/$teamId': typeof TeamTeamIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
@@ -822,6 +854,7 @@ export interface FileRoutesById {
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/streak': typeof StreakRoute
+  '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -855,6 +888,7 @@ export interface FileRoutesById {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
+  '/api/team-image': typeof ApiTeamImageRoute
   '/collections_/$id': typeof CollectionsIdRoute
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
@@ -862,11 +896,13 @@ export interface FileRoutesById {
   '/companella_/docs': typeof CompanellaDocsRoute
   '/companella_/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay_/community': typeof ReplayCommunityRoute
   '/replay_/uploads': typeof ReplayUploadsRoute
   '/skins_/$id': typeof SkinsIdRoute
+  '/team/$teamId': typeof TeamTeamIdRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
@@ -922,6 +958,7 @@ export interface FileRouteTypes {
     | '/skins'
     | '/snipes'
     | '/streak'
+    | '/teams'
     | '/terms'
     | '/top-plays'
     | '/tracker'
@@ -955,6 +992,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
+    | '/api/team-image'
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
@@ -962,11 +1000,13 @@ export interface FileRouteTypes {
     | '/companella/docs'
     | '/companella/test-callback'
     | '/dev/opt-in-preview'
+    | '/dev/recent-ratings-preview'
     | '/packs/collections'
     | '/player/$username'
     | '/replay/community'
     | '/replay/uploads'
     | '/skins/$id'
+    | '/team/$teamId'
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
@@ -1020,6 +1060,7 @@ export interface FileRouteTypes {
     | '/skins'
     | '/snipes'
     | '/streak'
+    | '/teams'
     | '/terms'
     | '/top-plays'
     | '/tracker'
@@ -1053,6 +1094,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
+    | '/api/team-image'
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
@@ -1060,11 +1102,13 @@ export interface FileRouteTypes {
     | '/companella/docs'
     | '/companella/test-callback'
     | '/dev/opt-in-preview'
+    | '/dev/recent-ratings-preview'
     | '/packs/collections'
     | '/player/$username'
     | '/replay/community'
     | '/replay/uploads'
     | '/skins/$id'
+    | '/team/$teamId'
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
@@ -1118,6 +1162,7 @@ export interface FileRouteTypes {
     | '/skins'
     | '/snipes'
     | '/streak'
+    | '/teams'
     | '/terms'
     | '/top-plays'
     | '/tracker'
@@ -1151,6 +1196,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/signature-preview'
     | '/api/sync'
+    | '/api/team-image'
     | '/collections_/$id'
     | '/communities_/$id'
     | '/communities_/review'
@@ -1158,11 +1204,13 @@ export interface FileRouteTypes {
     | '/companella_/docs'
     | '/companella_/test-callback'
     | '/dev/opt-in-preview'
+    | '/dev/recent-ratings-preview'
     | '/packs_/collections'
     | '/player/$username'
     | '/replay_/community'
     | '/replay_/uploads'
     | '/skins_/$id'
+    | '/team/$teamId'
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
@@ -1217,6 +1265,7 @@ export interface RootRouteChildren {
   SkinsRoute: typeof SkinsRoute
   SnipesRoute: typeof SnipesRoute
   StreakRoute: typeof StreakRoute
+  TeamsRoute: typeof TeamsRoute
   TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
@@ -1250,6 +1299,7 @@ export interface RootRouteChildren {
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSyncRoute: typeof ApiSyncRoute
+  ApiTeamImageRoute: typeof ApiTeamImageRoute
   CollectionsIdRoute: typeof CollectionsIdRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
@@ -1257,11 +1307,13 @@ export interface RootRouteChildren {
   CompanellaDocsRoute: typeof CompanellaDocsRoute
   CompanellaTestCallbackRoute: typeof CompanellaTestCallbackRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
+  DevRecentRatingsPreviewRoute: typeof DevRecentRatingsPreviewRoute
   PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   ReplayCommunityRoute: typeof ReplayCommunityRoute
   ReplayUploadsRoute: typeof ReplayUploadsRoute
   SkinsIdRoute: typeof SkinsIdRoute
+  TeamTeamIdRoute: typeof TeamTeamIdRoute
   ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
@@ -1447,6 +1499,13 @@ declare module '@tanstack/react-router' {
       path: '/streak'
       fullPath: '/streak'
       preLoaderRoute: typeof StreakRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teams': {
+      id: '/teams'
+      path: '/teams'
+      fullPath: '/teams'
+      preLoaderRoute: typeof TeamsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -1680,6 +1739,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/team-image': {
+      id: '/api/team-image'
+      path: '/api/team-image'
+      fullPath: '/api/team-image'
+      preLoaderRoute: typeof ApiTeamImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/collections_/$id': {
       id: '/collections_/$id'
       path: '/collections/$id'
@@ -1729,6 +1795,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevOptInPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dev/recent-ratings-preview': {
+      id: '/dev/recent-ratings-preview'
+      path: '/dev/recent-ratings-preview'
+      fullPath: '/dev/recent-ratings-preview'
+      preLoaderRoute: typeof DevRecentRatingsPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/packs_/collections': {
       id: '/packs_/collections'
       path: '/packs/collections'
@@ -1762,6 +1835,13 @@ declare module '@tanstack/react-router' {
       path: '/skins/$id'
       fullPath: '/skins/$id'
       preLoaderRoute: typeof SkinsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/team/$teamId': {
+      id: '/team/$teamId'
+      path: '/team/$teamId'
+      fullPath: '/team/$teamId'
+      preLoaderRoute: typeof TeamTeamIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/discord': {
@@ -2073,6 +2153,7 @@ const rootRouteChildren: RootRouteChildren = {
   SkinsRoute: SkinsRoute,
   SnipesRoute: SnipesRoute,
   StreakRoute: StreakRoute,
+  TeamsRoute: TeamsRoute,
   TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
@@ -2106,6 +2187,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSyncRoute: ApiSyncRoute,
+  ApiTeamImageRoute: ApiTeamImageRoute,
   CollectionsIdRoute: CollectionsIdRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,
@@ -2113,11 +2195,13 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaDocsRoute: CompanellaDocsRoute,
   CompanellaTestCallbackRoute: CompanellaTestCallbackRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
+  DevRecentRatingsPreviewRoute: DevRecentRatingsPreviewRoute,
   PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   ReplayCommunityRoute: ReplayCommunityRoute,
   ReplayUploadsRoute: ReplayUploadsRoute,
   SkinsIdRoute: SkinsIdRoute,
+  TeamTeamIdRoute: TeamTeamIdRoute,
   ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,

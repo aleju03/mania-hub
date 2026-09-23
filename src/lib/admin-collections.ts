@@ -8,7 +8,7 @@ import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 /* Server fns for /admin/collections, the grant desk for the pack economy: hand
    a collector shards, mint them a card with every field chosen by hand, or take
    one back. All of it lives in the live backend (pack_wallets,
-   pack_collection_cards, pack_cards, pack_card_serials) behind
+   pack_collection_cards, pack_cards, pack_card_serials, pack_team_cards) behind
    /api/admin/packs/collection*, and these proxy through with the admin token.
 
    Gated with requireTrueAdminAccess rather than the requireAdminAccess every
@@ -75,6 +75,30 @@ export interface AdminCollectionOverview {
     duplicateShardTotal: number;
     filteredShardTotal: number;
   };
+  /* Team cards live in their own table, so the backend lists every one they
+     hold apart from the paged player cards. */
+  teamCards: AdminTeamCard[];
+}
+
+export interface AdminTeamCard {
+  teamId: number;
+  name: string;
+  shortName: string;
+  flagUrl: string | null;
+  tier: string;
+  copies: number;
+  recycledCopies: number;
+  firstPulledAt: number;
+  lastPulledAt: number;
+}
+
+export interface AdminTeamSearchResult {
+  teamId: number;
+  name: string;
+  shortName: string;
+  flagUrl: string | null;
+  /* Null while the team has no card yet; granting one computes it. */
+  tier: string | null;
 }
 
 /* Every field of one holding. Anything left out keeps what the row already had,
@@ -154,6 +178,8 @@ async function failure(response: Response, action: string): Promise<Error> {
     if (body.includes("bad_tier")) return new Error("That is not one of the card tiers.");
     if (body.includes("bad_card_user")) return new Error("Pick the player whose card this is.");
     if (body.includes("bad_skills")) return new Error("Those skill numbers are too large to store.");
+    if (body.includes("bad_team")) return new Error("No team with that id.");
+    if (body.includes("no_team_card")) return new Error("That team has no card yet (its members' scores are not stored).");
   }
   return new Error(`${action} failed (${response.status}).`);
 }
@@ -252,4 +278,37 @@ export const removeAdminCollectionCard = createServerFn({ method: "POST" })
     if (response.status === 404) return { ok: false, removed: false, serialRemoved: false };
     if (!response.ok) throw await failure(response, "Card removal");
     return await response.json() as { ok: boolean; removed: boolean; serialRemoved: boolean };
+  });
+
+export const searchAdminTeams = createServerFn({ method: "GET" })
+  .validator((data: { query?: unknown }) => ({
+    query: typeof data?.query === "string" ? data.query.trim().slice(0, 80) : "",
+  }))
+  .handler(async ({ data }): Promise<AdminTeamSearchResult[]> => {
+    await requireTrueAdminAccess("Collections team search");
+    if (!data.query) return [];
+    const params = new URLSearchParams({ q: data.query });
+    const response = await fetch(`${requireLiveBackendBase()}/api/admin/packs/collection/teams?${params.toString()}`, {
+      headers: headers(),
+    });
+    if (!response.ok) throw await failure(response, "Team search");
+    return ((await response.json()) as { teams: AdminTeamSearchResult[] }).teams;
+  });
+
+export const grantAdminTeamCard = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; teamId?: unknown; copies?: unknown; copiesMode?: unknown }) => ({
+    ...normalizeTarget(data),
+    teamId: Math.floor(Number(data?.teamId)),
+    copies: Math.max(0, Math.floor(Number(data?.copies) || 0)),
+    copiesMode: data?.copiesMode === "set" ? "set" : "add",
+  }))
+  .handler(async ({ data }): Promise<{ ok: boolean; created: boolean; card: AdminTeamCard | null }> => {
+    await requireTrueAdminAccess("Collections team card grant");
+    const response = await fetch(`${requireLiveBackendBase()}/api/admin/packs/collection/team-grant`, {
+      method: "POST",
+      headers: headers(true),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw await failure(response, "Team card grant");
+    return await response.json() as { ok: boolean; created: boolean; card: AdminTeamCard | null };
   });

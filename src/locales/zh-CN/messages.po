@@ -123,6 +123,7 @@ msgstr "(由 {0} 上传)"
 #. placeholder {1}: formatNumber(keyMode.analyzedPlays)
 #. placeholder {2}: formatNumber(bucket.count)
 #. placeholder {2}: formatNumber(keyMode.analyzedPlays)
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, other {{2} 次游玩}}"
@@ -173,6 +174,11 @@ msgstr "{0, plural, other {# 个谱面}}"
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "{0, plural, one {# mapset} other {# mapsets}}"
 msgstr "{0, plural, other {# 个谱面集}}"
+
+#. placeholder {0}: data.total
+#: src/routes/teams.tsx
+msgid "{0, plural, one {# matching team} other {# matching teams}}"
+msgstr ""
 
 #. placeholder {0}: community.memberCount
 #: src/components/communities/CommunityCard.tsx
@@ -234,10 +240,20 @@ msgstr "{0, plural, other {# 个皮肤}}"
 msgid "{0, plural, one {# snipe} other {# snipes}}"
 msgstr "{0, plural, other {# 次狙击}}"
 
+#. placeholder {0}: data.total
+#: src/routes/teams.tsx
+msgid "{0, plural, one {# team} other {# teams}}"
+msgstr ""
+
 #. placeholder {0}: report.distinctOwners - collectors.length
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "{0, plural, one {+# more collector} other {+# more collectors}}"
 msgstr "{0, plural, other {还有 # 位收藏者}}"
+
+#. placeholder {0}: card.core.length
+#: src/components/team/TeamProfilePage.tsx
+#~ msgid "{0, plural, one {Averaged from the team's strongest member} other {Averaged from the team's # strongest members}}"
+#~ msgstr ""
 
 #. placeholder {0}: streakShardValue(streak)
 #: src/components/packs/StreakGame.tsx
@@ -248,6 +264,13 @@ msgstr "{0, plural, other {领取 # 个碎片}}"
 #: src/components/packs/CardCollectors.tsx
 msgid "{0, plural, one {collector} other {collectors}}"
 msgstr "{0, plural, other {收藏者}}"
+
+#. placeholder {0}: snapshot.activeMembers
+#. placeholder {1}: snapshot.memberCount
+#. placeholder {2}: snapshot.memberCount
+#: src/components/player/ActivityPanel.tsx
+msgid "{0, plural, one {from # tracked member of {1}} other {from # tracked members of {2}}}"
+msgstr ""
 
 #. placeholder {0}: toast.count
 #: src/components/me/GoalToasts.tsx
@@ -273,7 +296,8 @@ msgstr "{0, plural, other {张谱面}}"
 
 #. placeholder {0}: entry.count
 #. placeholder {0}: map.plays
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
+#: src/components/player/InsightModals.tsx
 msgid "{0, plural, one {play} other {plays}}"
 msgstr "{0, plural, other {次游玩}}"
 
@@ -297,14 +321,14 @@ msgstr "{0, plural, other {# 人在线}}"
 #. placeholder {0}: formatActivityTime(first.startAt, timezone)
 #. placeholder {1}: formatActivityTime(last.endAt, timezone)
 #. placeholder {2}: formatNumber(plays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} - {1} · {2} play"
 msgstr "{0} - {1} · {2} 次游玩"
 
 #. placeholder {0}: formatActivityTime(first.startAt, timezone)
 #. placeholder {1}: formatActivityTime(last.endAt, timezone)
 #. placeholder {2}: formatNumber(plays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} - {1} · {2} plays"
 msgstr "{0} - {1} · {2} 次游玩"
 
@@ -531,14 +555,14 @@ msgid "{0} maniacard"
 msgstr "{0} maniacard"
 
 #. placeholder {0}: maps.length
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} map"
 msgstr "{0} 张谱面"
 
 #. placeholder {0}: formatNumber(currentTotal)
 #. placeholder {0}: maps.length
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "{0} maps"
 msgstr "{0} 张谱面"
 
@@ -584,9 +608,27 @@ msgstr "第 {0} / {1}"
 msgid "{0} of {1} albums"
 msgstr "{1} 个卡册中的 {0} 个"
 
+#. placeholder {0}: snapshot.countedMembers
+#. placeholder {1}: snapshot.memberCount
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0} of {1} members counted"
+msgstr "已统计 {1} 名成员中的 {0} 名"
+
+#. placeholder {0}: snapshot.countedMembers
+#. placeholder {1}: snapshot.memberCount
+#: src/components/team/TeamProfilePage.tsx
+#~ msgid "{0} of {1} members counted so far"
+#~ msgstr ""
+
+#. placeholder {0}: skills.members.length
+#. placeholder {1}: skills.memberCount
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0} of {1} members rated"
+msgstr ""
+
 #. placeholder {0}: formatNumber(activeKeyMode.analyzedPlays)
 #. placeholder {1}: formatNumber(activeKeyMode.totalPlays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} of {1} plays analyzed"
 msgstr "已分析 {1} 次游玩中的 {0} 次"
 
@@ -603,7 +645,7 @@ msgstr "是 {1} 人中{0} 个抽到这张的"
 #~ msgstr "今日 {0}/{1}"
 
 #. placeholder {0}: maps.length
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} of {mapCount}"
 msgstr "{mapCount} 张中的 {0} 张"
 
@@ -618,7 +660,7 @@ msgstr "已选 {0}/{maxCards}"
 #~ msgstr "已选 {0} / {PACK_SHOWCASE_MAX_CARDS}"
 
 #. placeholder {0}: focused.count
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "{0} of {usageSampleSize}"
 msgstr "{usageSampleSize} 次中的 {0} 次"
 
@@ -664,7 +706,7 @@ msgstr "{0} 位抽到这张卡片的人"
 
 #. placeholder {0}: formatNumber(entry.playCount)
 #. placeholder {0}: formatNumber(segment.playCount)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} play"
 msgstr "{0} 次游玩"
 
@@ -679,10 +721,10 @@ msgstr "{0} 名玩家"
 #: src/components/maps/SearchCard.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/MyStatsInsights.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 msgid "{0} plays"
 msgstr "{0} 次游玩"
@@ -698,7 +740,7 @@ msgstr "{0} 次游玩"
 #~ msgstr ""
 
 #. placeholder {0}: formatNumber(activity.totalScores)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0} plays in {selectedYear}"
 msgstr "{selectedYear} 年游玩 {0} 次"
 
@@ -785,8 +827,11 @@ msgstr "{0} 星"
 msgid "{0} subfamilies"
 msgstr "{0} 个子类型"
 
+#. placeholder {0}: Math.round(insights.bpmRange.min)
 #. placeholder {0}: Math.round(profileInsights.bpmRange.min)
+#. placeholder {1}: Math.round(insights.bpmRange.max)
 #. placeholder {1}: Math.round(profileInsights.bpmRange.max)
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "{0} to {1}"
 msgstr "{0} 到 {1}"
@@ -817,6 +862,12 @@ msgstr "{0} 名被追踪玩家"
 msgid "{0} up · {1} down"
 msgstr "{0} 赞成 · {1} 反对"
 
+#. placeholder {0}: playerPeakMember.username
+#. placeholder {1}: formatDate(playerPeak.updated_at)
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0}, {1}"
+msgstr ""
+
 #. placeholder {0}: inviteCheck.preview.name
 #. placeholder {1}: inviteCheck.preview.memberCount.toLocaleString("en-US")
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -832,7 +883,7 @@ msgstr "{0}，由 {1} 上传的 {keymodes} osu!mania 皮肤。下载 .osk 或浏
 #. placeholder {0}: formatFullActivityDate(day.date)
 #. placeholder {1}: day.scoreCount
 #. placeholder {2}: day.sessionCount
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0}: {1} plays, {2} sessions"
 msgstr "{0}：{1} 次游玩，{2} 场游玩"
 
@@ -853,7 +904,7 @@ msgid "{0}: +{1}pp - click to filter"
 msgstr "{0}：+{1}pp - 点击筛选"
 
 #. placeholder {0}: formatFullActivityDate(day.date)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0}: no tracked plays"
 msgstr "{0}：没有追踪到的成绩"
 
@@ -871,6 +922,11 @@ msgstr "{0} 的卡片，回收得到 {recycledFor} 个碎片"
 #: src/routes/packs_.collections.tsx
 msgid "{0}'s collection"
 msgstr "{0} 的收藏册"
+
+#. placeholder {0}: team.name
+#: src/components/team/TeamProfilePage.tsx
+msgid "{0}'s flag"
+msgstr ""
 
 #. placeholder {0}: loadStatus.name
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -926,17 +982,19 @@ msgid "{0}% weighted"
 msgstr "加权 {0}%"
 
 #. placeholder {0}: activity.currentStreak
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{0}d"
 msgstr "{0} 天"
 
 #. placeholder {0}: formatNumber(Math.floor(railTotals.playTime / 3600))
+#. placeholder {0}: formatNumber(Math.floor(statistics.play_time / 3600))
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "{0}h"
 msgstr "{0} 小时"
 
 #. placeholder {0}: keySplit[0].keyCount
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "{0}K only"
 msgstr "只玩 {0}K"
 
@@ -951,7 +1009,9 @@ msgstr "{0}K 技能评分"
 #~ msgid "{0}ms hit window, worth {1}x"
 #~ msgstr ""
 
+#. placeholder {0}: Math.round(insights.ppRange.top - insights.ppRange.bottom)
 #. placeholder {0}: Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "{0}pp spread"
 msgstr "相差 {0}pp"
@@ -1195,7 +1255,7 @@ msgstr "{have} / {want} 个成绩"
 msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
 msgstr "{hiddenByMarks, plural, other {有 # 张谱面被你的标记隐藏}}"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{hiddenCount, plural, one {Show # more map} other {Show # more maps}}"
 msgstr "{hiddenCount, plural, other {再显示 # 张谱面}}"
 
@@ -1254,6 +1314,7 @@ msgstr "{keys}K 缩略图"
 #: src/components/player/DanMark.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/team/TeamProfilePage.tsx
 msgid "{label} dan"
 msgstr "{label} 段位"
 
@@ -1293,6 +1354,10 @@ msgstr "{mapCount, plural, other {共 # 张谱面}}"
 #: src/routes/collections_.$id.tsx
 msgid "{maps} osu!mania maps picked by {0}."
 msgstr "{0} 挑选的 {maps} 张 osu!mania 谱面。"
+
+#: src/routes/teams.tsx
+msgid "{members} members"
+msgstr ""
 
 #: src/routes/maps.tsx
 msgid "{message} ({percent}%)"
@@ -1489,6 +1554,7 @@ msgstr "{playerName} 的回放已加载，但现在无法下载 {mapLabel} 的�
 
 #: src/lib/streak-game.ts
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "{plays} plays"
 msgstr "{plays} 次游玩"
 
@@ -1504,6 +1570,10 @@ msgstr "{previousScoreAge}前"
 msgid "{progressCounts} players"
 msgstr "{progressCounts} 名玩家"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "{progressCounts} teams"
+#~ msgstr "{progressCounts} 个战队"
+
 #: src/routes/maps.tsx
 msgid "{randomPickCount, plural, one {# pick} other {# possible picks}}"
 msgstr "{randomPickCount, plural, other {# 个可抽选项}}"
@@ -1515,6 +1585,10 @@ msgstr "第 {rangeStart}–{pageEnd} 张 / 共 {totalText} 张卡片"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "第 {rangeStart}–{pageEnd} 名 / 共 {totalText} 名玩家"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "{rated, plural, one {# member} other {# members}}"
+msgstr ""
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{releases} release groups"
@@ -1532,6 +1606,10 @@ msgstr "{sample, plural, other {采样了你 pp 附近的 # 名玩家}}"
 msgid "{score} ranked score"
 msgstr "{score} Ranked 分数"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "{scoreCount, plural, one {# play} other {# plays}}"
+msgstr ""
+
 #: src/lib/format.ts
 msgid "{secs}s ago"
 msgstr "{secs} 秒前"
@@ -1548,7 +1626,7 @@ msgstr "{selectedKeymode}K 预览"
 
 #. placeholder {0}: formatNumber(sessionPlays)
 #. placeholder {1}: formatNumber(sessionPlays)
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "{sessionPlays, plural, one {{0} play} other {{1} plays}}"
 msgstr "{sessionPlays, plural, other {{1} 次游玩}}"
 
@@ -1612,7 +1690,7 @@ msgstr "{skillsTotal} 个技能中有 {skillsFull} 个达到了完整的 {perSki
 msgid "{speedLabel} speed"
 msgstr "{speedLabel} 速度"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "{stacks} extra mod-uses from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays."
 msgstr "有 {stacks} 次额外的 Mod 使用来自叠加 Mod 的成绩（例如 DT+MR）。扇形大小按 Mod 使用次数计算，百分比按成绩数计算。"
 
@@ -1772,7 +1850,7 @@ msgstr "还差 {gap}pp"
 msgid "+{hidden} more"
 msgstr "还有 {hidden} 个"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "+{stacks} stacked"
 msgstr "+{stacks} 叠加"
 
@@ -1984,11 +2062,11 @@ msgstr "1× = 原版默认速度"
 msgid "100"
 msgstr "100"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "12 AM"
 msgstr "0:00"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "12 PM"
 msgstr "12:00"
 
@@ -2048,11 +2126,11 @@ msgstr "4K 单点"
 msgid "50"
 msgstr "50"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "6 AM"
 msgstr "6:00"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "6 PM"
 msgstr "18:00"
 
@@ -2335,6 +2413,10 @@ msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
 msgid "A quick reminder of what a dan is"
 msgstr "先说清楚段位是什么"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "A rating is not supported for this chart or mod combination."
+msgstr "此谱面或模组组合暂不支持评级。"
+
 #: src/routes/dan-estimates.tsx
 msgid "A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and so does anything that slows the chart down: Half Time, Daycore, or a custom rate under 1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are all fine, because none of them make the course easier. A pass recorded before mod data was stored cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 msgstr "只有真的按课题打的成绩才算。Easy、No Fail 和 Random 会让它作废，任何拖慢谱面的东西也一样：Half Time、Daycore，或者低于 1.0x 的自定义倍速。Mirror、Hidden、Fade In、Flashlight、Hard Rock、Sudden Death、Perfect 和 Double Time 都没问题，因为它们都不会让课题变简单。在开始存储 Mod 数据之前记录的通过成绩无法核对，所以宁可不算，也不会直接当作有效。<0>点开你的段位徽章，就能看到是哪个课题定下了你的估算，如果有的话。</0>"
@@ -2358,6 +2440,10 @@ msgstr "有一张截图删除失败。请重试。"
 #: src/components/packs/SetsView.tsx
 msgid "A set can hold up to {BINDER_MAX_CARDS} cards."
 msgstr "每个卡组最多可容纳 {BINDER_MAX_CARDS} 张卡牌。"
+
+#: src/components/packs/SetsView.tsx
+msgid "A set holds either players or teams."
+msgstr "一个卡组只能放玩家或只能放战队。"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
@@ -2384,6 +2470,7 @@ msgstr "一段时间"
 msgid "A-Z"
 msgstr "A-Z"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "关于"
@@ -2396,6 +2483,7 @@ msgstr "关于"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Acc"
 msgstr "准度"
 
@@ -2438,10 +2526,12 @@ msgstr "准确率"
 #: src/components/me/MyStatsInsights.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Accuracy"
 msgstr "准确率"
 
@@ -2502,19 +2592,19 @@ msgid "achieved {0}"
 msgstr "达成于 {0}"
 
 #. placeholder {0}: profileInsights.sampleSize
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {0} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays"
 msgstr "统计自 {0} 个最佳成绩 · 尽量按打击密度计算节奏 · 已按变速 Mod 调整 · 高分成绩权重更高"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {ppTotal} profile top plays with PP"
 msgstr "统计自 {ppTotal} 个带 pp 的最佳成绩"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {usageSampleSize} modded top plays"
 msgstr "统计自 {usageSampleSize} 个带 Mod 的最佳成绩"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "across {usageSampleSize} top plays"
 msgstr "统计自 {usageSampleSize} 个最佳成绩"
 
@@ -2526,25 +2616,30 @@ msgstr "进行中"
 msgid "active days"
 msgstr "活跃天数"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Activity"
 msgstr "活跃度"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity day"
 msgstr "活跃日"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity is only available when the server is configured."
 msgstr "只有在服务端配置好之后才能查看活跃度。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker."
 msgstr "每个国家/地区前 100 名的活跃度会自动记录。你还不在其中，但可以把自己加进追踪器。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker."
 msgstr "活跃度只记录每个已追踪国家/地区的前 100 名。如果这是你的主页，用 osu! 登录就可以把自己加进追踪器。"
+
+#: src/components/player/ActivityPanel.tsx
+msgid "Activity is recorded for tracked players, and no one in this team is tracked yet."
+msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Actual size"
@@ -2685,8 +2780,8 @@ msgid "added"
 msgstr "已添加"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Adding you…"
 msgstr "正在加入…"
 
@@ -2707,7 +2802,7 @@ msgstr "管理员：用假抽卡刷满侧栏以预览动画"
 msgid "Advanced"
 msgstr "高级"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "Age"
 msgstr "时间"
 
@@ -2740,9 +2835,9 @@ msgid "all"
 msgstr "全部"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -2774,7 +2869,7 @@ msgstr "全部 Discord 服务器"
 msgid "all keymodes"
 msgstr "全部键数"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "All keymodes"
 msgstr "全部键数"
 
@@ -2898,6 +2993,10 @@ msgstr "分析"
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Analysis"
 #~ msgstr ""
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating."
+msgstr "已安排分析。结果准备好后，评级会在此处自动更新。部分成绩可能不符合评级要求。"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "analysis unavailable"
@@ -3200,7 +3299,7 @@ msgstr "头像"
 msgid "Averaged over {windowHave} of {windowNeed} weighted clears, so the estimate is still filling in."
 msgstr "目前按 {windowHave} 次加权通过取平均，目标是 {windowNeed} 次，估计仍在逐步完善。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Avg active day"
 msgstr "活跃日均"
 
@@ -3208,7 +3307,7 @@ msgstr "活跃日均"
 msgid "Avg duration"
 msgstr "平均时长"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "avg intensity, 0-100"
 msgstr "平均强度，0-100"
 
@@ -3276,6 +3375,10 @@ msgstr "回到皮肤位置"
 msgid "back to skins"
 msgstr "返回皮肤"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "back to teams"
+#~ msgstr "返回战队"
+
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "Back to the collection"
 #~ msgstr "返回收藏册"
@@ -3317,7 +3420,7 @@ msgstr "徽章"
 msgid "Balance bar"
 msgstr "平衡条"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Bands"
 msgstr "区间"
 
@@ -3493,6 +3596,7 @@ msgstr "最好 {best}%"
 msgid "best {best}pp"
 msgstr "最好 {best}pp"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Best Performance"
 msgstr "最佳成绩"
@@ -3584,7 +3688,7 @@ msgstr "加成"
 msgid "Bottom"
 msgstr "底部"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "bottom pp"
 msgstr "最低 pp"
 
@@ -3598,19 +3702,21 @@ msgstr "bpm"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/InsightModals.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "BPM"
 msgstr "BPM"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "BPM Breakdown"
 msgstr "BPM 分布"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/player/$username.tsx
 msgid "Bracket"
 msgstr "衩"
 
@@ -4043,11 +4149,11 @@ msgstr "请选择另一位收藏者收礼。"
 #~ msgstr "选择要制作特别版的卡片。"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Chordjack"
 msgstr "大叠"
 
@@ -4083,10 +4189,10 @@ msgstr "清除"
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/RangeSlider.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Clear"
 msgstr "清除"
 
@@ -4265,6 +4371,7 @@ msgstr "客户端"
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/player/InsightModals.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/player/SkillHistoryModal.tsx
@@ -4282,7 +4389,7 @@ msgstr "客户端"
 msgid "Close"
 msgstr "关闭"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Close activity details"
 msgstr "关闭活跃度详情"
 
@@ -4877,7 +4984,7 @@ msgstr "找不到这个谱面 ID。"
 msgid "Couldn't load About right now."
 msgstr "暂时无法加载关于内容。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Couldn't load Activity right now."
 msgstr "暂时无法加载活跃度。"
 
@@ -4917,6 +5024,10 @@ msgstr "暂时无法加载 osu! 最近成绩。"
 msgid "Couldn't load profile insights right now."
 msgstr "暂时无法加载资料洞察。"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load recent plays right now."
+msgstr ""
+
 #: src/routes/player/$username.tsx
 msgid "Couldn't load recent scores right now."
 msgstr "暂时无法加载最近成绩。"
@@ -4924,6 +5035,10 @@ msgstr "暂时无法加载最近成绩。"
 #: src/components/maps/MapSearchSection.tsx
 msgid "Couldn't load search results. Try again."
 msgstr "无法加载搜索结果。请重试。"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load skills right now."
+msgstr ""
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Couldn't load that image."
@@ -4946,13 +5061,21 @@ msgstr "无法加载榜单。"
 msgid "Couldn't load the farmer list. Try again."
 msgstr "无法加载刷图玩家列表。请重试。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Couldn't load the full day detail."
 msgstr "无法加载这一天的完整详情。"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load the Maniacard right now."
+msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Couldn't load the song audio for this replay."
 msgstr "无法加载这个回放的歌曲音频。"
+
+#: src/routes/teams.tsx
+msgid "Couldn't load the team rankings."
+msgstr ""
 
 #: src/routes/replay_.uploads.tsx
 msgid "Couldn't load the uploads; refresh to retry."
@@ -4977,6 +5100,10 @@ msgstr "暂时无法加载这名玩家。"
 #: src/components/packs/RevealStage.tsx
 msgid "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
 msgstr "现在无法加载这名玩家的成绩。卡片已经在你的收藏册里，会自行完成生成。"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Couldn't load this team right now."
+msgstr ""
 
 #: src/routes/farm-helper.tsx
 msgid "couldn't load this view"
@@ -5059,8 +5186,8 @@ msgid "Couldn't start the comparison"
 msgstr "无法开始对比"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Couldn't turn on tracking right now. Try again in a moment."
 msgstr "现在无法开启追踪。请稍后再试。"
 
@@ -5161,6 +5288,10 @@ msgstr ""
 msgid "Created {0}"
 msgstr "已创建 {0}"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Created <0>{createdValue}</0>"
+msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Creating"
 msgstr ""
@@ -5191,7 +5322,7 @@ msgstr "裁剪 {0}×{1}"
 msgid "Ctrl/Cmd-click images to add or remove them."
 msgstr "按住 Ctrl/Cmd 点击图片以添加或移除。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Cumulative"
 msgstr "累计"
 
@@ -5294,6 +5425,7 @@ msgid "dan"
 msgstr "段位"
 
 #: src/components/companella/SubmissionDetail.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -6283,6 +6415,10 @@ msgstr "附加：练习谱面可以直接定下一个技能"
 msgid "Failed"
 msgstr "失败"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "Failed plays do not receive an MSD rating."
+msgstr "未通过的成绩不会获得 MSD 评级。"
+
 #: src/routes/replay.tsx
 msgid "Failed to load replay"
 msgstr "回放加载失败"
@@ -6356,7 +6492,7 @@ msgstr "此浏览器不支持以该分辨率快速导出。请降低分辨率或
 msgid "Fast single-note runs flowing across the keys."
 msgstr "在各键之间快速流动的单点串。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Fastest"
 msgstr "最快"
 
@@ -6555,6 +6691,10 @@ msgstr "在你的收藏里查找玩家"
 #: src/components/packs/SetsView.tsx
 msgid "Find a set"
 msgstr "查找卡组"
+
+#: src/routes/teams.tsx
+msgid "find a team..."
+msgstr ""
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "find an album"
@@ -6831,7 +6971,7 @@ msgstr "免费"
 msgid "French"
 msgstr "法语"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Fri"
 msgstr "五"
 
@@ -7136,10 +7276,10 @@ msgid "Handjack"
 msgstr "三押叠"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
-#: src/routes/player/$username.tsx
 msgid "Handstream"
 msgstr "三押切"
 
@@ -7310,7 +7450,7 @@ msgstr "数值越大，判定线越靠下。"
 #~ msgid "Highest difficulty"
 #~ msgstr "难度最高"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "pp 从高到低"
 
@@ -7542,7 +7682,7 @@ msgstr "匈牙利语"
 msgid "hybrid"
 msgstr "混合"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Hybrid"
 msgstr "混合"
 
@@ -7891,11 +8031,11 @@ msgstr "意大利语"
 msgid "Italic"
 msgstr "斜体"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Jack"
 msgstr "叠"
 
@@ -7996,11 +8136,11 @@ msgid "Jump to a page"
 msgstr "跳转到某一页"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Jumpstream"
 msgstr "双押切"
 
@@ -8071,7 +8211,7 @@ msgstr "按下的按键"
 msgid "Key presses play the note's hitsound, like in game. Misses trigger the combo break sound."
 msgstr "按键会播放音符的打击音，和游戏里一样。Miss 会触发断连音效。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "Key Split"
 msgstr "键数分布"
 
@@ -8288,6 +8428,10 @@ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确
 #~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
 #~ msgstr "同样的判定下，lazer 显示的准确率会比 stable 略低，所以这里会把 lazer 成绩换算成 stable 准确率。lazer 的 95.5% 可以按 96% 的通过计入，因为 stable 玩家打出同样的判定就是 96%。这不是加成，Classic mod 也不会改变这一点。"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Leader"
+msgstr ""
+
 #: src/lib/replay-overlays.ts
 #: src/routes/snipes.tsx
 msgid "Leaderboard"
@@ -8460,16 +8604,17 @@ msgstr "实时更新已开启"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternRadar.tsx
 #: src/components/me/DynamicRendersPanel.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "LN"
 msgstr "LN"
 
@@ -8519,8 +8664,8 @@ msgstr "长条段位估计"
 #~ msgid "LN Density"
 #~ msgstr "LN 密度"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN General"
 msgstr "LN 综合"
 
@@ -8540,8 +8685,8 @@ msgstr "长条头颜色"
 msgid "LN Head color"
 msgstr "长条头颜色"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN Inverse"
 msgstr "LN 反键"
 
@@ -8553,8 +8698,8 @@ msgstr "LN 反键"
 msgid "LN notes"
 msgstr "长条数"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN Release"
 msgstr "LN 放手"
 
@@ -8579,8 +8724,8 @@ msgstr "LN 占比"
 msgid "LN tail"
 msgstr "长键尾部"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
-#: src/routes/player/$username.tsx
 msgid "LN Tech"
 msgstr "LN 技"
 
@@ -8647,7 +8792,7 @@ msgstr "已把 {0} 的 me! 页面加载到编辑器。"
 msgid "Loaded the built-in skin"
 msgstr "已加载内置皮肤"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "loading"
 msgstr "加载中"
 
@@ -8752,6 +8897,10 @@ msgstr "正在加载皮肤…"
 msgid "Loading skins…"
 msgstr "正在加载皮肤…"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Loading teams..."
+#~ msgstr "正在加载战队..."
+
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Loading the rest..."
 #~ msgstr "正在加载其余通过…"
@@ -8789,6 +8938,7 @@ msgstr "加载中…"
 msgid "Loading..."
 msgstr "加载中..."
 
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -8820,7 +8970,7 @@ msgstr "登录后上传"
 #: src/components/me/DynamicRendersPanel.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Log in with osu!"
 msgstr "使用 osu! 登录"
 
@@ -8835,6 +8985,10 @@ msgstr "请重新用 osu! 登录后再更新这套皮肤。"
 #: src/components/communities/field-options.tsx
 msgid "Log in with osu! first."
 msgstr "请先用 osu! 登录。"
+
+#: src/routes/packs.tsx
+msgid "Log in with osu! to open this pack"
+msgstr "使用 osu! 登录以开启此卡包"
 
 #: src/routes/communities.tsx
 msgid "Log in with osu! to post your server"
@@ -8914,7 +9068,7 @@ msgstr "社区喜爱"
 msgid "Low PP"
 msgstr "低 pp"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
 msgstr "pp 从低到高"
 
@@ -8994,6 +9148,10 @@ msgstr "管理员"
 #~ msgid "Mania Hub just updated"
 #~ msgstr "Mania Hub 刚刚更新了"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Mania Hub rank"
+msgstr "Mania Hub 排名"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -9006,6 +9164,10 @@ msgstr "Mania Replay Master"
 #: src/routes/skins.tsx
 msgid "mania stage"
 msgstr "mania 面板"
+
+#: src/routes/teams.tsx
+msgid "Mania team rankings"
+msgstr ""
 
 #: src/routes/legal.tsx
 msgid "Mania Tracker"
@@ -9071,6 +9233,7 @@ msgstr "maniabot，Discord 上的 Mania Tracker"
 
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Maniacard"
 msgstr "Maniacard"
@@ -9170,7 +9333,7 @@ msgid "maps"
 msgstr "谱面"
 
 #: src/components/maps/UserCollectionEditor.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Maps"
 msgstr "谱面"
 
@@ -9182,7 +9345,7 @@ msgstr "谱面榜单按国家/地区构建，另有一个合并的全球榜单�
 msgid "Maps build failed."
 msgstr "谱面数据构建失败。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Maps played"
 msgstr "打过的谱面"
 
@@ -9279,15 +9442,16 @@ msgstr "中位数 {median}pp"
 msgid "median {target}pp"
 msgstr "中位数 {target}pp"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "median BPM"
 msgstr "BPM 中位数"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Median BPM"
 msgstr "BPM 中位数"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Median by Keymode"
 msgstr "各键数中位数"
 
@@ -9299,6 +9463,11 @@ msgstr "各键数中位数"
 #: src/routes/communities.tsx
 msgid "members"
 msgstr "成员数"
+
+#: src/components/team/TeamProfilePage.tsx
+#: src/routes/teams.tsx
+msgid "Members"
+msgstr ""
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Message"
@@ -9381,7 +9550,7 @@ msgstr "你的收藏册里还没有。"
 #~ msgid "Missing score"
 #~ msgstr "缺失的成绩"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "mixed keys"
 msgstr "混合键数"
 
@@ -9389,7 +9558,7 @@ msgstr "混合键数"
 msgid "Mod filter"
 msgstr "Mod 筛选"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Mod Usage"
 msgstr "Mod 使用"
 
@@ -9397,7 +9566,7 @@ msgstr "Mod 使用"
 msgid "Modded"
 msgstr "带 Mod"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "modded plays"
 msgstr "带 Mod 的成绩"
 
@@ -9410,13 +9579,13 @@ msgid "moderation"
 msgstr "审核"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Mods"
 msgstr "Mod"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Mon"
 msgstr "一"
 
@@ -9543,6 +9712,7 @@ msgstr "{countryName} 游玩最多"
 msgid "most unique cards"
 msgstr "最多不重复卡牌"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Most Used Mod"
 msgstr "最常用 Mod"
@@ -9577,11 +9747,19 @@ msgstr "msd"
 msgid "MSD"
 msgstr "MSD"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "MSD and dan on recent plays"
+msgstr "在最近成绩中显示 MSD 和段位"
+
 #. placeholder {0}: formatRate(playRate)
 #. placeholder {0}: formatRate(rateAdjusted ? rate : 1)
 #: src/components/maps/MapDetailModal.tsx
 msgid "MSD at {0}"
 msgstr "{0} 下的 MSD"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "MSD on recent plays"
+msgstr "在最近成绩中显示 MSD"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/player/$username.tsx
@@ -9767,11 +9945,12 @@ msgstr "最新"
 msgid "Newest"
 msgstr "最新"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/routes/replay_.community.tsx
 msgid "Newest first"
 msgstr "从新到旧"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Newest Top Play"
 msgstr "最新的最佳成绩"
@@ -9850,11 +10029,11 @@ msgstr "下一段试听"
 msgid "next tier"
 msgstr "下一阶段"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "NM is excluded from mod usage"
 msgstr "Mod 使用统计不包含 NM"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "NM is included in mod usage"
 msgstr "Mod 使用统计包含 NM"
 
@@ -9880,7 +10059,7 @@ msgstr "还没有 {selectedKeymode}K 预览。"
 msgid "No About content found."
 msgstr "没有找到关于内容。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "No activity data for this player"
 msgstr "这名玩家没有活跃度数据"
 
@@ -9963,7 +10142,7 @@ msgstr "隐藏段位"
 msgid "no data"
 msgstr "无数据"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "No data"
 msgstr "无数据"
 
@@ -10003,7 +10182,7 @@ msgstr "压缩包里没有找到图片或音效。"
 #~ msgid "No installation has been approved yet."
 #~ msgstr ""
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "No key data"
 msgstr "无键数数据"
 
@@ -10067,11 +10246,16 @@ msgstr "无匹配"
 msgid "No matches"
 msgstr "无匹配"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "No member of this team has a Maniacard yet."
+msgstr ""
+
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
 msgid "No missing player matches \"{0}\"."
 msgstr "没有匹配「{0}」的缺失玩家。"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "No mod preference"
 msgstr "没有偏好的 Mod"
@@ -10084,7 +10268,7 @@ msgstr "无 Mod：占 {pct}% 的成绩"
 msgid "No mods"
 msgstr "无 Mod"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 msgid "No mods in top plays"
 msgstr "最佳成绩里没有 Mod"
 
@@ -10104,7 +10288,7 @@ msgstr "还没有水平相近的玩家刷过这张。"
 msgid "No osu! player named \"{trimmedQuery}\""
 msgstr "osu! 上没有名为“{trimmedQuery}”的玩家"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "No pattern signal for this keymode yet."
 msgstr "这个键数还没有可用的谱型数据。"
 
@@ -10186,6 +10370,10 @@ msgstr "暂无已评分的键数。"
 msgid "No rated players here yet."
 msgstr "这里还没有已评分的玩家。"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "No rating is available, and no analysis is currently scheduled."
+msgstr "暂无评级，目前也未安排分析。"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No rating system changes yet."
 msgstr "评分系统暂无更新。"
@@ -10238,6 +10426,7 @@ msgstr "该链接下没有找到成绩。"
 msgid "No score found for #{queryScoreId}."
 msgstr "找不到 #{queryScoreId} 这个成绩。"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "No scores found"
 msgstr "没有找到成绩"
@@ -10269,6 +10458,10 @@ msgstr "还没有服务器"
 #: src/components/packs/SetsView.tsx
 msgid "No sets found."
 msgstr "未找到卡组。"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "No skill ratings for this team's members yet."
+msgstr ""
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
@@ -10302,9 +10495,25 @@ msgstr "{countryName} 还没有狙击记录。"
 msgid "No streak this time."
 msgstr "这次没有连胜。"
 
+#: src/routes/teams.tsx
+msgid "No teams match \"{query}\"."
+msgstr ""
+
+#: src/routes/teams.tsx
+msgid "No teams yet."
+msgstr ""
+
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "No teams yet. Open a Team pack to start collecting them."
+#~ msgstr "还没有战队。开启战队卡包即可开始收集。"
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "No top plays found"
 msgstr "未找到最佳成绩"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "No top plays from this team's members yet."
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No top plays match those controls."
@@ -10317,6 +10526,10 @@ msgstr "还没有记录到最佳成绩。被追踪期间你每刷新一次个人
 #: src/routes/player/$username.tsx
 msgid "No tracked plays found"
 msgstr "没有追踪到的成绩"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "No tracked plays from this team's members yet."
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 msgid "No tracked plays match those controls."
@@ -10482,6 +10695,10 @@ msgstr "并非问题"
 #: src/components/player/ServerLinks.tsx
 msgid "Not a server we know yet."
 msgstr "暂不支持这个服务器。"
+
+#: src/routes/team/$teamId.tsx
+msgid "Not a team id."
+msgstr ""
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
@@ -10667,6 +10884,10 @@ msgstr "没有匹配的结果"
 msgid "Nothing missing. Every player in the pool is in your collection."
 msgstr "没有缺失。卡池里的每位玩家都在你的收藏册里。"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Nothing missing. Every team in the pool is in your collection."
+#~ msgstr "没有缺少的战队，卡池中的每个战队都在你的收藏里。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "本站上的任何东西都不是真正的段位通过。这里没有人是按段位课题认定过的。本站做的是另一件事：给每一张谱面自己评一个段位，再看你已经通过的那些谱面，从中读出一个段位。这就是为什么站内每个段位前面都写着「~」，也是为什么排行榜只把自己称作一个大致的排序。"
@@ -10692,7 +10913,7 @@ msgstr "还没有上传任何内容。"
 msgid "Notice"
 msgstr "提示框"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "now"
 msgstr "当前"
 
@@ -10795,7 +11016,7 @@ msgstr "最早"
 msgid "Oldest"
 msgstr "最早"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/routes/replay_.community.tsx
 msgid "Oldest first"
 msgstr "从旧到新"
@@ -10808,6 +11029,7 @@ msgstr "最早最佳成绩 ?"
 msgid "oldest top {month}"
 msgstr "最早最佳成绩 {month}"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Oldest Top Play"
 msgstr "最早的最佳成绩"
@@ -10978,6 +11200,16 @@ msgstr "在新标签页打开 {0} 的主页"
 msgid "Open {0}'s pull of {label}"
 msgstr "打开 {0} 抽到的 {label}"
 
+#. placeholder {0}: card.player.team.name
+#: src/components/packs/PackSummary.tsx
+msgid "Open {0}'s team page"
+msgstr "打开 {0} 的战队页面"
+
+#. placeholder {0}: current.player.team.name
+#: src/components/packs/RevealStage.tsx
+msgid "Open {0}'s team page in a new tab"
+msgstr "在新标签页中打开 {0} 的战队页面"
+
 #: src/routes/player/$username.tsx
 msgid "Open {profileCountryName} home"
 msgstr "打开{profileCountryName}主页"
@@ -11046,6 +11278,10 @@ msgstr "开卡包"
 msgid "Open profile"
 msgstr "打开主页"
 
+#: src/components/packs/PackSummary.tsx
+msgid "Open team page"
+msgstr "打开战队页面"
+
 #. placeholder {0}: section.name
 #: src/components/packs/album/AlbumView.tsx
 msgid "Open the {0} album"
@@ -11055,7 +11291,7 @@ msgstr "打开 {0} 卡册"
 msgid "Open the album"
 msgstr "打开卡册"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Open the day modal with simulated busy-day data"
 msgstr "用模拟的高强度数据打开当天弹窗"
 
@@ -11155,6 +11391,10 @@ msgstr "osu! 资源与数据"
 msgid "osu! didn't answer. Try again in a minute."
 msgstr "osu! 没有响应，请一分钟后再试。"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "osu! has no team with this id."
+msgstr ""
+
 #: src/routes/terms.tsx
 msgid "osu! Login"
 msgstr "osu! 登录"
@@ -11192,6 +11432,10 @@ msgstr "osu! 成绩链接"
 #: src/routes/player/$username.tsx
 #~ msgid "osu! Supporter"
 #~ msgstr "osu! Supporter"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "osu! team"
+msgstr ""
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -11231,6 +11475,10 @@ msgstr "osu!mania 皮肤"
 msgid "osu!mania skins on Mania Tracker."
 msgstr "Mania Tracker 上的 osu!mania 皮肤。"
 
+#: src/routes/teams.tsx
+msgid "osu!mania teams ranked by performance"
+msgstr ""
+
 #: src/components/communities/field-options.tsx
 #: src/routes/skins.tsx
 msgid "other"
@@ -11238,8 +11486,8 @@ msgstr "其他"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/UserCollectionsSection.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
 msgid "Other"
 msgstr "其他"
@@ -11337,6 +11585,10 @@ msgstr "概述"
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Own card"
 msgstr "自己的卡片"
+
+#: src/components/packs/collections/CardMarks.tsx
+msgid "Own team"
+msgstr "自己的战队"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "owner"
@@ -11467,7 +11719,7 @@ msgstr "谱型"
 #~ msgid "Pattern evidence"
 #~ msgstr "键型证据"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Pattern mix"
 msgstr "谱型构成"
 
@@ -11507,6 +11759,10 @@ msgstr "暂停试听"
 msgid "Peak"
 msgstr "最高"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Peak Mania Hub rank"
+msgstr "Mania Hub 最高排名"
+
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "同水平在刷"
@@ -11521,6 +11777,7 @@ msgstr "待定"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/routes/maps.tsx
 msgid "Pending"
 msgstr "待定"
@@ -11549,10 +11806,16 @@ msgstr "左右手准确率"
 msgid "percentiles are among tracked players"
 msgstr "百分位是在已追踪玩家中的排名"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Performance"
 msgstr "表现分"
+
+#: src/routes/teams.tsx
+msgid "Performance rank"
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Persian"
@@ -11655,8 +11918,10 @@ msgstr "再来一局"
 msgid "Play both replays"
 msgstr "播放两份回放"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Play Count"
 msgstr "游玩次数"
 
@@ -11681,6 +11946,7 @@ msgstr "在刷这张"
 msgid "Play this skin in your own replays for everyone who watches them"
 msgstr "在你自己的回放里使用这个皮肤，所有观看的人都会看到"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Play Time"
 msgstr "游玩时长"
@@ -11732,6 +11998,10 @@ msgstr "玩家详情"
 msgid "Player not found."
 msgstr "找不到该玩家。"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "Player Peak"
+msgstr ""
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Player's skin"
@@ -11745,6 +12015,8 @@ msgid "players"
 msgstr "玩家"
 
 #: src/components/discord/CommandShowcase.tsx
+#: src/components/packs/SetsView.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/routes/maps.tsx
 msgid "Players"
@@ -11772,17 +12044,18 @@ msgstr "游玩中"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "plays"
 msgstr "游玩次数"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
+#: src/routes/teams.tsx
 msgid "Plays"
 msgstr "游玩"
 
@@ -11790,7 +12063,7 @@ msgstr "游玩"
 msgid "Plays / session"
 msgstr "每场游玩次数"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them."
 msgstr "成绩只记录每个已追踪国家/地区的前 100 名玩家，这名玩家目前不在其中。"
 
@@ -11907,7 +12180,7 @@ msgstr "发布你的服务器"
 msgid "posted by"
 msgstr "发布者"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ProfileParts.tsx
 msgid "pp"
 msgstr "pp"
 
@@ -11935,12 +12208,12 @@ msgstr "成绩数量"
 msgid "PP counter"
 msgstr "pp 计数"
 
+#: src/components/player/InsightModals.tsx
 #: src/lib/signature-shared.ts
-#: src/routes/player/$username.tsx
 msgid "PP distribution"
 msgstr "pp 分布"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "PP Distribution"
 msgstr "pp 分布"
 
@@ -11964,6 +12237,7 @@ msgstr "获得的 pp"
 msgid "PP Gained"
 msgstr "获得 PP"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "PP Range"
 msgstr "pp 区间"
@@ -12313,7 +12587,7 @@ msgstr "全球随机抽取"
 msgid "Random picks in {countryName}"
 msgstr "{countryName} 随机抽取"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 #: src/routes/snipes.tsx
 msgid "Range"
 msgstr "范围"
@@ -12330,6 +12604,10 @@ msgstr "排序依据"
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 msgid "Rank is set by {0} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits."
 msgstr "卡片评级由 {0} 最佳 mania 成绩决定：以 pp 排名为主，同时结合控制、速度、精度和耐力特征。"
+
+#: src/components/player/maniacard3d/RatingExplainerModal.tsx
+msgid "Rank is set by the cards of the team's strongest members."
+msgstr ""
 
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Rank trajectory"
@@ -12353,6 +12631,10 @@ msgstr "Ranked（PP）"
 #: src/components/player/SkillPlaysModal.tsx
 msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
 msgstr "按这份档案评分背后的成绩(含已追踪历史)中的 {label} 技能评分排序。"
+
+#: src/routes/teams.tsx
+#~ msgid "Ranked Score"
+#~ msgstr ""
 
 #. placeholder {0}: entry.ranked_score.toLocaleString("en-US")
 #: src/components/packs/album/AlbumView.tsx
@@ -12491,6 +12773,10 @@ msgstr "你的成绩评分失败。系统会自动重试，请稍后再来看。
 msgid "Ratings"
 msgstr "评分"
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "Ratings could not be loaded. Tap Retry to try again."
+msgstr "无法加载评级。点击“重试”以重新加载。"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Ratio"
 msgstr "比值"
@@ -12623,6 +12909,7 @@ msgid "Recent plays"
 msgstr "最近游玩"
 
 #: src/components/replay/ReplayBrowseView.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Recent Plays"
 msgstr "最近成绩"
@@ -12699,6 +12986,10 @@ msgstr "回收卡片 +{value}"
 msgid "Recycle duplicates +{0}"
 msgstr "回收重复 +{0}"
 
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Recycle duplicates +{duplicateValue}"
+#~ msgstr "回收重复卡 +{duplicateValue}"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Recycle duplicates +{recyclable}"
 msgstr "回收重复 +{recyclable}"
@@ -12770,6 +13061,7 @@ msgstr "区域"
 #: src/components/player/SkillBreakdown.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
+#: src/components/team/TeamProfilePage.tsx
 msgid "Regular"
 msgstr "常规"
 
@@ -13170,6 +13462,7 @@ msgstr "数据保留与控制"
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/player/SharedSkillPlay.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
@@ -13320,7 +13613,7 @@ msgstr "在运营 osu!mania 服务器？发布它，通过审核后就会显示�
 msgid "Russian"
 msgstr "俄语"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sat"
 msgstr "六"
 
@@ -13914,7 +14207,7 @@ msgid "Servers are unavailable right now"
 msgstr "服务器列表暂时不可用"
 
 #. placeholder {0}: sessionIndex + 1
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Session {0}"
 msgstr "第 {0} 场"
 
@@ -13927,7 +14220,7 @@ msgstr "第 {0} 场"
 #~ msgstr ""
 
 #: src/components/me/MyStatsInsights.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sessions"
 msgstr "游玩场次"
 
@@ -14214,7 +14507,7 @@ msgstr "显示导出详情"
 msgid "show fewer"
 msgstr "收起"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/routes/report.tsx
 msgid "Show fewer"
 msgstr "收起"
@@ -14229,6 +14522,7 @@ msgstr "显示更多"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.uploads.tsx
 msgid "Show more"
@@ -14343,6 +14637,14 @@ msgstr "显示最新的 {0} 个。"
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "显示"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the MSD and dan of each play in Recent Plays"
+msgstr "在最近成绩中显示每个成绩的 MSD 和段位"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the MSD of each play in Recent Plays"
+msgstr "在最近成绩中显示每个成绩的 MSD"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
@@ -14470,7 +14772,7 @@ msgstr ""
 #~ msgid "Signing in does not start tracking. Turn it on to include new loved and graveyard plays in your skill rating."
 #~ msgstr ""
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sim busy day"
 msgstr "模拟高强度一天"
 
@@ -14513,7 +14815,7 @@ msgstr "大小"
 msgid "Skill"
 msgstr "技能"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Skill analysis is queued for the maps played on this day."
 msgstr "这一天打过的谱面已排队等待技能分析。"
 
@@ -14563,6 +14865,7 @@ msgstr "技能提升 {target}pp"
 msgid "skillboost only"
 msgstr "仅技能提升"
 
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "Skills"
 msgstr "技能"
@@ -14656,7 +14959,7 @@ msgstr "斯洛伐克语"
 msgid "Slower export with more CPU use."
 msgstr "导出较慢，CPU 占用更高。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "Slowest"
 msgstr "最慢"
 
@@ -14780,7 +15083,7 @@ msgstr "很快"
 msgid "sort"
 msgstr "排序"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/BestScoresControls.tsx
 #: src/routes/tracker.tsx
 msgid "Sort"
 msgstr "排序"
@@ -14917,11 +15220,11 @@ msgid "STAM"
 msgstr "耐力"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Stamina"
 msgstr "耐力"
 
@@ -14980,7 +15283,7 @@ msgid "Start the connection again from the app."
 msgstr ""
 
 #: src/components/me/RosterOptInCard.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Start tracking your plays"
 msgstr "开始追踪你的成绩"
 
@@ -15114,16 +15417,16 @@ msgstr "故事板…"
 msgid "streak"
 msgstr "连胜"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Streak"
 msgstr "连续天数"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Stream"
 msgstr "切"
 
@@ -15192,7 +15495,7 @@ msgstr ""
 msgid "Subregions"
 msgstr "子区域"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Sun"
 msgstr "日"
 
@@ -15378,15 +15681,38 @@ msgstr "目标会从你的 mania 成绩里自动追踪：总 pp、单个成绩�
 msgid "teal"
 msgstr "蓝绿"
 
+#: src/routes/teams.tsx
+msgid "Team"
+msgstr ""
+
+#: src/components/layout/Nav.tsx
+msgid "teams"
+msgstr ""
+
+#: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/ShowcasePicker.tsx
+#: src/components/packs/SetsView.tsx
+#: src/lib/packs.ts
+msgid "Teams"
+msgstr "战队"
+
+#: src/components/team/TeamProfilePage.tsx
+msgid "Teams need the server to be configured."
+msgstr ""
+
+#: src/lib/packs.ts
+msgid "Teams only, new teams first"
+msgstr "仅限战队，新战队优先"
+
 #: src/routes/packs.tsx
 msgid "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers."
 msgstr "撕开 maniacard 补充包：随机的 osu!mania 玩家被制成收藏卡，带有技能数据和稀有度等级。"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
 #: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
-#: src/routes/player/$username.tsx
 msgid "Tech"
 msgstr "技"
 
@@ -15751,6 +16077,10 @@ msgstr "谱面分析器正在为这些最佳成绩评分。"
 #: src/components/player/SkillBreakdown.tsx
 msgid "The chart analyzer is rating your top plays right now."
 msgstr "谱面分析器正在为你的最佳成绩评分。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "The chart changed after this play, so its rating cannot be verified."
+msgstr "谱面在这次游玩后发生了变化，因此无法验证评级。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
@@ -16470,6 +16800,10 @@ msgstr "可能需要先下载并处理歌曲。"
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
 
+#: src/routes/teams.tsx
+#~ msgid "The team rankings haven't been loaded from osu! yet."
+#~ msgstr ""
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "The test client keeps its signing key in this browser and its tokens in memory only, so refreshing the page means connecting again. Everything it submits is marked as test evidence and is removed automatically after a week."
 msgstr ""
@@ -16624,6 +16958,10 @@ msgstr "无法读取这个 .osk。"
 msgid "This account is not in the Companella beta."
 msgstr ""
 
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating."
+msgstr "这次尝试没有保存的 MSD。能力评级只保留选定的成绩，因此较弱的重复尝试可能没有评级。"
+
 #: src/lib/replay-export/errors.ts
 msgid "This browser can't encode the audio track for this format."
 msgstr "此浏览器无法为该格式编码音频轨道。"
@@ -16701,8 +17039,8 @@ msgid "This connection request has already been answered."
 msgstr ""
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
 
@@ -16808,6 +17146,14 @@ msgstr "{name} 就绪后，此页面会自动加载。"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play counts for nothing on the dan estimate."
 msgstr "这次成绩不计入段位估算。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is below the accuracy needed for an MSD rating."
+msgstr "这次成绩的准确率未达到 MSD 评级要求。"
+
+#: src/components/player/RecentPlayRatingCells.tsx
+msgid "This play is excluded from skill ratings."
+msgstr "这次成绩不计入能力评级。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play is under the minimum accuracy required for dan credit."
@@ -16923,6 +17269,10 @@ msgstr "这张特别版 Eternal 由原收藏者保留。"
 msgid "This tab went to the background, which can pause the export."
 msgstr "此标签页已切到后台，导出可能会被暂停。"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "This team has no description."
+msgstr ""
+
 #: src/routes/farm-helper.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "这个工具需要从服务器读取跨国家/地区的刷图数据，而当前环境没有配置服务器。"
@@ -16943,7 +17293,7 @@ msgstr ""
 msgid "Those images are no longer available."
 msgstr "这些图片已无法查看。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "四"
 
@@ -16955,7 +17305,7 @@ msgstr "周四"
 msgid "Tier changed to {tierLabel}"
 msgstr "等级变更为 {tierLabel}"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Time played"
 msgstr "游玩时长"
 
@@ -16988,6 +17338,7 @@ msgstr "标题"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
+#: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "至"
@@ -17128,7 +17479,7 @@ msgstr "顶尖玩家"
 
 #: src/components/layout/Nav.tsx
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "top plays"
 msgstr "最佳成绩"
 
@@ -17141,7 +17492,7 @@ msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "最佳成绩"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/InsightModals.tsx
 msgid "top pp"
 msgstr "最高 pp"
 
@@ -17162,8 +17513,8 @@ msgid "tournaments, mapping, casual"
 msgstr "比赛、制谱、休闲"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Track my plays"
 msgstr "追踪我的成绩"
 
@@ -17264,7 +17615,7 @@ msgstr "再试一次"
 msgid "Try turning a filter off."
 msgstr "试试关掉一个筛选条件。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Tue"
 msgstr "二"
 
@@ -17329,7 +17680,7 @@ msgid "Type a range: 40-60, 50+, <30"
 msgstr "输入区间：40-60、50+、<30"
 
 #. placeholder {0}: activity.typicalSession
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Typical session <0>{0} plays</0>"
 msgstr "一场通常打 <0>{0} 次</0>"
 
@@ -17337,7 +17688,7 @@ msgstr "一场通常打 <0>{0} 次</0>"
 msgid "Ukrainian"
 msgstr "乌克兰语"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Unanalyzed"
 msgstr "未分析"
 
@@ -17345,6 +17696,7 @@ msgstr "未分析"
 msgid "unavailable"
 msgstr "不可用"
 
+#: src/components/player/RecentPlayRatingCells.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Unavailable"
 msgstr "不可用"
@@ -17387,10 +17739,10 @@ msgstr "取消隐藏"
 msgid "unknown"
 msgstr "未知"
 
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/ScoreRows.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
-#: src/routes/player/$username.tsx
 msgid "Unknown"
 msgstr "未知"
 
@@ -17795,6 +18147,11 @@ msgstr "视图"
 msgid "View {0}'s card"
 msgstr "查看 {0} 的卡片"
 
+#. placeholder {0}: team.name
+#: src/components/team/TeamProfilePage.tsx
+msgid "View {0}'s flag"
+msgstr ""
+
 #. placeholder {0}: row.name
 #: src/routes/communities_.$id.tsx
 msgid "View {0}'s icon"
@@ -17855,11 +18212,20 @@ msgstr "在 osu! 网站查看"
 msgid "View osu! profile"
 msgstr "查看 osu! 主页"
 
+#: src/components/team/TeamProfilePage.tsx
+msgid "View osu! team"
+msgstr ""
+
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View profile"
 msgstr "查看主页"
+
+#: src/components/packs/CardSpotlight.tsx
+#: src/components/packs/CollectionPanel.tsx
+msgid "View team"
+msgstr "查看战队"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"
@@ -18066,7 +18432,7 @@ msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就�
 msgid "web.archive.org link to their osu! profile"
 msgstr "指向其 osu! 主页的 web.archive.org 链接"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Wed"
 msgstr "三"
 
@@ -18477,7 +18843,7 @@ msgid "you're already past {0}"
 msgstr "你已经超过 {0} 了"
 
 #: src/components/me/RosterOptInCard.tsx
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "You're being tracked now"
 msgstr "你已经被追踪了"
 
@@ -18574,8 +18940,8 @@ msgstr "你的收藏已发生变化，没有送出任何卡片。请刷新后重
 #~ msgstr "你的收藏日志"
 
 #: src/components/me/RosterOptInCard.tsx
+#: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
-#: src/routes/player/$username.tsx
 msgid "Your country isn't tracked yet, so there's nothing to record your plays against."
 msgstr "你的国家/地区还没有被追踪，所以没有地方记录你的成绩。"
 
@@ -18689,7 +19055,7 @@ msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在
 #~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
 #~ msgstr "正在拉取你最近的成绩，几分钟后会在这里评分。"
 
-#: src/routes/player/$username.tsx
+#: src/components/player/ActivityPanel.tsx
 msgid "Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play."
 msgstr "正在拉取你的最近成绩。一两分钟内活跃度就会出现在这里，并随着你打图持续更新。"
 
@@ -18742,6 +19108,10 @@ msgstr "你的展示柜"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"
 msgstr "你的皮肤"
+
+#: src/components/packs/TeamCollectionPanel.tsx
+#~ msgid "Your teams could not be loaded just now. Try again in a moment."
+#~ msgstr "暂时无法加载你的战队，请稍后再试。"
 
 #: src/components/player/SkillBreakdown.tsx
 msgid "Your top plays are being rated by the chart analyzer. The first pass takes a minute or two."

@@ -92,6 +92,7 @@ export function DanLevelBadge({
   size = "md",
   clearWindow,
   formatLabel,
+  approximate = true,
 }: {
   label: string;
   keyCount: number;
@@ -103,6 +104,8 @@ export function DanLevelBadge({
   clearWindow?: DanClearWindow | null;
   /** Renders the level for humans ("8" -> "8th dan"); used for alt text. */
   formatLabel: (label: string) => string;
+  /** Off where the badge counts players at a level rather than estimating one. */
+  approximate?: boolean;
 }) {
   const { t } = useLingui();
   const shown = beyondTable ? danBareLabel(label) : label;
@@ -126,14 +129,14 @@ export function DanLevelBadge({
   if (!image) {
     return (
       <span className="relative inline-flex items-center pr-2 text-[12px] font-bold text-osu-l1">
-        {approx}{formatLabel(shown)}
+        {approximate || beyondTable ? approx : null}{formatLabel(shown)}
         {partial ? <ClearWindowRing clearWindow={clearWindow!} size={size} title={windowTitle} /> : null}
       </span>
     );
   }
   return (
     <span className="flex items-center gap-0.5">
-      <span className={`${APPROX_CLASS[size]} leading-none text-osu-f1`}>{approx}</span>
+      {approximate || beyondTable ? <span className={`${APPROX_CLASS[size]} leading-none text-osu-f1`}>{approx}</span> : null}
       <span className="flex items-start gap-[2px] leading-none">
         <span className="relative inline-flex">
           <img src={image} alt={formatLabel(shown)} className={`${IMAGE_CLASS[size]} object-contain`} />

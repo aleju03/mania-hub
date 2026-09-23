@@ -12,6 +12,8 @@ import {
   type LiveGlobalRankingEntry,
 } from "./live-backend";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
+import { parsePackTeamCard, teamCardUser, teamPackCardKey, type PackTeamCard } from "./team-cards";
+export { parsePackTeamCard, teamCardFace, teamCardSkills, teamCardUser, teamPackCardKey, type PackTeamCard } from "./team-cards";
 import { parseCardMotif, type CardMotif } from "./card-motif";
 import { parsePackCardKey } from "./pack-collection";
 import { HONORARY_PACK_POOL, honoraryPlayerById, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
@@ -76,6 +78,16 @@ export interface PackPlayer {
      player this collector named and the pack reached for. Display-only, like
      the flags above - it only decides whether the reveal prints the tag. */
   wished?: boolean;
+  /* A team card (live-backend pack-teams.ts): the Team pack's slots, or the
+     extra one any other pack deals one open in five hundred. The server set
+     its tier and numbers and wrote it into the team collection at the draw,
+     so nothing about it is minted, synced or reported from here. user.id is
+     the negative team id and cardKey is "team:<id>". */
+  team?: PackTeamCard;
+  /* The team card's mint serial, read by the server at the draw (team cards
+     are never reported to the pull log, which is where a player card's comes
+     from). */
+  teamMint?: { serial: number; mintedTotal: number; isFirstGlobal: boolean };
 }
 
 /* The variant fields a server slot may carry, bounded: a key that is not a
@@ -120,7 +132,7 @@ export function packPlayerVariantFields(slot: {
 // progressively tighter top slices of the tracked pool. Within a pack's
 // slice every player has identical odds - rarity always comes from the
 // player's real scores, never from the draw.
-export type PackTypeId = "standard" | "wild" | "4k" | "7k" | "elite" | "legend";
+export type PackTypeId = "standard" | "wild" | "4k" | "7k" | "elite" | "legend" | "teams";
 
 export type PackCost = { kind: "charge" } | { kind: "shards"; amount: number };
 
@@ -153,6 +165,8 @@ export interface PackTypeDef {
      thousand - rare enough to stay a story, common enough that the story
      eventually happens to someone. Zero disables it entirely. */
   honoraryCascadeChance: number;
+  /* Deals team cards instead of players (the Team pack). */
+  teams?: boolean;
   blurb: string;
   accent: { r: number; g: number; b: number };
 }
@@ -266,7 +280,33 @@ export const PACK_TYPES: PackTypeDef[] = [
     blurb: "Top 2%, new cards first",
     accent: { r: 244, g: 114, b: 182 },
   },
+  // Deals osu! teams instead of players, from its own pool (every team
+  // someone has opened on the site) into its own collection. Signed-in only:
+  // the server sets a team card's tier, so there is no browser-local draw for
+  // it. Mirrored in live-backend/src/features/pack-teams.ts.
+  {
+    id: "teams",
+    name: "Teams",
+    cost: { kind: "shards", amount: 120 },
+    topFraction: 1,
+    cardCount: PACK_SIZE,
+    guaranteesNew: true,
+    honoraryChance: 0,
+    honoraryCascadeChance: 0,
+    teams: true,
+    blurb: "Teams only, new teams first",
+    accent: { r: 249, g: 115, b: 22 },
+  },
 ];
+
+/* The shelf shows the two keymode packs as one, opened as 4K or 7K. */
+export type PackShelfId = Exclude<PackTypeId, "4k" | "7k"> | "keys";
+
+export const PACK_SHELF: PackShelfId[] = ["standard", "wild", "keys", "elite", "teams", "legend"];
+
+export function packShelfIdOf(id: PackTypeId): PackShelfId {
+  return id === "4k" || id === "7k" ? "keys" : id;
+}
 
 export function packTypeById(id: PackTypeId): PackTypeDef {
   return PACK_TYPES.find((type) => type.id === id) ?? PACK_TYPES[0];
@@ -283,6 +323,7 @@ export const PACK_TYPE_NAME_LABELS: Record<PackTypeId, MessageDescriptor> = {
   "7k": msg`7K`,
   elite: msg`Elite`,
   legend: msg`Legend`,
+  teams: msg`Teams`,
 };
 
 export const PACK_TYPE_BLURB_LABELS: Record<PackTypeId, MessageDescriptor> = {
@@ -292,6 +333,7 @@ export const PACK_TYPE_BLURB_LABELS: Record<PackTypeId, MessageDescriptor> = {
   "7k": msg`Main 7K players only`,
   elite: msg`Top 10%, new cards first`,
   legend: msg`Top 2%, new cards first`,
+  teams: msg`Teams only, new teams first`,
 };
 
 // Tiny pools widen a sliced draw to a sane floor instead of repeating the
@@ -813,6 +855,30 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }),
   );
   for (const slot of result.players) {
+    if (slot.team) {
+      const team = parsePackTeamCard(slot.team);
+      if (!team) continue;
+      const cardKey = teamPackCardKey(team.teamId);
+      if (typeof slot.isNew === "boolean") isNewByCardKey.set(cardKey, slot.isNew);
+      const serial = Math.floor(Number(slot.mint?.serial) || 0);
+      players.push({
+        team,
+        cardKey,
+        user: teamCardUser(team),
+        globalRank: UNKNOWN_HONORARY_PEAK_RANK,
+        pp: 0,
+        ...(serial > 0
+          ? {
+              teamMint: {
+                serial,
+                mintedTotal: Math.max(serial, Math.floor(Number(slot.mint?.mintedTotal) || 0)),
+                isFirstGlobal: slot.mint?.isFirstGlobal === true,
+              },
+            }
+          : {}),
+      });
+      continue;
+    }
     const variant = packPlayerVariantFields(slot);
     if (typeof slot.isNew === "boolean") {
       isNewByCardKey.set(

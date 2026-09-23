@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchPlayerSitemapEntries } from "#/lib/player-sitemap";
 import { buildSitemap } from "./sitemap[.]xml";
+import { TEAMS_OPEN } from "#/lib/auth-shared";
+
+// /teams joins the static paths once teams leave the owner's preview.
+const TEAMS_PATHS = TEAMS_OPEN ? 1 : 0;
 
 const ORIGIN = "https://mania-tracker.com";
 
@@ -14,7 +18,7 @@ describe("sitemap players", () => {
     expect(xml).toContain("<loc>https://mania-tracker.com/player/Some%20Player</loc>");
     expect(xml).toContain("<lastmod>2026-09-12</lastmod>");
     expect(xml).toContain("<loc>https://mania-tracker.com/player/Undated</loc>");
-    expect(xml.match(/<url>/g)).toHaveLength(15);
+    expect(xml.match(/<url>/g)).toHaveLength(15 + TEAMS_PATHS);
     expect(xml.match(/<lastmod>/g)).toHaveLength(1);
     expect(xml.indexOf("/skins/x")).toBeLessThan(xml.indexOf("/player/"));
   });

@@ -5,6 +5,7 @@ import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
+import { canSeeTeams } from "#/lib/auth-shared";
 import { formatDate, formatOrdinal } from "#/lib/format";
 import { useLocale } from "#/lib/locale-context";
 import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
@@ -12,9 +13,9 @@ import { fetchLivePackCardGifts, fetchLivePackCardStats, isLiveBackendConfigured
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
-import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
+import { collectedCardRenderData } from "./cardThumbnailCache";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 export interface CardSpotlightTarget {
@@ -85,7 +86,9 @@ export function CardSpotlight({
   const [giftTally, setGiftTally] = useState<LivePackCardGifts | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const reducedMotion = prefersReducedMotion();
-  const viewerId = useAuth().viewer?.id ?? null;
+  const auth = useAuth();
+  const viewerId = auth.viewer?.id ?? null;
+  const teamsVisible = canSeeTeams(auth);
   const { t } = useLingui();
   const locale = useLocale();
 
@@ -99,7 +102,8 @@ export function CardSpotlight({
      half of where a card came from. */
   const gotAt = target ? (target.card.grantedAt || target.card.firstPulledAt || 0) : 0;
   const viewerTimeZone = useViewerTimeZone();
-  const spotlightCardKey = target ? packCardKeyOf(target.card) : null;
+  // A team card has no community stats, gifts or share page.
+  const spotlightCardKey = target && !target.card.team ? packCardKeyOf(target.card) : null;
   useEffect(() => {
     setOwnerCount(null);
     if (!spotlightCardKey || !isLiveBackendConfigured()) return;
@@ -202,19 +206,7 @@ export function CardSpotlight({
     const card = target?.card;
     if (!card?.skills) return;
     let cancelled = false;
-    const data = buildManiaCardRenderDataFromSkills({
-      user: {
-        id: card.userId,
-        username: card.username,
-        avatar_url: card.avatarUrl,
-        country_code: card.countryCode,
-        statistics: { global_rank: card.globalRank, pp: card.pp },
-      },
-      skills: card.skills,
-      tierOverride: collectedCardTier(card),
-      labelOverride: card.customLabel,
-      motifOverride: card.motif,
-    });
+    const data = collectedCardRenderData(card, card.skills);
     const fallbackTo2d = () => {
       rendererRef.current?.dispose();
       rendererRef.current = null;
@@ -360,7 +352,7 @@ export function CardSpotlight({
           >
             <div className="flex flex-col items-center gap-1.5 text-center">
               <div className="flex items-center gap-2">
-                <CountryFlag code={card.countryCode} size="sm" />
+                {!card.team && <CountryFlag code={card.countryCode} size="sm" />}
                 <span className="text-[15px] font-bold text-white">{card.username}</span>
                 {tierLabel && tier && (
                   <span
@@ -376,12 +368,16 @@ export function CardSpotlight({
                 )}
               </div>
               <div className="text-[12px] text-osu-f1 tabular-nums">
-                {Math.round(card.pp).toLocaleString("en-US")}pp
-                {card.globalRank > 0 && <> &middot; {t`#${card.globalRank.toLocaleString("en-US")} global`}</>}
+                {!card.team && (
+                  <>
+                    {Math.round(card.pp).toLocaleString("en-US")}pp
+                    {card.globalRank > 0 && <> &middot; {t`#${card.globalRank.toLocaleString("en-US")} global`}</>}
+                  </>
+                )}
                 {card.copies > 1 && (
                   <>
-                    {" "}
-                    &middot; <Plural value={Number(card.copies)} one="x# copy" other="x# copies" />
+                    {card.team ? null : <>{" "}&middot; </>}
+                    <Plural value={Number(card.copies)} one="x# copy" other="x# copies" />
                   </>
                 )}
                 {ownerCount !== null && ownerCount > 0 && (
@@ -521,6 +517,17 @@ export function CardSpotlight({
                   })()}
                 </div>
               ) : null}
+              {card.team ? teamsVisible && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Link
+                    to="/team/$teamId"
+                    params={{ teamId: String(card.team.teamId) }}
+                    className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition hover:brightness-110"
+                  >
+                    <Trans>View team</Trans>
+                  </Link>
+                </div>
+              ) : (
               <div className="mt-1.5 flex items-center gap-2">
                 <Link
                   to="/player/$username"
@@ -548,6 +555,7 @@ export function CardSpotlight({
                   )}
                 </button>
               </div>
+              )}
             </div>
           </motion.div>
         </div>

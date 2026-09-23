@@ -4,6 +4,7 @@ import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 import { liveBridgeToken } from "./live-backend-tokens";
 import { isPackCardMark, PACK_CARD_MARKS, type PackCardMark } from "./pack-collection";
 import { PACK_SHOWCASE_MAX_CARDS } from "./pack-showcase";
+import type { PackTeamCard } from "./packs";
 
 // Server functions bridging the browser to the server's pack_wallets store.
 // The viewer always comes from the osu! login cookie, never from client
@@ -53,6 +54,10 @@ export interface ServerPackCollectionCard {
   /* Who gave it, for a holding that arrived as an accepted gift. Null for a
      pull and for a grant-desk card, which has no person behind it. */
   giftedBy?: { userId: number; username: string } | null;
+  /* A team card pinned to a showcase ("team:<id>", userId the negative team
+     id), and whether the showcase's owner is on that team. */
+  team?: PackTeamCard;
+  ownTeam?: boolean;
 }
 
 /* Progress against the ordinary-drawable pool: owned players still pullable
@@ -79,6 +84,12 @@ export interface ServerPackCollectionPage {
      can label themselves while they are off. */
   markCounts?: Record<PackCardMark, number>;
   poolProgress: ServerPackCollectionPoolProgress | null;
+  /* Team cards held (live-backend pack-teams.ts), on a read that asked for
+     them. They sit in the grid under "team:<id>" and label the Teams chip. */
+  teamCount: number;
+  /* Pool teams the collection holds no card of, on a read that asked for
+     teams. Part of the header's "N missing". */
+  teamMissing: number;
   /** Honorary GOAT variants the collection still lacks. They are separate
       collectible slots from the ordinary player pool. */
   goatMissing: number;
@@ -97,8 +108,19 @@ export interface ServerPackCollectionMissingPlayer {
   poolRank: number;
 }
 
+/* One pool team the viewer holds no card of. */
+export interface ServerPackCollectionMissingTeam {
+  teamId: number;
+  name: string;
+  shortName: string;
+  flagUrl: string | null;
+}
+
 export interface ServerPackCollectionMissingPage {
   players: ServerPackCollectionMissingPlayer[];
+  /* Missing teams continue the players' run: total counts both, and a page
+     past the last player holds teams. */
+  teams: ServerPackCollectionMissingTeam[];
   total: number;
   /** GOAT variants this collection lacks, both as a count and as player ids so
       the client can hydrate their checked-in honorary faces. */
@@ -203,6 +225,8 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     sort?: unknown;
     duplicatesOnly?: unknown;
     mark?: unknown;
+    teams?: unknown;
+    teamsOnly?: unknown;
   }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
@@ -212,7 +236,9 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       input?.sort === "newest" ? ("newest" as const) : input?.sort === "copies" ? ("copies" as const) : ("rarity" as const);
     const duplicatesOnly = input?.duplicatesOnly === true;
     const mark = isPackCardMark(input?.mark) ? input.mark : null;
-    return { page, pageSize, tier, query, sort, duplicatesOnly, mark };
+    const teams = input?.teams === true;
+    const teamsOnly = teams && input?.teamsOnly === true;
+    return { page, pageSize, tier, query, sort, duplicatesOnly, mark, teams, teamsOnly };
   })
   .handler(async ({ data }): Promise<ServerPackCollectionPage | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -227,6 +253,8 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     if (data.sort !== "rarity") url.searchParams.set("sort", data.sort);
     if (data.duplicatesOnly) url.searchParams.set("dupes", "1");
     if (data.mark) url.searchParams.set("mark", data.mark);
+    if (data.teams) url.searchParams.set("teams", "1");
+    if (data.teamsOnly) url.searchParams.set("teamsOnly", "1");
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection fetch failed (${response.status}).`);
     const body = (await response.json()) as ServerPackCollectionPage;
@@ -254,6 +282,8 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
         : {}),
       poolProgress,
       goatMissing: Math.max(0, Math.floor(Number(body.goatMissing) || 0)),
+      teamCount: Math.max(0, Math.floor(Number(body.teamCount) || 0)),
+      teamMissing: Math.max(0, Math.floor(Number(body.teamMissing) || 0)),
     };
   });
 
@@ -274,6 +304,7 @@ export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" }
     if (!target) return null;
     const url = new URL(target.url.replace("/api/pack-wallet/", "/api/pack-collection/"));
     url.searchParams.set("missing", "1");
+    url.searchParams.set("teams", "1");
     url.searchParams.set("page", String(data.page));
     url.searchParams.set("pageSize", String(data.pageSize));
     if (data.query) url.searchParams.set("q", data.query);
@@ -281,12 +312,14 @@ export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" }
     if (!response.ok) throw new Error(`Pack collection missing fetch failed (${response.status}).`);
     const body = (await response.json()) as {
       players?: unknown;
+      teams?: unknown;
       total?: unknown;
       goatMissing?: unknown;
       goatMissingUserIds?: unknown;
     };
     return {
       players: Array.isArray(body.players) ? (body.players as ServerPackCollectionMissingPlayer[]) : [],
+      teams: Array.isArray(body.teams) ? (body.teams as ServerPackCollectionMissingTeam[]) : [],
       total: Number(body.total) || 0,
       goatMissing: Number(body.goatMissing) || 0,
       goatMissingUserIds: Array.isArray(body.goatMissingUserIds)
@@ -324,7 +357,7 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
     cardKeys: Array.isArray(input?.cardKeys)
       ? input.cardKeys
           .slice(0, PACK_SHOWCASE_MAX_CARDS * 10)
-          .map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null))
+          .map((key) => (typeof key === "string" ? sanitizeShowcaseKey(key) : null))
           .filter((key): key is string => key !== null)
       : [],
   }))
@@ -342,9 +375,16 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error(`Pack showcase save failed (${response.status}).`);
     const body = (await response.json()) as { cardKeys?: unknown };
     return Array.isArray(body.cardKeys)
-      ? body.cardKeys.map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null)).filter((key): key is string => key !== null)
+      ? body.cardKeys.map((key) => (typeof key === "string" ? sanitizeShowcaseKey(key) : null)).filter((key): key is string => key !== null)
       : [];
   });
+
+/* A shelf also takes a team card, "team:<id>", which no wallet holds. */
+function sanitizeShowcaseKey(value: string): string | null {
+  const team = /^team:(\d{1,12})$/.exec(value.trim());
+  if (team) return Number(team[1]) > 0 ? `team:${Number(team[1])}` : null;
+  return sanitizeCardKey(value);
+}
 
 /* Normalizes a wallet card key, rejecting anything that is not a player id
    with an optional ":goat" suffix. */
@@ -535,6 +575,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
     query?: unknown;
     duplicatesOnly?: unknown;
     mark?: unknown;
+    teamsOnly?: unknown;
   }) => {
     const mode =
       input?.mode === "duplicates" ||
@@ -546,11 +587,12 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       : null;
     // Cards are addressed by wallet key ("<id>" or "<id>:goat"), so a GOAT and
     // an ordinary card of the same player recycle independently.
-    const cardKey = typeof input?.cardKey === "string" ? sanitizeCardKey(input.cardKey) : null;
+    // Team cards share the grid under "team:<id>" and recycle in the same call.
+    const cardKey = typeof input?.cardKey === "string" ? sanitizeShowcaseKey(input.cardKey) : null;
     const cardKeys = mode === "whole" && Array.isArray(input?.cardKeys)
       ? input.cardKeys
           .slice(0, 500)
-          .map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null))
+          .map((key) => (typeof key === "string" ? sanitizeShowcaseKey(key) : null))
           .filter((key): key is string => key !== null)
       : null;
     const hasBulkKeys = cardKeys !== null && cardKeys.length > 0;
@@ -592,6 +634,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       // Same for the mark chips: under one of them "everything shown" is the
       // handful of cards wearing that seal, not the whole collection.
       mark: isPackCardMark(input?.mark) ? input.mark : null,
+      teamsOnly: input?.teamsOnly === true,
     };
   })
   .handler(async ({ data }): Promise<{ gained: number; payload: string; rev: number } | null> => {

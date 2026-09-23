@@ -13,8 +13,18 @@ import type { Texture } from "three";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH, type ShaderQuality } from "./layout";
 import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
 import { getCosmicTierPalette, type PreparedCardMotif } from "./cardTexture";
-import type { FaceLayout } from "./textureLayout";
+import type { FaceLayout, Rect } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
+
+/* A face rect in the shader's UV space, whose y runs up from the bottom. */
+function textureRectUv(rect: Rect): Vector4 {
+  return new Vector4(
+    rect.x / CARD_TEXTURE_WIDTH,
+    1 - (rect.y + rect.height) / CARD_TEXTURE_HEIGHT,
+    rect.width / CARD_TEXTURE_WIDTH,
+    rect.height / CARD_TEXTURE_HEIGHT,
+  );
+}
 
 export function createEdgeMaterial(data: ManiaCardReadyData) {
   return new MeshStandardMaterial({
@@ -55,6 +65,7 @@ export function createOverlayMaterial(
   motif: PreparedCardMotif | null = null,
 ) {
   const avatar = layout.masks.avatar;
+  const flag = layout.masks.flag;
   const cosmic = getCosmicTierPalette(data.tier, data.motif);
   return new ShaderMaterial({
     transparent: true,
@@ -79,16 +90,11 @@ export function createOverlayMaterial(
       uMotifSize: { value: new Vector2(motif?.cellWidth ?? 0.34, motif?.cellHeight ?? 0.34) },
       uMotifOpacity: { value: motif?.opacity ?? 1 },
       uRainbow: { value: cosmic?.rainbow ?? 1 },
-      uAvatarMask: {
-        value: new Vector4(
-          avatar.x / CARD_TEXTURE_WIDTH,
-          1 - (avatar.y + avatar.height) / CARD_TEXTURE_HEIGHT,
-          avatar.width / CARD_TEXTURE_WIDTH,
-          avatar.height / CARD_TEXTURE_HEIGHT,
-        ),
-      },
+      uAvatarMask: { value: textureRectUv(avatar) },
       uTextureSize: { value: new Vector2(CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT) },
       uAvatarRadius: { value: layout.front.avatar.radius },
+      uFlagMask: { value: flag ? textureRectUv(flag.rect) : new Vector4(-1, -1, 0, 0) },
+      uFlagRadius: { value: flag?.radius ?? 0 },
     },
   });
 }

@@ -1,4 +1,5 @@
 import type { CardMotif } from "./card-motif";
+import type { PackTeamCard } from "./team-cards";
 import { AWARDED_TIERS, getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
 
 // Pack economy: charges regenerate over time (one every 20 seconds, capped
@@ -64,6 +65,14 @@ export interface CollectedCard {
   /* The collector who gave it, when the card arrived as an accepted gift
      rather than from the grant desk. Server-only like grantedAt. */
   giftedBy?: { userId: number; username: string } | null;
+  /* Set on a team card (the team collection, live-backend pack-teams.ts),
+     which lives outside the wallet and is only ever shaped like this for the
+     spotlight and a showcase: it draws the team's banner face instead of a
+     player's. */
+  team?: PackTeamCard;
+  /* A showcased team card whose showcase owner is on that team. Server-only,
+     read when the showcase is. */
+  ownTeam?: boolean;
 }
 
 export interface PackWallet {

@@ -15,8 +15,7 @@ import type {
   ManiaCardRenderData,
   ManiaCardRenderInput,
   ManiaCardReadyData,
-  RgbaColor,
-} from "./types";
+  RgbaColor, ManiaCardTeamInput } from "./types";
 
 const EMPTY_CARD_MESSAGE = "Need at least one ranked play with full beatmap data to mint a card.";
 const ETERNAL_COLLECTOR_SKILLS: ManiaSkills = {
@@ -87,9 +86,12 @@ export function buildManiaCardRenderDataFromSkills({
   tierOverride,
   labelOverride,
   motifOverride,
+  team,
 }: {
   user: ManiaCardRenderInput["user"];
   skills: ManiaSkills;
+  /* A team card: the flag stands in for the avatar and the banner face draws. */
+  team?: ManiaCardTeamInput | null;
   scores?: ManiaCardRenderInput["scores"];
   tierOverride?: ManiaCardTier;
   /* Badge text for one holding, from /admin/collections. Same slot the
@@ -123,7 +125,7 @@ export function buildManiaCardRenderDataFromSkills({
     // rather than a.ppy.sh directly. Passing the stored avatar URL through
     // carries osu!'s version token into the proxy URL, which makes each one
     // immutable and lets the CDN hold it instead of re-fetching per render.
-    avatarUrl: maniaCardAvatarUrl(user),
+    avatarUrl: team ? team.flagUrl ?? "" : maniaCardAvatarUrl(user),
     scores,
     skills,
     tier,
@@ -138,6 +140,7 @@ export function buildManiaCardRenderDataFromSkills({
     glowColor: parseCssRgba(tierStyle.glowColor),
     badgeGradientStops: parseGradientStops(tierStyle.badgeGradient),
     motif: motifOverride ?? null,
+    team: team ? { tag: team.tag, coverUrl: team.coverUrl } : null,
   };
 }
 
@@ -162,6 +165,7 @@ export function getManiaCardRenderDataSignature(data: ManiaCardRenderData): stri
     signatureColor(data.glowColor),
     data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
     cardMotifSignature(data.motif),
+    data.team ? `team:${data.team.tag}:${data.team.coverUrl ?? ""}` : "",
   ].join("|");
 }
 

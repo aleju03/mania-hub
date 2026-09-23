@@ -26,6 +26,7 @@ import {
   fetchServerPackCollectionMissing,
   fetchServerPackCollectionPage,
   type ServerPackCollectionMissingPage,
+  type ServerPackCollectionMissingTeam,
   type ServerPackCollectionPage,
 } from "#/lib/pack-wallet-sync";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -35,7 +36,9 @@ import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./car
 import { useCardThumbnails } from "./useCardThumbnails";
 import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
+import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
+import { canSeeTeams } from "#/lib/auth-shared";
 
 export type { CardMint };
 
@@ -102,6 +105,7 @@ interface CollectionPanelProps {
     query: string;
     duplicatesOnly: boolean;
     mark: PackCardMark | null;
+    teamsOnly: boolean;
   }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
@@ -198,6 +202,7 @@ function serverCollectionCacheKey({
   sort,
   duplicatesOnly,
   mark,
+  teamsOnly,
 }: {
   page: number;
   pageSize: number;
@@ -206,8 +211,9 @@ function serverCollectionCacheKey({
   sort: CollectionSortMode;
   duplicatesOnly: boolean;
   mark: PackCardMark | null;
+  teamsOnly: boolean;
 }) {
-  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${query}`;
+  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${teamsOnly ? "teams" : ""}:${query}`;
 }
 
 /* Which rows the filter selects, not the order they come back in: totals,
@@ -221,14 +227,16 @@ function serverCollectionFilterKey({
   query,
   duplicatesOnly,
   mark,
+  teamsOnly,
 }: {
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
   duplicatesOnly: boolean;
   mark: PackCardMark | null;
+  teamsOnly: boolean;
 }) {
-  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${query}`;
+  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${teamsOnly ? "teams" : ""}:${query}`;
 }
 
 function CollectionPager({
@@ -390,6 +398,26 @@ function MissingGoatTile({ player }: { player: HonoraryPlayer }) {
   );
 }
 
+function MissingTeamTile({ team }: { team: ServerPackCollectionMissingTeam }) {
+  const flag = teamImageProxyUrl(team.flagUrl);
+  return (
+    <Link
+      to="/team/$teamId"
+      params={{ teamId: String(team.teamId) }}
+      className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30"
+      style={{ aspectRatio: "5 / 7" }}
+    >
+      <span className="absolute left-1.5 top-1.5 text-[10px] text-osu-f1/60">{team.shortName}</span>
+      {flag ? (
+        <img src={flag} alt="" className="aspect-[2/1] w-3/4 rounded-[3px] object-cover opacity-30 grayscale" loading="lazy" draggable={false} />
+      ) : (
+        <span className="aspect-[2/1] w-3/4 rounded-[3px] bg-white/5" />
+      )}
+      <span className="mt-2 w-full truncate text-center text-[11px] text-osu-f1">{team.name}</span>
+    </Link>
+  );
+}
+
 function MissingPlayerPlaceholder() {
   return (
     <div
@@ -416,7 +444,11 @@ export function CollectionPanel({
 }: CollectionPanelProps) {
   const { t, i18n } = useLingui();
   // Only for the self chip's badge, which wears the collector's own face.
-  const viewer = useAuth().viewer;
+  const auth = useAuth();
+  const viewer = auth.viewer;
+  /* Teams are the owner's preview: anyone else keeps the team cards they were
+     given but gets no team page to open and no team card to pass on. */
+  const teamsVisible = canSeeTeams(auth);
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -431,6 +463,9 @@ export function CollectionPanel({
      the duplicates chip it cuts across every tier, and every bulk action over
      "everything matching" carries it. */
   const [mark, setMark] = useState<PackCardMark | null>(null);
+  /* Narrows the grid to the team cards, which sit in it next to the players
+     (live-backend pack-teams.ts). A set filter like the duplicates chip. */
+  const [teamsOnly, setTeamsOnly] = useState(false);
   // Safe to read storage in the initializer: the panel renders null until the
   // wallet hydrates, so its first real render is already client-side.
   const [sortMode, setSortMode] = useState<CollectionSortMode>(readStoredCollectionSort);
@@ -506,6 +541,7 @@ export function CollectionPanel({
       sort: readStoredCollectionSort(),
       duplicatesOnly: false,
       mark: null,
+      teamsOnly: false,
     };
     const cacheKey = serverCollectionCacheKey(initialRequest);
     const page = serverCollectionPageCache.get(cacheKey) ?? null;
@@ -751,6 +787,7 @@ export function CollectionPanel({
     sort: sortMode,
     duplicatesOnly,
     mark,
+    teamsOnly,
   };
   const serverCacheKey = serverCollectionCacheKey(serverRequest);
   const serverFilterKey = serverCollectionFilterKey(serverRequest);
@@ -791,7 +828,10 @@ export function CollectionPanel({
   const goatMissingCount = useServerCollection
     ? serverMetaPage?.goatMissing ?? serverPage?.page.goatMissing ?? 0
     : 0;
-  const missingCount = poolMissingCount + goatMissingCount;
+  const teamMissingCount = useServerCollection
+    ? serverMetaPage?.teamMissing ?? serverPage?.page.teamMissing ?? 0
+    : 0;
+  const missingCount = poolMissingCount + teamMissingCount + goatMissingCount;
   const [showMissing, setShowMissing] = useState(false);
   const missingOpen = showMissing && useServerCollection;
   const [missingPageIndex, setMissingPageIndex] = useState(0);
@@ -824,6 +864,11 @@ export function CollectionPanel({
   useEffect(() => {
     if (duplicatesOnly && duplicateCardCount === 0) setDuplicatesOnly(false);
   }, [duplicatesOnly, duplicateCardCount]);
+  const teamCount = useServerCollection ? serverMetaPage?.teamCount ?? serverPage?.page.teamCount ?? 0 : 0;
+  // And the teams chip, once the last team is recycled.
+  useEffect(() => {
+    if (teamsOnly && (!useServerCollection || (serverMetaPage && teamCount === 0))) setTeamsOnly(false);
+  }, [teamsOnly, useServerCollection, serverMetaPage, teamCount]);
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -858,7 +903,9 @@ export function CollectionPanel({
      the grid jumped up under the pointer; the skeletons size off this too. */
   const estimatedFilteredTotal = mark
     ? markCounts?.[mark] ?? 0
-    : duplicatesOnly
+    : teamsOnly
+      ? teamCount
+      : duplicatesOnly
       ? duplicateCardCount
       : tierFilter === "all"
         ? collectionTotal
@@ -878,7 +925,8 @@ export function CollectionPanel({
      the same way the collection's counts do. */
   const missingRequestKey = `${missingPageIndex}:${trimmedQuery}`;
   const activeMissingPage = missingPage?.key === missingRequestKey ? missingPage.page : null;
-  const poolMissingTotal = activeMissingPage?.total ?? missingPage?.page.total ?? poolMissingCount;
+  // Players then teams, as the endpoint pages them; GOATs follow client-side.
+  const poolMissingTotal = activeMissingPage?.total ?? missingPage?.page.total ?? poolMissingCount + teamMissingCount;
   const missingGoatIds = new Set(activeMissingPage?.goatMissingUserIds ?? []);
   const allMissingGoats = activeMissingPage
     ? HONORARY_PLAYERS.filter((player) => {
@@ -918,7 +966,9 @@ export function CollectionPanel({
     Math.min(COLLECTION_PAGE_SIZE, poolMissingTotal - missingPageStart),
   );
   const goatPageStart = Math.max(0, missingPageStart - poolMissingTotal);
-  const goatPageCapacity = COLLECTION_PAGE_SIZE - (activeMissingPage?.players.length ?? pendingMissingTileCount);
+  const goatPageCapacity = COLLECTION_PAGE_SIZE - (activeMissingPage
+    ? activeMissingPage.players.length + activeMissingPage.teams.length
+    : pendingMissingTileCount);
   const missingGoats = allMissingGoats.slice(goatPageStart, goatPageStart + goatPageCapacity);
   const pendingGoatTileCount = activeMissingPage
     ? 0
@@ -936,7 +986,7 @@ export function CollectionPanel({
   // full page of placeholders.
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
-    ? (sortMode !== "rarity" || duplicatesOnly || mark !== null) && tierFilter === "all"
+    ? (sortMode !== "rarity" || duplicatesOnly || mark !== null || teamsOnly) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
       // skeletons take a rarity-less face rather than claiming a page of
       // commons that the loaded cards then contradict.
@@ -969,7 +1019,7 @@ export function CollectionPanel({
     setSelected(new Set());
     setSelectionScope("manual");
     setConfirmBulk(false);
-  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly, mark]);
+  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly, mark, teamsOnly]);
 
   useEffect(() => {
     if (selectionScope !== "all") setSelected(new Set());
@@ -1021,6 +1071,8 @@ export function CollectionPanel({
         sort: sortMode,
         duplicatesOnly,
         mark,
+        teams: true,
+        teamsOnly,
       },
     })
       .then((page) => {
@@ -1042,7 +1094,7 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, serverCacheKey, serverFilterKey, serverRefreshKey]);
+  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, teamsOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
   /* The missing list, read only while it is on screen. Not cached across
      opens like the collection pages are: the point of the list is which
@@ -1346,7 +1398,11 @@ export function CollectionPanel({
             these stay on whichever one is picked. */}
         {!missingOpen && (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1" data-select-keep="">
-            <MarkFilters value={mark} counts={markCounts} onChange={setMark} selfFace={viewer?.avatarUrl} />
+            <MarkFilters value={mark} counts={markCounts} onChange={(next) => {
+              setMark(next);
+              // A team is never its collector's own card.
+              if (next === "self") setTeamsOnly(false);
+            }} selfFace={viewer?.avatarUrl} />
             {duplicateCardCount > 0 && (
               <button
                 type="button"
@@ -1357,6 +1413,21 @@ export function CollectionPanel({
               >
                 <Trans>Duplicates</Trans>
                 <span translate="no" className="tabular-nums opacity-60">{duplicateCardCount}</span>
+              </button>
+            )}
+            {teamCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTeamsOnly((on) => !on);
+                  if (mark === "self") setMark(null);
+                  if (tierFilter === "untracked") setTierFilter("all");
+                }}
+                className={`${lensChipClass} ${teamsOnly ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
+                aria-pressed={teamsOnly}
+              >
+                <Trans>Teams</Trans>
+                <span translate="no" className="tabular-nums opacity-60">{teamCount}</span>
               </button>
             )}
             {useServerCollection && retiredOwned > 0 && (
@@ -1456,6 +1527,7 @@ export function CollectionPanel({
                   {activeMissingPage.players.map((player) => (
                     <MissingPlayerTile key={player.userId} player={player} wishlist={wishlist} />
                   ))}
+                  {activeMissingPage.teams.map((team) => <MissingTeamTile key={`team:${team.teamId}`} team={team} />)}
                   {missingGoats.map((player) => <MissingGoatTile key={`goat:${player.id}`} player={player} />)}
                 </>
               ) : (
@@ -1710,7 +1782,7 @@ export function CollectionPanel({
                 void (async () => {
                   try {
                     const gained = selectionScope === "all"
-                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly, mark })
+                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly, mark, teamsOnly })
                       : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
@@ -1793,19 +1865,35 @@ export function CollectionPanel({
             data-select-keep=""
           >
             <div className="flex items-center gap-2 px-3 py-1.5">
-              <img src={honoraryAvatarUrl(menu.card.userId) ?? menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
+              {menu.card.team ? (
+                <img src={teamImageProxyUrl(menu.card.team.flagUrl) ?? ""} alt="" className="h-[10px] w-5 rounded-sm object-cover" draggable={false} />
+              ) : (
+                <img src={honoraryAvatarUrl(menu.card.userId) ?? menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
+              )}
               <span className="truncate text-[12px] font-bold text-white">{menu.card.username}</span>
             </div>
             <div className="mx-2 my-1 h-px bg-osu-b3/40" />
-            <Link
-              to="/player/$username"
-              params={{ username: menu.card.username }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
-              role="menuitem"
-              onClick={() => setMenu(null)}
-            >
-              <Trans>Open profile</Trans>
-            </Link>
+            {menu.card.team ? teamsVisible && (
+              <Link
+                to="/team/$teamId"
+                params={{ teamId: String(menu.card.team.teamId) }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
+                role="menuitem"
+                onClick={() => setMenu(null)}
+              >
+                <Trans>View team</Trans>
+              </Link>
+            ) : (
+              <Link
+                to="/player/$username"
+                params={{ username: menu.card.username }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
+                role="menuitem"
+                onClick={() => setMenu(null)}
+              >
+                <Trans>Open profile</Trans>
+              </Link>
+            )}
             <button
               type="button"
               role="menuitem"
@@ -1828,7 +1916,7 @@ export function CollectionPanel({
                 onDone={() => setMenu(null)}
               />
             )}
-            {syncStatus === "synced" && menu.card.copies > 0 && (
+            {syncStatus === "synced" && menu.card.copies > 0 && (!menu.card.team || teamsVisible) && (
               <button type="button" role="menuitem" onClick={() => { setGiftCard(menu.card); setMenu(null); }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer">
                 <Gift className="h-3 w-3" />{t`Gift a card…`}

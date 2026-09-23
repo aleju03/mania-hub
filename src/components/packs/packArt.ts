@@ -30,7 +30,7 @@ function random01(value: number) {
 /* What the foil does behind the medallion. The packs are told apart at
    selector-thumbnail size (76px wide), where a tint alone is not enough, so
    each type gets its own field treatment as well as its own colour. */
-export type PackMotif = "triangles" | "scatter" | "lanes4" | "lanes7" | "rays" | "burst";
+export type PackMotif = "triangles" | "scatter" | "lanes4" | "lanes7" | "rays" | "burst" | "flags";
 
 export interface PackArtStyle {
   accent: { r: number; g: number; b: number };
@@ -55,6 +55,7 @@ const PACK_ART_RECIPES: Record<PackTypeId, { motif: PackMotif; rank: number }> =
   "7k": { motif: "lanes7", rank: 2 },
   elite: { motif: "rays", rank: 3 },
   legend: { motif: "burst", rank: 4 },
+  teams: { motif: "flags", rank: 3 },
 };
 
 /* The pack's own terms, printed on it: how much of the ladder it deals from.
@@ -72,7 +73,7 @@ export function packArtStyleFor(type: PackTypeDef): PackArtStyle {
     name: type.name.toUpperCase(),
     cardCount: type.cardCount,
     // A keymode pack's terms are who it deals, not how deep it deals.
-    poolLabel: type.keys ? `${type.keys}K MAINS` : poolLabelFor(type.topFraction),
+    poolLabel: type.teams ? "TEAMS ONLY" : type.keys ? `${type.keys}K MAINS` : poolLabelFor(type.topFraction),
     rank: recipe.rank,
     motif: recipe.motif,
   };
@@ -260,7 +261,9 @@ export function createPackFrontCanvas(style: PackArtStyle = DEFAULT_PACK_ART_STY
   drawMotif(context, width, height, style, emblemY);
   if (style.rank >= 3) drawPrismBand(context, width, height, style.rank);
   drawSheen(context, width, height);
-  drawEmblem(context, width, height, style.accent);
+  // The team pack's seal is a crest; every player pack keeps the coin.
+  if (style.motif === "flags") drawCrest(context, width / 2, emblemY, style.accent);
+  else drawEmblem(context, width, height, style.accent);
   drawPrint(context, width, height, style);
   drawCrimp(context, width, height, 0, style.accent);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height, style.accent);
@@ -368,7 +371,95 @@ function drawMotif(
       drawRays(context, width, height, style.accent, emblemY, 32, 0.125);
       drawStarburst(context, width / 2, emblemY, style.accent);
       return;
+    case "flags":
+      drawFlagWall(context, width, height, style.accent);
+      return;
   }
+}
+
+/* Rows of small blank flags on poles, staggered like a wall of them. The
+   swallowtail cut and the pole are what keep them from reading as bricks. */
+function drawFlagWall(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb) {
+  const accentSoft = mixRgb(accent, WHITE, 0.4);
+  const flagWidth = 42;
+  const flagHeight = 26;
+  const poleHeight = 60;
+  const columnGap = 100;
+  const rowGap = 92;
+  for (let row = 0; row * rowGap < height + rowGap; row += 1) {
+    const offset = row % 2 === 0 ? 0 : columnGap / 2;
+    for (let column = -1; column * columnGap < width + columnGap; column += 1) {
+      const seed = row * 31.7 + column * 7.3;
+      const x = column * columnGap + offset + (random01(seed) - 0.5) * 10;
+      const y = row * rowGap - 24 + (random01(seed + 2.3) - 0.5) * 10;
+      const tone = random01(seed + 5.1);
+      const alpha = 0.05 + random01(seed + 9.7) * 0.1;
+      context.fillStyle = tone > 0.66 ? rgba(WHITE, alpha * 0.7) : rgba(tone > 0.3 ? accent : accentSoft, alpha);
+      context.fillRect(x, y, 3, poleHeight);
+      context.beginPath();
+      context.moveTo(x + 3, y);
+      context.lineTo(x + 3 + flagWidth, y);
+      context.lineTo(x + 3 + flagWidth * 0.78, y + flagHeight / 2);
+      context.lineTo(x + 3 + flagWidth, y + flagHeight);
+      context.lineTo(x + 3, y + flagHeight);
+      context.closePath();
+      context.fill();
+    }
+  }
+}
+
+/* The team pack's seal as a shield rather than a coin: the same rings, fill
+   and glyph, cut to a crest. */
+function drawCrest(context: CanvasRenderingContext2D, cx: number, cy: number, accent: Rgb) {
+  const shield = (inset: number) => {
+    const halfWidth = 122 - inset;
+    const top = cy - 142 + inset;
+    const shoulder = cy + 10;
+    const bottom = cy + 160 - inset * 1.35;
+    context.beginPath();
+    context.moveTo(cx - halfWidth, top + 20);
+    context.quadraticCurveTo(cx - halfWidth, top, cx - halfWidth + 20, top);
+    context.lineTo(cx + halfWidth - 20, top);
+    context.quadraticCurveTo(cx + halfWidth, top, cx + halfWidth, top + 20);
+    context.lineTo(cx + halfWidth, shoulder);
+    context.quadraticCurveTo(cx + halfWidth, bottom - 56, cx, bottom);
+    context.quadraticCurveTo(cx - halfWidth, bottom - 56, cx - halfWidth, shoulder);
+    context.closePath();
+  };
+  context.save();
+  const halo = context.createRadialGradient(cx, cy, 0, cx, cy, 240);
+  halo.addColorStop(0, rgba(accent, 0.34));
+  halo.addColorStop(0.55, rgba(accent, 0.1));
+  halo.addColorStop(1, rgba(accent, 0));
+  context.fillStyle = halo;
+  context.fillRect(cx - 250, cy - 250, 500, 500);
+
+  shield(0);
+  context.strokeStyle = "rgba(255,255,255,0.34)";
+  context.lineWidth = 3;
+  context.stroke();
+  shield(13);
+  context.strokeStyle = "rgba(255,255,255,0.5)";
+  context.lineWidth = 1.6;
+  context.setLineDash([3, 9]);
+  context.stroke();
+  context.setLineDash([]);
+
+  shield(28);
+  const fill = context.createLinearGradient(cx - 100, cy - 120, cx + 100, cy + 130);
+  fill.addColorStop(0, rgba(mixRgb(accent, WHITE, 0.3), 0.85));
+  fill.addColorStop(0.5, rgba(mixRgb(accent, BLACK, 0.3), 0.85));
+  fill.addColorStop(1, rgba(mixRgb(accent, BLACK, 0.8), 0.9));
+  context.fillStyle = fill;
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.55)";
+  context.lineWidth = 3.4;
+  context.stroke();
+
+  context.shadowColor = "rgba(0,0,0,0.4)";
+  context.shadowBlur = 8;
+  drawManiaGlyph(context, cx - 60, cy - 78, 120, "rgba(255,255,255,0.96)");
+  context.restore();
 }
 
 // A few large interlocking triangles anchored to a loose grid, in quiet foil

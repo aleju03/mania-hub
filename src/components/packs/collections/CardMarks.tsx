@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { useId } from "react";
 import type { CollectedCard } from "#/lib/pack-collection";
+import { teamImageProxyUrl } from "#/lib/team-image";
 
 /* What makes one holding of a card different from every other holding of it,
    worn on the outside of the tile so a wall of cards does not read as one
@@ -11,7 +12,8 @@ import type { CollectedCard } from "#/lib/pack-collection";
    on a sleeve, outside the art: a scalloped medal for a low serial (gold for
    the first pull, silver and bronze for the next two, a holo finish when this
    is the only copy that ever existed), and the player's own face again as a
-   round badge when the collector pulled themselves. */
+   round badge when the collector pulled themselves. A team card pinned by a
+   member of that team wears the team's flag again the same way. */
 
 export type CardMark =
   /* Serial 1 and no second serial was ever minted. */
@@ -21,7 +23,9 @@ export type CardMark =
   /* Serial 2 or 3. */
   | { kind: "early"; serial: number }
   /* The collector holds their own card. */
-  | { kind: "self" };
+  | { kind: "self" }
+  /* A team card on the shelf of someone on that team. */
+  | { kind: "team"; flagUrl: string };
 
 const EARLY_SERIALS = 3;
 
@@ -41,6 +45,8 @@ export function cardMarksFor(card: CollectedCard, collectorUserId: number | null
   else if (pulled && card.serial === 1) marks.push({ kind: "first" });
   else if (pulled && card.serial && card.serial <= EARLY_SERIALS) marks.push({ kind: "early", serial: card.serial });
   if (collectorUserId != null && collectorUserId === card.userId) marks.push({ kind: "self" });
+  const flagUrl = card.team && card.ownTeam ? teamImageProxyUrl(card.team.flagUrl) : null;
+  if (flagUrl) marks.push({ kind: "team", flagUrl });
   return marks;
 }
 
@@ -127,6 +133,22 @@ export function CardMarks({ card, collectorUserId }: {
                   loading="lazy"
                   draggable={false}
                   className="size-[22px] rounded-full object-cover ring-2 ring-osu-pink drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]"
+                />
+              </span>
+            );
+          }
+          case "team": {
+            const title = t`Own team`;
+            return (
+              <span key={mark.kind} className="pointer-events-auto" title={title}>
+                <img
+                  src={mark.flagUrl}
+                  alt={title}
+                  width={30}
+                  height={15}
+                  loading="lazy"
+                  draggable={false}
+                  className="h-[15px] w-[30px] rounded-[3px] object-cover ring-2 ring-osu-pink drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]"
                 />
               </span>
             );

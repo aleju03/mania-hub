@@ -232,6 +232,7 @@ function YourShowcase({ slots, onSaved }: { slots: number; onSaved: () => void }
         open={picking}
         userId={viewer.id}
         initialKeys={keys ?? []}
+        includeTeams
         onCancel={() => setPicking(false)}
         onSave={save}
       />

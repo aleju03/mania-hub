@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trans } from "@lingui/react/macro";
 import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
 import type { PackTypeDef } from "#/lib/packs";
@@ -96,6 +96,9 @@ interface PackStageProps {
   reducedMotion: boolean;
   /* Tints the foil art and subtitle; omitted = the standard pack look. */
   packType?: PackTypeDef;
+  /* Drawn in the gap between the pack and the hint (the 4K | 7K toggle), so
+     showing it never moves the shelf. Taps on it never start the blade. */
+  controls?: ReactNode;
 }
 
 function random01(value: number) {
@@ -107,8 +110,9 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType }: PackStageProps) {
+export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType, controls }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
   // The blade effect below subscribes once ([] deps), so it reads the latest
   // callbacks through refs instead of resubscribing per render. onOpened
   // matters as much as onGrab: the page charges the selected pack type in it,
@@ -558,6 +562,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType }: 
       if (event.pointerType === "mouse" && event.button !== 0) return;
       const stage = stageRef.current;
       if (!stage || !(event.target instanceof Node) || !stage.contains(event.target)) return;
+      if (controlsRef.current?.contains(event.target)) return;
       trailHeldRef.current = true;
       trailCursorRef.current = { x: event.clientX, y: event.clientY };
       trailPointsRef.current.push({ x: event.clientX, y: event.clientY, t: performance.now() });
@@ -852,6 +857,7 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType }: 
       if (event.pointerType === "mouse" && event.button !== 0) return;
       const stage = stageRef.current;
       if (!stage || !(event.target instanceof Node) || !stage.contains(event.target)) return;
+      if (controlsRef.current?.contains(event.target)) return;
       onGrabRef.current?.();
       bladeHeldRef.current = { pointerId: event.pointerId };
       cutAtPoint(event.clientX, event.clientY);
@@ -937,19 +943,32 @@ export function PackStage({ onOpened, onCut, onGrab, reducedMotion, packType }: 
       >
         {!(artReady && sceneReady) && <div className="absolute inset-0 rounded-xl bg-osu-b4/50 animate-pulse" />}
       </div>
-      {/* Ground shadow under the floating pack */}
-      <motion.div
-        aria-hidden="true"
-        className="pointer-events-none mt-2 h-5 w-[min(210px,52vw)] rounded-[50%] bg-black/55 blur-lg"
-        animate={ripping ? { opacity: 0 } : undefined}
-        transition={{ duration: 0.5 }}
-      />
+      {/* The gap under the floating pack: its ground shadow, and the controls
+          laid over it, so the stage is the same height with or without them */}
+      <div className="relative flex h-14 w-full flex-col items-center">
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none mt-2 h-5 w-[min(210px,52vw)] rounded-[50%] bg-black/55 blur-lg"
+          animate={ripping ? { opacity: 0 } : undefined}
+          transition={{ duration: 0.5 }}
+        />
+        {controls && (
+          <motion.div
+            ref={controlsRef}
+            className="absolute inset-0 flex items-center justify-center"
+            animate={ripping ? { opacity: 0 } : { opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            {controls}
+          </motion.div>
+        )}
+      </div>
 
       {/* One line: the old second line only restated the first one in other
           words, and the gesture is the whole instruction. The blade below the
           seam gets its own warning, because by then the line is no longer an
           instruction but the news. */}
-      <div className="mt-5 h-5 text-center" aria-live="polite">
+      <div className="h-5 text-center" aria-live="polite">
         <div className={`text-sm font-semibold ${slicing && !ripping ? "text-osu-pink-light" : "text-white"}`}>
           {ripping
             ? slicing

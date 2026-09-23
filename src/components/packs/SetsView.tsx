@@ -316,6 +316,8 @@ function SetManager({ syncStatus, onClose }: {
         userId={auth.viewer?.id ?? 0}
         initialKeys={picking ? (picking.cards as CollectedCard[]).map((card) => packCardKeyOf(card)) : []}
         maxCards={BINDER_MAX_CARDS}
+        includeTeams
+        oneKind
         allowReorder
         initialCards={picking?.cards}
         title={picking ? t`Cards in ${picking.name}` : undefined}
@@ -386,12 +388,17 @@ export function BinderMenuItems({
         ? t`A set can hold up to ${BINDER_MAX_CARDS} cards.`
         : code === "binder_limit"
           ? t`You already have ${BINDER_MAX_PER_COLLECTOR} sets.`
-          : t`That did not save. Try again.`);
+          : code === "mixed_cards"
+            ? t`A set holds either players or teams.`
+            : t`That did not save. Try again.`);
     } finally {
       setBusy(false);
     }
   };
   const tooMany = cardCount > BINDER_MAX_CARDS;
+  /* A set holds player cards or team cards ("team:<id>"), never both. */
+  const addingTeams = cardKeys.some((key) => key.startsWith("team:"));
+  const mixed = addingTeams && cardKeys.some((key) => !key.startsWith("team:"));
   const itemClass =
     "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer disabled:cursor-default disabled:opacity-40";
 
@@ -415,6 +422,7 @@ export function BinderMenuItems({
           placeholder={t`Find a set`} className="w-full rounded border border-osu-b3/40 bg-osu-b4/60 py-1 pl-7 pr-2 text-[11px] text-white outline-none focus:border-osu-pink/50" />
       </label>}
       {tooMany && <p role="alert" className="px-3 py-2 text-[11px] text-osu-pink-light">{t`Select at most ${BINDER_MAX_CARDS} cards to add to a set.`}</p>}
+      {mixed && <p role="alert" className="px-3 py-2 text-[11px] text-osu-pink-light">{t`A set holds either players or teams.`}</p>}
       <div role="group" aria-label={t`Your sets`} className="max-h-40 overflow-y-auto overscroll-contain">
         {binders === null && !error && <p className="px-3 py-2 text-[11px] text-osu-f1">{t`Loading...`}</p>}
         {binders !== null && visible.length === 0 && <p className="px-3 py-2 text-[11px] text-osu-f1">{t`No sets found.`}</p>}
@@ -424,10 +432,11 @@ export function BinderMenuItems({
           const included = additions.length === 0;
           const full = binder.cards.length >= BINDER_MAX_CARDS;
           const fits = !tooMany && binder.cards.length + additions.length <= BINDER_MAX_CARDS;
-          return <button key={binder.id} type="button" role="menuitem" disabled={busy || included || !fits}
+          const otherKind = binder.cards.length > 0 && binder.cards.some((card) => packCardKeyOf(card as CollectedCard).startsWith("team:")) !== addingTeams;
+          return <button key={binder.id} type="button" role="menuitem" disabled={busy || included || !fits || mixed || otherKind}
             onClick={() => void run(() => actions.addCards(binder.id, cardKeys))} className={itemClass}>
             <span className="min-w-0 flex-1 truncate">{binder.name}</span>
-            {included ? <Check size={12} aria-label={t`Already in set`} /> : <span className="shrink-0 text-[10px] tabular-nums">{full ? t`Full` : !fits ? t`Not enough room` : `${binder.cards.length}/${BINDER_MAX_CARDS}`}</span>}
+            {included ? <Check size={12} aria-label={t`Already in set`} /> : <span className="shrink-0 text-[10px] tabular-nums">{otherKind ? (addingTeams ? t`Players` : t`Teams`) : full ? t`Full` : !fits ? t`Not enough room` : `${binder.cards.length}/${BINDER_MAX_CARDS}`}</span>}
           </button>;
         })}
       </div>
@@ -436,15 +445,15 @@ export function BinderMenuItems({
       {naming ? (
         <form onSubmit={(event) => {
           event.preventDefault();
-          if (name.trim() && !atLimit && !tooMany) void run(() => actions.create(name, cardKeys));
+          if (name.trim() && !atLimit && !tooMany && !mixed) void run(() => actions.create(name, cardKeys));
         }} className="mx-3 my-2 flex gap-1">
           <input value={name} autoFocus disabled={busy} maxLength={BINDER_NAME_MAX_CHARS}
             onChange={(event) => setName(event.target.value)} aria-label={t`Set name`} placeholder={t`Set name`}
             className="min-w-0 flex-1 rounded border border-osu-b3/40 bg-osu-b4/60 px-2 py-1 text-[12px] text-white outline-none focus:border-osu-pink/50" />
-          <button type="submit" disabled={busy || !name.trim() || atLimit || tooMany} className="cursor-pointer rounded px-1 text-[11px] text-osu-f1 hover:text-white disabled:opacity-40">{t`Create`}</button>
+          <button type="submit" disabled={busy || !name.trim() || atLimit || tooMany || mixed} className="cursor-pointer rounded px-1 text-[11px] text-osu-f1 hover:text-white disabled:opacity-40">{t`Create`}</button>
         </form>
       ) : (
-        <button type="button" role="menuitem" disabled={busy || binders === null || atLimit || tooMany} onClick={() => setNaming(true)} className={itemClass}>
+        <button type="button" role="menuitem" disabled={busy || binders === null || atLimit || tooMany || mixed} onClick={() => setNaming(true)} className={itemClass}>
           {atLimit ? t`Set limit reached` : t`New set`}
         </button>
       )}

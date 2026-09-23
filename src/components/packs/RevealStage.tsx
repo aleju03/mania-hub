@@ -12,13 +12,13 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
 import type { PackDamage } from "#/lib/pack-damage";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
-import { fetchPackPlayerScores, type PackPlayer } from "#/lib/packs";
+import { fetchPackPlayerScores, teamCardFace, teamCardSkills, type PackPlayer } from "#/lib/packs";
 import { withTimeout } from "#/lib/promise-timeout";
 import type { OsuScore } from "#/lib/types";
 import { useWindowActive } from "#/lib/window-activity";
 import { CountryFlag } from "../ui/CountryFlag";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
-import { buildManiaCardRenderData, maniaCardAvatarUrl } from "../player/maniacard3d/renderData";
+import { buildManiaCardRenderData, buildManiaCardRenderDataFromSkills, maniaCardAvatarUrl } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData, RgbaColor } from "../player/maniacard3d/types";
 import { renderCardThumbnail } from "./cardSnapshot";
 import {
@@ -165,6 +165,27 @@ function cascadeLayout(count: number, rowWidth: number, heightBudget: number) {
   // Never zero: the deal-in scale divides by it, and a row overflowing the
   // stage is already allowed.
   return { rows: best.rows, slotWidth: Math.max(best.slotWidth, 32) };
+}
+
+/* A dealt card's face. A team card draws from the numbers the server dealt
+   it with; every other card from the player's plays, at an awarded tier for
+   an Eternal. */
+function buildPackCardRenderData(player: PackPlayer, scores: OsuScore[]) {
+  if (player.team) {
+    return buildManiaCardRenderDataFromSkills({
+      user: player.user,
+      skills: teamCardSkills(player.team),
+      tierOverride: player.team.tier,
+      team: teamCardFace(player.team),
+    });
+  }
+  return buildManiaCardRenderData({
+    user: player.user,
+    scores,
+    tierOverride: player.eternal ? "eternal" : undefined,
+    labelOverride: player.customLabel,
+    motifOverride: player.motif,
+  });
 }
 
 async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
@@ -692,10 +713,12 @@ export function RevealStage({
   // response stays reusable for canvas work.
   useEffect(() => {
     for (const card of cards) {
+      const src = card.player.team ? teamCardFace(card.player.team).flagUrl : maniaCardAvatarUrl(card.player.user);
+      if (!src) continue;
       const image = new Image();
       image.crossOrigin = "anonymous";
       image.referrerPolicy = "no-referrer";
-      image.src = maniaCardAvatarUrl(card.player.user);
+      image.src = src;
     }
   }, [cards]);
 
@@ -813,13 +836,7 @@ export function RevealStage({
 
     // The completion reward reveals at its awarded tier; every other card's
     // tier comes out of its own plays.
-    const data = buildManiaCardRenderData({
-      user: card.player.user,
-      scores: scores ?? [],
-      tierOverride: card.player.eternal ? "eternal" : undefined,
-      labelOverride: card.player.customLabel,
-      motifOverride: card.player.motif,
-    });
+    const data = buildPackCardRenderData(card.player, scores ?? []);
 
     if (data.status !== "ready") {
       recordRevealed(position, { player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
@@ -1132,13 +1149,7 @@ export function RevealStage({
       };
       let skills: ManiaSkills | null = null;
       if ((scores !== null || card.player.eternal) && !cancelledRef.current) {
-        const data = buildManiaCardRenderData({
-          user: card.player.user,
-          scores: scores ?? [],
-          tierOverride: card.player.eternal ? "eternal" : undefined,
-          labelOverride: card.player.customLabel,
-          motifOverride: card.player.motif,
-        });
+        const data = buildPackCardRenderData(card.player, scores ?? []);
         if (data.status === "ready") {
           let thumbnail: string | null = null;
           try {
@@ -1600,23 +1611,44 @@ export function RevealStage({
             >
               {/* New tab: an in-app navigation would unmount the reveal and
                   forfeit the still-unrevealed cards of an already-paid pack. */}
-              <Link
-                to="/player/$username"
-                params={{ username: current.player.user.username }}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 hover:underline underline-offset-4 decoration-osu-f1/60"
-                aria-label={t`Open ${current.player.user.username}'s profile in a new tab`}
-              >
-                <img
-                  src={current.player.user.avatar_url}
-                  alt=""
-                  className="h-7 w-7 rounded-full object-cover"
-                  draggable={false}
-                />
-                <span className="text-lg font-bold text-white">{current.player.user.username}</span>
-                <CountryFlag code={current.player.user.country_code} size="sm" decorative />
-              </Link>
+              {current.player.team ? (
+                <Link
+                  to="/team/$teamId"
+                  params={{ teamId: String(current.player.team.teamId) }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 hover:underline underline-offset-4 decoration-osu-f1/60"
+                  aria-label={t`Open ${current.player.team.name}'s team page in a new tab`}
+                >
+                  {teamCardFace(current.player.team).flagUrl && (
+                    <img
+                      src={teamCardFace(current.player.team).flagUrl ?? ""}
+                      alt=""
+                      className="h-7 w-14 rounded object-cover"
+                      draggable={false}
+                    />
+                  )}
+                  <span className="text-lg font-bold text-white">{current.player.team.name}</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/player/$username"
+                  params={{ username: current.player.user.username }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 hover:underline underline-offset-4 decoration-osu-f1/60"
+                  aria-label={t`Open ${current.player.user.username}'s profile in a new tab`}
+                >
+                  <img
+                    src={current.player.user.avatar_url}
+                    alt=""
+                    className="h-7 w-7 rounded-full object-cover"
+                    draggable={false}
+                  />
+                  <span className="text-lg font-bold text-white">{current.player.user.username}</span>
+                  <CountryFlag code={current.player.user.country_code} size="sm" decorative />
+                </Link>
+              )}
               <div className="mt-1 flex items-center justify-center gap-2.5 text-[12px]">
                 {/* Solid, not a tinted whisper: a card the collection has
                     never held is the thing worth noticing in this row. */}

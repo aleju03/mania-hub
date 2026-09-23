@@ -6,21 +6,21 @@
 // supplies the digest.
 
 export const PACK_THUMBNAIL_PREFIX = "maniacards/";
-export const PACK_THUMBNAIL_KEY_PATTERN = /^(v\d+)-w\d+-u(\d+)-[a-f0-9]{16}$/;
+export const PACK_THUMBNAIL_KEY_PATTERN = /^(v\d+)-w\d+-(u|t)(\d+)-[a-f0-9]{16}$/;
 
-export function parsePackThumbnailCacheKey(cacheKey: string): { version: string; userId: string } {
+export function parsePackThumbnailCacheKey(cacheKey: string): { version: string; userId: string; kind: "u" | "t" } {
   const match = PACK_THUMBNAIL_KEY_PATTERN.exec(cacheKey);
   if (!match) throw new Error("Invalid maniacard thumbnail cache key.");
-  return { version: match[1]!, userId: match[2]! };
+  return { version: match[1]!, kind: match[2] as "u" | "t", userId: match[3]! };
 }
 
 /** Object key for a cache key, given the full hex sha256 of that cache key. */
 export function buildPackThumbnailStorageKey(cacheKey: string, sha256Hex: string): string {
-  const { version, userId } = parsePackThumbnailCacheKey(cacheKey);
+  const { version, userId, kind } = parsePackThumbnailCacheKey(cacheKey);
   const hash = sha256Hex.slice(0, 40);
   // v1 objects predate the inspectable hierarchy and keep their flat address;
   // every newer renderer writes into its own removable namespace and groups a
   // player's variants together in the R2 browser.
   if (version === "v1") return `${PACK_THUMBNAIL_PREFIX}${hash}.webp`;
-  return `${PACK_THUMBNAIL_PREFIX}${version}/${userId}/${hash}.webp`;
+  return `${PACK_THUMBNAIL_PREFIX}${version}/${kind === "t" ? "teams/" : ""}${userId}/${hash}.webp`;
 }

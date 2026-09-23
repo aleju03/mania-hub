@@ -43,6 +43,19 @@ export interface ServerPackDrawSlot {
      (live-backend pack-wishlist.ts), so the reveal can name it. Display-only
      on this side: the slot is an ordinary card either way. */
   wished?: boolean;
+  /* A team card (live-backend pack-teams.ts). userId is the negative team
+     id; the team carries the face and the numbers the server set. */
+  team?: {
+    teamId: number;
+    name: string;
+    shortName: string;
+    flagUrl: string | null;
+    coverUrl: string | null;
+    tier: string;
+    skills: Partial<Record<"cardPower" | "fingerControl" | "speed" | "accuracy" | "starAvg" | "mainKeyMode", number>> | null;
+  };
+  /* A team card's mint serial, minted with the draw. */
+  mint?: { serial?: number; mintedTotal?: number; isFirstGlobal?: boolean };
   isNew?: boolean;
   username?: string;
   avatarUrl?: string;
@@ -155,7 +168,7 @@ export const drawServerPack = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error(`Pack draw failed (${response.status}).`);
     const body = (await response.json()) as Partial<ServerPackDrawResult>;
     const players = (Array.isArray(body.players) ? body.players : [])
-      .filter((slot): slot is ServerPackDrawSlot => Math.floor(Number(slot?.userId) || 0) > 0);
+      .filter((slot): slot is ServerPackDrawSlot => Math.floor(Number(slot?.userId) || 0) > 0 || Boolean(slot?.team));
     if (players.length === 0) throw new Error("Pack draw dealt no players.");
     return {
       status: "dealt",

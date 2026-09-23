@@ -30,6 +30,10 @@ uniform float uMotifOpacity;
 uniform vec4 uAvatarMask;
 uniform vec2 uTextureSize;
 uniform float uAvatarRadius;
+// A second picture the foil dims over (a team card's flag); off the texture
+// on every other card.
+uniform vec4 uFlagMask;
+uniform float uFlagRadius;
 varying vec2 vUv;
 
 float roundedRectMaskPx(vec2 uv, vec4 rectUv, float radiusPx, vec2 textureSize) {
@@ -280,7 +284,10 @@ void main() {
   // star tint so a garish picture still belongs to the card it floats on.
   vec3 motifGlow = mix(uStarTint, motifSample.rgb, 0.78) * motif * 0.5;
 
-  float inAvatar = roundedRectMaskPx(vUv, uAvatarMask, uAvatarRadius, uTextureSize);
+  float inAvatar = max(
+    roundedRectMaskPx(vUv, uAvatarMask, uAvatarRadius, uTextureSize),
+    roundedRectMaskPx(vUv, uFlagMask, uFlagRadius, uTextureSize)
+  );
   float foilGain = mix(1.0, 0.30, inAvatar);
   float mask = roundedCardMask(vUv);
 

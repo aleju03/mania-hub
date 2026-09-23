@@ -126,8 +126,8 @@ describe("honorary pack odds", () => {
     expect(packTypeById("legend").cost).toEqual({ kind: "shards", amount: 200 });
   });
 
-  it("defines a chance for every pack type", () => {
-    for (const type of PACK_TYPES) {
+  it("defines a chance for every player pack type", () => {
+    for (const type of PACK_TYPES.filter((type) => !type.teams)) {
       expect(type.honoraryChance).toBeGreaterThan(0);
       expect(type.honoraryChance).toBeLessThan(1);
     }

@@ -12,10 +12,14 @@ import { SelectMenu, type SelectMenuOption } from "../../components/ui/SelectMen
 import {
   fetchAdminCollection,
   grantAdminCollectionCard,
+  grantAdminTeamCard,
   removeAdminCollectionCard,
+  searchAdminTeams,
   setAdminCollectionWallet,
   type AdminCollectionCard,
   type AdminCollectionOverview,
+  type AdminTeamCard,
+  type AdminTeamSearchResult,
 } from "../../lib/admin-collections";
 import {
   buildCardGrant,
@@ -37,10 +41,12 @@ import {
   getManiaCardTier,
   HONORARY_TIER_USER_IDS,
   MANIA_TIER_STYLES,
+  type ManiaCardTier,
 } from "../../lib/maniacard";
 import { fetchPackPlayerScores } from "../../lib/packs";
 import { shardValueForTier } from "../../lib/pack-collection";
 import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
+import { teamImageProxyUrl } from "../../lib/team-image";
 import {
   COLLECTIONS_RECENT_KEY,
   readRecentPlayers,
@@ -359,6 +365,14 @@ function CollectionsAdminPage() {
                 />
               </div>
 
+              <TeamCardsPanel
+                overview={overview}
+                advanced={advanced}
+                busy={loading}
+                onDone={(message) => { showAdminToast(message); void refresh(); }}
+                onError={(message) => showAdminToast(message, "error")}
+              />
+
               <CollectionPanel
                 overview={overview}
                 filter={filter}
@@ -464,6 +478,7 @@ const EMPTY_OVERVIEW: AdminCollectionOverview = {
   distinctCards: 0,
   totalCopies: 0,
   collection: { cards: [], total: 0, tierCounts: {}, duplicateShardTotal: 0, filteredShardTotal: 0 },
+  teamCards: [],
 };
 
 const NOOP = () => {};
@@ -477,6 +492,7 @@ function EmptyPanels({ advanced }: { advanced: boolean }) {
     <div className="space-y-4 opacity-50" inert aria-hidden>
       <WalletPanel overview={EMPTY_OVERVIEW} advanced={advanced} onDone={NOOP} onError={NOOP} />
       <GrantPanel ownerUserId={0} advanced={advanced} editing={null} onDone={NOOP} onError={NOOP} />
+      <TeamCardsPanel overview={EMPTY_OVERVIEW} advanced={advanced} busy onDone={NOOP} onError={NOOP} />
       <CollectionPanel
         overview={EMPTY_OVERVIEW}
         filter=""
@@ -1138,6 +1154,193 @@ function GrantPanel({
           </span>
         ) : null}
       </div>
+    </SectionCard>
+  );
+}
+
+function teamTierStyle(tier: string | null) {
+  return tier && tier in MANIA_TIER_STYLES ? MANIA_TIER_STYLES[tier as ManiaCardTier] : null;
+}
+
+function TeamFlag({ url }: { url: string | null }) {
+  const src = teamImageProxyUrl(url);
+  return src
+    ? <img src={src} alt="" className="h-[14px] w-[28px] rounded-[2px] object-cover" loading="lazy" />
+    : <span className="h-[14px] w-[28px] rounded-[2px] bg-osu-b4" />;
+}
+
+/* Team cards sit in their own table with no serial, badge text or face to
+   edit: a team card's tier and numbers are the pool's, taken when a collector
+   first holds it. So the desk only moves copies, the way a pull or a
+   recycle would. */
+function TeamCardsPanel({
+  overview,
+  advanced,
+  busy,
+  onDone,
+  onError,
+}: {
+  overview: AdminCollectionOverview;
+  advanced: boolean;
+  busy: boolean;
+  onDone: (message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<AdminTeamSearchResult[]>([]);
+  const [picked, setPicked] = useState<AdminTeamSearchResult | null>(null);
+  const [copies, setCopies] = useState("1");
+  const [sending, setSending] = useState(false);
+  const [armed, setArmed] = useState<number | null>(null);
+  const ownerUserId = overview.user.userId;
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed || picked) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      searchAdminTeams({ data: { query: trimmed } })
+        .then((teams) => { if (!cancelled) setResults(teams); })
+        .catch((caught) => { if (!cancelled) onError(errMessage(caught)); });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [onError, picked, query]);
+
+  const pickTeam = (team: AdminTeamSearchResult) => {
+    setPicked(team);
+    setQuery(team.name);
+    setResults([]);
+  };
+
+  const count = Math.max(0, Math.floor(Number(copies) || 0));
+
+  const send = useCallback(async (teamId: number, name: string, amount: number, mode: "add" | "set") => {
+    setSending(true);
+    try {
+      const result = await grantAdminTeamCard({ data: { userId: ownerUserId, teamId, copies: amount, copiesMode: mode } });
+      const held = result.card?.copies ?? 0;
+      onDone(mode === "set" ? `${name} set to ${held} ${held === 1 ? "copy" : "copies"}.` : `Gave ${amount} ${name} ${amount === 1 ? "card" : "cards"}.`);
+    } catch (caught) {
+      onError(errMessage(caught));
+    } finally {
+      setSending(false);
+      setArmed(null);
+    }
+  }, [onDone, onError, ownerUserId]);
+
+  const remove = useCallback(async (card: AdminTeamCard) => {
+    setSending(true);
+    try {
+      const result = await removeAdminCollectionCard({ data: { userId: ownerUserId, cardKey: `team:${card.teamId}` } });
+      onDone(result.removed ? `Removed ${card.name}.` : "That card was already gone.");
+    } catch (caught) {
+      onError(errMessage(caught));
+    } finally {
+      setSending(false);
+      setArmed(null);
+    }
+  }, [onDone, onError, ownerUserId]);
+
+  const pickedStyle = teamTierStyle(picked?.tier ?? null);
+
+  return (
+    <SectionCard title={`Team cards (${formatNumber(overview.teamCards.length)})`}>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="relative w-full sm:w-[300px]">
+          <span className={LABEL}>Team</span>
+          <input
+            value={query}
+            onChange={(event) => { setQuery(event.target.value); setPicked(null); }}
+            placeholder="Search a team or type its id"
+            className={INPUT}
+          />
+          {results.length > 0 ? (
+            <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[280px] overflow-y-auto rounded-md border border-osu-b3/40 bg-osu-b5 py-1 shadow-lg">
+              {results.map((team) => {
+                const style = teamTierStyle(team.tier);
+                return (
+                  <button
+                    key={team.teamId}
+                    type="button"
+                    onClick={() => pickTeam(team)}
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-osu-b4 cursor-pointer"
+                  >
+                    <TeamFlag url={team.flagUrl} />
+                    <span className="min-w-0 truncate text-[13px] text-osu-c1">{team.name}</span>
+                    <span className="text-[11px] text-osu-f1">{team.shortName}</span>
+                    <span className={`ml-auto text-[11px] font-semibold ${style?.badgeColor ?? "text-osu-f1"}`}>
+                      {style?.label ?? "No card yet"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+        <div className="w-[90px]">
+          <span className={LABEL}>Copies</span>
+          <input type="number" min={0} value={copies} onChange={(event) => setCopies(event.target.value)} className={INPUT} />
+        </div>
+        <button
+          disabled={busy || sending || !picked || count === 0}
+          onClick={() => picked && void send(picked.teamId, picked.name, count, "add")}
+          className={PRIMARY}
+        >
+          Give
+        </button>
+        {advanced ? (
+          <button
+            disabled={busy || sending || !picked}
+            onClick={() => picked && void send(picked.teamId, picked.name, count, "set")}
+            className={BUTTON}
+          >
+            Set copies
+          </button>
+        ) : null}
+        {picked ? (
+          <span className="flex items-center gap-2 text-[12px] text-osu-l2">
+            <TeamFlag url={picked.flagUrl} />
+            <span className={pickedStyle?.badgeColor ?? "text-osu-f1"}>{pickedStyle?.label ?? "No card yet"}</span>
+          </span>
+        ) : null}
+      </div>
+
+      {overview.teamCards.length > 0 ? (
+        <div className="mt-3 pt-1 border-t border-osu-b3/20 divide-y divide-osu-b3/20">
+          {overview.teamCards.map((card) => {
+            const style = teamTierStyle(card.tier);
+            return (
+              <div key={card.teamId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                <TeamFlag url={card.flagUrl} />
+                <button
+                  type="button"
+                  onClick={() => pickTeam({ teamId: card.teamId, name: card.name, shortName: card.shortName, flagUrl: card.flagUrl, tier: card.tier })}
+                  className="text-[13px] font-medium text-white hover:text-osu-pink-light cursor-pointer"
+                >
+                  {card.name}
+                </button>
+                <span className={`text-[11px] font-semibold ${style?.badgeColor ?? "text-osu-f1"}`}>{style?.label ?? card.tier}</span>
+                <span className="text-[12px] text-osu-l2 tabular-nums">x{card.copies}</span>
+                <button
+                  disabled={busy || sending}
+                  onClick={() => (armed === card.teamId ? void remove(card) : setArmed(card.teamId))}
+                  onBlur={() => setArmed((current) => (current === card.teamId ? null : current))}
+                  className={`ml-auto px-2 py-1 rounded-md border text-[11px] transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer ${
+                    armed === card.teamId
+                      ? "border-osu-red/50 bg-osu-red/20 text-osu-red-light"
+                      : "border-osu-b3/30 bg-osu-b4/60 text-osu-l2 hover:bg-osu-b3/60 hover:text-white"
+                  }`}
+                >
+                  {armed === card.teamId ? "Really remove" : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </SectionCard>
   );
 }
