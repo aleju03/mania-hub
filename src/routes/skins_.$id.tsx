@@ -43,7 +43,7 @@ export const Route = createFileRoute("/skins_/$id")({
     if (!skin) {
       return pageSeo({
         title: i18n._(msg`Skin`),
-        description: i18n._(msg`osu!mania skins on Mania Hub.`),
+        description: i18n._(msg`osu!mania skins on Mania Tracker.`),
         path: `/skins/${match.params.id}`,
         origin: match.context.origin,
         imageKind: "skins",

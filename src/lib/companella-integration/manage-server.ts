@@ -54,7 +54,7 @@ async function requireSameOrigin(): Promise<void> {
   const { getRequest } = await import("@tanstack/react-start/server");
   const { isSameOriginRequest } = await import("../origin");
   if (!isSameOriginRequest(getRequest())) {
-    throw new Error("This action must come from the Mania Hub site.");
+    throw new Error("This action must come from the Mania Tracker site.");
   }
 }
 
@@ -335,6 +335,7 @@ export interface AuthorizationDetail {
   scopes: string[];
   expires_at: string;
   outcome: string | null;
+  app_name: string | null;
   loopback: boolean;
 }
 
@@ -413,7 +414,7 @@ export const denyCompanellaAuthorization = createServerFn({ method: "POST" })
 export const createCompanellaAuthorizationRequest = createServerFn({ method: "POST" })
   .validator((data: {
     clientId: string; redirectUri: string; state: string;
-    codeChallenge: string; scope?: string | null; dpopJkt: string;
+    codeChallenge: string; scope?: string | null; dpopJkt: string; appName?: string | null;
   }) => ({
     clientId: String(data.clientId ?? ""),
     redirectUri: String(data.redirectUri ?? ""),
@@ -421,6 +422,7 @@ export const createCompanellaAuthorizationRequest = createServerFn({ method: "PO
     codeChallenge: String(data.codeChallenge ?? ""),
     scope: data.scope == null ? null : String(data.scope),
     dpopJkt: String(data.dpopJkt ?? ""),
+    appName: data.appName == null ? null : String(data.appName),
   }))
   .handler(async ({ data }): Promise<{ requestId?: string; consentToken?: string; error?: string }> => {
     await noStore();
@@ -437,6 +439,7 @@ export const createCompanellaAuthorizationRequest = createServerFn({ method: "PO
         code_challenge_method: "S256",
         scope: data.scope,
         dpop_jkt: data.dpopJkt,
+        app_name: data.appName,
       },
     });
     if (!response) return { error: "integration_unavailable" };

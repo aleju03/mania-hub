@@ -88,7 +88,7 @@ export interface OsuUser {
   playstyle: string[] | null;
   post_count: number;
   comments_count: number;
-  /* Mania Hub's own flag, set by the live backend when osu! no longer serves
+  /* Mania Tracker's own flag, set by the live backend when osu! no longer serves
      the account: `restricted` when osu! told us so at sign-in, `missing` when
      osu! just 404s. The profile shown is the last one stored. */
   account_status?: "restricted" | "missing";

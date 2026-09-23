@@ -13,8 +13,8 @@ import { Empty, Panel, Pill } from "./primitives";
  */
 
 const EVENT_TEXT: Record<string, string> = {
-  installation_approved: "An installation was approved",
-  installation_revoked: "An installation was revoked",
+  installation_approved: "A connection was approved",
+  installation_revoked: "A connection was revoked",
   new_country_observed: "A request arrived from a country this account had not used before",
   rapid_country_change: "Requests arrived from two countries close together, so this was flagged for a look",
   duplicate_replay_rejected: "The same play was submitted twice",

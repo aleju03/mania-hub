@@ -93,6 +93,7 @@ export function TestClientPanel({ onSubmitted }: { onSubmitted: () => void }) {
           codeChallenge: transaction.challenge,
           scope: "companella:scores:submit companella:submissions:read companella:charts:upload companella:installation:read",
           dpopJkt: key.thumbprint,
+          appName: "Browser test client",
         },
       });
       if (!created.requestId) {
@@ -143,13 +144,13 @@ export function TestClientPanel({ onSubmitted }: { onSubmitted: () => void }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label={<Trans>Key</Trans>}>{key ? `${key.thumbprint.slice(0, 12)}...` : t`Creating`}</Field>
         <Field label={<Trans>Account</Trans>}>{credentials?.username ?? "-"}</Field>
-        <Field label={<Trans>Installation</Trans>}>{credentials?.installationId?.slice(0, 10) ?? "-"}</Field>
+        <Field label={<Trans>Connection</Trans>}>{credentials?.installationId?.slice(0, 10) ?? "-"}</Field>
         <Field label={<Trans>Scopes</Trans>}>{String((identity?.scopes as string[] | undefined)?.length ?? 0)}</Field>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <ActionButton onClick={() => void connect()} disabled={busy || !key}>
-          <Trans>Create test installation</Trans>
+          <Trans>Create test connection</Trans>
         </ActionButton>
         <ActionButton
           tone="danger"

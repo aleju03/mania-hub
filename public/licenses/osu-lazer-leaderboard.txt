@@ -1,5 +1,5 @@
 osu! lazer gameplay leaderboard layout, ranking and animation logic
-Adapted to the Mania Hub Pixi replay renderer.
+Adapted to the Mania Tracker Pixi replay renderer.
 Source: https://github.com/ppy/osu/tree/ebaf7e9910ef3755308dec2c7950d916aabc545b/osu.Game/Screens/Play
 Easing and scrolling: https://github.com/ppy/osu-framework/tree/247dee9888c51606b939f027bce54504f8ca26fa/osu.Framework
 

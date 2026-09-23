@@ -142,7 +142,7 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
     // The generic n-key calc engine returns ~0 for skillsets it does not
     // rate; a 0.15 sliver next to 20+ bars is noise, not signal.
     .filter((entry) => entry.value >= 1);
-  // 4K LN uses Mania Hub's independent strain/SSR model; other keymodes
+  // 4K LN uses Mania Tracker's independent strain/SSR model; other keymodes
   // preserve their Overall-on-LN pattern ratings.
   // The wire axis stays pattern:ln
   // so the radar, explorer and population board open the same evidence.

@@ -81,7 +81,7 @@ function LnShareNote({ mode, className = "" }: { mode: MyDataSkillMode; classNam
 
 function percentileTitle(entry: SkillAxisEntry, mode: MyDataSkillMode, i18n: I18n): string | undefined {
   const model = mode.keyCount === 4 && entry.key === "ln"
-    ? i18n._(msg`Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.`)
+    ? i18n._(msg`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.`)
     : undefined;
   const percentile = mode.percentiles?.[entry.axis];
   if (!percentile) return model;

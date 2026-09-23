@@ -23,7 +23,7 @@ function headline(): string {
 it("headlines the LN value on a 4K LN chart when it is the hardest axis", () => {
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} /></I18nProvider>);
   expect(headline()).toBe("22.29");
-  expect(screen.getByTitle("Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.")).toBeTruthy();
+  expect(screen.getByTitle("Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.")).toBeTruthy();
 });
 
 it("keeps Overall as the headline on a rice chart", () => {

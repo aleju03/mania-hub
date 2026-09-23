@@ -172,7 +172,7 @@ const PRESETS: Preset[] = [
     key: "discord",
     label: "Discord (maniabot)",
     kind: "discord",
-    title: "maniabot - Mania Hub for Discord",
+    title: "maniabot - Mania Tracker for Discord",
     subtitle: "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel.",
     path: "/discord",
     rawTitle: true,
@@ -203,7 +203,7 @@ const PRESETS: Preset[] = [
     label: "Page URL",
     kind: "page-url",
     title: "Page URL preview",
-    subtitle: "Paste any Mania Hub page URL to read the social metadata rendered by that route.",
+    subtitle: "Paste any Mania Tracker page URL to read the social metadata rendered by that route.",
     path: "/",
     noindex: true,
   },
@@ -430,7 +430,7 @@ function OgPreviewPage() {
     : kind === "replay"
       ? ""
       : kind === "page-url"
-        ? pagePreview?.description || "Load a Mania Hub URL to preview its social card."
+        ? pagePreview?.description || "Load a Mania Tracker URL to preview its social card."
         : subtitle;
   const domain = kind === "page-url" && pagePreview
     ? new URL(pagePreview.pageUrl).host
@@ -461,7 +461,7 @@ function OgPreviewPage() {
     if (!requestUrl) {
       setPagePreview(null);
       setPagePreviewLoading(false);
-      setPagePreviewError("Paste a local, production, or relative Mania Hub URL.");
+      setPagePreviewError("Paste a local, production, or relative Mania Tracker URL.");
       return;
     }
 
@@ -540,7 +540,7 @@ function OgPreviewPage() {
           >
             <TextField
               label="Page URL"
-              hint="local or production Mania Hub URL, or a relative /path?query"
+              hint="local or production Mania Tracker URL, or a relative /path?query"
               value={pageUrl}
               max={2048}
               placeholder="http://localhost:3000/replay?uploadId=..."

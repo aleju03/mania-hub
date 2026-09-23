@@ -34,8 +34,8 @@ type Method = "GET" | "POST" | "PUT";
 const ENDPOINTS: Array<[Method, string, string]> = [
   ["GET", "/capabilities", "Endpoints, limits and supported mods. No auth."],
   ["POST", "/oauth/token", "Exchange the sign-in code for tokens, or refresh."],
-  ["POST", "/oauth/revoke", "Disconnect this installation. Needs a proof too."],
-  ["GET", "/me", "The connected account and installation."],
+  ["POST", "/oauth/revoke", "Disconnect this app. Needs a proof too."],
+  ["GET", "/me", "The connected account and app."],
   ["POST", "/submissions", "Reserve a play."],
   ["PUT", "/submissions/{id}/replay", "Upload the replay."],
   ["PUT", "/submissions/{id}/beatmap", "Upload the .osu, when the server asks for it."],
@@ -138,7 +138,7 @@ function CompanellaDocsPage() {
               redirect.
             </P>
             <ol className="mt-3 list-decimal space-y-2 pl-5 leading-7 marker:text-osu-f1/50">
-              <li>Generate a P-256 key pair and store the private key on the machine. Each key pair is one installation.</li>
+              <li>Generate a P-256 key pair and store the private key on the machine. Each key pair is one connection.</li>
               <li>
                 Listen on <Code>127.0.0.1</Code> or <Code>[::1]</Code> on any free port, with the path{" "}
                 <Code>/companella/callback</Code>. <Code>localhost</Code> is not accepted.
@@ -155,9 +155,11 @@ function CompanellaDocsPage() {
   &code_challenge_method=S256
   &scope=companella:scores:submit companella:submissions:read
          companella:charts:upload companella:installation:read
-  &dpop_jkt={RFC 7638 thumbprint of your public key}`}</CodeBlock>
+  &dpop_jkt={RFC 7638 thumbprint of your public key}
+  &app_name={your app's name, optional}`}</CodeBlock>
             <P>
-              The player names the installation and approves. Your callback receives <Code>code</Code> and{" "}
+              The consent screen shows <Code>app_name</Code> as you send it (one line, up to 40 characters), or
+              "An external application" without it. The player names the connection and approves. Your callback receives <Code>code</Code> and{" "}
               <Code>state</Code>; check that <Code>state</Code> matches, then stop listening. If the player cancels,
               the callback gets <Code>error=access_denied</Code> instead. A request nobody answers expires after 10
               minutes without calling back, so add a timeout on your side as well.

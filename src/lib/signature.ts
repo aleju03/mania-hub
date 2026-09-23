@@ -343,7 +343,7 @@ export const fetchSignatureAdminList = createServerFn({ method: "GET" })
 
 /* Resolve the player once before the browser asks the image endpoint for each
    layout. /snapshot, rather than cached-snapshot, is deliberate: this admin
-   tool promises any live osu! player, including one Mania Hub has never seen.
+   tool promises any live osu! player, including one Mania Tracker has never seen.
    A cold lookup mints the normal stored profile snapshot, after which every
    renderer reads it through its ordinary cached path. Nothing about the
    player's signature settings is created or changed. */

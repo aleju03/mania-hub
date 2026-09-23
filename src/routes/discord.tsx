@@ -18,13 +18,13 @@ export const Route = createFileRoute("/discord")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
-      title: i18n._(msg`maniabot - Mania Hub for Discord`),
+      title: i18n._(msg`maniabot - Mania Tracker for Discord`),
       appendSiteName: false,
       description: i18n._(msg`Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel.`),
       path: "/discord",
       origin: match.context.origin,
       imageKind: "discord",
-      imageTitle: "maniabot - Mania Hub for Discord",
+      imageTitle: "maniabot - Mania Tracker for Discord",
       noindex: true,
     });
   },

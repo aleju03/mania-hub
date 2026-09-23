@@ -1253,7 +1253,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null, i18n:
         <Embed accent={PINK}>
           <EmbedTitle linked>Replay viewer</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            Watch score <code className="rounded px-1 font-mono text-[11px]" style={{ backgroundColor: D.field }}>1234567</code> in the Mania Hub replay viewer.
+            Watch score <code className="rounded px-1 font-mono text-[11px]" style={{ backgroundColor: D.field }}>1234567</code> in the Mania Tracker replay viewer.
             <br />
             Adjust skin, scroll speed and overlays, or export it to video.
           </div>

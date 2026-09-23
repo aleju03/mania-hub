@@ -20,7 +20,7 @@ type AppRateBucket = "api" | "serverFn" | "costly" | "sync";
 const appRateWindows = new Map<string, { count: number; resetAt: number }>();
 let appRateChecksSincePrune = 0;
 
-// Mania Hub never talks to software or devices on a visitor's machine or LAN.
+// Mania Tracker never talks to software or devices on a visitor's machine or LAN.
 // Deny both address spaces at the document boundary so Chromium cannot show
 // its alarming "apps and services on this device" permission prompt, even if
 // stale or injected client code ever attempts such a request. The legacy alias

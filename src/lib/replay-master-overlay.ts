@@ -1,7 +1,7 @@
 // Visualization adapted from Mania Replay Master (Apache-2.0).
 // Copyright (c) 2020-present, project contributors.
 // https://github.com/Mania-Visualization-Project/Mania-Replay-Master
-// Ported to a seekable Pixi drawing layer; judgements come from Mania Hub.
+// Ported to a seekable Pixi drawing layer; judgements come from Mania Tracker.
 // License: public/licenses/mania-replay-master.txt
 import type { ManiaNote } from "./beatmap-parser";
 import type { Judgment, ReplayNoteState, ReplaySegment } from "#replay-judge/mania-replay-judgement";

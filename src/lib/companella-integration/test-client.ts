@@ -16,7 +16,7 @@
 import { md5Hex } from "../md5";
 import { COMPANELLA_API_PREFIX } from "./shared";
 
-const DB_NAME = "mania-hub-companella-test";
+const DB_NAME = "mania-tracker-companella-test";
 const STORE = "keys";
 const KEY_ID = "dpop";
 const TRANSACTION_KEY = "companella-test-transaction";

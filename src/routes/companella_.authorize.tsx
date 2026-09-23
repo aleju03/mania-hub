@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, Link2 } from "lucide-react";
+import { AppWindow, Check, Link2 } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 
@@ -44,15 +44,16 @@ export const Route = createFileRoute("/companella_/authorize")({
     code_challenge_method: text(search.code_challenge_method),
     scope: text(search.scope),
     dpop_jkt: text(search.dpop_jkt),
+    app_name: text(search.app_name),
   }),
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
-      title: i18n._(msg`Connect Companella`),
-      description: i18n._(msg`Approve a Companella installation for your osu! account.`),
+      title: i18n._(msg`Connect an app`),
+      description: i18n._(msg`Approve an app for your osu! account.`),
       path: "/companella/authorize",
       origin: match.context.origin,
-      imageTitle: "Connect Companella",
+      imageTitle: "Connect an app",
       noindex: true,
     });
   },
@@ -98,6 +99,7 @@ function AuthorizePage() {
         codeChallenge: search.code_challenge,
         scope: search.scope || null,
         dpopJkt: search.dpop_jkt,
+        appName: search.app_name || null,
       },
     })
       .then((created) => {
@@ -113,7 +115,7 @@ function AuthorizePage() {
         setError("request_failed");
         setLoading(false);
       });
-  }, [auth.viewer, requestId, search.client_id, search.code_challenge, search.dpop_jkt, search.redirect_uri, search.scope, search.state]);
+  }, [auth.viewer, requestId, search.app_name, search.client_id, search.code_challenge, search.dpop_jkt, search.redirect_uri, search.scope, search.state]);
 
   useEffect(() => {
     if (search.code_challenge_method && search.code_challenge_method !== "S256") {
@@ -131,7 +133,7 @@ function AuthorizePage() {
       .then((result) => {
         if (cancelled) return;
         setDetail(result);
-        setName(result?.loopback ? "Companella" : "Browser test client");
+        setName(result?.app_name ?? t`External application`);
       })
       .catch(() => {
         if (!cancelled) setDetail(null);
@@ -183,22 +185,11 @@ function AuthorizePage() {
     }
   }, [consent, name, requestId]);
 
-  // The server registers exactly two client ids and no dynamic registration
-  // (see companella-integration.md), so the display name and icon are a
-  // fixed lookup on the id the request was created with, not a claim the
-  // client gets to make about itself.
-  const client = (() => {
-    switch (detail?.client_id) {
-      case "companella-test":
-        return { name: t`Browser test client`, icon: null };
-      case "companella":
-      case undefined:
-        return { name: "Companella", icon: "/images/companella-icon.png" };
-      default:
-        return { name: detail?.client_id ?? "", icon: null };
-    }
-  })();
-  const appName = client.name;
+  // The app names itself on the authorize link (app_name, stored with the
+  // request once it exists); without one it is just an external application.
+  const declaredName = (detail ? detail.app_name : search.app_name) || "";
+  const appName = declaredName || t`An external application`;
+  const appNameInline = declaredName || t`an external application`;
   // Where the browser goes after approval, shown so the loopback address the
   // app registered is visible before the click.
   const redirectHost = (() => {
@@ -250,13 +241,9 @@ function AuthorizePage() {
 
   const identityRow = (
     <div className="mb-6 flex items-center justify-center gap-3">
-      {client.icon ? (
-        <img src={client.icon} alt={appName} width={56} height={56} className="h-14 w-14 rounded-full" />
-      ) : (
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-osu-b4 text-2xl font-bold text-white">
-          {appName.charAt(0)}
-        </div>
-      )}
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-osu-b4 text-2xl font-bold text-white">
+        {declaredName ? declaredName.charAt(0).toUpperCase() : <AppWindow size={26} />}
+      </div>
       <div className="flex items-center gap-1 text-osu-f1/60">
         <span className="h-px w-5 bg-current" />
         <Link2 size={16} />
@@ -271,7 +258,7 @@ function AuthorizePage() {
       <>
         {identityRow}
         <h1 className="text-center text-xl font-bold text-white">
-          <Trans>Sign in to connect {appName}</Trans>
+          <Trans>Sign in to connect {appNameInline}</Trans>
         </h1>
         <p className="mt-2 text-center text-sm text-osu-f1">
           <Trans>{appName} needs your Mania Tracker account to send plays to.</Trans>
@@ -347,7 +334,7 @@ function AuthorizePage() {
       </div>
 
       <div className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
-        <Trans>This will allow {appName} to</Trans>
+        <Trans>This will allow {appNameInline} to</Trans>
       </div>
       <ul className="mt-2 divide-y divide-osu-b3/30 rounded-xl border border-osu-b3/30">
         <li className="flex items-start gap-3 px-3 py-3">
@@ -365,7 +352,7 @@ function AuthorizePage() {
       </ul>
 
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
-        <Trans>Installation name</Trans>
+        <Trans>Connection name</Trans>
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -394,7 +381,7 @@ function AuthorizePage() {
         disabled={busy || !name.trim()}
         className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-osu-pink px-4 py-2.5 text-sm font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-40 disabled:hover:brightness-100"
       >
-        <Trans>Authorize {appName}</Trans>
+        <Trans>Authorize {appNameInline}</Trans>
       </button>
       <button
         type="button"
@@ -431,7 +418,7 @@ function AuthorizePage() {
           <Trans>Only approve a request you started yourself. If someone sent you this link, close it.</Trans>
         </p>
         <p>
-          <Trans>This does not give the app your osu! account. You can revoke it any time on your Companella page.</Trans>
+          <Trans>This does not give the app your osu! account. You can revoke it any time on Mania Tracker.</Trans>
         </p>
         <p>
           <Trans>Imported plays that pass the checks show on the tracker and your Mania Tracker profile.</Trans>

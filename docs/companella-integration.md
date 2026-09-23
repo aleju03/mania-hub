@@ -1,7 +1,7 @@
 # Companella integration
 
 The Companella score-import beta: a native osu! companion app sends completed
-osu!stable mania plays to Mania Hub over an authenticated HTTPS API. The owner
+osu!stable mania plays to Mania Tracker over an authenticated HTTPS API. The owner
 of the account sees them, and their effect on an experimental rating preview, on
 `/companella`; plays that pass every check also show on the tracker and on the
 player's profile Recent tab (see "Privacy").
@@ -107,7 +107,10 @@ a loopback redirect (RFC 8252).
 1. The client creates a P-256 key, binds a loopback listener on an ephemeral
    port, and opens `/companella/authorize` with `client_id`, `redirect_uri`,
    `state`, `code_challenge`, `code_challenge_method=S256`, `scope` and
-   `dpop_jkt`.
+   `dpop_jkt`, plus an optional `app_name`. The consent screen names the app
+   from `app_name` as sent (stored on the request, printable, 40 characters at
+   most) and says "An external application" without one; nothing is looked up
+   from the client id.
 2. An unauthenticated browser goes through the ordinary osu! login first, with
    a `next` that points back at the same URL and keeps the OAuth query
    (normalized to a path on this site). Only then does the page validate the

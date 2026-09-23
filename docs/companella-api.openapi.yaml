@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: Mania Hub Companella integration API
+  title: Mania Tracker Companella integration API
   version: "1.0.0"
   description: |
     The public API a Companella installation uses to send completed osu!stable
-    mania plays to Mania Hub.
+    mania plays to Mania Tracker.
 
     Authorization is Mania Tracker's own: authorization code + PKCE S256 +
     DPoP key binding (RFC 8252, RFC 7636, RFC 9449). No osu! token ever reaches

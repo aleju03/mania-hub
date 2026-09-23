@@ -256,21 +256,21 @@ function CompanellaPage() {
             setBusyId(id);
             void renameCompanellaInstallation({ data: { installationId: id, displayName: name } })
               .then(() => loadAll())
-              .catch(() => setNotice(t`Could not rename that installation.`))
+              .catch(() => setNotice(t`Could not rename that connection.`))
               .finally(() => setBusyId(null));
           }}
           onRevoke={(id) => {
-            if (!window.confirm(t`Revoke this installation? It stops submitting right away.`)) return;
+            if (!window.confirm(t`Revoke this connection? It stops submitting right away.`)) return;
             setBusyId(id);
             void revokeCompanellaInstallation({ data: { installationId: id } })
               .then(() => loadAll())
-              .catch(() => setNotice(t`Could not revoke that installation.`))
+              .catch(() => setNotice(t`Could not revoke that connection.`))
               .finally(() => setBusyId(null));
           }}
           onRevokeAll={() => {
-            if (!window.confirm(t`Revoke every installation on this account?`)) return;
+            if (!window.confirm(t`Revoke every connection on this account?`)) return;
             void revokeAllCompanellaInstallations().then(() => loadAll()).catch(() => {
-              setNotice(t`Could not revoke the installations.`);
+              setNotice(t`Could not revoke the connections.`);
             });
           }}
         />

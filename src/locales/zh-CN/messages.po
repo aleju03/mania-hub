@@ -2863,6 +2863,14 @@ msgstr "始终全部揭晓"
 msgid "amber"
 msgstr "琥珀"
 
+#: src/routes/companella_.authorize.tsx
+msgid "an external application"
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "An external application"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
 msgstr "导入的皮肤"
@@ -3015,7 +3023,11 @@ msgid "Applying…"
 msgstr "应用中…"
 
 #: src/routes/companella_.authorize.tsx
-msgid "Approve a Companella installation for your osu! account."
+#~ msgid "Approve a Companella installation for your osu! account."
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Approve an app for your osu! account."
 msgstr ""
 
 #: src/components/companella/InstallationList.tsx
@@ -3023,8 +3035,12 @@ msgid "Approved"
 msgstr ""
 
 #: src/components/companella/InstallationList.tsx
-msgid "Approved installations"
+msgid "Approved connections"
 msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#~ msgid "Approved installations"
+#~ msgstr ""
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Approving a new connection needs a recent sign-in. Sign in again, then approve."
@@ -3124,7 +3140,11 @@ msgstr "2026年8月23日"
 #~ msgstr "极光"
 
 #: src/routes/companella_.authorize.tsx
-msgid "Authorize {appName}"
+#~ msgid "Authorize {appName}"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Authorize {appNameInline}"
 msgstr ""
 
 #: src/routes/discord.tsx
@@ -3619,8 +3639,8 @@ msgid "Browser preferences and local caches stay on your device until they expir
 msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它们过期、被替换，或你清除 localStorage。osu! 登录会话最长可保持 30 天，除非你提前登出。"
 
 #: src/routes/companella_.authorize.tsx
-msgid "Browser test client"
-msgstr ""
+#~ msgid "Browser test client"
+#~ msgstr ""
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
@@ -4466,8 +4486,12 @@ msgid "Completion"
 msgstr ""
 
 #: src/routes/companella_.authorize.tsx
-msgid "Connect Companella"
+msgid "Connect an app"
 msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "Connect Companella"
+#~ msgstr ""
 
 #: src/routes/companella.tsx
 #~ msgid "Connect Companella to Mania Hub and review the plays it imported."
@@ -4498,6 +4522,7 @@ msgstr "已连接 Discord"
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "已连接，但几分钟内没有新成绩。等信息流跟上后，最近的游玩会显示出来。"
 
+#: src/components/companella/TestClientPanel.tsx
 #: src/routes/companella.tsx
 msgid "Connection"
 msgstr ""
@@ -4505,6 +4530,11 @@ msgstr ""
 #: src/routes/tracker.tsx
 msgid "Connection lost; reconnecting."
 msgstr "连接已断开，正在重连。"
+
+#: src/components/companella/InstallationList.tsx
+#: src/routes/companella_.authorize.tsx
+msgid "Connection name"
+msgstr ""
 
 #: src/routes/legal.tsx
 msgid "Contact"
@@ -4722,20 +4752,32 @@ msgid "Could not remove that listing."
 msgstr "无法移除这条收录。"
 
 #: src/routes/companella.tsx
-msgid "Could not rename that installation."
+msgid "Could not rename that connection."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Could not rename that installation."
+#~ msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not resize the image."
 msgstr "无法调整图片尺寸。"
 
 #: src/routes/companella.tsx
-msgid "Could not revoke that installation."
+msgid "Could not revoke that connection."
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Could not revoke the installations."
+#~ msgid "Could not revoke that installation."
+#~ msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Could not revoke the connections."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Could not revoke the installations."
+#~ msgstr ""
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
@@ -5070,8 +5112,12 @@ msgid "Create a set to organize your cards."
 msgstr "创建卡组来整理你的卡片。"
 
 #: src/components/companella/TestClientPanel.tsx
-msgid "Create test installation"
+msgid "Create test connection"
 msgstr ""
+
+#: src/components/companella/TestClientPanel.tsx
+#~ msgid "Create test installation"
+#~ msgstr ""
 
 #. placeholder {0}: preset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -6067,8 +6113,8 @@ msgid "Every osu!mania lookup as a slash command. Link your account once with <0
 msgstr "所有 osu!mania 查询都做成了斜杠命令。用 <0>/link</0> 关联一次账号，<1>/recent</1> 这类命令就不用再输用户名。实时 feed 会把新的最佳成绩、狙击和刷分谱面自动发到任意频道。"
 
 #: src/routes/replay_.community.tsx
-msgid "Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher."
-msgstr "所有上传到 Mania Hub 的 osu!mania 回放，按最新排序。可在回放播放器中打开任意一个。"
+msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
+msgstr "所有上传到 Mania Tracker 的 osu!mania 回放，按最新排序。可在回放播放器中打开任意一个。"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
@@ -6177,6 +6223,10 @@ msgstr "导出视频"
 #: src/lib/pattern-labels.ts
 #~ msgid "Exposed Releases"
 #~ msgstr "独立松键"
+
+#: src/routes/companella_.authorize.tsx
+msgid "External application"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Extra: clearing a real course overrides all of it"
@@ -7682,13 +7732,13 @@ msgid "Inspect {0}'s maniacard"
 msgstr "查看 {0} 的 maniacard"
 
 #: src/components/companella/TestClientPanel.tsx
-msgid "Installation"
-msgstr ""
+#~ msgid "Installation"
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 #: src/routes/companella_.authorize.tsx
-msgid "Installation name"
-msgstr ""
+#~ msgid "Installation name"
+#~ msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -8880,11 +8930,6 @@ msgstr "管理员"
 #~ msgid "Mania Hub just updated"
 #~ msgstr "Mania Hub 刚刚更新了"
 
-#: src/components/maps/MapDetailModal.tsx
-#: src/components/player/SkillBreakdown.tsx
-msgid "Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
-msgstr "Mania Hub LN 估算：松键时机、保持按键时的手指协调，以及松键后再次按键的衔接。与 MinaCalc 并行的独立模型。"
-
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -8931,6 +8976,11 @@ msgstr "Mania Tracker 是一个 osu!mania 社区网站，围绕公开的 osu! �
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker 是一个面向 osu!mania 玩家的非官方社区同人项目。它与 ppy Pty Ltd 或 osu! 团队没有从属关系，也未获得其背书、赞助或批准。"
 
+#: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+msgstr "Mania Tracker LN 估算：松键时机、保持按键时的手指协调，以及松键后再次按键的衔接。与 MinaCalc 并行的独立模型。"
+
 #: src/routes/terms.tsx
 msgid "Mania Tracker uses osu! OAuth to identify the signed-in osu! account. Mania Tracker does not receive or manage your osu! password."
 msgstr "Mania Tracker 使用 osu! OAuth 来识别已登录的 osu! 账号。Mania Tracker 不会收到或管理你的 osu! 密码。"
@@ -8952,8 +9002,8 @@ msgid "mania-stage left / right / bottom / hint pieces"
 msgstr "mania 面板的左侧 / 右侧 / 底部 / 提示部件"
 
 #: src/routes/discord.tsx
-msgid "maniabot - Mania Hub for Discord"
-msgstr "maniabot，Discord 上的 Mania Hub"
+msgid "maniabot - Mania Tracker for Discord"
+msgstr "maniabot，Discord 上的 Mania Tracker"
 
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
@@ -9825,6 +9875,10 @@ msgstr "这里还没有收藏册，来发布第一个吧。"
 msgid "No collector found. They need to open a pack first."
 msgstr "未找到收藏者。对方需要先打开一个卡包。"
 
+#: src/components/companella/InstallationList.tsx
+msgid "No connection has been approved yet."
+msgstr ""
+
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
 msgstr "未找到国家/地区"
@@ -9878,8 +9932,8 @@ msgid "No images or sounds were found in the archive."
 msgstr "压缩包里没有找到图片或音效。"
 
 #: src/components/companella/InstallationList.tsx
-msgid "No installation has been approved yet."
-msgstr ""
+#~ msgid "No installation has been approved yet."
+#~ msgstr ""
 
 #: src/routes/player/$username.tsx
 msgid "No key data"
@@ -11096,8 +11150,8 @@ msgid "osu!mania skins"
 msgstr "osu!mania 皮肤"
 
 #: src/routes/skins_.$id.tsx
-msgid "osu!mania skins on Mania Hub."
-msgstr "Mania Hub 上的 osu!mania 皮肤。"
+msgid "osu!mania skins on Mania Tracker."
+msgstr "Mania Tracker 上的 osu!mania 皮肤。"
 
 #: src/components/communities/field-options.tsx
 #: src/routes/skins.tsx
@@ -12595,6 +12649,7 @@ msgstr "请将此卡组减少至 {BINDER_MAX_CARDS} 张卡牌后再展示。"
 
 #: src/components/layout/StaleBuildNotice.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/routes/player/$username.tsx
 msgid "Refresh"
 msgstr "刷新"
 
@@ -13058,12 +13113,20 @@ msgid "Revoke all"
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Revoke every installation on this account?"
+msgid "Revoke every connection on this account?"
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Revoke this installation? It stops submitting right away."
+#~ msgid "Revoke every installation on this account?"
+#~ msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Revoke this connection? It stops submitting right away."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Revoke this installation? It stops submitting right away."
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 msgid "Revoked"
@@ -14207,7 +14270,11 @@ msgid "Sign in and runs like that pay shards."
 msgstr "登录后，这样的连胜就能赚碎片。"
 
 #: src/routes/companella_.authorize.tsx
-msgid "Sign in to connect {appName}"
+#~ msgid "Sign in to connect {appName}"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Sign in to connect {appNameInline}"
 msgstr ""
 
 #: src/components/maps/UserCollectionDetail.tsx
@@ -16121,8 +16188,8 @@ msgid "The replay renderer stopped during the export."
 msgstr "回放渲染器在导出过程中停止了。"
 
 #: src/routes/replay_.uploads.tsx
-msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
-msgstr "你上传到 Mania Hub 的回放，附带分享链接和删除操作。"
+msgid "The replays you have uploaded to Mania Tracker, with their share links and deletes."
+msgstr "你上传到 Mania Tracker 的回放，附带分享链接和删除操作。"
 
 #: src/routes/report.tsx
 msgid "The report was sent, but at least one image did not upload."
@@ -16517,8 +16584,12 @@ msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
 
 #: src/routes/companella_.authorize.tsx
-msgid "This does not give the app your osu! account. You can revoke it any time on your Companella page."
+msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."
 msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "This does not give the app your osu! account. You can revoke it any time on your Companella page."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "This exact version is already shown to everyone watching your replays"
@@ -16738,7 +16809,11 @@ msgid "This week"
 msgstr "本周"
 
 #: src/routes/companella_.authorize.tsx
-msgid "This will allow {appName} to"
+#~ msgid "This will allow {appName} to"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "This will allow {appNameInline} to"
 msgstr ""
 
 #: src/routes/report.tsx

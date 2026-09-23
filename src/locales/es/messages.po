@@ -2854,6 +2854,14 @@ msgstr "Revelar todas siempre"
 msgid "amber"
 msgstr "ámbar"
 
+#: src/routes/companella_.authorize.tsx
+msgid "an external application"
+msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "An external application"
+msgstr ""
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "an imported skin"
 msgstr "una skin importada"
@@ -3006,7 +3014,11 @@ msgid "Applying…"
 msgstr "Aplicando…"
 
 #: src/routes/companella_.authorize.tsx
-msgid "Approve a Companella installation for your osu! account."
+#~ msgid "Approve a Companella installation for your osu! account."
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Approve an app for your osu! account."
 msgstr ""
 
 #: src/components/companella/InstallationList.tsx
@@ -3014,8 +3026,12 @@ msgid "Approved"
 msgstr ""
 
 #: src/components/companella/InstallationList.tsx
-msgid "Approved installations"
+msgid "Approved connections"
 msgstr ""
+
+#: src/components/companella/InstallationList.tsx
+#~ msgid "Approved installations"
+#~ msgstr ""
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Approving a new connection needs a recent sign-in. Sign in again, then approve."
@@ -3115,7 +3131,11 @@ msgstr "23 de agosto de 2026"
 #~ msgstr "Aurora"
 
 #: src/routes/companella_.authorize.tsx
-msgid "Authorize {appName}"
+#~ msgid "Authorize {appName}"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Authorize {appNameInline}"
 msgstr ""
 
 #: src/routes/discord.tsx
@@ -3610,8 +3630,8 @@ msgid "Browser preferences and local caches stay on your device until they expir
 msgstr "Las preferencias del navegador y las cachés locales permanecen en tu dispositivo hasta que caducan, se reemplazan o borras localStorage. Las sesiones de inicio de sesión de osu! pueden durar hasta 30 días, salvo que cierres sesión antes."
 
 #: src/routes/companella_.authorize.tsx
-msgid "Browser test client"
-msgstr ""
+#~ msgid "Browser test client"
+#~ msgstr ""
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Buffering audio"
@@ -4457,8 +4477,12 @@ msgid "Completion"
 msgstr ""
 
 #: src/routes/companella_.authorize.tsx
-msgid "Connect Companella"
+msgid "Connect an app"
 msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "Connect Companella"
+#~ msgstr ""
 
 #: src/routes/companella.tsx
 #~ msgid "Connect Companella to Mania Hub and review the plays it imported."
@@ -4489,6 +4513,7 @@ msgstr "conectado a Discord"
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "Conectado, pero no han llegado scores nuevos en varios minutos. Las plays recientes aparecerán cuando el feed se ponga al día."
 
+#: src/components/companella/TestClientPanel.tsx
 #: src/routes/companella.tsx
 msgid "Connection"
 msgstr ""
@@ -4496,6 +4521,11 @@ msgstr ""
 #: src/routes/tracker.tsx
 msgid "Connection lost; reconnecting."
 msgstr "Conexión perdida; reconectando."
+
+#: src/components/companella/InstallationList.tsx
+#: src/routes/companella_.authorize.tsx
+msgid "Connection name"
+msgstr ""
 
 #: src/routes/legal.tsx
 msgid "Contact"
@@ -4713,20 +4743,32 @@ msgid "Could not remove that listing."
 msgstr "No se pudo eliminar ese anuncio."
 
 #: src/routes/companella.tsx
-msgid "Could not rename that installation."
+msgid "Could not rename that connection."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Could not rename that installation."
+#~ msgstr ""
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Could not resize the image."
 msgstr "No se pudo cambiar el tamaño de la imagen."
 
 #: src/routes/companella.tsx
-msgid "Could not revoke that installation."
+msgid "Could not revoke that connection."
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Could not revoke the installations."
+#~ msgid "Could not revoke that installation."
+#~ msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Could not revoke the connections."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Could not revoke the installations."
+#~ msgstr ""
 
 #: src/components/communities/CommunityEditModal.tsx
 msgid "Could not save that. Try again."
@@ -5061,8 +5103,12 @@ msgid "Create a set to organize your cards."
 msgstr "Crea un conjunto para organizar tus cartas."
 
 #: src/components/companella/TestClientPanel.tsx
-msgid "Create test installation"
+msgid "Create test connection"
 msgstr ""
+
+#: src/components/companella/TestClientPanel.tsx
+#~ msgid "Create test installation"
+#~ msgstr ""
 
 #. placeholder {0}: preset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -6058,8 +6104,8 @@ msgid "Every osu!mania lookup as a slash command. Link your account once with <0
 msgstr "Todas las búsquedas de osu!mania como comando de barra. Vincula tu cuenta una vez con <0>/link</0> y comandos como <1>/recent</1> funcionan sin nombre de usuario. Los feeds en vivo publican automáticamente nuevos top plays, snipes y mapas de farm directamente en cualquier canal."
 
 #: src/routes/replay_.community.tsx
-msgid "Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher."
-msgstr "Todos los replays de osu!mania subidos a Mania Hub, del más reciente al más antiguo. Abre cualquiera en el visor de replays."
+msgid "Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher."
+msgstr "Todos los replays de osu!mania subidos a Mania Tracker, del más reciente al más antiguo. Abre cualquiera en el visor de replays."
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Every pack is a random sample of its difficulty bucket"
@@ -6168,6 +6214,10 @@ msgstr "Exportar video"
 #: src/lib/pattern-labels.ts
 #~ msgid "Exposed Releases"
 #~ msgstr "Sueltas expuestas"
+
+#: src/routes/companella_.authorize.tsx
+msgid "External application"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Extra: clearing a real course overrides all of it"
@@ -7673,13 +7723,13 @@ msgid "Inspect {0}'s maniacard"
 msgstr "Inspeccionar el maniacard de {0}"
 
 #: src/components/companella/TestClientPanel.tsx
-msgid "Installation"
-msgstr ""
+#~ msgid "Installation"
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 #: src/routes/companella_.authorize.tsx
-msgid "Installation name"
-msgstr ""
+#~ msgid "Installation name"
+#~ msgstr ""
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -8871,11 +8921,6 @@ msgstr "gestor"
 #~ msgid "Mania Hub just updated"
 #~ msgstr "Mania Hub se acaba de actualizar"
 
-#: src/components/maps/MapDetailModal.tsx
-#: src/components/player/SkillBreakdown.tsx
-msgid "Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
-msgstr "Estimación LN de Mania Hub: precisión al soltar, coordinación con dedos mantenidos y recuperación. Un modelo independiente junto a MinaCalc."
-
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mapas de mania"
@@ -8922,6 +8967,11 @@ msgstr "Mania Tracker es un sitio comunitario de osu!mania construido en torno a
 msgid "Mania Tracker is an unofficial community fan project for osu!mania players. It is not affiliated with, endorsed by, sponsored by, or approved by ppy Pty Ltd or the osu! team."
 msgstr "Mania Tracker es un proyecto no oficial de fans de la comunidad para jugadores de osu!mania. No está afiliado a ppy Pty Ltd ni al equipo de osu!, ni cuenta con su respaldo, patrocinio o aprobación."
 
+#: src/components/maps/MapDetailModal.tsx
+#: src/components/player/SkillBreakdown.tsx
+msgid "Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
+msgstr "Estimación LN de Mania Tracker: precisión al soltar, coordinación con dedos mantenidos y recuperación. Un modelo independiente junto a MinaCalc."
+
 #: src/routes/terms.tsx
 msgid "Mania Tracker uses osu! OAuth to identify the signed-in osu! account. Mania Tracker does not receive or manage your osu! password."
 msgstr "Mania Tracker usa OAuth de osu! para identificar la cuenta de osu! con la que se ha iniciado sesión. Mania Tracker no recibe ni gestiona tu contraseña de osu!."
@@ -8943,8 +8993,8 @@ msgid "mania-stage left / right / bottom / hint pieces"
 msgstr "piezas izquierda / derecha / inferior / hint del mania-stage"
 
 #: src/routes/discord.tsx
-msgid "maniabot - Mania Hub for Discord"
-msgstr "maniabot - Mania Hub para Discord"
+msgid "maniabot - Mania Tracker for Discord"
+msgstr "maniabot - Mania Tracker para Discord"
 
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
@@ -9816,6 +9866,10 @@ msgstr "Todavía no hay colecciones. Publica la primera."
 msgid "No collector found. They need to open a pack first."
 msgstr "No se encontró al coleccionista. Primero debe abrir un pack."
 
+#: src/components/companella/InstallationList.tsx
+msgid "No connection has been approved yet."
+msgstr ""
+
 #: src/components/layout/CountrySelector.tsx
 msgid "No countries found"
 msgstr "No se encontraron países"
@@ -9869,8 +9923,8 @@ msgid "No images or sounds were found in the archive."
 msgstr "No se encontraron imágenes ni sonidos en el archivo."
 
 #: src/components/companella/InstallationList.tsx
-msgid "No installation has been approved yet."
-msgstr ""
+#~ msgid "No installation has been approved yet."
+#~ msgstr ""
 
 #: src/routes/player/$username.tsx
 msgid "No key data"
@@ -11087,8 +11141,8 @@ msgid "osu!mania skins"
 msgstr "skins de osu!mania"
 
 #: src/routes/skins_.$id.tsx
-msgid "osu!mania skins on Mania Hub."
-msgstr "skins de osu!mania en Mania Hub."
+msgid "osu!mania skins on Mania Tracker."
+msgstr "skins de osu!mania en Mania Tracker."
 
 #: src/components/communities/field-options.tsx
 #: src/routes/skins.tsx
@@ -12586,6 +12640,7 @@ msgstr "Reduce este conjunto a {BINDER_MAX_CARDS} cartas para mostrarlo en Desta
 
 #: src/components/layout/StaleBuildNotice.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
+#: src/routes/player/$username.tsx
 msgid "Refresh"
 msgstr "Recargar"
 
@@ -13049,12 +13104,20 @@ msgid "Revoke all"
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Revoke every installation on this account?"
+msgid "Revoke every connection on this account?"
 msgstr ""
 
 #: src/routes/companella.tsx
-msgid "Revoke this installation? It stops submitting right away."
+#~ msgid "Revoke every installation on this account?"
+#~ msgstr ""
+
+#: src/routes/companella.tsx
+msgid "Revoke this connection? It stops submitting right away."
 msgstr ""
+
+#: src/routes/companella.tsx
+#~ msgid "Revoke this installation? It stops submitting right away."
+#~ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 msgid "Revoked"
@@ -14198,7 +14261,11 @@ msgid "Sign in and runs like that pay shards."
 msgstr "Inicia sesión y rachas así pagan fragmentos."
 
 #: src/routes/companella_.authorize.tsx
-msgid "Sign in to connect {appName}"
+#~ msgid "Sign in to connect {appName}"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "Sign in to connect {appNameInline}"
 msgstr ""
 
 #: src/components/maps/UserCollectionDetail.tsx
@@ -16112,8 +16179,8 @@ msgid "The replay renderer stopped during the export."
 msgstr "El renderizador del replay se detuvo durante la exportación."
 
 #: src/routes/replay_.uploads.tsx
-msgid "The replays you have uploaded to Mania Hub, with their share links and deletes."
-msgstr "Los replays que has subido a Mania Hub, con sus enlaces para compartir y opciones de borrado."
+msgid "The replays you have uploaded to Mania Tracker, with their share links and deletes."
+msgstr "Los replays que has subido a Mania Tracker, con sus enlaces para compartir y opciones de borrado."
 
 #: src/routes/report.tsx
 msgid "The report was sent, but at least one image did not upload."
@@ -16508,8 +16575,12 @@ msgid "This country's opt-in list is full right now. Check back later."
 msgstr "La lista de este país está llena por ahora. Vuelve más tarde."
 
 #: src/routes/companella_.authorize.tsx
-msgid "This does not give the app your osu! account. You can revoke it any time on your Companella page."
+msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."
 msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+#~ msgid "This does not give the app your osu! account. You can revoke it any time on your Companella page."
+#~ msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "This exact version is already shown to everyone watching your replays"
@@ -16729,7 +16800,11 @@ msgid "This week"
 msgstr "Esta semana"
 
 #: src/routes/companella_.authorize.tsx
-msgid "This will allow {appName} to"
+#~ msgid "This will allow {appName} to"
+#~ msgstr ""
+
+#: src/routes/companella_.authorize.tsx
+msgid "This will allow {appNameInline} to"
 msgstr ""
 
 #: src/routes/report.tsx

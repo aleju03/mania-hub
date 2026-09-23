@@ -34,7 +34,7 @@ export const Route = createFileRoute("/replay_/uploads")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: i18n._(msg`Your Replay Uploads`),
-      description: i18n._(msg`The replays you have uploaded to Mania Hub, with their share links and deletes.`),
+      description: i18n._(msg`The replays you have uploaded to Mania Tracker, with their share links and deletes.`),
       path: "/replay/uploads",
       origin: match.context.origin,
       // Localized title, so the OG image key rides the English original.

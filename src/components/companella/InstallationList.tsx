@@ -34,13 +34,13 @@ export function InstallationList({
 
   return (
     <Panel
-      title={<Trans>Approved installations</Trans>}
+      title={<Trans>Approved connections</Trans>}
       right={active.length > 1 ? (
         <ActionButton tone="danger" onClick={onRevokeAll}><Trans>Revoke all</Trans></ActionButton>
       ) : null}
     >
       {installations.length === 0 ? (
-        <Empty><Trans>No installation has been approved yet.</Trans></Empty>
+        <Empty><Trans>No connection has been approved yet.</Trans></Empty>
       ) : (
         <div className="flex flex-col gap-2">
           {installations.map((installation) => (
@@ -52,7 +52,7 @@ export function InstallationList({
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
                       maxLength={60}
-                      aria-label={t`Installation name`}
+                      aria-label={t`Connection name`}
                       className="min-w-0 flex-1 rounded-lg bg-osu-b4 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-osu-pink"
                     />
                     <ActionButton

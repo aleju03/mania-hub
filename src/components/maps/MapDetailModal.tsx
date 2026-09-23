@@ -387,7 +387,7 @@ function PendingMsdBlock({ label }: { label?: string }) {
 // by value, Overall stays the headline.
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-// The standard keys are MinaCalc's; LN is Mania Hub's independent model.
+// The standard keys are MinaCalc's; LN is Mania Tracker's independent model.
 const MSD_SKILLSET_LABELS: Record<string, MessageDescriptor> = {
   Stream: msg`Stream`,
   Jumpstream: msg`Jumpstream`,
@@ -593,7 +593,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name === "LN" ? t`Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
+            <div key={name} className="flex flex-col" title={name === "LN" ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"

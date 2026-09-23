@@ -1,9 +1,9 @@
 # Companella client guide
 
 What a native client has to implement to send completed osu!stable mania plays
-to Mania Hub. Nothing here needs write access to either repository: the contract
+to Mania Tracker. Nothing here needs write access to either repository: the contract
 is the public HTTP API in `companella-api.openapi.yaml`, and
-`scripts/companella-test-client.mjs` in the Mania Hub repo is a working
+`scripts/companella-test-client.mjs` in the Mania Tracker repo is a working
 reference implementation of every step below.
 
 The page client authors are actually sent is `/companella/docs`
@@ -12,7 +12,7 @@ also serves the spec and the reference client. Change the two together.
 
 ## Split of responsibilities
 
-**Mania Hub provides:** account approval and the consent screen, credential and
+**Mania Tracker provides:** account approval and the consent screen, credential and
 proof validation, durable submission endpoints, missing-file negotiation, all
 server-side validation, chart identification, every difficulty and skill
 calculation, the owner's views, revocation, limits, and status and error
@@ -24,7 +24,7 @@ file, account-aware capture, supplying the complete replay, hashing the raw
 bytes, uploading a missing chart when asked, a persistent queue with retries,
 and the connection and submission UI.
 
-Companella must **not** compute a server family id, a Mania Hub rating, or any
+Companella must **not** compute a server family id, a Mania Tracker rating, or any
 value the server would have to trust. Those fields are rejected by the manifest
 validator rather than ignored.
 
@@ -54,7 +54,12 @@ scopes and algorithms, and the current limits.
   &code_challenge_method=S256
   &scope=companella%3Ascores%3Asubmit%20companella%3Asubmissions%3Aread%20companella%3Acharts%3Aupload%20companella%3Ainstallation%3Aread
   &dpop_jkt={RFC7638 thumbprint of your public JWK}
+  &app_name=Companella
 ```
+
+   `app_name` is optional and is shown on the consent screen exactly as sent
+   (printable, one line, up to 40 characters). Without it the screen says "An
+   external application".
 
 5. The user signs in with osu! if needed, names the installation, and approves.
    Approval covers both the plays and, when the site does not already hold a
@@ -297,7 +302,7 @@ copy honest about that too.
 
 ## Before shipping
 
-Confirm with the Mania Hub side:
+Confirm with the Mania Tracker side:
 
 - whether complete automatic replay capture, with the play's real input frames,
   is actually available in the app (a file assembled from local score data has

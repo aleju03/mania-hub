@@ -15,7 +15,7 @@ const SITE_HOSTS = new Set([
   "[::1]",
 ]);
 
-/** Turns a local, production, or relative Mania Hub URL into the same route on
+/** Turns a local, production, or relative Mania Tracker URL into the same route on
  * the current dev origin. Fetching only the current origin avoids CORS while
  * making the preview reflect the code that is actually being worked on. */
 export function sitePreviewRequestUrl(rawUrl: string, currentOrigin: string): URL | null {

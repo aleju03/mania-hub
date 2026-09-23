@@ -27,7 +27,7 @@ export const Route = createFileRoute("/replay_/community")({
     const i18n = getI18n(match.context.locale);
     return pageSeo({
       title: i18n._(msg`Community Replays`),
-      description: i18n._(msg`Every osu!mania replay uploaded to Mania Hub, newest first. Open any of them in the replay watcher.`),
+      description: i18n._(msg`Every osu!mania replay uploaded to Mania Tracker, newest first. Open any of them in the replay watcher.`),
       path: "/replay/community",
       origin: match.context.origin,
       imageTitle: "Community Replays",
