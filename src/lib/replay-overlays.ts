@@ -205,6 +205,8 @@ export interface ReplayOverlayPlacement {
   scrollSpeed?: number;
   /** Show Replay Master's marks directly over the stage. */
   transparentBackground?: boolean;
+  /** Scroll Replay Master with the map's SV instead of constant time. */
+  followSv?: boolean;
 }
 
 export interface ReplayOverlaySizeReference {
@@ -267,7 +269,7 @@ export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 // corner, so accuracy defaults to a big draggable readout on the left and
 // the judgement counts sit below the score block.
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
-  replayMaster: { enabled: false, x: 0.72, y: 0.25, scale: 0.75, scrollSpeed: DEFAULT_REPLAY_MASTER_SCROLL_SPEED, transparentBackground: false },
+  replayMaster: { enabled: false, x: 0.72, y: 0.25, scale: 0.75, scrollSpeed: DEFAULT_REPLAY_MASTER_SCROLL_SPEED, transparentBackground: false, followSv: false },
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1, style: DEFAULT_REPLAY_MISS_STYLE },
@@ -456,6 +458,7 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       const rawSpeed = raw[id] && typeof raw[id] === "object" ? (raw[id] as { scrollSpeed?: unknown }).scrollSpeed : undefined;
       placement.scrollSpeed = normalizeReplayMasterScrollSpeed(rawSpeed);
       placement.transparentBackground = (raw[id] as { transparentBackground?: unknown } | undefined)?.transparentBackground === true;
+      placement.followSv = (raw[id] as { followSv?: unknown } | undefined)?.followSv === true;
     }
     settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
       || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])

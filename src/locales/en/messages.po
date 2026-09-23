@@ -6741,6 +6741,10 @@ msgstr "Flip vertical"
 #~ msgid "Folders are kept with your account, so sign in to make one."
 #~ msgstr "Folders are kept with your account, so sign in to make one."
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Follow SV changes"
+msgstr "Follow SV changes"
+
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "for"

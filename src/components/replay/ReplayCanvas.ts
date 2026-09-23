@@ -5093,13 +5093,16 @@ export class ManiaReplayRenderer {
     const height = 384 * scale;
     const frame = this.getOverlayFrame(layout, "replayMaster", width, height);
     if (!frame) return;
-    this.replayMasterTimeline ??= buildReplayMasterTimeline(this.notes, this.noteStates, this.segments, this.modRate);
+    this.replayMasterTimeline ??= buildReplayMasterTimeline(this.notes, this.noteStates, this.segments);
     if (!this.overlaySettings.replayMaster.transparentBackground) {
       this.fillRect(frame.x, frame.y, width, height, "#000000", 1);
     }
     drawReplayMasterTimeline(this.replayMasterTimeline, this.currentTime, this.modRate, this.keyCount, width, height,
       (x, y, w, h, color) => this.fillRect(frame.x + x, frame.y + y, w, h, color, 1),
-      this.overlaySettings.replayMaster.scrollSpeed);
+      this.overlaySettings.replayMaster.scrollSpeed,
+      this.overlaySettings.replayMaster.followSv
+        ? { position: (time) => this.getScrollPosition(time), minVelocity: this.scrollVelocityMinMultiplier }
+        : undefined);
   }
 
   private renderMissOverlay(layout: Layout) {

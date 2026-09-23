@@ -71,13 +71,13 @@ describe("replay overlay settings", () => {
   it("adds Replay Master to old settings without enabling it and preserves its saved placement", () => {
     expect(normalizeReplayOverlaySettings({}).replayMaster.enabled).toBe(false);
     const placement = { enabled: true, x: 0.64, y: 0.12, scale: 1.3 };
-    expect(normalizeReplayOverlaySettings(JSON.parse(JSON.stringify({ replayMaster: placement }))).replayMaster).toEqual({ ...placement, scrollSpeed: 1, transparentBackground: false });
+    expect(normalizeReplayOverlaySettings(JSON.parse(JSON.stringify({ replayMaster: placement }))).replayMaster).toEqual({ ...placement, scrollSpeed: 1, transparentBackground: false, followSv: false });
   });
 
-  it("preserves Replay Master speed and transparency through saved settings", () => {
-    const placement = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.replayMaster, scrollSpeed: 0.5, transparentBackground: true };
+  it("preserves Replay Master speed, transparency and SV through saved settings", () => {
+    const placement = { ...DEFAULT_REPLAY_OVERLAY_SETTINGS.replayMaster, scrollSpeed: 0.5, transparentBackground: true, followSv: true };
     expect(normalizeReplayOverlaySettings(JSON.parse(JSON.stringify({ replayMaster: placement }))).replayMaster).toEqual(placement);
-    expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: NaN, transparentBackground: "true" } }).replayMaster).toMatchObject({ scrollSpeed: 1, transparentBackground: false });
+    expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: NaN, transparentBackground: "true", followSv: "true" } }).replayMaster).toMatchObject({ scrollSpeed: 1, transparentBackground: false, followSv: false });
     expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: 0 } }).replayMaster.scrollSpeed).toBe(0.25);
     expect(normalizeReplayOverlaySettings({ replayMaster: { scrollSpeed: 100 } }).replayMaster.scrollSpeed).toBe(3);
   });

@@ -6710,6 +6710,10 @@ msgstr "Voltear verticalmente"
 #~ msgid "Folders are kept with your account, so sign in to make one."
 #~ msgstr "Las carpetas se guardan con tu cuenta, así que inicia sesión para crear una."
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Follow SV changes"
+msgstr "Seguir cambios de SV"
+
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "para"

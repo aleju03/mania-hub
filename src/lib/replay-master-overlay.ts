@@ -5,7 +5,7 @@
 // License: public/licenses/mania-replay-master.txt
 import type { ManiaNote } from "./beatmap-parser";
 import type { Judgment, ReplayNoteState, ReplaySegment } from "#replay-judge/mania-replay-judgement";
-import { REPLAY_MASTER_MIN_SCROLL_SPEED, normalizeReplayMasterScrollSpeed } from "./replay-overlays";
+import { normalizeReplayMasterScrollSpeed } from "./replay-overlays";
 
 export const REPLAY_MASTER_COLORS: Record<Judgment, string> = {
   0: "#646464", 1: "#ffffff", 2: "#ffd237", 3: "#79d020",
@@ -41,7 +41,6 @@ export function buildReplayMasterTimeline(
   notes: ManiaNote[],
   states: ReplayNoteState[],
   segments: ReplaySegment[][],
-  rate: number,
 ): ReplayMasterTimeline {
   const shapes: MasterShape[] = [];
   const actions = segments.map((column, columnIndex) => column.map((segment) => ({
@@ -107,14 +106,19 @@ export function buildReplayMasterTimeline(
   }
   shapes.sort((a, b) => a.start - b.start);
   let maxEnd = -Infinity;
-  // Index enough padding for fixed-height marks at the slowest supported
-  // scroll speed. Speed changes can reuse the timeline without rejudging.
-  const markPadding = (40 / 1.2) * rate / REPLAY_MASTER_MIN_SCROLL_SPEED;
-  const maxEnds = shapes.map((shape) => (maxEnd = Math.max(maxEnd, shape.end + markPadding)));
+  // Speed and SV changes can reuse the timeline without rejudging; the
+  // drawer pads the lookup for fixed-height marks itself.
+  const maxEnds = shapes.map((shape) => (maxEnd = Math.max(maxEnd, shape.end)));
   return { shapes, maxEnds };
 }
 
 export type ReplayMasterDrawRect = (x: number, y: number, width: number, height: number, color: string) => void;
+
+// The playfield's SV-scaled distance in ms, strictly increasing with time.
+export interface ReplayMasterScroll {
+  position: (time: number) => number;
+  minVelocity: number;
+}
 
 export function drawReplayMasterTimeline(
   timeline: ReplayMasterTimeline,
@@ -125,16 +129,20 @@ export function drawReplayMasterTimeline(
   height: number,
   draw: ReplayMasterDrawRect,
   scrollSpeed = 1,
+  scroll?: ReplayMasterScroll,
 ): void {
   // Match the reference's 540x960 panel, constant-time scroll and geometry.
   // It previews the annotated replay ahead of the current time at the bottom.
   const scale = height / 960;
   const pixelsPerMs = 1.2 * scale * normalizeReplayMasterScrollSpeed(scrollSpeed) / rate;
-  const maxTime = time + height / pixelsPerMs;
   const columnWidth = width / keyCount;
   const stroke = 5 * scale;
   const actionHeight = 7 * scale;
-  const yAt = (at: number) => height - (at - time) * pixelsPerMs;
+  const position = scroll?.position ?? ((at: number) => at);
+  const now = position(time);
+  const yAt = (at: number) => height - (position(at) - now) * pixelsPerMs;
+  // A note outline can still show 40px after its start has scrolled past.
+  const lookBehind = 40 * scale / (pixelsPerMs * Math.max(0.01, scroll?.minVelocity ?? 1));
   const clipped = (x: number, y: number, w: number, h: number, color: string) => {
     const top = Math.max(0, y);
     const bottom = Math.min(height, y + h);
@@ -144,18 +152,18 @@ export function drawReplayMasterTimeline(
   let hi = timeline.maxEnds.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (timeline.maxEnds[mid] < time) lo = mid + 1;
+    if (timeline.maxEnds[mid] < time - lookBehind) lo = mid + 1;
     else hi = mid;
   }
   // Outlines first, then input bars/trails, as in the original renderer.
   for (const notesPass of [true, false]) {
     for (let i = lo; i < timeline.shapes.length; i++) {
       const shape = timeline.shapes[i];
-      if (shape.start > maxTime) break;
+      const bottom = yAt(shape.start);
+      if (bottom < 0) break;
       if ((shape.kind === "note") !== notesPass) continue;
       const color = REPLAY_MASTER_COLORS[shape.judgment];
       const x = shape.column * columnWidth;
-      const bottom = yAt(shape.start);
       const markHeight = shape.kind === "note" ? 40 * scale : shape.kind === "hold" ? 0 : actionHeight;
       const top = Math.min(yAt(shape.end), bottom - markHeight);
       if (top >= height) continue;

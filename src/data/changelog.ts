@@ -20,6 +20,8 @@ export interface ChangelogUpdate {
   text: string;
   /** A word in the text to highlight with a gentle letter wave. */
   emphasis?: string;
+  /** A button or option name inside the text, set in italics. */
+  label?: string;
   /** Link a named reference inside the text to its original source. */
   reference?: { text: string; href: string };
   /** Optional in-app path, which makes the whole row clickable. */
@@ -33,9 +35,10 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-22", text: "Added a 4K+7K column to the rankings that adds up each player's 4K and 7K pp, and you can sort by it.", to: "/rankings" },
-  { date: "2026-09-22", text: "Added new styles to the Skill radar dynamic render.", to: "/dynamic-renders" },
-  { date: "2026-09-22", text: "Fixed the 7K Gamma, Azimuth and Zenith dan emblems showing up empty on dynamic renders.", to: "/dynamic-renders" },
+  { date: "2026-09-23", text: "Added a Follow SV changes option to the Mania Replay Master overlay in replays.", label: "Follow SV changes", to: "/replay" },
+  { date: "2026-09-23", text: "Added a 4K+7K column to the rankings that adds up each player's 4K and 7K pp, and you can sort by it.", to: "/rankings" },
+  { date: "2026-09-23", text: "Added new styles to the Skill radar dynamic render.", to: "/dynamic-renders" },
+  { date: "2026-09-23", text: "Fixed the 7K Gamma, Azimuth and Zenith dan emblems showing up empty on dynamic renders.", to: "/dynamic-renders" },
   { date: "2026-09-21", text: "Two new pack options in settings: \"Skip animations\" shows your cards with a quick fade instead of the full reveal, and \"Always reveal all\" deals every card out at once instead of one at a time.", to: "/settings" },
   { date: "2026-09-21", text: "Stage art and the health bar from your skin can be moved, resized or hidden in replays, like the other overlays.", to: "/replay" },
   { date: "2026-09-21", text: "Skins with animated notes now animate in the replay viewer.", to: "/skins" },

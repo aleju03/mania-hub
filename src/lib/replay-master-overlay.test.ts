@@ -20,7 +20,7 @@ function render(timeline: ReturnType<typeof buildReplayMasterTimeline>, time: nu
 
 describe("Mania Replay Master overlay", () => {
   it("adjusts scrolling independently while keeping notes and input bars the same thickness", () => {
-    const timeline = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1020, end: 1050 }]], 1);
+    const timeline = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1020, end: 1050 }]]);
     const normal = render(timeline, 900);
     const slow = render(timeline, 900, 1, 0.5);
     const fast = render(timeline, 900, 1, 2);
@@ -34,7 +34,7 @@ describe("Mania Replay Master overlay", () => {
     expect(render(timeline, 1100, 1, 0.25).length).toBeGreaterThan(0);
   });
   it("draws actual raw input offsets even when stable interpolates judgement time", () => {
-    const timeline = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1028, end: 1050 }]], 1);
+    const timeline = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1028, end: 1050 }]]);
     expect(timeline.shapes.find((shape) => shape.kind === "press")).toMatchObject({ start: 1028, judgment: 2 });
     const rects = render(timeline, 600);
     const press = rects.find((rect) => Math.abs(rect.width - 21.6) < 0.01)!;
@@ -43,7 +43,7 @@ describe("Mania Replay Master overlay", () => {
   });
 
   it("keeps missed notes and stray inputs distinct without inventing timeout presses", () => {
-    const timeline = buildReplayMasterTimeline([note(1000)], [state({ headJudgment: 6, headTime: 1150, releaseTime: 0 })], [[{ start: 800, end: 810 }]], 1);
+    const timeline = buildReplayMasterTimeline([note(1000)], [state({ headJudgment: 6, headTime: 1150, releaseTime: 0 })], [[{ start: 800, end: 810 }]]);
     expect(timeline.shapes.filter((shape) => shape.kind === "press")).toEqual([
       expect.objectContaining({ start: 800, judgment: 6 }),
     ]);
@@ -55,7 +55,7 @@ describe("Mania Replay Master overlay", () => {
     const timeline = buildReplayMasterTimeline([note(1000, 2000)], [state({
       stableMatchedSegmentIndex: 0, stableTailSegmentIndex: 1,
       heldSegments: segments, releaseTime: 1950, tailJudgment: 3, tailTime: 1950,
-    })], [segments], 1);
+    })], [segments]);
     expect(timeline.shapes.filter((shape) => shape.kind === "hold")).toMatchObject([
       { start: 1020, end: 1300 }, { start: 1400, end: 1950 },
     ]);
@@ -66,14 +66,14 @@ describe("Mania Replay Master overlay", () => {
   it("keeps re-grab trails when separate-head/tail scoring only provides interpolated head timing", () => {
     const timeline = buildReplayMasterTimeline([note(1000, 2000)], [state({
       releaseTime: 1950, tailJudgment: 3, tailTime: 1950,
-    })], [[{ start: 1028, startPrevious: 1016, end: 1300 }, { start: 1400, end: 1950 }]], 1);
+    })], [[{ start: 1028, startPrevious: 1016, end: 1300 }, { start: 1400, end: 1950 }]]);
     expect(timeline.shapes.filter((shape) => shape.kind === "hold")).toHaveLength(2);
     expect(timeline.shapes.find((shape) => shape.kind === "press" && shape.start === 1028)?.judgment).toBe(2);
   });
 
   it.each([0.75, 1.5])("scales map time by rate %s while preserving visual hit offsets", (rate) => {
-    const normal = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1020, end: 1050 }]], 1);
-    const modified = buildReplayMasterTimeline([note(1000 * rate)], [state({ headTime: 1020 * rate, releaseTime: 1050 * rate })], [[{ start: 1020 * rate, end: 1050 * rate }]], rate);
+    const normal = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1020, end: 1050 }]]);
+    const modified = buildReplayMasterTimeline([note(1000 * rate)], [state({ headTime: 1020 * rate, releaseTime: 1050 * rate })], [[{ start: 1020 * rate, end: 1050 * rate }]]);
     const expected = render(normal, 600);
     const actual = render(modified, 600 * rate, rate);
     expect(actual).toHaveLength(expected.length);
@@ -85,11 +85,26 @@ describe("Mania Replay Master overlay", () => {
     });
   });
 
+  it("follows the playfield's SV so inputs line up with the keypress overlay", () => {
+    const timeline = buildReplayMasterTimeline([note(1000)], [state()], [[{ start: 1020, end: 1050 }]]);
+    const press = (rects: ReturnType<typeof render>) => rects.find((rect) => Math.abs(rect.width - 21.6) < 0.01)!;
+    const normal = press(render(timeline, 900));
+    // Half speed from 950 onward: 50ms at 1x plus 70ms at 0.5x.
+    const position = (time: number) => (time <= 950 ? time : 950 + (time - 950) * 0.5);
+    const rects: ReturnType<typeof render> = [];
+    drawReplayMasterTimeline(timeline, 900, 1, 4, 216, 384, (x, y, width, height, color) => {
+      rects.push({ x, y, width, height, color });
+    }, 1, { position, minVelocity: 0.5 });
+    const slowed = press(rects);
+    expect(slowed.height).toBeCloseTo(normal.height);
+    expect(384 - slowed.y - slowed.height).toBeCloseTo((384 - normal.y - normal.height) * 85 / 120);
+  });
+
   it("clips long holds without closing their outlines at the viewport edges and supports backwards seeks", () => {
     const timeline = buildReplayMasterTimeline([note(0, 60000)], [state({
       headTime: 0, releaseTime: 60000, tailJudgment: 1, tailTime: 60000,
       stableMatchedSegmentIndex: 0, stableTailSegmentIndex: 0,
-    })], [[{ start: 0, end: 60000 }]], 1);
+    })], [[{ start: 0, end: 60000 }]]);
     const before = render(timeline, 30000);
     expect(before.length).toBeGreaterThan(10);
     expect(before.every((rect) => rect.y >= 0 && rect.y + rect.height <= 384)).toBe(true);

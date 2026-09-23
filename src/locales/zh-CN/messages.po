@@ -6719,6 +6719,10 @@ msgstr "垂直翻转"
 #~ msgid "Folders are kept with your account, so sign in to make one."
 #~ msgstr "文件夹保存在你的账号里，登录后即可创建。"
 
+#: src/components/replay/ReplayMasterOverlayControls.tsx
+msgid "Follow SV changes"
+msgstr "跟随 SV 变化"
+
 #: src/routes/farm-helper.tsx
 msgid "for"
 msgstr "为"

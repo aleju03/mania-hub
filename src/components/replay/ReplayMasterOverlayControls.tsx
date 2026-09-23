@@ -36,6 +36,15 @@ export function ReplayMasterOverlayControls({ placement, onChange }: { placement
         />
         <Trans>Transparent background</Trans>
       </label>
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          checked={placement.followSv === true}
+          onChange={(event) => onChange({ followSv: event.target.checked })}
+          className="accent-osu-pink"
+        />
+        <Trans>Follow SV changes</Trans>
+      </label>
     </div>
   );
 }

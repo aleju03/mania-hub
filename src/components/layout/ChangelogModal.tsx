@@ -37,17 +37,30 @@ function UpdateText({ update }: { update: ChangelogUpdate }) {
     return () => animation.stop();
   }, [animate, emphasis, reduceMotion, scope, start]);
 
+  const renderLabel = (value: string) => {
+    const label = update.label;
+    const labelStart = label ? value.indexOf(label) : -1;
+    if (!label || labelStart === -1) return value;
+    return (
+      <>
+        {value.slice(0, labelStart)}
+        <em>{label}</em>
+        {value.slice(labelStart + label.length)}
+      </>
+    );
+  };
+
   const renderText = (value: string) => {
     const reference = update.reference;
     const referenceStart = reference ? value.indexOf(reference.text) : -1;
-    if (!reference || referenceStart === -1) return value;
+    if (!reference || referenceStart === -1) return renderLabel(value);
     return (
       <>
-        {value.slice(0, referenceStart)}
+        {renderLabel(value.slice(0, referenceStart))}
         <a href={reference.href} target="_blank" rel="noopener noreferrer" className="text-osu-pink underline underline-offset-2 hover:text-osu-pink-light">
           {reference.text}
         </a>
-        {value.slice(referenceStart + reference.text.length)}
+        {renderLabel(value.slice(referenceStart + reference.text.length))}
       </>
     );
   };
