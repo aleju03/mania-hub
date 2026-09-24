@@ -49,6 +49,7 @@ import { ShowcaseCards } from "./ShowcaseCards";
    goes near the owner-scoped collection routes. */
 
 const PAGE_SIZE = 24;
+type CardPool = "all" | "players" | "teams";
 
 /* Pages of somebody else's shelf, held for as long as the tab is open and
    warmed one page ahead of wherever the visitor is. Paging is the whole
@@ -67,8 +68,9 @@ function shelfPageKey(
   tier: ManiaCardTier | "all",
   mark: PackCardMark | null,
   query: string,
+  pool: CardPool,
 ) {
-  return `${userId}:${page}:${tier}:${mark ?? ""}:${query}`;
+  return `${userId}:${page}:${tier}:${mark ?? ""}:${pool}:${query}`;
 }
 
 /* Pages already on the wire, so a turn taken before the warm behind it lands
@@ -81,13 +83,14 @@ function loadShelfPage(
   tier: ManiaCardTier | "all",
   mark: PackCardMark | null,
   query: string,
+  pool: CardPool,
 ): Promise<LivePackCommunityCollectionPage> {
-  const key = shelfPageKey(userId, page, tier, mark, query);
+  const key = shelfPageKey(userId, page, tier, mark, query, pool);
   const held = shelfPageCache.get(key);
   if (held) return Promise.resolve(held);
   const inFlight = shelfPageRequests.get(key);
   if (inFlight) return inFlight;
-  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query })
+  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query, pool })
     .then((next) => {
       rememberShelfPage(key, next);
       return next;
@@ -331,6 +334,7 @@ export function CollectorShelf({ collector, tab }: {
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [tier, setTier] = useState<ManiaCardTier | "all">("all");
+  const [pool, setPool] = useState<CardPool>("all");
   /* One mark at a time, or none. A chip is a toggle rather than a row with
      an "all" because none of them is the resting state. */
   const [mark, setMark] = useState<PackCardMark | null>(null);
@@ -392,7 +396,7 @@ export function CollectorShelf({ collector, tab }: {
      new filter is paired with the old page index, and the read below would
      spend a request (and a warm behind it) on a page that is already on its
      way out. */
-  const filterKey = `${tier}:${mark ?? ""}:${debounced}`;
+  const filterKey = `${tier}:${mark ?? ""}:${pool}:${debounced}`;
   const [pagedFilter, setPagedFilter] = useState(filterKey);
   if (pagedFilter !== filterKey) {
     setPagedFilter(filterKey);
@@ -400,7 +404,7 @@ export function CollectorShelf({ collector, tab }: {
   }
 
   const ownerUserId = profile?.collector.userId ?? null;
-  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced) : null;
+  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced, pool) : null;
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a frame later. */
   const cachedPage = requestKey ? shelfPageCache.get(requestKey) ?? null : null;
@@ -418,7 +422,7 @@ export function CollectorShelf({ collector, tab }: {
         setPrefetched([]);
         return;
       }
-      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced)
+      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced, pool)
         .then((next) => {
           if (!cancelled) setPrefetched(next.cards as CollectedCard[]);
         })
@@ -439,7 +443,7 @@ export function CollectorShelf({ collector, tab }: {
     setCardsLoading(true);
     // Whatever was warmed sat next to a page that is no longer on screen.
     setPrefetched([]);
-    loadShelfPage(ownerUserId, page, tier, mark, debounced)
+    loadShelfPage(ownerUserId, page, tier, mark, debounced, pool)
       .then((next) => {
         if (cancelled) return;
         setCardPage(next);
@@ -452,7 +456,7 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, requestKey, page, tier, mark, debounced]);
+  }, [ownerUserId, requestKey, page, tier, mark, debounced, pool]);
 
   /* Mints the next page's faces into the shared thumbnail cache while this
      one is being read, so a turn lands on cards rather than on sketches. */
@@ -466,7 +470,7 @@ export function CollectorShelf({ collector, tab }: {
      says what the visitor is looking at. The shelf as opened is skipped: the
      pageview already recorded that, and a filter change is one event because
      the reset to page one happens in the same render. */
-  const browseKey = `${tier}:${mark ?? ""}:${debounced}:${page}`;
+  const browseKey = `${filterKey}:${page}`;
   const browsedKey = useRef(browseKey);
   useEffect(() => {
     if (browsedKey.current === browseKey) return;
@@ -477,6 +481,7 @@ export function CollectorShelf({ collector, tab }: {
         collector: profile?.collector.username ?? collectorLabel,
         tierLabel: TIER_FILTERS.find((filter) => filter.id === tier)?.label ?? null,
         markLabel: mark ? markLabels[mark] : null,
+        pool,
         query: debounced,
         page,
       }),
@@ -558,6 +563,7 @@ export function CollectorShelf({ collector, tab }: {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
   const tierCounts = shownPage?.tierCounts ?? {};
+  const availableTierCounts = shownPage?.filterCounts?.tiers ?? tierCounts;
 
   return (
     <div>
@@ -601,7 +607,7 @@ export function CollectorShelf({ collector, tab }: {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={t`Find a player`}
+              placeholder={pool === "players" ? t`Find a player` : pool === "teams" ? t`Find a team` : t`Find a player or team`}
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/50 py-1.5 pl-7 pr-2 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1 focus:border-osu-pink/50"
             />
           </label>
@@ -609,13 +615,15 @@ export function CollectorShelf({ collector, tab }: {
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {TIER_FILTERS.filter(
-            (filter) => filter.id === "all" || filter.id === tier || (tierCounts[filter.id] ?? 0) > 0,
+            (filter) => filter.id === "all" || filter.id === tier || (availableTierCounts[filter.id] ?? 0) > 0,
           ).map((filter) => (
             <button
               key={filter.id}
               type="button"
               onClick={() => setTier(filter.id)}
-              className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              aria-pressed={tier === filter.id}
+              disabled={filter.id !== "all" && filter.id !== tier && !(tierCounts[filter.id] ?? 0)}
+              className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:cursor-default disabled:opacity-35 ${
                 tier === filter.id ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
               }`}
               style={
@@ -625,20 +633,43 @@ export function CollectorShelf({ collector, tab }: {
               }
             >
               {filter.label}
-              {filter.id !== "all" && tierCounts[filter.id] ? (
-                <span translate="no" className="ml-1 tabular-nums opacity-60">{tierCounts[filter.id]}</span>
+              {filter.id !== "all" ? (
+                <span translate="no" className="ml-1 inline-block text-right tabular-nums opacity-60" style={{ width: `${String(availableTierCounts[filter.id] ?? 0).length}ch` }}>{tierCounts[filter.id] ?? 0}</span>
               ) : null}
             </button>
           ))}
         </div>
 
-        <MarkFilters
-          className="mt-2"
-          value={mark}
-          counts={shownPage?.markCounts}
-          onChange={setMark}
-          selfFace={profile.collector.avatarUrl}
-        />
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <MarkFilters
+            value={mark}
+            counts={shownPage?.markCounts}
+            availableCounts={shownPage?.filterCounts?.marks}
+            onChange={setMark}
+            selfFace={profile.collector.avatarUrl}
+          />
+          {(["players", "teams"] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              aria-pressed={pool === kind}
+              onClick={() => {
+                setPool(pool === kind ? "all" : kind);
+                if (kind === "teams" && mark === "self") setMark(null);
+              }}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                pool === kind ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
+              }`}
+            >
+              {kind === "players" ? t`Players` : t`Teams`}
+              {shownPage && (
+                <span translate="no" className="tabular-nums opacity-60">
+                  {kind === "players" ? shownPage.playerCount ?? profile.collector.cards : shownPage.teamCount ?? 0}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
         <CardGrid
           page={shownPage}

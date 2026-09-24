@@ -6678,9 +6678,17 @@ msgstr "查找玩家"
 msgid "Find a player in your collection"
 msgstr "在你的收藏里查找玩家"
 
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Find a player or team"
+msgstr "查找玩家或战队"
+
 #: src/components/packs/SetsView.tsx
 msgid "Find a set"
 msgstr "查找卡组"
+
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Find a team"
+msgstr "查找战队"
 
 #: src/routes/teams.tsx
 msgid "find a team..."
@@ -12007,6 +12015,7 @@ msgstr "玩家"
 
 #: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -15698,6 +15707,7 @@ msgid "teams"
 msgstr "战队"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/SetsView.tsx
 #: src/lib/packs.ts

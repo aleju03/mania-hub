@@ -8,7 +8,7 @@ import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { MyDataSkillBreakdown } from "./my-data";
-import type { ServerPackCollectionCard } from "./pack-wallet-sync";
+import type { ServerPackCollectionCard, ServerPackCollectionPage } from "./pack-wallet-sync";
 import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { LEADERBOARD_PAGE_SIZE, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import type { UnratedPlaysSnapshot } from "./unrated-plays";
@@ -3603,6 +3603,9 @@ export interface LivePackCommunityCollectionPage {
   tierCounts: Record<string, number>;
   /* Over the whole shelf, like tierCounts, whatever the page was filtered to. */
   markCounts: Record<PackCardMark, number>;
+  filterCounts?: ServerPackCollectionPage["filterCounts"];
+  playerCount?: number;
+  teamCount?: number;
 }
 
 /* What to put in ?collector= for a link into someone's shelf.
@@ -3745,6 +3748,9 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   tier?: string;
   query?: string;
   mark?: PackCardMark | null;
+  /* The public shelf includes teams; the showcase picker reads them
+     separately, so calls without a pool keep the player-only read. */
+  pool?: "all" | "players" | "teams";
 } = {}): Promise<LivePackCommunityCollectionPage> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
@@ -3752,6 +3758,10 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   if (options.tier && options.tier !== "all") query.set("tier", options.tier);
   if (options.query?.trim()) query.set("q", options.query.trim());
   if (options.mark) query.set("mark", options.mark);
+  if (options.pool) {
+    query.set("teams", "1");
+    if (options.pool !== "all") query.set(options.pool === "teams" ? "teamsOnly" : "playersOnly", "1");
+  }
   return fetchLiveJson(`/api/packs/community/collection/${userId}?${query.toString()}`);
 }
 

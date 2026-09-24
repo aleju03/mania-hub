@@ -6700,9 +6700,17 @@ msgstr "Find a player"
 msgid "Find a player in your collection"
 msgstr "Find a player in your collection"
 
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Find a player or team"
+msgstr "Find a player or team"
+
 #: src/components/packs/SetsView.tsx
 msgid "Find a set"
 msgstr "Find a set"
+
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Find a team"
+msgstr "Find a team"
 
 #: src/routes/teams.tsx
 msgid "find a team..."
@@ -12033,6 +12041,7 @@ msgstr "players"
 
 #: src/components/discord/CommandShowcase.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -15728,6 +15737,7 @@ msgid "teams"
 msgstr "teams"
 
 #: src/components/packs/CollectionPanel.tsx
+#: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
 #: src/components/packs/SetsView.tsx
 #: src/lib/packs.ts
