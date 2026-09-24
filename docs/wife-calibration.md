@@ -22,7 +22,7 @@ the existing mod policy; calibration does not bypass eligibility gates.
 | LN quality | Mean Wife3 points on press/release actions, treating a broken hold's tail as failed | Independent 4K LN SSR |
 
 Both retain osu!mania note assignment and hold-failure semantics. Neither is
-an independently played Etterna score. The LN action target is a Mania Hub
+an independently played Etterna score. The LN action target is a site-specific
 extension, not native Etterna Wife3 and not permission to feed tail taps to
 MinaCalc. Etterna's normalized Wife3 curve and separate hold-drop penalty
 are the reference for the press/hold target ([Wife3 function](https://github.com/etternagame/etterna/blob/master/src/RageUtil/Utils/RageUtil.h),

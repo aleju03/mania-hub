@@ -7,7 +7,7 @@ array, a per-hit / per-miss event stream, and the mods/OD/rate config a replay
 simulator needs to reproduce the score.
 
 This script is intentionally standalone: it only uses Python's standard
-library, so it can be copied to Windows and run outside the Mania Hub project.
+library, so it can be copied to Windows and run outside this repo.
 
 Examples:
   py replay_capture_stable.py 6698595595

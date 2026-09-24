@@ -4795,7 +4795,7 @@ async function renderDiscordOg(request: Request): Promise<Response> {
         sticker({
           key: "title",
           text: "maniabot",
-          subText: "MANIA HUB FOR DISCORD",
+          subText: "MANIA TRACKER FOR DISCORD",
           fontSize: 72,
           background: DISCORD_BLURPLE,
           color: "#ffffff",

@@ -1036,10 +1036,6 @@ msgid "{ALBUM_SEASON} series"
 msgstr "{ALBUM_SEASON} 系列"
 
 #: src/routes/companella_.authorize.tsx
-#~ msgid "{appName} needs your Mania Hub account to send plays to."
-#~ msgstr ""
-
-#: src/routes/companella_.authorize.tsx
 msgid "{appName} needs your Mania Tracker account to send plays to."
 msgstr ""
 
@@ -1898,10 +1894,6 @@ msgstr "<0>{0}</0> 个音效"
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
 msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不代表你在这个键数上更差。"
-
-#: src/routes/companella_.authorize.tsx
-#~ msgid "<0>{appName}</0> wants to access your Mania Hub account"
-#~ msgstr ""
 
 #: src/routes/companella_.authorize.tsx
 msgid "<0>{appName}</0> wants to access your Mania Tracker account"
@@ -4623,10 +4615,6 @@ msgstr ""
 #~ msgstr ""
 
 #: src/routes/companella.tsx
-#~ msgid "Connect Companella to Mania Hub and review the plays it imported."
-#~ msgstr ""
-
-#: src/routes/companella.tsx
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
 msgstr ""
 
@@ -5226,10 +5214,6 @@ msgstr "国家/地区 mania 排行榜"
 #: src/components/packs/collections/RecordBoards.tsx
 #~ msgid "country pride"
 #~ msgstr "国家荣耀"
-
-#: src/routes/dan-estimates.tsx
-#~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so Mania Hub cannot look yours up. It can only work from your plays."
-#~ msgstr "段位课题谱面都是未上架的，通过与否由运营该段位表的人来审核。这些信息都不会以段位的形式通过 osu! API 返回，所以 Mania Hub 查不到你的段位，只能从你的成绩来推算。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Course charts are unranked, and a clear is checked by the people who run that ladder. None of that comes back through the osu! API as a dan level, so the site cannot look yours up. It can only look at your plays."
@@ -6370,10 +6354,6 @@ msgstr "退出全屏"
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Experimental local evidence"
 #~ msgstr ""
-
-#: src/components/player/SkillBreakdown.tsx
-#~ msgid "Experimental Mania Hub LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc."
-#~ msgstr "Mania Hub 实验性 LN 估算：松键时机、保持按键时的手指协调，以及松键后再次按键的衔接。与 MinaCalc 并行的独立模型。"
 
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Experimental rating preview"
@@ -9141,18 +9121,6 @@ msgstr "马来语"
 msgid "manager"
 msgstr "管理员"
 
-#: src/routes/dan-estimates.tsx
-#~ msgid "Mania Hub downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
-#~ msgstr "Mania Hub 会下载谱面文件，读取音符，把谱型交给评分引擎来评。用哪个引擎取决于键数，因为没有哪个引擎在所有键数上都最好："
-
-#: src/components/layout/StaleBuildNotice.tsx
-#~ msgid "Mania Hub just updated"
-#~ msgstr "Mania Hub 刚刚更新了"
-
-#: src/components/team/TeamProfilePage.tsx
-#~ msgid "Mania Hub rank"
-#~ msgstr "Mania Hub 排名"
-
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -11760,10 +11728,6 @@ msgstr "暂停试听"
 #: src/routes/player/$username.tsx
 msgid "Peak"
 msgstr "最高"
-
-#: src/components/team/TeamProfilePage.tsx
-#~ msgid "Peak Mania Hub rank"
-#~ msgstr "Mania Hub 最高排名"
 
 #: src/routes/farm-helper/map/$beatmapId.tsx
 msgid "peers farming"
@@ -16913,10 +16877,6 @@ msgstr "这些是目前会核对的图包，按谱面匹配。通过必须发生
 #: src/routes/dan-estimates.tsx
 #~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, every chart gets a dan level of its own, and your level is read from the charts you have already passed. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "这些估算都不是真正的段位通过，这里的玩家都没有接受过段位课题认定。取而代之的是，每张谱面都会得到自己的段位，再根据你已经通过的谱面推算你的水平。因此，每个估算段位前都会带「~」，排行榜也因此只被称作粗略排序。"
-
-#: src/routes/dan-estimates.tsx
-#~ msgid "These estimates are not real dan clears. Nobody here has been checked against a dan course. Instead, Mania Hub gives every chart a dan level of its own, looks at the charts you have already passed, and reads a level off them. That is why every estimated dan is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
-#~ msgstr "这些估算不是真正的段位通过。这里没有人真的被段位课题检验过。Mania Hub 的做法是给每张谱面各自评一个段位，看你已经通过了哪些谱面，再从中读出一个等级。这就是为什么每个估算段位前面都写着「~」，排行榜也自称只是粗略排序。"
 
 #. placeholder {0}: forgeTierLabel(forgeSelection.targetTier)
 #: src/components/packs/CollectionPanel.tsx

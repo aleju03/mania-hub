@@ -142,7 +142,7 @@ The older live metrics keep their underlying counts but use literal labels: **Ho
 
 ## Dynamic renders
 
-`/admin/dynamic-renders` combines signature-background moderation with an on-demand player preview. The preview search calls the normal live-backend profile `/snapshot` route so an explicit admin lookup can warm a player Mania Hub has never stored, then draws every layout for the selected type through the same `/api/signature-preview` endpoint the player editor uses. Supplying a target player to that endpoint is accepted only when the signed session has `canUseAdminFeatures`; ordinary users remain locked to their own osu! id. Preview renders use the type's default style, write no signature settings or R2 image, and return `private, no-store` PNGs.
+`/admin/dynamic-renders` combines signature-background moderation with an on-demand player preview. The preview search calls the normal live-backend profile `/snapshot` route so an explicit admin lookup can warm a player the site has never stored, then draws every layout for the selected type through the same `/api/signature-preview` endpoint the player editor uses. Supplying a target player to that endpoint is accepted only when the signed session has `canUseAdminFeatures`; ordinary users remain locked to their own osu! id. Preview renders use the type's default style, write no signature settings or R2 image, and return `private, no-store` PNGs.
 
 ## BBCode image audit
 

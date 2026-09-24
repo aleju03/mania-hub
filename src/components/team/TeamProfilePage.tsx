@@ -15,6 +15,7 @@ import {
   fetchLiveTeamSkillsDirect,
   fetchLiveTeamSnapshotDirect,
   isLiveBackendConfigured,
+  LiveBackendRequestError,
   type LiveTeamCard,
   type LiveTeamMember,
   type LiveTeamProfileSnapshot,
@@ -200,24 +201,36 @@ export function TeamProfilePage({
       return;
     }
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     setFullLoaded(false);
     setMissing(false);
     setError(null);
-    fetchLiveTeamSnapshotDirect(teamId)
-      .then((next) => {
-        if (cancelled) return;
-        if (!next) {
-          setMissing(true);
-          return;
-        }
-        setSnapshot(next);
-        setFullLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setError(t`Couldn't load this team right now.`);
-      });
+    const load = () => {
+      fetchLiveTeamSnapshotDirect(teamId)
+        .then((next) => {
+          if (cancelled) return;
+          if (!next) {
+            setMissing(true);
+            return;
+          }
+          setSnapshot(next);
+          setFullLoaded(true);
+        })
+        .catch((loadError) => {
+          if (cancelled) return;
+          // Too many teams opened at once: keep loading and try again when
+          // the server says a slot frees up.
+          if (loadError instanceof LiveBackendRequestError && loadError.status === 429) {
+            retryTimer = setTimeout(load, Math.min(60_000, Math.max(2_000, loadError.retryAfterMs ?? 10_000)));
+            return;
+          }
+          setError(t`Couldn't load this team right now.`);
+        });
+    };
+    load();
     return () => {
       cancelled = true;
+      clearTimeout(retryTimer);
     };
   }, [teamId]);
 
