@@ -47,7 +47,7 @@ export const AnalyticsInsights = memo(function AnalyticsInsights({
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <CountriesCard rows={data.topPhysicalCountries} range={range} />
+        <CountriesCard rows={data.topPhysicalCountries.slice(0, 20)} range={range} />
         <ReferrersCard rows={data.topReferrers} range={range} />
         <TopRoutesCard rows={data.topRoutes} range={range} />
       </div>
