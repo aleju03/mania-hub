@@ -133,7 +133,7 @@ interface CollectionPanelProps {
     teamsOnly: boolean;
     playersOnly: boolean;
   }) => number | Promise<number>;
-  onRecycleAll: () => number | Promise<number>;
+  onRecycleAll: (scope?: { teamsOnly: boolean; playersOnly: boolean }) => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
   onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
   /* Present for a synced collection only: what the card menu's "Add to
@@ -497,6 +497,13 @@ export function CollectionPanel({
   const applyCardKind = (kind: CollectionCardKind | null) => {
     setChosenCardKind(kind);
     writeStoredCollectionKind(kind);
+    setCollectionPage(0);
+    setMissingPageIndex(0);
+    setMissingPage(null);
+    setQuery("");
+    setTierFilter("all");
+    setDuplicatesOnly(false);
+    exitSelecting();
   };
   // Safe to read storage in the initializer: the panel renders null until the
   // wallet hydrates, so its first real render is already client-side.
@@ -657,7 +664,7 @@ export function CollectionPanel({
     recycleAllTimerRef.current = window.setTimeout(() => {
       recycleAllTimerRef.current = null;
       setHoldingRecycleAll(false);
-      runRecycle(() => onRecycleAll(), anchor);
+      runRecycle(() => useServerCollection ? onRecycleAll({ teamsOnly, playersOnly }) : onRecycleAll(), anchor);
     }, RECYCLE_ALL_HOLD_MS);
   };
   const cancelRecycleAllHold = () => {
@@ -853,6 +860,8 @@ export function CollectionPanel({
   // carries them. Keeping them across filter switches stops the rarity chips
   // from flashing and lets the loading skeletons match the real per-rarity counts.
   const serverTierCounts = serverMetaPage?.tierCounts ?? serverPage?.page.tierCounts ?? {};
+  const filterCounts = serverMetaPage?.filterCounts ?? serverPage?.page.filterCounts;
+  const availableTierCounts = filterCounts?.tiers ?? serverTierCounts;
   // Like tierCounts, pool progress describes the whole collection, so any
   // loaded page's copy is current enough to keep the header from flashing.
   const serverPoolProgress = useServerCollection
@@ -873,7 +882,7 @@ export function CollectionPanel({
     ? serverMetaPage?.teamPoolTotal ?? serverPage?.page.teamPoolTotal ?? 0
     : 0;
   const teamsOwned = Math.max(0, teamPoolTotal - teamMissingCount);
-  const missingCount = poolMissingCount + teamMissingCount + goatMissingCount;
+  const missingCount = teamsOnly ? teamMissingCount : poolMissingCount + goatMissingCount + (playersOnly ? 0 : teamMissingCount);
   const [showMissing, setShowMissing] = useState(false);
   const missingOpen = showMissing && useServerCollection;
   const [missingPageIndex, setMissingPageIndex] = useState(0);
@@ -907,13 +916,9 @@ export function CollectionPanel({
     if (duplicatesOnly && duplicateCardCount === 0) setDuplicatesOnly(false);
   }, [duplicatesOnly, duplicateCardCount]);
   const teamCount = useServerCollection ? serverMetaPage?.teamCount ?? serverPage?.page.teamCount ?? 0 : 0;
-  // And the teams and players chips, once the last team is recycled.
-  useEffect(() => {
-    if (cardKind && serverMetaPage && teamCount === 0) applyCardKind(null);
-  }, [cardKind, serverMetaPage, teamCount]);
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
-    ? Object.keys(serverTierCounts)
+    ? Object.keys(availableTierCounts)
         .map((tier) => (tier === "unrated" ? null : tier as ManiaCardTier))
         .sort((a, b) => tierRank(b) - tierRank(a))
     : [...new Set(localCards.map((card) => card.tier))].sort((a, b) => tierRank(b) - tierRank(a));
@@ -948,7 +953,7 @@ export function CollectionPanel({
     : teamsOnly
       ? teamCount
       : playersOnly && !duplicatesOnly && tierFilter === "all"
-      ? Math.max(0, collectionTotal - teamCount)
+      ? collectionTotal
       : duplicatesOnly
       ? duplicateCardCount
       : tierFilter === "all"
@@ -967,12 +972,12 @@ export function CollectionPanel({
   /* The missing list pages on its own index and shares the search box. Its
      last known total keeps the pager on screen while the next page loads,
      the same way the collection's counts do. */
-  const missingRequestKey = `${missingPageIndex}:${trimmedQuery}`;
+  const missingRequestKey = `${cardKind}:${missingPageIndex}:${trimmedQuery}`;
   const activeMissingPage = missingPage?.key === missingRequestKey ? missingPage.page : null;
   // Players then teams, as the endpoint pages them; GOATs follow client-side.
-  const poolMissingTotal = activeMissingPage?.total ?? missingPage?.page.total ?? poolMissingCount + teamMissingCount;
+  const poolMissingTotal = activeMissingPage?.total ?? (teamsOnly ? teamMissingCount : poolMissingCount + (playersOnly ? 0 : teamMissingCount));
   const missingGoatIds = new Set(activeMissingPage?.goatMissingUserIds ?? []);
-  const allMissingGoats = activeMissingPage
+  const allMissingGoats = activeMissingPage && !teamsOnly
     ? HONORARY_PLAYERS.filter((player) => {
         if (!missingGoatIds.has(player.id)) return false;
         if (!trimmedQuery) return true;
@@ -985,7 +990,7 @@ export function CollectionPanel({
   /* Before the first missing response, the normal collection page already
      knows the unfiltered GOAT count. A search has to wait for the ids so it
      can match their checked-in names honestly. */
-  const missingGoatTotal = activeMissingPage
+  const missingGoatTotal = teamsOnly ? 0 : activeMissingPage
     ? allMissingGoats.length
     : trimmedQuery
       ? 0
@@ -1150,7 +1155,7 @@ export function CollectionPanel({
     let cancelled = false;
     setMissingFailed(false);
     void fetchServerPackCollectionMissing({
-      data: { page: missingPageIndex, pageSize: COLLECTION_PAGE_SIZE, query: trimmedQuery },
+      data: { page: missingPageIndex, pageSize: COLLECTION_PAGE_SIZE, query: trimmedQuery, pool: teamsOnly ? "teams" : playersOnly ? "players" : "all" },
     })
       .then((page) => {
         if (cancelled) return;
@@ -1163,23 +1168,20 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [missingOpen, missingPageIndex, trimmedQuery, missingRequestKey, serverRefreshKey]);
+  }, [missingOpen, missingPageIndex, trimmedQuery, missingRequestKey, serverRefreshKey, teamsOnly, playersOnly]);
 
 
   if (!wallet) return null;
 
-  // The header and "N missing" answer describe the same complete set: every
-  // ordinary-drawable player, honorary GOAT and drawable team. Keeping GOATs out
-  // of this ratio while adding them to the missing count made the visible
-  // equation disagree (owned + missing != total). Retired and special variant
-  // cards remain outside completion.
+  // Merged by default. The Players and Teams lenses narrow progress and the
+  // missing list to that reward pool; GOATs belong to player completion.
   const goatRosterTotal = HONORARY_PLAYERS.length;
   const goatsOwned = Math.max(0, goatRosterTotal - goatMissingCount);
-  const progressOwned = serverPoolProgress
-    ? serverPoolProgress.poolOwnedCount + goatsOwned + teamsOwned
+  const progressOwned = teamsOnly ? teamsOwned : serverPoolProgress
+    ? serverPoolProgress.poolOwnedCount + goatsOwned + (playersOnly ? 0 : teamsOwned)
     : collectionTotal;
-  const progressPool = serverPoolProgress
-    ? serverPoolProgress.poolTotal + goatRosterTotal + teamPoolTotal
+  const progressPool = teamsOnly ? teamPoolTotal : serverPoolProgress
+    ? serverPoolProgress.poolTotal + goatRosterTotal + (playersOnly ? 0 : teamPoolTotal)
     : wallet.poolTotal !== null
       ? wallet.poolTotal + goatRosterTotal
       : null;
@@ -1205,12 +1207,12 @@ export function CollectionPanel({
               <Trans>{progressCounts} cards</Trans>
             </span>
           </div>
-          {progressPercent !== null && collectionTotal > 0 && (
+          {progressPercent !== null && (
             <div className="mt-1 flex items-center gap-1.5">
               <div className="h-1 w-[140px] overflow-hidden rounded-full bg-osu-b3/40">
                 <div
                   className="h-full rounded-full bg-osu-pink/70 transition-[width] duration-500"
-                  style={{ width: `${Math.max(1, progressPercent)}%` }}
+                  style={{ width: `${Math.max(0, progressPercent)}%` }}
                 />
               </div>
               <span className="text-[10px] text-osu-f1 tabular-nums">
@@ -1357,7 +1359,7 @@ export function CollectionPanel({
         </div>
       ) : null}
 
-      {collectionTotal > 0 && (
+      {(collectionTotal > 0 || missingOpen || useServerCollection) && (
         <>
         <div
           ref={collectionControlsRef}
@@ -1370,7 +1372,7 @@ export function CollectionPanel({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={missingOpen ? t`find a missing player...` : t`find a card...`}
+              placeholder={missingOpen ? t`find a missing card...` : t`find a card...`}
               className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4/40 py-1.5 pl-8 pr-3 text-[12px] text-white placeholder:text-osu-f1/70 outline-none transition-colors focus:border-osu-pink/40"
             />
           </div>
@@ -1408,13 +1410,18 @@ export function CollectionPanel({
               // printed onto the card faces.
               const label = tier === "all" ? t`All` : tier === null ? t`Unrated` : MANIA_TIER_STYLES[tier].label;
               const count = tier === "all" ? collectionTotal : tierCounts.get(tier ?? "unrated") ?? 0;
+              const availableCount = tier === "all"
+                ? useServerCollection ? Object.values(availableTierCounts).reduce((sum, count) => sum + count, 0) : collectionTotal
+                : availableTierCounts[tier ?? "unrated"] ?? count;
+              const countWidth = String(availableCount).length + (tier === "goat" ? 1 + String(HONORARY_PLAYERS.length).length : 0);
               const rgb = tier === "all" || tier === null ? null : tierChipRgb(tier);
               return (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setTierFilter(selected ? "all" : (value as CollectionTierFilter))}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                  disabled={count === 0 && !selected}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors disabled:cursor-default disabled:opacity-35 ${
                     rgb
                       ? selected
                         ? ""
@@ -1429,7 +1436,7 @@ export function CollectionPanel({
                   {label}
                   {/* GOAT is a fixed, finite set, so the count reads as
                       progress against the roster rather than a bare total. */}
-                  <span translate="no" className="font-semibold tabular-nums opacity-60">
+                  <span translate="no" className="text-right font-semibold tabular-nums opacity-60" style={{ width: `${countWidth}ch` }}>
                     {tier === "goat" ? `${count}/${HONORARY_PLAYERS.length}` : count}
                   </span>
                 </button>
@@ -1441,26 +1448,27 @@ export function CollectionPanel({
         {/* The lenses that cut across every rarity, under it rather than
             over it: which rarity you are looking at is the bigger choice, and
             these stay on whichever one is picked. */}
-        {!missingOpen && (
+        {(!missingOpen || useServerCollection) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1" data-select-keep="">
-            <MarkFilters value={mark} counts={markCounts} onChange={(next) => {
+            {!missingOpen && <MarkFilters value={mark} counts={markCounts} availableCounts={filterCounts?.marks} onChange={(next) => {
               setMark(next);
               // A team is never its collector's own card.
-              if (next === "self" && teamsOnly) applyCardKind(null);
-            }} selfFace={viewer?.avatarUrl} />
-            {duplicateCardCount > 0 && (
+              if (next === "self" && teamsOnly) applyCardKind("players");
+            }} selfFace={viewer?.avatarUrl} />}
+            {!missingOpen && (filterCounts?.duplicates ?? duplicateCardCount) > 0 && (
               <button
                 type="button"
                 onClick={() => setDuplicatesOnly((on) => !on)}
-                className={`${lensChipClass} ${duplicatesOnly ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
+                disabled={duplicateCardCount === 0 && !duplicatesOnly}
+                className={`${lensChipClass} disabled:cursor-default disabled:opacity-35 ${duplicatesOnly ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
                 title={t`Cards you hold more than one copy of.`}
                 aria-pressed={duplicatesOnly}
               >
                 <Trans>Duplicates</Trans>
-                <span translate="no" className="tabular-nums opacity-60">{duplicateCardCount}</span>
+                <span translate="no" className="text-right tabular-nums opacity-60" style={{ width: `${String(filterCounts?.duplicates ?? duplicateCardCount).length}ch` }}>{duplicateCardCount}</span>
               </button>
             )}
-            {teamCount > 0 && (
+            {useServerCollection && (
               <button
                 type="button"
                 onClick={() => applyCardKind(playersOnly ? null : "players")}
@@ -1468,10 +1476,10 @@ export function CollectionPanel({
                 aria-pressed={playersOnly}
               >
                 <Trans>Players</Trans>
-                <span translate="no" className="tabular-nums opacity-60">{Math.max(0, collectionTotal - teamCount)}</span>
+                <span translate="no" className="tabular-nums opacity-60">{serverMetaPage?.playerCount ?? serverPage?.page.playerCount ?? Math.max(0, collectionTotal - teamCount)}</span>
               </button>
             )}
-            {teamCount > 0 && (
+            {useServerCollection && (
               <button
                 type="button"
                 onClick={() => {
@@ -1486,16 +1494,17 @@ export function CollectionPanel({
                 <span translate="no" className="tabular-nums opacity-60">{teamCount}</span>
               </button>
             )}
-            {useServerCollection && retiredOwned > 0 && (
+            {!missingOpen && useServerCollection && retiredOwned > 0 && (
               <button
                 type="button"
                 onClick={() => setTierFilter(tierFilter === "untracked" ? "all" : "untracked")}
-                className={`${lensChipClass} ${tierFilter === "untracked" ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
+                disabled={teamsOnly}
+                className={`${lensChipClass} disabled:cursor-default disabled:opacity-35 ${tierFilter === "untracked" ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
                 title={t`Cards you own for players who can no longer be pulled: they are out of the top 100 in every tracked country and have not opted in. They rejoin the pool, and the completion count, if they come back.`}
                 aria-pressed={tierFilter === "untracked"}
               >
                 <Trans>Not tracked</Trans>
-                <span translate="no" className="tabular-nums opacity-60">{retiredOwned}</span>
+                <span translate="no" className="text-right tabular-nums opacity-60" style={{ width: `${String(retiredOwned).length}ch` }}>{teamsOnly ? 0 : retiredOwned}</span>
               </button>
             )}
           </div>
@@ -1569,8 +1578,8 @@ export function CollectionPanel({
           ) : activeMissingPage && missingTotal === 0 ? (
             <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
               {trimmedQuery
-                ? t`No missing player matches "${activeQuery.trim()}".`
-                : t`Nothing missing. Every player in the pool is in your collection.`}
+                ? t`No missing card matches "${activeQuery.trim()}".`
+                : t`Nothing missing. Every card in this pool is in your collection.`}
             </div>
           ) : activeMissingPage?.total || missingGoats.length > 0 ||
             (!activeMissingPage && (pendingMissingTileCount > 0 || pendingGoatTileCount > 0)) ? (

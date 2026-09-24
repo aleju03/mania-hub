@@ -66,7 +66,7 @@ export interface PackWalletApi {
      the pack added. */
   recycleCopies: (entries: Array<{ cardKey: string; copies: number }>) => number | Promise<number>;
   recycleWholeMatching: (filter: PackCollectionFilter) => number | Promise<number>;
-  recycleAll: () => number | Promise<number>;
+  recycleAll: (scope?: { teamsOnly: boolean; playersOnly: boolean }) => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed.
      Resolves false when there was nothing to repair (or the repair failed). */
@@ -502,11 +502,12 @@ export function usePackWallet(): PackWalletApi {
       }
       return recycleMatchingLocally();
     },
-    recycleAll: () => {
+    recycleAll: (scope) => {
       if (syncRef.current.enabled) {
         return (async () => {
-          const gained = await recycleOnServer("all_duplicates");
+          const gained = await recycleOnServer("all_duplicates", undefined, undefined, { tier: "all", query: "", ...scope });
           if (gained !== null) return gained;
+          if (scope?.teamsOnly) return 0;
           const current = walletRef.current;
           if (!current) return 0;
           const result = recycleAllDuplicates(current);

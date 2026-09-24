@@ -6663,8 +6663,12 @@ msgid "find a map"
 msgstr "找谱面"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "find a missing player..."
-msgstr "查找缺失的玩家…"
+msgid "find a missing card..."
+msgstr "查找缺少的卡牌..."
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "find a missing player..."
+#~ msgstr "查找缺失的玩家…"
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Find a player"
@@ -10233,8 +10237,13 @@ msgstr "这个战队还没有成员拥有 Maniacard。"
 
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
-msgid "No missing player matches \"{0}\"."
-msgstr "没有匹配「{0}」的缺失玩家。"
+msgid "No missing card matches \"{0}\"."
+msgstr "没有缺少的卡牌与“{0}”匹配。"
+
+#. placeholder {0}: activeQuery.trim()
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "No missing player matches \"{0}\"."
+#~ msgstr "没有匹配「{0}」的缺失玩家。"
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
@@ -10862,8 +10871,12 @@ msgid "Nothing matched that"
 msgstr "没有匹配的结果"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "Nothing missing. Every player in the pool is in your collection."
-msgstr "没有缺失。卡池里的每位玩家都在你的收藏册里。"
+msgid "Nothing missing. Every card in this pool is in your collection."
+msgstr "没有缺少的卡牌。你已收集此卡池中的所有卡牌。"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Nothing missing. Every player in the pool is in your collection."
+#~ msgstr "没有缺失。卡池里的每位玩家都在你的收藏册里。"
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Nothing missing. Every team in the pool is in your collection."

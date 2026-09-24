@@ -6,7 +6,7 @@
 // resident) are drawn live on top. Rooms live in their own VIEW-sized scene;
 // the world-side door definitions live here too.
 
-import { C, TILE, VIEW_W, VIEW_H, clamp, mulberry32, shade, type Ctx, type Sprite } from "./core";
+import { C, TILE, VIEW_W, VIEW_H, clamp, createCanvas, ctx2d, mulberry32, shade, type Ctx, type Sprite } from "./core";
 import { drawText, textWidth } from "./font";
 import { OUTLINE, disk, ellipse, hash2, line, newSprite, outlineSprite, rect } from "./paint";
 import type { Rect, ValleySprites } from "./sprites";
@@ -639,6 +639,24 @@ function drawShell(ctx: Ctx, f: Rect, paper: Paper, base: string, hour = 12): vo
   rect(ctx, wx + 1, f.y + f.h + SIDE - 2, ww - 2, 1, capL);
 }
 
+// Walls and floors are painted pixel by pixel, far too slow to redo every
+// frame, so each room's background is painted once and reused.
+const bgCache = new Map<string, { canvas: HTMLCanvasElement; x: number; y: number }>();
+function background(ctx: Ctx, key: string, f: Rect, paint: (c: Ctx) => void): void {
+  let e = bgCache.get(key);
+  if (!e) {
+    const x = f.x - SIDE - 4;
+    const y = f.y - WALL_H - 6;
+    const canvas = createCanvas(f.w + SIDE * 2 + 8, f.h + WALL_H + SIDE + 12);
+    const c = ctx2d(canvas);
+    c.translate(-x, -y);
+    paint(c);
+    e = { canvas, x, y };
+    bgCache.set(key, e);
+  }
+  ctx.drawImage(e.canvas, e.x, e.y);
+}
+
 function wallShadow(ctx: Ctx, f: Rect): void {
   ctx.fillStyle = "rgba(20,10,10,0.3)";
   ctx.fillRect(f.x, f.y, f.w, 4);
@@ -923,10 +941,12 @@ function farmhouseInterior(): Interior {
     ],
     drawBase: (ctx, sim, _s, hour) => {
       const k = kit();
-      drawShell(ctx, f, "stripes", "#e8d8b0");
-      woodFloor(ctx, f, 71);
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, "farmhouse", f, (c) => {
+        drawShell(c, f, "stripes", "#e8d8b0");
+        woodFloor(c, f, 71);
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       drawWindow(ctx, f.x + 90, f.y - 34, 18, 14, hour, "#c9564a");
       drawWindow(ctx, f.x + 142, f.y - 34, 18, 14, hour, "#c9564a");
       drawPainting(ctx, f.x + 118, f.y - 33, 14, 10, 7);
@@ -1005,10 +1025,12 @@ function barnInterior(): Interior {
     ],
     drawBase: (ctx, sim) => {
       const k = kit();
-      drawShell(ctx, f, "barn", "#a04438");
-      strawFloor(ctx, f, 55, 260);
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, "barn", f, (c) => {
+        drawShell(c, f, "barn", "#a04438");
+        strawFloor(c, f, 55, 260);
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       spr(ctx, k.toolRack, f.x + f.w - 40, f.y - 34);
       drawLantern(ctx, board.x - 14, f.y - 32, sim.t);
       rect(ctx, shelf.x - 1, f.y - 5, shelf.w + 2, 12, OUTLINE);
@@ -1089,10 +1111,12 @@ function coopInterior(): Interior {
     ],
     drawBase: (ctx, sim, s, hour) => {
       const k = kit();
-      drawShell(ctx, f, "planks", "#b88a55");
-      strawFloor(ctx, f, 77, 320);
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, "coop", f, (c) => {
+        drawShell(c, f, "planks", "#b88a55");
+        strawFloor(c, f, 77, 320);
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       drawWindow(ctx, f.x + 112, f.y - 34, 14, 11, hour, null);
       const total = sim.status?.sseTotal ?? 0;
       // two perch bars; roosting birds sit on them
@@ -1173,10 +1197,12 @@ function windmillInterior(): Interior {
     ],
     drawBase: (ctx, sim, _s, hour) => {
       const k = kit();
-      drawShell(ctx, f, "stone", "#b8b0a8");
-      tileFloor(ctx, f, 88);
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, "windmill", f, (c) => {
+        drawShell(c, f, "stone", "#b8b0a8");
+        tileFloor(c, f, 88);
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       drawWindow(ctx, f.x + 44, f.y - 32, 12, 14, hour, null);
       drawLantern(ctx, f.x + f.w - 44, f.y - 30, sim.t);
       spr(ctx, k.stairs, f.x + 1, f.y - 8);
@@ -1264,10 +1290,12 @@ function siloInterior(): Interior {
       { x: f.x, y: f.y + f.h - 30, w: 34, h: 14 },
     ],
     drawBase: (ctx) => {
-      drawShell(ctx, f, "stone", "#c2bdb6");
-      tileFloor(ctx, f, 21, "#a8a29c");
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, "silo", f, (c) => {
+        drawShell(c, f, "stone", "#c2bdb6");
+        tileFloor(c, f, 21, "#a8a29c");
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       // ladder up the wall + fill marks
       for (let y = f.y - WALL_H + 4; y < f.y; y++) {
         rect(ctx, f.x + f.w - 18, y, 1, 1, "#6a6560");
@@ -1339,10 +1367,12 @@ function storeInterior(): Interior {
     ],
     drawBase: (ctx, _sim, _s, hour) => {
       const k = kit();
-      drawShell(ctx, f, "diamonds", "#d8e4d0");
-      woodFloor(ctx, f, 301, 0.04);
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, "store", f, (c) => {
+        drawShell(c, f, "diamonds", "#d8e4d0");
+        woodFloor(c, f, 301, 0.04);
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       for (let i = 0; i < 5; i++) {
         if (i === 2) {
           drawWindow(ctx, f.x + 18 + i * 44 + 6, f.y - 34, 22, 14, hour, "#c9483c");
@@ -1403,10 +1433,12 @@ function greenhouseInterior(): Interior {
     hotspots: beds.map((b) => ({ id: "greenhouse", rect: { x: b.x, y: b.y - 14, w: 92, h: 34 }, label: "PLANTER" })),
     solids: beds.map((b) => ({ x: b.x, y: b.y + 6, w: 92, h: 12 })),
     drawBase: (ctx, _sim, _s, hour) => {
-      drawShell(ctx, f, "glass", "#9fd0ea", hour);
-      tileFloor(ctx, f, 41, "#a8a8a0");
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, `greenhouse-${Math.round(nightAmount(hour) * 2)}`, f, (c) => {
+        drawShell(c, f, "glass", "#9fd0ea", hour);
+        tileFloor(c, f, 41, "#a8a8a0");
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
     },
     drawables: (sim) => {
       const k = kit();
@@ -1497,10 +1529,12 @@ function cottageInterior(index: number, variant: number): Interior {
     drawBase: (ctx, sim, _s, hour) => {
       const k = kit();
       const c = sim.housesRanked[index] ?? null;
-      drawShell(ctx, f, look.paper, look.color);
-      woodFloor(ctx, f, 140 + index * 13, (variant % 3) * -0.06);
-      wallShadow(ctx, f);
-      drawExitDoor(ctx, f, exit);
+      background(ctx, `house-${index}`, f, (c) => {
+        drawShell(c, f, look.paper, look.color);
+        woodFloor(c, f, 140 + index * 13, (variant % 3) * -0.06);
+        wallShadow(c, f);
+        drawExitDoor(c, f, exit);
+      });
       drawWindow(ctx, f.x + 108, f.y - 34, 16, 13, hour, RUGS[(variant + 2) % RUGS.length]);
       drawBanner(ctx, f.x + 46, f.y - 36, RUGS[variant % RUGS.length]);
       const code = c ? c.country : "";

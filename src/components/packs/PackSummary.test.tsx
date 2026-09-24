@@ -66,6 +66,29 @@ describe("PackSummary", () => {
     expect(container.querySelector('[data-pull-index="1"]')?.textContent).not.toContain("+250");
   });
 
+  it("renders a sixteen-card hand and recycles all fifteen eligible slots without merging variants", async () => {
+    const keys = [...Array.from({ length: 10 }, (_, index) => String(index + 1)),
+      "team:1", "team:2:eternal", "team:1:eternal", "11:eternal", "12:eternal", "12:v1"];
+    const cards = keys.map((key, index): RevealedCard => ({
+      ...card,
+      tier: index >= 11 ? "eternal" : "rare",
+      player: { ...card.player, cardKey: key, milestone: index === 15,
+        user: { ...card.player.user, id: index >= 14 ? 12 : index + 1, username: `Card ${index}` } },
+    }));
+    const onRecycleCopies = vi.fn(() => 1);
+    const { container } = render(
+      <I18nProvider i18n={getI18n("en")}>
+        <PackSummary cards={cards} onOpenAnother={() => {}} onOpenNext={() => {}}
+          canOpenNext={false} nextPackShardCost={null} serials={null}
+          onRecycleCopies={onRecycleCopies} reducedMotion />
+      </I18nProvider>,
+    );
+    expect(container.querySelectorAll("[data-pull-position]")).toHaveLength(16);
+    fireEvent.click(screen.getByRole("button", { name: /^Recycle all/ }));
+    await waitFor(() => expect(onRecycleCopies).toHaveBeenCalledWith(keys.slice(0, 15).map((cardKey) => ({ cardKey, copies: 1 }))));
+    expect(container.querySelector('[data-pull-position="15"]')).toBeTruthy();
+  });
+
   it("reserves pull-serial space before asynchronous mint details arrive", () => {
     // The summary uses <Trans>, which throws without a provider; en resolves
     // to the source strings, matching what this test asserts on.

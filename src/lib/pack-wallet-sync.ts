@@ -1,3 +1,4 @@
+import { PACK_MAX_PLAYER_CARDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
@@ -75,6 +76,11 @@ export interface ServerPackCollectionPage {
   cards: ServerPackCollectionCard[];
   total: number;
   tierCounts: Record<string, number>;
+  filterCounts?: {
+    tiers: Record<string, number>;
+    marks?: Record<PackCardMark, number>;
+    duplicates: number;
+  };
   /* Cards held at two copies or more, counted over the whole collection so
      the duplicates chip can label itself while it is off. */
   duplicateCardCount: number;
@@ -87,6 +93,7 @@ export interface ServerPackCollectionPage {
   /* Team cards held (live-backend pack-teams.ts), on a read that asked for
      them. They sit in the grid under "team:<id>" and label the Teams chip. */
   teamCount: number;
+  playerCount: number;
   /* Pool teams the collection holds no card of, on a read that asked for
      teams. Part of the header's "N missing". */
   teamMissing: number;
@@ -273,6 +280,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     return {
       cards: Array.isArray(body.cards) ? body.cards : [],
       total: Number(body.total) || 0,
+      filterCounts: body.filterCounts,
       tierCounts: body.tierCounts && typeof body.tierCounts === "object" ? body.tierCounts : {},
       duplicateCardCount: Math.max(0, Math.floor(Number(body.duplicateCardCount) || 0)),
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
@@ -287,6 +295,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       poolProgress,
       goatMissing: Math.max(0, Math.floor(Number(body.goatMissing) || 0)),
       teamCount: Math.max(0, Math.floor(Number(body.teamCount) || 0)),
+      playerCount: Math.max(0, Math.floor(Number(body.playerCount) || 0)),
       teamMissing: Math.max(0, Math.floor(Number(body.teamMissing) || 0)),
       teamPoolTotal: Math.max(0, Math.floor(Number(body.teamPoolTotal) || 0)),
     };
@@ -296,11 +305,11 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
    viewer holds, in pool order. Synced collections only, since the server is
    the one that knows both halves. */
 export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" })
-  .validator((input: { page?: unknown; pageSize?: unknown; query?: unknown }) => {
+  .validator((input: { page?: unknown; pageSize?: unknown; query?: unknown; pool?: "all" | "players" | "teams" }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
     const query = typeof input?.query === "string" ? input.query : "";
-    return { page, pageSize, query };
+    return { page, pageSize, query, pool: input?.pool === "teams" ? "teams" : input?.pool === "players" ? "players" : "all" };
   })
   .handler(async ({ data }): Promise<ServerPackCollectionMissingPage | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -310,6 +319,7 @@ export const fetchServerPackCollectionMissing = createServerFn({ method: "GET" }
     const url = new URL(target.url.replace("/api/pack-wallet/", "/api/pack-collection/"));
     url.searchParams.set("missing", "1");
     url.searchParams.set("teams", "1");
+    if (data.pool !== "all") url.searchParams.set(data.pool === "teams" ? "teamsOnly" : "playersOnly", "1");
     url.searchParams.set("page", String(data.page));
     url.searchParams.set("pageSize", String(data.pageSize));
     if (data.query) url.searchParams.set("q", data.query);
@@ -434,7 +444,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 13) // The largest pack (Wild) plus the three bonus slots.
+      .slice(0, PACK_MAX_PLAYER_CARDS)
       .map((raw: unknown) => {
         const card = raw as Partial<PackPullRecordCard> | null;
         const userId = Math.floor(Number(card?.userId) || 0);
@@ -722,7 +732,7 @@ export interface PackPullMintCard {
 export const mintServerPackCollectionCards = createServerFn({ method: "POST" })
   .validator((input: { cards?: unknown }) => {
     const cards: PackPullMintCard[] = (Array.isArray(input?.cards) ? input.cards : [])
-      .slice(0, 13) // The largest pack (Wild) plus the three bonus slots.
+      .slice(0, PACK_MAX_PLAYER_CARDS)
       .map((raw: unknown): PackPullMintCard | null => {
         const card = raw as Partial<PackPullMintCard> | null;
         const cardKey = typeof card?.cardKey === "string" ? sanitizeCardKey(card.cardKey) : null;

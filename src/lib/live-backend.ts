@@ -1,3 +1,4 @@
+import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { VibroAnalysis } from "#dan/vibro-sections";
@@ -3423,7 +3424,7 @@ export async function submitLiveMissingScore(userId: number, link: string): Prom
 export async function warmLivePackPlayers(userIds: number[]): Promise<void> {
   const uniqueUserIds = [...new Set(userIds)]
     .filter((id) => Number.isInteger(id) && id > 0)
-    .slice(0, 10);
+    .slice(0, PACK_MAX_PLAYER_IDS);
   if (uniqueUserIds.length === 0) return;
   await fetchLiveJson("/api/packs/warm", {
     method: "POST",
@@ -3471,7 +3472,7 @@ export interface LivePackPullFeedEntry {
    card, their GOAT and each one the grant desk handed out are counted apart,
    and only the caller looking at a card knows which of them is on screen. */
 export async function fetchLivePackCardStats(cardKeys: string[]): Promise<LivePackCardStats[]> {
-  const uniqueKeys = [...new Set(cardKeys)].filter((key) => key.length > 0).slice(0, 10);
+  const uniqueKeys = [...new Set(cardKeys)].filter((key) => key.length > 0).slice(0, PACK_MAX_PLAYER_CARDS);
   if (uniqueKeys.length === 0) return [];
   const body = await fetchLiveJson<{ cards?: LivePackCardStats[] }>(
     `/api/packs/card-stats?keys=${uniqueKeys.map(encodeURIComponent).join(",")}`,

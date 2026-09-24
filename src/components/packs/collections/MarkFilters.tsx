@@ -27,10 +27,12 @@ export function useMarkLabels(): Record<PackCardMark, string> {
   };
 }
 
-export function MarkFilters({ value, counts, onChange, selfFace, className }: {
+export function MarkFilters({ value, counts, onChange, selfFace, className, availableCounts }: {
   value: PackCardMark | null;
   /* Missing until the surface has read them once; the chips wait for it. */
   counts: Record<PackCardMark, number> | null | undefined;
+  /* Keep the full shelf's options and count widths while a pool is selected. */
+  availableCounts?: Record<PackCardMark, number> | null;
   onChange: (mark: PackCardMark | null) => void;
   /* The self mark's badge is a collector's own face. A surface with one
      collector passes it; the wall, with many, gets a plain figure. */
@@ -38,7 +40,7 @@ export function MarkFilters({ value, counts, onChange, selfFace, className }: {
   className?: string;
 }) {
   const labels = useMarkLabels();
-  const marks = PACK_CARD_MARKS.filter((mark) => mark === value || (counts?.[mark] ?? 0) > 0);
+  const marks = PACK_CARD_MARKS.filter((mark) => mark === value || ((availableCounts ?? counts)?.[mark] ?? 0) > 0);
   if (marks.length === 0) return null;
   return (
     <div className={`flex flex-wrap gap-1.5 ${className ?? ""}`} data-mark-filters="">
@@ -47,8 +49,9 @@ export function MarkFilters({ value, counts, onChange, selfFace, className }: {
           key={mark}
           type="button"
           aria-pressed={value === mark}
+          disabled={!!availableCounts && !(counts?.[mark] ?? 0) && value !== mark}
           onClick={() => onChange(value === mark ? null : mark)}
-          className={`flex cursor-pointer items-center gap-1.5 rounded-full py-0.5 pl-1 pr-2.5 text-[11px] font-semibold transition-colors ${
+          className={`flex cursor-pointer items-center gap-1.5 rounded-full py-0.5 pl-1 pr-2.5 text-[11px] font-semibold transition-colors disabled:cursor-default disabled:opacity-35 ${
             value === mark ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
           }`}
         >
@@ -62,7 +65,11 @@ export function MarkFilters({ value, counts, onChange, selfFace, className }: {
             <Seal finish={SEALS[mark].finish} label={SEALS[mark].label} title={labels[mark]} size={18} />
           )}
           {labels[mark]}
-          {counts?.[mark] ? <span translate="no" className="tabular-nums opacity-60">{counts[mark]}</span> : null}
+          {(availableCounts || counts?.[mark]) ? (
+            <span translate="no" className="tabular-nums opacity-60" style={availableCounts ? { width: `${String(availableCounts[mark] ?? 0).length}ch`, textAlign: "right" } : undefined}>
+              {counts?.[mark] ?? 0}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>

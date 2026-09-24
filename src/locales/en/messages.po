@@ -6685,8 +6685,12 @@ msgid "find a map"
 msgstr "find a map"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "find a missing player..."
-msgstr "find a missing player..."
+msgid "find a missing card..."
+msgstr "find a missing card..."
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "find a missing player..."
+#~ msgstr "find a missing player..."
 
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "Find a player"
@@ -10259,8 +10263,13 @@ msgstr "No member of this team has a Maniacard yet."
 
 #. placeholder {0}: activeQuery.trim()
 #: src/components/packs/CollectionPanel.tsx
-msgid "No missing player matches \"{0}\"."
-msgstr "No missing player matches \"{0}\"."
+msgid "No missing card matches \"{0}\"."
+msgstr "No missing card matches \"{0}\"."
+
+#. placeholder {0}: activeQuery.trim()
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "No missing player matches \"{0}\"."
+#~ msgstr "No missing player matches \"{0}\"."
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
@@ -10888,8 +10897,12 @@ msgid "Nothing matched that"
 msgstr "Nothing matched that"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "Nothing missing. Every player in the pool is in your collection."
-msgstr "Nothing missing. Every player in the pool is in your collection."
+msgid "Nothing missing. Every card in this pool is in your collection."
+msgstr "Nothing missing. Every card in this pool is in your collection."
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "Nothing missing. Every player in the pool is in your collection."
+#~ msgstr "Nothing missing. Every player in the pool is in your collection."
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "Nothing missing. Every team in the pool is in your collection."

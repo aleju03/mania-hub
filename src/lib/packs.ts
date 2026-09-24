@@ -79,7 +79,7 @@ export interface PackPlayer {
      the flags above - it only decides whether the reveal prints the tag. */
   wished?: boolean;
   /* A team card (live-backend pack-teams.ts): the Team pack's slots, or the
-     extra one any other pack deals one open in five hundred. The server set
+     extra one any other pack deals one open in a hundred. The server set
      its tier and numbers and wrote it into the team collection at the draw,
      so nothing about it is minted, synced or reported from here. user.id is
      the negative team id and cardKey is "team:<id>". */

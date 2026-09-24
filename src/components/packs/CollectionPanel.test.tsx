@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n } from "#/lib/i18n";
 import type { PackWallet } from "#/lib/pack-collection";
 import { HONORARY_PLAYERS } from "#/lib/honorary-players";
-import { fetchServerPackCollectionPage } from "#/lib/pack-wallet-sync";
+import { fetchServerPackCollectionPage, fetchServerPackCollectionMissing, type ServerPackCollectionPage } from "#/lib/pack-wallet-sync";
 
 vi.mock("#/lib/pack-wallet-sync", () => ({
   fetchServerPackCollectionPage: vi.fn(),
@@ -244,13 +244,18 @@ it("filters the grid to the cards held more than once, and carries that into a b
   expect(onRecycleWholeMatching).toHaveBeenCalledWith({ tier: "all", query: "", duplicatesOnly: true, mark: null, teamsOnly: false, playersOnly: false });
 });
 
-it("uses players, GOATs and drawable teams for both the header and missing count", async () => {
+it("switches the grid, progress and missing list between independent pools, including an empty team collection", async () => {
   vi.useRealTimers();
-  vi.mocked(fetchServerPackCollectionPage).mockResolvedValue({
-    cards: [], total: 10, tierCounts: { rare: 10 }, duplicateCardCount: 0,
+  window.localStorage.removeItem("mania-hub-collection-kind-v1");
+  vi.mocked(fetchServerPackCollectionPage).mockImplementation(async ({ data }): Promise<ServerPackCollectionPage> => ({
+    cards: [], total: data.teamsOnly ? 0 : 10, tierCounts: data.teamsOnly ? {} : { rare: 10 }, duplicateCardCount: 0,
     duplicateShardTotal: 0, filteredShardTotal: 0,
     poolProgress: { poolTotal: 100, poolOwnedCount: 40, retiredOwnedCount: 9 },
-    teamCount: 7, teamPoolTotal: 20, teamMissing: 15, goatMissing: HONORARY_PLAYERS.length - 3,
+    teamCount: 0, playerCount: 10, teamPoolTotal: 20, teamMissing: 20, goatMissing: HONORARY_PLAYERS.length - 3,
+  }));
+  vi.mocked(fetchServerPackCollectionMissing).mockResolvedValue({
+    players: [], teams: [{ teamId: 9, name: "Missing team", shortName: "MT", flagUrl: null }],
+    total: 20, goatMissing: 0, goatMissingUserIds: [],
   });
   render(
     <I18nProvider i18n={getI18n("en")}>
@@ -259,9 +264,23 @@ it("uses players, GOATs and drawable teams for both the header and missing count
         onRecycleWholeMatching={() => 0} onRecycleAll={() => 0} onApplyMint={() => true} />
     </I18nProvider>,
   );
-  const total = 120 + HONORARY_PLAYERS.length;
-  // Five drawable teams count; the other two holdings are special or retired.
-  expect(await screen.findByText(`48 / ${total} cards`)).toBeTruthy();
-  expect(screen.getByRole("button", { name: `${total - 48} missing` })).toBeTruthy();
-  expect(screen.getByText(`${((48 / total) * 100).toFixed(1)}%`)).toBeTruthy();
+  const total = 100 + HONORARY_PLAYERS.length;
+  expect(await screen.findByText(`43 / ${total + 20} cards`)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^Players/ }));
+  expect(await screen.findByText(`43 / ${total} cards`)).toBeTruthy();
+  expect(screen.getByRole("button", { name: `${total - 43} missing` })).toBeTruthy();
+  expect(fetchServerPackCollectionPage).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ playersOnly: true, teamsOnly: false }) }));
+  fireEvent.click(screen.getByRole("button", { name: /^Teams/ }));
+  expect(await screen.findByText("0 / 20 cards")).toBeTruthy();
+  expect(screen.getByText("0.0%")).toBeTruthy();
+  expect(fetchServerPackCollectionPage).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ teamsOnly: true, playersOnly: false }) }));
+  fireEvent.click(screen.getByRole("button", { name: "20 missing" }));
+  expect(await screen.findByText("Missing team")).toBeTruthy();
+  expect(fetchServerPackCollectionMissing).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ pool: "teams", page: 0 }) }));
+  fireEvent.click(screen.getByRole("button", { name: /^Players/ }));
+  expect(await screen.findByText(`43 / ${total} cards`)).toBeTruthy();
+  expect(fetchServerPackCollectionMissing).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ pool: "players", page: 0 }) }));
+  fireEvent.click(screen.getByRole("button", { name: /^Players/ }));
+  expect(await screen.findByText(`43 / ${total + 20} cards`)).toBeTruthy();
+  expect(fetchServerPackCollectionMissing).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ pool: "all", page: 0 }) }));
 });
