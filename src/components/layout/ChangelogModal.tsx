@@ -37,15 +37,28 @@ function UpdateText({ update }: { update: ChangelogUpdate }) {
     return () => animation.stop();
   }, [animate, emphasis, reduceMotion, scope, start]);
 
+  const renderBold = (value: string) => {
+    const bold = update.bold;
+    const boldStart = bold ? value.indexOf(bold) : -1;
+    if (!bold || boldStart === -1) return value;
+    return (
+      <>
+        {value.slice(0, boldStart)}
+        <strong className="font-bold">{bold}</strong>
+        {value.slice(boldStart + bold.length)}
+      </>
+    );
+  };
+
   const renderLabel = (value: string) => {
     const label = update.label;
     const labelStart = label ? value.indexOf(label) : -1;
-    if (!label || labelStart === -1) return value;
+    if (!label || labelStart === -1) return renderBold(value);
     return (
       <>
-        {value.slice(0, labelStart)}
+        {renderBold(value.slice(0, labelStart))}
         <em>{label}</em>
-        {value.slice(labelStart + label.length)}
+        {renderBold(value.slice(labelStart + label.length))}
       </>
     );
   };

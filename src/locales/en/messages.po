@@ -877,7 +877,7 @@ msgid "{0} up · {1} down"
 msgstr "{0} up · {1} down"
 
 #. placeholder {0}: playerPeakMember.username
-#. placeholder {1}: formatDate(playerPeak.updated_at)
+#. placeholder {1}: formatDate(playerPeak.updated_at, "UTC", locale)
 #: src/components/team/TeamProfilePage.tsx
 msgid "{0}, {1}"
 msgstr "{0}, {1}"
@@ -1000,10 +1000,12 @@ msgstr "{0}% weighted"
 msgid "{0}d"
 msgstr "{0}d"
 
+#. placeholder {0}: formatNumber(Math.floor(entry.play_time / 3600))
 #. placeholder {0}: formatNumber(Math.floor(railTotals.playTime / 3600))
 #. placeholder {0}: formatNumber(Math.floor(statistics.play_time / 3600))
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/teams.tsx
 msgid "{0}h"
 msgstr "{0}h"
 
@@ -12107,6 +12109,10 @@ msgstr "Plays when a combo above 20 is lost."
 #: src/routes/player/$username.tsx
 msgid "Plays with <0>{playstyleValue}</0>"
 msgstr "Plays with <0>{playstyleValue}</0>"
+
+#: src/routes/teams.tsx
+msgid "Playtime"
+msgstr "Playtime"
 
 #: src/routes/replay.tsx
 msgid "Please choose an .osr replay file."

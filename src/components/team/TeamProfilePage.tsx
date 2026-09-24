@@ -22,6 +22,7 @@ import {
   type LiveTeamSkills,
 } from "../../lib/live-backend";
 import { formatAccuracy, formatDate, formatNumber } from "../../lib/format";
+import { useLocale } from "../../lib/locale-context";
 import { getRankTierClass } from "../../lib/rankings";
 import { calculateUserProfileInsights, scoreToSnapshot } from "../../lib/profile-insights";
 import { danBareLabel } from "../../lib/dan-images";
@@ -112,6 +113,7 @@ export function TeamProfilePage({
   onTabChange: (tab: TeamTab) => void;
 }) {
   const { t, i18n } = useLingui();
+  const locale = useLocale();
   const [snapshot, setSnapshot] = useState<LiveTeamProfileSnapshot | null>(initialSnapshot);
   const [fullLoaded, setFullLoaded] = useState(false);
   const [missing, setMissing] = useState(false);
@@ -304,7 +306,7 @@ export function TeamProfilePage({
   const leader = team.leader_id != null ? membersById.get(team.leader_id) ?? null : null;
   const playerPeak = statistics.player_peak;
   const playerPeakMember = playerPeak ? membersById.get(playerPeak.user_id) ?? null : null;
-  const createdValue = team.created_at ? formatDate(team.created_at) : null;
+  const createdValue = team.created_at ? formatDate(team.created_at, "UTC", locale) : null;
 
   return (
     <div className="flex-1">
@@ -445,7 +447,7 @@ export function TeamProfilePage({
             <HeroStat
               label={t`Peak`}
               value={statistics.peak ? `#${formatNumber(statistics.peak.rank)}` : "-"}
-              sub={statistics.peak ? formatDate(statistics.peak.ranked_at) : null}
+              sub={statistics.peak ? formatDate(statistics.peak.ranked_at, "UTC", locale) : null}
             />
             <HeroStat
               label={t`Player Peak`}
@@ -453,7 +455,7 @@ export function TeamProfilePage({
               valueClassName={playerPeak ? getRankTierClass(playerPeak.rank) || "text-white" : "text-white"}
               sub={playerPeak && playerPeakMember ? (
                 playerPeak.updated_at
-                  ? t`${playerPeakMember.username}, ${formatDate(playerPeak.updated_at)}`
+                  ? t`${playerPeakMember.username}, ${formatDate(playerPeak.updated_at, "UTC", locale)}`
                   : playerPeakMember.username
               ) : null}
             />

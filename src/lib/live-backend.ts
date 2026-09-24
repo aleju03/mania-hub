@@ -2222,7 +2222,7 @@ export async function fetchLiveTeamActivityDayDirect(teamId: number, date: strin
   return fetchLiveJson(`${teamPath(teamId, "activity-day")}?date=${date}`);
 }
 
-export type LiveTeamRankingsSort = "performance" | "members" | "plays" | "accuracy" | "combined" | "ss" | "s" | "a";
+export type LiveTeamRankingsSort = "performance" | "members" | "plays" | "playtime" | "accuracy" | "combined" | "ss" | "s" | "a";
 
 /* Every number is over the team's tracked members (features/teams.ts). */
 export interface LiveTeamRankingEntry {
@@ -2233,6 +2233,8 @@ export interface LiveTeamRankingEntry {
   tracked_members: number;
   performance: number;
   play_count: number;
+  /** Combined tracked-member playtime in seconds; null when none is known. */
+  play_time: number | null;
   accuracy: number | null;
   pp_4k: number | null;
   pp_7k: number | null;

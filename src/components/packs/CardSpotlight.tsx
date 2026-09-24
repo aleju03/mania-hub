@@ -5,7 +5,6 @@ import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
-import { canSeeTeams } from "#/lib/auth-shared";
 import { formatDate, formatOrdinal } from "#/lib/format";
 import { useLocale } from "#/lib/locale-context";
 import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
@@ -86,9 +85,7 @@ export function CardSpotlight({
   const [giftTally, setGiftTally] = useState<LivePackCardGifts | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const reducedMotion = prefersReducedMotion();
-  const auth = useAuth();
-  const viewerId = auth.viewer?.id ?? null;
-  const teamsVisible = canSeeTeams(auth);
+  const viewerId = useAuth().viewer?.id ?? null;
   const { t } = useLingui();
   const locale = useLocale();
 
@@ -517,7 +514,7 @@ export function CardSpotlight({
                   })()}
                 </div>
               ) : null}
-              {card.team ? teamsVisible && (
+              {card.team ? (
                 <div className="mt-1.5 flex items-center gap-2">
                   <Link
                     to="/team/$teamId"

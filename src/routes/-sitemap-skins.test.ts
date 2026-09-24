@@ -2,10 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { buildSitemap } from "./sitemap[.]xml";
 import { isSkinsBrowseView } from "./skins";
-import { TEAMS_OPEN } from "#/lib/auth-shared";
-
-// /teams joins the static paths once teams leave the owner's preview.
-const TEAMS_PATHS = TEAMS_OPEN ? 1 : 0;
 
 const ORIGIN = "https://mania-tracker.com";
 
@@ -16,7 +12,7 @@ describe("sitemap", () => {
     expect(xml).toContain("<loc>https://mania-tracker.com/skins</loc>");
     expect(xml).toContain("<loc>https://mania-tracker.com/communities</loc>");
     expect(xml).toContain("<loc>https://mania-tracker.com/packs/collections</loc>");
-    expect(xml.match(/<url>/g)).toHaveLength(12 + TEAMS_PATHS);
+    expect(xml.match(/<url>/g)).toHaveLength(13);
   });
 
   it("adds a url per skin, with the lastmod at date precision", () => {
@@ -27,7 +23,7 @@ describe("sitemap", () => {
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/r-skin-v1-2-bars</loc>");
     expect(xml).toContain("<lastmod>2026-08-10</lastmod>");
     expect(xml).toContain("<loc>https://mania-tracker.com/skins/gray-malevich-edited</loc>");
-    expect(xml.match(/<url>/g)).toHaveLength(14 + TEAMS_PATHS);
+    expect(xml.match(/<url>/g)).toHaveLength(15);
     // The undated skin carries no lastmod rather than an empty or invalid one.
     expect(xml.match(/<lastmod>/g)).toHaveLength(1);
   });

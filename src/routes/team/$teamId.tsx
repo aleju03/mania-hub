@@ -1,5 +1,4 @@
-import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { canSeeTeams } from "../../lib/auth-shared";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans } from "@lingui/react/macro";
 import { fetchLiveTeamStoredSnapshot, type LiveTeamProfileSnapshot } from "../../lib/live-backend";
 import { pageSeo } from "../../lib/seo";
@@ -32,9 +31,6 @@ export const Route = createFileRoute("/team/$teamId")({
   validateSearch: (search: Record<string, unknown>): TeamSearch => (
     isTeamTab(search.tab) && search.tab !== "best" ? { tab: search.tab } : {}
   ),
-  beforeLoad: ({ context }) => {
-    if (!canSeeTeams(context.auth)) throw notFound();
-  },
   loader: async ({ params }) => loadTeamRouteData(params.teamId),
   head: ({ params, match, loaderData }) => {
     const name = loaderData?.snapshot?.team.name;

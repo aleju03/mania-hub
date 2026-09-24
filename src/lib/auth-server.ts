@@ -122,8 +122,6 @@ function buildAuthState(viewer: AuthViewer | null, request = getRequest()): Auth
     isAdmin,
     canUseDevFeatures: isLocalDev || isAllowedDevUser,
     canUseAdminFeatures: isLocalDev || isAdmin,
-    // Not host-gated like isAdmin: the owner previews teams on the live site.
-    teamsPreview: !!viewer && adminUserIds.has(viewer.id),
     loginAvailable,
     loginSuggested: loginAvailable && (Boolean(viewer) || isLoginSuggestedHost(hostname)),
   };

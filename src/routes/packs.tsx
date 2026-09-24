@@ -32,7 +32,6 @@ import {
 import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
-import { canSeeTeams } from "../lib/auth-shared";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -420,7 +419,6 @@ function PackTypeSelector({
   selectedId,
   keyMode,
   teamsAvailable,
-  showTeams,
   thumbs,
   locked,
   onSelect,
@@ -431,8 +429,6 @@ function PackTypeSelector({
   keyMode: "4k" | "7k";
   /* The Team pack is dealt by the server only, so it needs a login. */
   teamsAvailable: boolean;
-  /* Teams are the owner's preview (canSeeTeams): nobody else sees the pack. */
-  showTeams: boolean;
   thumbs: Partial<Record<PackTypeId, string>>;
   /* A committed slash already bought the selected pack. Keep its type stable
      until PackStage hands it to the reveal. */
@@ -444,7 +440,7 @@ function PackTypeSelector({
     <div>
       {/* wrap: six pack types no longer fit one row on phone widths */}
       <div className="flex flex-wrap items-start justify-center gap-3 sm:gap-5">
-        {PACK_SHELF.filter((shelfId) => shelfId !== "teams" || showTeams).map((shelfId) => {
+        {PACK_SHELF.map((shelfId) => {
           const type = packTypeById(shelfId === "keys" ? keyMode : shelfId);
           const selected = type.id === selectedId;
           const affordable = canAffordPack(wallet, type) && (!type.teams || teamsAvailable);
@@ -997,7 +993,7 @@ function PacksPage() {
   };
 
   /* Team cards are dealt and kept server-side only. */
-  const teamsAvailable = Boolean(auth.viewer) && isLiveBackendConfigured() && canSeeTeams(auth);
+  const teamsAvailable = Boolean(auth.viewer) && isLiveBackendConfigured();
   const canOpen = canAffordPack(wallet, selectedType) && (!selectedType.teams || teamsAvailable);
   /* The game owns the page's middle while it is open, so the collection does
      not sit under it: the point of hosting it here is the ticker and the
@@ -1190,7 +1186,6 @@ function PacksPage() {
                           selectedId={packTypeId}
                           keyMode={keyMode}
                           teamsAvailable={teamsAvailable}
-                          showTeams={canSeeTeams(auth)}
                           thumbs={packThumbs}
                           locked={cutCommitted}
                           onSelect={selectPackType}

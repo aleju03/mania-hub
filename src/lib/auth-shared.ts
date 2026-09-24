@@ -15,9 +15,6 @@ export interface AuthState {
   isAdmin: boolean;
   canUseDevFeatures: boolean;
   canUseAdminFeatures: boolean;
-  /* The viewer is one of the admin osu! ids, on any host. Teams are their
-     preview until TEAMS_OPEN (see canSeeTeams). */
-  teamsPreview: boolean;
   loginAvailable: boolean;
   loginSuggested: boolean;
 }
@@ -27,7 +24,6 @@ export const ANONYMOUS_AUTH_STATE: AuthState = {
   isAdmin: false,
   canUseDevFeatures: false,
   canUseAdminFeatures: false,
-  teamsPreview: false,
   loginAvailable: false,
   loginSuggested: false,
 };
@@ -38,15 +34,6 @@ export function canUseDevFeatures(auth: AuthState | undefined | null): boolean {
 
 export function canUseAdminFeatures(auth: AuthState | undefined | null): boolean {
   return auth?.canUseAdminFeatures === true;
-}
-
-/* Teams (the pages, the Team pack, team links, missing team cards) are the
-   owner's preview. Flip this together with the backend's TEAMS_OPEN. Owned
-   team cards show to everyone either way. */
-export const TEAMS_OPEN = false;
-
-export function canSeeTeams(auth: AuthState | undefined | null): boolean {
-  return TEAMS_OPEN || auth?.teamsPreview === true;
 }
 
 export function isAdmin(auth: AuthState | undefined | null): boolean {

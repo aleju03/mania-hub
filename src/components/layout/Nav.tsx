@@ -11,7 +11,6 @@ import { SettingsDrawer } from "./SettingsDrawer";
 import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
-import { canSeeTeams } from "../../lib/auth-shared";
 import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
@@ -250,7 +249,6 @@ export function Nav() {
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
     if (leaf.id === "snipes") return showSnipesLink;
-    if (leaf.id === "teams") return canSeeTeams(auth);
     return true;
   };
   const visibleLeaves = ALL_LEAVES.filter(isLeafVisible);

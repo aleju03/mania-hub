@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TEAMS_OPEN } from "#/lib/auth-shared";
 import { getCanonicalOrigin } from "#/lib/origin";
 import { fetchPlayerSitemapEntries, type PlayerSitemapEntry } from "#/lib/player-sitemap";
 import { fetchSkinSitemapEntries, type SkinSitemapEntry } from "#/lib/skins";
@@ -10,7 +9,7 @@ const STATIC_PATHS = [
   { path: "/", changefreq: "hourly", priority: "1.0" },
   { path: "/rankings", changefreq: "hourly", priority: "0.9" },
   { path: "/top-plays", changefreq: "hourly", priority: "0.9" },
-  ...(TEAMS_OPEN ? [{ path: "/teams", changefreq: "daily", priority: "0.7" }] as const : []),
+  { path: "/teams", changefreq: "daily", priority: "0.7" },
   { path: "/maps", changefreq: "daily", priority: "0.8" },
   { path: "/replay", changefreq: "weekly", priority: "0.8" },
   { path: "/farm-helper", changefreq: "daily", priority: "0.7" },

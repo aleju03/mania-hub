@@ -40,7 +40,6 @@ import {
   getScoreTimeMs,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
-import { canSeeTeams } from "../../lib/auth-shared";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
 import { DisplayNameButton, DisplayNameForm, pendingRenameDate } from "../../components/player/DisplayNameEditor";
@@ -2010,7 +2009,7 @@ export function PlayerProfilePage({
       />,
     ] : []),
   ] : [
-    ...(user.team && canSeeTeams(auth) ? [
+    ...(user.team ? [
       <Link
         key="team"
         to="/team/$teamId"

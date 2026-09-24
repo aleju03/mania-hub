@@ -38,7 +38,6 @@ import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
-import { canSeeTeams } from "#/lib/auth-shared";
 
 export type { CardMint };
 
@@ -474,11 +473,7 @@ export function CollectionPanel({
 }: CollectionPanelProps) {
   const { t, i18n } = useLingui();
   // Only for the self chip's badge, which wears the collector's own face.
-  const auth = useAuth();
-  const viewer = auth.viewer;
-  /* Teams are the owner's preview: anyone else keeps the team cards they were
-     given but gets no team page to open and no team card to pass on. */
-  const teamsVisible = canSeeTeams(auth);
+  const viewer = useAuth().viewer;
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -1930,7 +1925,7 @@ export function CollectionPanel({
               <span className="truncate text-[12px] font-bold text-white">{menu.card.username}</span>
             </div>
             <div className="mx-2 my-1 h-px bg-osu-b3/40" />
-            {menu.card.team ? teamsVisible && (
+            {menu.card.team ? (
               <Link
                 to="/team/$teamId"
                 params={{ teamId: String(menu.card.team.teamId) }}
@@ -1973,7 +1968,7 @@ export function CollectionPanel({
                 onDone={() => setMenu(null)}
               />
             )}
-            {syncStatus === "synced" && menu.card.copies > 0 && (!menu.card.team || teamsVisible) && (
+            {syncStatus === "synced" && menu.card.copies > 0 && (
               <button type="button" role="menuitem" onClick={() => { setGiftCard(menu.card); setMenu(null); }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer">
                 <Gift className="h-3 w-3" />{t`Gift a card…`}

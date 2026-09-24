@@ -863,7 +863,7 @@ msgid "{0} up · {1} down"
 msgstr "{0} 赞成 · {1} 反对"
 
 #. placeholder {0}: playerPeakMember.username
-#. placeholder {1}: formatDate(playerPeak.updated_at)
+#. placeholder {1}: formatDate(playerPeak.updated_at, "UTC", locale)
 #: src/components/team/TeamProfilePage.tsx
 msgid "{0}, {1}"
 msgstr "{0}，{1}"
@@ -986,10 +986,12 @@ msgstr "加权 {0}%"
 msgid "{0}d"
 msgstr "{0} 天"
 
+#. placeholder {0}: formatNumber(Math.floor(entry.play_time / 3600))
 #. placeholder {0}: formatNumber(Math.floor(railTotals.playTime / 3600))
 #. placeholder {0}: formatNumber(Math.floor(statistics.play_time / 3600))
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
+#: src/routes/teams.tsx
 msgid "{0}h"
 msgstr "{0} 小时"
 
@@ -12081,6 +12083,10 @@ msgstr "连击超过 20 时才会播放断连音效。"
 #: src/routes/player/$username.tsx
 msgid "Plays with <0>{playstyleValue}</0>"
 msgstr "使用 <0>{playstyleValue}</0> 游玩"
+
+#: src/routes/teams.tsx
+msgid "Playtime"
+msgstr "游玩时长"
 
 #: src/routes/replay.tsx
 msgid "Please choose an .osr replay file."

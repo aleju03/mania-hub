@@ -1,5 +1,4 @@
-import { createFileRoute, Link, notFound, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { canSeeTeams } from "../lib/auth-shared";
+import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -30,7 +29,7 @@ const TEAMS_SEARCH_DEFAULTS: Required<Pick<TeamsSearch, "page" | "q" | "sort" | 
   dir: "desc",
 };
 
-const SORTS: readonly LiveTeamRankingsSort[] = ["performance", "members", "plays", "accuracy", "combined", "ss", "s", "a"];
+const SORTS: readonly LiveTeamRankingsSort[] = ["performance", "members", "plays", "playtime", "accuracy", "combined", "ss", "s", "a"];
 const GRADE_IMAGES = {
   ss: "/images/badges/score-ranks-v2019/GradeSmall-SS.svg",
   s: "/images/badges/score-ranks-v2019/GradeSmall-S.svg",
@@ -69,9 +68,6 @@ export const Route = createFileRoute("/teams")({
   }),
   search: {
     middlewares: [stripSearchParams(TEAMS_SEARCH_DEFAULTS)],
-  },
-  beforeLoad: ({ context }) => {
-    if (!canSeeTeams(context.auth)) throw notFound();
   },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
@@ -180,6 +176,7 @@ function TeamsPage() {
     { field: "members", label: t`Members` },
     { field: "accuracy", label: t`Acc` },
     { field: "plays", label: t`Plays` },
+    { field: "playtime", label: t`Playtime` },
     { field: "combined", label: "4K+7K" },
   ];
 
@@ -263,19 +260,20 @@ function TeamsPage() {
             )}
           </div>
 
-          <div className="hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30">
-            <table className="w-full table-fixed">
+          <div className="hidden sm:block rounded-xl overflow-x-auto border border-osu-b3/30">
+            <table className="w-full min-w-[1000px] table-fixed">
               <colgroup>
                 <col style={{ width: rankColumnWidth(rows, rowsSort) }} />
                 <col />
+                <col className="w-[7%]" />
+                <col className="w-[8%]" />
                 <col className="w-[9%]" />
                 <col className="w-[9%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
-                <col className="w-[6%]" />
-                <col className="w-[6%]" />
-                <col className="w-[6%]" />
+                <col className="w-[11%]" />
+                <col className="w-[9%]" />
+                <col className="w-[5%]" />
+                <col className="w-[5%]" />
+                <col className="w-[5%]" />
               </colgroup>
               <thead>
                 <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
@@ -284,6 +282,7 @@ function TeamsPage() {
                   <SortableHeader label={t`Members`} active={sort === "members"} dir={dir} onSort={() => handleSort("members")} />
                   <SortableHeader label={t`Accuracy`} active={sort === "accuracy"} dir={dir} onSort={() => handleSort("accuracy")} />
                   <SortableHeader label={t`Play Count`} active={sort === "plays"} dir={dir} onSort={() => handleSort("plays")} />
+                  <SortableHeader label={t`Playtime`} active={sort === "playtime"} dir={dir} onSort={() => handleSort("playtime")} />
                   {/* Only marked once it leaves the default order, like the player board's #. */}
                   <SortableHeader label={t`Performance`} active={sort === "performance" && dir === "asc"} dir={dir} onSort={() => handleSort("performance")} />
                   <SortableHeader label="4K+7K" active={sort === "combined"} dir={dir} onSort={() => handleSort("combined")} />
@@ -298,7 +297,7 @@ function TeamsPage() {
                 {firstLoad ? (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-t border-osu-b3/20">
-                      <td colSpan={10} className="px-3 py-1.5"><RankingRowSkeleton /></td>
+                      <td colSpan={11} className="px-3 py-1.5"><RankingRowSkeleton /></td>
                     </tr>
                   ))
                 ) : rows.length > 0 ? (
@@ -327,6 +326,9 @@ function TeamsPage() {
                       <td className={cellClass(sort === "members")}>{formatNumber(entry.tracked_members)}</td>
                       <td className={cellClass(sort === "accuracy", "text-osu-l2")}>{formatTeamAccuracy(entry.accuracy)}</td>
                       <td className={cellClass(sort === "plays")}>{formatNumber(entry.play_count)}</td>
+                      <td className={`${cellClass(sort === "playtime")} whitespace-nowrap`}>
+                        {entry.play_time != null ? t`${formatNumber(Math.floor(entry.play_time / 3600))}h` : "-"}
+                      </td>
                       <td className="py-2.5 px-3 text-sm font-bold text-right text-white">{formatNumber(Math.round(entry.performance))}</td>
                       <td className={cellClass(sort === "combined")} title={combinedTitle(entry)}>{formatCombined(entry)}</td>
                       <td className={gradeCellClass(sort === "ss")}>{formatNumber(entry.grade_counts.ss)}</td>
@@ -336,7 +338,7 @@ function TeamsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-[13px] text-osu-f1">{emptyText}</td>
+                    <td colSpan={11} className="px-4 py-10 text-center text-[13px] text-osu-f1">{emptyText}</td>
                   </tr>
                 )}
               </tbody>
@@ -409,13 +411,16 @@ function TeamFlag({ url, large = false }: { url: string | null; large?: boolean 
 }
 
 function MobileTeamRow({ entry, sort }: { entry: LiveTeamRankingEntry; sort: LiveTeamRankingsSort }) {
+  const { t } = useLingui();
   const members = formatNumber(entry.tracked_members);
   const plays = formatNumber(entry.play_count);
+  const playtime = entry.play_time != null ? t`${formatNumber(Math.floor(entry.play_time / 3600))}h` : "-";
   const performance = <>{formatNumber(Math.round(entry.performance))}pp</>;
   const value = (() => {
     switch (sort) {
       case "members": return <Trans>{members} members</Trans>;
       case "plays": return <Trans>{plays} plays</Trans>;
+      case "playtime": return <>{playtime}</>;
       case "accuracy": return <>{formatTeamAccuracy(entry.accuracy)}</>;
       case "combined": {
         const combined = formatCombined(entry);
@@ -449,6 +454,7 @@ function MobileTeamRow({ entry, sort }: { entry: LiveTeamRankingEntry; sort: Liv
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1">
             {sort === "performance" ? <Trans>{members} members</Trans> : performance}
+            {sort !== "playtime" && <> · {playtime}</>}
           </div>
         </div>
         <span className="text-sm font-bold text-right flex-shrink-0">{value}</span>
