@@ -73,3 +73,20 @@ it("bounds active downloads and the waiting backlog", async () => {
   await Promise.all(pending);
   expect(peak).toBe(2);
 });
+
+it("serves a flag as a WebP no wider than the card draws it", async () => {
+  const { default: sharp } = await import("sharp");
+  // A grainy gradient: PNG stores the grain losslessly, WebP does not have to.
+  let seed = 1;
+  const raw = Buffer.from(Array.from({ length: 800 * 400 * 3 }, (_, i) => {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    const pixel = Math.floor(i / 3);
+    return ((pixel % 800) + Math.floor(pixel / 800)) / 5 + (seed >>> 28);
+  }));
+  const png = await sharp(raw, { raw: { width: 800, height: 400, channels: 3 } }).png().toBuffer();
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(png), { headers: { "content-type": "image/png" } })));
+  const image = await new TeamImageCache({ ...limits, bytes: 4_000_000, imageBytes: 4_000_000, timeoutMs: 5_000 }).get(path(1));
+  expect(image.contentType).toBe("image/webp");
+  expect(image.buffer.length).toBeLessThan(png.length);
+  expect((await sharp(image.buffer).metadata()).width).toBe(646);
+});

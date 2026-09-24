@@ -139,15 +139,15 @@ export async function createCardTextures(
     return front.measureText(text).width;
   };
   const layout = buildFaceLayout(data, measure);
-  const [avatar, laurel, motif] = await Promise.all([
+  const [avatar, laurel, motif, teamCover] = await Promise.all([
     data.avatarUrl ? loadImage(data.avatarUrl).catch(() => loadImage(data.avatarUrl)).catch(() => null) : Promise.resolve(null),
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
     // A motif that will not load is simply not drawn: the card falls back to
     // the flecks or starfield its tier already had, which is a card that looks
     // ordinary rather than one that looks broken.
     data.motif ? loadImage(cardMotifImageSrc(data.motif)).catch(() => null) : Promise.resolve(null),
+    data.team?.coverUrl ? loadImage(data.team.coverUrl).catch(() => null) : Promise.resolve(null),
   ]);
-  const teamCover = data.team?.coverUrl ? await loadImage(data.team.coverUrl).catch(() => null) : null;
 
   drawFront(front, data, layout, avatar, laurel, motif, options.driftingMotif === true, teamCover);
   if (!options.frontOnly) drawBack(back, data, layout, laurel);
