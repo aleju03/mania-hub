@@ -83,6 +83,12 @@ function getAdminUserIds(): Set<number> {
   return parseUserIdSet(process.env.ADMIN_OSU_USER_IDS, DEFAULT_ADMIN_OSU_USER_IDS);
 }
 
+/** Whether this osu! account is a site admin, on any host. Unlike isAdmin in
+    AuthState this does not depend on where the request came from. */
+export function isAdminOsuUserId(userId: number): boolean {
+  return getAdminUserIds().has(userId);
+}
+
 function isLocalDevRequest(request = getRequest()): boolean {
   return isLocalDevAccessGranted({
     nodeEnv: process.env.NODE_ENV,

@@ -4,7 +4,6 @@ import type { ReactElement, ReactNode } from "react";
 import { I18nProvider } from "@lingui/react";
 import { getI18n } from "../../../lib/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AnalyticsRecentEventRow } from "../../../lib/analytics-feed";
 import type { AnalyticsViewersResult } from "../../../lib/analytics-monitor";
 
 // The flag chips these cards draw read their copy through Lingui, so renders
@@ -16,8 +15,7 @@ const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 
 const getAnalyticsViewers = vi.hoisted(() => vi.fn());
-const getAnalyticsViewerEvents = vi.hoisted(() => vi.fn());
-vi.mock("../../../lib/analytics-monitor-data", () => ({ getAnalyticsViewers, getAnalyticsViewerEvents }));
+vi.mock("../../../lib/analytics-monitor-data", () => ({ getAnalyticsViewers }));
 
 const { AnalyticsViewersCard } = await import("./AnalyticsViewersCard");
 
@@ -26,9 +24,9 @@ const NOW = Date.now();
 const RESULT: AnalyticsViewersResult = {
   total: 3,
   viewers: [
-    { viewerId: 111, username: "juan", firstSeen: NOW - 30 * 86_400_000, lastSeen: NOW - 60_000, events: 412, country: "CR", pp: 16_712.3, globalRank: 409 },
-    { viewerId: 222, username: "kanaria", firstSeen: NOW - 2 * 86_400_000, lastSeen: NOW - 3 * 3_600_000, events: 87, country: "JP", pp: 9_001.5, globalRank: 2_048 },
-    { viewerId: 333, username: "Ranshii", firstSeen: NOW - 900_000, lastSeen: NOW - 900_000, events: 4, country: null, pp: null, globalRank: null },
+    { viewerId: 111, username: "juan", firstSeen: NOW - 30 * 86_400_000, lastSeen: NOW - 60_000, country: "CR", pp: 16_712.3, globalRank: 409 },
+    { viewerId: 222, username: "kanaria", firstSeen: NOW - 2 * 86_400_000, lastSeen: NOW - 3 * 3_600_000, country: "JP", pp: 9_001.5, globalRank: 2_048 },
+    { viewerId: 333, username: "Ranshii", firstSeen: NOW - 900_000, lastSeen: NOW - 900_000, country: null, pp: null, globalRank: null },
   ],
 };
 
@@ -42,7 +40,7 @@ function manyViewers(count = 12): AnalyticsViewersResult {
       username: `player${index}`,
       firstSeen: NOW - 86_400_000,
       lastSeen: NOW - 60_000 * (index + 1),
-      events: 5,
+     
       country: null,
       pp: 10_000 - index,
       globalRank: 100 + index,
@@ -50,25 +48,9 @@ function manyViewers(count = 12): AnalyticsViewersResult {
   };
 }
 
-/* One row of a player's trail. Only the fields the description reads are worth
-   spelling out; the rest of the shape is noise here. */
-function activityEvent(overrides: Partial<AnalyticsRecentEventRow>): AnalyticsRecentEventRow {
-  return {
-    eventId: null,
-    timestamp: "",
-    ts: NOW,
-    event: "$pageview",
-    path: "/tracker",
-    deviceKind: "desktop",
-    distinctId: "d111",
-    ...overrides,
-  } as AnalyticsRecentEventRow;
-}
-
 afterEach(() => {
   cleanup();
   getAnalyticsViewers.mockReset();
-  getAnalyticsViewerEvents.mockReset();
 });
 
 describe("AnalyticsViewersCard", () => {
@@ -80,9 +62,11 @@ describe("AnalyticsViewersCard", () => {
     expect(screen.getByText("3 osu! accounts have signed in")).toBeTruthy();
     expect(screen.getByText("kanaria")).toBeTruthy();
     expect(screen.getByText("Ranshii")).toBeTruthy();
-    expect(screen.getByText("412 events")).toBeTruthy();
-    // A single-visit account has no span to report.
-    expect(screen.getByText("first visit")).toBeTruthy();
+    // A single sign-in has no span to report.
+    expect(screen.getByText("first sign-in")).toBeTruthy();
+    // The roster never says what an account has been doing.
+    expect(screen.queryByText(/events/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /has been doing/ })).toBeNull();
     // Rows link into the player's profile page.
     expect(screen.getByText("juan").closest("a")!.getAttribute("href")).toContain("/player/juan");
   });
@@ -102,7 +86,7 @@ describe("AnalyticsViewersCard", () => {
         username: index === 0 ? "kanaria" : `player${index}`,
         firstSeen: NOW - 86_400_000,
         lastSeen: NOW - 60_000,
-        events: 5,
+       
         country: null,
       })),
     });
@@ -159,58 +143,6 @@ describe("AnalyticsViewersCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "PP" }));
     await waitFor(() => expect(screen.getByText(/showing the 12 highest by pp/)).toBeTruthy());
-  });
-
-  it("opens one player's own trail on demand", async () => {
-    getAnalyticsViewers.mockResolvedValue(RESULT);
-    getAnalyticsViewerEvents.mockResolvedValue({
-      viewerId: 111,
-      events: [
-        activityEvent({ ts: NOW - 60_000, path: "/player/kanaria" }),
-        activityEvent({
-          ts: NOW - 300_000,
-          event: "replay_view",
-          path: "/replay",
-          replayTitle: "Blue Zenith",
-          replayArtist: "xi",
-          replayPlayer: "cookiezi",
-        }),
-      ],
-    });
-    render(<AnalyticsViewersCard />);
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
-    // Nothing is fetched until a row is actually opened.
-    expect(getAnalyticsViewerEvents).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
-    await waitFor(() => expect(screen.getByText("kanaria's profile")).toBeTruthy());
-    expect(getAnalyticsViewerEvents).toHaveBeenCalledWith({ data: { viewerId: 111 } });
-    expect(screen.getByText("xi - Blue Zenith")).toBeTruthy();
-    // Only the row that was asked for.
-    expect(getAnalyticsViewerEvents).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole("button", { name: "Hide what juan has been doing" }));
-    expect(screen.queryByText("kanaria's profile")).toBeNull();
-  });
-
-  it("distinguishes a pruned trail from a broken one", async () => {
-    getAnalyticsViewers.mockResolvedValue(RESULT);
-    getAnalyticsViewerEvents.mockResolvedValue({ viewerId: 111, events: [] });
-    render(<AnalyticsViewersCard />);
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
-
-    fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
-    await waitFor(() => expect(screen.getByText("Nothing left in the retention window for this player.")).toBeTruthy());
-  });
-
-  it("reports a failed trail load on the row that asked for it", async () => {
-    getAnalyticsViewers.mockResolvedValue(RESULT);
-    getAnalyticsViewerEvents.mockRejectedValue(new Error("Analytics viewer events failed (500)."));
-    render(<AnalyticsViewersCard />);
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
-
-    fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
-    await waitFor(() => expect(screen.getByText("Analytics viewer events failed (500).")).toBeTruthy());
   });
 
   it("asks the backend for one country rather than filtering the page in hand", async () => {

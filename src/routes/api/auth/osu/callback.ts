@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AUTH_STATE_COOKIE_NAME } from "#/lib/auth-shared";
+import { waitUntil } from "@vercel/functions";
+import { AUTH_STATE_COOKIE_NAME, type AuthViewer } from "#/lib/auth-shared";
+import { bridgeAuthHeaders, liveBridgeToken } from "#/lib/live-backend-tokens";
+
+const SIGN_IN_RECORD_TIMEOUT_MS = 5_000;
 
 function getCookieFromHeader(cookieHeader: string | null, name: string): string | undefined {
   if (!cookieHeader) return undefined;
@@ -13,6 +17,22 @@ function getCookieFromHeader(cookieHeader: string | null, name: string): string 
 function appendCookies(response: Response, cookies: string[]): Response {
   for (const cookie of cookies) response.headers.append("Set-Cookie", cookie);
   return response;
+}
+
+/* Adds the account to the backend's list of osu! accounts that have signed in
+   (id, name, osu! country, first and last sign-in). Best effort: a backend
+   that is down must never cost anyone their login. */
+function recordSignIn(viewer: AuthViewer): void {
+  const base = (process.env.LIVE_BACKEND_URL ?? process.env.VITE_LIVE_BACKEND_URL)?.replace(/\/+$/, "");
+  if (!base || !liveBridgeToken()) return;
+  waitUntil(
+    fetch(`${base}/api/analytics/sign-in`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ id: viewer.id, username: viewer.username, country: viewer.countryCode }),
+      signal: AbortSignal.timeout(SIGN_IN_RECORD_TIMEOUT_MS),
+    }).then(() => undefined, () => undefined),
+  );
 }
 
 function redirectWithCookies(request: Request, path: string, cookies: string[]): Response {
@@ -50,6 +70,7 @@ export const Route = createFileRoute("/api/auth/osu/callback")({
         try {
           const viewer = await exchangeOsuCodeForViewer(code, stateCookie.redirectUri);
           const authCookie = await createAuthCookieHeader(viewer, request);
+          recordSignIn(viewer);
           return redirectWithCookies(request, next, [authCookie, clearState]);
         } catch (error) {
           console.warn("[auth] osu login failed", error);

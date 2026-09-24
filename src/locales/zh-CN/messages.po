@@ -3243,7 +3243,6 @@ msgstr "音频设置立即生效。"
 msgid "Audio URL (mp3)"
 msgstr "音频链接 (mp3)"
 
-#: src/routes/privacy.tsx
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
 msgstr "2026年8月23日"
@@ -7714,8 +7713,12 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "如果你本地有这张谱面，把它的 .osz 拖进来，回放就用你的副本播放。"
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区，并记录你的账号何时登录过。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
+
+#: src/routes/privacy.tsx
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "如果你用 osu! 登录，本站会收到 identify 和 public 这两个 OAuth 授权范围允许的 osu! 账号信息，例如用户 ID、用户名、头像 URL 和国家/地区。本站会存储一个带签名的 HTTP-only 会话 cookie，以便在会话有效期间识别你。"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
@@ -14211,6 +14214,10 @@ msgstr "送给你一张卡片。"
 msgid "Sent, thanks."
 msgstr "已提交，谢谢。"
 
+#: src/routes/privacy.tsx
+msgid "September 24, 2026"
+msgstr "2026年9月24日"
+
 #: src/components/communities/field-options.tsx
 msgid "Serbian"
 msgstr "塞尔维亚语"
@@ -14665,7 +14672,7 @@ msgstr "在最近成绩中显示每个成绩的 MSD"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
-msgstr "用快速淡入显示卡片，而不是完整的揭晓动画"
+msgstr "开包时卡片直接淡入，不播放完整的揭晓动画"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"

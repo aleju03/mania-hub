@@ -132,7 +132,7 @@ function VisitorSearch({ value, onChange }: { value: string; onChange: (next: st
           if (event.key === "Escape") onChange("");
         }}
         placeholder="Find a visitor"
-        aria-label="Find a visitor by name, country or activity"
+        aria-label="Find a visitor by country or activity"
         className="h-7 w-[150px] rounded-md border border-osu-b3/30 bg-osu-b5/70 pl-7 pr-6 text-[11px] text-white placeholder:text-osu-f1 focus:border-osu-pink/40 focus:outline-none sm:w-[190px] [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? (
@@ -167,7 +167,7 @@ function rankSessions(
 
 function identityText(session: AnalyticsSession): string {
   const country = session.country ? `${session.country} ${getCountryName(session.country) || ""}` : "";
-  return `${session.viewerUsername ?? "guest"} ${session.label} ${country} ${session.distinctId}`.toLowerCase();
+  return `${session.signedIn ? "signed in" : "guest"} ${session.label} ${country} ${session.distinctId}`.toLowerCase();
 }
 
 function activityText(session: AnalyticsSession, replayMaps: AnalyticsReplayMapIndex): string {
@@ -277,7 +277,7 @@ function LiveVisitorCard({
             slot={session.slot}
             country={session.country}
             deviceKind={session.deviceKind}
-            viewerUsername={session.viewerUsername}
+            signedIn={session.signedIn}
           />
           <span className="ml-auto flex-shrink-0 font-mono text-[10px] text-osu-f1" title="time between their first and last event in range">
             {formatAnalyticsDuration(session.durationMs)}

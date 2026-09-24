@@ -1,29 +1,29 @@
 import { RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Avatar } from "../../ui/Avatar";
 import { SectionCard } from "../SectionCard";
 import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
 import {
   analyticsEventHasOwnDescription,
   analyticsEventHref,
-  analyticsInspectionHref,
   buildAnalyticsReplayMapIndex,
   describeAnalyticsEvent,
   formatAnalyticsActivityText,
   formatAnalyticsAgo,
   type AnalyticsRecentEventRow,
 } from "../../../lib/analytics-feed";
-import { getAnalyticsEventCatalog, getAnalyticsEventLookup } from "../../../lib/analytics-monitor-data";
+import { getAnalyticsEventCatalog, getAnalyticsEventLookup, getAnalyticsPageLookup } from "../../../lib/analytics-monitor-data";
 import {
   ANALYTICS_EVENT_LOOKUP_LIMIT,
   ANALYTICS_EVENT_LOOKUP_STORAGE_KEY,
   clampAnalyticsRangeHours,
   formatAnalyticsEventLabel,
   formatAnalyticsRangeLabel,
+  normalizeAnalyticsLookupPath,
   type AnalyticsEventActorRow,
   type AnalyticsEventCatalogEntry,
   type AnalyticsEventLookupResult,
+  type AnalyticsPageLookupResult,
   type AnalyticsRange,
 } from "../../../lib/analytics-monitor";
 import { ACTIVITY_KIND_STYLES, AnalyticsEmptyMessage, InlineCountryFlag } from "./shared";
@@ -34,7 +34,10 @@ import { ACTIVITY_KIND_STYLES, AnalyticsEmptyMessage, InlineCountryFlag } from "
    is the only way to answer "who opened the changelog recently".
 
    Two readings of the same window, because both questions get asked: people
-   folds it to one row each, firings leaves every one of them. */
+   folds it to one row each, firings leaves every one of them.
+
+   The same card answers the page-side question ("has anyone opened this
+   profile, and when") from the page search above the event list. */
 
 const PAGE_SIZE = 50;
 
@@ -45,9 +48,12 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [pageInput, setPageInput] = useState("");
+  // A looked-up page takes the place of the selected event until one is picked.
+  const [page, setPage] = useState<string | null>(null);
   const [scoped, setScoped] = useState(false);
   const [mode, setMode] = useState<LookupMode>("people");
-  const [result, setResult] = useState<AnalyticsEventLookupResult | null>(null);
+  const [result, setResult] = useState<AnalyticsEventLookupResult | AnalyticsPageLookupResult | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -86,13 +92,16 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
   const sinceTs = scoped ? Date.now() - clampAnalyticsRangeHours(range) * 60 * 60_000 : 0;
 
   useEffect(() => {
-    if (!selected) {
+    if (!selected && !page) {
       setResult(null);
       return;
     }
     let active = true;
     setPending(true);
-    getAnalyticsEventLookup({ data: { event: selected, sinceTs } })
+    const request: Promise<AnalyticsEventLookupResult | AnalyticsPageLookupResult> = page
+      ? getAnalyticsPageLookup({ data: { path: page, sinceTs } })
+      : getAnalyticsEventLookup({ data: { event: selected!, sinceTs } });
+    request
       .then((data) => {
         if (!active) return;
         setResult(data);
@@ -101,7 +110,7 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
       .catch((error: unknown) => {
         if (!active) return;
         setResult(null);
-        setLookupError(error instanceof Error ? error.message : "Could not load this event.");
+        setLookupError(error instanceof Error ? error.message : page ? "Could not load this page." : "Could not load this event.");
       })
       .finally(() => {
         if (active) setPending(false);
@@ -111,10 +120,12 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
     };
     // Keyed off the choices behind sinceTs rather than sinceTs itself, which is
     // recomputed from the clock on every render.
-  }, [selected, scoped, range, reloads]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected, page, scoped, range, reloads]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const select = useCallback((event: string) => {
     setSelected(event);
+    setPage(null);
+    setResult(null);
     setLimit(PAGE_SIZE);
     try {
       window.localStorage.setItem(ANALYTICS_EVENT_LOOKUP_STORAGE_KEY, event);
@@ -142,17 +153,32 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
   // borrows its map from the others in the same answer.
   const replayMaps = useMemo(() => buildAnalyticsReplayMapIndex(result?.occurrences ?? []), [result]);
 
+  const lookUpPage = (event: React.FormEvent) => {
+    event.preventDefault();
+    const path = normalizeAnalyticsLookupPath(pageInput);
+    if (!path) return;
+    setPageInput(path);
+    setPage(path);
+    setSelected(null);
+    setResult(null);
+    setLimit(PAGE_SIZE);
+  };
+
   const windowLabel = scoped ? formatAnalyticsRangeLabel(range).toLowerCase() : "everything still stored";
-  const selectedLabel = selected ? formatAnalyticsEventLabel(selected) : null;
+  const selectedLabel = page ?? (selected ? formatAnalyticsEventLabel(selected) : null);
+  const pageViews = result && "views" in result ? result.views : null;
+  const lastVisit = page && result?.occurrences[0] ? `, last ${formatAnalyticsAgo(now - result.occurrences[0].ts)} ago` : "";
   const subtitle = catalogError
     ? "could not load"
-    : selected
+    : selectedLabel
       ? result == null
         ? "loading..."
-        : mode === "people"
-          ? `${selectedLabel} · ${formatNumber(result.people.length)} ${result.people.length === 1 ? "person" : "people"}, ${windowLabel}`
-          : `${selectedLabel} · ${formatNumber(result.occurrences.length)}${result.occurrences.length >= ANALYTICS_EVENT_LOOKUP_LIMIT ? "+" : ""} firings, ${windowLabel}`
-      : "pick an event to see who fired it, most recent first";
+        : pageViews != null && mode === "people"
+          ? `${selectedLabel} · ${formatNumber(pageViews)} ${pageViews === 1 ? "view" : "views"}${lastVisit}, ${windowLabel}`
+          : mode === "people"
+            ? `${selectedLabel} · ${formatNumber(result.people.length)} ${result.people.length === 1 ? "person" : "people"}, ${windowLabel}`
+            : `${selectedLabel} · ${formatNumber(result.occurrences.length)}${result.occurrences.length >= ANALYTICS_EVENT_LOOKUP_LIMIT ? "+" : ""} ${page ? "visits" : "firings"}, ${windowLabel}`
+      : "pick an event or look up a page, most recent first";
 
   return (
     <SectionCard
@@ -171,7 +197,7 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
           <button
             type="button"
             onClick={() => setReloads((value) => value + 1)}
-            disabled={!selected || pending}
+            disabled={(!selected && !page) || pending}
             title="Refresh this lookup"
             aria-label="Refresh this lookup"
             className="inline-flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border border-osu-b3/30 bg-osu-b5/70 text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -186,6 +212,16 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
       ) : (
         <div className="grid gap-2 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-1.5">
+            <form onSubmit={lookUpPage} className="flex h-7 items-center gap-1.5 rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2">
+              <Search className="h-3 w-3 flex-shrink-0 text-osu-f1" aria-hidden="true" />
+              <input
+                value={pageInput}
+                onChange={(event) => setPageInput(event.currentTarget.value)}
+                placeholder="Look up a page, e.g. /player/name"
+                aria-label="Look up a page"
+                className="min-w-0 flex-1 bg-transparent text-[11px] text-white placeholder:text-osu-f1 focus:outline-none"
+              />
+            </form>
             <label className="flex h-7 items-center gap-1.5 rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2">
               <Search className="h-3 w-3 flex-shrink-0 text-osu-f1" aria-hidden="true" />
               <input
@@ -207,10 +243,10 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
                     key={entry.event}
                     type="button"
                     onClick={() => select(entry.event)}
-                    aria-pressed={selected === entry.event}
+                    aria-pressed={!page && selected === entry.event}
                     title={`${entry.event} · last fired ${new Date(entry.lastTs).toLocaleString("en-US")}`}
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-[100ms] ${
-                      selected === entry.event ? "bg-osu-pink/20 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
+                      !page && selected === entry.event ? "bg-osu-pink/20 text-white" : "text-osu-l2 hover:bg-osu-b3/40 hover:text-white"
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{formatAnalyticsEventLabel(entry.event)}</span>
@@ -227,7 +263,7 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
           <div className="min-w-0">
             {lookupError ? (
               <AnalyticsEmptyMessage text={lookupError} />
-            ) : !selected ? (
+            ) : !selectedLabel ? (
               <AnalyticsEmptyMessage text="Pick an event on the left." />
             ) : result == null ? (
               <div className="space-y-1">
@@ -238,9 +274,13 @@ export function AnalyticsEventLookup({ range, now }: { range: AnalyticsRange; no
             ) : rows.length === 0 ? (
               <AnalyticsEmptyMessage
                 text={
-                  scoped
-                    ? `Nobody fired ${selectedLabel} in this range.`
-                    : `Nothing left in the retention window for ${selectedLabel}.`
+                  page
+                    ? pageViews
+                      ? `Only your own visits to ${page} ${scoped ? "in this range" : "are still stored"}.`
+                      : `Nobody visited ${page} ${scoped ? "in this range" : "in the retention window"}.`
+                    : scoped
+                      ? `Nobody fired ${selectedLabel} in this range.`
+                      : `Nothing left in the retention window for ${selectedLabel}.`
                 }
               />
             ) : (
@@ -286,26 +326,17 @@ function ModeButton({ active, onClick, label, title }: { active: boolean; onClic
   );
 }
 
-/* One person who fired the event. A signed-in account is a person and links to
-   their profile; a signed-out visitor is only ever the device they browsed on,
-   so it says Guest and shows the id it is counted under. */
+/* One visitor who fired the event: the anonymous device id it is counted
+   under, since events never name the osu! account behind them. */
 function ActorRow({ row, now }: { row: AnalyticsEventActorRow; now: number }) {
   const when = new Date(row.lastTs).toLocaleString("en-US");
-  const body = (
-    <>
-      {row.viewerId ? (
-        <Avatar userId={row.viewerId} size={22} shape="circle" />
-      ) : (
-        <span className="h-[22px] w-[22px] flex-shrink-0 rounded-full bg-osu-b3/40" aria-hidden="true" />
-      )}
+  return (
+    <div className="flex items-center gap-2 rounded-md px-2 py-1.5" title={`last fired ${when}`}>
+      <span className="h-[22px] w-[22px] flex-shrink-0 rounded-full bg-osu-b3/40" aria-hidden="true" />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        {row.username ? (
-          <span className="truncate text-[12px] font-medium text-white group-hover:underline">{row.username}</span>
-        ) : (
-          <span className="truncate text-[12px] font-medium text-osu-f1" title={`visitor id: ${row.distinctId}`}>
-            Guest
-          </span>
-        )}
+        <span className="truncate text-[12px] font-medium text-osu-f1" title={`visitor id: ${row.distinctId}`}>
+          Visitor {row.distinctId.slice(0, 8)}
+        </span>
         {row.country ? (
           <span title={getCountryName(row.country) || row.country} className="flex-shrink-0">
             <InlineCountryFlag country={row.country} />
@@ -319,20 +350,7 @@ function ActorRow({ row, now }: { row: AnalyticsEventActorRow; now: number }) {
       <span className="w-10 flex-shrink-0 text-right font-mono text-[11px] text-osu-l2" title={when}>
         {formatAnalyticsAgo(now - row.lastTs)}
       </span>
-    </>
-  );
-  const className = "flex items-center gap-2 rounded-md px-2 py-1.5";
-  if (!row.username) return <div className={className}>{body}</div>;
-  return (
-    <a
-      href={analyticsInspectionHref(`/player/${encodeURIComponent(row.username)}`)}
-      target="_blank"
-      rel="noreferrer"
-      title={`last fired ${when}`}
-      className={`group cursor-pointer transition-colors duration-[100ms] hover:bg-osu-b3/30 ${className}`}
-    >
-      {body}
-    </a>
+    </div>
   );
 }
 
@@ -361,10 +379,10 @@ function FiringRow({
     <>
       <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${style.bar}`} aria-hidden="true" />
       <span
-        className={`w-[104px] flex-shrink-0 truncate text-[11px] font-semibold ${row.viewerUsername ? "text-osu-pink-light" : "text-osu-f1/60"}`}
-        title={row.viewerUsername ? `signed in as ${row.viewerUsername}` : `visitor id: ${row.distinctId}`}
+        className={`w-[104px] flex-shrink-0 truncate text-[11px] font-semibold ${row.signedIn ? "text-osu-pink-light" : "text-osu-f1/60"}`}
+        title={`visitor id: ${row.distinctId}`}
       >
-        {row.viewerUsername ?? "Guest"}
+        {row.signedIn ? "Signed in" : "Guest"}
       </span>
       <InlineCountryFlag country={row.country} />
       <span className="min-w-0 flex-1 truncate text-[11px] text-osu-f1">

@@ -65,7 +65,6 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     farmMapTitle: null,
     farmMapUser: null,
     packType: null,
-    packUsername: null,
     skinsQuery: null,
     skinsKeys: null,
     skinsFilters: null,
@@ -103,7 +102,7 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     skillPlaysKeys: null,
     skillPlaysAxis: null,
     skillPlaysSide: null,
-    viewerUsername: null,
+    signedIn: false,
     referrer: null,
     ...overrides,
   };
@@ -214,14 +213,14 @@ describe("AnalyticsStream", () => {
     expect(screen.getByText('"camellia"')).toBeTruthy();
   });
 
-  it("names signed-out visitors instead of leaving the row blank", () => {
+  it("says whether a visitor was signed in, never who", () => {
     renderStream([
       ROWS[0],
-      row({ distinctId: "d", ts: NOW - 30_000, path: "/maps", viewerUsername: "Aleju03" }),
+      row({ distinctId: "d", ts: NOW - 30_000, path: "/maps", signedIn: true }),
     ]);
     fireEvent.click(screen.getByRole("button", { name: /Visitor trails/ }));
     expect(within(screen.getByText("V1").closest("button")!).getByText("Guest")).toBeTruthy();
-    expect(within(screen.getByText("V2").closest("button")!).getByText("Aleju03")).toBeTruthy();
+    expect(within(screen.getByText("V2").closest("button")!).getByText("Signed in")).toBeTruthy();
   });
 
   it("comes back in the reading mode it was left in", () => {
@@ -270,13 +269,13 @@ describe("AnalyticsLiveBoard", () => {
     expect(cardOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
   });
 
-  const searchBox = () => screen.getByLabelText("Find a visitor by name, country or activity");
+  const searchBox = () => screen.getByLabelText("Find a visitor by country or activity");
 
   it("narrows the board to the searched visitor", () => {
-    const rows = [row({ distinctId: "y", ts: NOW - 3_000, viewerUsername: "Yunarkm", path: "/maps", mapsQuery: "dt" }), ...ROWS];
+    const rows = [row({ distinctId: "y", ts: NOW - 3_000, signedIn: true, path: "/maps", mapsQuery: "dt" }), ...ROWS];
     render(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(rows, NOW)} replayMaps={buildAnalyticsReplayMapIndex(rows)} now={NOW} />);
-    fireEvent.change(searchBox(), { target: { value: "yunar" } });
-    expect(screen.getByText("Yunarkm")).toBeTruthy();
+    fireEvent.change(searchBox(), { target: { value: "signed in" } });
+    expect(screen.getByText("Signed in")).toBeTruthy();
     expect(screen.getByText("1 of 3 online visitors match")).toBeTruthy();
     expect(screen.queryByText("Camellia - Ghost [4K Insane]")).toBeNull();
   });
@@ -290,10 +289,10 @@ describe("AnalyticsLiveBoard", () => {
   });
 
   it("accounts for a match who has already gone quiet", () => {
-    const rows = [...ROWS, row({ distinctId: "y", ts: NOW - 60 * 60_000, viewerUsername: "Yunarkm" })];
+    const rows = [...ROWS, row({ distinctId: "y", ts: NOW - 60 * 60_000, signedIn: true })];
     render(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(rows, NOW)} replayMaps={new Map()} now={NOW} />);
-    fireEvent.change(searchBox(), { target: { value: "yunarkm" } });
-    expect(screen.getByText('Nobody online matches "yunarkm".')).toBeTruthy();
+    fireEvent.change(searchBox(), { target: { value: "signed in" } });
+    expect(screen.getByText('Nobody online matches "signed in".')).toBeTruthy();
     expect(screen.getByText("1 visitor matched earlier in this range - they are in the activity feed below.")).toBeTruthy();
   });
 

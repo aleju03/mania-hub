@@ -32,10 +32,8 @@ export interface BannedUser {
      gone (restricted-pp.ts); null when nothing counts. */
   simulatedPp: number | null;
   simulatedPlays: number;
-  /* Their latest signed-in visit to this site, from analytics; null when
-     they never signed in here. */
+  /* Their latest sign-in to this site; null when they never signed in here. */
   siteLastSeenAt: string | null;
-  siteEvents: number;
 }
 
 export interface BannedUsersPage {

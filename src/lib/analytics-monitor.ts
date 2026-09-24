@@ -72,14 +72,14 @@ export interface AnalyticsRecentServerErrorRow {
   retryAfter: string | null;
 }
 
-/* One osu! account that has browsed the site while signed in. Durable on the
-   backend, so the roster outlives the 90-day event retention. */
+/* One osu! account that has signed in: first and last sign-in and its osu!
+   country. Durable on the backend, so the roster outlives the 90-day event
+   retention. */
 export interface AnalyticsViewerRow {
   viewerId: number;
   username: string;
   firstSeen: number;
   lastSeen: number;
-  events: number;
   country: string | null;
   /* Optional because a backend deployed behind this build does not send them
      yet, and because only players the backend has ingested have them at all. */
@@ -113,17 +113,6 @@ export interface AnalyticsViewersResult {
   countries?: AnalyticsCountryRow[];
 }
 
-/* One player's own trail, read on demand from the roster. Empty is a real
-   answer: the roster is durable and the events behind it are pruned. */
-export interface AnalyticsViewerEventsResult {
-  viewerId: number;
-  events: AnalyticsRecentEventRow[];
-}
-
-// How much of one player's trail a single request pulls back. Matches the
-// backend ceiling.
-export const ANALYTICS_VIEWER_EVENTS_LIMIT = 300;
-
 /* One event name the store has recorded, with how often it ever has and when
    it last did. The picker for the lookup below. */
 export interface AnalyticsEventCatalogEntry {
@@ -132,12 +121,10 @@ export interface AnalyticsEventCatalogEntry {
   lastTs: number;
 }
 
-/* One person behind an event: a signed-in account, or the device a signed-out
-   visitor browsed on. The counts are over the lookup's window, not all time. */
+/* One visitor behind an event, by its anonymous device id. The counts are
+   over the lookup's window, not all time. */
 export interface AnalyticsEventActorRow {
   actorKey: string;
-  viewerId: number | null;
-  username: string | null;
   distinctId: string;
   country: string | null;
   path: string | null;
@@ -153,6 +140,31 @@ export interface AnalyticsEventLookupResult {
   sinceTs: number;
   people: AnalyticsEventActorRow[];
   occurrences: AnalyticsRecentEventRow[];
+}
+
+/* Every view of one page: the lookup's page search. `views` counts every view
+   in the window (the site admin's too); the rows leave the admin out. */
+export interface AnalyticsPageLookupResult {
+  path: string;
+  sinceTs: number;
+  views: number;
+  people: AnalyticsEventActorRow[];
+  occurrences: AnalyticsRecentEventRow[];
+}
+
+/* What someone typed into the page search, as the pathname analytics stores:
+   a full URL or a bare "player/name" works, a query or hash is dropped, and
+   the name is percent-encoded the way the browser reported it. */
+export function normalizeAnalyticsLookupPath(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  try {
+    const absolute = /^https?:\/\//i.test(trimmed) || trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    const pathname = new URL(absolute, "https://mania-tracker.com").pathname;
+    return pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  } catch {
+    return null;
+  }
 }
 
 /* What the store's event names mean, for reading a list of them at a glance.

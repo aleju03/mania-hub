@@ -99,13 +99,13 @@ export function VisitorChip({
   slot,
   country,
   deviceKind,
-  viewerUsername,
+  signedIn,
 }: {
   label: string;
   slot: number;
   country: string | null;
   deviceKind: AnalyticsDeviceKind;
-  viewerUsername: string | null;
+  signedIn: boolean;
 }) {
   const color = visitorColor(slot);
   return (
@@ -117,19 +117,11 @@ export function VisitorChip({
         <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" aria-hidden="true" />
       )}
       <DeviceIcon deviceKind={deviceKind} />
-      {viewerUsername ? (
-        <span
-          className="min-w-0 truncate text-[10px] font-semibold text-osu-pink-light"
-          title={`signed in as ${viewerUsername}`}
-        >
-          {viewerUsername}
-        </span>
+      {/* Events never name the account, only whether there was one. */}
+      {signedIn ? (
+        <span className="min-w-0 truncate text-[10px] font-semibold text-osu-pink-light">Signed in</span>
       ) : (
-        // Most visitors browse signed out; naming them keeps the row from
-        // reading as a missing username.
-        <span className="min-w-0 truncate text-[10px] font-semibold text-osu-f1/50" title="Not signed in">
-          Guest
-        </span>
+        <span className="min-w-0 truncate text-[10px] font-semibold text-osu-f1/50">Guest</span>
       )}
     </>
   );

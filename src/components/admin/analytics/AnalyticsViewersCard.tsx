@@ -1,31 +1,23 @@
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import { Avatar } from "../../ui/Avatar";
 import { SectionCard } from "../SectionCard";
 import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
-import {
-  analyticsEventHref,
-  analyticsInspectionHref,
-  buildAnalyticsReplayMapIndex,
-  describeAnalyticsEvent,
-  formatAnalyticsActivityText,
-  formatAnalyticsAgo,
-  type AnalyticsRecentEventRow,
-} from "../../../lib/analytics-feed";
-import { getAnalyticsViewerEvents, getAnalyticsViewers } from "../../../lib/analytics-monitor-data";
+import { analyticsInspectionHref, formatAnalyticsAgo } from "../../../lib/analytics-feed";
+import { getAnalyticsViewers } from "../../../lib/analytics-monitor-data";
 import type { AnalyticsCountryRow, AnalyticsViewersResult, AnalyticsViewerRow, AnalyticsViewerSort } from "../../../lib/analytics-monitor";
 import {
-  ACTIVITY_KIND_STYLES,
   AnalyticsCountryFilter,
   AnalyticsEmptyMessage,
   InlineCountryFlag,
   useTickingNow,
 } from "./shared";
 
-/* Every osu! account that has signed in and browsed the site. The backend keeps
-   this as a durable projection, so it is not bounded by the event retention
-   window the rest of the tab reads from. */
+/* Every osu! account that has signed in, recorded at login and never tied to
+   what the account browses. The backend keeps this as a durable projection,
+   so it is not bounded by the event retention window the rest of the tab
+   reads from. */
 
 /* The whole roster is fetched so search can reach a player who last visited
    months ago, but only a page of it is ever in the DOM: each row costs an
@@ -37,7 +29,7 @@ const PAGE_SIZE = 100;
    roster before cutting it to a page, so "top by pp" is the best player who
    has ever signed in rather than the best of the most recent page. */
 const SORTS: Array<{ id: AnalyticsViewerSort; label: string; title: string }> = [
-  { id: "recent", label: "Recent", title: "Newest visit first" },
+  { id: "recent", label: "Recent", title: "Newest sign-in first" },
   { id: "pp", label: "PP", title: "Highest pp first" },
 ];
 
@@ -246,173 +238,37 @@ function ViewerRank({ pp, globalRank }: { pp: number | null; globalRank: number 
    few hundred avatar rows each time is pure waste. */
 const ViewerRow = memo(function ViewerRow({ row, now }: { row: AnalyticsViewerRow; now: number }) {
   const seenFor = row.lastSeen - row.firstSeen;
-  const [open, setOpen] = useState(false);
-  return (
-    <div
-      className={`overflow-hidden rounded-md border bg-osu-b5/50 transition-colors duration-[100ms] ${
-        open ? "border-osu-pink/35" : "border-osu-b3/20"
-      }`}
-    >
-      <div className="flex items-center gap-1 pr-1 transition-colors duration-[100ms] hover:bg-osu-b3/25">
-        <a
-          href={analyticsInspectionHref(`/player/${encodeURIComponent(row.username)}`)}
-          target="_blank"
-          rel="noreferrer"
-          className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 py-2 pl-2.5"
-          title={`osu! user id ${row.viewerId}`}
-        >
-          <Avatar userId={row.viewerId} size={30} shape="circle" />
-          {/* A phone reads this as a name over its numbers; from sm the same spans
-              become the columns of a single line. Fixed-width columns on a narrow
-              screen left the name about four characters wide. */}
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
-            <span className="flex min-w-0 items-center gap-1.5 sm:flex-1">
-              <span className="truncate text-[13px] font-medium text-white group-hover:underline">{row.username}</span>
-              {row.country ? (
-                <span title={getCountryName(row.country) || row.country} className="flex-shrink-0">
-                  <InlineCountryFlag country={row.country} />
-                </span>
-              ) : null}
-            </span>
-            <span className="flex min-w-0 items-center gap-2.5 sm:contents">
-              <span className="hidden flex-shrink-0 text-[11px] text-osu-f1 lg:inline" title="time between their first and most recent visit">
-                {seenFor >= 60_000 ? `around for ${formatAnalyticsAgo(seenFor)}` : "first visit"}
-              </span>
-              <ViewerRank pp={row.pp ?? null} globalRank={row.globalRank ?? null} />
-              <span className="flex-shrink-0 text-[11px] text-osu-f1 sm:w-[86px] sm:text-right" title={`${formatNumber(row.events)} captured events`}>
-                {formatNumber(row.events)} events
-              </span>
-            </span>
-          </div>
-          <span className="w-10 flex-shrink-0 text-right font-mono text-[11px] text-osu-l2 sm:w-14" title={new Date(row.lastSeen).toLocaleString("en-US")}>
-            {formatAnalyticsAgo(now - row.lastSeen)}
-          </span>
-        </a>
-        {/* Its own control rather than the row itself: the row already means
-            "open their profile", and both wants are real. */}
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-label={`${open ? "Hide" : "Show"} what ${row.username} has been doing`}
-          title={`${open ? "Hide" : "Show"} what ${row.username} has been doing`}
-          className="flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-osu-f1 transition-colors duration-[120ms] hover:bg-osu-b3/50 hover:text-white"
-        >
-          <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-        </button>
-      </div>
-      {open ? <ViewerActivity viewerId={row.viewerId} now={now} /> : null}
-    </div>
-  );
-});
-
-// How much of a trail is unfolded at a time. The request brings back more; a
-// few hundred rows dropped into the roster at once buries everything under it.
-const ACTIVITY_PAGE_SIZE = 20;
-
-/* What this player has actually been doing, fetched the first time their row is
-   opened. The roster's event count is lifetime and the events behind it are
-   pruned at the store's retention, so an old account answering with nothing is
-   a true answer rather than a failure. */
-function ViewerActivity({ viewerId, now }: { viewerId: number; now: number }) {
-  const [events, setEvents] = useState<AnalyticsRecentEventRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [limit, setLimit] = useState(ACTIVITY_PAGE_SIZE);
-
-  useEffect(() => {
-    let active = true;
-    getAnalyticsViewerEvents({ data: { viewerId } })
-      .then((result) => {
-        if (active) setEvents(result.events);
-      })
-      .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : "Could not load this player's activity.");
-      });
-    return () => {
-      active = false;
-    };
-  }, [viewerId]);
-
-  // Replay titles live on the events themselves, so the map a bare /replay
-  // pageview was about is recovered from the player's own trail.
-  const replayMaps = useMemo(() => buildAnalyticsReplayMapIndex(events ?? []), [events]);
-
-  if (error) {
-    return <div className="border-t border-osu-b3/20 px-3 py-3 text-[11px] text-osu-red-light">{error}</div>;
-  }
-  if (events == null) {
-    return (
-      <div className="space-y-1 border-t border-osu-b3/20 p-2">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="skeleton-pulse h-[26px] rounded" />
-        ))}
-      </div>
-    );
-  }
-  if (events.length === 0) {
-    return (
-      <div className="border-t border-osu-b3/20 px-3 py-3 text-[11px] text-osu-f1">
-        Nothing left in the retention window for this player.
-      </div>
-    );
-  }
-
-  const shown = events.slice(0, limit);
-  const hidden = events.length - shown.length;
-
-  return (
-    <div className="border-t border-osu-b3/20 p-1.5">
-      {shown.map((event, index) => (
-        <ActivityLine key={event.eventId ?? `${event.ts}-${index}`} event={event} replayMaps={replayMaps} now={now} />
-      ))}
-      {hidden > 0 ? (
-        <button
-          type="button"
-          onClick={() => setLimit((value) => value + ACTIVITY_PAGE_SIZE)}
-          className="mt-1 w-full cursor-pointer rounded py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/40 hover:text-white"
-        >
-          {formatNumber(hidden)} earlier
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function ActivityLine({
-  event,
-  replayMaps,
-  now,
-}: {
-  event: AnalyticsRecentEventRow;
-  replayMaps: ReturnType<typeof buildAnalyticsReplayMapIndex>;
-  now: number;
-}) {
-  const activity = describeAnalyticsEvent(event, replayMaps);
-  const style = ACTIVITY_KIND_STYLES[activity.kind];
-  const href = analyticsEventHref(event);
-  const body = (
-    <>
-      <span className={`mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full ${style.bar}`} aria-hidden="true" />
-      <span className="min-w-0 flex-1 text-[12px] leading-snug text-osu-f1">
-        {activity.verb} <span className={`text-white ${href ? "group-hover:underline" : ""}`}>{activity.subject}</span>
-        {activity.detail ? <span className="text-osu-f1"> {activity.detail}</span> : null}
-      </span>
-      <span className="mt-[3px] flex-shrink-0 font-mono text-[11px] text-osu-f1" title={new Date(event.ts).toLocaleString("en-US")}>
-        {formatAnalyticsAgo(now - event.ts)}
-      </span>
-    </>
-  );
-  const className = "flex items-start gap-2 rounded px-2 py-1.5";
-  if (!href) return <div className={className}>{body}</div>;
   return (
     <a
-      href={href}
+      href={analyticsInspectionHref(`/player/${encodeURIComponent(row.username)}`)}
       target="_blank"
       rel="noreferrer"
-      title={formatAnalyticsActivityText(activity)}
-      className={`group cursor-pointer transition-colors duration-[100ms] hover:bg-osu-b3/40 ${className}`}
+      className="group flex min-w-0 cursor-pointer items-center gap-2.5 rounded-md border border-osu-b3/20 bg-osu-b5/50 py-2 pl-2.5 pr-2 transition-colors duration-[100ms] hover:bg-osu-b3/25"
+      title={`osu! user id ${row.viewerId}`}
     >
-      {body}
+      <Avatar userId={row.viewerId} size={30} shape="circle" />
+      {/* A phone reads this as a name over its numbers; from sm the same spans
+          become the columns of a single line. Fixed-width columns on a narrow
+          screen left the name about four characters wide. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+        <span className="flex min-w-0 items-center gap-1.5 sm:flex-1">
+          <span className="truncate text-[13px] font-medium text-white group-hover:underline">{row.username}</span>
+          {row.country ? (
+            <span title={getCountryName(row.country) || row.country} className="flex-shrink-0">
+              <InlineCountryFlag country={row.country} />
+            </span>
+          ) : null}
+        </span>
+        <span className="flex min-w-0 items-center gap-2.5 sm:contents">
+          <span className="hidden flex-shrink-0 text-[11px] text-osu-f1 lg:inline" title="time between their first and most recent sign-in">
+            {seenFor >= 60_000 ? `around for ${formatAnalyticsAgo(seenFor)}` : "first sign-in"}
+          </span>
+          <ViewerRank pp={row.pp ?? null} globalRank={row.globalRank ?? null} />
+        </span>
+      </div>
+      <span className="w-10 flex-shrink-0 text-right font-mono text-[11px] text-osu-l2 sm:w-14" title={`last signed in ${new Date(row.lastSeen).toLocaleString("en-US")}`}>
+        {formatAnalyticsAgo(now - row.lastSeen)}
+      </span>
     </a>
   );
-}
+});

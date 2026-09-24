@@ -48,7 +48,6 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     farmMapTitle: null,
     farmMapUser: null,
     packType: null,
-    packUsername: null,
     skinsQuery: null,
     skinsKeys: null,
     skinsFilters: null,
@@ -86,7 +85,7 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     skillPlaysKeys: null,
     skillPlaysAxis: null,
     skillPlaysSide: null,
-    viewerUsername: null,
+    signedIn: false,
     referrer: null,
     ...overrides,
   };
@@ -338,17 +337,17 @@ describe("describeAnalyticsEvent", () => {
       kind: "farm",
       subject: "farm help for juan",
     });
-    expect(describeAnalyticsEvent(row({ event: "pack_open", packType: "elite", packUsername: "juan" }))).toMatchObject({
+    expect(describeAnalyticsEvent(row({ event: "pack_open", packType: "elite", signedIn: true }))).toMatchObject({
       kind: "pack",
       verb: "opened",
       subject: "an Elite pack",
-      detail: "as juan",
+      detail: null,
     });
-    expect(describeAnalyticsEvent(row({ event: "pack_cut", packType: "standard", packUsername: "juan" }))).toMatchObject({
+    expect(describeAnalyticsEvent(row({ event: "pack_cut", packType: "standard" }))).toMatchObject({
       kind: "pack",
       verb: "cut through",
       subject: "a Standard pack",
-      detail: "as juan",
+      detail: null,
     });
     expect(describeAnalyticsEvent(row({ event: "skin_download", skinName: "Freedom Dive" }))).toMatchObject({
       kind: "skin",

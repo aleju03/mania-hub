@@ -429,7 +429,7 @@ function StreamRow({
             slot={slot}
             country={row.country}
             deviceKind={row.deviceKind}
-            viewerUsername={row.viewerUsername}
+            signedIn={row.signedIn}
           />
           <span className="ml-auto flex-shrink-0 font-mono text-[10px] text-osu-f1 sm:hidden">{ago}</span>
         </span>
@@ -513,7 +513,7 @@ function SessionRows({
                     slot={session.slot}
                     country={session.country}
                     deviceKind={session.deviceKind}
-                    viewerUsername={session.viewerUsername}
+                    signedIn={session.signedIn}
                   />
                 </span>
                 {session.online ? (

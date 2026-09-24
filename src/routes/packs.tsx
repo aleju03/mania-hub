@@ -695,10 +695,7 @@ function PacksPage() {
      elsewhere), and the caller keeps the pack unopened. */
   const chargeForPack = (type: PackTypeDef): boolean => {
     if (!walletApi.openPack(type.cost)) return false;
-    track("pack_open", {
-      pack_type: type.id,
-      pack_username: auth.viewer?.username,
-    });
+    track("pack_open", { pack_type: type.id });
     return true;
   };
 
@@ -825,7 +822,7 @@ function PacksPage() {
             serverIsNewRef.current = dealt.isNewByCardKey;
             serverPaidRef.current = true;
             if (dealt.wallet) walletApi.applyServerWallet(dealt.wallet.payload, dealt.wallet.rev);
-            track("pack_open", { pack_type: type.id, pack_username: viewerRef.current?.username });
+            track("pack_open", { pack_type: type.id });
             finishDeal(devApplyForcedEternal(dealt.draw.players), dealt.draw.poolTotal, dealt.scoresByUserId);
             return;
           }
@@ -963,10 +960,7 @@ function PacksPage() {
     /* Its own line in the feed, next to the open: the blade went past the foil
        and through the cards, so the whole hand came out in two pieces. */
     if (effectiveDamage) {
-      track("pack_cut", {
-        pack_type: selectedType.id,
-        pack_username: auth.viewer?.username,
-      });
+      track("pack_cut", { pack_type: selectedType.id });
     }
     const trigger = dealTriggerRef.current;
     if (serverDeals()) {

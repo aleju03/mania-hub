@@ -1,7 +1,7 @@
 /* The traffic chart is only readable if its axis is: ticks have to land on round
    local clock times and stay clear of the range's own start/"now" labels. */
 import { describe, expect, it } from "vitest";
-import { analyticsSnapshotSupersedes, buildAnalyticsTimelineTicks, getAnalyticsViewKey } from "./analytics-monitor";
+import { analyticsSnapshotSupersedes, buildAnalyticsTimelineTicks, getAnalyticsViewKey, normalizeAnalyticsLookupPath } from "./analytics-monitor";
 
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
@@ -83,5 +83,19 @@ describe("analyticsSnapshotSupersedes", () => {
     for (const key of [getAnalyticsViewKey(1, null), getAnalyticsViewKey(24, "CR")]) {
       expect(analyticsSnapshotSupersedes(shown, { key, fetchedAt: 1, cacheState: "warming" })).toBe(true);
     }
+  });
+});
+
+describe("normalizeAnalyticsLookupPath", () => {
+  it("reads a full URL, a bare path or a slashless one as the stored pathname", () => {
+    expect(normalizeAnalyticsLookupPath("https://mania-tracker.com/player/Juan?tab=skills#top")).toBe("/player/Juan");
+    expect(normalizeAnalyticsLookupPath("/player/Juan/")).toBe("/player/Juan");
+    expect(normalizeAnalyticsLookupPath(" player/Juan ")).toBe("/player/Juan");
+    expect(normalizeAnalyticsLookupPath("/")).toBe("/");
+  });
+
+  it("encodes a name the way the browser reports it, and turns away nothing", () => {
+    expect(normalizeAnalyticsLookupPath("/player/Some Name")).toBe("/player/Some%20Name");
+    expect(normalizeAnalyticsLookupPath("   ")).toBeNull();
   });
 });

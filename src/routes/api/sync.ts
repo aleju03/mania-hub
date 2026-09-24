@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { waitUntil } from "@vercel/functions";
 
 import type { AuthViewer } from "../../lib/auth-shared";
-import { readViewerFromRequest } from "../../lib/auth-server";
+import { isAdminOsuUserId, readViewerFromRequest } from "../../lib/auth-server";
 import { readEdgeCountry } from "../../lib/country-cookie";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
 import { isSameOriginRequest } from "../../lib/origin";
@@ -25,7 +25,7 @@ const LIVE_ANALYTICS_FORWARD_TIMEOUT_MS = 5_000;
    events (a 429 to sendBeacon is not retried). Ten requests a second from one
    address is not a browser population, it is a script, and what bounds the
    damage below that line is the 20-event / 64 KiB cap on each accepted request
-   plus the server-derived viewer identity. */
+   plus the server-derived session flags. */
 const SYNC_RATE_WINDOW_MS = 60_000;
 const SYNC_RATE_PER_WINDOW = 600;
 const syncLimiter = createFixedWindowLimiter(SYNC_RATE_WINDOW_MS);
@@ -116,35 +116,21 @@ function readCapturedEvents(body: ArrayBuffer): unknown[] {
   return parsed ? [parsed] : [];
 }
 
-/* The acting identity is server business, not a browser super-property. The
-   store copies `viewer_id` / `viewer_username` straight out of the bag and
-   upserts them into `analytics_viewers`, a roster that deliberately outlives
-   event pruning, so a client-supplied pair would let anyone invent a trail for
-   any osu! account. Drop whatever arrived and re-derive from the signed session
-   cookie, the same way geo_country and is_bot are derived here. */
-export function applyServerViewer(events: unknown[], viewer: AuthViewer | null): unknown[] {
-  return events.map((event) => {
-    if (!event || typeof event !== "object" || Array.isArray(event)) return event;
-    const record = { ...(event as Record<string, unknown>) };
-    const rawProperties = record.properties;
-    const properties: Record<string, unknown> =
-      rawProperties && typeof rawProperties === "object" && !Array.isArray(rawProperties)
-        ? { ...(rawProperties as Record<string, unknown>) }
-        : {};
-    delete properties.viewer_id;
-    delete properties.viewer_username;
-    if (viewer) {
-      properties.viewer_id = viewer.id;
-      properties.viewer_username = viewer.username;
-    }
-    record.properties = properties;
-    return record;
-  });
+/* Analytics events never name the osu! account behind them. All the store
+   learns from the session cookie is whether there was one, and whether it
+   belongs to a site admin, whose own browsing stays out of the activity feed.
+   Both are derived here, like geo_country and is_bot; the store drops any
+   account the browser itself sends. */
+export function sessionFlags(viewer: AuthViewer | null): { signed_in: boolean; site_admin: boolean } {
+  return {
+    signed_in: viewer != null,
+    site_admin: viewer != null && isAdminOsuUserId(viewer.id),
+  };
 }
 
 /* Second write target: the in-house analytics store on the live backend.
    Wrapped (not raw-forwarded) so the backend gets the edge-derived GeoIP
-   country, a bot verdict and the signed-in viewer without trusting
+   country, a bot verdict and the session flags without trusting
    client-supplied properties. */
 function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
   const base = getLiveBackendBase();
@@ -170,9 +156,10 @@ function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
         // The store unwraps a `batch` payload into individual events itself, so
         // a browser batch stays one forward rather than one per event.
         body: JSON.stringify({
-          payload: { batch: applyServerViewer(events, viewer) },
+          payload: { batch: events },
           geo_country: readEdgeCountry(request.headers),
           is_bot: isLikelyBotUserAgent(request.headers.get("user-agent")),
+          ...sessionFlags(viewer),
           client_key: clientKey,
         }),
         signal: controller.signal,

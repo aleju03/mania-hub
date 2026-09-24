@@ -216,7 +216,7 @@ function BannedUserRow({
             {entry.siteLastSeenAt ? (
               <span
                 className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-300"
-                title={`Signed in on Mania Tracker, last ${formatTimeAgo(entry.siteLastSeenAt)} (${plural(entry.siteEvents, "event")})`}
+                title={`Signed in on Mania Tracker, last ${formatTimeAgo(entry.siteLastSeenAt)}`}
               >
                 site user
               </span>

@@ -4,7 +4,7 @@
    value depends on two properties: same client today -> same key, and no way
    back to the address it was built from (nor across a day boundary). */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyServerViewer, buildClientKey } from "./api/sync";
+import { buildClientKey, sessionFlags } from "./api/sync";
 
 const SECRET = "test-admin-token";
 
@@ -77,31 +77,21 @@ describe("analytics client key", () => {
   });
 });
 
-/* The acting identity has to come off the session cookie: the store writes it
-   into a viewer roster that outlives event pruning, so a browser-supplied one
-   would let anyone put words in another player's mouth. */
-describe("analytics viewer identity", () => {
+/* Events carry no osu! account: the proxy only tells the store whether the
+   visitor was signed in, and whether as a site admin. */
+describe("analytics session flags", () => {
   const viewer = { id: 2927048, username: "someone", avatarUrl: "", countryCode: "CR" };
 
-  it("replaces a client-supplied viewer with the signed-in one", () => {
-    const [event] = applyServerViewer(
-      [{ event: "$pageview", properties: { viewer_id: 1, viewer_username: "not-them", $pathname: "/packs" } }],
-      viewer,
-    ) as Array<{ properties: Record<string, unknown> }>;
-    expect(event.properties).toEqual({ $pathname: "/packs", viewer_id: 2927048, viewer_username: "someone" });
+  it("says signed in without naming the account", () => {
+    const flags = sessionFlags(viewer);
+    expect(flags).toEqual({ signed_in: true, site_admin: false });
+    expect(JSON.stringify(flags)).not.toContain("someone");
   });
 
-  it("drops a client-supplied viewer entirely when nobody is signed in", () => {
-    const [event] = applyServerViewer(
-      [{ event: "$pageview", properties: { viewer_id: 1, viewer_username: "not-them" } }],
-      null,
-    ) as Array<{ properties: Record<string, unknown> }>;
-    expect(event.properties).toEqual({});
-  });
-
-  it("leaves non-object events and missing property bags alone", () => {
-    expect(applyServerViewer(["nope", null], viewer)).toEqual(["nope", null]);
-    const [event] = applyServerViewer([{ event: "$pageview" }], null) as Array<Record<string, unknown>>;
-    expect(event).toEqual({ event: "$pageview", properties: {} });
+  it("marks an admin account and nobody when signed out", () => {
+    vi.stubEnv("ADMIN_OSU_USER_IDS", String(viewer.id));
+    expect(sessionFlags(viewer)).toEqual({ signed_in: true, site_admin: true });
+    vi.unstubAllEnvs();
+    expect(sessionFlags(null)).toEqual({ signed_in: false, site_admin: false });
   });
 });

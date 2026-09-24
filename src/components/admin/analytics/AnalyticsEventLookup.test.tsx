@@ -17,7 +17,8 @@ const render = (ui: ReactElement) => rtlRender(ui, { wrapper: I18nWrap });
 
 const getAnalyticsEventCatalog = vi.hoisted(() => vi.fn());
 const getAnalyticsEventLookup = vi.hoisted(() => vi.fn());
-vi.mock("../../../lib/analytics-monitor-data", () => ({ getAnalyticsEventCatalog, getAnalyticsEventLookup }));
+const getAnalyticsPageLookup = vi.hoisted(() => vi.fn());
+vi.mock("../../../lib/analytics-monitor-data", () => ({ getAnalyticsEventCatalog, getAnalyticsEventLookup, getAnalyticsPageLookup }));
 
 const { AnalyticsEventLookup } = await import("./AnalyticsEventLookup");
 
@@ -33,11 +34,11 @@ const LOOKUP: AnalyticsEventLookupResult = {
   event: "changelog_open",
   sinceTs: 0,
   people: [
-    { actorKey: "u111", viewerId: 111, username: "juan", distinctId: "d111", country: "CR", path: "/skins", lastTs: NOW - 3_600_000, count: 4 },
-    { actorKey: "danon", viewerId: null, username: null, distinctId: "anon-1", country: "JP", path: "/", lastTs: NOW - 7_200_000, count: 1 },
+    { actorKey: "dd111", distinctId: "d111", country: "CR", path: "/skins", lastTs: NOW - 3_600_000, count: 4 },
+    { actorKey: "danon-1", distinctId: "anon-1", country: "JP", path: "/", lastTs: NOW - 7_200_000, count: 1 },
   ],
   occurrences: [
-    firing({ ts: NOW - 3_600_000, viewerUsername: "juan", country: "CR" }),
+    firing({ ts: NOW - 3_600_000, signedIn: true, country: "CR" }),
     firing({ ts: NOW - 7_200_000, distinctId: "anon-1", country: "JP" }),
   ],
 };
@@ -54,7 +55,7 @@ function firing(overrides: Partial<AnalyticsRecentEventRow>): AnalyticsRecentEve
     country: null,
     deviceKind: "desktop",
     distinctId: "d111",
-    viewerUsername: null,
+    signedIn: false,
     ...overrides,
   } as AnalyticsRecentEventRow;
 }
@@ -63,10 +64,47 @@ afterEach(() => {
   cleanup();
   getAnalyticsEventCatalog.mockReset();
   getAnalyticsEventLookup.mockReset();
+  getAnalyticsPageLookup.mockReset();
   window.localStorage.clear();
 });
 
 describe("AnalyticsEventLookup", () => {
+  it("looks up every visit to one page, typed as a full URL", async () => {
+    getAnalyticsEventCatalog.mockResolvedValue(CATALOG);
+    getAnalyticsPageLookup.mockResolvedValue({
+      path: "/player/Juan",
+      sinceTs: 0,
+      views: 7,
+      people: [{ actorKey: "dd111", distinctId: "d111", country: "CR", path: "/player/Juan", lastTs: NOW - 3 * 3_600_000, count: 2 }],
+      occurrences: [
+        firing({ event: "$pageview", path: "/player/Juan", ts: NOW - 3 * 3_600_000, profileUsername: "Juan" }),
+        firing({ event: "$pageview", path: "/player/Juan", ts: NOW - 5 * 3_600_000, profileUsername: "Juan" }),
+      ],
+    });
+    render(<AnalyticsEventLookup range={24} now={NOW} />);
+
+    fireEvent.change(screen.getByLabelText("Look up a page"), { target: { value: "https://mania-tracker.com/player/Juan/?tab=skills" } });
+    fireEvent.submit(screen.getByLabelText("Look up a page").closest("form")!);
+
+    await waitFor(() => expect(screen.getByText("Visitor d111")).toBeTruthy());
+    expect(getAnalyticsPageLookup).toHaveBeenCalledWith({ data: { path: "/player/Juan", sinceTs: 0 } });
+    expect(getAnalyticsEventLookup).not.toHaveBeenCalled();
+    expect(screen.getByText("/player/Juan · 7 views, last 3h ago, everything still stored")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Firings"));
+    expect(screen.getByText("/player/Juan · 2 visits, everything still stored")).toBeTruthy();
+  });
+
+  it("says when the only visits to a page were the admin's own", async () => {
+    getAnalyticsEventCatalog.mockResolvedValue(CATALOG);
+    getAnalyticsPageLookup.mockResolvedValue({ path: "/player/Juan", sinceTs: 0, views: 3, people: [], occurrences: [] });
+    render(<AnalyticsEventLookup range={24} now={NOW} />);
+
+    fireEvent.change(screen.getByLabelText("Look up a page"), { target: { value: "player/Juan" } });
+    fireEvent.submit(screen.getByLabelText("Look up a page").closest("form")!);
+    await waitFor(() => expect(screen.getByText("Only your own visits to /player/Juan are still stored.")).toBeTruthy());
+  });
+
   it("lists the store's events and looks up who fired the one picked", async () => {
     getAnalyticsEventCatalog.mockResolvedValue(CATALOG);
     getAnalyticsEventLookup.mockResolvedValue(LOOKUP);
@@ -78,12 +116,12 @@ describe("AnalyticsEventLookup", () => {
     expect(screen.getByText("Pick an event on the left.")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Changelog opened"));
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Visitor d111")).toBeTruthy());
     expect(getAnalyticsEventLookup).toHaveBeenCalledWith({ data: { event: "changelog_open", sinceTs: 0 } });
-    // One row per person, the signed-out one named for what it is.
-    expect(screen.getByText("Guest")).toBeTruthy();
+    // One row per anonymous device; nothing names or links an account.
+    expect(screen.getByText("Visitor anon-1")).toBeTruthy();
     expect(screen.getByText("Changelog opened · 2 people, everything still stored")).toBeTruthy();
-    expect(screen.getByText("juan").closest("a")!.getAttribute("href")).toContain("/player/juan");
+    expect(screen.getByText("Visitor d111").closest("a")).toBeNull();
   });
 
   it("narrows the lookup to the selected range on request", async () => {
@@ -111,7 +149,7 @@ describe("AnalyticsEventLookup", () => {
 
     await waitFor(() => expect(screen.getByText("Changelog opened")).toBeTruthy());
     fireEvent.click(screen.getByText("Changelog opened"));
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Visitor d111")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Firings"));
     // The feed's own sentence for the event, once per firing.
@@ -131,11 +169,11 @@ describe("AnalyticsEventLookup", () => {
     expect(screen.queryByText("Changelog opened")).toBeNull();
     fireEvent.change(screen.getByPlaceholderText("Find an event"), { target: { value: "" } });
     fireEvent.click(screen.getByText("Changelog opened"));
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Visitor d111")).toBeTruthy());
     first.unmount();
 
     render(<AnalyticsEventLookup range={24} now={NOW} />);
-    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Visitor d111")).toBeTruthy());
   });
 
   it("puts the most recently fired event at the top, however rare it is", async () => {
@@ -156,7 +194,7 @@ describe("AnalyticsEventLookup", () => {
       event: "streak_run",
       sinceTs: 0,
       people: [],
-      occurrences: [firing({ event: "streak_run", path: "/packs", viewerUsername: "juan" })],
+      occurrences: [firing({ event: "streak_run", path: "/packs", signedIn: true })],
     });
     render(<AnalyticsEventLookup range={24} now={NOW} />);
 

@@ -48,7 +48,6 @@ export interface AnalyticsRecentEventRow {
   farmMapTitle: string | null;
   farmMapUser: string | null;
   packType: string | null;
-  packUsername: string | null;
   skinsQuery: string | null;
   skinsKeys: string | null;
   skinsFilters: string | null;
@@ -86,7 +85,8 @@ export interface AnalyticsRecentEventRow {
   skillPlaysKeys: string | null;
   skillPlaysAxis: string | null;
   skillPlaysSide: string | null;
-  viewerUsername: string | null;
+  /* Whether the visitor was signed in. Events never name the account. */
+  signedIn: boolean;
   referrer: string | null;
 }
 
@@ -599,7 +599,8 @@ function describeNamedAnalyticsEvent(
         kind: "pack",
         verb: row.event === "pack_cut" ? "cut through" : "opened",
         subject: `${/^[aeiou]/i.test(packType) ? "an" : "a"} ${packType} pack`,
-        detail: row.packUsername ? `as ${row.packUsername}` : "as a guest",
+        // Signed in or not is already on the row's visitor chip.
+        detail: null,
       };
     }
     case "replay_watch_crash":
@@ -710,10 +711,10 @@ export function describeAnalyticsEvent(
   }
   if (path === "/rankings") return describeRankings(row, scope);
   if (path === "/my-stats" || path === "/my-data") {
-    return { kind: "profile", verb: "opened", subject: "their own stats", detail: row.viewerUsername ? `as ${row.viewerUsername}` : null };
+    return { kind: "profile", verb: "opened", subject: "their own stats", detail: null };
   }
   if (path === "/goals") {
-    return { kind: "profile", verb: "opened", subject: "their goals", detail: row.viewerUsername ? `as ${row.viewerUsername}` : null };
+    return { kind: "profile", verb: "opened", subject: "their goals", detail: null };
   }
   const simple = SIMPLE_PAGE_LABELS[path];
   if (simple) {
@@ -789,7 +790,7 @@ export interface AnalyticsSession {
   label: string;
   country: string | null;
   deviceKind: AnalyticsDeviceKind;
-  viewerUsername: string | null;
+  signedIn: boolean;
   referrer: string | null;
   firstTs: number;
   lastTs: number;
@@ -813,7 +814,7 @@ export function buildAnalyticsSessions(rows: AnalyticsRecentEventRow[], now: num
         label: `V${slot + 1}`,
         country: row.country,
         deviceKind: row.deviceKind,
-        viewerUsername: row.viewerUsername,
+        signedIn: row.signedIn,
         referrer: null,
         firstTs: row.ts,
         lastTs: row.ts,
@@ -825,7 +826,7 @@ export function buildAnalyticsSessions(rows: AnalyticsRecentEventRow[], now: num
     }
     if (!session.country && row.country) session.country = row.country;
     if (session.deviceKind === "unknown" && row.deviceKind !== "unknown") session.deviceKind = row.deviceKind;
-    if (!session.viewerUsername && row.viewerUsername) session.viewerUsername = row.viewerUsername;
+    if (row.signedIn) session.signedIn = true;
     // Rows run newest to oldest, so the last referrer seen is the entry one.
     if (row.referrer) session.referrer = row.referrer;
     if (Number.isFinite(row.ts)) {

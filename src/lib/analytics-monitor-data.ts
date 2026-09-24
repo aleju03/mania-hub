@@ -8,17 +8,16 @@ import {
   ANALYTICS_EVENT_LOOKUP_LIMIT,
   ANALYTICS_RECENT_EVENTS_LIMIT,
   ANALYTICS_TIMELINE_BUCKETS,
-  ANALYTICS_VIEWER_EVENTS_LIMIT,
   clampAnalyticsRangeHours,
   getAnalyticsBucketMs,
   normalizeAnalyticsViewerSort,
   parseAnalyticsRangeHours,
   type AnalyticsEventCatalogEntry,
   type AnalyticsEventLookupResult,
+  type AnalyticsPageLookupResult,
   type AnalyticsMonitorData,
   type AnalyticsRange,
   type AnalyticsTimelineBucket,
-  type AnalyticsViewerEventsResult,
   type AnalyticsViewerSort,
   type AnalyticsViewersResult,
 } from "./analytics-monitor";
@@ -176,28 +175,6 @@ export const getAnalyticsViewers = createServerFn({ method: "POST" })
     return await response.json() as AnalyticsViewersResult;
   });
 
-/* What one signed-in player has been doing. Its own call rather than part of
-   the roster: a trail per row would be hundreds of scans for the handful anyone
-   actually opens. */
-export const getAnalyticsViewerEvents = createServerFn({ method: "POST" })
-  .validator((data: { viewerId?: unknown }) => {
-    const viewerId = Number(data?.viewerId);
-    if (!Number.isFinite(viewerId) || viewerId <= 0) throw new Error("A viewer id is required.");
-    return { viewerId: Math.round(viewerId) };
-  })
-  .handler(async ({ data }: { data: { viewerId: number } }): Promise<AnalyticsViewerEventsResult> => {
-    await requireAdminAccess("Analytics viewer events");
-    const base = getServerLiveBackendUrl();
-    const token = process.env.LIVE_ADMIN_TOKEN;
-    if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
-    const params = new URLSearchParams({ viewerId: String(data.viewerId), limit: String(ANALYTICS_VIEWER_EVENTS_LIMIT) });
-    const response = await fetch(`${base}/api/admin/analytics/viewer-events?${params}`, {
-      headers: { authorization: `Bearer ${token}`, connection: "close" },
-    });
-    if (!response.ok) throw new Error(`Analytics viewer events failed (${response.status}).`);
-    return await response.json() as AnalyticsViewerEventsResult;
-  });
-
 /* Every event name the store has recorded. Its own call because it is the
    picker rather than the answer: it is read once when the lookup opens and
    again only when the admin asks for a refresh. */
@@ -229,8 +206,7 @@ export const getAnalyticsProductInsights = createServerFn({ method: "POST" })
     return await response.json() as AnalyticsProductResponse;
   });
 
-/* Who fired one event. The mirror of getAnalyticsViewerEvents: that one starts
-   from a player, this one starts from the thing that was done. */
+/* Which anonymous visitors fired one event. */
 export const getAnalyticsEventLookup = createServerFn({ method: "POST" })
   .validator((data: { event?: unknown; sinceTs?: unknown }) => {
     const event = typeof data?.event === "string" ? data.event.trim().slice(0, 120) : "";
@@ -250,6 +226,28 @@ export const getAnalyticsEventLookup = createServerFn({ method: "POST" })
     });
     if (!response.ok) throw new Error(`Analytics event lookup failed (${response.status}).`);
     return await response.json() as AnalyticsEventLookupResult;
+  });
+
+/* Every view of one page, newest first. */
+export const getAnalyticsPageLookup = createServerFn({ method: "POST" })
+  .validator((data: { path?: unknown; sinceTs?: unknown }) => {
+    const path = typeof data?.path === "string" ? data.path.trim().slice(0, 300) : "";
+    if (!path.startsWith("/")) throw new Error("A page path is required.");
+    const sinceTs = Number(data?.sinceTs);
+    return { path, sinceTs: Number.isFinite(sinceTs) && sinceTs > 0 ? Math.round(sinceTs) : 0 };
+  })
+  .handler(async ({ data }: { data: { path: string; sinceTs: number } }): Promise<AnalyticsPageLookupResult> => {
+    await requireAdminAccess("Analytics page lookup");
+    const base = getServerLiveBackendUrl();
+    const token = process.env.LIVE_ADMIN_TOKEN;
+    if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
+    const params = new URLSearchParams({ path: data.path, limit: String(ANALYTICS_EVENT_LOOKUP_LIMIT) });
+    if (data.sinceTs > 0) params.set("sinceTs", String(data.sinceTs));
+    const response = await fetch(`${base}/api/admin/analytics/page-lookup?${params}`, {
+      headers: { authorization: `Bearer ${token}`, connection: "close" },
+    });
+    if (!response.ok) throw new Error(`Analytics page lookup failed (${response.status}).`);
+    return await response.json() as AnalyticsPageLookupResult;
   });
 
 /* Trades the admin session for a short-lived SSE ticket: EventSource can't

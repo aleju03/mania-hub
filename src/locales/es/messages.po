@@ -2997,7 +2997,7 @@ msgstr "Analítica y registros"
 
 #: src/routes/privacy.tsx
 msgid "Analytics groups page views from the same browser using a random visitor ID stored in localStorage. The ID is not derived from or linked to your osu! account, and clearing site data removes it. The country shown in analytics is derived from the request at the hosting edge; the IP address itself and the browser user agent are not stored. Analytics events are not sent to any third-party service."
-msgstr "La analítica agrupa las vistas de página del mismo navegador mediante un ID de visitante aleatorio guardado en localStorage. El ID no se deriva de tu cuenta de osu! ni está vinculado a ella, y borrar los datos del sitio lo elimina. El país que aparece en la analítica se deduce de la petición en el borde del alojamiento; la dirección IP en sí y el user agent del navegador no se almacenan. Los eventos de analítica no se envían a ningún servicio de terceros."
+msgstr "La analítica agrupa las vistas de página del mismo navegador mediante un ID de visitante aleatorio guardado en localStorage. El ID no se deriva de tu cuenta de osu! ni está vinculado a ella, y borrar los datos del sitio lo elimina. El país que aparece en la analítica lo obtiene el proveedor de alojamiento a partir de la conexión, y no se guardan ni la dirección IP ni el user agent del navegador. Los eventos de analítica no se envían a ningún servicio externo."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "analyzing"
@@ -3234,7 +3234,6 @@ msgstr "Los ajustes de audio se aplican de inmediato."
 msgid "Audio URL (mp3)"
 msgstr "URL de audio (mp3)"
 
-#: src/routes/privacy.tsx
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
 msgstr "23 de agosto de 2026"
@@ -7705,8 +7704,12 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "Si tienes el mapa, suelta su .osz aquí y el replay se reproduce desde tu copia."
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes de OAuth identify y public, como el ID de usuario, el nombre de usuario, la URL del avatar y el país. El sitio guarda una cookie de sesión firmada y HTTP-only para poder reconocerte mientras la sesión esté activa."
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes de OAuth identify y public, como el ID de usuario, el nombre de usuario, la URL del avatar y el país, y guarda un registro de cuándo inició sesión tu cuenta. El sitio guarda una cookie de sesión firmada y HTTP-only para poder reconocerte mientras la sesión esté activa."
+
+#: src/routes/privacy.tsx
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "Si inicias sesión con osu!, el sitio recibe los datos de la cuenta de osu! que permiten los scopes de OAuth identify y public, como el ID de usuario, el nombre de usuario, la URL del avatar y el país. El sitio guarda una cookie de sesión firmada y HTTP-only para poder reconocerte mientras la sesión esté activa."
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
@@ -14202,6 +14205,10 @@ msgstr "Te regaló una carta."
 msgid "Sent, thanks."
 msgstr "Enviado, gracias."
 
+#: src/routes/privacy.tsx
+msgid "September 24, 2026"
+msgstr "24 de septiembre de 2026"
+
 #: src/components/communities/field-options.tsx
 msgid "Serbian"
 msgstr "Serbio"
@@ -14656,7 +14663,7 @@ msgstr "Muestra el MSD de cada play en Plays recientes"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows your cards with a quick fade instead of the full reveal"
-msgstr "Muestra tus cartas con un fundido rápido en lugar de la revelación completa"
+msgstr "Las cartas aparecen de una vez, sin la animación completa al abrir el sobre"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "shuffle"
@@ -14949,7 +14956,7 @@ msgstr "Las skins no están disponibles por ahora"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Skip animations"
-msgstr "Saltar animaciones"
+msgstr "Omitir animaciones"
 
 #: src/routes/maps.tsx
 msgid "Skips the last few players and maps you were shown."

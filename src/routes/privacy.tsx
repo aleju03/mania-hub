@@ -19,7 +19,7 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   const { t } = useLingui();
   return (
-    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`August 23, 2026`}>
+    <LegalDocument eyebrow={t`Privacy`} title={t`Privacy Policy`} updatedAt={t`September 24, 2026`}>
       <LegalSection title={t`Overview`}>
         <LegalParagraph>
           <Trans>
@@ -42,8 +42,8 @@ function PrivacyPage() {
         <LegalParagraph>
           <Trans>
             If you sign in with osu!, the site receives the osu! account details allowed by the
-            identify and public OAuth scopes, such as user ID, username, avatar URL, and country.
-            The site stores a signed HTTP-only session cookie so it can recognize you while the
+            identify and public OAuth scopes, such as user ID, username, avatar URL, and country,
+            and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the
             session is active.
           </Trans>
         </LegalParagraph>

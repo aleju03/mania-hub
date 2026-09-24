@@ -3261,7 +3261,6 @@ msgstr "Audio settings apply immediately."
 msgid "Audio URL (mp3)"
 msgstr "Audio URL (mp3)"
 
-#: src/routes/privacy.tsx
 #: src/routes/terms.tsx
 msgid "August 23, 2026"
 msgstr "August 23, 2026"
@@ -7740,8 +7739,12 @@ msgid "If you have the map, drop its .osz here and the replay plays from your co
 msgstr "If you have the map, drop its .osz here and the replay plays from your copy."
 
 #: src/routes/privacy.tsx
-msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
-msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+
+#: src/routes/privacy.tsx
+#~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
+#~ msgstr "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "If your osu! account is restricted, imported plays show on your Mania Tracker profile."
@@ -14236,6 +14239,10 @@ msgstr "Sent you a card."
 #: src/components/settings/TranslationReportForm.tsx
 msgid "Sent, thanks."
 msgstr "Sent, thanks."
+
+#: src/routes/privacy.tsx
+msgid "September 24, 2026"
+msgstr "September 24, 2026"
 
 #: src/components/communities/field-options.tsx
 msgid "Serbian"
