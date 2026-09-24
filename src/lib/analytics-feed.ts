@@ -98,6 +98,7 @@ export type AnalyticsActivityKind =
   | "replay"
   | "profile"
   | "ranking"
+  | "team"
   | "farm"
   | "pack"
   | "skin"
@@ -110,6 +111,7 @@ export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
   "replay",
   "profile",
   "ranking",
+  "team",
   "farm",
   "pack",
   "skin",
@@ -153,7 +155,6 @@ const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/tracker": "the tracker",
   "/top-plays": "top plays",
   "/snipes": "snipes",
-  "/teams": "team rankings",
   "/packs": "card packs",
   "/settings": "settings",
   "/bbcode": "the BBCode editor",
@@ -670,11 +671,27 @@ export function describeAnalyticsEvent(
   }
   if (path.startsWith("/team/")) {
     const id = row.teamId || path.slice("/team/".length).split("/")[0];
+    const tab = analyticsUrlParam(row.viewUrl, "tab");
     return {
-      kind: "profile",
+      kind: "team",
       verb: "viewed",
       subject: row.teamName ? `the ${row.teamName} team` : id ? `team #${id}` : "a team",
-      detail: null,
+      detail: tab && tab !== "best" ? tab : null,
+    };
+  }
+  if (path === "/teams") {
+    const query = analyticsUrlParam(row.viewUrl, "q");
+    const sort = analyticsUrlParam(row.viewUrl, "sort");
+    const page = analyticsUrlParam(row.viewUrl, "page");
+    return {
+      kind: query ? "search" : "team",
+      verb: query ? "searched" : "browsed",
+      subject: query ? `"${query}"` : "team rankings",
+      detail: joinDetail([
+        query ? "in team rankings" : null,
+        sort && sort !== "performance" ? `by ${sort}` : null,
+        page && page !== "1" ? `page ${page}` : null,
+      ]),
     };
   }
   if (path.startsWith("/player/")) {

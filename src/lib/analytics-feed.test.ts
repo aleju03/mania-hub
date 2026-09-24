@@ -415,11 +415,26 @@ describe("describeAnalyticsEvent", () => {
 
   it("names the team a team page is about", () => {
     expect(describeAnalyticsEvent(row({ path: "/team/77", teamId: "77", teamName: "Seven Keys" }))).toMatchObject({
-      kind: "profile",
+      kind: "team",
       verb: "viewed",
       subject: "the Seven Keys team",
+      detail: null,
     });
     expect(describeAnalyticsEvent(row({ path: "/team/77" })).subject).toBe("team #77");
+    expect(describeAnalyticsEvent(row({ path: "/team/77", viewUrl: "https://mania-tracker.com/team/77?tab=members" })).detail).toBe("members");
+  });
+
+  it("puts the team rankings under teams, and a team search under searches", () => {
+    expect(describeAnalyticsEvent(row({ path: "/teams" }))).toMatchObject({ kind: "team", verb: "browsed", subject: "team rankings", detail: null });
+    expect(describeAnalyticsEvent(row({ path: "/teams", viewUrl: "https://mania-tracker.com/teams?sort=members&page=2" }))).toMatchObject({
+      kind: "team",
+      detail: "by members · page 2",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/teams", viewUrl: "https://mania-tracker.com/teams?q=seven" }))).toMatchObject({
+      kind: "search",
+      subject: '"seven"',
+      detail: "in team rankings",
+    });
   });
 
   it("names the server a detail page or an invite click is about", () => {

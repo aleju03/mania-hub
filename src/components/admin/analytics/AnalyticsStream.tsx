@@ -474,9 +474,25 @@ function SessionRows({
   // A lone visitor starts expanded (toggling still collapses it); with several
   // visitors everything starts collapsed.
   const [toggled, setToggled] = useState<Set<string>>(new Set());
+  const [hovering, setHovering] = useState(false);
+  /* Trails re-sort by latest activity on every event, which carried the one
+     being read off down the list. While the pointer is on the list or a trail
+     is open, the order is held and newcomers wait behind a button. */
+  const [frozen, setFrozen] = useState<string[] | null>(null);
+  const holding = hovering || toggled.size > 0;
+  useEffect(() => {
+    if (!holding) setFrozen(null);
+    else setFrozen((prev) => prev ?? sessions.map((session) => session.distinctId));
+  }, [holding, sessions]);
+  const { ordered, arrivals } = useMemo(() => {
+    if (!frozen) return { ordered: sessions, arrivals: 0 };
+    const byId = new Map(sessions.map((session) => [session.distinctId, session]));
+    const held = frozen.flatMap((id) => byId.get(id) ?? []);
+    return { ordered: held, arrivals: sessions.length - held.length };
+  }, [sessions, frozen]);
   const defaultOpen = sessions.length === 1;
   if (sessions.length === 0) return <EmptyForFilter country={country} />;
-  const shown = sessions.slice(0, limit);
+  const shown = ordered.slice(0, limit);
 
   const toggle = (id: string) => {
     setToggled((prev) => {
@@ -490,7 +506,22 @@ function SessionRows({
   return (
     <>
       <p className="mb-2 text-[10px] text-osu-f1">Trails group the loaded events by browser and can span several visits. Durations show the observed event span, not active time.</p>
-      <div className="max-h-[560px] space-y-1 overflow-y-auto pr-1">
+      {arrivals > 0 ? (
+        <button
+          type="button"
+          onClick={() => setFrozen(sessions.map((session) => session.distinctId))}
+          className="mb-1 w-full cursor-pointer rounded-md bg-osu-pink/15 py-1.5 text-[11px] font-semibold text-osu-pink-light transition-colors duration-[120ms] hover:bg-osu-pink/25"
+        >
+          {formatNumber(arrivals)} new visitor{arrivals === 1 ? "" : "s"}
+        </button>
+      ) : null}
+      <div
+        className="max-h-[560px] space-y-1 overflow-y-auto pr-1"
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse") setHovering(true);
+        }}
+        onPointerLeave={() => setHovering(false)}
+      >
         {shown.map((session) => {
           const open = toggled.has(session.distinctId) !== defaultOpen;
           const color = visitorColor(session.slot);
@@ -556,7 +587,7 @@ function SessionRows({
           );
         })}
       </div>
-      <ShowMore remaining={sessions.length - shown.length} onMore={onMore} />
+      <ShowMore remaining={ordered.length - shown.length} onMore={onMore} />
     </>
   );
 }
