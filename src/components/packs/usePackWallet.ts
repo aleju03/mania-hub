@@ -125,6 +125,8 @@ export interface PackCollectionFilter {
   mark?: PackCardMark | null;
   /* Only the team cards, which a local wallet never holds. */
   teamsOnly?: boolean;
+  /* Leaves the team cards out. */
+  playersOnly?: boolean;
 }
 
 function collectionCardMatchesFilter(
@@ -257,6 +259,7 @@ export function usePackWallet(): PackWalletApi {
           duplicatesOnly: filter?.duplicatesOnly === true,
           mark: filter?.mark ?? null,
           teamsOnly: filter?.teamsOnly === true,
+          playersOnly: filter?.playersOnly === true,
         },
       });
       if (!result) {

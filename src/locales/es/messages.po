@@ -11972,6 +11972,7 @@ msgid "players"
 msgstr "jugadores"
 
 #: src/components/discord/CommandShowcase.tsx
+#: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx

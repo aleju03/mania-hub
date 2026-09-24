@@ -89,6 +89,31 @@ function writeStoredCollectionSort(mode: CollectionSortMode): void {
   }
 }
 
+/* Hiding the team cards, or looking at nothing else, is the same kind of
+   standing preference, so it rides a key of its own next to the sort. */
+type CollectionCardKind = "players" | "teams";
+const COLLECTION_KIND_STORAGE_KEY = "mania-hub-collection-kind-v1";
+
+function readStoredCollectionKind(): CollectionCardKind | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(COLLECTION_KIND_STORAGE_KEY);
+    return stored === "players" || stored === "teams" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCollectionKind(kind: CollectionCardKind | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (kind) window.localStorage.setItem(COLLECTION_KIND_STORAGE_KEY, kind);
+    else window.localStorage.removeItem(COLLECTION_KIND_STORAGE_KEY);
+  } catch {
+    // Private mode or a full quota: the choice just lasts this session.
+  }
+}
+
 interface CollectionPanelProps {
   wallet: PackWallet | null;
   showLoginNudge: boolean;
@@ -106,6 +131,7 @@ interface CollectionPanelProps {
     duplicatesOnly: boolean;
     mark: PackCardMark | null;
     teamsOnly: boolean;
+    playersOnly: boolean;
   }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   /* Resolves true when the repair actually landed (locally or server-side). */
@@ -203,6 +229,7 @@ function serverCollectionCacheKey({
   duplicatesOnly,
   mark,
   teamsOnly,
+  playersOnly,
 }: {
   page: number;
   pageSize: number;
@@ -212,8 +239,9 @@ function serverCollectionCacheKey({
   duplicatesOnly: boolean;
   mark: PackCardMark | null;
   teamsOnly: boolean;
+  playersOnly: boolean;
 }) {
-  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${teamsOnly ? "teams" : ""}:${query}`;
+  return `${page}:${pageSize}:${tier}:${sort}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${teamsOnly ? "teams" : playersOnly ? "players" : ""}:${query}`;
 }
 
 /* Which rows the filter selects, not the order they come back in: totals,
@@ -228,6 +256,7 @@ function serverCollectionFilterKey({
   duplicatesOnly,
   mark,
   teamsOnly,
+  playersOnly,
 }: {
   pageSize: number;
   tier: CollectionTierFilter;
@@ -235,8 +264,9 @@ function serverCollectionFilterKey({
   duplicatesOnly: boolean;
   mark: PackCardMark | null;
   teamsOnly: boolean;
+  playersOnly: boolean;
 }) {
-  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${teamsOnly ? "teams" : ""}:${query}`;
+  return `${pageSize}:${tier}:${duplicatesOnly ? "dupes" : "all"}:${mark ?? ""}:${teamsOnly ? "teams" : playersOnly ? "players" : ""}:${query}`;
 }
 
 function CollectionPager({
@@ -464,8 +494,13 @@ export function CollectionPanel({
      "everything matching" carries it. */
   const [mark, setMark] = useState<PackCardMark | null>(null);
   /* Narrows the grid to the team cards, which sit in it next to the players
-     (live-backend pack-teams.ts). A set filter like the duplicates chip. */
-  const [teamsOnly, setTeamsOnly] = useState(false);
+     (live-backend pack-teams.ts), or to the players without them. A set
+     filter like the duplicates chip; the two chips exclude each other. */
+  const [chosenCardKind, setChosenCardKind] = useState<CollectionCardKind | null>(readStoredCollectionKind);
+  const applyCardKind = (kind: CollectionCardKind | null) => {
+    setChosenCardKind(kind);
+    writeStoredCollectionKind(kind);
+  };
   // Safe to read storage in the initializer: the panel renders null until the
   // wallet hydrates, so its first real render is already client-side.
   const [sortMode, setSortMode] = useState<CollectionSortMode>(readStoredCollectionSort);
@@ -541,7 +576,9 @@ export function CollectionPanel({
       sort: readStoredCollectionSort(),
       duplicatesOnly: false,
       mark: null,
-      teamsOnly: false,
+      // The stored kind too, for the same reason.
+      teamsOnly: readStoredCollectionKind() === "teams",
+      playersOnly: readStoredCollectionKind() === "players",
     };
     const cacheKey = serverCollectionCacheKey(initialRequest);
     const page = serverCollectionPageCache.get(cacheKey) ?? null;
@@ -776,6 +813,11 @@ export function CollectionPanel({
 
   const walletReady = wallet !== null;
   const useServerCollection = walletReady && syncStatus !== "local";
+  // Teams only exist on a synced collection, so a local wallet ignores the
+  // stored choice rather than filtering by something it cannot see.
+  const cardKind = useServerCollection ? chosenCardKind : null;
+  const teamsOnly = cardKind === "teams";
+  const playersOnly = cardKind === "players";
   // Only the server path pays for a keystroke; a local wallet filters in
   // memory, so it keeps searching as you type.
   const activeQuery = useServerCollection ? debouncedQuery : query;
@@ -788,6 +830,7 @@ export function CollectionPanel({
     duplicatesOnly,
     mark,
     teamsOnly,
+    playersOnly,
   };
   const serverCacheKey = serverCollectionCacheKey(serverRequest);
   const serverFilterKey = serverCollectionFilterKey(serverRequest);
@@ -865,10 +908,10 @@ export function CollectionPanel({
     if (duplicatesOnly && duplicateCardCount === 0) setDuplicatesOnly(false);
   }, [duplicatesOnly, duplicateCardCount]);
   const teamCount = useServerCollection ? serverMetaPage?.teamCount ?? serverPage?.page.teamCount ?? 0 : 0;
-  // And the teams chip, once the last team is recycled.
+  // And the teams and players chips, once the last team is recycled.
   useEffect(() => {
-    if (teamsOnly && (!useServerCollection || (serverMetaPage && teamCount === 0))) setTeamsOnly(false);
-  }, [teamsOnly, useServerCollection, serverMetaPage, teamCount]);
+    if (cardKind && serverMetaPage && teamCount === 0) applyCardKind(null);
+  }, [cardKind, serverMetaPage, teamCount]);
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -905,6 +948,8 @@ export function CollectionPanel({
     ? markCounts?.[mark] ?? 0
     : teamsOnly
       ? teamCount
+      : playersOnly && !duplicatesOnly && tierFilter === "all"
+      ? Math.max(0, collectionTotal - teamCount)
       : duplicatesOnly
       ? duplicateCardCount
       : tierFilter === "all"
@@ -986,7 +1031,7 @@ export function CollectionPanel({
   // full page of placeholders.
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
-    ? (sortMode !== "rarity" || duplicatesOnly || mark !== null || teamsOnly) && tierFilter === "all"
+    ? (sortMode !== "rarity" || duplicatesOnly || mark !== null || cardKind !== null) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
       // skeletons take a rarity-less face rather than claiming a page of
       // commons that the loaded cards then contradict.
@@ -1019,7 +1064,7 @@ export function CollectionPanel({
     setSelected(new Set());
     setSelectionScope("manual");
     setConfirmBulk(false);
-  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly, mark, teamsOnly]);
+  }, [trimmedQuery, tierFilter, sortMode, duplicatesOnly, mark, cardKind]);
 
   useEffect(() => {
     if (selectionScope !== "all") setSelected(new Set());
@@ -1073,6 +1118,7 @@ export function CollectionPanel({
         mark,
         teams: true,
         teamsOnly,
+        playersOnly,
       },
     })
       .then((page) => {
@@ -1094,7 +1140,7 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, teamsOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
+  }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, teamsOnly, playersOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
   /* The missing list, read only while it is on screen. Not cached across
      opens like the collection pages are: the point of the list is which
@@ -1401,7 +1447,7 @@ export function CollectionPanel({
             <MarkFilters value={mark} counts={markCounts} onChange={(next) => {
               setMark(next);
               // A team is never its collector's own card.
-              if (next === "self") setTeamsOnly(false);
+              if (next === "self" && teamsOnly) applyCardKind(null);
             }} selfFace={viewer?.avatarUrl} />
             {duplicateCardCount > 0 && (
               <button
@@ -1418,8 +1464,19 @@ export function CollectionPanel({
             {teamCount > 0 && (
               <button
                 type="button"
+                onClick={() => applyCardKind(playersOnly ? null : "players")}
+                className={`${lensChipClass} ${playersOnly ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"}`}
+                aria-pressed={playersOnly}
+              >
+                <Trans>Players</Trans>
+                <span translate="no" className="tabular-nums opacity-60">{Math.max(0, collectionTotal - teamCount)}</span>
+              </button>
+            )}
+            {teamCount > 0 && (
+              <button
+                type="button"
                 onClick={() => {
-                  setTeamsOnly((on) => !on);
+                  applyCardKind(teamsOnly ? null : "teams");
                   if (mark === "self") setMark(null);
                   if (tierFilter === "untracked") setTierFilter("all");
                 }}
@@ -1564,7 +1621,7 @@ export function CollectionPanel({
       ) : (
         <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
           {showSkeletonGrid
-            ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} />)
+            ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} team={teamsOnly} />)
             : pageCards.map((card) => {
             const cardKey = packCardKeyOf(card);
             const dupValue = duplicateShardValue(card);
@@ -1782,7 +1839,7 @@ export function CollectionPanel({
                 void (async () => {
                   try {
                     const gained = selectionScope === "all"
-                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly, mark, teamsOnly })
+                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery, duplicatesOnly, mark, teamsOnly, playersOnly })
                       : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);

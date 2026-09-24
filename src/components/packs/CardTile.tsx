@@ -136,7 +136,12 @@ export async function backfillCardMint(
   }
 }
 
-export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: CollectedCard; tier?: ManiaCardTier | null }) {
+export function CollectionCardFacePlaceholder({ card, tier: forcedTier, team: forcedTeam }: {
+  card?: CollectedCard;
+  tier?: ManiaCardTier | null;
+  /* For a placeholder with no card behind it yet that is known to be a team. */
+  team?: boolean;
+}) {
   // A null forcedTier is the rarity-less face; only an absent one falls back to
   // the card's own tier.
   const tier = forcedTier !== undefined ? forcedTier : resolveCollectionCardTier(card);
@@ -152,7 +157,7 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
      as a third state between the old page and the new one. */
   const hydrated = useHydrated();
   const palette = card?.motif?.palette;
-  const team = Boolean(card?.team);
+  const team = Boolean(card?.team) || forcedTeam === true;
   const skeletonKey = `${tier ?? "neutral"}:${palette ?? ""}${team ? ":team" : ""}`;
   let thumbnail = hydrated ? skeletonThumbnailCache.get(skeletonKey) ?? null : null;
   if (hydrated && !thumbnail) {
@@ -187,10 +192,12 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
   );
 }
 
-export function CollectionCardPlaceholder({ tier, card, showCaption = true }: {
+export function CollectionCardPlaceholder({ tier, card, team, showCaption = true }: {
   tier: ManiaCardTier | null;
   /* The card this stands in for, when known, so a team card holds its shape. */
   card?: CollectedCard;
+  /* Without a card, whether the slot is known to hold a team. */
+  team?: boolean;
   /* The stub under the face stands in for the line of text a grid prints
      below its cards. A surface that prints none passes false, or its
      placeholders would be taller than the tiles that replace them. */
@@ -199,7 +206,7 @@ export function CollectionCardPlaceholder({ tier, card, showCaption = true }: {
   return (
     <div>
       <div className="relative" style={{ aspectRatio: "5 / 7" }}>
-        <CollectionCardFacePlaceholder tier={tier} card={card} />
+        <CollectionCardFacePlaceholder tier={tier} card={card} team={team} />
       </div>
       {showCaption && <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />}
     </div>

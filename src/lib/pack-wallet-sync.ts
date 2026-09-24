@@ -227,6 +227,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     mark?: unknown;
     teams?: unknown;
     teamsOnly?: unknown;
+    playersOnly?: unknown;
   }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
@@ -238,7 +239,8 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     const mark = isPackCardMark(input?.mark) ? input.mark : null;
     const teams = input?.teams === true;
     const teamsOnly = teams && input?.teamsOnly === true;
-    return { page, pageSize, tier, query, sort, duplicatesOnly, mark, teams, teamsOnly };
+    const playersOnly = teams && !teamsOnly && input?.playersOnly === true;
+    return { page, pageSize, tier, query, sort, duplicatesOnly, mark, teams, teamsOnly, playersOnly };
   })
   .handler(async ({ data }): Promise<ServerPackCollectionPage | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -255,6 +257,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     if (data.mark) url.searchParams.set("mark", data.mark);
     if (data.teams) url.searchParams.set("teams", "1");
     if (data.teamsOnly) url.searchParams.set("teamsOnly", "1");
+    if (data.playersOnly) url.searchParams.set("playersOnly", "1");
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection fetch failed (${response.status}).`);
     const body = (await response.json()) as ServerPackCollectionPage;
@@ -576,6 +579,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
     duplicatesOnly?: unknown;
     mark?: unknown;
     teamsOnly?: unknown;
+    playersOnly?: unknown;
   }) => {
     const mode =
       input?.mode === "duplicates" ||
@@ -635,6 +639,7 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       // handful of cards wearing that seal, not the whole collection.
       mark: isPackCardMark(input?.mark) ? input.mark : null,
       teamsOnly: input?.teamsOnly === true,
+      playersOnly: input?.teamsOnly !== true && input?.playersOnly === true,
     };
   })
   .handler(async ({ data }): Promise<{ gained: number; payload: string; rev: number } | null> => {
