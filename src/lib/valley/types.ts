@@ -46,10 +46,14 @@ export interface ValleyStatus {
   apiErrors15m: number;
   sqliteBusyLastAt: string | null;
   sqliteBusyExhausted: number;
+  // the osu! API recent-scores poller (the primary score ingest)
   scoresFallback: {
     enabled: boolean;
+    ran: boolean;
+    reason: string | null;
     inserted: number;
     fetched: number;
+    intervalMs: number;
     updatedAt: string | null;
   } | null;
   sseTotal: number;
@@ -155,8 +159,11 @@ export function parseValleyStatus(raw: unknown): ValleyStatus {
     scoresFallback: fallback
       ? {
           enabled: bool(fallback.enabled),
+          ran: bool(fallbackResult?.ran),
+          reason: str(fallbackResult?.reason),
           inserted: num(fallbackResult?.inserted),
           fetched: num(fallbackResult?.fetched),
+          intervalMs: num(fallback.intervalMs, 10_000),
           updatedAt: str(fallback.updatedAt),
         }
       : null,

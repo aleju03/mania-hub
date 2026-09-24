@@ -2,7 +2,7 @@
 // translates clicks into Deltarune-style dialogs and status payloads into
 // world changes. The route component only feeds it data.
 
-import { clamp, ctx2d, VIEW_W, VIEW_H, type Ctx, type Sprite } from "./core";
+import { clamp, ctx2d, VIEW_W, VIEW_H, WORLD_W, WORLD_H, type Ctx, type Sprite } from "./core";
 import { textWidth } from "./font";
 import { buildMap, type ValleyMap } from "./map";
 import { buildSprites, type ValleySprites } from "./sprites";
@@ -14,7 +14,6 @@ import { C } from "./core";
 
 const SOUND_PREF_KEY = "mania-valley-sound";
 const TEXT_SPEED = 55; // chars/sec
-const DIALOG_TEXT_W = 560;
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "NEVER";
@@ -65,7 +64,14 @@ export class ValleyGame {
   private mouse: { x: number; y: number } | null = null; // screen space
   private hover: { id: string; label: string } | null = null;
   private dialog: DialogState | null = null;
-  private zoom = 2; // 2 = follow player, 1 = whole map
+  private wide = false; // false = close follow camera, true = wider view
+  private mapOpen = false;
+  // integer world zoom levels + UI scale for the current backing size, so
+  // every world pixel lands on a whole number of device pixels
+  private zoomClose = 2;
+  private zoomWide = 1;
+  private ui = 1;
+  private portrait = false;
   private keys = new Set<string>();
   private blipAt = 0;
   private cluckAt = 0;
@@ -105,19 +111,28 @@ export class ValleyGame {
     this.sim.setConnectionLost();
   }
 
-  // Match the internal resolution to the on-screen box: landscape keeps the
-  // classic 768x432, portrait narrows to 384 wide so the world stays chunky
-  // and the UI can draw at 2x for touch.
+  // Back the canvas with its real device-pixel size and scale the world by an
+  // integer factor. Stretching a small canvas by a fractional CSS scale
+  // makes pixels uneven and shimmer while the camera moves.
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width < 10 || rect.height < 10) return;
-    const aspect = rect.width / rect.height;
-    let iw = VIEW_W;
-    let ih = VIEW_H;
-    if (aspect < 1.3) {
-      iw = 384;
-      ih = clamp(Math.round(384 / aspect / 2) * 2, 432, 688);
+    const dpr = clamp(window.devicePixelRatio || 1, 1, 3);
+    let iw = Math.round(rect.width * dpr);
+    let ih = Math.round(rect.height * dpr);
+    const cap = 2560 / Math.max(iw, 1);
+    if (cap < 1) {
+      iw = Math.round(iw * cap);
+      ih = Math.round(ih * cap);
     }
+    this.portrait = rect.width / rect.height < 1.3;
+    // close view shows ~400 world px across (~200 in portrait), wide ~2x that
+    const closeTarget = this.portrait ? 200 : 400;
+    this.zoomClose = Math.max(2, Math.round(iw / closeTarget));
+    this.zoomWide = Math.max(1, Math.min(this.zoomClose - 1, Math.round(iw / (closeTarget * 1.9))));
+    // HUD text sized in CSS pixels: ~12px glyphs on desktop, ~11px on phones
+    const cssUnit = this.portrait ? 1.6 : Math.max(1, rect.width / 768);
+    this.ui = Math.max(1, Math.round(cssUnit * (iw / rect.width)));
     if (this.canvas.width !== iw || this.canvas.height !== ih) {
       this.canvas.width = iw;
       this.canvas.height = ih;
@@ -139,6 +154,13 @@ export class ValleyGame {
       // ignore
     }
     return next;
+  }
+
+  private toggleMap(): void {
+    this.audio.unlock();
+    this.mapOpen = !this.mapOpen;
+    if (this.mapOpen) this.dialog = null;
+    this.audio.play(this.mapOpen ? "open" : "close");
   }
 
   // ------------------------------------------------------------------ loop
@@ -183,12 +205,16 @@ export class ValleyGame {
       this.renderer.render(this.ctx, this.sim, {
         hour,
         dt,
-        zoom: this.zoom,
+        zoom: this.wide ? this.zoomWide : this.zoomClose,
+        wide: this.wide,
+        ui: this.ui,
+        portrait: this.portrait,
         muted: this.audio.muted,
         audioUnlocked: this.audio.unlocked,
         mouse: this.mouse,
         hover: this.hover,
         dialog: this.dialog,
+        mapOpen: this.mapOpen,
       });
       this.raf = requestAnimationFrame(frame);
     };
@@ -237,8 +263,8 @@ export class ValleyGame {
       this.mouse = toScreen(e);
       const world = toWorld(this.mouse);
       const btns = this.renderer.uiButtons();
-      const ui = inRect(this.mouse, btns.sound) || inRect(this.mouse, btns.zoom);
-      this.hover = ui ? null : this.hitTest(world.x, world.y);
+      const ui = inRect(this.mouse, btns.sound) || inRect(this.mouse, btns.zoom) || inRect(this.mouse, btns.map);
+      this.hover = ui || this.mapOpen ? null : this.hitTest(world.x, world.y);
       this.canvas.style.cursor = ui || this.hover ? "pointer" : "default";
     };
     const onLeave = () => {
@@ -253,8 +279,19 @@ export class ValleyGame {
         this.toggleSound();
         return;
       }
+      if (inRect(screen, btns.map)) {
+        this.toggleMap();
+        return;
+      }
+      if (this.mapOpen) {
+        // clicking a spot on the map walks there
+        const target = this.renderer.mapToWorld(screen);
+        this.toggleMap();
+        if (target && this.sim.place === "world") this.sim.setMoveTarget(target.x, target.y);
+        return;
+      }
       if (inRect(screen, btns.zoom)) {
-        this.zoom = this.zoom === 2 ? 1 : 2;
+        this.wide = !this.wide;
         this.audio.play("open");
         return;
       }
@@ -292,17 +329,25 @@ export class ValleyGame {
     };
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+      if (key === "escape" && this.mapOpen) {
+        this.toggleMap();
+        return;
+      }
       if (key === "escape" && this.dialog) {
         this.dialog = null;
         this.audio.play("close");
         return;
       }
       if (key === "m") {
+        this.toggleMap();
+        return;
+      }
+      if (key === "n") {
         this.toggleSound();
         return;
       }
       if (key === "z") {
-        this.zoom = this.zoom === 2 ? 1 : 2;
+        this.wide = !this.wide;
         return;
       }
       if (key === "shift") {
@@ -346,9 +391,16 @@ export class ValleyGame {
   }
 
   private hitTest(x: number, y: number): { id: string; label: string } | null {
-    // characters first
+    // a door under the player still means "go inside"
+    if (this.sim.place === "world") {
+      for (const d of this.sim.doors) {
+        if (x >= d.rect.x && x <= d.rect.x + d.rect.w && y >= d.rect.y && y <= d.rect.y + d.rect.h) {
+          return { id: `door-${d.id}`, label: "GO INSIDE" };
+        }
+      }
+    }
     const pl = this.sim.player;
-    if (Math.abs(x - pl.x) <= 8 && y >= pl.y - 19 && y <= pl.y + 3) {
+    if (Math.abs(x - pl.x) <= 8 && y >= pl.y - 24 && y <= pl.y + 3) {
       return { id: "player", label: "YOU" };
     }
     if (this.sim.place !== "world") {
@@ -367,7 +419,7 @@ export class ValleyGame {
       return null;
     }
     for (const n of this.sim.npcs) {
-      if (Math.abs(x - n.x) <= 8 && y >= n.y - 19 && y <= n.y + 3) {
+      if (Math.abs(x - n.x) <= 8 && y >= n.y - 24 && y <= n.y + 3) {
         return n.kind === "farmer"
           ? { id: `farmer-${n.id}`, label: "FARMHAND" }
           : { id: `villager-${n.id}`, label: "VISITOR" };
@@ -380,11 +432,14 @@ export class ValleyGame {
       }
     }
     if (this.sim.scarecrow) {
-      const sx = this.map.fieldRect.x + this.map.fieldRect.w - 30;
-      const sy = this.map.fieldRect.y + 26;
-      if (x >= sx - 2 && x <= sx + 18 && y >= sy - 2 && y <= sy + 24) {
+      const sx = this.map.scarecrowAt.x;
+      const sy = this.map.scarecrowAt.y;
+      if (x >= sx - 2 && x <= sx + 20 && y >= sy - 2 && y <= sy + 30) {
         return { id: "scarecrow", label: "SCARECROW" };
       }
+    }
+    for (const d of this.sim.ducks) {
+      if (Math.abs(x - d.x) <= 7 && y >= d.y - 8 && y <= d.y + 3) return { id: "duck", label: "DUCK" };
     }
     // doors win over the building hotspots that contain them
     for (const d of this.sim.doors) {
@@ -392,12 +447,22 @@ export class ValleyGame {
         return { id: `door-${d.id}`, label: "GO INSIDE" };
       }
     }
+    let best: { id: string; label: string; bottom: number } | null = null;
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const onBridge = this.map.bridges.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y - 10 && y <= b.y + b.h);
+    if (!onBridge && xi >= 0 && yi >= 0 && xi < WORLD_W && yi < WORLD_H) {
+      const w = this.map.water[yi * WORLD_W + xi];
+      if (w === 1) best = { id: "river", label: "RIVER", bottom: -1 };
+      else if (w === 2) best = { id: "pond", label: "POND", bottom: -1 };
+    }
     for (const h of this.map.hotspots) {
       if (x >= h.rect.x && x <= h.rect.x + h.rect.w && y >= h.rect.y && y <= h.rect.y + h.rect.h) {
-        return { id: h.id, label: h.label };
+        const bottom = h.rect.y + h.rect.h;
+        if (!best || bottom > best.bottom) best = { id: h.id, label: h.label, bottom };
       }
     }
-    return null;
+    return best ? { id: best.id, label: best.label } : null;
   }
 
   // ------------------------------------------------------------------ dialogs
@@ -412,7 +477,7 @@ export class ValleyGame {
   private buildDialog(id: string): DialogState | null {
     const s = this.sim.status;
     // portrait screens draw dialog text at 2x in a narrower box
-    const maxW = this.canvas.width < 520 ? 138 : DIALOG_TEXT_W;
+    const maxW = this.renderer.dialogTextWidth();
     const make = (title: string, text: string[], portrait: Sprite | null, accent: string = C.uiYellow): DialogState => ({
       id,
       title,
@@ -433,7 +498,7 @@ export class ValleyGame {
       ];
       if (n?.bubble) lines.push(`CURRENTLY LOOKING AT: ${n.bubble.text}.`);
       lines.push("SPEECH BUBBLES ARE REAL PAGEVIEWS AS THEY HAPPEN.");
-      return make("VISITOR", lines, sp.villagers[(n?.palette ?? 0) % sp.villagers.length].front[0], C.uiPink);
+      return make("VISITOR", lines, sp.villagers[(n?.palette ?? 0) % sp.villagers.length].down[0], C.uiPink);
     }
     if (id === "player") {
       return make(
@@ -442,7 +507,7 @@ export class ValleyGame {
           "THE KEEPER OF MANIA VALLEY. THIS FARM IS YOUR LIVE BACKEND.",
           "WASD OR TAP THE GROUND TO WALK, HOLD SHIFT TO RUN. WALK INTO A DOORWAY TO GO INSIDE.",
         ],
-        sp.player.front[0],
+        sp.player.down[0],
         C.uiPink,
       );
     }
@@ -459,7 +524,7 @@ export class ValleyGame {
           `${c.activeUsers} ACTIVE USER${c.activeUsers === 1 ? "" : "S"}, LAST ACTIVITY ${timeAgo(c.lastActiveAt)}.`,
           c.isWarm ? "THE HEARTH IS WARM: THIS COUNTRY IS ACTIVE." : "DOZING. THE COUNTRY IS COLD UNTIL SOMEONE VISITS.",
         ],
-        sp.villagers[idx % sp.villagers.length].front[0],
+        sp.villagers[idx % sp.villagers.length].down[0],
         C.uiBlue,
       );
     }
@@ -478,7 +543,7 @@ export class ValleyGame {
             : "ALL LANES IDLE. WAITING FOR JOBS TO RIPEN.",
         "FARMHANDS ARE THE JOB QUEUE WORKER LANES.",
       ];
-      return make("FARMHAND", lines, sp.farmer.front[0], C.uiGreen);
+      return make("FARMHAND", lines, sp.farmer.down[0], C.uiGreen);
     }
     if (id.startsWith("chicken-")) {
       const total = s?.sseTotal ?? 0;
@@ -493,21 +558,25 @@ export class ValleyGame {
         C.uiPink,
       );
     }
+    if (id === "duck") {
+      return make("DUCK", ["QUACK.", "THE DUCKS MONITOR NOTHING. THEY ARE SIMPLY DUCKS."], sp.boat, C.uiPink);
+    }
     if (id.startsWith("house-")) {
       const idx = Number(id.slice(6));
       const houses = this.houseAssignments();
       const c = houses[idx];
+      const houseSprite = sp.houses[(this.map.villageHouses[idx]?.variant ?? idx) % sp.houses.length];
       if (!c) {
-        return make("EMPTY HOUSE", ["NOBODY HAS SETTLED HERE YET."], sp.houses[idx % sp.houses.length]);
+        return make("EMPTY HOUSE", ["NOBODY HAS SETTLED HERE YET."], houseSprite);
       }
       return make(
         `VILLAGE HOUSE · ${c.country}`,
         [
           `STATUS ${c.status.toUpperCase()} · TIER ${c.featureTier.toUpperCase()}${c.pinned ? " · PINNED" : ""}.`,
           `${c.activeUsers} ACTIVE USER${c.activeUsers === 1 ? "" : "S"}, LAST ACTIVITY ${timeAgo(c.lastActiveAt)}.`,
-          c.isWarm ? "THE LIGHTS ARE ON: THIS COUNTRY IS WARM." : "COLD AND DARK UNTIL SOMEONE VISITS.",
+          c.isWarm ? "THE LIGHTS ARE ON AND THE CHIMNEY SMOKES: THIS COUNTRY IS WARM." : "COLD AND DARK UNTIL SOMEONE VISITS.",
         ],
-        sp.houses[idx % sp.houses.length],
+        houseSprite,
         C.uiBlue,
       );
     }
@@ -568,19 +637,75 @@ export class ValleyGame {
         );
       }
       case "well": {
-        const fb = s?.scoresFallback;
+        const errs = s?.apiErrors15m ?? 0;
         return make(
-          "WELL · SCORES FALLBACK",
-          fb
+          "WELL · API ERRORS",
+          s
             ? [
-                fb.enabled
-                  ? "WHEN THE RIVER RUNS DRY, SCORES GET PULLED UP FROM THIS WELL (OSU! API CURSOR SCAN)."
-                  : "THE FALLBACK SCANNER IS DISABLED.",
-                `LAST SCAN: ${fb.fetched} FETCHED, ${fb.inserted} INSERTED, ${timeAgo(fb.updatedAt)}.`,
+                errs > 0
+                  ? `THE BUCKET CAME UP WITH ${errs} OSU! API ERROR${errs === 1 ? "" : "S"} FROM THE LAST 15 MINUTES.`
+                  : "THE BUCKET CAME UP CLEAN. NO OSU! API ERRORS IN THE LAST 15 MINUTES.",
+                "FIVE OR MORE AND THE SKY TURNS TO RAIN.",
               ]
-            : ["NO FALLBACK DATA YET."],
+            : ["NO STATUS DATA YET."],
           sp.well,
+          errs >= 5 ? C.uiRed : C.uiBlue,
         );
+      }
+      case "greenhouse": {
+        const a = s?.analysis;
+        return make(
+          "GREENHOUSE · CHART ANALYSIS",
+          a
+            ? [
+                `${a.analyzed} CHARTS ANALYZED, ${a.running} RUNNING, ${a.failed} FAILED.`,
+                "EVERY PLANT IN HERE IS A BEATMAP THE PATTERN ANALYZER HAS READ.",
+              ]
+            : ["NO ANALYSIS DATA YET."],
+          sp.buildings.greenhouse,
+          C.uiGreen,
+        );
+      }
+      case "store": {
+        const recent = (this.sim.visitors?.recent ?? []).slice(0, 4).map((r) => r.label);
+        return make(
+          "GENERAL STORE · PAGEVIEWS",
+          [
+            recent.length ? `LATEST ORDERS: ${recent.join(", ")}.` : "NO RECENT PAGEVIEWS ON THE LEDGER.",
+            "THE SHOPKEEPER LOGS EVERY PAGE A VISITOR OPENS.",
+          ],
+          sp.buildings.store,
+          C.uiPink,
+        );
+      }
+      case "fountain": {
+        const count = this.sim.visitors?.activeVisitors ?? 0;
+        return make(
+          "PLAZA FOUNTAIN · VISITORS",
+          [
+            this.sim.visitors?.available
+              ? `${count} VISITOR${count === 1 ? "" : "S"} ON THE SITE IN THE LAST 5 MINUTES. EACH ONE WALKS THE VILLAGE ROADS.`
+              : "THE VISITOR FEED IS UNAVAILABLE RIGHT NOW.",
+          ],
+          sp.buildings.fountain,
+          C.uiBlue,
+        );
+      }
+      case "noticeboard": {
+        const countries = s?.countries ?? [];
+        const warm = countries.filter((c) => c.isWarm).map((c) => c.country);
+        return make(
+          "NOTICE BOARD",
+          [
+            warm.length ? `WARM COUNTRIES: ${warm.slice(0, 10).join(", ")}${warm.length > 10 ? "..." : ""}.` : "NO COUNTRY IS WARM RIGHT NOW.",
+            `${countries.length} COUNTRIES TRACKED IN TOTAL.`,
+          ],
+          sp.signpost,
+          C.uiBlue,
+        );
+      }
+      case "pond": {
+        return make("POND", ["STILL WATER, A FEW DUCKS AND A BOAT NOBODY USES."], sp.boat, C.uiBlue);
       }
       case "field": {
         const summary = (s?.queueSummary ?? [])
@@ -625,20 +750,23 @@ export class ValleyGame {
         );
       }
       case "river": {
-        const osc = s?.osc;
+        const fb = s?.scoresFallback;
+        const state = this.sim.riverState;
         const lines: string[] = [];
-        if (!osc || this.sim.connectionLost) lines.push("THE RIVER CARRIES SCORES FROM THE OSC FEED INTO THE VALLEY.");
-        else if (!osc.connected) {
-          lines.push("THE RIVER RAN DRY: THE OSC SOCKET IS DISCONNECTED.");
-          lines.push(`${osc.restarts} RESTARTS SO FAR. ${osc.lastError ? osc.lastError.toUpperCase().slice(0, 80) : ""}`);
-        } else if (osc.stale) {
-          lines.push(`THE RIVER RUNS MURKY: CONNECTED BUT NO SCORES SINCE ${timeAgo(osc.staleSinceAt)}.`);
-          if (osc.nextReconnectAt) lines.push(`NEXT RECONNECT ATTEMPT ${timeAgo(osc.nextReconnectAt).replace(" AGO", "")}.`);
+        if (!s || this.sim.connectionLost) lines.push("THE RIVER CARRIES SCORES FROM THE OSU! API POLLER INTO THE VALLEY.");
+        else if (state === "dry") {
+          lines.push(
+            fb?.enabled
+              ? `THE RIVER RAN DRY: THE SCORE POLLER LAST REPORTED ${timeAgo(fb.updatedAt)}.`
+              : "THE RIVER RAN DRY: THE SCORE POLLER IS SWITCHED OFF.",
+          );
+        } else if (state === "stale") {
+          lines.push(`THE RIVER RUNS MURKY. LAST POLL ${timeAgo(fb?.updatedAt ?? null)}, LAST NEW SCORE ${timeAgo(s.lastEventAt)}.`);
         } else {
-          lines.push("SCORES FLOW DOWN THIS RIVER FROM KAYLA'S OSC FEED. SPLASHES ARE FRESH SCORES.");
-          lines.push(`LAST EVENT ${timeAgo(s?.lastEventAt ?? null)}. ${osc.restarts} RECONNECTS THIS LIFETIME.`);
+          lines.push("SCORES FLOW DOWN THIS RIVER FROM THE OSU! API POLLER. SPLASHES ARE FRESH SCORES.");
+          if (fb) lines.push(`LAST POLL ${timeAgo(fb.updatedAt)}: ${fb.fetched} FETCHED, ${fb.inserted} NEW.`);
         }
-        return make("RIVER · OSC SCORE FEED", lines, sp.boat, C.uiBlue);
+        return make("RIVER · SCORE FEED", lines, sp.boat, C.uiBlue);
       }
       case "signpost": {
         const countries = s?.countries ?? [];
@@ -648,7 +776,7 @@ export class ValleyGame {
           "VILLAGE SIGN · COUNTRIES",
           [
             `${countries.length} COUNTRIES SETTLED IN THE VALLEY. ${warm} WARM, ${active} ACTIVE USER${active === 1 ? "" : "S"} RIGHT NOW.`,
-            "THE SIX HOUSES SHOW THE TOP COUNTRIES: LIT WINDOWS MEAN WARM.",
+            `THE ${this.map.villageHouses.length} HOUSES SHOW THE TOP COUNTRIES: LIT WINDOWS AND CHIMNEY SMOKE MEAN WARM.`,
           ],
           sp.signpost,
           C.uiBlue,
@@ -759,6 +887,22 @@ export class ValleyGame {
             : ["NO STORAGE DATA YET."],
           null,
           C.uiYellow,
+        );
+      }
+      case "int-goods": {
+        const counts = new Map<string, number>();
+        for (const r of this.sim.visitors?.recent ?? []) counts.set(r.label, (counts.get(r.label) ?? 0) + 1);
+        const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        return make(
+          "SHELVES",
+          [
+            top.length
+              ? `BEST SELLERS LATELY: ${top.map(([l, n]) => `${l} ×${n}`).join(", ")}.`
+              : "THE SHELVES ARE FULL. NOBODY HAS BOUGHT ANYTHING RECENTLY.",
+            "EACH ITEM IS A PAGE VISITORS KEEP OPENING.",
+          ],
+          null,
+          C.uiPink,
         );
       }
       case "int-mill": {

@@ -140,7 +140,7 @@ function ValleyPage() {
       />
       <div className="font-mono text-[10px] uppercase tracking-wide text-[#5a5468] px-2 text-center">
         <span className="hidden sm:inline">
-          wasd or tap to walk · hold shift to run · walk into doors to go inside · z toggles map · m mutes
+          wasd or tap to walk · hold shift to run · walk into doors to go inside · m opens the map · z toggles the wide view · n mutes
         </span>
         <span className="sm:hidden">tap to walk · tap doors to go inside · tap things to inspect</span>
       </div>

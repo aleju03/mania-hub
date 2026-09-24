@@ -2,7 +2,7 @@
 // weather, all driven by diffs of the parsed backend status. The sim never
 // reads the network itself; game.ts feeds it new snapshots.
 
-import { clamp, lerp, mulberry32, TILE, MAP_W, MAP_H, VIEW_W, VIEW_H } from "./core";
+import { clamp, lerp, mulberry32, TILE, MAP_W, MAP_H } from "./core";
 import { isSolidAt, type ValleyMap } from "./map";
 import { buildDoors, buildInteriors, interiorSolidAt, type DoorDef, type Interior } from "./interiors";
 import type { ValleyStatus, ValleyVisitors, ValleyVisitorEvent } from "./types";
@@ -31,7 +31,10 @@ export interface Bubble {
   until: number;
 }
 
+export type Face = "down" | "up" | "left" | "right";
+
 export interface Npc {
+  face: Face;
   id: number;
   kind: "villager" | "farmer";
   x: number;
@@ -51,6 +54,7 @@ export interface Npc {
 }
 
 export interface Player {
+  face: Face;
   x: number;
   y: number;
   facing: 1 | -1;
@@ -79,6 +83,15 @@ export interface Chicken {
   facing: 1 | -1;
 }
 
+export interface Duck {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  facing: 1 | -1;
+  until: number;
+}
+
 export interface Particle {
   kind: "smoke" | "sparkle" | "splash" | "drop" | "dirt" | "leaf" | "firefly" | "zzz" | "ping";
   x: number;
@@ -102,10 +115,10 @@ export interface Flyer {
 }
 
 const CROP_KEYS = Object.keys(CROP_COLORS);
-const MAX_CROPS = 60;
-const MAX_SEEDLINGS = 32;
-const MAX_CHICKENS = 8;
-const MAX_VILLAGERS = 10;
+const MAX_CROPS = 78;
+const MAX_SEEDLINGS = 48;
+const MAX_CHICKENS = 10;
+const MAX_VILLAGERS = 14;
 const FARMER_COUNT = 3;
 const CROP_GROW_SECONDS = 90;
 
@@ -137,12 +150,13 @@ export class ValleySim {
   seedlingCount = 0;
   npcs: Npc[] = [];
   chickens: Chicken[] = [];
+  ducks: Duck[] = [];
   particles: Particle[] = [];
   flyers: Flyer[] = [];
   sounds: SoundEvent[] = [];
 
   // the user's avatar; starts on the path outside the farmhouse
-  player: Player = { x: 96, y: 146, facing: 1, dy: 0, moving: false, sprinting: false, target: null, waypoints: [] };
+  player: Player = { face: "down", x: 120, y: 190, facing: 1, dy: 0, moving: false, sprinting: false, target: null, waypoints: [] };
   moveInput = { x: 0, y: 0 };
   sprint = false; // held shift
   private static readonly PLAYER_SPEED = 70;
@@ -159,7 +173,7 @@ export class ValleySim {
   private plantQueue = 0;
   private harvestQueue = 0;
   private splashQueue = 0;
-  private wellQueue = 0;
+
   private bubbleQueue: ValleyVisitorEvent[] = [];
   private seenEventKeys = new Set<string>();
   private lastEventAt: string | null = null;
@@ -167,20 +181,37 @@ export class ValleySim {
   private nextNpcId = 1;
   private thunderAt = 0;
   private rng = mulberry32(99);
-  private smokeAt = 0;
   private ambientAt = 0;
   private queueTickAt = 0;
   private targetVillagers = 1;
   private busyLanes = 0;
   private flowerSpots: Array<{ x: number; y: number }>;
   private treeSpots: Array<{ x: number; y: number }>;
+  // chimneys: world emitter + which signal keeps the fire lit
+  private chimneys: Array<{ x: number; y: number; key: string; at: number }>;
   private walkable: Uint8Array; // per-tile walkability for tap pathfinding
 
   constructor(map: ValleyMap) {
     this.map = map;
-    this.flowerSpots = map.placements.filter((p) => p.kind === "flower").map((p) => ({ x: p.x, y: p.y }));
-    this.treeSpots = map.placements.filter((p) => p.kind === "oak").map((p) => ({ x: p.x + 11, y: p.y + 10 }));
+    this.flowerSpots = map.placements.filter((p) => p.kind === "flowerbush").map((p) => ({ x: p.x + 10, y: p.y + 6 }));
+    this.treeSpots = map.placements
+      .filter((p) => p.kind === "oak" || p.kind === "birch" || p.kind === "blossom")
+      .map((p) => ({ x: p.x + 17, y: p.y + 20 }));
+    this.chimneys = map.buildings
+      .filter((b) => b.spec.chimney)
+      .map((b) => ({ x: b.x + b.spec.chimney!.x, y: b.y + b.spec.chimney!.y, key: b.key, at: 0 }));
     this.doors = buildDoors(map);
+    const home = this.doors.find((d) => d.id === "farmhouse");
+    if (home) {
+      this.player.x = home.outside.x;
+      this.player.y = home.outside.y + 6;
+    }
+    const pond = map.pondRect;
+    for (let i = 0; i < 4; i++) {
+      const x = pond.x + pond.w * (0.3 + this.rng() * 0.4);
+      const y = pond.y + pond.h * (0.35 + this.rng() * 0.35);
+      this.ducks.push({ x, y, tx: x, ty: y, facing: this.rng() < 0.5 ? 1 : -1, until: 0 });
+    }
     this.interiors = buildInteriors(map);
     this.walkable = new Uint8Array(MAP_W * MAP_H);
     for (let ty = 0; ty < MAP_H; ty++) {
@@ -201,25 +232,17 @@ export class ValleySim {
     this.connectionLost = false;
     this.serverOk = status.ok && status.db;
 
-    // river
-    if (!status.osc || !status.osc.connected) this.riverState = "dry";
-    else if (status.osc.stale) this.riverState = "stale";
-    else this.riverState = "flow";
+    this.riverState = riverStateFor(status);
 
-    // score ingest -> river splashes
-    if (status.lastEventAt && status.lastEventAt !== this.lastEventAt) {
-      if (this.lastEventAt !== null) this.splashQueue = Math.min(this.splashQueue + 2, 6);
-      this.lastEventAt = status.lastEventAt;
-    }
-
-    // fallback scanner -> well activity
+    // every poller run that inserted scores splashes the river
     const fb = status.scoresFallback;
     if (fb?.updatedAt && fb.updatedAt !== this.lastFallbackAt) {
-      if (this.lastFallbackAt !== null && fb.inserted > 0) {
-        this.wellQueue = Math.min(this.wellQueue + Math.min(fb.inserted, 4), 8);
-        this.sounds.push("well");
-      }
+      if (this.lastFallbackAt !== null && fb.inserted > 0) this.splashQueue = Math.min(this.splashQueue + Math.min(fb.inserted, 4), 10);
       this.lastFallbackAt = fb.updatedAt;
+    }
+    if (status.lastEventAt && status.lastEventAt !== this.lastEventAt) {
+      if (this.lastEventAt !== null && !fb?.enabled) this.splashQueue = Math.min(this.splashQueue + 2, 10);
+      this.lastEventAt = status.lastEventAt;
     }
 
     // crops <- queue depth
@@ -232,7 +255,7 @@ export class ValleySim {
       this.drainPlantQueue(true);
     }
 
-    this.seedlingCount = clamp(Math.round(status.deferred / 50), status.deferred > 0 ? 1 : 0, MAX_SEEDLINGS);
+    this.seedlingCount = clamp(Math.round(status.deferred / 25), status.deferred > 0 ? 1 : 0, MAX_SEEDLINGS);
     this.scarecrow = status.shedding;
 
     // windmill <- API rate
@@ -312,6 +335,7 @@ export class ValleySim {
       ty: 0,
       node: 0,
       prevNode: 0,
+      face: "down",
       palette: 0,
       state: "pause",
       stateUntil: this.t + 1 + this.rng() * 2,
@@ -335,7 +359,8 @@ export class ValleySim {
       ty: nodes[node].y,
       node,
       prevNode: node,
-      palette: Math.floor(this.rng() * 6),
+      face: "down",
+      palette: Math.floor(this.rng() * 16),
       state: "pause",
       stateUntil: this.t + this.rng() * 2,
       facing: this.rng() < 0.5 ? 1 : -1,
@@ -461,10 +486,6 @@ export class ValleySim {
         this.splashQueue--;
         this.riverSplash();
       }
-      if (this.wellQueue > 0) {
-        this.wellQueue--;
-        this.wellDrops();
-      }
     }
 
     // speech bubbles from live visitor events
@@ -487,21 +508,31 @@ export class ValleySim {
     this.updateParticles(dt);
     this.updateFlyers(dt, hour);
 
-    // farmhouse chimney smoke
-    if (this.serverOk && t >= this.smokeAt) {
-      this.smokeAt = t + 0.7 + this.rng() * 0.5;
+    // chimney smoke: the farmhouse while the server is healthy, a village
+    // house while its country is warm
+    for (const ch of this.chimneys) {
+      if (t < ch.at) continue;
+      ch.at = t + 0.8 + this.rng() * 0.6;
+      let lit = false;
+      if (ch.key === "farmhouse") lit = this.serverOk;
+      else if (ch.key.startsWith("house-")) {
+        const c = this.housesRanked[Number(ch.key.slice(6))];
+        lit = !!c && (c.isWarm || c.status === "active");
+      } else lit = this.serverOk;
+      if (!lit) continue;
       this.particles.push({
         kind: "smoke",
-        x: 44 + 56 + this.rng() * 3,
-        y: 32 + 5,
-        vx: 2 + this.rng() * 3,
-        vy: -6 - this.rng() * 3,
+        x: ch.x + (this.rng() - 0.5) * 2,
+        y: ch.y,
+        vx: 3 + this.rng() * 3,
+        vy: -7 - this.rng() * 3,
         age: 0,
         life: 3 + this.rng() * 1.5,
         color: "#cfc9bd",
         size: 1 + this.rng() * 1.5,
       });
     }
+    this.updateDucks(dt);
 
     // storm thunder, sparingly
     if (this.weather === "storm" && t >= this.thunderAt) {
@@ -515,8 +546,9 @@ export class ValleySim {
       if (this.riverState === "flow" && this.rng() < 0.09) {
         this.riverSplash(true);
       }
-      if (this.rng() < 0.3 && this.treeSpots.length > 0) {
-        const spot = this.treeSpots[Math.floor(this.rng() * this.treeSpots.length)];
+      const nearTrees = this.treeSpots.filter((s2) => Math.abs(s2.x - this.player.x) < 400 && Math.abs(s2.y - this.player.y) < 260);
+      if (this.rng() < 0.5 && nearTrees.length > 0) {
+        const spot = nearTrees[Math.floor(this.rng() * nearTrees.length)];
         this.particles.push({
           kind: "leaf",
           x: spot.x + this.rng() * 8 - 4,
@@ -530,11 +562,11 @@ export class ValleySim {
         });
       }
       const night = hour >= 20.5 || hour < 5;
-      if (night && this.weather === "sunny" && this.particles.filter((p) => p.kind === "firefly").length < 14) {
+      if (night && this.weather === "sunny" && this.particles.filter((p) => p.kind === "firefly").length < 18) {
         this.particles.push({
           kind: "firefly",
-          x: this.rng() * VIEW_W,
-          y: VIEW_H * 0.3 + this.rng() * VIEW_H * 0.6,
+          x: this.player.x + (this.rng() - 0.5) * 420,
+          y: this.player.y + (this.rng() - 0.5) * 260,
           vx: (this.rng() - 0.5) * 8,
           vy: (this.rng() - 0.5) * 6,
           age: 0,
@@ -767,6 +799,7 @@ export class ValleySim {
     if (Math.abs(vx) > 0.5) p.facing = vx > 0 ? 1 : -1;
     p.dy = Math.hypot(vx, vy) > 0 ? vy / Math.hypot(vx, vy) : 0;
     if (Math.abs(vx) < 0.01) p.dy = vy < 0 ? -1 : 1;
+    p.face = faceFor(vx, vy);
 
     // door / exit transitions. Entering needs a mostly-upward walk (or a
     // pending door click) so sliding along a building base never swallows
@@ -815,7 +848,7 @@ export class ValleySim {
   private exitInterior(): void {
     if (this.transition) return;
     const door = this.doors.find((d) => d.id === this.place);
-    const out = door ? door.outside : { x: 96, y: 146 };
+    const out = door ? door.outside : { x: this.player.x, y: this.player.y };
     this.player.target = null;
     this.transition = { phase: "out", t: 0, toPlace: "world", toX: out.x, toY: out.y };
     this.sounds.push("door");
@@ -953,6 +986,7 @@ export class ValleySim {
     if (Math.abs(dx) > 0.5) n.facing = dx > 0 ? 1 : -1;
     n.dy = dy / dist;
     if (Math.abs(dx) < Math.abs(dy) * 0.4) n.dy = dy < 0 ? -1 : 1;
+    n.face = faceFor(dx, dy);
     return false;
   }
 
@@ -1022,13 +1056,14 @@ export class ValleySim {
       }
       f.x += f.vx * dt;
       f.y += f.vy * dt;
-      const gone = f.x < -20 || f.x > VIEW_W + 20 || f.y < -20 || f.y > VIEW_H + 20 || f.age > 26;
+      const gone = Math.abs(f.x - this.player.x) > 520 || Math.abs(f.y - this.player.y) > 360 || f.age > 26;
       if (gone) this.flyers.splice(i, 1);
     }
     if (day && this.weather === "sunny") {
       const butterflies = this.flyers.filter((f) => f.kind === "butterfly").length;
-      if (butterflies < 3 && this.rng() < dt * 0.25 && this.flowerSpots.length > 0) {
-        const spot = this.flowerSpots[Math.floor(this.rng() * this.flowerSpots.length)];
+      const near = this.flowerSpots.filter((f) => Math.abs(f.x - this.player.x) < 360 && Math.abs(f.y - this.player.y) < 220);
+      if (butterflies < 4 && this.rng() < dt * 0.3 && near.length > 0) {
+        const spot = near[Math.floor(this.rng() * near.length)];
         this.flyers.push({
           kind: "butterfly",
           x: spot.x,
@@ -1043,8 +1078,8 @@ export class ValleySim {
         const fromLeft = this.rng() < 0.5;
         this.flyers.push({
           kind: "bird",
-          x: fromLeft ? -12 : VIEW_W + 12,
-          y: 20 + this.rng() * 70,
+          x: this.player.x + (fromLeft ? -420 : 420),
+          y: this.player.y - 200 + this.rng() * 140,
           vx: fromLeft ? 26 + this.rng() * 10 : -26 - this.rng() * 10,
           vy: (this.rng() - 0.5) * 4,
           age: 0,
@@ -1072,9 +1107,9 @@ export class ValleySim {
   }
 
   private riverSplash(quiet = false): void {
-    const ty = clamp(3 + this.rng() * 20, 3, 23);
-    const cx = this.map.riverCenter(ty) * TILE;
-    const y = ty * TILE;
+    // prefer a spot the player can see
+    const y = clamp(this.player.y + (this.rng() - 0.5) * 300, 20, MAP_H * TILE - 20);
+    const cx = this.map.riverCenter(y) + (this.rng() - 0.5) * this.map.riverHalf(y);
     if (!quiet) this.sounds.push("splash");
     for (let i = 0; i < 5; i++) {
       this.particles.push({
@@ -1102,22 +1137,27 @@ export class ValleySim {
     });
   }
 
-  private wellDrops(): void {
-    const well = { x: 188, y: 148 };
-    for (let i = 0; i < 4; i++) {
-      this.particles.push({
-        kind: "drop",
-        x: well.x + (this.rng() - 0.5) * 6,
-        y: well.y - 2,
-        vx: (this.rng() - 0.5) * 16,
-        vy: -22 - this.rng() * 10,
-        age: 0,
-        life: 0.55,
-        color: "#9fd0f0",
-        size: 1,
-      });
+  private updateDucks(dt: number): void {
+    const p = this.map.pondRect;
+    const cx = p.x + p.w / 2;
+    const cy = p.y + p.h / 2;
+    for (const d of this.ducks) {
+      const dx = d.tx - d.x;
+      const dy = d.ty - d.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 1) {
+        const step = Math.min(dist, 7 * dt);
+        d.x += (dx / dist) * step;
+        d.y += (dy / dist) * step;
+        if (Math.abs(dx) > 0.3) d.facing = dx > 0 ? 1 : -1;
+      } else if (this.t >= d.until) {
+        const a = this.rng() * Math.PI * 2;
+        const r = Math.sqrt(this.rng()) * 0.62;
+        d.tx = cx + Math.cos(a) * r * (p.w / 2);
+        d.ty = cy + Math.sin(a) * r * (p.h / 2);
+        d.until = this.t + 2 + this.rng() * 5;
+      }
     }
-    this.burstSparkles(well.x, well.y - 10, "#9fd0f0");
   }
 
   drainSounds(): SoundEvent[] {
@@ -1125,4 +1165,30 @@ export class ValleySim {
     this.sounds = [];
     return out;
   }
+}
+
+function faceFor(vx: number, vy: number): Face {
+  if (Math.abs(vx) >= Math.abs(vy) * 0.8) return vx < 0 ? "left" : "right";
+  return vy < 0 ? "up" : "down";
+}
+
+// The river runs on the osu! API score poller: flowing while it reports in,
+// murky once runs stop landing (or land nothing for a while), dry when the
+// poller has been silent for ten minutes or is switched off.
+export function riverStateFor(status: ValleyStatus): "flow" | "stale" | "dry" {
+  const now = Date.now();
+  const fb = status.scoresFallback;
+  const oscLive = !!status.osc && status.osc.connected && !status.osc.stale;
+  if (fb?.enabled && fb.updatedAt) {
+    const age = now - new Date(fb.updatedAt).getTime();
+    const beat = Math.max(60_000, fb.intervalMs * 6);
+    if (age > 10 * 60_000) return oscLive ? "flow" : "dry";
+    if (age > beat) return oscLive ? "flow" : "stale";
+    const lastScore = status.lastEventAt ? now - new Date(status.lastEventAt).getTime() : Infinity;
+    if (fb.reason === "osc_fresh") return "flow";
+    return lastScore > 20 * 60_000 ? "stale" : "flow";
+  }
+  if (oscLive) return "flow";
+  if (status.osc?.connected) return "stale";
+  return "dry";
 }

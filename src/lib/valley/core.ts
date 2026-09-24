@@ -3,10 +3,14 @@
 // @napi-rs/canvas harness (no window/OffscreenCanvas at module scope).
 
 export const TILE = 16;
-export const MAP_W = 48;
-export const MAP_H = 27;
-export const VIEW_W = MAP_W * TILE; // 768
-export const VIEW_H = MAP_H * TILE; // 432
+export const MAP_W = 80;
+export const MAP_H = 52;
+export const WORLD_W = MAP_W * TILE; // 1280
+export const WORLD_H = MAP_H * TILE; // 832
+// internal screen resolution (landscape); the camera shows a window of the
+// world scaled by the zoom level
+export const VIEW_W = 768;
+export const VIEW_H = 432;
 
 export type Ctx = CanvasRenderingContext2D;
 
@@ -118,6 +122,29 @@ export const C = {
 } as const;
 
 export type ColorKey = keyof typeof C;
+
+// --- colour helpers -------------------------------------------------------
+
+export function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+export function rgbToHex(r: number, g: number, b: number): string {
+  const c = (v: number) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0");
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+// Darken (amount < 0) or lighten (amount > 0) with a slight hue shift, the
+// usual pixel-art trick: shadows lean cool, highlights lean warm.
+export function shade(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  if (amount < 0) {
+    const k = 1 + amount;
+    return rgbToHex(r * k * 0.96, g * k * 0.98, b * k + 10 * -amount);
+  }
+  return rgbToHex(r + (255 - r) * amount + 6 * amount, g + (255 - g) * amount, b + (255 - b) * amount * 0.8);
+}
 
 export function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
