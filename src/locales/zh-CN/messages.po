@@ -1565,8 +1565,12 @@ msgid "{previousScoreAge} earlier"
 msgstr "{previousScoreAge}前"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "{progressCounts} players"
-msgstr "{progressCounts} 名玩家"
+msgid "{progressCounts} cards"
+msgstr "{progressCounts} 张卡牌"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "{progressCounts} players"
+#~ msgstr "{progressCounts} 名玩家"
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "{progressCounts} teams"
@@ -7550,11 +7554,17 @@ msgstr "长按回收"
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "长按回收所有重复卡，价值 {recyclable} 碎片"
 
+#. placeholder {0}: formatNumber(completionCounts.owned)
+#. placeholder {1}: formatNumber(completionCounts.total)
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Holds <0>{0}</0> of the <1>{1}</1> collectible cards, <2>{poolPercent}%</2>"
+msgstr "在 <1>{1}</1> 张可收集卡牌中持有 <0>{0}</0> 张，占 <2>{poolPercent}%</2>"
+
 #. placeholder {0}: formatNumber(completion.poolOwnedCount)
 #. placeholder {1}: formatNumber(completion.poolTotal)
 #: src/components/packs/collections/CollectorShelf.tsx
-msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
-msgstr "在 <1>{1}</1> 名可抽取玩家中持有 <0>{0}</0> 名，占 <2>{poolPercent}%</2>"
+#~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
+#~ msgstr "在 <1>{1}</1> 名可抽取玩家中持有 <0>{0}</0> 名，占 <2>{poolPercent}%</2>"
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -18209,6 +18219,7 @@ msgstr "查看主页"
 
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "查看战队"
 

@@ -66,6 +66,8 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     communitiesPage: null,
     communityId: null,
     communityName: null,
+    teamId: null,
+    teamName: null,
     collectionsCollector: null,
     collectionsTab: null,
     collectionsTier: null,
@@ -410,6 +412,15 @@ describe("describeAnalyticsEvent", () => {
       kind: "community",
       subject: "the server review queue",
     });
+  });
+
+  it("names the team a team page is about", () => {
+    expect(describeAnalyticsEvent(row({ path: "/team/77", teamId: "77", teamName: "Seven Keys" }))).toMatchObject({
+      kind: "profile",
+      verb: "viewed",
+      subject: "the Seven Keys team",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/team/77" })).subject).toBe("team #77");
   });
 
   it("names the server a detail page or an invite click is about", () => {

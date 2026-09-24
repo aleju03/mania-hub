@@ -1,5 +1,6 @@
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { teamPackCardKey } from "../../lib/team-cards";
 import { Loader2, Trash2, Wand2, X } from "lucide-react";
 
 import { AdminToasts, hideAdminToast, showAdminToast } from "../../components/admin/AdminToasts";
@@ -1191,7 +1192,7 @@ function TeamCardsPanel({
   const [picked, setPicked] = useState<AdminTeamSearchResult | null>(null);
   const [copies, setCopies] = useState("1");
   const [sending, setSending] = useState(false);
-  const [armed, setArmed] = useState<number | null>(null);
+  const [armed, setArmed] = useState<string | null>(null);
   const ownerUserId = overview.user.userId;
 
   useEffect(() => {
@@ -1234,7 +1235,7 @@ function TeamCardsPanel({
   const remove = useCallback(async (card: AdminTeamCard) => {
     setSending(true);
     try {
-      const result = await removeAdminCollectionCard({ data: { userId: ownerUserId, cardKey: `team:${card.teamId}` } });
+      const result = await removeAdminCollectionCard({ data: { userId: ownerUserId, cardKey: teamPackCardKey(card.teamId, card.tier ?? undefined) } });
       onDone(result.removed ? `Removed ${card.name}.` : "That card was already gone.");
     } catch (caught) {
       onError(errMessage(caught));
@@ -1339,8 +1340,9 @@ function TeamCardsPanel({
         <div className="mt-3 pt-1 border-t border-osu-b3/20 divide-y divide-osu-b3/20">
           {overview.teamCards.map((card) => {
             const style = teamTierStyle(card.tier);
+            const key = teamPackCardKey(card.teamId, card.tier ?? undefined);
             return (
-              <div key={card.teamId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+              <div key={key} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                 <TeamFlag url={card.flagUrl} />
                 <button
                   type="button"
@@ -1353,15 +1355,15 @@ function TeamCardsPanel({
                 <span className="text-[12px] text-osu-l2 tabular-nums">x{card.copies}</span>
                 <button
                   disabled={busy || sending}
-                  onClick={() => (armed === card.teamId ? void remove(card) : setArmed(card.teamId))}
-                  onBlur={() => setArmed((current) => (current === card.teamId ? null : current))}
+                  onClick={() => (armed === key ? void remove(card) : setArmed(key))}
+                  onBlur={() => setArmed((current) => (current === key ? null : current))}
                   className={`ml-auto px-2 py-1 rounded-md border text-[11px] transition-colors duration-[120ms] disabled:opacity-50 cursor-pointer ${
-                    armed === card.teamId
+                    armed === key
                       ? "border-osu-red/50 bg-osu-red/20 text-osu-red-light"
                       : "border-osu-b3/30 bg-osu-b4/60 text-osu-l2 hover:bg-osu-b3/60 hover:text-white"
                   }`}
                 >
-                  {armed === card.teamId ? "Really remove" : <Trash2 className="w-3.5 h-3.5" />}
+                  {armed === key ? "Really remove" : <Trash2 className="w-3.5 h-3.5" />}
                 </button>
               </div>
             );

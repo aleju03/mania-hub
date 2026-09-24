@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans } from "@lingui/react/macro";
 import { fetchLiveTeamStoredSnapshot, type LiveTeamProfileSnapshot } from "../../lib/live-backend";
+import { rememberTeamName } from "../../lib/analytics-teams";
 import { pageSeo } from "../../lib/seo";
 import { TeamProfilePage, isTeamTab, type TeamTab } from "../../components/team/TeamProfilePage";
 
@@ -51,6 +53,12 @@ function TeamRoute() {
   const { snapshot } = Route.useLoaderData();
   const navigate = useNavigate({ from: Route.fullPath });
   const id = parseTeamId(teamId);
+  // A link stashes the name on its way here, but a shared link arrives with
+  // nothing stashed. This runs before the root provider's pageview effect
+  // (children commit first), and only a hard load has the snapshot this early.
+  useEffect(() => {
+    if (snapshot) rememberTeamName(snapshot.team.id, snapshot.team.name);
+  }, [snapshot]);
   if (id == null) {
     return <div className="flex-1 bg-osu-b5 px-4 py-16 text-center text-sm text-osu-f1"><Trans>Not a team id.</Trans></div>;
   }

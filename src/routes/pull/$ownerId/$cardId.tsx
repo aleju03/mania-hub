@@ -19,6 +19,8 @@ import {
 import { HONORARY_PACK_POOL } from "../../../lib/honorary-players";
 import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "../../../lib/maniacard";
 import { parsePackCardKey } from "../../../lib/pack-collection";
+import { teamImageProxyUrl } from "../../../lib/team-image";
+import { parsePackTeamCard, parseTeamPackCardKey, teamCardFace, teamCardSkills, teamCardUser, type PackTeamCard } from "../../../lib/team-cards";
 import { getI18n } from "../../../lib/i18n";
 import { PACK_TYPE_NAME_LABELS, PACK_TYPES, type PackTypeId } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
@@ -101,6 +103,13 @@ function goatPullOdds(packType: string): { packId: PackTypeId; slotChance: numbe
   return { packId: definition.id, slotChance: definition.honoraryChance, percent: `${percent}%` };
 }
 
+/* A team card's own shape, rebuilt from the permalink payload so it draws
+   the same banner face the collection does. Null for a player card. */
+function sharedTeamCard(shared: LiveSharedPackCard): PackTeamCard | null {
+  if (!shared.team) return null;
+  return parsePackTeamCard({ ...shared.team, tier: shared.card.tier, skills: shared.card.skills });
+}
+
 function tierAccentRgb(tier: ManiaCardTier): string {
   const match = MANIA_TIER_STYLES[tier].badgeHalo.match(/([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
   return match ? `${match[1]}, ${match[2]}, ${match[3]}` : "148, 163, 184";
@@ -124,19 +133,27 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
       setStaticImage(renderCardSkeletonThumbnail(tier, 600, shared.card.motif ?? null));
       return;
     }
-    const data = buildManiaCardRenderDataFromSkills({
-      user: {
-        id: shared.card.userId,
-        username: shared.card.username,
-        avatar_url: shared.card.avatarUrl,
-        country_code: shared.card.countryCode,
-        statistics: { global_rank: shared.card.globalRank, pp: shared.card.pp },
-      },
-      skills,
-      tierOverride: tier,
-      labelOverride: shared.card.customLabel,
-      motifOverride: shared.card.motif,
-    });
+    const team = sharedTeamCard(shared);
+    const data = team
+      ? buildManiaCardRenderDataFromSkills({
+          user: teamCardUser(team),
+          skills: teamCardSkills(team),
+          tierOverride: team.tier,
+          team: teamCardFace(team),
+        })
+      : buildManiaCardRenderDataFromSkills({
+          user: {
+            id: shared.card.userId,
+            username: shared.card.username,
+            avatar_url: shared.card.avatarUrl,
+            country_code: shared.card.countryCode,
+            statistics: { global_rank: shared.card.globalRank, pp: shared.card.pp },
+          },
+          skills,
+          tierOverride: tier,
+          labelOverride: shared.card.customLabel,
+          motifOverride: shared.card.motif,
+        });
     let cancelled = false;
     // The 2D front renders first so something card-shaped is visible while
     // the WebGL pipeline warms up (and stays if it fails).
@@ -232,7 +249,7 @@ function PullPage() {
        ordinary card, and the backend falls back to whatever card of that
        player they do hold, which is what every link shared before keys were
        addressable meant. */
-    const card = parsePackCardKey(cardId);
+    const card = parsePackCardKey(cardId) ?? parseTeamPackCardKey(cardId);
     if (!isLiveBackendConfigured() || !Number.isInteger(owner) || owner <= 0 || !card) {
       setState({ status: "missing" });
       return;
@@ -290,6 +307,8 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const locale = useLocale();
   const tier = sharedCardTier(shared);
   const accent = tierAccentRgb(tier);
+  const team = shared.team ?? null;
+  const flagUrl = team ? teamImageProxyUrl(team.flagUrl) ?? team.flagUrl : null;
   const tierLabel = shared.card.tierLabel ?? MANIA_TIER_STYLES[tier].label;
   const odds = shared.goatPull ? goatPullOdds(shared.goatPull.packType) : null;
   const exactPull = shared.pullEvent && shared.pullEvent.pulledAt > 0 ? shared.pullEvent : null;
@@ -303,7 +322,11 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
       <PulledCardArt shared={shared} />
       <div className="mt-6 flex flex-col items-center gap-1.5 text-center">
         <div className="flex items-center gap-2">
-          <CountryFlag code={shared.card.countryCode} size="sm" />
+          {team ? (
+            flagUrl && <img src={flagUrl} alt="" className="h-4 w-8 rounded-[3px] object-cover" draggable={false} />
+          ) : (
+            <CountryFlag code={shared.card.countryCode} size="sm" />
+          )}
           <span className="text-[16px] font-bold text-white">{shared.card.username}</span>
           <span
             className="rounded-full border px-2 py-px text-[10px] font-bold uppercase tracking-wide"
@@ -317,15 +340,17 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           </span>
         </div>
         <div className="text-[12px] text-osu-f1 tabular-nums">
-          {Math.round(shared.card.pp).toLocaleString("en-US")}pp
-          {shared.card.globalRank > 0 && (
-            <> &middot; <Trans>#{shared.card.globalRank.toLocaleString("en-US")} global</Trans></>
+          {!team && (
+            <>
+              {Math.round(shared.card.pp).toLocaleString("en-US")}pp
+              {shared.card.globalRank > 0 && (
+                <> &middot; <Trans>#{shared.card.globalRank.toLocaleString("en-US")} global</Trans></>
+              )}
+              {shared.owners > 0 && <>{" "}&middot;{" "}</>}
+            </>
           )}
           {shared.owners > 0 && (
-            <>
-              {" "}&middot;{" "}
-              <Plural value={shared.owners} one="in # collection" other="in # collections" />
-            </>
+            <Plural value={shared.owners} one="in # collection" other="in # collections" />
           )}
         </div>
         {typeof shared.serial === "number" && shared.serial > 0 && (
@@ -393,13 +418,23 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           >
             <Trans>Open your own packs</Trans>
           </Link>
-          <Link
-            to="/player/$username"
-            params={{ username: shared.card.username }}
-            className="rounded-full bg-osu-b3/80 px-5 py-2 text-[12px] font-bold text-white transition hover:bg-osu-b3"
-          >
-            <Trans>View profile</Trans>
-          </Link>
+          {team ? (
+            <Link
+              to="/team/$teamId"
+              params={{ teamId: String(team.teamId) }}
+              className="rounded-full bg-osu-b3/80 px-5 py-2 text-[12px] font-bold text-white transition hover:bg-osu-b3"
+            >
+              <Trans>View team</Trans>
+            </Link>
+          ) : (
+            <Link
+              to="/player/$username"
+              params={{ username: shared.card.username }}
+              className="rounded-full bg-osu-b3/80 px-5 py-2 text-[12px] font-bold text-white transition hover:bg-osu-b3"
+            >
+              <Trans>View profile</Trans>
+            </Link>
+          )}
         </div>
       </div>
     </div>

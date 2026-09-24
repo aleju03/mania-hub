@@ -11,6 +11,7 @@ import { fetchLiveTeamRankings, type LiveTeamRankingEntry, type LiveTeamRankings
 import { PageHeader } from "../components/layout/PageHeader";
 import { Pagination } from "../components/ui/Pagination";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
+import { rememberTeamName } from "../lib/analytics-teams";
 
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -306,7 +307,10 @@ function TeamsPage() {
                       key={entry.team.id}
                       className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
                       style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
-                      onClick={() => navigate({ to: "/team/$teamId", params: { teamId: String(entry.team.id) } })}
+                      onClick={() => {
+                        rememberTeamName(entry.team.id, entry.team.name);
+                        void navigate({ to: "/team/$teamId", params: { teamId: String(entry.team.id) } });
+                      }}
                       onAuxClick={(event) => handleTeamAuxClick(event, entry.team.id)}
                     >
                       <td className="py-2.5 px-3 text-sm font-bold text-osu-f1 whitespace-nowrap"><RankCell entry={entry} sort={rowsSort} inline /></td>
@@ -442,6 +446,7 @@ function MobileTeamRow({ entry, sort }: { entry: LiveTeamRankingEntry; sort: Liv
     <Link
       to="/team/$teamId"
       params={{ teamId: String(entry.team.id) }}
+      onClick={() => rememberTeamName(entry.team.id, entry.team.name)}
       className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
     >
       <div className="flex items-center gap-3">

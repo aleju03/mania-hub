@@ -56,6 +56,9 @@ export interface ServerPackDrawSlot {
   };
   /* A team card's mint serial, minted with the draw. */
   mint?: { serial?: number; mintedTotal?: number; isFirstGlobal?: boolean };
+  /* A team card's pull log entry, held off the feed until the reveal
+     finishes and releases it. */
+  pullEventId?: number;
   isNew?: boolean;
   username?: string;
   avatarUrl?: string;

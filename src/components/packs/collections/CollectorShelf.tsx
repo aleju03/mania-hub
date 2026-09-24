@@ -1,3 +1,4 @@
+import { packCompletionCounts } from "#/lib/pack-completion";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useLocale } from "#/lib/locale-context";
 import { Link } from "@tanstack/react-router";
@@ -141,9 +142,10 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
   const { t } = useLingui();
   const locale = useLocale();
   const { collector, completion, ranks } = profile;
+  const completionCounts = packCompletionCounts(completion);
   // Floored for the same reason the boards floor it: 99.99% is not 100%.
   const poolPercent =
-    completion.poolTotal > 0 ? Math.floor((completion.poolOwnedCount / completion.poolTotal) * 100) : null;
+    completion.poolTotal > 0 ? Math.floor((completionCounts.owned / completionCounts.total) * 100) : null;
 
   return (
     <div>
@@ -214,13 +216,13 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
           <Trans>
             Holds{" "}
             <span translate="no" className="font-bold text-white tabular-nums">
-              {formatNumber(completion.poolOwnedCount)}
+              {formatNumber(completionCounts.owned)}
             </span>{" "}
             of the{" "}
             <span translate="no" className="font-bold text-white tabular-nums">
-              {formatNumber(completion.poolTotal)}
+              {formatNumber(completionCounts.total)}
             </span>{" "}
-            pullable players,{" "}
+            collectible cards,{" "}
             <span translate="no" className="font-bold text-white tabular-nums">
               {poolPercent}%
             </span>

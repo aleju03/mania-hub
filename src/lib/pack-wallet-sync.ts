@@ -90,6 +90,7 @@ export interface ServerPackCollectionPage {
   /* Pool teams the collection holds no card of, on a read that asked for
      teams. Part of the header's "N missing". */
   teamMissing: number;
+  teamPoolTotal: number;
   /** Honorary GOAT variants the collection still lacks. They are separate
       collectible slots from the ordinary player pool. */
   goatMissing: number;
@@ -287,6 +288,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       goatMissing: Math.max(0, Math.floor(Number(body.goatMissing) || 0)),
       teamCount: Math.max(0, Math.floor(Number(body.teamCount) || 0)),
       teamMissing: Math.max(0, Math.floor(Number(body.teamMissing) || 0)),
+      teamPoolTotal: Math.max(0, Math.floor(Number(body.teamPoolTotal) || 0)),
     };
   });
 
@@ -384,8 +386,8 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
 
 /* A shelf also takes a team card, "team:<id>", which no wallet holds. */
 function sanitizeShowcaseKey(value: string): string | null {
-  const team = /^team:(\d{1,12})$/.exec(value.trim());
-  if (team) return Number(team[1]) > 0 ? `team:${Number(team[1])}` : null;
+  const team = /^team:(\d{1,12})(:eternal)?$/.exec(value.trim());
+  if (team) return Number(team[1]) > 0 ? `team:${Number(team[1])}${team[2] ?? ""}` : null;
   return sanitizeCardKey(value);
 }
 

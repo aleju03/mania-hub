@@ -38,6 +38,7 @@ import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
+import { rememberTeamName } from "../../lib/analytics-teams";
 
 export type { CardMint };
 
@@ -433,6 +434,7 @@ function MissingTeamTile({ team }: { team: ServerPackCollectionMissingTeam }) {
     <Link
       to="/team/$teamId"
       params={{ teamId: String(team.teamId) }}
+      onClick={() => rememberTeamName(team.teamId, team.name)}
       className="relative flex flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-white/12 bg-black/20 px-1.5 transition-colors hover:border-white/25 hover:bg-black/30"
       style={{ aspectRatio: "5 / 7" }}
     >
@@ -856,10 +858,8 @@ export function CollectionPanel({
   const serverPoolProgress = useServerCollection
     ? serverMetaPage?.poolProgress ?? serverPage?.page.poolProgress ?? null
     : null;
-  /* The other side of collection completion: ordinary pool players plus GOAT
-     variants this collection has no card of. GOATs remain outside the player
-     ratio, but they are collectible slots, so the nearby "N missing" answer
-     must include them. The detailed list is fetched separately. */
+  /* Completion and its missing list cover ordinary players, GOATs and teams.
+     The detailed missing list is fetched separately. */
   const poolMissingCount = serverPoolProgress
     ? Math.max(0, serverPoolProgress.poolTotal - serverPoolProgress.poolOwnedCount)
     : 0;
@@ -869,6 +869,10 @@ export function CollectionPanel({
   const teamMissingCount = useServerCollection
     ? serverMetaPage?.teamMissing ?? serverPage?.page.teamMissing ?? 0
     : 0;
+  const teamPoolTotal = useServerCollection
+    ? serverMetaPage?.teamPoolTotal ?? serverPage?.page.teamPoolTotal ?? 0
+    : 0;
+  const teamsOwned = Math.max(0, teamPoolTotal - teamMissingCount);
   const missingCount = poolMissingCount + teamMissingCount + goatMissingCount;
   const [showMissing, setShowMissing] = useState(false);
   const missingOpen = showMissing && useServerCollection;
@@ -1165,17 +1169,17 @@ export function CollectionPanel({
   if (!wallet) return null;
 
   // The header and "N missing" answer describe the same complete set: every
-  // ordinary-drawable player plus the honorary GOAT roster. Keeping GOATs out
+  // ordinary-drawable player, honorary GOAT and drawable team. Keeping GOATs out
   // of this ratio while adding them to the missing count made the visible
   // equation disagree (owned + missing != total). Retired and special variant
   // cards remain outside completion.
   const goatRosterTotal = HONORARY_PLAYERS.length;
   const goatsOwned = Math.max(0, goatRosterTotal - goatMissingCount);
   const progressOwned = serverPoolProgress
-    ? serverPoolProgress.poolOwnedCount + goatsOwned
+    ? serverPoolProgress.poolOwnedCount + goatsOwned + teamsOwned
     : collectionTotal;
   const progressPool = serverPoolProgress
-    ? serverPoolProgress.poolTotal + goatRosterTotal
+    ? serverPoolProgress.poolTotal + goatRosterTotal + teamPoolTotal
     : wallet.poolTotal !== null
       ? wallet.poolTotal + goatRosterTotal
       : null;
@@ -1198,7 +1202,7 @@ export function CollectionPanel({
                 pushes land; auto-translate's <font> rewrites detach the text
                 nodes React keeps updating. */}
             <span translate="no" className="text-[12px] text-osu-f1 tabular-nums">
-              <Trans>{progressCounts} players</Trans>
+              <Trans>{progressCounts} cards</Trans>
             </span>
           </div>
           {progressPercent !== null && collectionTotal > 0 && (
@@ -1931,7 +1935,10 @@ export function CollectionPanel({
                 params={{ teamId: String(menu.card.team.teamId) }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
                 role="menuitem"
-                onClick={() => setMenu(null)}
+                onClick={() => {
+                  if (menu.card.team) rememberTeamName(menu.card.team.teamId, menu.card.team.name);
+                  setMenu(null);
+                }}
               >
                 <Trans>View team</Trans>
               </Link>

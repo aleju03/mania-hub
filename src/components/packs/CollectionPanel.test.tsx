@@ -5,6 +5,13 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n } from "#/lib/i18n";
 import type { PackWallet } from "#/lib/pack-collection";
+import { HONORARY_PLAYERS } from "#/lib/honorary-players";
+import { fetchServerPackCollectionPage } from "#/lib/pack-wallet-sync";
+
+vi.mock("#/lib/pack-wallet-sync", () => ({
+  fetchServerPackCollectionPage: vi.fn(),
+  fetchServerPackCollectionMissing: vi.fn(),
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
@@ -235,4 +242,26 @@ it("filters the grid to the cards held more than once, and carries that into a b
   fireEvent.click(screen.getByRole("button", { name: /^Recycle \+/ }));
   fireEvent.click(screen.getByRole("button", { name: /Sure\?/ }));
   expect(onRecycleWholeMatching).toHaveBeenCalledWith({ tier: "all", query: "", duplicatesOnly: true, mark: null, teamsOnly: false, playersOnly: false });
+});
+
+it("uses players, GOATs and drawable teams for both the header and missing count", async () => {
+  vi.useRealTimers();
+  vi.mocked(fetchServerPackCollectionPage).mockResolvedValue({
+    cards: [], total: 10, tierCounts: { rare: 10 }, duplicateCardCount: 0,
+    duplicateShardTotal: 0, filteredShardTotal: 0,
+    poolProgress: { poolTotal: 100, poolOwnedCount: 40, retiredOwnedCount: 9 },
+    teamCount: 7, teamPoolTotal: 20, teamMissing: 15, goatMissing: HONORARY_PLAYERS.length - 3,
+  });
+  render(
+    <I18nProvider i18n={getI18n("en")}>
+      <CollectionPanel wallet={wallet} showLoginNudge={false} syncStatus="synced"
+        onRecycleCard={() => 0} onRecycleWhole={() => 0} onRecycleWholeMany={() => 0}
+        onRecycleWholeMatching={() => 0} onRecycleAll={() => 0} onApplyMint={() => true} />
+    </I18nProvider>,
+  );
+  const total = 120 + HONORARY_PLAYERS.length;
+  // Five drawable teams count; the other two holdings are special or retired.
+  expect(await screen.findByText(`48 / ${total} cards`)).toBeTruthy();
+  expect(screen.getByRole("button", { name: `${total - 48} missing` })).toBeTruthy();
+  expect(screen.getByText(`${((48 / total) * 100).toFixed(1)}%`)).toBeTruthy();
 });

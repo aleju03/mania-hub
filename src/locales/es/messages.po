@@ -1556,8 +1556,12 @@ msgid "{previousScoreAge} earlier"
 msgstr "{previousScoreAge} antes"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "{progressCounts} players"
-msgstr "{progressCounts} jugadores"
+msgid "{progressCounts} cards"
+msgstr "{progressCounts} cartas"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "{progressCounts} players"
+#~ msgstr "{progressCounts} jugadores"
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "{progressCounts} teams"
@@ -7541,11 +7545,17 @@ msgstr "mantén para reciclar"
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "Mantén pulsado para reciclar todos los duplicados, valen {recyclable} fragmentos"
 
+#. placeholder {0}: formatNumber(completionCounts.owned)
+#. placeholder {1}: formatNumber(completionCounts.total)
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Holds <0>{0}</0> of the <1>{1}</1> collectible cards, <2>{poolPercent}%</2>"
+msgstr "Tiene <0>{0}</0> de las <1>{1}</1> cartas coleccionables, <2>{poolPercent}%</2>"
+
 #. placeholder {0}: formatNumber(completion.poolOwnedCount)
 #. placeholder {1}: formatNumber(completion.poolTotal)
 #: src/components/packs/collections/CollectorShelf.tsx
-msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
-msgstr "Tiene <0>{0}</0> de los <1>{1}</1> jugadores que puedes sacar, <2>{poolPercent}%</2>"
+#~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
+#~ msgstr "Tiene <0>{0}</0> de los <1>{1}</1> jugadores que puedes sacar, <2>{poolPercent}%</2>"
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -18200,6 +18210,7 @@ msgstr "Ver perfil"
 
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "Ver equipo"
 

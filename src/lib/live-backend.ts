@@ -3529,13 +3529,14 @@ export interface LivePackCollector {
   completion: LivePackCollectorCompletion;
 }
 
-/* The two sets a collection can actually complete: the live draw pool and the
-   honorary roster. Everything else about a collection is unbounded. */
+/* Ordinary player and team pools plus the honorary roster. */
 export interface LivePackCollectorCompletion {
   poolTotal: number;
   poolOwnedCount: number;
   goatsOwned: number;
   goatsTotal: number;
+  teamsTotal: number;
+  teamsOwned: number;
 }
 
 export interface LivePackCommunityCard {
@@ -3898,6 +3899,9 @@ export interface LiveSharedPackCard {
      Null for a card pulled out of the ranked pool before the player joined the
      honorary roster, and for pulls older than the log. */
   goatPull: { packType: string; pulledAt: number } | null;
+  /* Set on a team card (key "team:<id>"): card.userId is the negative team
+     id and card.username the team's name. */
+  team?: { teamId: number; name: string; shortName: string; flagUrl: string | null; coverUrl: string | null } | null;
 }
 
 /* One owned card as a shareable artifact: backs the /pull/{owner}/{card}
@@ -3906,9 +3910,9 @@ export interface LiveSharedPackCard {
    card was recycled away or never synced. */
 export async function fetchLivePackSharedCard(
   ownerId: number,
-  /* A card key: the player's id for their ordinary card, "<id>:goat", or
-     "<id>:v<n>" for one the grant desk handed out. A collector holding several
-     cards of one player has a link to each. */
+  /* A card key: the player's id for their ordinary card, "<id>:goat",
+     "<id>:v<n>" for one the grant desk handed out, or "team:<id>". A
+     collector holding several cards of one player has a link to each. */
   cardKey: string | number,
   pullId?: number,
 ): Promise<LiveSharedPackCard> {

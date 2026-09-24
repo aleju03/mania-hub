@@ -1613,6 +1613,7 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
 
 interface SharedPackCardPayload {
   owner?: { userId?: number; username?: string };
+  team?: unknown;
   card?: {
     userId?: number;
     username?: string;
@@ -1652,6 +1653,9 @@ async function renderPulledCardOg(
   if (payloadResponse.status === 404) throw new OgFallbackError(`no pulled card ${ownerId}/${cardKey}`);
   if (!payloadResponse.ok) throw new OgFallbackError(`pulled card ${payloadResponse.status}`);
   const payload = (await payloadResponse.json()) as SharedPackCardPayload;
+  // The OG card art has no team banner face, so a team pull shares the
+  // default image rather than a player card with an empty portrait.
+  if (payload.team) throw new OgFallbackError(`pulled card ${ownerId}/${cardKey} is a team card`);
   const card = payload.card;
   const skills = card?.skills;
   if (

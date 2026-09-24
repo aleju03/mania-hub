@@ -65,6 +65,38 @@ export const fetchServerPackTeamCollection = createServerFn({ method: "GET" })
   },
 );
 
+/* The reveal finished: the team pulls the draw logged are held off the pull
+   feed until now, so the feed never shows a card before its opener saw it. */
+export const releaseServerTeamPackPulls = createServerFn({ method: "POST" })
+  .validator((input: { eventIds?: unknown }) => {
+    const eventIds = (Array.isArray(input?.eventIds) ? input.eventIds : [])
+      .slice(0, 12)
+      .map((id: unknown) => Math.floor(Number(id) || 0))
+      .filter((id: number) => id > 0);
+    if (eventIds.length === 0) throw new Error("Invalid team pull release.");
+    return { eventIds };
+  })
+  .handler(async ({ data }): Promise<{ released: number } | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.viewer) return null;
+    const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+    if (!base) return null;
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    const bridgeToken = liveBridgeToken();
+    if (bridgeToken) headers.authorization = `Bearer ${bridgeToken}`;
+    const response = await fetch(`${base}/api/packs/team-pulls/release`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ userId: auth.viewer.id, eventIds: data.eventIds }),
+    });
+    if (!response.ok) throw new Error(`Team pull release failed (${response.status}).`);
+    const body = (await response.json()) as { released?: unknown };
+    return { released: Number(body.released) || 0 };
+  });
+
 /* Hands team cards back for shards: some copies of some teams (the pack
    summary), or every copy past the first of every team. */
 export const recycleServerPackTeamCards = createServerFn({ method: "POST" })
@@ -74,6 +106,7 @@ export const recycleServerPackTeamCards = createServerFn({ method: "POST" })
       .slice(0, 50)
       .map((entry) => ({
         teamId: Math.floor(Number((entry as { teamId?: unknown })?.teamId) || 0),
+        tier: (entry as { tier?: unknown })?.tier === "eternal" ? "eternal" : undefined,
         copies: Math.min(100, Math.floor(Number((entry as { copies?: unknown })?.copies) || 0)),
       }))
       .filter((entry) => entry.teamId > 0 && entry.copies > 0);
@@ -101,7 +134,7 @@ export const recycleServerPackTeamCards = createServerFn({ method: "POST" })
 export function teamCollectedCard(card: ServerPackTeamCard): CollectedCard {
   return {
     userId: -card.teamId,
-    cardKey: teamPackCardKey(card.teamId),
+    cardKey: teamPackCardKey(card.teamId, card.tier),
     team: card,
     username: card.name,
     avatarUrl: "",

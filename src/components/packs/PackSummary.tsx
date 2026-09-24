@@ -21,6 +21,7 @@ import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { playRecycleClink } from "./packSfx";
 import type { FlightRect, RevealedCard } from "./RevealStage";
 import { SlicedFace } from "./SlicedFace";
+import { rememberTeamName } from "../../lib/analytics-teams";
 
 interface PackSummaryProps {
   cards: RevealedCard[];
@@ -88,8 +89,13 @@ function groupHand(cards: RevealedCard[]): HandGroup[] {
 }
 
 /* The spotlight speaks CollectedCard; a fresh pull maps onto one directly
-   (a single copy, timestamps unused by the spotlight). */
-function toSpotlightCard(card: RevealedCard): CollectedCard {
+   (a single copy pulled just now), carrying the serial the pull log handed
+   back so the spotlight says where it sits in the mint order. */
+function toSpotlightCard(
+  card: RevealedCard,
+  mint: { serial: number; mintedTotal: number } | undefined,
+  pulledAt: number,
+): CollectedCard {
   return {
     userId: card.player.user.id,
     ...(card.player.milestone ? { recyclable: false } : {}),
@@ -107,8 +113,9 @@ function toSpotlightCard(card: RevealedCard): CollectedCard {
     globalRank: card.player.globalRank,
     copies: 1,
     recycledCopies: 0,
-    firstPulledAt: 0,
-    lastPulledAt: 0,
+    firstPulledAt: pulledAt,
+    lastPulledAt: pulledAt,
+    ...(mint ? { serial: mint.serial, mintedTotal: mint.mintedTotal } : {}),
   };
 }
 
@@ -608,7 +615,11 @@ export function PackSummary({
                   }
                   const rect = event.currentTarget.getBoundingClientRect();
                   setSpotlight({
-                    card: toSpotlightCard(card),
+                    card: toSpotlightCard(
+                      card,
+                      serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier)),
+                      Date.now(),
+                    ),
                     thumbnail: card.thumbnail,
                     rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
                   });
@@ -744,6 +755,7 @@ export function PackSummary({
                   <Link
                     to="/team/$teamId"
                     params={{ teamId: String(card.player.team.teamId) }}
+                    onClick={() => card.player.team && rememberTeamName(card.player.team.teamId, card.player.team.name)}
                     className="flex items-center justify-center gap-1.5 hover:underline underline-offset-4 decoration-osu-f1/60"
                     aria-label={t`Open ${card.player.team.name}'s team page`}
                   >
@@ -766,7 +778,9 @@ export function PackSummary({
                       {card.tierLabel}
                     </span>
                   )}
-                  <span className="text-osu-f1 tabular-nums">#{card.player.globalRank.toLocaleString("en-US")}</span>
+                  {!card.player.team && (
+                    <span className="text-osu-f1 tabular-nums">#{card.player.globalRank.toLocaleString("en-US")}</span>
+                  )}
                 </div>
                 {(() => {
                   const mint = serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier));
@@ -928,7 +942,10 @@ export function PackSummary({
                   params={{ teamId: String(card.player.team.teamId) }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
                   role="menuitem"
-                  onClick={() => setMenu(null)}
+                  onClick={() => {
+                    if (card.player.team) rememberTeamName(card.player.team.teamId, card.player.team.name);
+                    setMenu(null);
+                  }}
                 >
                   <Trans>Open team page</Trans>
                 </Link>

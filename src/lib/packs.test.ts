@@ -848,6 +848,21 @@ describe("startBoundedPrefetches", () => {
 describe("mapServerPackDraw", () => {
   const score = { pp: 321 } as OsuScore;
 
+  it("keeps regular and Eternal cards of the same team distinct and enables the Eternal ceremony", () => {
+    const team = { teamId: 9, name: "Nine", shortName: "NN", flagUrl: null, coverUrl: null, skills: { cardPower: 70 } };
+    const mapped = mapServerPackDraw({
+      poolTotal: 12, cards: [], wallet: null,
+      players: [
+        { userId: -9, isNew: false, team: { ...team, tier: "mythic" } },
+        { userId: -9, isNew: true, team: { ...team, tier: "eternal" }, pullEventId: 123 },
+      ],
+    });
+    expect(mapped.draw.players.map((card) => card.cardKey)).toEqual(["team:9", "team:9:eternal"]);
+    expect(mapped.draw.players[1]).toMatchObject({ eternal: true, teamPullEventId: 123 });
+    expect(mapped.isNewByCardKey.get("team:9")).toBe(false);
+    expect(mapped.isNewByCardKey.get("team:9:eternal")).toBe(true);
+  });
+
   it("maps a team slot onto a team card and drops one with an unknown tier", () => {
     const skills = { cardPower: 70, fingerControl: 60, speed: 65, accuracy: 80, starAvg: 5.5, mainKeyMode: 4 };
     const mapped = mapServerPackDraw({

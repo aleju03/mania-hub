@@ -35,6 +35,19 @@ describe("pack-pending", () => {
     expect(effectivePackDamage([{ ...makePlayer(1), eternal: true }], damage)).toBeNull();
   });
 
+  it("resumes and consumes the exact team variant and protects its Eternal from pack damage", () => {
+    const team = { teamId: 9, name: "Nine", shortName: "NN", flagUrl: null, coverUrl: null,
+      skills: { cardPower: 70, fingerControl: 60, speed: 65, accuracy: 80, starAvg: 5.5, mainKeyMode: 4 } };
+    const regular: PackPlayer = { ...makePlayer(-9), globalRank: 1, team: { ...team, tier: "mythic" }, cardKey: "team:9" };
+    const eternal: PackPlayer = { ...regular, team: { ...team, tier: "eternal" }, cardKey: "team:9:eternal", eternal: true, teamPullEventId: 123 };
+    writePendingPack([regular, eternal]);
+    const resumed = readPendingPack()!;
+    expect(resumed.players[1]).toMatchObject({ cardKey: "team:9:eternal", eternal: true, teamPullEventId: 123 });
+    expect(effectivePackDamage(resumed.players, { path: [0.4, 0.5, 0.45, 0.6] })).toBeNull();
+    consumePendingPackCard(-9, "team:9:eternal");
+    expect(readPendingPack()?.players.map((card) => card.cardKey)).toEqual(["team:9"]);
+  });
+
   it("keeps the milestone card's key, badge, motif and number across a resume", () => {
     const motif = { url: "https://mania-tracker.com/images/packs/milestone-3m.png", scale: 1.35, opacity: 0.9, palette: "gold" as const };
     const golden: PackPlayer = { ...makePlayer(8), eternal: true, milestone: true, milestoneTarget: 3_000_000, cardKey: "8:v1", customLabel: "3,000,000th pack", motif };

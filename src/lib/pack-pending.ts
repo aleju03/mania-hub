@@ -62,13 +62,15 @@ function sanitizePlayer(value: unknown): PackPlayer | null {
     ...packPlayerVariantFields({ userId: user.id, ...raw }),
     /* A team card resumes as the team it was dealt as; the server already
        wrote it into the team collection. */
-    ...teamFields(raw.team),
+    ...teamFields(raw.team, raw.teamPullEventId),
   };
 }
 
-function teamFields(value: unknown): Pick<PackPlayer, "team" | "cardKey"> {
+function teamFields(value: unknown, pullEventId: unknown): Pick<PackPlayer, "team" | "cardKey" | "teamPullEventId" | "eternal"> {
   const team = parsePackTeamCard(value);
-  return team ? { team, cardKey: teamPackCardKey(team.teamId) } : {};
+  if (!team) return {};
+  const eventId = Math.floor(Number(pullEventId) || 0);
+  return { team, ...(team.tier === "eternal" ? { eternal: true } : {}), cardKey: teamPackCardKey(team.teamId, team.tier), ...(eventId > 0 ? { teamPullEventId: eventId } : {}) };
 }
 
 export function readPendingPack(): PendingPack | null {
@@ -114,10 +116,10 @@ export function writePendingPack(players: PackPlayer[], damage: PackDamage | nul
 /* Drops a player from the stored remainder the moment their card flips into
    the wallet. Reveals run in draw order, but match by id anyway so an
    out-of-sync entry cannot eat the wrong card. */
-export function consumePendingPackCard(userId: number): void {
+export function consumePendingPackCard(userId: number, cardKey?: string): void {
   const pending = readPendingPack();
   if (!pending) return;
-  const index = pending.players.findIndex((player) => player.user.id === userId);
+  const index = pending.players.findIndex((player) => player.user.id === userId && (!cardKey || player.cardKey === cardKey));
   if (index === -1) return;
   pending.players.splice(index, 1);
   // The remainder of a cut pack is still cut.

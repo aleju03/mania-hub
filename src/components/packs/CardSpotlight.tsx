@@ -16,6 +16,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
 import { collectedCardRenderData } from "./cardThumbnailCache";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
+import { rememberTeamName } from "../../lib/analytics-teams";
 
 export interface CardSpotlightTarget {
   card: CollectedCard;
@@ -519,6 +520,7 @@ export function CardSpotlight({
                   <Link
                     to="/team/$teamId"
                     params={{ teamId: String(card.team.teamId) }}
+                    onClick={() => card.team && rememberTeamName(card.team.teamId, card.team.name)}
                     className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition hover:brightness-110"
                   >
                     <Trans>View team</Trans>

@@ -1,3 +1,4 @@
+import { packCompletionCounts } from "#/lib/pack-completion";
 import { Link } from "@tanstack/react-router";
 import { useLingui } from "@lingui/react/macro";
 import { formatNumber, formatTimeAgo } from "#/lib/format";
@@ -131,7 +132,8 @@ export function RecordBoardsSkeleton() {
    rounding it to 100% claims a completion nobody has managed. */
 function completionNote(completion: LivePackCollectorCompletion): string | null {
   if (completion.poolTotal <= 0) return null;
-  return `${Math.floor((completion.poolOwnedCount / completion.poolTotal) * 100)}%`;
+  const { owned, total } = packCompletionCounts(completion);
+  return `${Math.floor((owned / total) * 100)}%`;
 }
 
 export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
@@ -150,7 +152,7 @@ export function RecordBoards({ stats }: { stats: LivePackCommunityStats }) {
               collector={collector}
               index={index}
               note={completionNote(collector.completion)}
-              value={formatNumber(collector.completion.poolOwnedCount)}
+              value={formatNumber(packCompletionCounts(collector.completion).owned)}
             />
           ))}
         </Board>

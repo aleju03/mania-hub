@@ -3,7 +3,7 @@
    unmounted: coming back to the stats meant its skeletons again and two more
    requests for numbers it had just been told. What this covers is the second
    click, which should cost nothing. */
-import { act, render as rtlRender } from "@testing-library/react";
+import { act, render as rtlRender, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ReactElement, ReactNode } from "react";
 import { I18nProvider } from "@lingui/react";
@@ -34,7 +34,7 @@ const collector = {
   packsOpened: 4164,
   joinedAt: 1,
   lastPulledAt: 2,
-  completion: { poolTotal: 12591, poolOwnedCount: 12591, goatsOwned: 24, goatsTotal: 24 },
+  completion: { poolTotal: 12591, poolOwnedCount: 12591, goatsOwned: 24, goatsTotal: 24, teamsOwned: 0, teamsTotal: 2700 },
 };
 
 const card = {
@@ -154,4 +154,14 @@ it("re-reads the snapshot once it has gone stale", async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("includes missing teams in collection completion even with every player and GOAT owned", async () => {
+  const view = render(<StatsTab active />);
+  await settle();
+  const heading = within(view.container).getByText("most complete collections");
+  const board = heading?.parentElement;
+  expect(board?.textContent).toContain("12,615");
+  expect(board?.textContent).toContain("82%");
+  expect(board?.textContent).not.toContain("100%");
 });

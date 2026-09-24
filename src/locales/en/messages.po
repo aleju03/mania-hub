@@ -1579,8 +1579,12 @@ msgid "{previousScoreAge} earlier"
 msgstr "{previousScoreAge} earlier"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "{progressCounts} players"
-msgstr "{progressCounts} players"
+msgid "{progressCounts} cards"
+msgstr "{progressCounts} cards"
+
+#: src/components/packs/CollectionPanel.tsx
+#~ msgid "{progressCounts} players"
+#~ msgstr "{progressCounts} players"
 
 #: src/components/packs/TeamCollectionPanel.tsx
 #~ msgid "{progressCounts} teams"
@@ -7572,11 +7576,17 @@ msgstr "hold to recycle"
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "Hold to recycle every duplicate, worth {recyclable} shards"
 
+#. placeholder {0}: formatNumber(completionCounts.owned)
+#. placeholder {1}: formatNumber(completionCounts.total)
+#: src/components/packs/collections/CollectorShelf.tsx
+msgid "Holds <0>{0}</0> of the <1>{1}</1> collectible cards, <2>{poolPercent}%</2>"
+msgstr "Holds <0>{0}</0> of the <1>{1}</1> collectible cards, <2>{poolPercent}%</2>"
+
 #. placeholder {0}: formatNumber(completion.poolOwnedCount)
 #. placeholder {1}: formatNumber(completion.poolTotal)
 #: src/components/packs/collections/CollectorShelf.tsx
-msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
-msgstr "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
+#~ msgid "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
+#~ msgstr "Holds <0>{0}</0> of the <1>{1}</1> pullable players, <2>{poolPercent}%</2>"
 
 #: src/components/layout/Nav.tsx
 msgid "home"
@@ -18247,6 +18257,7 @@ msgstr "View profile"
 
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/CollectionPanel.tsx
+#: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "View team"
 

@@ -214,11 +214,14 @@ function paintCharacter(look: Look, dir: Dir, frame: number): Sprite {
       r(5, hy, 6, 1, hair);
       r(4, hy + 1, 8, 2, hair);
       r(3, hy + 2, 10, 2, hair);
-      r(9, hy + 4, 4, 5, hair);
+      r(8, hy + 4, 5, 5, hair);
       r(10, hy + 9, 2, 1, hairD);
       if (withFringe) {
-        r(3, hy + 4, 3, 1, hair);
-        r(7, hy + 4, 1, 1, hair);
+        // bangs swept forward over the forehead, as in the front view
+        r(3, hy + 4, 6, 1, hair);
+        r(3, hy + 5, 2, 1, hair);
+        r(6, hy + 5, 2, 1, hair);
+        r(4, hy + 5, 1, 1, hairD);
       }
       r(5, hy + 1, 3, 1, hairL);
       r(12, hy + 3, 1, 6, hairD);

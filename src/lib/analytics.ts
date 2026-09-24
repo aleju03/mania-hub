@@ -3,6 +3,7 @@ import {
   getCommunitiesPageviewProperties,
   getCommunityDetailPageviewProperties,
 } from "./analytics-communities";
+import { getTeamDetailPageviewProperties } from "./analytics-teams";
 import { getMapsPageviewProperties } from "./analytics-maps";
 import { getSkinDetailPageviewProperties, getSkinsPageviewProperties } from "./analytics-skins";
 import {
@@ -291,6 +292,8 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     const context = readFarmMapContext(beatmapId);
     if (context.title) props.farm_map_title = context.title;
     if (context.user) props.farm_map_user = context.user;
+  } else if (pathname.startsWith("/team/")) {
+    Object.assign(props, getTeamDetailPageviewProperties(pathname));
   } else if (pathname.startsWith("/player/")) {
     const username = decodeURIComponent(pathname.slice("/player/".length));
     if (username) props.profile_username = username;

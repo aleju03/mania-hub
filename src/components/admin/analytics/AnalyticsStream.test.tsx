@@ -83,6 +83,8 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     communitiesPage: null,
     communityId: null,
     communityName: null,
+    teamId: null,
+    teamName: null,
     collectionsCollector: null,
     collectionsTab: null,
     collectionsTier: null,

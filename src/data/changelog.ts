@@ -37,6 +37,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-24", text: "The first member of each team to collect every regular Team card gets their team's Eternal card in their next pack, unlocking it for everyone. Unlocked Eternal team cards can then drop as a bonus at a 0.01% chance per pack.", bold: "Eternal", to: "/packs" },
   { date: "2026-09-24", text: "Teams now have profiles like players do, and a leaderboard. Teams also have their own Maniacards you can pull from packs.", bold: "Teams", to: "/teams" },
   { date: "2026-09-23", text: "You can now link private server profiles to your account with the + next to osu! profile" },
   { date: "2026-09-23", text: "Player dan + and - steps used to be uneven, so a plain level like gamma covered a much bigger part of the level than the other steps, and -- almost never showed up. They are five equal steps per level now, so some player dans show one step lower (like gamma- instead of gamma), but the level itself stays the same as it was before.", to: "/dan-estimates" },

@@ -50,7 +50,7 @@ import {
   writePendingPack,
 } from "../lib/pack-pending";
 import { mintServerPackCollectionCards, recordServerPackPulls } from "../lib/pack-wallet-sync";
-import { recycleServerPackTeamCards } from "../lib/pack-teams";
+import { recycleServerPackTeamCards, releaseServerTeamPackPulls } from "../lib/pack-teams";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
@@ -1234,7 +1234,8 @@ function PacksPage() {
                             const result = await recycleServerPackTeamCards({
                               data: {
                                 entries: teamEntries.map((entry) => ({
-                                  teamId: Number(entry.cardKey.slice("team:".length)),
+                                  teamId: Number(entry.cardKey.split(":")[1]),
+                                  tier: entry.cardKey.endsWith(":eternal") ? "eternal" : undefined,
                                   copies: entry.copies,
                                 })),
                               },
@@ -1256,7 +1257,7 @@ function PacksPage() {
                         damage={damage}
                         onCardRevealed={(pull) => {
                           // In the wallet now, so no longer owed by the pending pack.
-                          consumePendingPackCard(pull.userId);
+                          consumePendingPackCard(pull.userId, pull.cardKey?.startsWith("team:") ? pull.cardKey : undefined);
                           /* A team card went into the team collection at the
                              draw; the player wallet never holds one. */
                           if (pull.cardKey?.startsWith("team:")) return serverIsNewRef.current?.get(pull.cardKey) ?? false;
@@ -1277,7 +1278,7 @@ function PacksPage() {
                              until the collection's repair path re-mints it,
                              never a card. */
                           /* Team cards are already complete on the server:
-                             no mint pass, and no line in the pull feed. */
+                             no mint pass and no pull report. */
                           const playerPulls = pulls.filter((pull) => !pull.player.team);
                           // A team card's serial came with the draw, so its
                           // "Nth to pull this" line is there from the start.
@@ -1287,6 +1288,19 @@ function PacksPage() {
                               : [],
                           );
                           if (teamMints.length > 0) setSerials(new Map(teamMints));
+                          /* The server logged the team cards at the draw but
+                             held them off the pull feed until now, the moment
+                             a player card's report would put it there. */
+                          const teamPullEventIds = pulls.flatMap((pull) =>
+                            pull.player.team && pull.player.teamPullEventId ? [pull.player.teamPullEventId] : [],
+                          );
+                          if (auth.viewer && teamPullEventIds.length > 0) {
+                            void releaseServerTeamPackPulls({ data: { eventIds: teamPullEventIds } })
+                              .then((result) => {
+                                if (result && result.released > 0) refreshPackPulseFeed();
+                              })
+                              .catch(() => {});
+                          }
                           if (auth.viewer && playerPulls.length > 0) {
                             const mints = playerPulls
                               .filter((pull) => pull.skills)

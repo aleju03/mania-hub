@@ -16,6 +16,7 @@ import { useDocumentVisible } from "#/lib/window-activity";
 import { formatPreciseTimeAgo } from "#/lib/format";
 import { useLocale } from "#/lib/locale-context";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
+import { teamPackCardKey } from "#/lib/team-cards";
 import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "#/lib/auth-context";
 import { canUseAdminFeatures } from "#/lib/auth-shared";
@@ -589,7 +590,7 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                       not who pulled it), but each entry links to that exact
                       event on the card's durable permalink. The pull page names
                       the owner and can distinguish a new card from a duplicate.
-                      A team card has no permalink, so it links to the team. */}
+                      A team card's permalink is keyed "team:<id>". */}
                   {(() => {
                     const ring = { boxShadow: `0 0 0 1.5px rgba(${accent}, ${notable ? 0.8 : 0.35})` };
                     const body = (
@@ -646,19 +647,13 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                       </>
                     );
                     const linkClass = "pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100";
-                    return pull.team ? (
-                      <Link
-                        to="/team/$teamId"
-                        params={{ teamId: String(pull.team.teamId) }}
-                        className={linkClass}
-                        aria-label={`${pull.cardUsername} was pulled`}
-                      >
-                        {body}
-                      </Link>
-                    ) : (
+                    return (
                       <Link
                         to="/pull/$ownerId/$cardId"
-                        params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
+                        params={{
+                          ownerId: String(pull.ownerUserId),
+                          cardId: pull.team ? teamPackCardKey(pull.team.teamId, pull.tier ?? undefined) : String(pull.cardUserId),
+                        }}
                         search={{ pull: pull.id }}
                         className={linkClass}
                         aria-label={`${pull.cardUsername} was pulled`}

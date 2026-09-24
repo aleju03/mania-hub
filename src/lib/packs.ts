@@ -88,6 +88,9 @@ export interface PackPlayer {
      are never reported to the pull log, which is where a player card's comes
      from). */
   teamMint?: { serial: number; mintedTotal: number; isFirstGlobal: boolean };
+  /* The team card's pull log entry, which the server holds off the feed until
+     the reveal finishes and releases it (releaseServerTeamPackPulls). */
+  teamPullEventId?: number;
 }
 
 /* The variant fields a server slot may carry, bounded: a key that is not a
@@ -858,12 +861,14 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     if (slot.team) {
       const team = parsePackTeamCard(slot.team);
       if (!team) continue;
-      const cardKey = teamPackCardKey(team.teamId);
+      const cardKey = teamPackCardKey(team.teamId, team.tier);
       if (typeof slot.isNew === "boolean") isNewByCardKey.set(cardKey, slot.isNew);
       const serial = Math.floor(Number(slot.mint?.serial) || 0);
+      const pullEventId = Math.floor(Number(slot.pullEventId) || 0);
       players.push({
         team,
         cardKey,
+        ...(team.tier === "eternal" ? { eternal: true } : {}),
         user: teamCardUser(team),
         globalRank: UNKNOWN_HONORARY_PEAK_RANK,
         pp: 0,
@@ -876,6 +881,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
               },
             }
           : {}),
+        ...(pullEventId > 0 ? { teamPullEventId: pullEventId } : {}),
       });
       continue;
     }

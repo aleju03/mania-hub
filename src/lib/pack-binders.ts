@@ -29,8 +29,8 @@ async function getSyncTarget(): Promise<{ url: string; headers: HeadersInit } | 
    with an optional ":goat", ":eternal" or ":v<n>" suffix, or a team card's
    "team:<id>". */
 function sanitizeCardKey(value: string): string | null {
-  const team = /^team:(\d{1,12})$/.exec(value.trim());
-  if (team) return Number(team[1]) > 0 ? `team:${Number(team[1])}` : null;
+  const team = /^team:(\d{1,12})(:eternal)?$/.exec(value.trim());
+  if (team) return Number(team[1]) > 0 ? `team:${Number(team[1])}${team[2] ?? ""}` : null;
   const match = /^(\d+)(:goat|:eternal|:v\d{1,6})?$/.exec(value.trim());
   if (!match) return null;
   const userId = Math.floor(Number(match[1]));

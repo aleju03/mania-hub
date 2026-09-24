@@ -20,8 +20,15 @@ export interface PackTeamCard {
   };
 }
 
-export function teamPackCardKey(teamId: number): string {
-  return `team:${teamId}`;
+export function teamPackCardKey(teamId: number, tier?: string): string {
+  return `team:${teamId}${tier === "eternal" ? ":eternal" : ""}`;
+}
+
+/* The team id a "team:<id>" key addresses, or null for any other key. */
+export function parseTeamPackCardKey(key: string): number | null {
+  const match = /^team:(\d{1,12})(:eternal)?$/.exec(key);
+  const teamId = match ? Number(match[1]) : 0;
+  return teamId > 0 ? teamId : null;
 }
 
 /* The skills shape the card renderer reads, filled from a team's card. The

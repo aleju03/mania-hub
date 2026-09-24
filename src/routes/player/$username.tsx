@@ -126,6 +126,7 @@ import {
   RailStat,
   TopPlayCard,
 } from "../../components/player/ProfileParts";
+import { rememberTeamName } from "../../lib/analytics-teams";
 
 // The BBCode editor (toolbar + parser + preview) only loads when someone
 // actually opens it; the about tab itself stays light.
@@ -2014,6 +2015,7 @@ export function PlayerProfilePage({
         key="team"
         to="/team/$teamId"
         params={{ teamId: String(user.team.id) }}
+        onClick={() => user.team && rememberTeamName(user.team.id, user.team.name)}
         title={user.team.short_name}
         className="inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-white/85 transition-colors duration-150 hover:text-white"
       >

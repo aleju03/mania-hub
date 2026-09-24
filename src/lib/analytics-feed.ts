@@ -66,6 +66,8 @@ export interface AnalyticsRecentEventRow {
   communitiesPage: string | null;
   communityId: string | null;
   communityName: string | null;
+  teamId: string | null;
+  teamName: string | null;
   collectionsCollector: string | null;
   collectionsTab: string | null;
   collectionsTier: string | null;
@@ -664,6 +666,15 @@ export function describeAnalyticsEvent(
   if (path.startsWith("/communities/")) {
     const id = row.communityId || decodeURIComponent(path.slice("/communities/".length).split("/")[0] ?? "");
     return describeCommunity(row, "opened", id || null);
+  }
+  if (path.startsWith("/team/")) {
+    const id = row.teamId || path.slice("/team/".length).split("/")[0];
+    return {
+      kind: "profile",
+      verb: "viewed",
+      subject: row.teamName ? `the ${row.teamName} team` : id ? `team #${id}` : "a team",
+      detail: null,
+    };
   }
   if (path.startsWith("/player/")) {
     const username = row.profileUsername || decodeURIComponent(path.slice("/player/".length));
