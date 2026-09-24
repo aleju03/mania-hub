@@ -4,6 +4,7 @@ import { createCardTextures, getCosmicTierPalette } from "../player/maniacard3d/
 import { drawManiaGlyph } from "../player/maniacard3d/cardTexture";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "../player/maniacard3d/layout";
 import { parseGradientStops } from "../player/maniacard3d/renderData";
+import { TEAM_COLUMN, TEAM_FLAG, TEAM_FLAG_RADIUS, TEAM_SPINE } from "../player/maniacard3d/textureLayout";
 import type { ManiaCardReadyData } from "../player/maniacard3d/types";
 
 const CARD_THUMBNAIL_MIME_TYPE = "image/webp";
@@ -98,6 +99,9 @@ export function renderCardSkeletonThumbnail(
   tier: ManiaCardTier | null,
   width = 240,
   motif: SkeletonPalette = null,
+  /* A team card is laid out around its spine, not an avatar, so its skeleton
+     has to be too or the tile changes shape when the real face lands. */
+  team = false,
 ): string | null {
   if (typeof document === "undefined") return null;
 
@@ -107,7 +111,7 @@ export function renderCardSkeletonThumbnail(
   const context = source.getContext("2d");
   if (!context) return null;
 
-  drawSkeletonFront(context, tier, motif);
+  drawSkeletonFront(context, tier, motif, team);
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -118,7 +122,7 @@ export function renderCardSkeletonThumbnail(
   return canvas.toDataURL("image/webp", CARD_THUMBNAIL_QUALITY);
 }
 
-function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTier | null, motif: SkeletonPalette = null) {
+function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTier | null, motif: SkeletonPalette = null, team = false) {
   context.save();
   roundedRect(context, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT, 58);
   context.clip();
@@ -127,12 +131,85 @@ function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTie
   else drawSkeletonTrianglePattern(context, tier ? 0.18 : 0.07);
   context.save();
   if (!tier) context.globalAlpha = NEUTRAL_SKELETON_ALPHA;
+  if (team) {
+    drawSkeletonTeamFace(context, tier, motif);
+    context.restore();
+    context.restore();
+    return;
+  }
   drawSkeletonModeBadge(context, tier, motif);
   drawSkeletonNamePlate(context);
   if (tier) drawSkeletonTierLabel(context, tier);
   drawSkeletonAvatar(context);
   drawSkeletonStats(context);
   context.restore();
+  context.restore();
+}
+
+/* The team face from textureLayout: the spine in the tier's gradient darkened
+   (what a team with no header draws), then the flag, name, rarity and the
+   three stat columns stacked to its right. */
+function drawSkeletonTeamFace(context: CanvasRenderingContext2D, tier: ManiaCardTier | null, motif: SkeletonPalette) {
+  const stops = parseGradientStops(skeletonGradient(tier, motif));
+  context.save();
+  const spine = context.createLinearGradient(0, TEAM_SPINE.y, 0, TEAM_SPINE.y + TEAM_SPINE.height);
+  for (const stop of stops) spine.addColorStop(stop.offset, stop.color);
+  context.fillStyle = stops.length > 0 ? spine : "rgba(255,255,255,0.10)";
+  context.fillRect(TEAM_SPINE.x, TEAM_SPINE.y, TEAM_SPINE.width, TEAM_SPINE.height);
+  context.fillStyle = "rgba(0,0,0,0.38)";
+  context.fillRect(TEAM_SPINE.x, TEAM_SPINE.y, TEAM_SPINE.width, TEAM_SPINE.height);
+  context.fillStyle = "rgba(255,255,255,0.28)";
+  context.fillRect(TEAM_SPINE.x + TEAM_SPINE.width - 2, TEAM_SPINE.y, 2, TEAM_SPINE.height);
+  // Where the tag's letters stack down the spine.
+  const center = TEAM_SPINE.x + TEAM_SPINE.width / 2;
+  context.fillStyle = "rgba(255,255,255,0.20)";
+  for (let index = 0; index < 4; index += 1) {
+    roundedRect(context, center - 60, 430 + index * 150, 120, 110, 18);
+    context.fill();
+  }
+  context.restore();
+
+  context.save();
+  roundedRect(context, TEAM_FLAG.x - 6, TEAM_FLAG.y - 6, TEAM_FLAG.width + 12, TEAM_FLAG.height + 12, TEAM_FLAG_RADIUS + 6);
+  context.fillStyle = "rgba(255,255,255,0.16)";
+  context.fill();
+  roundedRect(context, TEAM_FLAG.x, TEAM_FLAG.y, TEAM_FLAG.width, TEAM_FLAG.height, TEAM_FLAG_RADIUS);
+  context.clip();
+  context.fillStyle = "rgba(255,255,255,0.58)";
+  context.fillRect(TEAM_FLAG.x, TEAM_FLAG.y, TEAM_FLAG.width, TEAM_FLAG.height);
+  const shade = context.createLinearGradient(TEAM_FLAG.x, TEAM_FLAG.y, TEAM_FLAG.x + TEAM_FLAG.width, TEAM_FLAG.y + TEAM_FLAG.height);
+  shade.addColorStop(0, "rgba(255,255,255,0.22)");
+  shade.addColorStop(1, "rgba(0,0,0,0.10)");
+  context.fillStyle = shade;
+  context.fillRect(TEAM_FLAG.x, TEAM_FLAG.y, TEAM_FLAG.width, TEAM_FLAG.height);
+  context.restore();
+
+  const nameY = TEAM_FLAG.y + TEAM_FLAG.height + 86;
+  context.save();
+  context.fillStyle = "rgba(255,255,255,0.24)";
+  roundedRect(context, TEAM_COLUMN.x, nameY - 40, 300, 40, 12);
+  context.fill();
+  if (tier) {
+    context.font = "italic 900 52px Torus, Arial, sans-serif";
+    context.textAlign = "left";
+    context.fillStyle = "rgba(255,255,255,0.82)";
+    context.shadowColor = "rgba(0,0,0,0.65)";
+    context.shadowBlur = 8;
+    context.shadowOffsetY = 5;
+    context.fillText(MANIA_TIER_STYLES[tier].label, TEAM_COLUMN.x, nameY + 76);
+  }
+  context.restore();
+
+  context.save();
+  const columnWidth = TEAM_COLUMN.width / 3;
+  context.fillStyle = "rgba(255,255,255,0.24)";
+  for (let index = 0; index < 3; index += 1) {
+    const x = TEAM_COLUMN.x + columnWidth * (index + 0.5);
+    roundedRect(context, x - 70, 880 - 64, 140, 64, 16);
+    context.fill();
+    roundedRect(context, x - 55, 880 + 26, 110, 22, 11);
+    context.fill();
+  }
   context.restore();
 }
 

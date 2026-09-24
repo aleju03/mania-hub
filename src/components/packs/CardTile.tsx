@@ -152,10 +152,11 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
      as a third state between the old page and the new one. */
   const hydrated = useHydrated();
   const palette = card?.motif?.palette;
-  const skeletonKey = `${tier ?? "neutral"}:${palette ?? ""}`;
+  const team = Boolean(card?.team);
+  const skeletonKey = `${tier ?? "neutral"}:${palette ?? ""}${team ? ":team" : ""}`;
   let thumbnail = hydrated ? skeletonThumbnailCache.get(skeletonKey) ?? null : null;
   if (hydrated && !thumbnail) {
-    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, card?.motif ?? null);
+    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, card?.motif ?? null, team);
     if (thumbnail) skeletonThumbnailCache.set(skeletonKey, thumbnail);
   }
   if (thumbnail) {
@@ -186,8 +187,10 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card
   );
 }
 
-export function CollectionCardPlaceholder({ tier, showCaption = true }: {
+export function CollectionCardPlaceholder({ tier, card, showCaption = true }: {
   tier: ManiaCardTier | null;
+  /* The card this stands in for, when known, so a team card holds its shape. */
+  card?: CollectedCard;
   /* The stub under the face stands in for the line of text a grid prints
      below its cards. A surface that prints none passes false, or its
      placeholders would be taller than the tiles that replace them. */
@@ -196,7 +199,7 @@ export function CollectionCardPlaceholder({ tier, showCaption = true }: {
   return (
     <div>
       <div className="relative" style={{ aspectRatio: "5 / 7" }}>
-        <CollectionCardFacePlaceholder tier={tier} />
+        <CollectionCardFacePlaceholder tier={tier} card={card} />
       </div>
       {showCaption && <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />}
     </div>

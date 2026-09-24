@@ -53,9 +53,9 @@ export interface FaceLayout {
 // the left edge, where its 4:1 shape fits nearly uncropped, with the tag down
 // it one letter at a time. The flag, name, rarity, stats and stars stack in
 // the column to its right.
-const TEAM_SPINE: Rect = { x: 0, y: 0, width: 270, height: 1400 };
-const TEAM_COLUMN = { x: 310, width: 646 };
-const TEAM_FLAG: Rect = { x: TEAM_COLUMN.x, y: 84, width: TEAM_COLUMN.width, height: TEAM_COLUMN.width / 2 };
+export const TEAM_SPINE: Rect = { x: 0, y: 0, width: 270, height: 1400 };
+export const TEAM_COLUMN = { x: 310, width: 646 };
+export const TEAM_FLAG: Rect = { x: TEAM_COLUMN.x, y: 84, width: TEAM_COLUMN.width, height: TEAM_COLUMN.width / 2 };
 export const TEAM_FLAG_RADIUS = 26;
 
 function buildTeamFaceLayout(data: ManiaCardReadyData, measure: MeasureText): FaceLayout {

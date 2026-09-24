@@ -65,7 +65,7 @@ function SetTiles({ entry, renderCard, onThumbnailError }: {
       {cards.map((card, index) => <div key={packCardKeyOf(card)} className="min-w-0 snap-start">
         {index >= Math.max(0, start - 1) && index < start + 4
           ? renderCard(card, `set:${set.id}:${packCardKeyOf(card)}`, start > 0 ? extra.onThumbnailError : onThumbnailError)
-          : <CollectionCardPlaceholder tier={card.tier} showCaption={false} />}
+          : <CollectionCardPlaceholder tier={card.tier} card={card} showCaption={false} />}
       </div>)}
     </div>
     <div className="flex items-center gap-2 px-1 pt-1">
