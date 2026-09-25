@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, Trophy, TriangleAlert, User, Users, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, Crosshair, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, Trophy, TriangleAlert, User, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { getCountryName } from "../../../lib/country";
@@ -27,6 +27,8 @@ export const ACTIVITY_KIND_STYLES: Record<AnalyticsActivityKind, {
   ranking: { label: "Rankings", icon: Trophy, text: "text-teal-300", bg: "bg-teal-400/12", ring: "ring-teal-400/30", bar: "bg-teal-300" },
   // Violet next to the purple of player profiles: a team is a group of them.
   team: { label: "Teams", icon: Users, text: "text-violet-300", bg: "bg-violet-400/12", ring: "ring-violet-400/30", bar: "bg-violet-300" },
+  // Cyan: the last free hue that doesn't read as another kind's.
+  snipe: { label: "Snipes", icon: Crosshair, text: "text-cyan-300", bg: "bg-cyan-400/12", ring: "ring-cyan-400/30", bar: "bg-cyan-300" },
   farm: { label: "Farm", icon: Sprout, text: "text-osu-green-light", bg: "bg-osu-green/12", ring: "ring-osu-green/30", bar: "bg-osu-green-light" },
   pack: { label: "Packs", icon: Package, text: "text-osu-orange", bg: "bg-osu-orange/12", ring: "ring-osu-orange/30", bar: "bg-osu-orange" },
   skin: { label: "Skins", icon: Palette, text: "text-osu-c2", bg: "bg-osu-c2/10", ring: "ring-osu-c2/25", bar: "bg-osu-c2" },

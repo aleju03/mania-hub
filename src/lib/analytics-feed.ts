@@ -85,6 +85,10 @@ export interface AnalyticsRecentEventRow {
   skillPlaysKeys: string | null;
   skillPlaysAxis: string | null;
   skillPlaysSide: string | null;
+  snipeSniper: string | null;
+  snipeVictim: string | null;
+  snipeMap: string | null;
+  snipeTarget: string | null;
   /* Whether the visitor was signed in. Events never name the account. */
   signedIn: boolean;
   referrer: string | null;
@@ -99,6 +103,7 @@ export type AnalyticsActivityKind =
   | "profile"
   | "ranking"
   | "team"
+  | "snipe"
   | "farm"
   | "pack"
   | "skin"
@@ -112,6 +117,7 @@ export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
   "profile",
   "ranking",
   "team",
+  "snipe",
   "farm",
   "pack",
   "skin",
@@ -149,12 +155,11 @@ const ANALYTICS_PACK_TYPE_LABELS: Record<string, string> = {
 
 /* Pages whose content follows the selected country scope, so the feed line
    says which tracker/rankings/etc. the visitor was actually looking at. */
-const COUNTRY_SCOPED_PATHS = new Set(["/tracker", "/top-plays", "/snipes"]);
+const COUNTRY_SCOPED_PATHS = new Set(["/tracker", "/top-plays"]);
 
 const SIMPLE_PAGE_LABELS: Record<string, string> = {
   "/tracker": "the tracker",
   "/top-plays": "top plays",
-  "/snipes": "snipes",
   "/packs": "card packs",
   "/settings": "settings",
   "/bbcode": "the BBCode editor",
@@ -447,6 +452,62 @@ function describeCollectionsCard(row: AnalyticsRecentEventRow): AnalyticsActivit
   };
 }
 
+/* The snipes feed keeps its filters in the URL and strips them at their
+   defaults, so the captured URL is the whole record of which slice was on
+   screen: an absent range is the last 7 days, an absent keymode is both. */
+const SNIPES_RANGE_LABELS: Record<string, string> = { "24h": "last 24h", "30d": "last 30 days" };
+
+function describeSnipesPage(row: AnalyticsRecentEventRow, scope: string | null): AnalyticsActivity {
+  const keys = analyticsUrlParam(row.viewUrl, "keys");
+  const range = analyticsUrlParam(row.viewUrl, "range");
+  const page = analyticsUrlParam(row.viewUrl, "page");
+  return {
+    kind: "snipe",
+    verb: "browsed",
+    subject: "snipes",
+    detail: joinDetail([
+      scope,
+      keys === "4k" || keys === "7k" ? keys.toUpperCase() : null,
+      range ? SNIPES_RANGE_LABELS[range] ?? range : null,
+      // The URL page is zero-based; the page control counts from 1.
+      page && Number(page) > 0 ? `page ${Number(page) + 1}` : null,
+    ]),
+  };
+}
+
+// "manolo sniping pepe" when both names rode along, else whichever did.
+function snipePair(row: AnalyticsRecentEventRow): string {
+  if (row.snipeSniper && row.snipeVictim) return `${row.snipeSniper} sniping ${row.snipeVictim}`;
+  if (row.snipeSniper) return `a snipe by ${row.snipeSniper}`;
+  return "a snipe";
+}
+
+/* Where a click on a snipe row went. The destination page logs its own line
+   too; this one keeps the click under Snipes so the feature's funnel reads in
+   one place. */
+function describeSnipeLink(row: AnalyticsRecentEventRow): AnalyticsActivity {
+  const map = row.snipeMap ? `on ${row.snipeMap}` : null;
+  switch (row.snipeTarget) {
+    case "replay":
+      return { kind: "snipe", verb: "watched the replay of", subject: snipePair(row), detail: map };
+    case "beatmap":
+      return { kind: "snipe", verb: "opened the map of", subject: snipePair(row), detail: row.snipeMap };
+    case "sniper":
+      return { kind: "snipe", verb: "opened", subject: row.snipeSniper ? `${row.snipeSniper}'s profile` : "the sniper's profile", detail: "from snipes" };
+    case "victim":
+      return { kind: "snipe", verb: "opened", subject: row.snipeVictim ? `${row.snipeVictim}'s profile` : "the sniped player's profile", detail: "from snipes" };
+    case "board":
+      return {
+        kind: "snipe",
+        verb: "opened",
+        subject: row.profileUsername ? `${row.profileUsername}'s profile` : "a profile",
+        detail: `from the board of ${snipePair(row)}`,
+      };
+    default:
+      return { kind: "snipe", verb: "followed a link on", subject: snipePair(row), detail: map };
+  }
+}
+
 /* Why a paste was turned down, in the words the feed can read at a glance.
    The keys are the backend's own failure reasons. */
 const ADD_SCORE_FAILURE_LABELS: Record<string, string> = {
@@ -588,6 +649,16 @@ function describeNamedAnalyticsEvent(
         subject: row.collectionsCards === "1" ? "1 card on their showcase" : `${row.collectionsCards ?? "0"} cards on their showcase`,
         detail: null,
       };
+    /* The snipes page: a row opened to its head to head and board, the board
+       opened past its first ten, the rules panel, and the links out of a row. */
+    case "snipes_row_open":
+      return { kind: "snipe", verb: "opened", subject: snipePair(row), detail: row.snipeMap ? `on ${row.snipeMap}` : null };
+    case "snipes_board_all":
+      return { kind: "snipe", verb: "showed the full board of", subject: snipePair(row), detail: row.snipeMap ? `on ${row.snipeMap}` : null };
+    case "snipes_rules_open":
+      return { kind: "snipe", verb: "opened", subject: "the snipe rules", detail: null };
+    case "snipes_link":
+      return describeSnipeLink(row);
     case "skin_upload_failed":
       return { kind: "error", verb: "failed", subject: "a skin upload", detail: row.skinUploadError };
     /* A cut pack is also an open, so both lines land for the same pack: the
@@ -727,6 +798,7 @@ export function describeAnalyticsEvent(
     };
   }
   if (path === "/rankings") return describeRankings(row, scope);
+  if (path === "/snipes") return describeSnipesPage(row, scope);
   if (path === "/my-stats" || path === "/my-data") {
     return { kind: "profile", verb: "opened", subject: "their own stats", detail: null };
   }

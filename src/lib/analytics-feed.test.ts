@@ -85,6 +85,10 @@ function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentE
     skillPlaysKeys: null,
     skillPlaysAxis: null,
     skillPlaysSide: null,
+    snipeSniper: null,
+    snipeVictim: null,
+    snipeMap: null,
+    snipeTarget: null,
     signedIn: false,
     referrer: null,
     ...overrides,
@@ -435,6 +439,39 @@ describe("describeAnalyticsEvent", () => {
       subject: '"seven"',
       detail: "in team rankings",
     });
+  });
+
+  it("puts the whole snipes page under snipes", () => {
+    expect(describeAnalyticsEvent(row({ path: "/snipes", selectedCountry: "CR" }))).toEqual({
+      kind: "snipe",
+      verb: "browsed",
+      subject: "snipes",
+      detail: "Costa Rica",
+    });
+    expect(describeAnalyticsEvent(row({
+      path: "/snipes",
+      selectedCountry: "CR",
+      viewUrl: "https://mania-tracker.com/snipes?keys=7k&range=30d&page=2",
+    })).detail).toBe("Costa Rica · 7K · last 30 days · page 3");
+    const snipe = { snipeSniper: "alpha", snipeVictim: "beta", snipeMap: "Song [Hard]" };
+    expect(describeAnalyticsEvent(row({ event: "snipes_row_open", path: "/snipes", ...snipe }))).toEqual({
+      kind: "snipe",
+      verb: "opened",
+      subject: "alpha sniping beta",
+      detail: "on Song [Hard]",
+    });
+    expect(describeAnalyticsEvent(row({ event: "snipes_link", path: "/snipes", snipeTarget: "replay", ...snipe }))).toMatchObject({
+      kind: "snipe",
+      verb: "watched the replay of",
+      subject: "alpha sniping beta",
+    });
+    expect(describeAnalyticsEvent(row({ event: "snipes_link", path: "/snipes", snipeTarget: "victim", ...snipe })).subject).toBe("beta's profile");
+    expect(describeAnalyticsEvent(row({ event: "snipes_link", path: "/snipes", snipeTarget: "board", profileUsername: "gamma", ...snipe }))).toMatchObject({
+      subject: "gamma's profile",
+      detail: "from the board of alpha sniping beta",
+    });
+    expect(describeAnalyticsEvent(row({ event: "snipes_rules_open", path: "/snipes" })).kind).toBe("snipe");
+    expect(describeAnalyticsEvent(row({ event: "snipes_board_all", path: "/snipes" })).subject).toBe("a snipe");
   });
 
   it("names the server a detail page or an invite click is about", () => {
