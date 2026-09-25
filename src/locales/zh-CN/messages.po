@@ -1134,7 +1134,7 @@ msgstr "{countryName} mania 技能排行榜"
 
 #: src/routes/snipes.tsx
 msgid "{countryName} mania snipes"
-msgstr "{countryName} mania 狙击"
+msgstr "{countryName} mania Snipe"
 
 #: src/routes/top-plays.tsx
 msgid "{countryName} mania top plays"
@@ -15125,15 +15125,15 @@ msgstr "狙击者"
 
 #: src/components/layout/Nav.tsx
 msgid "snipes"
-msgstr "狙击"
+msgstr "Snipe"
 
 #: src/routes/snipes.tsx
 msgid "Snipes"
-msgstr "狙击"
+msgstr "Snipe"
 
 #: src/routes/snipes.tsx
 msgid "Snipes - {countryName}"
-msgstr "狙击 - {countryName}"
+msgstr "Snipe - {countryName}"
 
 #: src/routes/snipes.tsx
 msgid "Snipes appear when tracked country players push each other down a beatmap's country leaderboard."
