@@ -35,7 +35,7 @@ const period = (data: ProductData) => `${date(data.weekStart)}–${date(data.wee
 const iconButton = "inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border border-osu-b3/30 bg-osu-b4/60 text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50";
 
 const FEATURE_KINDS: Record<string, AnalyticsActivityKind> = {
-  player: "profile", replay: "replay", maps: "search", rankings: "ranking", teams: "team", team: "team", "farm-helper": "farm",
+  player: "profile", replay: "replay", maps: "search", rankings: "ranking", teams: "team", team: "team", snipes: "snipe", "farm-helper": "farm",
   packs: "pack", collections: "pack", skins: "skin", communities: "community",
 };
 
