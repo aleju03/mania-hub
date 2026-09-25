@@ -566,13 +566,6 @@ export function Nav() {
     setSelectedCountry(country);
     setMenuOpen(false);
 
-    // Snipes is not a Global surface (Global is not a country). Switching to
-    // Global from /snipes moves the reader to Maps, the headline Global view.
-    if (isGlobalScope(country) && location.pathname === "/snipes") {
-      navigate({ to: "/maps", search: freshMapsSearch(country), replace: true });
-      return;
-    }
-
     if (location.pathname === "/") {
       navigate({ to: "/", search: { country }, replace: true });
       return;
