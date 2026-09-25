@@ -11,7 +11,6 @@ import { SettingsDrawer } from "./SettingsDrawer";
 import { preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
-import { canSeeTrackedSnipes } from "../../lib/snipes-access";
 import { useBannedUsersAlert } from "../../lib/banned-users-alert";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
@@ -241,13 +240,13 @@ export function Nav() {
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
-  // When the server is off, Snipes is always shown. Otherwise show it once the
-  // tier is known to be snipes, or live and Global for whoever can see
-  // tracked-only snipes - while the tier is still unknown (first-ever visit)
-  // the tab stays hidden rather than flashing in.
+  // When the server is off, Snipes is always shown. Otherwise show it for
+  // Global and once the tier is known to be live or snipes - while the tier is
+  // still unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured
-    || selectedCountryFeatureTier === "snipes"
-    || (canSeeTrackedSnipes(adminMode) && (isGlobalScope(selectedCountry) || selectedCountryFeatureTier === "live"));
+    || isGlobalScope(selectedCountry)
+    || selectedCountryFeatureTier === "live"
+    || selectedCountryFeatureTier === "snipes";
   const isLeafVisible = (leaf: NavLeaf) => {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.

@@ -8,7 +8,6 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../../lib/cache";
 import { GLOBAL_SCOPE_CODE, getCountryName, isGlobalScope } from "../../lib/country";
 import { isRegionScope } from "../../lib/regions";
 import { useAuth } from "../../lib/auth-context";
-import { canSeeTrackedSnipes } from "../../lib/snipes-access";
 import type { AuthViewer } from "../../lib/auth-shared";
 import {
   fetchDiscordShowcase,
@@ -1459,18 +1458,17 @@ export function CommandShowcase() {
   // Only treat the fixture as live data when it actually matches the selected
   // country (guards the brief window after switching country, or a stray refresh).
   const activeFixture = fixture && fixture.country === selectedCountry.toUpperCase() ? fixture : null;
-  // Snipe boards exist for Global and every live country, but outside
-  // snipes-tier countries the feed follows the same admin gate as the page.
+  // Snipe boards exist for Global and every live country, so the snipe feed is
+  // hidden only until the tier is known to be live or snipes.
   const { featureTier } = useCountryWarming(selectedCountry);
   const commands = useMemo(() => {
     const all = buildCommands(sample, activeFixture, i18n, noDans);
-    const hasSnipeBoards = featureTier === "snipes"
-      || (canSeeTrackedSnipes(auth.canUseAdminFeatures) && (selectedIsGlobal || featureTier === "live"));
+    const hasSnipeBoards = selectedIsGlobal || featureTier === "live" || featureTier === "snipes";
     return all.filter((cmd) =>
       (hasSnipeBoards || cmd.id !== "feed-snipe")
       && (!noDans || cmd.id !== "dan"),
     );
-  }, [sample, activeFixture, featureTier, i18n, noDans, selectedIsGlobal, auth.canUseAdminFeatures]);
+  }, [sample, activeFixture, featureTier, i18n, noDans, selectedIsGlobal]);
   const selected = commands.find((c) => c.id === selectedId) ?? commands[0];
 
   return (
