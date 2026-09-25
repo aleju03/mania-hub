@@ -1152,6 +1152,10 @@ msgstr "{countryName} mania 未评分成绩"
 #~ msgid "{countryName} mania vibro league"
 #~ msgstr ""
 
+#: src/routes/snipes.tsx
+msgid "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards."
+msgstr "{countryName} 的狙击只统计本站追踪到的成绩，更早的游玩不在榜上。"
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgstr "{courseName} 上 {courseAccuracy}，低于其 {courseBar}。"
@@ -1200,6 +1204,14 @@ msgstr "{downloadCountLabel} 次下载"
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads, {viewCountLabel} views"
 msgstr "{downloadCountLabel} 次下载，{viewCountLabel} 次浏览"
+
+#: src/routes/snipes.tsx
+#~ msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
+#~ msgstr "{dtBadges} 的成绩单独排榜，{htBadges} 也是。其他所有 mod 与 {nomodBadge} 共用一个榜。"
+
+#: src/routes/snipes.tsx
+msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the nomod board."
+msgstr "{dtBadges} 的成绩单独排榜，{htBadges} 也是。其他所有 mod 与无 mod 共用一个榜。"
 
 #: src/components/packs/PackSummary.tsx
 msgid "{dupeCount, plural, one {duplicate} other {duplicates}}"
@@ -2450,6 +2462,10 @@ msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度
 #: src/routes/snipes.tsx
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
+
+#: src/routes/snipes.tsx
+msgid "A snipe is when your new best on a map passes a player who was above you."
+msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你前面的玩家。"
 
 #: src/components/player/VibroLeaguePanel.tsx
 #~ msgid "A standing needs {VIBRO_LEAGUE_MIN_PLAYS} rated plays on one keymode."
@@ -3984,6 +4000,14 @@ msgstr "更新"
 #: src/components/player/SkillHistoryModal.tsx
 #~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
 #~ msgstr "每次重新计算评分时都会保存变化，包括评分系统更新带来的变化。更早的变化未被记录。"
+
+#: src/routes/snipes.tsx
+msgid "Changes the map's difficulty settings, like OD and HP."
+msgstr "修改图的难度设置，例如 OD 和 HP。"
+
+#: src/routes/snipes.tsx
+msgid "Changes the song speed during the map based on your hits."
+msgstr "根据你的击打在游玩中改变歌曲速度。"
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Changes to total pp, existing plays, map data or the rating formula."
@@ -5823,6 +5847,10 @@ msgstr "完成"
 msgid "done with it"
 msgstr "刷够了"
 
+#: src/routes/snipes.tsx
+msgid "Doubles the columns into two stages."
+msgstr "把轨道翻倍，分成两个舞台。"
+
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
@@ -5968,6 +5996,10 @@ msgstr "松手即可读取"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drop your own .osr file"
 msgstr "拖入你自己的 .osr 文件"
+
+#: src/routes/snipes.tsx
+#~ msgid "DT and NC scores have their own board, and so do HT and DC. Every other mod shares the nomod board."
+#~ msgstr "DT 和 NC 的成绩单独排榜，HT 和 DC 也是。其他所有 mod 与无 mod 共用一个榜。"
 
 #: src/lib/goal-format.ts
 msgid "DT/NC"
@@ -7142,6 +7174,10 @@ msgstr "全球 mania 狙击"
 msgid "global plays"
 msgstr "全球游玩次数"
 
+#: src/routes/snipes.tsx
+msgid "Global snipes only count the top 100 players, and only scores tracked on this site."
+msgstr "全球狙击只统计前 100 名玩家，且只统计本站追踪到的成绩。"
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "Global tracker is ready"
 msgstr "全球追踪器已就绪"
@@ -7549,6 +7585,10 @@ msgstr "按住 <0>C</0> 并移动光标即可画出烟雾，就像在 osu! 游�
 msgid "Hold and drag across the dotted line"
 msgstr "按住并沿虚线拖动"
 
+#: src/routes/snipes.tsx
+msgid "Hold notes don't need their release timed."
+msgstr "长条的松开不需要掐准时机。"
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
 msgstr "长按删除"
@@ -7707,6 +7747,10 @@ msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支
 #: src/routes/player/$username.tsx
 #~ msgid "If this is you, <0>log in with osu!</0> to track your plays."
 #~ msgstr "如果这是你，<0>使用 osu! 登录</0>来追踪你的成绩。"
+
+#: src/routes/snipes.tsx
+msgid "If you already had an older best above them, it doesn't count."
+msgstr "如果你之前已有高于对方的最佳成绩，则不算狙击。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
@@ -10256,6 +10300,10 @@ msgstr "没有缺少的卡牌与“{0}”匹配。"
 #~ msgid "No missing player matches \"{0}\"."
 #~ msgstr "没有匹配「{0}」的缺失玩家。"
 
+#: src/routes/snipes.tsx
+#~ msgid "No Mod"
+#~ msgstr "无 Mod"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "No mod preference"
@@ -10272,6 +10320,10 @@ msgstr "无 Mod"
 #: src/components/player/BestScoresControls.tsx
 msgid "No mods in top plays"
 msgstr "最佳成绩里没有 Mod"
+
+#: src/routes/snipes.tsx
+#~ msgid "No mods."
+#~ msgstr "不开任何 mod。"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "No MSD rating"
@@ -11131,17 +11183,33 @@ msgstr "仅自己"
 msgid "Only one"
 msgstr "唯一一张"
 
+#: src/routes/snipes.tsx
+msgid "Only passes on ranked, approved, loved and qualified maps count."
+msgstr "只统计 ranked、approved、loved 和 qualified 图上的通过成绩。"
+
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
 msgstr "只有来自该地区的玩家才能加入"
+
+#: src/routes/snipes.tsx
+msgid "Only players in the {countryName} rankings take part."
+msgstr "只有 {countryName} 排行榜上的玩家参与。"
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Only restricted accounts can change their name here."
 msgstr "只有被限制的账号可以在这里更改名字。"
 
+#: src/routes/snipes.tsx
+msgid "Only scores tracked on this site are on the boards."
+msgstr "榜上只有本站追踪到的成绩。"
+
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
 msgstr "当前只有提升技能的谱面"
+
+#: src/routes/snipes.tsx
+msgid "Only the global top 100 take part."
+msgstr "只有全球前 100 名参与。"
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
@@ -11675,6 +11743,10 @@ msgstr "在 {mapSlot} 上通关 <0/>"
 #: src/routes/dan-estimates.tsx
 msgid "Pass bar"
 msgstr "通过线"
+
+#: src/routes/snipes.tsx
+msgid "Passing several players with one score counts as one snipe, against the highest of them."
+msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名最高的玩家。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -13219,6 +13291,10 @@ msgstr "移出心愿单"
 msgid "Removed imported skin hitsounds"
 msgstr "已移除导入的皮肤打击音"
 
+#: src/routes/snipes.tsx
+msgid "Removes the map's scroll speed changes."
+msgstr "去掉图中的流速变化。"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "移除截图失败。请重试。"
@@ -13625,6 +13701,10 @@ msgstr "轮换谱包"
 msgid "rough estimate, may be off"
 msgstr "粗略估算，可能有偏差"
 
+#: src/routes/snipes.tsx
+msgid "Rules"
+msgstr "规则"
+
 #: src/routes/communities.tsx
 msgid "Run an osu!mania server? Post it and it shows up here once it is approved."
 msgstr "在运营 osu!mania 服务器？发布它，通过审核后就会显示在这里。"
@@ -13757,16 +13837,16 @@ msgstr "保存中…"
 msgid "Say a little more about what went wrong."
 msgstr "请再多写一点出了什么问题。"
 
-#: src/components/ghost/GhostSprite.tsx
+#: src/components/mascot/MascotSprite.tsx
 msgid "say something back"
 msgstr "回一句吧"
 
 #. placeholder {0}: drawn.name
-#: src/components/ghost/GhostSprite.tsx
+#: src/components/mascot/MascotSprite.tsx
 msgid "Say something to {0}"
 msgstr "对 {0} 说点什么"
 
-#: src/components/ghost/GhostSprite.tsx
+#: src/components/mascot/MascotSprite.tsx
 msgid "Say something to {name}"
 msgstr "对 {name} 说点什么"
 
@@ -13831,6 +13911,22 @@ msgstr "ScorePosition"
 #: src/routes/tracker.tsx
 msgid "Scores"
 msgstr "成绩"
+
+#: src/routes/snipes.tsx
+#~ msgid "Scores added by hand update the boards but never count as snipes."
+#~ msgstr "手动添加的成绩会更新榜单，但不会算作狙击。"
+
+#: src/routes/snipes.tsx
+msgid "Scores added by hand update the boards but never count as snipes. An older score added this way that beats the sniper's removes the snipe."
+msgstr "手动添加的成绩会更新榜单，但不会算作狙击。以这种方式添加的更早成绩如果高于狙击者的成绩，该狙击会被移除。"
+
+#: src/routes/snipes.tsx
+msgid "Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count."
+msgstr "带有 {excludedBadges}、改变图键数的键数 mod，或自定义倍速的 {customRateBadges} 的成绩不计入。"
+
+#: src/routes/snipes.tsx
+#~ msgid "Scores with HO, IN, NR, DS, DA, CS, WU, WD or AS, a key mod that changes the map's key count, or DT or HT at a custom rate don't count."
+#~ msgstr "带有 HO、IN、NR、DS、DA、CS、WU、WD 或 AS，改变图键数的键数 mod，或自定义倍速的 DT、HT 的成绩不计入。"
 
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
@@ -14987,6 +15083,18 @@ msgstr "导出较慢，CPU 占用更高。"
 msgid "Slowest"
 msgstr "最慢"
 
+#: src/routes/snipes.tsx
+msgid "Slows the song down gradually during the map."
+msgstr "在游玩中逐渐放慢歌曲。"
+
+#: src/routes/snipes.tsx
+msgid "Slows the song down to 0.75x and lowers the pitch."
+msgstr "把歌曲放慢到 0.75 倍并降低音调。"
+
+#: src/routes/snipes.tsx
+msgid "Slows the song down to 0.75x."
+msgstr "把歌曲放慢到 0.75 倍。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "小"
@@ -14998,6 +15106,10 @@ msgstr "更小文件"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Snipe feed"
 msgstr "狙击 feed"
+
+#: src/routes/snipes.tsx
+msgid "Snipe rules"
+msgstr "狙击规则"
 
 #: src/components/SnipesNotTracked.tsx
 msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
@@ -15026,6 +15138,10 @@ msgstr "狙击 - {countryName}"
 #: src/routes/snipes.tsx
 msgid "Snipes appear when tracked country players push each other down a beatmap's country leaderboard."
 msgstr "当被追踪的玩家在谱面的国家/地区排行榜上互相反超时，就会产生狙击。"
+
+#: src/components/SnipesNotTracked.tsx
+msgid "Snipes are only tracked for countries with live score tracking."
+msgstr "只有开启实时成绩追踪的国家/地区才会追踪狙击。"
 
 #: src/components/SnipesNotTracked.tsx
 msgid "Snipes aren't tracked for {name}"
@@ -15190,6 +15306,18 @@ msgstr "速叠"
 #~ msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
 #~ msgstr "速叠是个例外。尽管速叠属于叠，MinaCalc 却经常把它读成 Jumpstream；因此，谱面分析中可信的 speedjack 或 chordjack 标签会把这次通过归到叠。它会取代 MSD 的归类，而不是在其之上再加一项。"
 
+#: src/routes/snipes.tsx
+msgid "Speeds the song up gradually during the map."
+msgstr "在游玩中逐渐加快歌曲。"
+
+#: src/routes/snipes.tsx
+msgid "Speeds the song up to 1.5x and raises the pitch."
+msgstr "把歌曲加快到 1.5 倍并提高音调。"
+
+#: src/routes/snipes.tsx
+msgid "Speeds the song up to 1.5x."
+msgstr "把歌曲加快到 1.5 倍。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -15198,6 +15326,14 @@ msgstr "剧透文字"
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
+
+#: src/routes/snipes.tsx
+msgid "Stable and lazer scores are on separate boards because their scoring is different."
+msgstr "stable 和 lazer 的成绩分开排榜，因为两者的计分方式不同。"
+
+#: src/routes/snipes.tsx
+#~ msgid "Stable and lazer scores are on separate boards."
+#~ msgstr "stable 和 lazer 的成绩分开排榜。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value."
@@ -17428,8 +17564,13 @@ msgstr "用时 {span}"
 
 #. placeholder {0}: event.boardRank
 #: src/routes/snipes.tsx
-msgid "Took the country board's #{0} spot"
-msgstr "占据了国家/地区榜第 {0} 名"
+msgid "Took the board's #{0} spot"
+msgstr "占据了榜单第 {0} 名"
+
+#. placeholder {0}: event.boardRank
+#: src/routes/snipes.tsx
+#~ msgid "Took the country board's #{0} spot"
+#~ msgstr "占据了国家/地区榜第 {0} 名"
 
 #. placeholder {0}: board.entries.length
 #. placeholder {1}: formatNumber(board.total)
@@ -17671,6 +17812,14 @@ msgstr "把手机横过来观看。"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Turned down{said} Editing it sends it back for approval."
 msgstr "已被拒绝{said}修改后会重新提交审核。"
+
+#: src/routes/snipes.tsx
+msgid "Turns every hold note into a normal note."
+msgstr "把所有长条变成普通音符。"
+
+#: src/routes/snipes.tsx
+msgid "Turns the notes into hold notes that fill the gaps between them."
+msgstr "把音符变成填满其间空隙的长条。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."

@@ -1166,6 +1166,10 @@ msgstr "{countryName} mania unrated plays"
 #~ msgid "{countryName} mania vibro league"
 #~ msgstr "{countryName} mania vibro league"
 
+#: src/routes/snipes.tsx
+msgid "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards."
+msgstr "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards."
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{courseAccuracy} on {courseName}, under its {courseBar}."
 msgstr "{courseAccuracy} on {courseName}, under its {courseBar}."
@@ -1214,6 +1218,14 @@ msgstr "{downloadCountLabel} downloads"
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads, {viewCountLabel} views"
 msgstr "{downloadCountLabel} downloads, {viewCountLabel} views"
+
+#: src/routes/snipes.tsx
+#~ msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
+#~ msgstr "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the {nomodBadge} board."
+
+#: src/routes/snipes.tsx
+msgid "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the nomod board."
+msgstr "{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the nomod board."
 
 #: src/components/packs/PackSummary.tsx
 msgid "{dupeCount, plural, one {duplicate} other {duplicates}}"
@@ -2464,6 +2476,10 @@ msgstr "A shareable skill-tier card: control, speed and precision under a tier b
 #: src/routes/snipes.tsx
 msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 msgstr "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
+
+#: src/routes/snipes.tsx
+msgid "A snipe is when your new best on a map passes a player who was above you."
+msgstr "A snipe is when your new best on a map passes a player who was above you."
 
 #: src/components/player/VibroLeaguePanel.tsx
 #~ msgid "A standing needs {VIBRO_LEAGUE_MIN_PLAYS} rated plays on one keymode."
@@ -4002,6 +4018,14 @@ msgstr "Changes"
 #: src/components/player/SkillHistoryModal.tsx
 #~ msgid "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
 #~ msgstr "Changes are saved when ratings are recalculated, including rating system updates. Earlier changes were not recorded."
+
+#: src/routes/snipes.tsx
+msgid "Changes the map's difficulty settings, like OD and HP."
+msgstr "Changes the map's difficulty settings, like OD and HP."
+
+#: src/routes/snipes.tsx
+msgid "Changes the song speed during the map based on your hits."
+msgstr "Changes the song speed during the map based on your hits."
 
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #~ msgid "Changes to total pp, existing plays, map data or the rating formula."
@@ -5841,6 +5865,10 @@ msgstr "Done"
 msgid "done with it"
 msgstr "done with it"
 
+#: src/routes/snipes.tsx
+msgid "Doubles the columns into two stages."
+msgstr "Doubles the columns into two stages."
+
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Download"
@@ -5986,6 +6014,10 @@ msgstr "Drop to read it"
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drop your own .osr file"
 msgstr "Drop your own .osr file"
+
+#: src/routes/snipes.tsx
+#~ msgid "DT and NC scores have their own board, and so do HT and DC. Every other mod shares the nomod board."
+#~ msgstr "DT and NC scores have their own board, and so do HT and DC. Every other mod shares the nomod board."
 
 #: src/lib/goal-format.ts
 msgid "DT/NC"
@@ -7164,6 +7196,10 @@ msgstr "Global mania snipes"
 msgid "global plays"
 msgstr "global plays"
 
+#: src/routes/snipes.tsx
+msgid "Global snipes only count the top 100 players, and only scores tracked on this site."
+msgstr "Global snipes only count the top 100 players, and only scores tracked on this site."
+
 #: src/components/LiveDataEmptyState.tsx
 msgid "Global tracker is ready"
 msgstr "Global tracker is ready"
@@ -7571,6 +7607,10 @@ msgstr "Hold <0>C</0> and move the cursor to draw smoke, just like mid-play draw
 msgid "Hold and drag across the dotted line"
 msgstr "Hold and drag across the dotted line"
 
+#: src/routes/snipes.tsx
+msgid "Hold notes don't need their release timed."
+msgstr "Hold notes don't need their release timed."
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
 msgstr "hold to delete"
@@ -7733,6 +7773,10 @@ msgstr "If the site has been useful to you, consider supporting it. Donations he
 #: src/routes/player/$username.tsx
 #~ msgid "If this is you, <0>log in with osu!</0> to track your plays."
 #~ msgstr "If this is you, <0>log in with osu!</0> to track your plays."
+
+#: src/routes/snipes.tsx
+msgid "If you already had an older best above them, it doesn't count."
+msgstr "If you already had an older best above them, it doesn't count."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "If you have the map, drop its .osz here and the replay plays from your copy."
@@ -10282,6 +10326,10 @@ msgstr "No missing card matches \"{0}\"."
 #~ msgid "No missing player matches \"{0}\"."
 #~ msgstr "No missing player matches \"{0}\"."
 
+#: src/routes/snipes.tsx
+#~ msgid "No Mod"
+#~ msgstr "No Mod"
+
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "No mod preference"
@@ -10298,6 +10346,10 @@ msgstr "No mods"
 #: src/components/player/BestScoresControls.tsx
 msgid "No mods in top plays"
 msgstr "No mods in top plays"
+
+#: src/routes/snipes.tsx
+#~ msgid "No mods."
+#~ msgstr "No mods."
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "No MSD rating"
@@ -11157,17 +11209,33 @@ msgstr "Only me"
 msgid "Only one"
 msgstr "Only one"
 
+#: src/routes/snipes.tsx
+msgid "Only passes on ranked, approved, loved and qualified maps count."
+msgstr "Only passes on ranked, approved, loved and qualified maps count."
+
 #: src/components/communities/CommunityCard.tsx
 msgid "Only people from here can join"
 msgstr "Only people from here can join"
+
+#: src/routes/snipes.tsx
+msgid "Only players in the {countryName} rankings take part."
+msgstr "Only players in the {countryName} rankings take part."
 
 #: src/components/player/DisplayNameEditor.tsx
 msgid "Only restricted accounts can change their name here."
 msgstr "Only restricted accounts can change their name here."
 
+#: src/routes/snipes.tsx
+msgid "Only scores tracked on this site are on the boards."
+msgstr "Only scores tracked on this site are on the boards."
+
 #: src/routes/farm-helper.tsx
 msgid "Only skillboost maps right now"
 msgstr "Only skillboost maps right now"
+
+#: src/routes/snipes.tsx
+msgid "Only the global top 100 take part."
+msgstr "Only the global top 100 take part."
 
 #: src/routes/packs_.open.$token.tsx
 #~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
@@ -11701,6 +11769,10 @@ msgstr "Pass <0/> on {mapSlot}"
 #: src/routes/dan-estimates.tsx
 msgid "Pass bar"
 msgstr "Pass bar"
+
+#: src/routes/snipes.tsx
+msgid "Passing several players with one score counts as one snipe, against the highest of them."
+msgstr "Passing several players with one score counts as one snipe, against the highest of them."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -13245,6 +13317,10 @@ msgstr "Remove wish"
 msgid "Removed imported skin hitsounds"
 msgstr "Removed imported skin hitsounds"
 
+#: src/routes/snipes.tsx
+msgid "Removes the map's scroll speed changes."
+msgstr "Removes the map's scroll speed changes."
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "Removing the screenshot failed. Try again."
@@ -13651,6 +13727,10 @@ msgstr "Rotating packs"
 msgid "rough estimate, may be off"
 msgstr "rough estimate, may be off"
 
+#: src/routes/snipes.tsx
+msgid "Rules"
+msgstr "Rules"
+
 #: src/routes/communities.tsx
 msgid "Run an osu!mania server? Post it and it shows up here once it is approved."
 msgstr "Run an osu!mania server? Post it and it shows up here once it is approved."
@@ -13783,16 +13863,16 @@ msgstr "Saving…"
 msgid "Say a little more about what went wrong."
 msgstr "Say a little more about what went wrong."
 
-#: src/components/ghost/GhostSprite.tsx
+#: src/components/mascot/MascotSprite.tsx
 msgid "say something back"
 msgstr "say something back"
 
 #. placeholder {0}: drawn.name
-#: src/components/ghost/GhostSprite.tsx
+#: src/components/mascot/MascotSprite.tsx
 msgid "Say something to {0}"
 msgstr "Say something to {0}"
 
-#: src/components/ghost/GhostSprite.tsx
+#: src/components/mascot/MascotSprite.tsx
 msgid "Say something to {name}"
 msgstr "Say something to {name}"
 
@@ -13857,6 +13937,22 @@ msgstr "ScorePosition"
 #: src/routes/tracker.tsx
 msgid "Scores"
 msgstr "Scores"
+
+#: src/routes/snipes.tsx
+#~ msgid "Scores added by hand update the boards but never count as snipes."
+#~ msgstr "Scores added by hand update the boards but never count as snipes."
+
+#: src/routes/snipes.tsx
+msgid "Scores added by hand update the boards but never count as snipes. An older score added this way that beats the sniper's removes the snipe."
+msgstr "Scores added by hand update the boards but never count as snipes. An older score added this way that beats the sniper's removes the snipe."
+
+#: src/routes/snipes.tsx
+msgid "Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count."
+msgstr "Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count."
+
+#: src/routes/snipes.tsx
+#~ msgid "Scores with HO, IN, NR, DS, DA, CS, WU, WD or AS, a key mod that changes the map's key count, or DT or HT at a custom rate don't count."
+#~ msgstr "Scores with HO, IN, NR, DS, DA, CS, WU, WD or AS, a key mod that changes the map's key count, or DT or HT at a custom rate don't count."
 
 #: src/routes/dan-estimates.tsx
 msgid "ScoreV2 acc (97%)"
@@ -15017,6 +15113,18 @@ msgstr "Slower export with more CPU use."
 msgid "Slowest"
 msgstr "Slowest"
 
+#: src/routes/snipes.tsx
+msgid "Slows the song down gradually during the map."
+msgstr "Slows the song down gradually during the map."
+
+#: src/routes/snipes.tsx
+msgid "Slows the song down to 0.75x and lowers the pitch."
+msgstr "Slows the song down to 0.75x and lowers the pitch."
+
+#: src/routes/snipes.tsx
+msgid "Slows the song down to 0.75x."
+msgstr "Slows the song down to 0.75x."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Small"
 msgstr "Small"
@@ -15028,6 +15136,10 @@ msgstr "Smaller file"
 #: src/components/discord/CommandShowcase.tsx
 msgid "Snipe feed"
 msgstr "Snipe feed"
+
+#: src/routes/snipes.tsx
+msgid "Snipe rules"
+msgstr "Snipe rules"
 
 #: src/components/SnipesNotTracked.tsx
 msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
@@ -15056,6 +15168,10 @@ msgstr "Snipes - {countryName}"
 #: src/routes/snipes.tsx
 msgid "Snipes appear when tracked country players push each other down a beatmap's country leaderboard."
 msgstr "Snipes appear when tracked country players push each other down a beatmap's country leaderboard."
+
+#: src/components/SnipesNotTracked.tsx
+msgid "Snipes are only tracked for countries with live score tracking."
+msgstr "Snipes are only tracked for countries with live score tracking."
 
 #: src/components/SnipesNotTracked.tsx
 msgid "Snipes aren't tracked for {name}"
@@ -15220,6 +15336,18 @@ msgstr "Speedjack"
 #~ msgid "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
 #~ msgstr "Speedjack is the exception. MinaCalc often reads it as Jumpstream even though speedjack is jack, so a confident speedjack or chordjack tag from the chart analysis moves that pass to jack. It replaces the MSD choice rather than adding to it."
 
+#: src/routes/snipes.tsx
+msgid "Speeds the song up gradually during the map."
+msgstr "Speeds the song up gradually during the map."
+
+#: src/routes/snipes.tsx
+msgid "Speeds the song up to 1.5x and raises the pitch."
+msgstr "Speeds the song up to 1.5x and raises the pitch."
+
+#: src/routes/snipes.tsx
+msgid "Speeds the song up to 1.5x."
+msgstr "Speeds the song up to 1.5x."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -15228,6 +15356,14 @@ msgstr "Spoiler text"
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
+
+#: src/routes/snipes.tsx
+msgid "Stable and lazer scores are on separate boards because their scoring is different."
+msgstr "Stable and lazer scores are on separate boards because their scoring is different."
+
+#: src/routes/snipes.tsx
+#~ msgid "Stable and lazer scores are on separate boards."
+#~ msgstr "Stable and lazer scores are on separate boards."
 
 #: src/routes/dan-estimates.tsx
 msgid "Stable scores are recalculated with ScoreV2 from their judgements, so the accuracy used here may be lower than the displayed value."
@@ -17466,8 +17602,13 @@ msgstr "took {span}"
 
 #. placeholder {0}: event.boardRank
 #: src/routes/snipes.tsx
-msgid "Took the country board's #{0} spot"
-msgstr "Took the country board's #{0} spot"
+msgid "Took the board's #{0} spot"
+msgstr "Took the board's #{0} spot"
+
+#. placeholder {0}: event.boardRank
+#: src/routes/snipes.tsx
+#~ msgid "Took the country board's #{0} spot"
+#~ msgstr "Took the country board's #{0} spot"
 
 #. placeholder {0}: board.entries.length
 #. placeholder {1}: formatNumber(board.total)
@@ -17709,6 +17850,14 @@ msgstr "Turn your phone sideways to watch."
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Turned down{said} Editing it sends it back for approval."
 msgstr "Turned down{said} Editing it sends it back for approval."
+
+#: src/routes/snipes.tsx
+msgid "Turns every hold note into a normal note."
+msgstr "Turns every hold note into a normal note."
+
+#: src/routes/snipes.tsx
+msgid "Turns the notes into hold notes that fill the gaps between them."
+msgstr "Turns the notes into hold notes that fill the gaps between them."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Twenty is enough that a few lucky passes cannot carry it. With fewer than 20 qualifying passes the average is over what you have; a skill you have fewer than four in gets no dan of its own, and a side you have fewer than four on gets no estimate at all rather than a shaky one."

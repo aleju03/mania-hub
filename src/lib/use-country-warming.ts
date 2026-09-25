@@ -40,9 +40,9 @@ const TIER_RANK: Record<LiveCountryFeatureTier, number> = { indexed: 0, maps_war
 
 /**
  * A region's tier is derived, not activated: the best tier among its member
- * countries, capped at "live". Snipes stays a per-country feature, so a
- * snipes-tier member (e.g. CR in Central America) must not surface the Snipes
- * tab on the region scope. Null when no member has a cached tier yet.
+ * countries, capped at "live". Seeded snipe boards are a per-country feature,
+ * so a snipes-tier member (e.g. CR in Central America) must not make the
+ * region's snipes read as seeded. Null when no member has a cached tier yet.
  */
 export function getRegionEffectiveTier(code: string): LiveCountryFeatureTier | null {
   const region = getRegionDef(code);
