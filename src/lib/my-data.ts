@@ -97,6 +97,8 @@ export interface MyDataSkillMode {
   // Thin evidence base (few analyzed plays): ratings are served shrunk toward
   // the population median and should read as rough estimates.
   provisional?: boolean;
+  // The MinaCalc build behind the ratings ("0.75.0"); absent on older rows.
+  minaCalc?: string;
 }
 
 // What a ready row's pending plays wait on, as the backend's last pass saw it

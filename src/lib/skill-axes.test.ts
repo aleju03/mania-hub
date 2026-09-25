@@ -44,3 +44,21 @@ it("keeps a newly certified keymode reachable alongside a well-established main"
   ];
   expect(qualifyingSkillModes({ modes, status: "ready", version: 1, computedAt: null, totalPlays: 101, analyzedPlays: 101, pendingPlays: 0, unsupportedPlays: 0 }).map((mode) => mode.keyCount)).toEqual([4, 7]);
 });
+
+describe("skillModeEntries", () => {
+  const ratings = { Overall: 9, Stream: 8, Jumpstream: 9, Handstream: 7, Stamina: 7.5, JackSpeed: 6, Chordjack: 5, Technical: 3 };
+
+  it("keeps a 6K/7K card on the MSD skillsets until three patterns are rated", () => {
+    const thin = { keyCount: 7, analyzedPlays: 13, ratings, patterns: [{ id: "tech", rating: 4, plays: 4 }, { id: "chordstream", rating: 7, plays: 3 }] };
+    expect(skillModeEntries(thin).map(entry => entry.key)).toEqual(["Jumpstream", "Stream", "Stamina", "Handstream", "JackSpeed", "Chordjack"]);
+    const rated = { ...thin, patterns: [...thin.patterns, { id: "jack", rating: 6, plays: 3 }] };
+    expect(skillModeEntries(rated).map(entry => entry.key)).toEqual(["chordstream", "jack", "tech"]);
+  });
+
+  it("shows Technical on 4K and 5K only", () => {
+    for (const keyCount of [4, 5]) {
+      expect(skillModeEntries({ keyCount, analyzedPlays: 50, ratings, patterns: [] }).some(entry => entry.key === "Technical")).toBe(true);
+    }
+    expect(skillModeEntries({ keyCount: 9, analyzedPlays: 50, ratings, patterns: [] }).some(entry => entry.key === "Technical")).toBe(false);
+  });
+});

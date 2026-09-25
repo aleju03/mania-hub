@@ -28,6 +28,11 @@ export interface SkillHistoryNote {
 
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
+    date: "2026-09-25",
+    text: "Updated MinaCalc to 0.75.0 for 5K and up. 5K and 7K ratings went up the most, and Technical now only shows on 4K and 5K.",
+    keyCounts: Array.from({ length: 14 }, (_, i) => i + 5),
+  },
+  {
     date: "2026-09-16",
     text: "Improved 4K vibro detection to catch more patterns that were inflating ratings, while restoring MSD and Dan credit to dense chordjack plays that were incorrectly excluded.",
     keyCounts: [4],

@@ -1144,6 +1144,10 @@ msgstr "Jugadas sin clasificar de mania de {countryName}"
 #~ msgstr ""
 
 #: src/routes/snipes.tsx
+msgid "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards unless you <0>add them</0>."
+msgstr "Los snipes de {countryName} solo cuentan los scores registrados en este sitio, así que las plays más viejas no están en los leaderboards a menos que <0>las agregues</0>."
+
+#: src/routes/snipes.tsx
 msgid "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards."
 msgstr "Los snipes de {countryName} solo cuentan los scores registrados en este sitio, así que las plays más viejas no están en los leaderboards."
 
@@ -1901,8 +1905,8 @@ msgstr "<0>{0}</0> sonidos"
 
 #. placeholder {0}: mode!.keyCount
 #: src/components/player/SkillBreakdown.tsx
-msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
-msgstr "<0>{0}K tiene su propia escala de rating.</0> Que el número sea más bajo que en otro keymode no significa que seas peor en él."
+#~ msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
+#~ msgstr "<0>{0}K tiene su propia escala de rating.</0> Que el número sea más bajo que en otro keymode no significa que seas peor en él."
 
 #: src/routes/companella_.authorize.tsx
 msgid "<0>{appName}</0> wants to access your Mania Tracker account"
@@ -9516,6 +9520,14 @@ msgstr "Pulgar de la columna central"
 msgid "Min PP"
 msgstr "PP mín."
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "MinaCalc {version}"
+msgstr "MinaCalc {version}"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "MinaCalc is Etterna's difficulty calculator"
+msgstr "MinaCalc es la calculadora de dificultad de Etterna"
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Mine"
 msgstr "Mías"
@@ -12986,6 +12998,14 @@ msgstr "Top plays destacados recientes de un país."
 #: src/components/packs/RecentOpens.tsx
 #~ msgid "Recent opens"
 #~ msgstr "Aperturas recientes"
+
+#: src/routes/snipes.tsx
+msgid "Recent osu!mania snipes in {countryName}."
+msgstr "Snipes recientes de osu!mania en {countryName}."
+
+#: src/routes/snipes.tsx
+msgid "Recent osu!mania snipes."
+msgstr "Snipes recientes de osu!mania."
 
 #: src/routes/maps.tsx
 msgid "Recent plays"
@@ -16731,8 +16751,8 @@ msgid "The pool is your osu! top plays, everything recorded while you were track
 msgstr "El conjunto son tus top plays de osu!, todo lo registrado mientras tenías tracking y cualquier enlace de score agregado manualmente, quedándote solo con tu mejor play en cada chart a cada velocidad. El historial automático por debajo de tus top plays solo existe si estás en el roster de tu país, que incluye su top 100 y a cualquiera que haya activado el tracking por su cuenta, y empieza el día en que se activa el tracking. Los charts marcados como vibro se descartan en todas partes, porque los algoritmos de rating leen un muro de mash como densidad enorme y lo puntúan de forma absurda."
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
-msgid "The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should."
-msgstr "La base de comparación de este modo de teclas todavía no está construida, así que estos son ratings sin ajustar y los jugadores con pocas jugadas pueden aparecer más arriba de lo que deberían."
+#~ msgid "The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should."
+#~ msgstr "La base de comparación de este modo de teclas todavía no está construida, así que estos son ratings sin ajustar y los jugadores con pocas jugadas pueden aparecer más arriba de lo que deberían."
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #~ msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."

@@ -1153,6 +1153,10 @@ msgstr "{countryName} mania 未评分成绩"
 #~ msgstr ""
 
 #: src/routes/snipes.tsx
+msgid "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards unless you <0>add them</0>."
+msgstr "{countryName} 的狙击只统计本站追踪到的成绩，更早的游玩不在榜上，除非你<0>手动添加</0>。"
+
+#: src/routes/snipes.tsx
 msgid "{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards."
 msgstr "{countryName} 的狙击只统计本站追踪到的成绩，更早的游玩不在榜上。"
 
@@ -1910,8 +1914,8 @@ msgstr "<0>{0}</0> 个音效"
 
 #. placeholder {0}: mode!.keyCount
 #: src/components/player/SkillBreakdown.tsx
-msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
-msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不代表你在这个键数上更差。"
+#~ msgid "<0>{0}K has its own rating scale.</0> A lower number than another keymode doesn't mean you're worse at it."
+#~ msgstr "<0>{0}K 有自己的评分标准。</0>数值比其他键数低，并不代表你在这个键数上更差。"
 
 #: src/routes/companella_.authorize.tsx
 msgid "<0>{appName}</0> wants to access your Mania Tracker account"
@@ -9525,6 +9529,14 @@ msgstr "中间轨道拇指"
 msgid "Min PP"
 msgstr "最低 PP"
 
+#: src/components/player/SkillBreakdown.tsx
+msgid "MinaCalc {version}"
+msgstr "MinaCalc {version}"
+
+#: src/components/player/SkillBreakdown.tsx
+msgid "MinaCalc is Etterna's difficulty calculator"
+msgstr "MinaCalc 是 Etterna 的难度计算器"
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "Mine"
 msgstr "我的"
@@ -12995,6 +13007,14 @@ msgstr "某个国家/地区最近值得关注的最佳成绩。"
 #: src/components/packs/RecentOpens.tsx
 #~ msgid "Recent opens"
 #~ msgstr "最近开包"
+
+#: src/routes/snipes.tsx
+msgid "Recent osu!mania snipes in {countryName}."
+msgstr "{countryName} 最近的 osu!mania Snipe。"
+
+#: src/routes/snipes.tsx
+msgid "Recent osu!mania snipes."
+msgstr "最近的 osu!mania Snipe。"
 
 #: src/routes/maps.tsx
 msgid "Recent plays"
@@ -16740,8 +16760,8 @@ msgid "The pool is your osu! top plays, everything recorded while you were track
 msgstr "成绩池由你的 osu! 最佳成绩、追踪期间记录的所有成绩，以及手动添加的成绩链接组成，并按每张谱面、每个速度只保留最好的一次。只有进入所在国家/地区的名单后，最佳成绩以下的历史成绩才会被自动记录；名单包括该国家/地区前 100 名和自行开启追踪的人，而且从开始追踪当天才计入。标为 Vibro 的谱面一律排除，因为评级引擎会把一堵乱搓音符墙识别为极高密度，给出离谱的评级。"
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
-msgid "The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should."
-msgstr "该键位模式的统计基准尚未建立，因此这里显示的是未经调整的原始评分，游玩次数很少的玩家可能排得比应有的位置更高。"
+#~ msgid "The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should."
+#~ msgstr "该键位模式的统计基准尚未建立，因此这里显示的是未经调整的原始评分，游玩次数很少的玩家可能排得比应有的位置更高。"
 
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #~ msgid "The population baseline has not been built yet, so these are raw ratings and will not match the numbers on player profiles."
