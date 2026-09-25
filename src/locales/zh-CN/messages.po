@@ -2460,8 +2460,8 @@ msgid "A shareable skill-tier card: control, speed and precision under a tier ba
 msgstr "一张可分享的技能等级卡：等级徽章下方是控制、速度和精准，并附带星级。"
 
 #: src/routes/snipes.tsx
-msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
-msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
+#~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
+#~ msgstr "狙击是指同一国家/地区的玩家在某个排行榜上反超另一名玩家，所以它只在单个国家/地区内才有意义。选择一个国家/地区查看其狙击记录，或浏览合并的谱面视图。"
 
 #: src/routes/snipes.tsx
 msgid "A snipe is when your new best on a map passes a player who was above you."
@@ -6397,8 +6397,8 @@ msgstr "退出全屏"
 #~ msgstr ""
 
 #: src/routes/snipes.tsx
-msgid "Explore Global maps"
-msgstr "浏览全球谱面"
+#~ msgid "Explore Global maps"
+#~ msgstr "浏览全球谱面"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Export cancelled."
@@ -7167,8 +7167,8 @@ msgid "Global mania rankings"
 msgstr "全球 mania 排行榜"
 
 #: src/routes/snipes.tsx
-msgid "Global mania snipes"
-msgstr "全球 mania 狙击"
+#~ msgid "Global mania snipes"
+#~ msgstr "全球 mania 狙击"
 
 #: src/routes/maps.tsx
 msgid "global plays"
@@ -15112,8 +15112,8 @@ msgid "Snipe rules"
 msgstr "狙击规则"
 
 #: src/components/SnipesNotTracked.tsx
-msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
-msgstr "狙击追踪开销较大，只对少数国家/地区开启。"
+#~ msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
+#~ msgstr "狙击追踪开销较大，只对少数国家/地区开启。"
 
 #: src/routes/snipes.tsx
 msgid "sniped"
@@ -15148,8 +15148,8 @@ msgid "Snipes aren't tracked for {name}"
 msgstr "{name} 未开启狙击追踪"
 
 #: src/routes/snipes.tsx
-msgid "Snipes don't apply to Global"
-msgstr "狙击不适用于全球视图"
+#~ msgid "Snipes don't apply to Global"
+#~ msgstr "狙击不适用于全球视图"
 
 #: src/lib/signature-style.ts
 msgid "Solid"

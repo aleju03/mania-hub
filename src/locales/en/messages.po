@@ -2474,8 +2474,8 @@ msgid "A shareable skill-tier card: control, speed and precision under a tier ba
 msgstr "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating."
 
 #: src/routes/snipes.tsx
-msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
-msgstr "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
+#~ msgid "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
+#~ msgstr "A snipe is one country's player overtaking another on a board, so it only makes sense within a single country. Pick a country to see its snipes, or explore the combined Maps view."
 
 #: src/routes/snipes.tsx
 msgid "A snipe is when your new best on a map passes a player who was above you."
@@ -6419,8 +6419,8 @@ msgstr "Exit fullscreen"
 #~ msgstr "Experimental rating preview"
 
 #: src/routes/snipes.tsx
-msgid "Explore Global maps"
-msgstr "Explore Global maps"
+#~ msgid "Explore Global maps"
+#~ msgstr "Explore Global maps"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Export cancelled."
@@ -7189,8 +7189,8 @@ msgid "Global mania rankings"
 msgstr "Global mania rankings"
 
 #: src/routes/snipes.tsx
-msgid "Global mania snipes"
-msgstr "Global mania snipes"
+#~ msgid "Global mania snipes"
+#~ msgstr "Global mania snipes"
 
 #: src/routes/maps.tsx
 msgid "global plays"
@@ -15142,8 +15142,8 @@ msgid "Snipe rules"
 msgstr "Snipe rules"
 
 #: src/components/SnipesNotTracked.tsx
-msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
-msgstr "Snipe tracking runs for a small set of countries because it's an expensive operation."
+#~ msgid "Snipe tracking runs for a small set of countries because it's an expensive operation."
+#~ msgstr "Snipe tracking runs for a small set of countries because it's an expensive operation."
 
 #: src/routes/snipes.tsx
 msgid "sniped"
@@ -15178,8 +15178,8 @@ msgid "Snipes aren't tracked for {name}"
 msgstr "Snipes aren't tracked for {name}"
 
 #: src/routes/snipes.tsx
-msgid "Snipes don't apply to Global"
-msgstr "Snipes don't apply to Global"
+#~ msgid "Snipes don't apply to Global"
+#~ msgstr "Snipes don't apply to Global"
 
 #: src/lib/signature-style.ts
 msgid "Solid"

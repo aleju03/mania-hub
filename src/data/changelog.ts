@@ -37,6 +37,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-25", text: "Snipes are now available for every country and region, and for Global, which counts the top 100 players.", bold: "Snipes", to: "/snipes" },
   { date: "2026-09-24", text: "The first member of each team to collect every regular Team card gets their team's Eternal card in their next pack, unlocking it for everyone. Unlocked Eternal team cards can then drop as a bonus at a 0.01% chance per pack.", bold: "Eternal", to: "/packs" },
   { date: "2026-09-24", text: "Teams now have profiles like players do, and a leaderboard. Teams also have their own Maniacards you can pull from packs.", bold: "Teams", to: "/teams" },
   { date: "2026-09-23", text: "You can now link private server profiles to your account with the + next to osu! profile" },

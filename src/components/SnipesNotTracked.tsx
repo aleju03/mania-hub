@@ -10,10 +10,8 @@ import { CountryFlag } from "./ui/CountryFlag";
  * it's just waiting for activity.
  *
  * `hasOldData` softens the wording when stale snipe history still exists.
- * `limited` keeps the older small-set wording while tracked-only snipes are
- * admin-only (see snipes-access.ts).
  */
-export function SnipesNotTracked({ country, hasOldData, limited = false }: { country: string; hasOldData: boolean; limited?: boolean }) {
+export function SnipesNotTracked({ country, hasOldData }: { country: string; hasOldData: boolean }) {
   const locale = useLocale();
   const name = displayCountryName(country, locale);
 
@@ -25,14 +23,7 @@ export function SnipesNotTracked({ country, hasOldData, limited = false }: { cou
           <Trans>Snipes aren't tracked for {name}</Trans>
         </p>
         <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-          {limited ? (
-            <Trans>
-              Snipe tracking runs for a small set of countries because it's an
-              expensive operation.
-            </Trans>
-          ) : (
-            <Trans>Snipes are only tracked for countries with live score tracking.</Trans>
-          )}{" "}
+          <Trans>Snipes are only tracked for countries with live score tracking.</Trans>{" "}
           {hasOldData ? (
             <Trans>{name} isn't one of them, so the snipes below are older history and won't update.</Trans>
           ) : (

@@ -1,5 +1,4 @@
-import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { Globe } from "lucide-react";
+import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -28,8 +27,6 @@ import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { SnipesNotTracked } from "../components/SnipesNotTracked";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
-import { useAuth } from "../lib/auth-context";
-import { canSeeTrackedSnipes } from "../lib/snipes-access";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -125,20 +122,16 @@ function SnipesPage() {
   const windowActive = useWindowActive();
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const { warming, featureTier } = useCountryWarming(selectedCountry);
-  const trackedSnipesVisible = canSeeTrackedSnipes(useAuth().canUseAdminFeatures);
-  const globalHidden = selectedIsGlobal && !trackedSnipesVisible;
   // Country is below the live tier: its scores aren't ingested, so the backend
   // keeps no snipe boards for it and there is nothing live to wait for here.
-  // While tracked-only snipes are admin-only, live countries read the same.
-  const snipesTierDisabled = liveBackendEnabled && !selectedIsGlobal && featureTier != null && featureTier !== "snipes"
-    && (featureTier !== "live" || !trackedSnipesVisible);
+  const snipesTierDisabled = liveBackendEnabled && !selectedIsGlobal && featureTier != null && featureTier !== "live" && featureTier !== "snipes";
   // Only snipes-tier countries have boards seeded from osu!. Everywhere else,
   // Global included, the boards hold only the scores tracked here.
   const trackedOnlySnipes = liveBackendEnabled && (selectedIsGlobal || featureTier === "live");
   const seededSnipes = !selectedIsGlobal && featureTier === "snipes";
 
   useEffect(() => {
-    if (!liveBackendEnabled || globalHidden || !windowActive) return;
+    if (!liveBackendEnabled || !windowActive) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
     fetchLiveSnipesSnapshot(requestedCountry)
@@ -156,10 +149,10 @@ function SnipesPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveBackendEnabled, globalHidden, selectedCountry, setSnipes, snipes.length, windowActive]);
+  }, [liveBackendEnabled, selectedCountry, setSnipes, snipes.length, windowActive]);
 
   useEffect(() => {
-    if (!liveBackendEnabled || globalHidden || !windowActive) return;
+    if (!liveBackendEnabled || !windowActive) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("snipe", (event) => {
@@ -176,7 +169,7 @@ function SnipesPage() {
       setRefreshing(false);
     });
     return () => source.close();
-  }, [liveBackendEnabled, globalHidden, selectedCountry, setSnipes, snipes, windowActive]);
+  }, [liveBackendEnabled, selectedCountry, setSnipes, snipes, windowActive]);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -349,37 +342,6 @@ function SnipesPage() {
     );
   }
 
-  if (globalHidden) {
-    return (
-      <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/snipes.svg" title={t`Global mania snipes`} />
-        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 py-12 sm:py-20">
-          <div className="mx-auto max-w-md rounded-xl border border-osu-b3/30 bg-osu-b4/80 px-6 py-10 text-center backdrop-blur-sm">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-osu-pink/15 text-osu-pink-light">
-              <Globe className="h-6 w-6" strokeWidth={2.2} />
-            </span>
-            <p className="mt-5 text-sm font-medium text-osu-c2"><Trans>Snipes don't apply to Global</Trans></p>
-            <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-              <Trans>
-                A snipe is one country's player overtaking another on a board, so it
-                only makes sense within a single country. Pick a country to see its
-                snipes, or explore the combined Maps view.
-              </Trans>
-            </p>
-            <Link
-              to="/maps"
-              search={{ tab: "farmed", country: selectedCountry, page: 0 } as never}
-              className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/30 hover:text-white"
-            >
-              <Globe className="h-3.5 w-3.5" strokeWidth={2.4} />
-              <Trans>Explore Global maps</Trans>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1">
       <PageHeader
@@ -408,10 +370,10 @@ function SnipesPage() {
       {warming && <CountryWarming country={selectedCountry} />}
 
       {!warming && snipesTierDisabled && (
-        <SnipesNotTracked country={selectedCountry} hasOldData={trackedSnipesVisible && snipes.length > 0} limited={!trackedSnipesVisible} />
+        <SnipesNotTracked country={selectedCountry} hasOldData={snipes.length > 0} />
       )}
 
-      {!warming && !(snipesTierDisabled && (snipes.length === 0 || !trackedSnipesVisible)) && (
+      {!warming && !(snipesTierDisabled && snipes.length === 0) && (
       <div className="relative overflow-hidden bg-osu-b5">
       <OsuTriangleBackdrop />
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
