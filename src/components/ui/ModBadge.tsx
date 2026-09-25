@@ -57,7 +57,8 @@ const iconInset: Record<string, number> = {
   NC: 1,
 };
 
-export function ModBadge({ mod, size = 1, rate, color, detail }: { mod: string; size?: number; rate?: number; color?: string; detail?: string }) {
+/** `plain` drops the native title tooltip, for callers that draw their own. */
+export function ModBadge({ mod, size = 1, rate, color, detail, plain = false }: { mod: string; size?: number; rate?: number; color?: string; detail?: string; plain?: boolean }) {
   if (!mod) return null;
   const file = MOD_BADGE_FILE_NAMES[mod];
   const bg = color ?? MOD_BADGE_TYPE_COLORS[mod] ?? "#ff6666";
@@ -74,7 +75,7 @@ export function ModBadge({ mod, size = 1, rate, color, detail }: { mod: string; 
 
   // Format matches osu-web: 2 decimals + "×" (U+00D7). E.g. 0.9 → "0.90×".
   const rateText = rate != null ? `${rate.toFixed(2)}×` : null;
-  const title = [mod, rateText, detail].filter(Boolean).join(" ");
+  const title = plain ? undefined : [mod, rateText, detail].filter(Boolean).join(" ");
   // The tail text: a rate for speed mods, otherwise a short setting like "OD 9".
   const tailText = rateText ?? detail ?? null;
   // Spans, not divs: the badge also renders inside <p> prose (dan-estimates

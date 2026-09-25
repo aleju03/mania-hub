@@ -4,15 +4,16 @@ import { useLocale } from "../lib/locale-context";
 import { CountryFlag } from "./ui/CountryFlag";
 
 /**
- * Shown on the Snipes page when the selected country is below the "snipes"
- * feature tier. Snipe board seeding is an expensive, opt-in operation enabled
- * only for a small set of tracked countries, so a non-snipes country will
- * never accumulate snipe data. This explains that instead of showing an empty
- * list that looks like it's just waiting for activity.
+ * Shown on the Snipes page when the selected country is below the "live"
+ * feature tier. Its scores aren't ingested, so it never accumulates snipe
+ * data. This explains that instead of showing an empty list that looks like
+ * it's just waiting for activity.
  *
  * `hasOldData` softens the wording when stale snipe history still exists.
+ * `limited` keeps the older small-set wording while tracked-only snipes are
+ * admin-only (see snipes-access.ts).
  */
-export function SnipesNotTracked({ country, hasOldData }: { country: string; hasOldData: boolean }) {
+export function SnipesNotTracked({ country, hasOldData, limited = false }: { country: string; hasOldData: boolean; limited?: boolean }) {
   const locale = useLocale();
   const name = displayCountryName(country, locale);
 
@@ -24,10 +25,14 @@ export function SnipesNotTracked({ country, hasOldData }: { country: string; has
           <Trans>Snipes aren't tracked for {name}</Trans>
         </p>
         <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-          <Trans>
-            Snipe tracking runs for a small set of countries because it's an
-            expensive operation.
-          </Trans>{" "}
+          {limited ? (
+            <Trans>
+              Snipe tracking runs for a small set of countries because it's an
+              expensive operation.
+            </Trans>
+          ) : (
+            <Trans>Snipes are only tracked for countries with live score tracking.</Trans>
+          )}{" "}
           {hasOldData ? (
             <Trans>{name} isn't one of them, so the snipes below are older history and won't update.</Trans>
           ) : (

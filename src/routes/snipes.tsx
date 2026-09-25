@@ -1,6 +1,7 @@
 import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { Globe } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
@@ -20,12 +21,15 @@ import type { SnipeEvent } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
+import { track } from "../lib/analytics";
 import { fetchLiveSnipeBoard, fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveSnipeBoardEntry, type LiveSnipeBoardSnapshot } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { SnipesNotTracked } from "../components/SnipesNotTracked";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
+import { useAuth } from "../lib/auth-context";
+import { canSeeTrackedSnipes } from "../lib/snipes-access";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -121,12 +125,20 @@ function SnipesPage() {
   const windowActive = useWindowActive();
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const { warming, featureTier } = useCountryWarming(selectedCountry);
-  // Country is below the snipes tier: the backend won't seed/update snipe
-  // boards for it, so there is nothing live to wait for here.
-  const snipesTierDisabled = liveBackendEnabled && featureTier != null && featureTier !== "snipes";
+  const trackedSnipesVisible = canSeeTrackedSnipes(useAuth().canUseAdminFeatures);
+  const globalHidden = selectedIsGlobal && !trackedSnipesVisible;
+  // Country is below the live tier: its scores aren't ingested, so the backend
+  // keeps no snipe boards for it and there is nothing live to wait for here.
+  // While tracked-only snipes are admin-only, live countries read the same.
+  const snipesTierDisabled = liveBackendEnabled && !selectedIsGlobal && featureTier != null && featureTier !== "snipes"
+    && (featureTier !== "live" || !trackedSnipesVisible);
+  // Only snipes-tier countries have boards seeded from osu!. Everywhere else,
+  // Global included, the boards hold only the scores tracked here.
+  const trackedOnlySnipes = liveBackendEnabled && (selectedIsGlobal || featureTier === "live");
+  const seededSnipes = !selectedIsGlobal && featureTier === "snipes";
 
   useEffect(() => {
-    if (!liveBackendEnabled || selectedIsGlobal || !windowActive) return;
+    if (!liveBackendEnabled || globalHidden || !windowActive) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
     fetchLiveSnipesSnapshot(requestedCountry)
@@ -144,10 +156,10 @@ function SnipesPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes.length, windowActive]);
+  }, [liveBackendEnabled, globalHidden, selectedCountry, setSnipes, snipes.length, windowActive]);
 
   useEffect(() => {
-    if (!liveBackendEnabled || selectedIsGlobal || !windowActive) return;
+    if (!liveBackendEnabled || globalHidden || !windowActive) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("snipe", (event) => {
@@ -164,7 +176,7 @@ function SnipesPage() {
       setRefreshing(false);
     });
     return () => source.close();
-  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes, windowActive]);
+  }, [liveBackendEnabled, globalHidden, selectedCountry, setSnipes, snipes, windowActive]);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -337,9 +349,7 @@ function SnipesPage() {
     );
   }
 
-  // Snipes are inherently per-country (a snipe is one country's player passing
-  // another). The Global aggregate has no such notion, so point readers to Maps.
-  if (selectedIsGlobal) {
+  if (globalHidden) {
     return (
       <div className="flex-1">
         <PageHeader iconSrc="/images/icons/snipes.svg" title={t`Global mania snipes`} />
@@ -398,10 +408,10 @@ function SnipesPage() {
       {warming && <CountryWarming country={selectedCountry} />}
 
       {!warming && snipesTierDisabled && (
-        <SnipesNotTracked country={selectedCountry} hasOldData={snipes.length > 0} />
+        <SnipesNotTracked country={selectedCountry} hasOldData={trackedSnipesVisible && snipes.length > 0} limited={!trackedSnipesVisible} />
       )}
 
-      {!warming && !(snipesTierDisabled && snipes.length === 0) && (
+      {!warming && !(snipesTierDisabled && (snipes.length === 0 || !trackedSnipesVisible)) && (
       <div className="relative overflow-hidden bg-osu-b5">
       <OsuTriangleBackdrop />
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
@@ -424,6 +434,7 @@ function SnipesPage() {
                 </span>
               )}
             </button>
+            <SnipeRules countryName={countryName} isGlobal={selectedIsGlobal} seeded={seededSnipes} />
           </div>
 
           {/* Backdrop */}
@@ -520,12 +531,20 @@ function SnipesPage() {
               <Trans>Clear filters</Trans>
             </button>
           )}
+          <SnipeRules countryName={countryName} isGlobal={selectedIsGlobal} seeded={seededSnipes} className="max-sm:hidden sm:ml-auto" />
         </div>
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
       <div className="relative z-10">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-6">
+          {trackedOnlySnipes && (
+            <p className="mb-4 text-[12px] text-osu-f1">
+              {selectedIsGlobal
+                ? <Trans>Global snipes only count the top 100 players, and only scores tracked on this site.</Trans>
+                : <Trans>{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards.</Trans>}
+            </p>
+          )}
           {error && (
             <div className="text-center py-16 text-osu-f1 text-sm">{error}</div>
           )}
@@ -598,7 +617,182 @@ function SnipesPage() {
   );
 }
 
+// ── Rules ─────────────────────────────────────────────────────────────────
+
+/**
+ * How a snipe counts, mirroring updateSnipeProjection in the live backend:
+ * one board per client and speed bucket (getBoardLaneKey), public
+ * leaderboards only, no chart-changing mods or custom rates
+ * (scoreCountsForSnipes), ranked roster members (the global top 100 on Global),
+ * one snipe per score against the highest player passed. Only seeded boards
+ * know a player's older osu! best; the rest hold tracked scores only.
+ */
+function SnipeRules({ countryName, isGlobal, seeded, className = "" }: { countryName: string; isGlobal: boolean; seeded: boolean; className?: string }) {
+  const { t } = useLingui();
+  const modInfo: Record<string, { name: string; description: string }> = {
+    DT: { name: "Double Time", description: t`Speeds the song up to 1.5x.` },
+    NC: { name: "Nightcore", description: t`Speeds the song up to 1.5x and raises the pitch.` },
+    HT: { name: "Half Time", description: t`Slows the song down to 0.75x.` },
+    DC: { name: "Daycore", description: t`Slows the song down to 0.75x and lowers the pitch.` },
+    HO: { name: "Hold Off", description: t`Turns every hold note into a normal note.` },
+    IN: { name: "Invert", description: t`Turns the notes into hold notes that fill the gaps between them.` },
+    NR: { name: "No Release", description: t`Hold notes don't need their release timed.` },
+    DS: { name: "Dual Stages", description: t`Doubles the columns into two stages.` },
+    DA: { name: "Difficulty Adjust", description: t`Changes the map's difficulty settings, like OD and HP.` },
+    CS: { name: "Constant Speed", description: t`Removes the map's scroll speed changes.` },
+    WU: { name: "Wind Up", description: t`Speeds the song up gradually during the map.` },
+    WD: { name: "Wind Down", description: t`Slows the song down gradually during the map.` },
+    AS: { name: "Adaptive Speed", description: t`Changes the song speed during the map based on your hits.` },
+  };
+  const badges = (mods: string[]) => (
+    <span className="inline-flex flex-wrap items-center gap-1 align-middle">
+      {mods.map((mod) => <ModTip key={mod} mod={mod} info={modInfo[mod]} />)}
+    </span>
+  );
+  const dtBadges = badges(["DT", "NC"]);
+  const htBadges = badges(["HT", "DC"]);
+  const excludedBadges = badges(["HO", "IN", "NR", "DS", "DA", "CS", "WU", "WD", "AS"]);
+  const customRateBadges = badges(["DT", "HT"]);
+  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const open = anchor != null;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The page body clips overflow for its backdrop, so the panel is portaled
+  // to <body> and placed under the button by hand, right edges aligned. It is
+  // placed from the left because the page scrollbar narrows the fixed
+  // containing block, which throws off a right offset.
+  const readAnchor = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const width = Math.min(340, document.documentElement.clientWidth - 32);
+    return { top: rect.bottom + 8, left: Math.max(16, rect.right - width), width };
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!buttonRef.current?.contains(target) && !panelRef.current?.contains(target)) setAnchor(null);
+    };
+    const onMove = () => setAnchor(readAnchor());
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAnchor(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open]);
+
+  return (
+    <div className={className}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => {
+          if (!open) track("snipes_rules_open");
+          setAnchor(open ? null : readAnchor());
+        }}
+        aria-expanded={open}
+        className={`text-[11px] transition-colors cursor-pointer ${open ? "text-white" : "text-osu-f1 hover:text-white"}`}
+      >
+        <Trans>Rules</Trans>
+      </button>
+      {anchor && createPortal(
+        <div
+          ref={panelRef}
+          role="dialog"
+          style={{ top: anchor.top, left: anchor.left, width: anchor.width }}
+          className="fixed z-40 rounded-lg bg-osu-b4 p-4 shadow-xl shadow-black/40"
+        >
+          <p className="text-[12px] font-semibold text-white"><Trans>Snipe rules</Trans></p>
+          <ul className="mt-2 space-y-2 text-[12px] leading-relaxed text-osu-c2">
+            <li><Trans>A snipe is when your new best on a map passes a player who was above you.</Trans></li>
+            <li><Trans>Stable and lazer scores are on separate boards because their scoring is different.</Trans></li>
+            <li><Trans>{dtBadges} scores have their own board, and so do {htBadges}. Every other mod shares the nomod board.</Trans></li>
+            <li><Trans>Only passes on ranked, approved, loved and qualified maps count.</Trans></li>
+            <li><Trans>Scores with {excludedBadges}, a key mod that changes the map's key count, or {customRateBadges} at a custom rate don't count.</Trans></li>
+            <li>
+              {isGlobal
+                ? <Trans>Only the global top 100 take part.</Trans>
+                : <Trans>Only players in the {countryName} rankings take part.</Trans>}
+            </li>
+            <li><Trans>Passing several players with one score counts as one snipe, against the highest of them.</Trans></li>
+            {seeded
+              ? <li><Trans>If you already had an older best above them, it doesn't count.</Trans></li>
+              : <li><Trans>Only scores tracked on this site are on the boards.</Trans></li>}
+            <li><Trans>Scores added by hand update the boards but never count as snipes. An older score added this way that beats the sniper's removes the snipe.</Trans></li>
+          </ul>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+// A mod badge that names the mod and says what it does, on hover or on tap.
+// The tip centers on the badge unless that would push it past the rules panel.
+function ModTip({ mod, info }: { mod: string; info: { name: string; description: string } }) {
+  const [align, setAlign] = useState<"left" | "center" | "right" | null>(null);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const show = () => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return setAlign("center");
+    const bounds = rootRef.current?.closest('[role="dialog"]')?.getBoundingClientRect()
+      ?? { left: 0, right: document.documentElement.clientWidth };
+    const halfTip = 115;
+    const middle = rect.left + rect.width / 2;
+    setAlign(middle - bounds.left < halfTip ? "left" : bounds.right - middle < halfTip ? "right" : "center");
+  };
+  const alignClass = align === "left" ? "left-0" : align === "right" ? "right-0" : "left-1/2 -translate-x-1/2";
+  return (
+    <span
+      ref={rootRef}
+      className="relative inline-flex cursor-help"
+      tabIndex={0}
+      aria-label={`${info.name}. ${info.description}`}
+      // Hover drives it for a mouse; a tap toggles it, since touch has no hover.
+      onPointerEnter={(event) => event.pointerType === "mouse" && show()}
+      onPointerLeave={(event) => event.pointerType === "mouse" && setAlign(null)}
+      onPointerUp={(event) => event.pointerType !== "mouse" && (align ? setAlign(null) : show())}
+      onFocus={show}
+      onBlur={() => setAlign(null)}
+    >
+      <ModBadge mod={mod} size={0.7} plain />
+      {align && (
+        <span
+          role="tooltip"
+          className={`pointer-events-none absolute bottom-full z-10 mb-1.5 w-max max-w-[220px] rounded-md bg-osu-d5 px-2.5 py-1.5 text-left text-[11px] leading-snug shadow-lg shadow-black/40 ${alignClass}`}
+        >
+          <span className="block font-semibold text-white">{info.name}</span>
+          <span className="block text-osu-f1">{info.description}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Snipe row ─────────────────────────────────────────────────────────────
+
+// Who sniped whom and on what, so the admin feed can name the snipe a
+// visitor opened or followed a link out of.
+function snipeAnalytics(event: SnipeEvent): Record<string, string> {
+  return {
+    snipe_sniper: event.sniper.username,
+    snipe_victim: event.victim.username,
+    snipe_map: `${event.beatmapset.title} [${event.beatmap.version}]`,
+  };
+}
+
+function trackSnipeLink(event: SnipeEvent, target: "sniper" | "victim" | "beatmap" | "replay" | "board") {
+  track("snipes_link", { ...snipeAnalytics(event), snipe_target: target });
+}
 
 function SnipeRow({
   event,
@@ -654,12 +848,16 @@ function SnipeRow({
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
       <div
         className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
-        onClick={() => onToggle(eventKey)}
+        onClick={() => {
+          if (!expanded) track("snipes_row_open", snipeAnalytics(event));
+          onToggle(eventKey);
+        }}
       >
         {/* Sniper */}
         <button
           onClick={(e) => {
             e.stopPropagation();
+            trackSnipeLink(event, "sniper");
             window.location.href = sniperHref;
           }}
           className="cursor-pointer flex-shrink-0"
@@ -675,6 +873,7 @@ function SnipeRow({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  trackSnipeLink(event, "sniper");
                   window.location.href = sniperHref;
                 }}
                 className="cursor-pointer min-w-0"
@@ -699,6 +898,7 @@ function SnipeRow({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  trackSnipeLink(event, "victim");
                   window.location.href = previousHref;
                 }}
                 className="cursor-pointer min-w-0 flex items-center gap-1.5"
@@ -736,7 +936,10 @@ function SnipeRow({
                       href={beatmapHref}
                       target="_blank"
                       rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        trackSnipeLink(event, "beatmap");
+                      }}
                       className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
                       title={t`Open beatmap on osu!`}
                     >
@@ -756,7 +959,7 @@ function SnipeRow({
               {event.boardRank != null && event.boardRank > 0 && (
                 <span
                   className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-osu-pink-light"
-                  title={t`Took the country board's #${event.boardRank} spot`}
+                  title={t`Took the board's #${event.boardRank} spot`}
                 >
                   #{event.boardRank}
                 </span>
@@ -783,6 +986,7 @@ function SnipeRow({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    trackSnipeLink(event, "replay");
                     navigate({ to: "/replay", search: replaySearch });
                   }}
                   className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
@@ -809,6 +1013,7 @@ function SnipeRow({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                trackSnipeLink(event, "replay");
                 navigate({ to: "/replay", search: replaySearch });
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
@@ -901,6 +1106,7 @@ function SnipeRow({
               href={beatmapHref}
               target="_blank"
               rel="noreferrer"
+              onClick={() => trackSnipeLink(event, "beatmap")}
               className="ml-auto flex-shrink-0 underline-offset-2 transition-colors hover:text-osu-pink-light hover:underline"
             >
               <Trans>View beatmap →</Trans>
@@ -987,7 +1193,15 @@ function SnipeBoard({ event, country }: { event: SnipeEvent; country: string }) 
       ) : board.entries.length === 0 ? (
         <div className="py-3 text-[10px] text-osu-f1"><Trans>No board stored for this lane yet.</Trans></div>
       ) : (
-        <BoardRows board={board} event={event} showAll={showAll} onShowAll={() => setShowAll(true)} />
+        <BoardRows
+          board={board}
+          event={event}
+          showAll={showAll}
+          onShowAll={() => {
+            track("snipes_board_all", snipeAnalytics(event));
+            setShowAll(true);
+          }}
+        />
       )}
     </div>
   );
@@ -1020,11 +1234,11 @@ function BoardRows({
   return (
     <div className="mt-1">
       {head.map((entry) => (
-        <SnipeBoardRow key={entry.scoreId} entry={entry} showPp={showPp} highlight={highlightOf(entry.user.id)} />
+        <SnipeBoardRow key={entry.scoreId} entry={entry} event={event} showPp={showPp} highlight={highlightOf(entry.user.id)} />
       ))}
       {tail.length > 0 && <div className="py-0.5 pl-2 text-[10px] leading-none text-osu-f1">···</div>}
       {tail.map((entry) => (
-        <SnipeBoardRow key={entry.scoreId} entry={entry} showPp={showPp} highlight={highlightOf(entry.user.id)} />
+        <SnipeBoardRow key={entry.scoreId} entry={entry} event={event} showPp={showPp} highlight={highlightOf(entry.user.id)} />
       ))}
       {hidden > 0 && (
         <button
@@ -1043,10 +1257,12 @@ function BoardRows({
 
 function SnipeBoardRow({
   entry,
+  event,
   showPp,
   highlight,
 }: {
   entry: LiveSnipeBoardEntry;
+  event: SnipeEvent;
   showPp: boolean;
   highlight: "sniper" | "victim" | null;
 }) {
@@ -1062,6 +1278,7 @@ function SnipeBoardRow({
       <button
         onClick={(e) => {
           e.stopPropagation();
+          track("snipes_link", { ...snipeAnalytics(event), snipe_target: "board", profile_username: entry.user.username });
           window.location.href = `/player/${encodeURIComponent(entry.user.username)}`;
         }}
         className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left"
