@@ -12,7 +12,7 @@ import {
   SKIN_PREVIEW_HEIGHT,
   SKIN_PREVIEW_WIDTH,
 } from "./skin-preview-render";
-import type { ReplaySkinImageAsset } from "./replay-skin";
+import { REPLAY_SKIN_NOTE_FRAME_DURATION_MS, type ReplaySkinImageAsset } from "./replay-skin";
 import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
 
 describe("computeSkinPreviewLayout", () => {
@@ -82,9 +82,11 @@ describe("previewAnimationFrame", () => {
 
   it("runs a note's loop backwards from the hit line, like the replay canvas", () => {
     expect(previewAnimationFrame(animated, 0).name).toBe("f0");
-    expect(previewAnimationFrame(animated, 50).name).toBe("f3");
-    expect(previewAnimationFrame(animated, 150).name).toBe("f2");
-    expect(previewAnimationFrame(animated, 400).name).toBe("f0");
+    // Mania notes run at a fixed 60 FPS; the stored frameDurationMs is ignored.
+    const frameMs = REPLAY_SKIN_NOTE_FRAME_DURATION_MS;
+    expect(previewAnimationFrame(animated, frameMs * 0.5).name).toBe("f3");
+    expect(previewAnimationFrame(animated, frameMs * 1.5).name).toBe("f2");
+    expect(previewAnimationFrame(animated, frameMs * 4).name).toBe("f0");
     expect(previewAnimationFrame(animated, undefined).name).toBe("f0");
   });
 
