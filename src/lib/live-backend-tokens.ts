@@ -2,7 +2,7 @@
    call takes.
 
    `LIVE_ADMIN_TOKEN` opens the admin surface: `/api/admin/*`, the analytics
-   queries, the destructive actions, and the HMAC key the ghost overlay signs
+   queries, the destructive actions, and the HMAC key the mascot overlay signs
    viewer identities with.
 
    `LIVE_BRIDGE_TOKEN` opens the per-user routes: goals, wallets, skins

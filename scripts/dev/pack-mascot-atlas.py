@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Rebuild a ghost atlas (public/images/ghost/*.png) from a local DELTARUNE install.
+"""Rebuild a mascot atlas (public/images/mascot/*.png) from a local DELTARUNE install.
 
 Dev-only, run by hand, not part of any build: it needs the game installed and
 Pillow, and it exists so a character's art has a provenance and a way back. The
 clip specs at the bottom are the record of which sprite and which frames each
 row of each atlas came from.
 
-    python3 scripts/dev/pack-ghost-atlas.py dog starwalker
+    python3 scripts/dev/pack-mascot-atlas.py dog starwalker
 
-Then update the character's clips and bounds in src/lib/ghost-shared.ts with
+Then update the character's clips and bounds in src/lib/mascot-shared.ts with
 what it prints, bump that character's atlas.version, and put the new digest in
-src/lib/ghost-shared.test.ts. The version matters because the service worker
+src/lib/mascot-shared.test.ts. The version matters because the service worker
 caches /images/* forever: art swapped under the same URL renders as fragments.
 
 How it reads the game: data.win is a FORM of chunks. STRG holds strings, SPRT
@@ -30,7 +30,7 @@ from PIL import Image
 
 GAME = Path.home() / ".local/share/Steam/steamapps/common/DELTARUNE"
 CHAPTER = "chapter%d_windows/data.win"
-OUT = Path(__file__).resolve().parents[2] / "public/images/ghost"
+OUT = Path(__file__).resolve().parents[2] / "public/images/mascot"
 # Transparent margin kept around the packed art, in sprite pixels.
 PAD = 2
 

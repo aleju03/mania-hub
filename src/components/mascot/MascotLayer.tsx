@@ -1,12 +1,12 @@
 import { useRouterState } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
-import { getGhostViewerTicket, type GhostViewerTicket } from "#/lib/ghost";
-import { DEFAULT_GHOST_VISUAL, ghostSpeechDurationMs, normalizeGhostRoute, type GhostVisual } from "#/lib/ghost-shared";
+import { getMascotViewerTicket, type MascotViewerTicket } from "#/lib/mascot";
+import { DEFAULT_MASCOT_VISUAL, mascotSpeechDurationMs, normalizeMascotRoute, type MascotVisual } from "#/lib/mascot-shared";
 import { getLiveBackendUrl } from "#/lib/live-backend";
 import { useDocumentVisible } from "#/lib/window-activity";
 
-/* Mounted once in the root layout: holds the ghost stream for whatever page the
+/* Mounted once in the root layout: holds the mascot stream for whatever page the
    visitor is on, and renders the sprite only while the owner is actually here.
 
    One SSE connection per visible page is the cost of the feature — it is what lets
@@ -14,10 +14,10 @@ import { useDocumentVisible } from "#/lib/window-activity";
    the presence roster the control panel targets people from. It carries its own
    connection budget on the backend. Hidden tabs disconnect so local HTTP/1.1
    cannot run out of browser connection slots; they rejoin when visible again.
-   The whole thing goes away with ENABLE_GHOST=false (the stream 404s, this layer
+   The whole thing goes away with ENABLE_MASCOT=false (the stream 404s, this layer
    gives up after a few tries and stays quiet). */
 
-const GhostSprite = lazy(() => import("./GhostSprite").then((module) => ({ default: module.GhostSprite })));
+const MascotSprite = lazy(() => import("./MascotSprite").then((module) => ({ default: module.MascotSprite })));
 
 const RECONNECT_DELAYS_MS = [2_000, 6_000, 20_000];
 const ROUTE_SETTLE_MS = 250;
@@ -25,35 +25,35 @@ const ROUTE_SETTLE_MS = 250;
    the roster or draw a second Ralsei on top of the panel's own marker, so it
    asks for a dead overlay through the URL hash (a hash, not a query param, so
    no route's search validation ever sees it). */
-export const GHOST_PREVIEW_HASH = "#ghost-preview";
+export const MASCOT_PREVIEW_HASH = "#mascot-preview";
 
 /* One fetch per full page load, reused across client-side navigations. */
-let viewerTicketPromise: Promise<GhostViewerTicket | null> | null = null;
+let viewerTicketPromise: Promise<MascotViewerTicket | null> | null = null;
 
-function loadViewerTicket(): Promise<GhostViewerTicket | null> {
-  viewerTicketPromise ??= getGhostViewerTicket().catch(() => null);
+function loadViewerTicket(): Promise<MascotViewerTicket | null> {
+  viewerTicketPromise ??= getMascotViewerTicket().catch(() => null);
   return viewerTicketPromise;
 }
 
-export function GhostLayer() {
+export function MascotLayer() {
   /* The id alone, not the viewer object: a fresh root context every minute
      hands back an equal-but-new object, which would reconnect the stream. */
   const viewerId = useAuth().viewer?.id ?? null;
   const documentVisible = useDocumentVisible();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const currentRoute = normalizeGhostRoute(pathname);
+  const currentRoute = normalizeMascotRoute(pathname);
   const [route, setRoute] = useState<string | null>(currentRoute);
 
   /* Movement lands here every tick; only the discrete bits below re-render. */
-  const visualRef = useRef<GhostVisual>({ ...DEFAULT_GHOST_VISUAL });
+  const visualRef = useRef<MascotVisual>({ ...DEFAULT_MASCOT_VISUAL });
   const [present, setPresent] = useState(false);
-  const [speech, setSpeech] = useState<GhostVisual["speech"]>(null);
-  const [action, setAction] = useState<GhostVisual["action"]>(null);
-  const [scale, setScale] = useState(DEFAULT_GHOST_VISUAL.scale);
-  const [character, setCharacter] = useState(DEFAULT_GHOST_VISUAL.character);
+  const [speech, setSpeech] = useState<MascotVisual["speech"]>(null);
+  const [action, setAction] = useState<MascotVisual["action"]>(null);
+  const [scale, setScale] = useState(DEFAULT_MASCOT_VISUAL.scale);
+  const [character, setCharacter] = useState(DEFAULT_MASCOT_VISUAL.character);
   /* The connection id doubles as the capability to answer him: it is only ever
      sent down this stream, and the backend only accepts it while this same
-     connection is being shown a ghost. */
+     connection is being shown a mascot. */
   const [connectionId, setConnectionId] = useState<string | null>(null);
   /* What this visitor has already been shown. A line and an action stay on the
      session until the owner replaces them, which is what lets someone arriving
@@ -67,7 +67,7 @@ export function GhostLayer() {
   /* A navigation mid-flight would otherwise reconnect once per intermediate
      route; settle first, then move the stream. */
   useEffect(() => {
-    const next = normalizeGhostRoute(pathname);
+    const next = normalizeMascotRoute(pathname);
     const timer = window.setTimeout(() => setRoute(next), ROUTE_SETTLE_MS);
     return () => window.clearTimeout(timer);
   }, [pathname]);
@@ -75,7 +75,7 @@ export function GhostLayer() {
   useEffect(() => {
     const base = getLiveBackendUrl();
     if (!base || !route || route !== currentRoute || !documentVisible || typeof EventSource === "undefined") return;
-    if (window.location.hash === GHOST_PREVIEW_HASH) return;
+    if (window.location.hash === MASCOT_PREVIEW_HASH) return;
 
     let source: EventSource | null = null;
     let retry = 0;
@@ -117,7 +117,7 @@ export function GhostLayer() {
       });
       source.addEventListener("update", (event) => {
         try {
-          const payload = JSON.parse((event as MessageEvent).data) as { present: boolean; visual?: GhostVisual };
+          const payload = JSON.parse((event as MessageEvent).data) as { present: boolean; visual?: MascotVisual };
           if (!payload.present || !payload.visual) {
             clear();
             return;
@@ -130,7 +130,7 @@ export function GhostLayer() {
              panel starts numbering again from one. */
           setPresent(true);
           setScale(visual.scale);
-          setCharacter(visual.character ?? DEFAULT_GHOST_VISUAL.character);
+          setCharacter(visual.character ?? DEFAULT_MASCOT_VISUAL.character);
 
           /* A line this visitor already sat through is not replayed. One they
              were part way through when the tab went away still finishes: the
@@ -142,7 +142,7 @@ export function GhostLayer() {
             const key = `${line.id}:${line.text}`;
             const shown = shownSpeechRef.current;
             if (shown?.key !== key) shownSpeechRef.current = { key, at: Date.now() };
-            else if (Date.now() - shown.at >= ghostSpeechDurationMs(line.text)) saying = null;
+            else if (Date.now() - shown.at >= mascotSpeechDurationMs(line.text)) saying = null;
           }
           setSpeech((current) => (current?.id === saying?.id && current?.text === saying?.text ? current : saying));
 
@@ -187,13 +187,13 @@ export function GhostLayer() {
   if (!present || route !== currentRoute) return null;
   return (
     <Suspense fallback={null}>
-      <GhostSprite
+      <MascotSprite
         visualRef={visualRef}
         character={character}
         speech={speech}
         action={action}
         scale={scale}
-        onSay={connectionId ? (text) => sendGhostReply(connectionId, text) : null}
+        onSay={connectionId ? (text) => sendMascotReply(connectionId, text) : null}
       />
     </Suspense>
   );
@@ -201,7 +201,7 @@ export function GhostLayer() {
 
 /* Fire and forget: a refused reply (rate limited, or he just left) is not worth
    interrupting the visitor over. */
-function sendGhostReply(connectionId: string, text: string): void {
+function sendMascotReply(connectionId: string, text: string): void {
   const base = getLiveBackendUrl();
   if (!base) return;
   void fetch(`${base}/api/updates/say`, {

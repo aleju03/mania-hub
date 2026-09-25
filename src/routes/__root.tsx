@@ -5,7 +5,7 @@ import { Coffee, Heart, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
-import { GhostLayer } from "../components/ghost/GhostLayer";
+import { MascotLayer } from "../components/mascot/MascotLayer";
 import { CustomCursor } from "../components/layout/CustomCursor";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { Nav } from "../components/layout/Nav";
@@ -662,7 +662,7 @@ function RootLayout() {
               </main>
               <GoalToasts />
               <TrackingToasts />
-              <GhostLayer />
+              <MascotLayer />
             </>
           )}
           {/* Above the outlet on purpose: a replay video export keeps running

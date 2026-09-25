@@ -9,16 +9,16 @@ vi.mock("@tanstack/react-router", () => ({
     select({ location: { pathname: mocks.pathname } }),
 }));
 vi.mock("#/lib/auth-context", () => ({ useAuth: () => ({ viewer: null }) }));
-vi.mock("#/lib/ghost", () => ({ getGhostViewerTicket: vi.fn() }));
+vi.mock("#/lib/mascot", () => ({ getMascotViewerTicket: vi.fn() }));
 vi.mock("#/lib/live-backend", () => ({ getLiveBackendUrl: () => "http://localhost:7227" }));
 vi.mock("#/lib/window-activity", () => ({ useDocumentVisible: () => true }));
-vi.mock("./GhostSprite", () => ({
-  GhostSprite: ({ speech }: { speech: { text: string } | null }) => (
+vi.mock("./MascotSprite", () => ({
+  MascotSprite: ({ speech }: { speech: { text: string } | null }) => (
     <div>Ralsei sprite{speech ? `: ${speech.text}` : ""}</div>
   ),
 }));
 
-import { GhostLayer } from "./GhostLayer";
+import { MascotLayer } from "./MascotLayer";
 
 class FakeEventSource {
   static readonly CONNECTING = 0;
@@ -61,9 +61,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("GhostLayer navigation", () => {
+describe("MascotLayer navigation", () => {
   test("hides the old route immediately while the next stream settles", async () => {
-    const view = render(<GhostLayer />);
+    const view = render(<MascotLayer />);
     expect(FakeEventSource.instances).toHaveLength(1);
 
     await act(async () => {
@@ -86,7 +86,7 @@ describe("GhostLayer navigation", () => {
     expect(screen.getByText("Ralsei sprite")).toBeTruthy();
 
     mocks.pathname = "/two";
-    view.rerender(<GhostLayer />);
+    view.rerender(<MascotLayer />);
     expect(screen.queryByText("Ralsei sprite")).toBeNull();
     expect(FakeEventSource.instances[0].readyState).toBe(FakeEventSource.CLOSED);
     expect(FakeEventSource.instances).toHaveLength(1);
@@ -101,7 +101,7 @@ describe("GhostLayer navigation", () => {
    late still reads it. The stream also closes with a hidden tab, and the frame
    that reseeds it on return carries that same line: without the guard in the
    layer, a bubble already read and gone types itself out again. */
-describe("GhostLayer speech replay", () => {
+describe("MascotLayer speech replay", () => {
   const visual = (speech: { id: number; text: string } | null) => ({
     present: true,
     visual: {
@@ -123,7 +123,7 @@ describe("GhostLayer speech replay", () => {
   const rejoin = async (view: ReturnType<typeof render>, speech: { id: number; text: string } | null) => {
     const before = FakeEventSource.instances.length;
     mocks.pathname = mocks.pathname === "/one" ? "/two" : "/one";
-    view.rerender(<GhostLayer />);
+    view.rerender(<MascotLayer />);
     await act(async () => {
       vi.advanceTimersByTime(250);
       await Promise.resolve();
@@ -137,7 +137,7 @@ describe("GhostLayer speech replay", () => {
   };
 
   test("does not re-say a line the visitor already sat through", async () => {
-    const view = render(<GhostLayer />);
+    const view = render(<MascotLayer />);
     await act(async () => {
       FakeEventSource.instances[0].emit("hello", { id: "one" });
       FakeEventSource.instances[0].emit("update", visual({ id: 1, text: "hello" }));
@@ -157,7 +157,7 @@ describe("GhostLayer speech replay", () => {
   });
 
   test("finishes a line the visitor was part way through", async () => {
-    const view = render(<GhostLayer />);
+    const view = render(<MascotLayer />);
     await act(async () => {
       FakeEventSource.instances[0].emit("hello", { id: "one" });
       FakeEventSource.instances[0].emit("update", visual({ id: 7, text: "still talking" }));

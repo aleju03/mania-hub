@@ -13,7 +13,7 @@ describe("document device-access policy", () => {
   });
 
   // Same middleware, same text/html responses: a foreign page must not be able
-  // to frame the site, while /admin/ghost's same-origin preview keeps working.
+  // to frame the site, while /admin/mascot's same-origin preview keeps working.
   it("refuses cross-site framing of every document", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "start.ts"), "utf8");
 

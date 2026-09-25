@@ -1,33 +1,33 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
-import { playGhostActionSfx, playGhostSpeechSfx, preloadGhostSfx } from "#/lib/ghost-sfx";
+import { playMascotActionSfx, playMascotSpeechSfx, preloadMascotSfx } from "#/lib/mascot-sfx";
 import {
-  findGhostAction,
-  GHOST_CHARACTER_LIST,
-  GHOST_REPLY_MAX_LENGTH,
-  GHOST_WALK_SPEED,
-  directionalGhostFrame,
-  fitGhostScale,
-  ghostAtlasCols,
-  ghostAtlasRows,
-  ghostAtlasUrl,
-  ghostBubbleLift,
-  ghostCharacter,
-  ghostClip,
-  ghostClipBounds,
-  ghostHitboxRect,
-  ghostSpeechDurationMs,
-  ghostWrapDelta,
-  isLoopingGhostPose,
-  resolveGhostClip,
-  shouldFlipGhostClip,
-  wrapGhostX,
-  type GhostCharacter,
-  type GhostEffect,
-  type GhostVisual,
-} from "#/lib/ghost-shared";
+  findMascotAction,
+  MASCOT_CHARACTER_LIST,
+  MASCOT_REPLY_MAX_LENGTH,
+  MASCOT_WALK_SPEED,
+  directionalMascotFrame,
+  fitMascotScale,
+  mascotAtlasCols,
+  mascotAtlasRows,
+  mascotAtlasUrl,
+  mascotBubbleLift,
+  mascotCharacter,
+  mascotClip,
+  mascotClipBounds,
+  mascotHitboxRect,
+  mascotSpeechDurationMs,
+  mascotWrapDelta,
+  isLoopingMascotPose,
+  resolveMascotClip,
+  shouldFlipMascotClip,
+  wrapMascotX,
+  type MascotCharacter,
+  type MascotEffect,
+  type MascotVisual,
+} from "#/lib/mascot-shared";
 
-/* Renders the ghost itself: sprite, speech bubble, action effects.
+/* Renders the mascot itself: sprite, speech bubble, action effects.
 
    Position and frame are written straight to the DOM from one rAF loop reading
    a ref, never through React state — movement arrives ~15 times a second and
@@ -39,8 +39,8 @@ import {
    enough to feel driven, low enough to smooth a lossy connection. */
 const FOLLOW_RATE = 14;
 
-export interface GhostSpriteProps {
-  visualRef: MutableRefObject<GhostVisual>;
+export interface MascotSpriteProps {
+  visualRef: MutableRefObject<MascotVisual>;
   /* The roster id off the stream. Discrete, so it arrives as a prop and the
      draw loop below reads the resolved entry from the ref. */
   character: string;
@@ -52,7 +52,7 @@ export interface GhostSpriteProps {
   onSay: ((text: string) => void) | null;
 }
 
-export function GhostSprite({ visualRef, character, speech, action, scale, onSay }: GhostSpriteProps) {
+export function MascotSprite({ visualRef, character, speech, action, scale, onSay }: MascotSpriteProps) {
   const { t } = useLingui();
   const containerRef = useRef<HTMLDivElement>(null);
   const spriteRef = useRef<HTMLDivElement>(null);
@@ -80,22 +80,22 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
      warmed with them: they are a few KB each, and the owner switching character
      mid-visit should not leave a hole where the sprite was. */
   useEffect(() => {
-    preloadGhostSfx();
-    for (const entry of GHOST_CHARACTER_LIST) new Image().src = ghostAtlasUrl(entry);
+    preloadMascotSfx();
+    for (const entry of MASCOT_CHARACTER_LIST) new Image().src = mascotAtlasUrl(entry);
   }, []);
 
   useEffect(() => {
     // Resolved off the ref, not the prop: depending on the character here would
     // replay the last action every time the owner switches sprite.
-    if (!action || !findGhostAction(ghostCharacter(visualRef.current.character), action.kind)) return;
+    if (!action || !findMascotAction(mascotCharacter(visualRef.current.character), action.kind)) return;
     setPlaying({ ...action, startedAt: performance.now() });
-    playGhostActionSfx(action.kind);
+    playMascotActionSfx(action.kind);
   }, [action, visualRef]);
 
   useEffect(() => {
     setSaying(speech);
     if (!speech) return;
-    const timer = window.setTimeout(() => setSaying(null), ghostSpeechDurationMs(speech.text));
+    const timer = window.setTimeout(() => setSaying(null), mascotSpeechDurationMs(speech.text));
     return () => window.clearTimeout(timer);
   }, [speech]);
 
@@ -114,14 +114,14 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
        scrollHeight forces layout, and it only changes when content does. */
     let page = { w: window.innerWidth, h: window.innerHeight };
     let measuredAt = 0;
-    let anchored: GhostVisual["anchor"] = visualRef.current.anchor;
+    let anchored: MascotVisual["anchor"] = visualRef.current.anchor;
     /* How fast he is actually travelling, which is what sets the leg speed:
        a sprint has to look like one without another field on the wire. */
     let rate = 0;
     let phase = 0;
     /* The atlas in the element right now. Swapping characters is rare and the
        url is only rewritten when it actually changes. */
-    let drawn: GhostCharacter | null = null;
+    let drawn: MascotCharacter | null = null;
     let cols = 1;
     let rows = 1;
 
@@ -150,9 +150,9 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
       const follow = 1 - Math.exp(-FOLLOW_RATE * dt);
       /* Chased the short way round, so walking off the right edge crosses to
          the left rather than sliding back over everything in between. */
-      const movedX = ghostWrapDelta(x, next.x) * follow;
+      const movedX = mascotWrapDelta(x, next.x) * follow;
       const movedY = (next.y - y) * follow;
-      x = wrapGhostX(x + movedX);
+      x = wrapMascotX(x + movedX);
       y += movedY;
       /* Real distance travelled, in screen widths per second: the same unit the
          walk and sprint speeds are expressed in, so the comparison below holds
@@ -165,18 +165,18 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
       /* Which sprite is on the page. The clip names below are that character's,
          so both are resolved together: a tick that still carries the previous
          character's clip draws its idle rather than a missing row. */
-      const character = ghostCharacter(next.character);
+      const character = mascotCharacter(next.character);
       if (character !== drawn) {
         drawn = character;
-        cols = ghostAtlasCols(character);
-        rows = ghostAtlasRows(character);
-        sprite.style.backgroundImage = `url(${ghostAtlasUrl(character)})`;
+        cols = mascotAtlasCols(character);
+        rows = mascotAtlasRows(character);
+        sprite.style.backgroundImage = `url(${mascotAtlasUrl(character)})`;
       }
 
       const active = playingRef.current;
-      const spec = active ? findGhostAction(character, active.kind) : null;
-      const clipName = resolveGhostClip(character, spec?.clip ?? next.clip);
-      const clip = ghostClip(character, clipName);
+      const spec = active ? findMascotAction(character, active.kind) : null;
+      const clipName = resolveMascotClip(character, spec?.clip ?? next.clip);
+      const clip = mascotClip(character, clipName);
       let frame = 0;
       if (active && spec) {
         const index = Math.floor(((now - active.startedAt) / 1000) * clip.fps);
@@ -190,13 +190,13 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
         /* The action belongs to whoever was on screen a moment ago: drop it
            rather than holding it against a character that has no such move. */
         if (playingRef.current?.id === active.id) setPlaying(null);
-      } else if (directionalGhostFrame(character, clipName, next.facing) != null) {
+      } else if (directionalMascotFrame(character, clipName, next.facing) != null) {
         // Two drawings, one per side: the frame is the direction, not the time.
-        frame = directionalGhostFrame(character, clipName, next.facing)!;
-      } else if (next.moving || isLoopingGhostPose(character, clipName)) {
+        frame = directionalMascotFrame(character, clipName, next.facing)!;
+      } else if (next.moving || isLoopingMascotPose(character, clipName)) {
         /* Legs keep up with the actual pace: nominal at a walk, faster at a
            run, so a sprint reads as one. Poses just run at their own rate. */
-        const pace = next.moving ? Math.min(2, Math.max(0.7, rate / GHOST_WALK_SPEED)) : 1;
+        const pace = next.moving ? Math.min(2, Math.max(0.7, rate / MASCOT_WALK_SPEED)) : 1;
         phase += dt * clip.fps * pace;
         frame = Math.floor(phase) % clip.frames;
       } else {
@@ -206,8 +206,8 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
       /* The owner picks one size for everyone, in sprite pixels. Each viewer
          caps it against their own width so he is a character on a phone rather
          than most of the screen. */
-      const spriteScale = fitGhostScale(character, next.scale, window.innerWidth);
-      const flip = shouldFlipGhostClip(character, clipName, next.facing);
+      const spriteScale = fitMascotScale(character, next.scale, window.innerWidth);
+      const flip = shouldFlipMascotClip(character, clipName, next.facing);
       sprite.style.width = `${character.frame.w * spriteScale}px`;
       sprite.style.height = `${character.frame.h * spriteScale}px`;
       sprite.style.backgroundSize = `${character.frame.w * cols * spriteScale}px ${character.frame.h * rows * spriteScale}px`;
@@ -217,8 +217,8 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
       sprite.style.transform = `${flip ? "scaleX(-1) " : ""}translate(${-character.anchor.x * spriteScale}px, ${-character.anchor.y * spriteScale}px)`;
       /* The bubble hangs off whatever clip is drawn this frame, so a pose that
          changes his height moves it with him rather than at the next render. */
-      if (bubbleRef.current) bubbleRef.current.style.bottom = `${ghostBubbleLift(character, clipName, spriteScale)}px`;
-      const hitboxRect = ghostHitboxRect(character, clipName, spriteScale, flip);
+      if (bubbleRef.current) bubbleRef.current.style.bottom = `${mascotBubbleLift(character, clipName, spriteScale)}px`;
+      const hitboxRect = mascotHitboxRect(character, clipName, spriteScale, flip);
       hitbox.style.left = `${hitboxRect.x}px`;
       hitbox.style.top = `${hitboxRect.y}px`;
       hitbox.style.width = `${hitboxRect.w}px`;
@@ -229,30 +229,30 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
     return () => cancelAnimationFrame(raf);
   }, [visualRef]);
 
-  const drawn = ghostCharacter(character);
-  const spec = playing ? findGhostAction(drawn, playing.kind) : null;
+  const drawn = mascotCharacter(character);
+  const spec = playing ? findMascotAction(drawn, playing.kind) : null;
   /* The bubble and the shadow hang off the drawn size, so they need the same
      cap the loop draws him at, re-read when the window changes (a phone turned
      on its side is a different screen). */
-  const drawScale = fitGhostScale(drawn, scale, viewportWidth);
+  const drawScale = fitMascotScale(drawn, scale, viewportWidth);
   /* Where the bubble starts out. The loop takes it over on the next frame, off
      whatever clip is actually drawn. */
-  const lift = ghostBubbleLift(drawn, spec?.clip ?? visualRef.current.clip, drawScale);
+  const lift = mascotBubbleLift(drawn, spec?.clip ?? visualRef.current.clip, drawScale);
   /* Sized off the character rather than a fixed 16px: the same ellipse under a
      37px star and a 22px dog reads as a puddle under one and a smudge under the
      other. Taken from the idle clip so it holds still while he moves. */
-  const shadowWidth = Math.round(ghostClipBounds(drawn, drawn.idle).w * 0.7);
+  const shadowWidth = Math.round(mascotClipBounds(drawn, drawn.idle).w * 0.7);
   return (
     <>
-      {spec?.effect ? <GhostEffectLayer key={playing?.id} effect={spec.effect} /> : null}
-      {spec?.caption ? <GhostCaption key={`caption-${playing?.id}`} text={spec.caption} /> : null}
+      {spec?.effect ? <MascotEffectLayer key={playing?.id} effect={spec.effect} /> : null}
+      {spec?.caption ? <MascotCaption key={`caption-${playing?.id}`} text={spec.caption} /> : null}
       {/* Absolute, not fixed: he stands in the page, so he stays next to
           whatever he was put beside while the visitor scrolls. */}
       <div ref={containerRef} className="pointer-events-none absolute left-0 top-0 z-[200] will-change-transform">
         <div className="relative">
-          {saying ? <GhostBubble key={saying.id} containerRef={bubbleRef} text={saying.text} lift={lift} /> : null}
+          {saying ? <MascotBubble key={saying.id} containerRef={bubbleRef} text={saying.text} lift={lift} /> : null}
           {answering && onSay ? (
-            <GhostReplyBox
+            <MascotReplyBox
               name={drawn.name}
               onClose={() => setAnswering(false)}
               onSend={(text) => {
@@ -262,7 +262,7 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
               }}
             />
           ) : null}
-          {answered ? <GhostAnsweredBubble key={answered.id} text={answered.text} onDone={() => setAnswered(null)} /> : null}
+          {answered ? <MascotAnsweredBubble key={answered.id} text={answered.text} onDone={() => setAnswered(null)} /> : null}
           {/* Grounds him on the page instead of leaving him floating. */}
           <div
             aria-hidden
@@ -282,7 +282,7 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
             aria-label={onSay ? undefined : drawn.name}
             aria-hidden={onSay ? true : undefined}
             className="pointer-events-none absolute origin-top-left [image-rendering:pixelated]"
-            style={{ backgroundImage: `url(${ghostAtlasUrl(drawn)})`, backgroundRepeat: "no-repeat" }}
+            style={{ backgroundImage: `url(${mascotAtlasUrl(drawn)})`, backgroundRepeat: "no-repeat" }}
           />
           {/* The atlas frame is mostly transparent padding. Keep interaction on
               a separate rectangle matching the current clip's visible pixels
@@ -308,20 +308,20 @@ export function GhostSprite({ visualRef, character, speech, action, scale, onSay
 /* One atlas frame, for surfaces that place a character themselves (the control
    panel's stage and its picker). Same anchor rules as the overlay, so what the
    owner aims at is where he lands on the visitor's screen. */
-export function GhostAtlasFrame({
+export function MascotAtlasFrame({
   character,
   clip,
   frame,
   scale,
   flip = false,
 }: {
-  character: GhostCharacter;
+  character: MascotCharacter;
   clip: string;
   frame: number;
   scale: number;
   flip?: boolean;
 }) {
-  const definition = ghostClip(character, clip);
+  const definition = mascotClip(character, clip);
   return (
     <div
       aria-hidden
@@ -329,9 +329,9 @@ export function GhostAtlasFrame({
       style={{
         width: character.frame.w * scale,
         height: character.frame.h * scale,
-        backgroundImage: `url(${ghostAtlasUrl(character)})`,
+        backgroundImage: `url(${mascotAtlasUrl(character)})`,
         backgroundRepeat: "no-repeat",
-        backgroundSize: `${character.frame.w * ghostAtlasCols(character) * scale}px ${character.frame.h * ghostAtlasRows(character) * scale}px`,
+        backgroundSize: `${character.frame.w * mascotAtlasCols(character) * scale}px ${character.frame.h * mascotAtlasRows(character) * scale}px`,
         backgroundPosition: `${-(frame % definition.frames) * character.frame.w * scale}px ${-definition.row * character.frame.h * scale}px`,
         transform: `${flip ? "scaleX(-1) " : ""}translate(${-character.anchor.x * scale}px, ${-character.anchor.y * scale}px)`,
       }}
@@ -341,7 +341,7 @@ export function GhostAtlasFrame({
 
 const TYPE_MS_PER_CHAR = 32;
 
-function GhostBubble({ text, lift, containerRef }: {
+function MascotBubble({ text, lift, containerRef }: {
   text: string;
   lift: number;
   /* The draw loop keeps this in step with the clip he is in; the lift above is
@@ -364,15 +364,15 @@ function GhostBubble({ text, lift, containerRef }: {
   }, [text]);
 
   useEffect(() => {
-    if (shown > 0) playGhostSpeechSfx(text[shown - 1] ?? "");
+    if (shown > 0) playMascotSpeechSfx(text[shown - 1] ?? "");
   }, [shown, text]);
 
   return (
     <div ref={containerRef} className="absolute left-1/2 w-max max-w-[min(320px,70vw)] -translate-x-1/2" style={{ bottom: lift }}>
-      <GhostBubbleBox>
+      <MascotBubbleBox>
         {text.slice(0, shown)}
         <span className="opacity-0">{text.slice(shown)}</span>
-      </GhostBubbleBox>
+      </MascotBubbleBox>
     </div>
   );
 }
@@ -380,7 +380,7 @@ function GhostBubble({ text, lift, containerRef }: {
 /* The box a line sits in, without any placement of its own. Exported so the
    control panel's stage can draw the same bubble the page draws instead of
    leaving the owner to guess at what everyone else is reading. */
-export function GhostBubbleBox({ children }: { children: ReactNode }) {
+export function MascotBubbleBox({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="rounded-md border-2 border-white bg-black px-3 py-2 text-left text-[13px] font-semibold leading-snug text-white">
@@ -394,7 +394,7 @@ export function GhostBubbleBox({ children }: { children: ReactNode }) {
 /* Answering him. The box is deliberately small and unstyled beyond the same
    black-and-white box his own lines use: it is a whisper to whoever is driving,
    not a chat feature. */
-function GhostReplyBox({ name, onSend, onClose }: { name: string; onSend: (text: string) => void; onClose: () => void }) {
+function MascotReplyBox({ name, onSend, onClose }: { name: string; onSend: (text: string) => void; onClose: () => void }) {
   const { t } = useLingui();
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -419,7 +419,7 @@ function GhostReplyBox({ name, onSend, onClose }: { name: string; onSend: (text:
           onBlur={() => {
             if (!text.trim()) onClose();
           }}
-          maxLength={GHOST_REPLY_MAX_LENGTH}
+          maxLength={MASCOT_REPLY_MAX_LENGTH}
           placeholder={t`say something back`}
           aria-label={t`Say something to ${name}`}
           className="w-[min(240px,55vw)] bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/40"
@@ -439,7 +439,7 @@ function GhostReplyBox({ name, onSend, onClose }: { name: string; onSend: (text:
   );
 }
 
-function GhostAnsweredBubble({ text, onDone }: { text: string; onDone: () => void }) {
+function MascotAnsweredBubble({ text, onDone }: { text: string; onDone: () => void }) {
   useEffect(() => {
     const timer = window.setTimeout(onDone, 3_000);
     return () => window.clearTimeout(timer);
@@ -453,10 +453,10 @@ function GhostAnsweredBubble({ text, onDone }: { text: string; onDone: () => voi
   );
 }
 
-function GhostCaption({ text }: { text: string }) {
+function MascotCaption({ text }: { text: string }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-10 z-[201] flex justify-center px-4">
-      <div className="ghost-caption rounded-md border-2 border-white bg-black px-4 py-2 text-[13px] font-semibold text-white">
+      <div className="mascot-caption rounded-md border-2 border-white bg-black px-4 py-2 text-[13px] font-semibold text-white">
         {text}
       </div>
     </div>
@@ -469,7 +469,7 @@ const EFFECT_GLYPHS: Record<"sparkles" | "hearts" | "notes", string[]> = {
   notes: ["♪", "♫"],
 };
 
-function GhostEffectLayer({ effect }: { effect: Exclude<GhostEffect, null> }) {
+function MascotEffectLayer({ effect }: { effect: Exclude<MascotEffect, null> }) {
   const particles = useMemo(() => {
     if (effect === "shake" || effect === "dark") return [];
     const glyphs = EFFECT_GLYPHS[effect];
@@ -486,16 +486,16 @@ function GhostEffectLayer({ effect }: { effect: Exclude<GhostEffect, null> }) {
   useEffect(() => {
     if (effect !== "shake") return;
     const root = document.documentElement;
-    root.classList.add("ghost-shake");
-    const timer = window.setTimeout(() => root.classList.remove("ghost-shake"), 600);
+    root.classList.add("mascot-shake");
+    const timer = window.setTimeout(() => root.classList.remove("mascot-shake"), 600);
     return () => {
       window.clearTimeout(timer);
-      root.classList.remove("ghost-shake");
+      root.classList.remove("mascot-shake");
     };
   }, [effect]);
 
   if (effect === "shake") return null;
-  if (effect === "dark") return <div className="ghost-dark pointer-events-none fixed inset-0 z-[199] bg-[#160d24]" />;
+  if (effect === "dark") return <div className="mascot-dark pointer-events-none fixed inset-0 z-[199] bg-[#160d24]" />;
 
   const tint = effect === "hearts" ? "text-[#ff5fb0]" : effect === "notes" ? "text-[#8ef0c0]" : "text-[#c9ffdf]";
   return (
@@ -503,7 +503,7 @@ function GhostEffectLayer({ effect }: { effect: Exclude<GhostEffect, null> }) {
       {particles.map((particle) => (
         <span
           key={particle.id}
-          className={`ghost-float absolute bottom-0 ${tint}`}
+          className={`mascot-float absolute bottom-0 ${tint}`}
           style={{
             left: `${particle.left}%`,
             fontSize: particle.size,

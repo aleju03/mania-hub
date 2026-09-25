@@ -7,7 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
    drawn on a stranger's screen would be whatever the query string said, so the
    name travels as a short-lived ticket minted here from the osu!-verified
    session and signed with the token only the two servers hold (the same scheme
-   the ghost overlay uses for viewer identity). */
+   the mascot overlay uses for viewer identity). */
 
 const SPECTATOR_TICKET_TTL_MS = 12 * 60 * 60_000;
 

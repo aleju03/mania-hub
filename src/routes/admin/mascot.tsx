@@ -1,45 +1,46 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { ArrowDown, Eye, EyeOff, Loader2, MessageCircle, Pin, PinOff, Plug, PlugZap, Users, Volume2, VolumeX, X } from "lucide-react";
-import { GHOST_PREVIEW_HASH } from "../../components/ghost/GhostLayer";
-import { GhostAtlasFrame, GhostBubbleBox } from "../../components/ghost/GhostSprite";
+import { MASCOT_PREVIEW_HASH } from "../../components/mascot/MascotLayer";
+import { MascotAtlasFrame, MascotBubbleBox } from "../../components/mascot/MascotSprite";
+import { Avatar } from "../../components/ui/Avatar";
 import { useAuth } from "../../lib/auth-context";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
-import { getGhostControlTicket } from "../../lib/ghost";
-import { playGhostActionSfx, preloadGhostSfx, setGhostSfxMuted } from "../../lib/ghost-sfx";
+import { getMascotControlTicket } from "../../lib/mascot";
+import { playMascotActionSfx, preloadMascotSfx, setMascotSfxMuted } from "../../lib/mascot-sfx";
 import {
-  DEFAULT_GHOST_CHARACTER,
-  EMPTY_GHOST_PRESENCE,
-  GHOST_CHARACTER_LIST,
-  directionalGhostFrame,
-  findGhostAction,
-  findGhostPose,
-  fitGhostScale,
-  isGhostGait,
-  isLoopingGhostPose,
-  followGhostCamera,
-  ghostCharacter,
-  ghostClip,
-  ghostClipBounds,
-  ghostMoveStep,
-  ghostBubbleLift,
-  ghostSpeechDurationMs,
-  normalizeGhostRoute,
-  shouldFlipGhostClip,
+  DEFAULT_MASCOT_CHARACTER,
+  EMPTY_MASCOT_PRESENCE,
+  MASCOT_CHARACTER_LIST,
+  directionalMascotFrame,
+  findMascotAction,
+  findMascotPose,
+  fitMascotScale,
+  isMascotGait,
+  isLoopingMascotPose,
+  followMascotCamera,
+  mascotCharacter,
+  mascotClip,
+  mascotClipBounds,
+  mascotMoveStep,
+  mascotBubbleLift,
+  mascotSpeechDurationMs,
+  normalizeMascotRoute,
+  shouldFlipMascotClip,
   walkClipFor,
-  wrapGhostX,
-  type GhostAnchor,
-  type GhostAudience,
-  type GhostCharacter,
-  type GhostFacing,
-  type GhostPresence,
-  type GhostPresenceViewer,
-  type GhostReply,
-  type GhostVisual,
-} from "../../lib/ghost-shared";
+  wrapMascotX,
+  type MascotAnchor,
+  type MascotAudience,
+  type MascotCharacter,
+  type MascotFacing,
+  type MascotPresence,
+  type MascotPresenceViewer,
+  type MascotReply,
+  type MascotVisual,
+} from "../../lib/mascot-shared";
 import { getLiveBackendUrl } from "../../lib/live-backend";
 
-/* The ghost control room.
+/* The mascot control room.
 
    The browser drives the backend directly here, with a short-lived ticket
    instead of the admin token: movement goes out ~15 times a second and a hop
@@ -48,7 +49,7 @@ import { getLiveBackendUrl } from "../../lib/live-backend";
    document), so one stage drives every screen size watching, and the stage is a
    camera over the framed page rather than the whole of it. */
 
-export const Route = createFileRoute("/admin/ghost")({
+export const Route = createFileRoute("/admin/mascot")({
   head: () => ({
     meta: [
       { title: "Ralsei - admin" },
@@ -61,14 +62,14 @@ export const Route = createFileRoute("/admin/ghost")({
     }
     return undefined as never;
   },
-  component: GhostAdminPage,
+  component: MascotAdminPage,
 });
 
 /* The control panel is a page like any other, so the tab you drive from shows up
    in the roster as a viewer on it. Staging against it frames the panel inside
    itself: a second stage, a second marker, and a second of everything below.
    Nothing automatic aims there, and it never gets a preview. */
-const GHOST_PANEL_ROUTE = "/admin/ghost";
+const MASCOT_PANEL_ROUTE = "/admin/mascot";
 const SEND_INTERVAL_MS = 70;
 const KEEPALIVE_MS = 4_000;
 const PRESENCE_POLL_MS = 3_000;
@@ -103,7 +104,7 @@ const STICK_RADIUS = 46;
 const STICK_DEADZONE = 0.22;
 const STICK_SPRINT = 0.82;
 
-const KEY_DIRECTIONS: Record<string, GhostFacing> = {
+const KEY_DIRECTIONS: Record<string, MascotFacing> = {
   w: "up",
   a: "left",
   s: "down",
@@ -117,7 +118,7 @@ const KEY_DIRECTIONS: Record<string, GhostFacing> = {
 interface DriveState {
   x: number;
   y: number;
-  facing: GhostFacing;
+  facing: MascotFacing;
   moving: boolean;
 }
 
@@ -134,27 +135,27 @@ interface ChatLine {
   text: string;
 }
 
-function GhostAdminPage() {
+function MascotAdminPage() {
   const auth = useAuth();
   const base = getLiveBackendUrl();
   const [ticket, setTicket] = useState<string | null>(null);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [routeInput, setRouteInput] = useState("/");
-  const [audience, setAudience] = useState<GhostAudience>({ mode: "none" });
+  const [audience, setAudience] = useState<MascotAudience>({ mode: "none" });
   /* Who is being driven. Poses, actions and the size range all come off the
      roster entry, so switching swaps the whole control set below. */
-  const [characterId, setCharacterId] = useState<string>(DEFAULT_GHOST_CHARACTER);
-  const character = ghostCharacter(characterId);
+  const [characterId, setCharacterId] = useState<string>(DEFAULT_MASCOT_CHARACTER);
+  const character = mascotCharacter(characterId);
   const [pose, setPose] = useState<string>("auto");
   /* What his position is measured against on the far side. Standing in the page
      is the default and the right one when aiming at a person; sticking to the
      screen is what makes a placement mean the same thing to a phone and a
      desktop looking at the same page. */
-  const [anchor, setAnchor] = useState<GhostAnchor>("page");
-  const [scale, setScale] = useState(ghostCharacter(DEFAULT_GHOST_CHARACTER).scale.default);
+  const [anchor, setAnchor] = useState<MascotAnchor>("page");
+  const [scale, setScale] = useState(mascotCharacter(DEFAULT_MASCOT_CHARACTER).scale.default);
   const [message, setMessage] = useState("");
-  const [presence, setPresence] = useState<GhostPresence>(EMPTY_GHOST_PRESENCE);
+  const [presence, setPresence] = useState<MascotPresence>(EMPTY_MASCOT_PRESENCE);
   const [preview, setPreview] = useState(true);
   /* Local only: whether the panel plays back what it fires. The audience hears
      it either way. */
@@ -195,7 +196,7 @@ function GhostAdminPage() {
   /* Only the parts of the drive state that change what is rendered: position
      moves through a ref so walking does not re-render the page 60 times a
      second. */
-  const [look, setLook] = useState<{ facing: GhostFacing; moving: boolean }>({ facing: "down", moving: false });
+  const [look, setLook] = useState<{ facing: MascotFacing; moving: boolean }>({ facing: "down", moving: false });
   /* On a phone the panel is one column with a thumb stick under the stage: the
      cast, the roster and the conversation are each a tab rather than three
      screens of scrolling, and every control that was a hover is a tap. */
@@ -221,8 +222,8 @@ function GhostAdminPage() {
   /* The stick writes here rather than into state: at 60 frames a second a
      rendered stick would be the one part of this page that stutters. */
   const stickRef = useRef({ dx: 0, dy: 0, sprint: false });
-  const speechRef = useRef<GhostVisual["speech"]>(null);
-  const actionRef = useRef<GhostVisual["action"]>(null);
+  const speechRef = useRef<MascotVisual["speech"]>(null);
+  const actionRef = useRef<MascotVisual["action"]>(null);
   const eventIdRef = useRef(1);
   const lastSentRef = useRef(0);
   const dirtyRef = useRef(true);
@@ -239,29 +240,30 @@ function GhostAdminPage() {
   /* Loop-visible copy of everything the send payload needs, so the rAF loop
      never has to be torn down and rebuilt on a settings change. */
   const settingsRef = useRef({ route: "/", audience, character, pose, scale, anchor, connected, ticket });
-  settingsRef.current = { route: normalizeGhostRoute(routeInput) ?? "/", audience, character, pose, scale, anchor, connected, ticket };
+  settingsRef.current = { route: normalizeMascotRoute(routeInput) ?? "/", audience, character, pose, scale, anchor, connected, ticket };
 
-  const route = normalizeGhostRoute(routeInput);
+  const route = normalizeMascotRoute(routeInput);
   /* Their newest tab that is not the control panel, so testing on yourself
      stages against the page you are actually reading rather than this one. */
   const targetViewer = audience.mode === "user"
-    ? presence.viewers.find((viewer) => viewer.userId === audience.userId && viewer.route !== GHOST_PANEL_ROUTE)
+    ? presence.viewers.find((viewer) => viewer.userId === audience.userId && viewer.route !== MASCOT_PANEL_ROUTE)
       ?? presence.viewers.find((viewer) => viewer.userId === audience.userId)
       ?? null
     : null;
   /* The roster only names signed-in viewers; everyone else is a count. */
   const routeHere = route ? presence.routes.find((entry) => entry.route === route) ?? null : null;
-  /* One row per matched person, their open tabs gathered under them, so the
-     answer reads as "yes, and here is where" rather than one row per tab. */
+  /* One tile per person, their open tabs gathered under them, newest arrival
+     first. The search only narrows the same grid. */
   const trimmedViewerQuery = viewerQuery.trim();
-  const foundViewers = new Map<number, GhostPresenceViewer[]>();
-  if (trimmedViewerQuery) {
+  const people = new Map<number, MascotPresenceViewer[]>();
+  {
     const needle = trimmedViewerQuery.toLowerCase();
     for (const viewer of presence.viewers) {
-      if (viewer.userId == null || !viewer.username?.toLowerCase().includes(needle)) continue;
-      const tabs = foundViewers.get(viewer.userId);
+      if (viewer.userId == null) continue;
+      if (needle && !viewer.username?.toLowerCase().includes(needle)) continue;
+      const tabs = people.get(viewer.userId);
       if (tabs) tabs.push(viewer);
-      else foundViewers.set(viewer.userId, [viewer]);
+      else people.set(viewer.userId, [viewer]);
     }
   }
   const ownViewport = useOwnViewport();
@@ -271,7 +273,7 @@ function GhostAdminPage() {
      than reshaping itself around whoever last landed on the page. */
   const viewport = targetViewer?.viewport ?? ownViewport;
   const previewScale = stageWidth > 0 ? stageWidth / viewport.w : 0;
-  const canPreview = Boolean(previewRoute) && !previewRoute!.endsWith("/*") && previewRoute !== GHOST_PANEL_ROUTE;
+  const canPreview = Boolean(previewRoute) && !previewRoute!.endsWith("/*") && previewRoute !== MASCOT_PANEL_ROUTE;
   /* Without a framed page to measure, the page is just one screen tall. */
   const pageHeightPx = pageHeight > 0 ? Math.max(pageHeight, viewport.h) : viewport.h;
   pageMetricsRef.current = { viewW: viewport.w, viewH: viewport.h, pageH: pageHeightPx };
@@ -280,10 +282,10 @@ function GhostAdminPage() {
     let cancelled = false;
     const mint = async () => {
       try {
-        const issued = await getGhostControlTicket();
+        const issued = await getMascotControlTicket();
         if (cancelled) return;
         if (!issued) {
-          setTicketError("The live backend is not configured for ghost control.");
+          setTicketError("The live backend is not configured for mascot control.");
           return;
         }
         setTicket(issued.ticket);
@@ -320,7 +322,7 @@ function GhostAdminPage() {
       return;
     }
     const targetPx = driveRef.current.y * pageH;
-    cameraRef.current = followGhostCamera(cameraRef.current, targetPx, viewH, pageH);
+    cameraRef.current = followMascotCamera(cameraRef.current, targetPx, viewH, pageH);
     marker.style.top = `${(targetPx - cameraRef.current) * scale}px`;
     frameRef.current?.contentWindow?.scrollTo({ top: cameraRef.current, behavior: "instant" });
   }, []);
@@ -328,7 +330,7 @@ function GhostAdminPage() {
   useEffect(placeMarker, [placeMarker, anchor, connected, preview, stageWidth, pageHeight, viewport.w, viewport.h]);
 
   useEffect(() => {
-    preloadGhostSfx();
+    preloadMascotSfx();
   }, []);
 
   useEffect(() => {
@@ -336,7 +338,7 @@ function GhostAdminPage() {
   }, [composing]);
 
   useEffect(() => {
-    setGhostSfxMuted(!sound);
+    setMascotSfxMuted(!sound);
   }, [sound]);
 
   useEffect(() => {
@@ -399,14 +401,14 @@ function GhostAdminPage() {
     lastEndRef.current = settled.then(() => post(route ? { op: "end", route } : { op: "end" }));
   }, [post]);
 
-  const buildVisual = useCallback((): GhostVisual => {
+  const buildVisual = useCallback((): MascotVisual => {
     const state = driveRef.current;
     const settings = settingsRef.current;
-    const posed = findGhostPose(settings.character, settings.pose)?.clip ?? null;
+    const posed = findMascotPose(settings.character, settings.pose)?.clip ?? null;
     /* A held pose stops the walk cycle, except where the pose is itself a way
        of walking: the dog on stilts takes a stride per step and stands still
        between them, rather than marching on the spot. */
-    const striding = posed != null && isGhostGait(settings.character, posed);
+    const striding = posed != null && isMascotGait(settings.character, posed);
     return {
       x: state.x,
       y: state.y,
@@ -445,7 +447,7 @@ function GhostAdminPage() {
     void request.then((response) => {
       inflightPatchesRef.current.delete(request);
       if (!response?.ok || extra?.withViewers !== true) return;
-      void response.json().then((payload: { presence?: GhostPresence }) => {
+      void response.json().then((payload: { presence?: MascotPresence }) => {
         if (payload.presence) setPresence(payload.presence);
       }).catch(() => undefined);
     });
@@ -481,7 +483,7 @@ function GhostAdminPage() {
       const state = driveRef.current;
       if (moving) {
         const page = pageMetricsRef.current;
-        const step = ghostMoveStep({ dx, dy }, {
+        const step = mascotMoveStep({ dx, dy }, {
           sprinting,
           dt,
           viewWidth: page.viewW,
@@ -489,12 +491,12 @@ function GhostAdminPage() {
           pageHeight: settingsRef.current.anchor === "screen" ? page.viewH : page.pageH,
         });
         // Sideways he wraps; up and down he stops at the ends of the page.
-        const nextX = wrapGhostX(state.x + step.dx);
+        const nextX = wrapMascotX(state.x + step.dx);
         const nextY = clamp01(state.y + step.dy);
         /* The longer axis wins the facing, so an analog push that is mostly
            sideways keeps the side view instead of flickering between two clips,
            and a key-held diagonal (both axes equal) still reads as sideways. */
-        const facing: GhostFacing = Math.abs(dx) >= Math.abs(dy)
+        const facing: MascotFacing = Math.abs(dx) >= Math.abs(dy)
           ? (dx < 0 ? "left" : "right")
           : dy < 0 ? "up" : "down";
         driveRef.current = { x: nextX, y: nextY, facing, moving: true };
@@ -517,12 +519,12 @@ function GhostAdminPage() {
   /* Swapping who is on the page. Everything character-shaped moves together and
      lands in settingsRef before the push, because state set here is not
      readable until the next render and the tick goes out now. */
-  const pickCharacter = useCallback((next: GhostCharacter) => {
+  const pickCharacter = useCallback((next: MascotCharacter) => {
     const current = settingsRef.current;
     if (next.id === current.character.id) return;
     scaleMemoryRef.current[current.character.id] = current.scale;
     // A pose only survives the switch if the new character has one by that name.
-    const keptPose = findGhostPose(next, current.pose) ? current.pose : "auto";
+    const keptPose = findMascotPose(next, current.pose) ? current.pose : "auto";
     const nextScale = scaleMemoryRef.current[next.id] ?? next.scale.default;
     setCharacterId(next.id);
     setPose(keptPose);
@@ -554,7 +556,7 @@ function GhostAdminPage() {
       }
       /* Number keys swap character, in the order the picker shows them. */
       if (key >= "1" && key <= "9") {
-        const picked = GHOST_CHARACTER_LIST[Number(key) - 1];
+        const picked = MASCOT_CHARACTER_LIST[Number(key) - 1];
         if (picked) {
           event.preventDefault();
           pickCharacter(picked);
@@ -589,7 +591,7 @@ function GhostAdminPage() {
       try {
         const response = await fetch(`${base}/api/updates/presence?ticket=${encodeURIComponent(ticket)}`);
         if (!response.ok || cancelled) return;
-        const payload = await response.json() as GhostPresence;
+        const payload = await response.json() as MascotPresence;
         if (!cancelled && payload.routes) setPresence(payload);
       } catch {
         // A missed poll just means a stale roster for three seconds.
@@ -616,7 +618,7 @@ function GhostAdminPage() {
     const source = new EventSource(`${base}/api/updates/inbox?ticket=${encodeURIComponent(ticket)}`);
     source.addEventListener("reply", (event) => {
       try {
-        const reply = JSON.parse((event as MessageEvent).data) as GhostReply;
+        const reply = JSON.parse((event as MessageEvent).data) as MascotReply;
         pushChat({
           key: `r${reply.id}`,
           kind: "reply",
@@ -656,8 +658,8 @@ function GhostAdminPage() {
   useEffect(() => {
     if (!follow || audience.mode !== "user") return;
     // Never onto the panel: following yourself would land him inside it.
-    const viewer = presence.viewers.find((entry) => entry.userId === audience.userId && entry.route !== GHOST_PANEL_ROUTE);
-    const next = viewer ? normalizeGhostRoute(viewer.route) : null;
+    const viewer = presence.viewers.find((entry) => entry.userId === audience.userId && entry.route !== MASCOT_PANEL_ROUTE);
+    const next = viewer ? normalizeMascotRoute(viewer.route) : null;
     if (!next || next === settingsRef.current.route) return;
     setRouteInput(next);
     settingsRef.current = { ...settingsRef.current, route: next };
@@ -670,7 +672,7 @@ function GhostAdminPage() {
      is cleared, which is what a viewer arriving later gets shown. */
   useEffect(() => {
     if (!bubble) return;
-    const timer = window.setTimeout(() => setBubble(null), ghostSpeechDurationMs(bubble.text));
+    const timer = window.setTimeout(() => setBubble(null), mascotSpeechDurationMs(bubble.text));
     return () => window.clearTimeout(timer);
   }, [bubble]);
 
@@ -749,7 +751,7 @@ function GhostAdminPage() {
     dirtyRef.current = true;
     sendNow();
     /* The same cue the audience gets, so firing one is not guesswork. */
-    playGhostActionSfx(kind);
+    playMascotActionSfx(kind);
     pushChat({
       key: `a${eventIdRef.current}`,
       kind: "act",
@@ -757,14 +759,14 @@ function GhostAdminPage() {
       route: settingsRef.current.route,
       userId: null,
       name: settingsRef.current.character.name,
-      text: findGhostAction(settingsRef.current.character, kind)?.label ?? kind,
+      text: findMascotAction(settingsRef.current.character, kind)?.label ?? kind,
     });
   };
 
   /* Audience and route move together when you pick a person off the roster:
      both have to be in settingsRef before the push, because state set here is
      not readable until the next render. */
-  const aim = (next: GhostAudience, nextRoute?: string) => {
+  const aim = (next: MascotAudience, nextRoute?: string) => {
     setAudience(next);
     setPicking(false);
     setArmEveryone(false);
@@ -772,7 +774,7 @@ function GhostAdminPage() {
     settingsRef.current = {
       ...settingsRef.current,
       audience: next,
-      route: (nextRoute ? normalizeGhostRoute(nextRoute) : null) ?? settingsRef.current.route,
+      route: (nextRoute ? normalizeMascotRoute(nextRoute) : null) ?? settingsRef.current.route,
     };
     dirtyRef.current = true;
     sendNow();
@@ -802,21 +804,21 @@ function GhostAdminPage() {
     sendNow();
   };
 
-  const poseClip = findGhostPose(character, pose)?.clip ?? null;
+  const poseClip = findMascotPose(character, pose)?.clip ?? null;
   const stageClip = poseClip ?? walkClipFor(character, look.facing);
-  const sided = directionalGhostFrame(character, stageClip, look.facing);
+  const sided = directionalMascotFrame(character, stageClip, look.facing);
   /* Same rule the overlay draws by: a pose animates on its own only if it
      is not a gait, and a gait moves when he does. */
   const animated = useAnimatedFrame(
     character,
     stageClip,
-    sided == null && (look.moving || (poseClip != null && isLoopingGhostPose(character, poseClip))),
+    sided == null && (look.moving || (poseClip != null && isLoopingMascotPose(character, poseClip))),
   );
   const frame = sided ?? animated;
   /* Same on-screen size he has for the viewer, shrunk by whatever the preview is
      shrunk by, and the bubble sits above his head off the same number. It keeps
      a floor so a heavily shrunk stage still shows a readable line. */
-  const stageSpriteScale = Math.max(0.75, fitGhostScale(character, scale, viewport.w) * (previewScale || 0.6));
+  const stageSpriteScale = Math.max(0.75, fitMascotScale(character, scale, viewport.w) * (previewScale || 0.6));
   const bubbleScale = Math.max(0.6, previewScale || 0.6);
   /* The row under the stage is hover-sized text on a desktop and a row of tap
      targets on a phone, where there is no hover to explain a bare icon. */
@@ -864,10 +866,10 @@ function GhostAdminPage() {
                 if (event.key === "Enter" && !connected) connect();
               }}
               placeholder="/player/jakads"
-              list="ghost-live-routes"
+              list="mascot-live-routes"
               className="min-w-[220px] flex-1 rounded-md bg-osu-b3/60 px-3 py-2 text-sm text-white outline-none placeholder:text-osu-f1/60 max-lg:text-base"
             />
-            <datalist id="ghost-live-routes">
+            <datalist id="mascot-live-routes">
               {presence.routes.map((entry) => <option key={entry.route} value={entry.route} />)}
             </datalist>
             <button
@@ -902,7 +904,7 @@ function GhostAdminPage() {
                 <iframe
                   key={previewRoute}
                   ref={frameRef}
-                  src={`${previewRoute}${GHOST_PREVIEW_HASH}`}
+                  src={`${previewRoute}${MASCOT_PREVIEW_HASH}`}
                   title="Page preview"
                   tabIndex={-1}
                   scrolling="no"
@@ -920,7 +922,7 @@ function GhostAdminPage() {
                      readable size rather than scaled down with the preview. */
                   <div
                     className="absolute left-0 w-max -translate-x-1/2"
-                    style={{ bottom: ghostBubbleLift(character, stageClip, stageSpriteScale) }}
+                    style={{ bottom: mascotBubbleLift(character, stageClip, stageSpriteScale) }}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <div className="rounded-md border-2 border-white bg-black px-2 py-1.5">
@@ -954,20 +956,20 @@ function GhostAdminPage() {
                   <div
                     className="absolute left-0 w-max max-w-[320px]"
                     style={{
-                      bottom: ghostBubbleLift(character, stageClip, stageSpriteScale),
+                      bottom: mascotBubbleLift(character, stageClip, stageSpriteScale),
                       transform: `translateX(-50%) scale(${bubbleScale})`,
                       transformOrigin: "bottom center",
                     }}
                   >
-                    <GhostBubbleBox>{bubble.text}</GhostBubbleBox>
+                    <MascotBubbleBox>{bubble.text}</MascotBubbleBox>
                   </div>
                 ) : null}
-                <GhostAtlasFrame
+                <MascotAtlasFrame
                   character={character}
                   clip={stageClip}
                   frame={frame}
                   scale={stageSpriteScale}
-                  flip={shouldFlipGhostClip(character, stageClip, look.facing)}
+                  flip={shouldFlipMascotClip(character, stageClip, look.facing)}
                 />
               </div>
               {!connected ? (
@@ -1043,7 +1045,7 @@ function GhostAdminPage() {
               <span className={mobile ? "w-full" : undefined}>
                 {mobile
                   ? "Drag the stick to walk, push it to the rim to run, tap the stage to place him, Talk to say something"
-                  : `WASD to walk, shift to run, 1-${GHOST_CHARACTER_LIST.length} to swap character, click the stage to place him, enter or T to talk, esc to close it`}
+                  : `WASD to walk, shift to run, 1-${MASCOT_CHARACTER_LIST.length} to swap character, click the stage to place him, enter or T to talk, esc to close it`}
               </span>
               <button
                 type="button"
@@ -1077,7 +1079,7 @@ function GhostAdminPage() {
               <span>
                 {canPreview
                   ? `${viewport.w}x${viewport.h}`
-                  : previewRoute === GHOST_PANEL_ROUTE
+                  : previewRoute === MASCOT_PANEL_ROUTE
                     ? "this panel, no preview of itself"
                     : "wildcard route, no preview"}
                 {targetViewer ? ` (${targetViewer.username}'s screen)` : " (your screen)"}
@@ -1118,7 +1120,7 @@ function GhostAdminPage() {
               clicked blind. */}
           <div className={`mb-1 flex flex-wrap items-center gap-x-4 gap-y-2 ${hidden("cast")}`}>
             <div className="flex flex-wrap gap-1.5">
-              {GHOST_CHARACTER_LIST.map((entry) => (
+              {MASCOT_CHARACTER_LIST.map((entry) => (
                 <CharacterChip
                   key={entry.id}
                   character={entry}
@@ -1175,14 +1177,14 @@ function GhostAdminPage() {
             ) : null}
           </div>
           <div className={`mb-6 h-4 truncate text-[11px] text-osu-f1 ${hidden("cast")}`}>
-            {hint ?? `holding: ${findGhostPose(character, pose)?.label ?? "Walk"}`}
+            {hint ?? `holding: ${findMascotPose(character, pose)?.label ?? "Walk"}`}
           </div>
 
           <div className={hidden("who")}>
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-osu-f1">
-              Who is where
-              <span className="font-normal text-osu-f1/70">
-                {presence.totals.viewers} open across {presence.totals.routes} pages, {presence.totals.named} signed in
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+              <span className="text-sm font-semibold text-white">{presence.totals.named} signed in</span>
+              <span className="text-[11px] text-osu-f1">
+                {presence.totals.viewers - presence.totals.named} anon, {presence.totals.viewers} tabs across {presence.totals.routes} pages
               </span>
               <input
                 value={viewerQuery}
@@ -1190,106 +1192,87 @@ function GhostAdminPage() {
                 onKeyDown={(event) => {
                   if (event.key === "Escape") setViewerQuery("");
                 }}
-                placeholder="is someone here?"
-                className={`rounded-md bg-osu-b3/60 px-2.5 py-1.5 font-normal text-white outline-none placeholder:text-osu-f1/60 ${mobile ? "w-full" : "ml-auto w-44 py-1"}`}
+                placeholder="find someone"
+                className={`rounded-md bg-osu-b3/60 px-2.5 py-1.5 text-xs text-white outline-none placeholder:text-osu-f1/60 ${mobile ? "w-full" : "ml-auto w-48"}`}
               />
             </div>
-            {trimmedViewerQuery ? (
-              foundViewers.size === 0 ? (
-                <div className="text-xs text-osu-f1/70">
-                  Nobody signed in matches "{trimmedViewerQuery}".
-                  {presence.truncated ? " The roster is cut to the newest arrivals, so a quiet tab could still be out there." : ""}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  {[...foundViewers.values()].map((tabs) => (
-                    <div key={tabs[0].userId} className="flex flex-wrap items-center gap-2 rounded-md bg-osu-b4/60 px-3 py-2">
-                      <span className="text-sm font-semibold text-white">{tabs[0].username}</span>
-                      <span className="text-[11px] text-osu-f1">
-                        here now, {tabs.length === 1 ? "1 tab open" : `${tabs.length} tabs open`}
-                      </span>
-                      <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                        {tabs.map((viewer) => (
-                          <button
-                            key={viewer.id}
-                            type="button"
-                            onClick={() => aim({ mode: "user", userId: viewer.userId! }, viewer.route)}
-                            title={viewer.viewport ? `${viewer.viewport.w}x${viewer.viewport.h}` : "unknown viewport"}
-                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors max-lg:px-2.5 max-lg:py-1.5 max-lg:text-xs ${
-                              viewer.showing ? "bg-osu-pink/25 text-osu-pink-light" : "bg-osu-b3/60 text-white hover:bg-osu-b3"
-                            }`}
-                          >
-                            {viewer.route}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : presence.routes.length === 0 ? (
-              <div className="text-xs text-osu-f1/70">Nobody has a page open right now.</div>
+
+            {people.size === 0 ? (
+              <div className="py-2 text-xs text-osu-f1">
+                {trimmedViewerQuery
+                  ? `Nobody signed in matches "${trimmedViewerQuery}".${presence.truncated ? " The roster is cut to the newest arrivals, so a quiet tab could still be out there." : ""}`
+                  : "Nobody signed in has a page open right now."}
+              </div>
             ) : (
-              <div className="flex flex-col gap-1">
-                {(showAllRoutes ? presence.routes : presence.routes.slice(0, ROUTE_ROWS)).map((entry) => {
-                  /* Only the named viewers are listable, and only a few of them
-                     per row: a popular page can hold hundreds. */
-                  const named = presence.viewers.filter((viewer) => viewer.route === entry.route);
-                  const shown = named.slice(0, NAMES_PER_ROUTE);
-                  return (
-                    <div key={entry.route} className="flex flex-wrap items-center gap-2 rounded-md bg-osu-b4/60 px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setRouteInput(entry.route)}
-                        className="cursor-pointer text-sm font-semibold text-white transition-colors hover:text-osu-pink-light"
-                      >
-                        {entry.route}
-                      </button>
-                      <span className="text-[11px] text-osu-f1">
-                        {entry.viewers} open
-                        {entry.narrow > 0 ? `, ${entry.narrow} on phones` : ""}
-                        {entry.showing > 0 ? `, ${entry.showing} seeing him` : ""}
-                      </span>
-                      <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                        {shown.map((viewer) => (
-                          <button
-                            key={viewer.id}
-                            type="button"
-                            onClick={() => {
-                              if (viewer.userId != null) aim({ mode: "user", userId: viewer.userId }, viewer.route);
-                            }}
-                            title={viewer.viewport ? `${viewer.viewport.w}x${viewer.viewport.h}` : "unknown viewport"}
-                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors max-lg:px-2.5 max-lg:py-1.5 max-lg:text-xs ${
-                              viewer.showing ? "bg-osu-pink/25 text-osu-pink-light" : "bg-osu-b3/60 text-white hover:bg-osu-b3"
-                            }`}
-                          >
-                            {viewer.username}
-                          </button>
-                        ))}
-                        {named.length > shown.length ? (
-                          <span className="text-[11px] text-osu-f1">+{named.length - shown.length} signed in</span>
-                        ) : null}
-                        {entry.viewers > entry.named ? (
-                          <span className="text-[11px] text-osu-f1/60">{entry.viewers - entry.named} anon</span>
-                        ) : null}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-1.5">
+                {[...people.values()].map((tabs) => (
+                  <PersonTile
+                    key={tabs[0].userId}
+                    tabs={tabs}
+                    targeted={audience.mode === "user" && audience.userId === tabs[0].userId}
+                    onAim={(viewer) => aim({ mode: "user", userId: viewer.userId! }, viewer.route)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {presence.routes.length > 0 && !trimmedViewerQuery ? (
+              <div className="mt-5 border-t border-white/[0.07] pt-3">
+                <div className="mb-1.5 text-[11px] font-semibold text-osu-f1">Pages</div>
+                <div className="flex flex-col">
+                  {(showAllRoutes ? presence.routes : presence.routes.slice(0, ROUTE_ROWS)).map((entry) => {
+                    const named = presence.viewers.filter((viewer) => viewer.route === entry.route);
+                    const shown = named.slice(0, NAMES_PER_ROUTE);
+                    return (
+                      <div key={entry.route} className="flex items-center gap-3 rounded px-1 py-1.5 hover:bg-osu-b4/60">
+                        <button
+                          type="button"
+                          onClick={() => setRouteInput(entry.route)}
+                          title="stage on this page"
+                          className="min-w-0 cursor-pointer truncate text-left text-sm font-semibold text-white transition-colors hover:text-osu-pink-light"
+                        >
+                          {entry.route}
+                        </button>
+                        <span className="shrink-0 text-[11px] tabular-nums text-osu-f1">
+                          {entry.viewers} open
+                          {entry.viewers > entry.named ? `, ${entry.viewers - entry.named} anon` : ""}
+                          {entry.narrow > 0 ? `, ${entry.narrow} on phones` : ""}
+                          {entry.showing > 0 ? `, ${entry.showing} seeing him` : ""}
+                        </span>
+                        <div className="ml-auto flex shrink-0 items-center -space-x-1.5">
+                          {shown.map((viewer) => (
+                            <button
+                              key={viewer.id}
+                              type="button"
+                              onClick={() => aim({ mode: "user", userId: viewer.userId! }, viewer.route)}
+                              title={viewer.username ?? undefined}
+                              className="cursor-pointer rounded-full ring-2 ring-osu-b5 transition-transform hover:z-10 hover:scale-110"
+                            >
+                              <Avatar userId={viewer.userId} size={22} />
+                            </button>
+                          ))}
+                          {named.length > shown.length ? (
+                            <span className="pl-3 text-[11px] text-osu-f1">+{named.length - shown.length}</span>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
                 {presence.routes.length > ROUTE_ROWS ? (
                   <button
                     type="button"
                     onClick={() => setShowAllRoutes((value) => !value)}
-                    className="cursor-pointer self-start px-1 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-white"
+                    className="mt-1 cursor-pointer px-1 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-white"
                   >
                     {showAllRoutes ? "show fewer pages" : `show all ${presence.routes.length} pages`}
                   </button>
                 ) : null}
-                {presence.truncated ? (
-                  <div className="text-[11px] text-osu-f1/60">Busiest pages and newest arrivals only; the rest are counted, not listed.</div>
-                ) : null}
               </div>
-            )}
+            ) : null}
+            {presence.truncated ? (
+              <div className="mt-2 text-[11px] text-osu-f1">Busiest pages and newest arrivals only; the rest are counted, not listed.</div>
+            ) : null}
           </div>
         </div>
 
@@ -1467,7 +1450,7 @@ function ChatRow({ line, activeRoute, onAim }: {
       ) : (
         <>
           {line.kind === "said" ? (
-            <span className="font-semibold text-osu-pink-light">{line.name ?? "Ghost"}</span>
+            <span className="font-semibold text-osu-pink-light">{line.name ?? "Mascot"}</span>
           ) : (
             <button
               type="button"
@@ -1491,6 +1474,62 @@ function ChatRow({ line, activeRoute, onAim }: {
   );
 }
 
+/* One person online. Clicking them aims at their newest tab that is not this
+   panel; a second tab gets its own line so it can be picked on purpose. The
+   avatar ring is pink while he is on their screen. */
+function PersonTile({ tabs, targeted, onAim }: {
+  tabs: MascotPresenceViewer[];
+  targeted: boolean;
+  onAim: (viewer: MascotPresenceViewer) => void;
+}) {
+  const primary = tabs.find((viewer) => viewer.route !== MASCOT_PANEL_ROUTE) ?? tabs[0];
+  const others = tabs.filter((viewer) => viewer !== primary);
+  const showing = tabs.some((viewer) => viewer.showing);
+  const since = Math.min(...tabs.map((viewer) => viewer.connectedAt));
+  return (
+    <div className={`flex flex-col rounded-md px-2 py-2 transition-colors ${targeted ? "bg-osu-pink/20" : "bg-osu-b4/60 hover:bg-osu-b4"}`}>
+      <button
+        type="button"
+        onClick={() => onAim(primary)}
+        title={primary.viewport ? `${primary.viewport.w}x${primary.viewport.h}` : "unknown viewport"}
+        className="flex min-w-0 cursor-pointer items-center gap-2.5 text-left"
+      >
+        <span className={`shrink-0 rounded-full ring-2 ${showing ? "ring-osu-pink" : "ring-transparent"}`}>
+          <Avatar userId={primary.userId} size={40} />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-semibold text-white">{primary.username}</span>
+          <span className="truncate text-[11px] text-osu-f1">{primary.route}</span>
+          <span className="text-[11px] tabular-nums text-osu-f1">{hereFor(since)}</span>
+        </span>
+      </button>
+      {others.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1 pl-[50px]">
+          {others.map((viewer) => (
+            <button
+              key={viewer.id}
+              type="button"
+              onClick={() => onAim(viewer)}
+              className={`max-w-full cursor-pointer truncate rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                viewer.showing ? "bg-osu-pink/25 text-osu-pink-light" : "bg-osu-b3/60 text-white hover:bg-osu-b3"
+              }`}
+            >
+              {viewer.route}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function hereFor(since: number): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - since) / 60_000));
+  if (minutes < 1) return "just arrived";
+  if (minutes < 60) return `${minutes}m here`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m here`;
+}
+
 /* Same person, same colour, every session. */
 function nameColor(name: string): string {
   let hash = 0;
@@ -1508,31 +1547,31 @@ function clamp01(value: number): number {
    different sizes (a 19px dog against a 43px Ralsei, and one pose 220px tall),
    so each clip is fitted to the box rather than drawn at its own scale: here the
    picture is the label, not the size. */
-export const GHOST_TILE = 46;
+export const MASCOT_TILE = 46;
 
 /* Where to park the frame so the clip's own drawing lands centred in the tile.
    The frame draws itself up and left of its anchor (the feet), which is why the
    anchor has to be taken back out of the offset rather than the box just being
    centred. Whole-number scales only, because a pixel sprite at 1.7x is a smeared
    pixel sprite; a clip too big to fit at 1x takes the exact fraction instead. */
-export function fitClipToTile(character: GhostCharacter, clip: string): { scale: number; left: number; top: number } {
-  const bounds = ghostClipBounds(character, clip);
-  const raw = Math.min(GHOST_TILE / bounds.w, GHOST_TILE / bounds.h);
+export function fitClipToTile(character: MascotCharacter, clip: string): { scale: number; left: number; top: number } {
+  const bounds = mascotClipBounds(character, clip);
+  const raw = Math.min(MASCOT_TILE / bounds.w, MASCOT_TILE / bounds.h);
   const scale = raw >= 1 ? Math.floor(raw) : raw;
   return {
     scale,
-    left: GHOST_TILE / 2 - (bounds.w * scale) / 2 + (character.anchor.x - bounds.x) * scale,
-    top: GHOST_TILE / 2 - (bounds.h * scale) / 2 + (character.anchor.y - bounds.y) * scale,
+    left: MASCOT_TILE / 2 - (bounds.w * scale) / 2 + (character.anchor.x - bounds.x) * scale,
+    top: MASCOT_TILE / 2 - (bounds.h * scale) / 2 + (character.anchor.y - bounds.y) * scale,
   };
 }
 
 /* One clip, drawn at rest inside its square. */
-function ClipArt({ character, clip }: { character: GhostCharacter; clip: string }) {
+function ClipArt({ character, clip }: { character: MascotCharacter; clip: string }) {
   const fit = fitClipToTile(character, clip);
   return (
-    <span className="relative block shrink-0 overflow-hidden" style={{ width: GHOST_TILE, height: GHOST_TILE }}>
+    <span className="relative block shrink-0 overflow-hidden" style={{ width: MASCOT_TILE, height: MASCOT_TILE }}>
       <span className="absolute block" style={{ left: fit.left, top: fit.top }}>
-        <GhostAtlasFrame character={character} clip={clip} frame={0} scale={fit.scale} />
+        <MascotAtlasFrame character={character} clip={clip} frame={0} scale={fit.scale} />
       </span>
     </span>
   );
@@ -1543,7 +1582,7 @@ function ClipArt({ character, clip }: { character: GhostCharacter; clip: string 
    share a clip (vanish is appear backwards) and firing the wrong one at somebody
    cannot be undone. Either way the line under the bar names what is hovered. */
 function ClipTile({ character, clip, label, caption, active = false, disabled = false, onClick, onHint }: {
-  character: GhostCharacter;
+  character: MascotCharacter;
   clip: string;
   label: string;
   caption?: boolean;
@@ -1577,7 +1616,7 @@ function ClipTile({ character, clip, label, caption, active = false, disabled = 
 /* Who to be. The same square with the name beside it, because three of them is a
    cast list rather than a palette. */
 function CharacterChip({ character, active, onClick, onHint }: {
-  character: GhostCharacter;
+  character: MascotCharacter;
   active: boolean;
   onClick: () => void;
   onHint: (label: string | null) => void;
@@ -1749,9 +1788,9 @@ function useOwnViewport(): { w: number; h: number } {
 
 /* Stage-only animation: the overlay runs its own rAF loop, this just keeps the
    preview from being a frozen frame. */
-function useAnimatedFrame(character: GhostCharacter, clip: string, animating: boolean): number {
+function useAnimatedFrame(character: MascotCharacter, clip: string, animating: boolean): number {
   const [frame, setFrame] = useState(0);
-  const fps = ghostClip(character, clip).fps;
+  const fps = mascotClip(character, clip).fps;
   useEffect(() => {
     if (!animating) {
       setFrame(0);
