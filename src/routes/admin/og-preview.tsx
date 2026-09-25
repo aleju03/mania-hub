@@ -21,6 +21,7 @@ type PresetKind =
   | "maps"
   | "maps-search"
   | "maps-collections"
+  | "snipes"
   | "farm-helper"
   | "packs"
   | "skins"
@@ -134,6 +135,16 @@ const PRESETS: Preset[] = [
     title: "Map collections",
     subtitle: "Browse curated osu!mania map collections grouped by pattern and star rating.",
     path: "/maps?tab=collections",
+  },
+  {
+    key: "snipes",
+    label: "Snipes",
+    kind: "snipes",
+    /* Mirrors the head() of /snipes. */
+    title: "Snipes - Costa Rica",
+    subtitle: "Recent osu!mania snipes in Costa Rica.",
+    path: "/snipes",
+    countryAware: true,
   },
   {
     key: "farm-helper",
@@ -392,7 +403,7 @@ function OgPreviewPage() {
       });
       return `/api/og?${params.toString()}`;
     }
-    if (kind === "home" || kind === "rankings") {
+    if (kind === "home" || kind === "rankings" || kind === "snipes") {
       const params = new URLSearchParams({
         kind,
         title,
@@ -674,7 +685,9 @@ function OgPreviewPage() {
                   ))}
                 </select>
                 <span className="text-[10px] text-osu-f1/70">
-                  endpoint fetches the top 5 of this country live
+                  {kind === "snipes"
+                    ? "the scope's newest #1 snipe from the snipes snapshot; a scope with none falls back to the country scoreboard"
+                    : "endpoint fetches the top 5 of this country live"}
                 </span>
               </div>
             ) : (

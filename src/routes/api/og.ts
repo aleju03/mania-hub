@@ -25,7 +25,7 @@ import {
 import { getServerLiveBackendUrl } from "../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
-import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
+import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import {
   getDisplayedAccuracy,
@@ -59,7 +59,7 @@ import {
   MANIACARD_W,
   type ManiaTierCardArt,
 } from "../../lib/maniacard-art";
-import type { OsuCovers, OsuScore, OsuUser } from "../../lib/types";
+import type { OsuCovers, OsuScore, OsuUser, SnipeEvent } from "../../lib/types";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -1838,6 +1838,9 @@ type PolaroidProps = {
   badge?: string;
   badgeColor?: string;
   variant?: "photo" | "flag";
+  /* 0..1: fades the frame toward the surface and the photo toward its dark
+     backing, so a card reads as set behind the others. */
+  dim?: number;
   key: string;
 };
 
@@ -1854,8 +1857,11 @@ function polaroid(props: PolaroidProps) {
     badge,
     badgeColor,
     variant = "photo",
+    dim = 0,
     key,
   } = props;
+  const frameColor = dim > 0 ? lerpHex(POLAROID_FRAME_COLOR, SURFACE_COLOR, dim) : POLAROID_FRAME_COLOR;
+  const captionColor = dim > 0 ? lerpHex("#1a1317", "#7a6b74", dim) : "#1a1317";
   const frameWidth = size + 28;
   const captionHeight = caption
     ? subCaption
@@ -1877,7 +1883,7 @@ function polaroid(props: PolaroidProps) {
         width: `${frameWidth}px`,
         height: `${frameHeight}px`,
         padding: "14px 14px 0",
-        background: "#f3ece4",
+        background: frameColor,
         boxSizing: "border-box",
         transform: `rotate(${rotate}deg)`,
       },
@@ -1904,6 +1910,7 @@ function polaroid(props: PolaroidProps) {
               width: `${size}px`,
               height: `${photoHeight}px`,
               objectFit: "cover",
+              opacity: 1 - dim,
             },
           }),
           badge
@@ -1953,7 +1960,7 @@ function polaroid(props: PolaroidProps) {
                   style: {
                     fontSize: `${captionFontSize}px`,
                     fontWeight: 900,
-                    color: "#1a1317",
+                    color: captionColor,
                     lineHeight: "1.0",
                     overflow: "hidden",
                     maxWidth: `${size}px`,
@@ -2019,6 +2026,8 @@ const PHOTO_BG_COLOR = "#1a1317";
 function backdropAvatars(
   country: string,
   avatars: Array<{ url: string }>,
+  // Scales every card's depth; below 1 pushes the whole pile further back.
+  depthScale = 1,
 ): ReactNode[] {
   if (avatars.length === 0) return [];
   // Dense grid so coverage stays even (no large empty patches), with
@@ -2053,7 +2062,7 @@ function backdropAvatars(
       // Lower depth = further back = frame fades toward the surface
       // colour, avatar fades toward photo-bg. Higher depth = closer
       // to foreground.
-      const depth = 0.18 + rng() * 0.6;
+      const depth = (0.18 + rng() * 0.6) * depthScale;
       const frameColor = lerpHex(SURFACE_COLOR, POLAROID_FRAME_COLOR, depth);
       // Avatar opacity is applied inside the frame, on top of the dark
       // photo bg. That blends toward the photo bg (still inside the
@@ -2433,6 +2442,243 @@ async function renderRankingsOg(
           rotate: -2,
           top: 50,
           left: 1010,
+        }),
+      ],
+    ),
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* Snipes: one recent snipe pinned to the scrapbook. The map's cover sits on
+   top as a wide photo; the sniper's polaroid is stuck over the victim's,
+   which is faded back. Everyone else in the scope's recent snipes fills the
+   dim backdrop. Global and regions are scopes here too, so the scope reads
+   from a sticker rather than a flag. The snapshot read is observe-only: an
+   OG render must never activate or warm a country. */
+const SNIPES_OG_EVENT_LIMIT = 80;
+
+async function fetchSnipesOgEvents(scope: string): Promise<SnipeEvent[]> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return [];
+  const query = new URLSearchParams({ country: scope, limit: String(SNIPES_OG_EVENT_LIMIT), observe: "1" });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MAPS_OG_LIVE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${base}/api/snapshots/snipes?${query.toString()}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) return [];
+    const snapshot = (await response.json()) as { events?: SnipeEvent[] };
+    return snapshot.events ?? [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// The newest snipe that took a #1 spot; failing that, the newest snipe.
+function pickSnipesOgHero(events: SnipeEvent[]): SnipeEvent | null {
+  return events.find((event) => event.boardRank === 1 && !event.isSeeded)
+    ?? events.find((event) => event.boardRank === 1)
+    ?? events[0]
+    ?? null;
+}
+
+async function renderSnipesOg(request: Request, scope: string): Promise<Response> {
+  const [regularFont, heavyFont, events] = await Promise.all([
+    getFont(request, "Torus-Regular.otf"),
+    getFont(request, "Torus-Heavy.otf"),
+    fetchSnipesOgEvents(scope),
+  ]);
+  const hero = pickSnipesOgHero(events);
+  if (!hero) throw new OgFallbackError(`no snipes for ${scope}`);
+
+  const heroIds = new Set([hero.sniper.id, hero.victim.id]);
+  const seen = new Set<number>();
+  const backdropPlayers: Array<{ url: string }> = [];
+  for (const event of events) {
+    for (const player of [event.sniper, event.victim]) {
+      if (heroIds.has(player.id) || seen.has(player.id)) continue;
+      seen.add(player.id);
+      backdropPlayers.push({ url: ogAvatarUrl(request, player.avatar_url, player.id) });
+    }
+  }
+
+  const scopeName = getCountryName(scope) || scope;
+  const coverW = 560;
+  const coverH = Math.round(coverW / 3.6);
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        ...backdropAvatars(`snipes:${scope}`, backdropPlayers, 0.6),
+
+        // The map, as a wide photo with its title for a caption.
+        h(
+          "div",
+          {
+            key: "map",
+            style: {
+              position: "absolute",
+              top: "112px",
+              left: "566px",
+              display: "flex",
+              flexDirection: "column",
+              width: `${coverW + 28}px`,
+              padding: "14px 14px 18px",
+              background: POLAROID_FRAME_COLOR,
+              boxSizing: "border-box",
+              transform: "rotate(-2deg)",
+            },
+          },
+          [
+            h(
+              "div",
+              {
+                key: "photo",
+                style: {
+                  display: "flex",
+                  width: `${coverW}px`,
+                  height: `${coverH}px`,
+                  background: PHOTO_BG_COLOR,
+                  overflow: "hidden",
+                },
+              },
+              h("img", {
+                src: hero.beatmapset.cover_url,
+                style: { width: `${coverW}px`, height: `${coverH}px`, objectFit: "cover" },
+              }),
+            ),
+            h(
+              "div",
+              {
+                key: "title",
+                style: {
+                  display: "flex",
+                  marginTop: "14px",
+                  fontSize: "34px",
+                  fontWeight: 900,
+                  color: "#1a1317",
+                  lineHeight: "1.0",
+                },
+              },
+              clamp(hero.beatmapset.title, 30),
+            ),
+            h(
+              "div",
+              {
+                key: "diff",
+                style: {
+                  display: "flex",
+                  marginTop: "8px",
+                  fontSize: "22px",
+                  fontWeight: 900,
+                  color: "#7a6b74",
+                  lineHeight: "1.0",
+                },
+              },
+              clamp(hero.beatmap.version, 44),
+            ),
+          ],
+        ),
+
+        // Victim first so the sniper's card lands on top of it.
+        polaroid({
+          key: "victim",
+          imgSrc: ogAvatarUrl(request, hero.victim.avatar_url, hero.victim.id),
+          caption: clamp(hero.victim.username, 15),
+          subCaption: hero.victimTotalScore != null ? formatOgInt(hero.victimTotalScore) : undefined,
+          size: 190,
+          rotate: -8,
+          top: 196,
+          left: 44,
+          dim: 0.3,
+        }),
+        polaroid({
+          key: "sniper",
+          imgSrc: ogAvatarUrl(request, hero.sniper.avatar_url, hero.sniper.id),
+          caption: clamp(hero.sniper.username, 15),
+          subCaption: formatOgInt(hero.totalScore),
+          captionFontSize: 26,
+          size: 230,
+          rotate: 5,
+          top: 238,
+          left: 222,
+        }),
+
+        hero.boardRank
+          ? sticker({
+              key: "rank",
+              text: `#${hero.boardRank}`,
+              fontSize: 72,
+              background: OG_PINK,
+              color: "#1a1317",
+              paddingX: 22,
+              paddingY: 12,
+              rotate: 8,
+              top: 70,
+              left: 1040,
+            })
+          : null,
+
+        sticker({
+          key: "label",
+          text: "snipes",
+          fontSize: 56,
+          background: OG_PINK,
+          color: "#1a1317",
+          paddingX: 22,
+          paddingY: 14,
+          rotate: -4,
+          top: 36,
+          left: 56,
+        }),
+
+        sticker({
+          key: "scope",
+          text: scopeName,
+          fontSize: 52,
+          background: POLAROID_FRAME_COLOR,
+          color: "#1a1317",
+          paddingX: 22,
+          paddingY: 14,
+          rotate: 3,
+          top: 470,
+          left: 700,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#1a1317",
+          color: "#7a6b74",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 574,
+          left: 1030,
         }),
       ],
     ),
@@ -5128,6 +5374,19 @@ export const Route = createFileRoute("/api/og")({
             return await serveOg(request, `${kind}:v${version}`, () => staticRender(request));
           } catch (err) {
             console.warn(`[og] ${kind} render failed, falling back`, err);
+          }
+        }
+
+        // Snipes covers Global and regions as well as countries; a bare
+        // /snipes link gets the Global card.
+        if (kind === "snipes") {
+          const scope = country && isSupportedCountryScope(country) ? country : "GLOBAL";
+          try {
+            return await serveOg(request, `snipes:${scope}:v${version}`, () => renderSnipesOg(request, scope));
+          } catch (err) {
+            if (!isOgFallbackError(err)) {
+              console.warn("[og] snipes render failed, falling back", err);
+            }
           }
         }
 
