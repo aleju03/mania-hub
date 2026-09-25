@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import { msg, plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -198,7 +197,8 @@ function DanChips({ mode, onSelect }: { mode: MyDataSkillMode; onSelect?: (side:
 // The two `own` variants spell the whole sentence out rather than swapping a
 // "your"/"the" fragment into one: possessives do not slot into other
 // languages the way they do into English.
-function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: boolean, i18n: I18n): string {
+// `withVersion: false` where the card title already names the MinaCalc build.
+function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: boolean, i18n: I18n, withVersion = true): string {
   const plays = mode.analyzedPlays;
   // An untracked player has no tracked history to cite: the rating saw the
   // osu! top plays and whatever was added by score link, nothing else.
@@ -211,13 +211,14 @@ function footnote(skills: MyDataSkillBreakdown, mode: MyDataSkillMode, own: bool
         ? i18n._(msg`rated from ${plays} plays across your top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`)
         : i18n._(msg`rated from ${plays} plays across the top plays and tracked history, DT and HT at their real rate, accuracy weighted by MAX:300 ratio against each chart's OD windows, localized vibro sections adjusted, sustained vibro excluded`),
   ];
+  const version = mode.minaCalc;
+  if (version && withVersion) parts.push(i18n._(msg`MinaCalc ${version}`));
   const pending = skills.pendingPlays;
   if (pending > 0) parts.push(i18n._(msg`${pending} still analyzing`));
   if (skills.baseline) parts.push(i18n._(msg`percentiles are among tracked players`));
   return parts.join(" · ");
 }
 
-const SCALE_HINT_SEEN_KEY = "mania-hub-keymode-scale-hint-seen";
 // Past this many jobs ahead, the queue line stops printing the number.
 const QUEUE_AHEAD_SHOWN_MAX = 100;
 
@@ -225,27 +226,6 @@ const QUEUE_AHEAD_SHOWN_MAX = 100;
 
 export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, userId }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null; own?: boolean; onSelectDan?: (side: "rc" | "ln") => void; userId?: number }) {
   const { i18n } = useLingui();
-  // Surface the scale warning at the moment it matters: right after the
-  // viewer flips to another keymode tab and is about to compare numbers.
-  // It fades back out, and once someone has seen it we assume the point
-  // landed - a localStorage flag keeps it from nagging on every tab flip.
-  const modeKey = mode?.keyCount ?? null;
-  const prevModeKey = useRef<number | null>(null);
-  const [showScaleHint, setShowScaleHint] = useState(false);
-  useEffect(() => {
-    const prev = prevModeKey.current;
-    prevModeKey.current = modeKey;
-    if (prev == null || modeKey == null || modeKey === prev) return;
-    try {
-      if (localStorage.getItem(SCALE_HINT_SEEN_KEY)) return;
-      localStorage.setItem(SCALE_HINT_SEEN_KEY, "1");
-    } catch {
-      // Storage unavailable (private mode quirks): fall back to showing it.
-    }
-    setShowScaleHint(true);
-    const timer = setTimeout(() => setShowScaleHint(false), 8000);
-    return () => clearTimeout(timer);
-  }, [modeKey]);
   const empty = skillEmptyState(skills, mode, own);
   if (empty) return mode?.dan ? <div className="space-y-3">{empty}<DanChips mode={mode} onSelect={onSelectDan} /></div> : empty;
   const entries = skillModeEntries(mode!);
@@ -280,23 +260,6 @@ export function SkillBreakdownBody({ skills, mode, own = false, onSelectDan, use
       ) : (
         <div className="mb-2.5" />
       )}
-      <AnimatePresence initial={false}>
-        {showScaleHint ? (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="pb-2.5 text-[11px] text-osu-l2">
-              <Trans>
-                <span className="font-semibold text-white">{mode!.keyCount}K has its own rating scale.</span>{" "}
-                A lower number than another keymode doesn't mean you're worse at it.
-              </Trans>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
       <div className="mb-3">
         <DanChips mode={mode!} onSelect={onSelectDan} />
       </div>
@@ -599,6 +562,7 @@ export function SkillModePanel({
   const overall = Number(mode.ratings.Overall ?? 0);
   const overallPercentile = mode.percentiles?.Overall;
   const max = entries[0]?.value ?? 1;
+  const version = mode.minaCalc;
   return (
     <div className="flex h-full flex-col rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
       <div className="relative flex flex-wrap items-start justify-between gap-3">
@@ -606,6 +570,11 @@ export function SkillModePanel({
           <div className="mb-1 flex items-center gap-2">
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
+            {version ? (
+              <span className="cursor-help text-[11px] font-semibold uppercase tracking-wide text-osu-f1" title={t`MinaCalc is Etterna's difficulty calculator`}>
+                {i18n._(msg`MinaCalc ${version}`)}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-[30px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span>
@@ -687,7 +656,7 @@ export function SkillModePanel({
       </div>
 
       <div className="mt-auto pt-3 text-[10px] text-osu-f1">
-        {footnote(skills, mode, false, i18n)}
+        {footnote(skills, mode, false, i18n, false)}
         <SkillQueueNote skills={skills} className="mt-1" />
       </div>
     </div>

@@ -29,7 +29,7 @@ export interface SkillAxisMeta {
 
 // Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
 // the same palette the old pattern fingerprint used. Shown for every keymode
-// except 6K and 7K (usesPatternSkillAxes).
+// except 6K and 7K (usesPatternSkillAxes), and Technical only on 4K and 5K.
 export const MSD_SKILLSET_META: SkillAxisMeta[] = [
   { key: "Stream", label: "Stream", labelMsg: msg`Stream`, color: "#8f6bd8" },
   { key: "Jumpstream", label: "Jumpstream", labelMsg: msg`Jumpstream`, color: "#6f87d8" },
@@ -126,8 +126,14 @@ export function usesPatternSkillAxes(keyCount: number): boolean {
   return keyCount === 6 || keyCount === 7 || keyCount === 8;
 }
 
+// Fewest pattern axes a 6K/7K/8K card switches to. A pattern needs 3 plays of
+// its own, so a thin pool clears one or two first, and switching then turned
+// a six-spoke card into one or two bars with no radar.
+const PATTERN_ENTRIES_MIN = 3;
+
 // 6K/7K/8K speak the in-house pattern vocabulary (falling back to the MSD names
-// while tags are missing); every other keymode speaks MinaCalc's skillsets.
+// until three patterns are rated); every other keymode speaks MinaCalc's
+// skillsets.
 export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   if (usesPatternSkillAxes(mode.keyCount)) {
     const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
@@ -135,9 +141,11 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
       .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0), axis: `pattern:${meta.key}` }))
       .filter((entry) => entry.value >= 1)
       .sort((a, b) => b.value - a.value);
-    if (patternEntries.length > 0) return patternEntries;
+    if (patternEntries.length >= PATTERN_ENTRIES_MIN) return patternEntries;
   }
   const entries: SkillAxisEntry[] = MSD_SKILLSET_META
+    // MinaCalc only rates Technical on 4K and 5K (the backend's publishesMsdSkillset).
+    .filter((meta) => meta.key !== "Technical" || mode.keyCount === 4 || mode.keyCount === 5)
     .map((meta) => ({ ...meta, value: Number(mode.ratings[meta.key] ?? 0), axis: meta.key }))
     // The generic n-key calc engine returns ~0 for skillsets it does not
     // rate; a 0.15 sliver next to 20+ bars is noise, not signal.

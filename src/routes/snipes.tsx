@@ -18,7 +18,8 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import type { SnipeEvent } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
-import { parseCountrySearchParam } from "../lib/country-search";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { pageSeo } from "../lib/seo";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { track } from "../lib/analytics";
 import { fetchLiveSnipeBoard, fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveSnipeBoardEntry, type LiveSnipeBoardSnapshot } from "../lib/live-backend";
@@ -27,6 +28,8 @@ import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { SnipesNotTracked } from "../components/SnipesNotTracked";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
+import { useAuth } from "../lib/auth-context";
+import { AddScoreModal } from "../components/player/AddScoreModal";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -66,13 +69,17 @@ export const Route = createFileRoute("/snipes")({
     const country = match.search.country;
     const countryName = country ? displayCountryName(country, match.context.locale) : null;
     const i18n = getI18n(match.context.locale);
-    return {
-      meta: [
-        { title: countryName ? i18n._(msg`Snipes - ${countryName}`) : i18n._(msg`Snipes`) },
-        { name: "description", content: "" },
-        { name: "robots", content: "noindex, nofollow" },
-      ],
-    };
+    return pageSeo({
+      title: countryName ? i18n._(msg`Snipes - ${countryName}`) : i18n._(msg`Snipes`),
+      // "in Global" reads wrong, so Global shares the bare /snipes line.
+      description: countryName && !isGlobalScope(country)
+        ? i18n._(msg`Recent osu!mania snipes in ${countryName}.`)
+        : i18n._(msg`Recent osu!mania snipes.`),
+      path: withSearchParams("/snipes", { country }),
+      origin: match.context.origin,
+      imageKind: "snipes",
+      imageCountry: country,
+    });
   },
   search: {
     middlewares: [stripSearchParams(DEFAULT_SNIPES_SEARCH)],
@@ -88,6 +95,8 @@ export const Route = createFileRoute("/snipes")({
 
 function SnipesPage() {
   const { t } = useLingui();
+  const auth = useAuth();
+  const [addScoreOpen, setAddScoreOpen] = useState(false);
   const search = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -504,8 +513,29 @@ function SnipesPage() {
             <p className="mb-4 text-[12px] text-osu-f1">
               {selectedIsGlobal
                 ? <Trans>Global snipes only count the top 100 players, and only scores tracked on this site.</Trans>
-                : <Trans>{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards.</Trans>}
+                : auth.viewer
+                  ? (
+                    <Trans>
+                      {countryName} snipes only count scores tracked on this site, so older plays aren't on the boards unless you{" "}
+                      <button
+                        type="button"
+                        onClick={() => setAddScoreOpen(true)}
+                        className="underline decoration-white/25 underline-offset-2 transition-colors cursor-pointer hover:text-white hover:decoration-white/60"
+                      >
+                        add them
+                      </button>.
+                    </Trans>
+                  )
+                  : <Trans>{countryName} snipes only count scores tracked on this site, so older plays aren't on the boards.</Trans>}
             </p>
+          )}
+          {addScoreOpen && auth.viewer && createPortal(
+            <AddScoreModal
+              userId={auth.viewer.id}
+              username={auth.viewer.username}
+              onClose={() => setAddScoreOpen(false)}
+            />,
+            document.body,
           )}
           {error && (
             <div className="text-center py-16 text-osu-f1 text-sm">{error}</div>
