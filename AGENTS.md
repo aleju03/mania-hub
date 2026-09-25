@@ -15,7 +15,7 @@ This file is the condensed guide. `docs/` holds the maintained reference; read t
 - `docs/features.md`: per-feature models - snipes, top plays, maps, farm helper, activity, dan estimates, chart analysis, profiles/rankings, goals, my data, uploaded replays, skins privacy.
 - `docs/packs.md`: card pack economy, streak/blitz arcade games, GOAT poll.
 - `docs/discord.md`: maniabot Discord bot, `/communities` server directory.
-- `docs/admin.md`: admin surfaces - ghost overlay, todos, analytics, BBCode image audit, `bugs:pull` setup.
+- `docs/admin.md`: admin surfaces - mascot overlay, todos, analytics, BBCode image audit, `bugs:pull` setup.
 - `docs/frontend.md`: route/component map, live data flow (SSE client, cross-tab sharing), client state, on-device replay video export, OG images, BBCode editor.
 - `docs/companella-integration.md`: the Companella score-import beta (`/companella`), off by default. `docs/companella-api.openapi.yaml`, `docs/companella-client-guide.md` and `docs/companella-operations.md` are its API spec, client contract and runbook.
 
@@ -26,7 +26,7 @@ Keep one-off audits, investigation notes, and capture reports in `local-notes/` 
 - `src/routes/`: file-based routes (`createFileRoute`); shared shell, auth, country context, theme bootstrap, and live-backend bootstrap in `src/routes/__root.tsx`. Search params are validated per route and drive country scope, pagination, and filters. API/proxy routes in `src/routes/api/` (`/api/sync` is the analytics capture proxy into the backend's in-house analytics store, not a live-data fallback); admin pages in `src/routes/admin/`. Files prefixed with `-` are tests, not routes; do not delete them as stale.
 - `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities). `src/lib/osu.ts` is a facade over `src/lib/osu/` domain modules (rankings, maps, replay, snipes, tracker, top-plays, pattern-analysis, dan, users, beatmaps, plus shared support modules).
 - `live-backend/src/`: `server.ts` (boot), `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/` (one module per surface), `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`; schema in `migrations/001_initial.sql`, later tables migrated in `db.ts`.
-- `scripts/`: dan benchmark, replay capture, ghost atlas, dev helpers. Static assets in `public/`.
+- `scripts/`: dan benchmark, replay capture, mascot atlas, dev helpers. Static assets in `public/`.
 
 ## Commands
 

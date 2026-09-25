@@ -1,6 +1,6 @@
-// Sound for the ghost's actions and for his talking blip.
+// Sound for the mascot's actions and for his talking blip.
 //
-// Two tiers, in that order: a real sample from public/audio/ghost/ when one has
+// Two tiers, in that order: a real sample from public/audio/mascot/ when one has
 // been dropped in, and a synthesized cue when it has not. The repo ships no
 // audio for this, so the folder starts empty and every action still makes a
 // noise; drop <kind>.ogg next to the others and it takes over from then on.
@@ -9,31 +9,31 @@
 // best effort. A blocked AudioContext, a missing file or a decode failure is
 // silence, never something the visitor is told about.
 
-import { GHOST_ACTION_KINDS } from "./ghost-shared";
+import { MASCOT_ACTION_KINDS } from "./mascot-shared";
 
 /** An action kind from any character on the roster, plus the blip a speech
     bubble types with. Kinds shared between characters share their cue. */
-export type GhostSfxName = string;
+export type MascotSfxName = string;
 
-const SAMPLE_DIR = "/audio/ghost";
+const SAMPLE_DIR = "/audio/mascot";
 
 /* What each cue is called on disk: the action's own kind. Change the extension
    here if your files are .wav or .mp3 instead; nothing else cares what the
    container is. */
 const SAMPLE_EXTENSION = "ogg";
 
-export function ghostSampleFile(name: GhostSfxName): string {
+export function mascotSampleFile(name: MascotSfxName): string {
   return `${name}.${SAMPLE_EXTENSION}`;
 }
 
 /** Every cue the page can play: one per action kind on the roster, plus the
     speech blip. */
-export const GHOST_SFX_NAMES: readonly GhostSfxName[] = [...GHOST_ACTION_KINDS, "speech"];
+export const MASCOT_SFX_NAMES: readonly MascotSfxName[] = [...MASCOT_ACTION_KINDS, "speech"];
 
 /* The fallback: a short figure of notes, a pitch sweep, or a noise burst. These
    are stand-ins so an empty folder is not a silent feature, not imitations of
    anything in particular. */
-interface GhostCue {
+interface MascotCue {
   notes?: number[];
   sweep?: [number, number];
   noise?: boolean;
@@ -43,7 +43,7 @@ interface GhostCue {
   gain: number;
 }
 
-const CUES: Record<string, GhostCue> = {
+const CUES: Record<string, MascotCue> = {
   heal: { notes: [523.25, 659.25, 783.99, 1046.5], wave: "sine", step: 0.09, gain: 0.14 },
   pacify: { notes: [659.25, 523.25, 392], wave: "sine", step: 0.15, gain: 0.12 },
   cheer: { notes: [587.33, 739.99, 880], wave: "square", step: 0.07, gain: 0.06 },
@@ -61,15 +61,15 @@ const CUES: Record<string, GhostCue> = {
 
 /* An action whose kind has no cue of its own still makes a noise rather than
    nothing, so adding one to the roster is never silently mute. */
-const FALLBACK_CUE: GhostCue = { notes: [523.25, 698.46], wave: "square", step: 0.08, gain: 0.05 };
+const FALLBACK_CUE: MascotCue = { notes: [523.25, 698.46], wave: "square", step: 0.08, gain: 0.05 };
 
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
 let muted = false;
 // null = no file there, or it would not decode: fall back to the cue instead of
 // asking for it again on every action.
-const buffers = new Map<GhostSfxName, AudioBuffer | null>();
-const loading = new Map<GhostSfxName, Promise<void>>();
+const buffers = new Map<MascotSfxName, AudioBuffer | null>();
+const loading = new Map<MascotSfxName, Promise<void>>();
 
 function ensureContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -90,12 +90,12 @@ function ensureContext(): AudioContext | null {
   return master ? context : null;
 }
 
-function loadSample(ctx: AudioContext, name: GhostSfxName): Promise<void> {
+function loadSample(ctx: AudioContext, name: MascotSfxName): Promise<void> {
   const pending = loading.get(name);
   if (pending) return pending;
   const promise = (async () => {
     try {
-      const response = await fetch(`${SAMPLE_DIR}/${ghostSampleFile(name)}`);
+      const response = await fetch(`${SAMPLE_DIR}/${mascotSampleFile(name)}`);
       if (!response.ok) throw new Error(`status ${response.status}`);
       // decodeAudioData works on a suspended context, so this can run before the
       // page has been touched.
@@ -128,7 +128,7 @@ function startBuffer(ctx: AudioContext, buffer: AudioBuffer, gain: number): void
   }
 }
 
-function synthesize(ctx: AudioContext, name: GhostSfxName): void {
+function synthesize(ctx: AudioContext, name: MascotSfxName): void {
   if (!master || ctx.state !== "running") return;
   const cue = CUES[name] ?? FALLBACK_CUE;
   const now = ctx.currentTime;
@@ -183,7 +183,7 @@ function synthesize(ctx: AudioContext, name: GhostSfxName): void {
   oscillator.stop(now + notes.length * cue.step + 0.05);
 }
 
-function play(name: GhostSfxName, gain: number): void {
+function play(name: MascotSfxName, gain: number): void {
   if (muted) return;
   const ctx = ensureContext();
   if (!ctx) return;
@@ -204,29 +204,29 @@ function play(name: GhostSfxName, gain: number): void {
 
 /** Fetch and decode every sample up front, so the first action is not late.
     Call from a page effect; repeat calls are free. */
-export function preloadGhostSfx(): void {
+export function preloadMascotSfx(): void {
   if (typeof window === "undefined") return;
   const ctx = ensureContext();
   if (!ctx) return;
-  for (const name of GHOST_SFX_NAMES) {
+  for (const name of MASCOT_SFX_NAMES) {
     if (!buffers.has(name)) void loadSample(ctx, name);
   }
 }
 
 /** One of the roster's actions firing. Unknown kinds are silent rather than
     guessed at. */
-export function playGhostActionSfx(kind: string): void {
-  if (kind === "speech" || !GHOST_ACTION_KINDS.includes(kind)) return;
+export function playMascotActionSfx(kind: string): void {
+  if (kind === "speech" || !MASCOT_ACTION_KINDS.includes(kind)) return;
   play(kind, 0.9);
 }
 
 /** One character of a speech bubble typing itself out. */
-export function playGhostSpeechSfx(character: string): void {
+export function playMascotSpeechSfx(character: string): void {
   if (character === "" || character === " " || character === "\n") return;
   play("speech", 0.5);
 }
 
 /** Local mute, for the control panel's own preview of what it is firing. */
-export function setGhostSfxMuted(next: boolean): void {
+export function setMascotSfxMuted(next: boolean): void {
   muted = next;
 }

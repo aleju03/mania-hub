@@ -47,8 +47,8 @@ import { Route as AdminCompanellaFlagsRouteImport } from './routes/admin/compane
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-renders'
-import { Route as AdminGhostRouteImport } from './routes/admin/ghost'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
+import { Route as AdminMascotRouteImport } from './routes/admin/mascot'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminTodosRouteImport } from './routes/admin/todos'
@@ -300,14 +300,14 @@ const AdminDynamicRendersRoute = AdminDynamicRendersRouteImport.update({
   path: '/admin/dynamic-renders',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminGhostRoute = AdminGhostRouteImport.update({
-  id: '/admin/ghost',
-  path: '/admin/ghost',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
   id: '/admin/live-backend',
   path: '/admin/live-backend',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMascotRoute = AdminMascotRouteImport.update({
+  id: '/admin/mascot',
+  path: '/admin/mascot',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
@@ -663,8 +663,8 @@ export interface FileRoutesByFullPath {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
-  '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
+  '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
@@ -765,8 +765,8 @@ export interface FileRoutesByTo {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
-  '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
+  '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
@@ -868,8 +868,8 @@ export interface FileRoutesById {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
-  '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
+  '/admin/mascot': typeof AdminMascotRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
@@ -972,8 +972,8 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
-    | '/admin/ghost'
     | '/admin/live-backend'
+    | '/admin/mascot'
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
@@ -1074,8 +1074,8 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
-    | '/admin/ghost'
     | '/admin/live-backend'
+    | '/admin/mascot'
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
@@ -1176,8 +1176,8 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
-    | '/admin/ghost'
     | '/admin/live-backend'
+    | '/admin/mascot'
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
@@ -1279,8 +1279,8 @@ export interface RootRouteChildren {
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminDynamicRendersRoute: typeof AdminDynamicRendersRoute
-  AdminGhostRoute: typeof AdminGhostRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
+  AdminMascotRoute: typeof AdminMascotRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
   AdminTodosRoute: typeof AdminTodosRoute
@@ -1599,18 +1599,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDynamicRendersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/ghost': {
-      id: '/admin/ghost'
-      path: '/admin/ghost'
-      fullPath: '/admin/ghost'
-      preLoaderRoute: typeof AdminGhostRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/live-backend': {
       id: '/admin/live-backend'
       path: '/admin/live-backend'
       fullPath: '/admin/live-backend'
       preLoaderRoute: typeof AdminLiveBackendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/mascot': {
+      id: '/admin/mascot'
+      path: '/admin/mascot'
+      fullPath: '/admin/mascot'
+      preLoaderRoute: typeof AdminMascotRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/og-preview': {
@@ -2167,8 +2167,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminDynamicRendersRoute: AdminDynamicRendersRoute,
-  AdminGhostRoute: AdminGhostRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
+  AdminMascotRoute: AdminMascotRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
   AdminTodosRoute: AdminTodosRoute,

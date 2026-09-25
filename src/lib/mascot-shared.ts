@@ -1,12 +1,12 @@
-/* The admin ghost: shared vocabulary between the visitor overlay
-   (components/ghost) and the control panel (routes/admin/ghost).
+/* The admin mascot: shared vocabulary between the visitor overlay
+   (components/mascot) and the control panel (routes/admin/mascot).
 
-   Each character is one atlas under public/images/ghost/: a grid of uniform
+   Each character is one atlas under public/images/mascot/: a grid of uniform
    frames, one clip per row, every frame aligned on the same anchor so switching
    clips never makes the sprite hop. The characters differ in frame size, clip
    set, poses and actions, so everything below is looked up through the roster
    rather than read off a single sheet. Route normalization mirrors
-   live-backend/src/live/ghost.ts and must stay in step with it: the backend
+   live-backend/src/live/mascot.ts and must stay in step with it: the backend
    matches a session's route against what the overlay reports, so both sides
    have to fold a path the same way. */
 
@@ -14,15 +14,15 @@
    sprite pixels, which is the same number of pixels on a phone as on a desktop:
    84 per step is a sixth of a wide screen and most of a narrow one, so every
    viewer caps it against their own width. */
-export const GHOST_MAX_WIDTH_RATIO = 0.3;
+export const MASCOT_MAX_WIDTH_RATIO = 0.3;
 
 /* Under this many CSS pixels across, count a viewer as being on a phone. Same
    breakpoint the site's own layout switches at. */
-export const GHOST_NARROW_WIDTH = 768;
+export const MASCOT_NARROW_WIDTH = 768;
 
-export type GhostFacing = "down" | "up" | "left" | "right";
+export type MascotFacing = "down" | "up" | "left" | "right";
 
-export interface GhostClip {
+export interface MascotClip {
   row: number;
   frames: number;
   fps: number;
@@ -72,9 +72,9 @@ const RALSEI_CLIPS = {
      not two frames of an animation. */
   squashed: { row: 23, frames: 2, fps: 1, native: "down", directional: true },
   sleep: { row: 24, frames: 4, fps: 2, native: "down" },
-} as const satisfies Record<string, GhostClip>;
+} as const satisfies Record<string, MascotClip>;
 
-export interface GhostClipBounds {
+export interface MascotClipBounds {
   x: number;
   y: number;
   w: number;
@@ -111,7 +111,7 @@ const RALSEI_BOUNDS = {
   tiny: { x: 16, y: 56, w: 25, h: 39 },
   squashed: { x: 4, y: 64, w: 48, h: 31 },
   sleep: { x: 0, y: 21, w: 55, h: 74 },
-} as const satisfies Record<keyof typeof RALSEI_CLIPS, GhostClipBounds>;
+} as const satisfies Record<keyof typeof RALSEI_CLIPS, MascotClipBounds>;
 
 /* Starwalker, the yellow star person from the Cyber World, who introduces
    himself as "the original star walker". One walk animation covers every
@@ -123,7 +123,7 @@ const STARWALKER_CLIPS = {
   edge: { row: 2, frames: 2, fps: 6, native: "down" },
   final: { row: 3, frames: 1, fps: 1, native: "down" },
   shadow: { row: 4, frames: 1, fps: 1, native: "down" },
-} as const satisfies Record<string, GhostClip>;
+} as const satisfies Record<string, MascotClip>;
 
 const STARWALKER_BOUNDS = {
   idle: { x: 2, y: 3, w: 37, h: 36 },
@@ -131,7 +131,7 @@ const STARWALKER_BOUNDS = {
   edge: { x: 2, y: 3, w: 37, h: 36 },
   final: { x: 2, y: 3, w: 37, h: 36 },
   shadow: { x: 2, y: 3, w: 37, h: 36 },
-} as const satisfies Record<keyof typeof STARWALKER_CLIPS, GhostClipBounds>;
+} as const satisfies Record<keyof typeof STARWALKER_CLIPS, MascotClipBounds>;
 
 /* The Annoying Dog. Small, white, and the only one of the three with a real
    front and back, so all four directions are drawn. The frame is 224 tall
@@ -147,7 +147,7 @@ const DOG_CLIPS = {
   maracas: { row: 6, frames: 2, fps: 5, native: "left" },
   stilts: { row: 7, frames: 4, fps: 6, native: "left", gait: true },
   "stilts-long": { row: 8, frames: 4, fps: 6, native: "left", gait: true },
-} as const satisfies Record<string, GhostClip>;
+} as const satisfies Record<string, MascotClip>;
 
 const DOG_BOUNDS = {
   idle: { x: 14, y: 203, w: 22, h: 19 },
@@ -159,16 +159,16 @@ const DOG_BOUNDS = {
   maracas: { x: 3, y: 162, w: 44, h: 60 },
   stilts: { x: 15, y: 150, w: 19, h: 72 },
   "stilts-long": { x: 15, y: 2, w: 19, h: 220 },
-} as const satisfies Record<keyof typeof DOG_CLIPS, GhostClipBounds>;
+} as const satisfies Record<keyof typeof DOG_CLIPS, MascotClipBounds>;
 
-export type GhostEffect = "sparkles" | "hearts" | "notes" | "shake" | "dark" | null;
+export type MascotEffect = "sparkles" | "hearts" | "notes" | "shake" | "dark" | null;
 
-export interface GhostActionSpec {
+export interface MascotActionSpec {
   kind: string;
   label: string;
   /* The one-shot clip that takes over while the action plays. */
   clip: string;
-  effect: GhostEffect;
+  effect: MascotEffect;
   /* Plays the clip backwards, which is how "appear" becomes "vanish". */
   reverse?: boolean;
   loops?: number;
@@ -179,7 +179,7 @@ export interface GhostActionSpec {
 /* Sustained clips the owner can park a character in, as opposed to the walk
    cycles the panel picks automatically from movement. Every roster entry opens
    with "auto", which hands the clip back to whatever the movement wants. */
-export interface GhostPoseSpec {
+export interface MascotPoseSpec {
   kind: string;
   label: string;
   clip: string | null;
@@ -187,7 +187,7 @@ export interface GhostPoseSpec {
 
 const WALK_POSE = { kind: "auto", label: "Walk", clip: null } as const;
 
-export interface GhostCharacter {
+export interface MascotCharacter {
   id: string;
   name: string;
   /* One line for the picker, so choosing between them is not guesswork. */
@@ -195,16 +195,16 @@ export interface GhostCharacter {
   atlas: { file: string; version: number };
   frame: { w: number; h: number };
   /* Where the character's feet sit inside a frame: the point placed exactly on
-     the ghost's (x, y) so a position means the same thing for every clip. */
+     the mascot's (x, y) so a position means the same thing for every clip. */
   anchor: { x: number; y: number };
-  clips: Record<string, GhostClip>;
-  bounds: Record<string, GhostClipBounds>;
+  clips: Record<string, MascotClip>;
+  bounds: Record<string, MascotClipBounds>;
   /* Which clip each direction walks in. Characters drawn from one side point
      several directions at the same clip. */
-  walk: Record<GhostFacing, string>;
+  walk: Record<MascotFacing, string>;
   idle: string;
-  poses: readonly GhostPoseSpec[];
-  actions: readonly GhostActionSpec[];
+  poses: readonly MascotPoseSpec[];
+  actions: readonly MascotActionSpec[];
   /* Sprite pixels per step. The three are drawn at wildly different sizes (a
      19px dog against a 43px Ralsei), so each carries the size that puts it on a
      page looking like itself rather than a speck or a billboard. */
@@ -214,7 +214,7 @@ export interface GhostCharacter {
 /* The roster. The wire carries the id, and anything unknown falls back to the
    first entry, so a browser on an older build never draws a sprite it has no
    atlas for. */
-export const GHOST_CHARACTERS = {
+export const MASCOT_CHARACTERS = {
   ralsei: {
     id: "ralsei",
     name: "Ralsei",
@@ -310,66 +310,66 @@ export const GHOST_CHARACTERS = {
     actions: [],
     scale: { default: 6, min: 3, max: 12 },
   },
-} as const satisfies Record<string, GhostCharacter>;
+} as const satisfies Record<string, MascotCharacter>;
 
-export type GhostCharacterId = keyof typeof GHOST_CHARACTERS;
+export type MascotCharacterId = keyof typeof MASCOT_CHARACTERS;
 
-export const GHOST_CHARACTER_LIST: readonly GhostCharacter[] = Object.values(GHOST_CHARACTERS);
-export const DEFAULT_GHOST_CHARACTER: GhostCharacterId = "ralsei";
+export const MASCOT_CHARACTER_LIST: readonly MascotCharacter[] = Object.values(MASCOT_CHARACTERS);
+export const DEFAULT_MASCOT_CHARACTER: MascotCharacterId = "ralsei";
 
-export function isGhostCharacter(id: string): id is GhostCharacterId {
-  return Object.hasOwn(GHOST_CHARACTERS, id);
+export function isMascotCharacter(id: string): id is MascotCharacterId {
+  return Object.hasOwn(MASCOT_CHARACTERS, id);
 }
 
 /** The roster entry to draw. Anything unrecognised is the default rather than
     nothing: a visitor on a cached build must not be left with a blank page
-    where the ghost is, and the wire is a plain string. */
-export function ghostCharacter(id: string | null | undefined): GhostCharacter {
-  return typeof id === "string" && isGhostCharacter(id)
-    ? GHOST_CHARACTERS[id]
-    : GHOST_CHARACTERS[DEFAULT_GHOST_CHARACTER];
+    where the mascot is, and the wire is a plain string. */
+export function mascotCharacter(id: string | null | undefined): MascotCharacter {
+  return typeof id === "string" && isMascotCharacter(id)
+    ? MASCOT_CHARACTERS[id]
+    : MASCOT_CHARACTERS[DEFAULT_MASCOT_CHARACTER];
 }
 
-export function ghostAtlasUrl(character: GhostCharacter): string {
-  return `/images/ghost/${character.atlas.file}?v=${character.atlas.version}`;
+export function mascotAtlasUrl(character: MascotCharacter): string {
+  return `/images/mascot/${character.atlas.file}?v=${character.atlas.version}`;
 }
 
 /* The atlas is a plain grid, so its size follows from the clip table: one row
    per clip, as many columns as the longest clip. */
-export function ghostAtlasRows(character: GhostCharacter): number {
+export function mascotAtlasRows(character: MascotCharacter): number {
   return Math.max(...Object.values(character.clips).map((clip) => clip.row)) + 1;
 }
 
-export function ghostAtlasCols(character: GhostCharacter): number {
+export function mascotAtlasCols(character: MascotCharacter): number {
   return Math.max(...Object.values(character.clips).map((clip) => clip.frames));
 }
 
-export function isGhostClip(character: GhostCharacter, name: string): boolean {
+export function isMascotClip(character: MascotCharacter, name: string): boolean {
   return Object.hasOwn(character.clips, name);
 }
 
 /** The clip that will actually be drawn. Clip names are per character and the
     wire can still be carrying the previous one for a tick after a switch, so an
     unknown name resolves to standing still rather than to a missing row. */
-export function resolveGhostClip(character: GhostCharacter, name: string): string {
-  return isGhostClip(character, name) ? name : character.idle;
+export function resolveMascotClip(character: MascotCharacter, name: string): string {
+  return isMascotClip(character, name) ? name : character.idle;
 }
 
-export function ghostClip(character: GhostCharacter, name: string): GhostClip {
-  return character.clips[resolveGhostClip(character, name)];
+export function mascotClip(character: MascotCharacter, name: string): MascotClip {
+  return character.clips[resolveMascotClip(character, name)];
 }
 
-export function ghostClipBounds(character: GhostCharacter, name: string): GhostClipBounds {
-  return character.bounds[resolveGhostClip(character, name)];
+export function mascotClipBounds(character: MascotCharacter, name: string): MascotClipBounds {
+  return character.bounds[resolveMascotClip(character, name)];
 }
 
 /** The drawn scale for one viewer, never wider than the ratio above. The floor
     of 1 wins on a screen too narrow to honour the cap, since a sprite scaled
     below its own pixels is not worth showing. */
-export function fitGhostScale(character: GhostCharacter, scale: number, viewportWidth: number): number {
+export function fitMascotScale(character: MascotCharacter, scale: number, viewportWidth: number): number {
   if (!Number.isFinite(scale)) return 1;
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return scale;
-  return Math.max(1, Math.min(scale, (viewportWidth * GHOST_MAX_WIDTH_RATIO) / character.frame.w));
+  return Math.max(1, Math.min(scale, (viewportWidth * MASCOT_MAX_WIDTH_RATIO) / character.frame.w));
 }
 
 /* How far above the feet a speech bubble hangs, in drawn pixels. Measured from
@@ -377,17 +377,17 @@ export function fitGhostScale(character: GhostCharacter, scale: number, viewport
    transparent padding above the head, and clearing that leaves the bubble
    floating half a sprite too high. Clips differ a lot here (asleep is tall,
    knocked out is a heap), so this follows whatever the character is doing. */
-export function ghostBubbleLift(character: GhostCharacter, name: string, scale: number): number {
-  return (character.anchor.y - ghostClipBounds(character, name).y + 4) * scale;
+export function mascotBubbleLift(character: MascotCharacter, name: string, scale: number): number {
+  return (character.anchor.y - mascotClipBounds(character, name).y + 4) * scale;
 }
 
-export function ghostHitboxRect(
-  character: GhostCharacter,
+export function mascotHitboxRect(
+  character: MascotCharacter,
   name: string,
   scale: number,
   flipped: boolean,
-): GhostClipBounds {
-  const bounds = ghostClipBounds(character, name);
+): MascotClipBounds {
+  const bounds = mascotClipBounds(character, name);
   return {
     x: (flipped ? character.anchor.x - bounds.x - bounds.w : bounds.x - character.anchor.x) * scale,
     y: (bounds.y - character.anchor.y) * scale,
@@ -399,8 +399,8 @@ export function ghostHitboxRect(
 /* Mirroring is only ever needed when a clip is drawn facing the way it was not
    painted. Ralsei's two walk cycles ship as real art, so neither is ever
    mirrored; the dog's one side is. */
-export function shouldFlipGhostClip(character: GhostCharacter, name: string, facing: GhostFacing): boolean {
-  const native = ghostClip(character, name).native;
+export function shouldFlipMascotClip(character: MascotCharacter, name: string, facing: MascotFacing): boolean {
+  const native = mascotClip(character, name).native;
   if (native === "right") return facing === "left";
   if (native === "left") return facing === "right";
   return false;
@@ -409,8 +409,8 @@ export function shouldFlipGhostClip(character: GhostCharacter, name: string, fac
 /* A pose with more than one frame keeps cycling while the character stands
    still; a single frame one, a pair that is really two directions, and a gait
    are just held. */
-export function isLoopingGhostPose(character: GhostCharacter, name: string): boolean {
-  const clip = ghostClip(character, name);
+export function isLoopingMascotPose(character: MascotCharacter, name: string): boolean {
+  const clip = mascotClip(character, name);
   return clip.frames > 1
     && !clip.directional
     && !clip.gait
@@ -420,30 +420,30 @@ export function isLoopingGhostPose(character: GhostCharacter, name: string): boo
 /** Whether a clip's frames are steps, so they only advance while he moves. A
     pose that is one keeps the movement flag alive on the wire, which a held
     pose otherwise clears. */
-export function isGhostGait(character: GhostCharacter, name: string): boolean {
-  return ghostClip(character, name).gait === true;
+export function isMascotGait(character: MascotCharacter, name: string): boolean {
+  return mascotClip(character, name).gait === true;
 }
 
 /* Which drawing a two-sided clip should show, or null when the clip is a real
    animation and the frame comes from the clock instead. */
-export function directionalGhostFrame(character: GhostCharacter, name: string, facing: GhostFacing): number | null {
-  if (!ghostClip(character, name).directional) return null;
+export function directionalMascotFrame(character: MascotCharacter, name: string, facing: MascotFacing): number | null {
+  if (!mascotClip(character, name).directional) return null;
   return facing === "left" ? 1 : 0;
 }
 
-export function findGhostPose(character: GhostCharacter, kind: string): GhostPoseSpec | null {
+export function findMascotPose(character: MascotCharacter, kind: string): MascotPoseSpec | null {
   return character.poses.find((pose) => pose.kind === kind) ?? null;
 }
 
-export function findGhostAction(character: GhostCharacter, kind: string): GhostActionSpec | null {
+export function findMascotAction(character: MascotCharacter, kind: string): MascotActionSpec | null {
   return character.actions.find((action) => action.kind === kind) ?? null;
 }
 
 /** Every action kind on the roster, which is what the sound layer keys its cues
     off. Kinds are shared where the cue should be (every character's "vanish"
     sounds the same). */
-export const GHOST_ACTION_KINDS: readonly string[] = [
-  ...new Set(GHOST_CHARACTER_LIST.flatMap((character) => character.actions.map((action) => action.kind))),
+export const MASCOT_ACTION_KINDS: readonly string[] = [
+  ...new Set(MASCOT_CHARACTER_LIST.flatMap((character) => character.actions.map((action) => action.kind))),
 ];
 
 /* Where (x, y) is measured against.
@@ -457,40 +457,40 @@ export const GHOST_ACTION_KINDS: readonly string[] = [
    same spot for everyone regardless of layout or scroll position. It is the
    honest choice for an audience of everyone, where there is no single layout to
    aim at. */
-export type GhostAnchor = "page" | "screen";
+export type MascotAnchor = "page" | "screen";
 
-export interface GhostVisual {
+export interface MascotVisual {
   /* Normalized: x across the width, y down the height of whatever the anchor
      below measures against. */
   x: number;
   y: number;
-  anchor: GhostAnchor;
+  anchor: MascotAnchor;
   /* Which roster entry is on screen. A plain string on the wire: an id from a
      newer build resolves to the default rather than breaking the overlay. */
   character: string;
   clip: string;
-  facing: GhostFacing;
+  facing: MascotFacing;
   moving: boolean;
   scale: number;
   speech: { id: number; text: string } | null;
   action: { id: number; kind: string } | null;
 }
 
-export interface GhostAudience {
+export interface MascotAudience {
   mode: "everyone" | "user" | "none";
   userId?: number;
 }
 
-export interface GhostSessionState {
+export interface MascotSessionState {
   route: string;
-  audience: GhostAudience;
-  visual: GhostVisual;
+  audience: MascotAudience;
+  visual: MascotVisual;
   seq: number;
   updatedAt: number;
   ownerUserId: number | null;
 }
 
-export interface GhostPresenceViewer {
+export interface MascotPresenceViewer {
   id: string;
   route: string;
   userId: number | null;
@@ -500,7 +500,7 @@ export interface GhostPresenceViewer {
   showing: boolean;
 }
 
-export interface GhostPresenceRoute {
+export interface MascotPresenceRoute {
   route: string;
   viewers: number;
   named: number;
@@ -514,16 +514,16 @@ export interface GhostPresenceRoute {
 /* Counts for everyone, identities only for the people who can be aimed at. With
    a few hundred pages open the full roster would be a list nobody can read and
    a payload nobody needs, every three seconds. */
-export interface GhostPresence {
-  routes: GhostPresenceRoute[];
-  viewers: GhostPresenceViewer[];
+export interface MascotPresence {
+  routes: MascotPresenceRoute[];
+  viewers: MascotPresenceViewer[];
   totals: { viewers: number; named: number; routes: number; showing: number };
   truncated: boolean;
 }
 
 /* A viewer talking back. Nothing about this is stored: it reaches the owner's
    open panel and a short in-memory buffer, and dies with the process. */
-export interface GhostReply {
+export interface MascotReply {
   id: number;
   at: number;
   route: string;
@@ -532,20 +532,20 @@ export interface GhostReply {
   text: string;
 }
 
-export const GHOST_REPLY_MAX_LENGTH = 200;
+export const MASCOT_REPLY_MAX_LENGTH = 200;
 
-export const EMPTY_GHOST_PRESENCE: GhostPresence = {
+export const EMPTY_MASCOT_PRESENCE: MascotPresence = {
   routes: [],
   viewers: [],
   totals: { viewers: 0, named: 0, routes: 0, showing: 0 },
   truncated: false,
 };
 
-export const DEFAULT_GHOST_VISUAL: GhostVisual = {
+export const DEFAULT_MASCOT_VISUAL: MascotVisual = {
   x: 0.5,
   y: 0.72,
   anchor: "page",
-  character: DEFAULT_GHOST_CHARACTER,
+  character: DEFAULT_MASCOT_CHARACTER,
   clip: "idle",
   facing: "down",
   moving: false,
@@ -558,9 +558,9 @@ const ROUTE_PATTERN = /^\/[\w\-./%]*$/;
 const MAX_ROUTE_LENGTH = 200;
 
 /* Lowercased pathname, no query or hash, no trailing slash; a `/*` suffix is
-   kept so a session can cover a section. Mirrors normalizeGhostRoute in
-   live-backend/src/live/ghost.ts. */
-export function normalizeGhostRoute(raw: string | null | undefined): string | null {
+   kept so a session can cover a section. Mirrors normalizeMascotRoute in
+   live-backend/src/live/mascot.ts. */
+export function normalizeMascotRoute(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
   let value = raw.trim();
   if (!value) return null;
@@ -581,7 +581,7 @@ export function normalizeGhostRoute(raw: string | null | undefined): string | nu
   return wildcard ? `${value === "/" ? "" : value}/*` : value;
 }
 
-export function matchesGhostRoute(pattern: string, route: string): boolean {
+export function matchesMascotRoute(pattern: string, route: string): boolean {
   if (pattern === route) return true;
   if (!pattern.endsWith("/*")) return false;
   const prefix = pattern.slice(0, -2);
@@ -589,28 +589,28 @@ export function matchesGhostRoute(pattern: string, route: string): boolean {
   return route === prefix || route.startsWith(`${prefix}/`);
 }
 
-/* Which clip a walking ghost should be in. Standing still on a walk cycle is
+/* Which clip a walking mascot should be in. Standing still on a walk cycle is
    its first frame, so the wire format never needs a per-direction idle clip. */
-export function walkClipFor(character: GhostCharacter, facing: GhostFacing): string {
+export function walkClipFor(character: MascotCharacter, facing: MascotFacing): string {
   return character.walk[facing];
 }
 
 /* Deltarune pacing: a deliberate walk, and a run on Shift that is about twice
    as fast. Both are fractions of the visible screen per second, converted to
    page fractions by the caller (a long page must not make him teleport). */
-export const GHOST_WALK_SPEED = 0.17;
-export const GHOST_SPRINT_SPEED = 0.38;
+export const MASCOT_WALK_SPEED = 0.17;
+export const MASCOT_SPRINT_SPEED = 0.38;
 
 /* One movement step, as a change in page fractions. x is a fraction of the page
    width and y a fraction of its whole height, so the two axes need different
    conversions to cover the same pixels: without that he walks down at the
    screen's aspect ratio and slower still on a long page. */
-export function ghostMoveStep(
+export function mascotMoveStep(
   input: { dx: number; dy: number },
   options: { sprinting: boolean; dt: number; viewWidth: number; pageHeight: number },
 ): { dx: number; dy: number } {
   const length = Math.hypot(input.dx, input.dy) || 1;
-  const step = (options.sprinting ? GHOST_SPRINT_SPEED : GHOST_WALK_SPEED) * options.dt;
+  const step = (options.sprinting ? MASCOT_SPRINT_SPEED : MASCOT_WALK_SPEED) * options.dt;
   return {
     dx: (input.dx / length) * step,
     dy: (input.dy / length) * step * (options.viewWidth / Math.max(1, options.pageHeight)),
@@ -620,7 +620,7 @@ export function ghostMoveStep(
 /* Sideways the page has no edges: walking off the right brings him back on the
    left. Only x wraps, because the top and bottom of a page are real places and
    falling off them would just lose him. */
-export function wrapGhostX(value: number): number {
+export function wrapMascotX(value: number): number {
   if (!Number.isFinite(value)) return 0.5;
   /* Anything already on the page is left exactly alone: the modulo round trip
      below is lossy in binary floating point, and a position that drifts by a
@@ -632,7 +632,7 @@ export function wrapGhostX(value: number): number {
 /** The shorter way round from one x to another. Following a wrap without this
     slides him back across the whole page instead of over the edge, and any
     move of more than half a page takes the outside route. */
-export function ghostWrapDelta(from: number, to: number): number {
+export function mascotWrapDelta(from: number, to: number): number {
   const delta = to - from;
   if (delta > 0.5) return delta - 1;
   if (delta < -0.5) return delta + 1;
@@ -642,7 +642,7 @@ export function ghostWrapDelta(from: number, to: number): number {
 /* Keeps him inside a comfortable band of the stage and never scrolls past the
    ends of the page, which is what makes walking down feel like a camera
    following him rather than him leaving the frame. */
-export function followGhostCamera(current: number, targetPx: number, viewHeight: number, pageHeight: number): number {
+export function followMascotCamera(current: number, targetPx: number, viewHeight: number, pageHeight: number): number {
   const limit = Math.max(0, pageHeight - viewHeight);
   const band = Math.min(viewHeight * 0.3, viewHeight / 2);
   let next = current;
@@ -651,6 +651,6 @@ export function followGhostCamera(current: number, targetPx: number, viewHeight:
   return Math.max(0, Math.min(limit, next));
 }
 
-export function ghostSpeechDurationMs(text: string): number {
+export function mascotSpeechDurationMs(text: string): number {
   return Math.min(16_000, Math.max(3_500, 1_400 + text.length * 90));
 }

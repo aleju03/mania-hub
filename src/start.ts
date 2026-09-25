@@ -28,7 +28,7 @@ let appRateChecksSincePrune = 0;
 export const DEVICE_ACCESS_PERMISSIONS_POLICY =
   "local-network=(), loopback-network=(), local-network-access=()";
 
-// SAMEORIGIN rather than DENY: /admin/ghost frames the site's own pages to show
+// SAMEORIGIN rather than DENY: /admin/mascot frames the site's own pages to show
 // what a visitor is looking at, and that is a same-origin frame. Cross-site
 // framing is what matters here, and it is refused. The session cookie is
 // HttpOnly + SameSite=Lax so a foreign frame already renders signed out, which
