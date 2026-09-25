@@ -139,12 +139,6 @@ export function SkillLeaderboardBoard({
         />
       </div>
 
-      {snapshot && !snapshot.shrunk && (
-        <p className="text-[11px] text-osu-f1">
-          <Trans>The population baseline for this keymode has not been built yet, so these are raw ratings and players with few plays can sit higher than they should.</Trans>
-        </p>
-      )}
-
       <LeaderboardTable
         rows={rows}
         loading={loading}
