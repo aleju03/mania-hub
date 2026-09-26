@@ -33,6 +33,7 @@ type StageArtRenderer = {
   getOverlayPlacementOrigin(hitbox: Box): { x: number; y: number };
   clampOverlayPosition(id: ReplayOverlayId, x: number, y: number, width: number, height: number, layout: { w: number; h: number }): { x: number; y: number };
   listStageArtOverlayIds(): ReplayOverlayId[];
+  renderSkinHealthBar(layout: typeof LAYOUT, health: number): boolean;
 };
 
 const LAYOUT = { w: 1600, h: 900, playfieldX: 600, playfieldWidth: 400, layoutScale: 1.875 };
@@ -163,6 +164,93 @@ function mockPaddedArt() {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("skinned HP bar hit area", () => {
+  function healthBarRenderer({ blankFill = false, visibleBackground = false } = {}) {
+    // aleju03-lazer uses a transparent 1x1 background and a 614x60 fill
+    // whose only visible pixels are the horizontal strip at y=21..30.
+    const assets = {
+      scorebarBg: { src: `hp-bg-${visibleBackground}-${blankFill}`, width: 1, height: 1 },
+      scorebarColour: { src: `hp-fill-${visibleBackground}-${blankFill}`, width: 614, height: 60 },
+    };
+    vi.stubGlobal("Image", class {
+      naturalWidth = 1;
+      naturalHeight = 1;
+      onload?: () => void;
+      source = "";
+      set src(value: string) {
+        this.source = value;
+        const asset = value === assets.scorebarColour.src ? assets.scorebarColour : assets.scorebarBg;
+        this.naturalWidth = asset.width;
+        this.naturalHeight = asset.height;
+        this.onload?.();
+      }
+    });
+    vi.stubGlobal("document", {
+      createElement: () => {
+        let source = "";
+        return { getContext: () => ({
+          drawImage: (image: { source: string }) => { source = image.source; },
+          getImageData: (_x: number, _y: number, width: number, height: number) => {
+            const data = new Uint8ClampedArray(width * height * 4);
+            for (let y = 0; y < height; y++) {
+              const visible = source === assets.scorebarColour.src
+                ? !blankFill && y >= Math.floor(21 / 60 * height) && y < Math.ceil(31 / 60 * height)
+                : visibleBackground;
+              if (visible) for (let x = 0; x < width; x++) data[(y * width + x) * 4 + 3] = 255;
+            }
+            return { data };
+          },
+        }) };
+      },
+    });
+    const renderer = stageArtRenderer();
+    const draw = vi.fn();
+    Object.assign(renderer, {
+      skinProfile: { assets: { stage: assets } },
+      getStageAssetNativeSize: (asset: { width: number; height: number }) => asset,
+      drawSkinImageRotatedCcw: draw,
+    });
+    const render = (health: number) => {
+      renderer.overlayHitboxes = [];
+      renderer.stageArtOverlayIds.clear();
+      renderer.renderSkinHealthBar(LAYOUT, health);
+      return renderer.overlayHitboxes.find((box) => box.id === "healthBar");
+    };
+    render(1); // Let the alpha reads complete before inspecting trimmed bounds.
+    return { renderer, render, draw, assets };
+  }
+
+  it("lets the visible fill be grabbed when the skin's background is fully transparent", () => {
+    const { renderer, render, draw, assets } = healthBarRenderer();
+    const box = render(1)!;
+    expect(box).toBeDefined();
+    expect(renderer.listStageArtOverlayIds()).toContain("healthBar");
+    const [, x, bottom, length, thickness] = draw.mock.calls.find(([asset]) => asset === assets.scorebarColour)!;
+    const visibleCenter = x + thickness * 26 / 60;
+    expect(box.x).toBeLessThan(visibleCenter);
+    expect(box.x + box.width).toBeGreaterThan(visibleCenter);
+    expect(box.y).toBeCloseTo(bottom - length);
+    expect(box.height).toBeCloseTo(length);
+    expect(render(0.25)).toEqual(box);
+    expect(render(0)).toEqual(box);
+  });
+
+  it("does not make a fully invisible bar selectable", () => {
+    const { renderer, render } = healthBarRenderer({ blankFill: true });
+    expect(render(1)).toBeUndefined();
+    expect(renderer.listStageArtOverlayIds()).not.toContain("healthBar");
+  });
+
+  it("includes visible background art as well as the fill", () => {
+    const { render, draw, assets } = healthBarRenderer({ visibleBackground: true });
+    const box = render(1)!;
+    const [, bgX] = draw.mock.calls.find(([asset]) => asset === assets.scorebarBg)!;
+    const [, fillX, , , thickness] = draw.mock.calls.find(([asset]) => asset === assets.scorebarColour)!;
+    expect(box.x).toBeCloseTo(bgX);
+    expect(box.x + box.width).toBeGreaterThan(fillX + thickness * 26 / 60);
+  });
+});
 
 describe("moved skin art across viewport sizes", () => {
   it("keeps a padded frame aligned with its leaderboard through fitting, saving and export", () => {

@@ -27,6 +27,8 @@ export interface BannedUser {
   reviewedAt: string | null;
   hasProfile: boolean;
   companellaPlays: number;
+  /* Blocked from connecting Companella and sending plays through it. */
+  companellaBlocked: boolean;
   displayName: string | null;
   /* The pp their counted Companella imports price to while osu! has them
      gone (restricted-pp.ts); null when nothing counts. */
@@ -166,4 +168,18 @@ export const setRestrictedPpPlaysRemoved = createServerFn({ method: "POST" })
     });
     if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/restricted-pp`);
     return Number(((await response.json()) as { changed?: unknown }).changed ?? 0);
+  });
+
+/** Blocks an account from Companella (revoking what it has connected), or lifts the block. */
+export const setCompanellaAccountBlocked = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; blocked?: unknown }) => ({ userId: validUserId(data?.userId), blocked: data?.blocked === true }))
+  .handler(async ({ data }): Promise<number> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess(data.blocked ? "Block from Companella" : "Unblock from Companella");
+    const response = await adminFetch(`/api/admin/companella/block/${data.userId}`, {
+      method: "POST",
+      body: JSON.stringify({ blocked: data.blocked }),
+    });
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/block`);
+    return Number(((await response.json()) as { revoked?: unknown }).revoked ?? 0);
   });

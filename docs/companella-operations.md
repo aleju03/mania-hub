@@ -219,14 +219,15 @@ it.
 ## Rate flags
 
 A play whose frames do not confirm the speed its mods claim is not held. It
-counts, the player is not told, and `/admin/companella-flags` lists it (each
+counts, the player is not told, and `/admin/companella?tab=flags` lists it (each
 one also logs `companella_rate_suspicious`). "Frames read slower" is the one to
 act on: `claimed_rate_too_high` never happened on an honest replay in the
 measurement, and a NoMod replay relabelled DT reads about 1.00x against a 1.50x
 claim. "Unreadable" is mostly honest: about 6% of honest DT plays have too few
-idle frames to read or come from a game at 60 fps or below. Hold takes a play
-out of its owner's preview (`quarantined` through the review route); Count it
-puts it back.
+idle frames to read or come from a game at 60 fps or below. Exclude takes a play
+out of its owner's preview (`quarantined` through the review route); Restore
+puts it back. Click a player name to open their Players tab details, including
+their other plays and the account block control.
 
 ## What is deliberately NOT logged
 

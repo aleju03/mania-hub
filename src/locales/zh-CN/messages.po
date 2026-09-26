@@ -425,6 +425,11 @@ msgstr "{0} 个收藏册"
 msgid "{0} columns selected"
 msgstr "已选 {0} 列"
 
+#. placeholder {0}: active.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0} connected"
+msgstr "已连接 {0} 个"
+
 #. placeholder {0}: formatNumber(history.records.mostCopies.copies, locale)
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "{0} copies"
@@ -1079,6 +1084,10 @@ msgstr "已收集 {collectedShown}/{0}"
 #: src/routes/packs_.collections.tsx
 #~ msgid "{collector}'s collection"
 #~ msgstr "{collector} 的收藏册"
+
+#: src/routes/integrations.tsx
+#~ msgid "{connected} connected"
+#~ msgstr "已连接 {connected} 个"
 
 #: src/components/packs/CardSpotlight.tsx
 #~ msgid "{copiesText} of these copies were gifts, from {sendersText}"
@@ -2488,6 +2497,7 @@ msgstr "一段时间"
 msgid "A-Z"
 msgstr "A-Z"
 
+#: src/components/settings/CompanellaGroup.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
@@ -3161,7 +3171,7 @@ msgstr ""
 
 #: src/components/companella/InstallationList.tsx
 msgid "approved"
-msgstr ""
+msgstr "批准于"
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Approved"
@@ -3178,6 +3188,10 @@ msgstr ""
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Approving a new connection needs a recent sign-in. Sign in again, then approve."
 #~ msgstr ""
+
+#: src/routes/integrations.tsx
+#~ msgid "Apps connected to your account."
+#~ msgstr "已连接到你账号的应用。"
 
 #: src/components/communities/field-options.tsx
 msgid "Arabic"
@@ -4620,8 +4634,9 @@ msgstr "社区投票选出新的 GOAT"
 
 #: src/routes/companella_.test-callback.tsx
 #: src/routes/companella.tsx
+#: src/routes/news_.companella.tsx
 msgid "Companella"
-msgstr ""
+msgstr "Companella"
 
 #: src/routes/companella.tsx
 #~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the connection, and the approval is bound to that connection only."
@@ -4630,6 +4645,22 @@ msgstr ""
 #: src/routes/companella.tsx
 #~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the installation, and the approval is bound to that installation only."
 #~ msgstr ""
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella is a desktop app for osu!stable made by a different developer (<0>erdbee.re</0>). If you use it, you can connect it to your account and it sends every mania play you finish on stable, with its replay."
+#~ msgstr "Companella 是一款由其他开发者制作的 osu!stable 桌面应用（<0>erdbee.re</0>）。如果你在用它，可以把它连接到你的账号，它会上传你在 stable 上完成的每一局 mania 成绩，并附带回放。"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella is a desktop app for osu!stable. Once you connect it to your account, it sends every mania play you finish on stable, with its replay."
+#~ msgstr "Companella 是一款 osu!stable 桌面应用。连接到你的账号后，它会上传你在 stable 上完成的每一局 mania 成绩，并附带回放。"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella now connects to Mania Tracker"
+#~ msgstr "Companella 现已可以连接 Mania Tracker"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella now connects to Mania Tracker."
+#~ msgstr "Companella 现已可以连接 Mania Tracker。"
 
 #: src/routes/farm-helper.tsx
 msgid "compared to {range} pp"
@@ -4683,11 +4714,11 @@ msgstr "连接已断开，正在重连。"
 #: src/components/companella/InstallationList.tsx
 #: src/routes/companella_.authorize.tsx
 msgid "Connection name"
-msgstr ""
+msgstr "连接名称"
 
 #: src/components/companella/InstallationList.tsx
 msgid "Connections"
-msgstr ""
+msgstr "连接"
 
 #: src/routes/legal.tsx
 msgid "Contact"
@@ -4778,7 +4809,7 @@ msgstr "无法核对这个邀请链接，请再试一次。"
 
 #: src/routes/companella.tsx
 msgid "Could not clear the revoked connections."
-msgstr ""
+msgstr "无法清除已撤销的连接。"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Could not confirm delivery. Retry to check this same gift."
@@ -4910,7 +4941,7 @@ msgstr "无法移除这条收录。"
 
 #: src/routes/companella.tsx
 msgid "Could not rename that connection."
-msgstr ""
+msgstr "无法重命名该连接。"
 
 #: src/routes/companella.tsx
 #~ msgid "Could not rename that installation."
@@ -4920,9 +4951,10 @@ msgstr ""
 msgid "Could not resize the image."
 msgstr "无法调整图片尺寸。"
 
+#: src/components/settings/CompanellaGroup.tsx
 #: src/routes/companella.tsx
 msgid "Could not revoke that connection."
-msgstr ""
+msgstr "无法撤销该连接。"
 
 #: src/routes/companella.tsx
 #~ msgid "Could not revoke that installation."
@@ -4930,7 +4962,7 @@ msgstr ""
 
 #: src/routes/companella.tsx
 msgid "Could not revoke the connections."
-msgstr ""
+msgstr "无法撤销这些连接。"
 
 #: src/routes/companella.tsx
 #~ msgid "Could not revoke the installations."
@@ -5719,6 +5751,10 @@ msgstr "丢弃草稿"
 msgid "disconnect"
 msgstr "断开连接"
 
+#: src/routes/integrations.tsx
+#~ msgid "Disconnect this computer? Companella on it stops sending plays right away."
+#~ msgstr ""
+
 #: src/components/layout/Nav.tsx
 msgid "Discord bot"
 msgstr "Discord 机器人"
@@ -5877,6 +5913,10 @@ msgstr "下载 {0}"
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Download again"
 msgstr "重新下载"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Download Companella"
+#~ msgstr "下载 Companella"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Download replay"
@@ -7412,7 +7452,7 @@ msgstr "隐藏"
 #. placeholder {0}: revoked.length
 #: src/components/companella/InstallationList.tsx
 msgid "Hide {0} revoked"
-msgstr ""
+msgstr "隐藏 {0} 个已撤销"
 
 #. placeholder {0}: mode.keyCount
 #: src/routes/player/$username.tsx
@@ -7748,6 +7788,18 @@ msgstr "混合"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
 
+#: src/routes/news_.companella.tsx
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
+#~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，其中 ranked 图的成绩会计入你在排行榜上的 pp。"
+
+#: src/routes/news_.companella.tsx
+msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。不过，作弊仍然可能让你被 Mania Tracker 封禁。"
+
+#: src/routes/news_.companella.tsx
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
+#~ msgstr "如果 osu! 限制了你的账号，你的个人资料仍会显示你上传的成绩，并用与 osu! 相同的算法根据其中 ranked 图的成绩计算你的 pp，所以你仍会出现在排行榜上。作弊仍会让你被 Mania Tracker 封禁。"
+
 #: src/routes/__root.tsx
 msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
 msgstr "如果这个网站对你有帮助，欢迎支持一下。捐赠用于支付服务器费用，并让开发得以继续。"
@@ -7995,6 +8047,10 @@ msgstr "查看 {0} 的 maniacard"
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Installation name"
 #~ msgstr ""
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Integrations"
+msgstr "集成"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -8412,11 +8468,16 @@ msgstr "最后一页"
 
 #: src/components/companella/InstallationList.tsx
 msgid "last seen"
-msgstr ""
+msgstr "最后活动于"
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Last seen"
 #~ msgstr ""
+
+#. placeholder {0}: formatTimeAgo(installation.lastSeenAt, locale)
+#: src/components/settings/CompanellaGroup.tsx
+msgid "last seen {0}"
+msgstr "最后活动于 {0}"
 
 #. placeholder {0}: formatDetailedTimeAgo(user.last_visit, locale)
 #: src/routes/player/$username.tsx
@@ -9926,8 +9987,9 @@ msgid "never loaded here"
 msgstr "从未在此加载过"
 
 #: src/components/companella/InstallationList.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "never seen"
-msgstr ""
+msgstr "从未活动"
 
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
@@ -10777,9 +10839,25 @@ msgstr "不是有效的战队 ID。"
 msgid "Not analyzed yet."
 msgstr ""
 
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not available for this account yet."
+msgstr "此账号暂不可用。"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not available for this account."
+msgstr "此账号不可用。"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not available yet."
+msgstr "暂不可用。"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Not connected"
 msgstr ""
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not connected. Connect from inside Companella."
+msgstr "未连接。请在 Companella 内连接。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -10839,6 +10917,10 @@ msgstr "未评级"
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not rated."
 msgstr ""
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not reachable right now."
+msgstr "暂时无法访问。"
 
 #: src/components/communities/field-options.tsx
 msgid "not set"
@@ -10934,11 +11016,11 @@ msgstr "已加载的成绩里没有符合「{trimmedQuery}」的。"
 
 #: src/components/companella/InstallationList.tsx
 msgid "Nothing is connected right now."
-msgstr ""
+msgstr "当前没有任何连接。"
 
 #: src/components/companella/InstallationList.tsx
 msgid "Nothing is connected yet. Connect from Companella's settings."
-msgstr ""
+msgstr "尚未连接任何设备。请在 Companella 的设置中连接。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
@@ -11116,8 +11198,8 @@ msgstr "最早的最佳成绩"
 #~ msgstr ""
 
 #: src/components/replay/ReplayControls.tsx
-msgid "On"
-msgstr "开"
+#~ msgid "On"
+#~ msgstr "开"
 
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -11157,6 +11239,10 @@ msgstr "已展示"
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "已列入待办"
+
+#: src/routes/news_.companella.tsx
+msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
+msgstr "把 Companella 连接到你的账号后，它会上传你完成的每一局 mania 成绩，并附带回放。这些成绩会带着 Companella 图标显示在你个人资料的最近标签页和追踪器中。osu! 也收录的成绩只显示一次。"
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13616,20 +13702,25 @@ msgstr "正在揭晓剩下的…"
 #~ msgstr "查看材料（{available}/{0}）"
 
 #: src/components/companella/InstallationList.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "Revoke"
-msgstr ""
+msgstr "撤销"
 
 #: src/components/companella/InstallationList.tsx
 msgid "Revoke all"
-msgstr ""
+msgstr "全部撤销"
 
 #: src/routes/companella.tsx
 msgid "Revoke every connection on this account?"
-msgstr ""
+msgstr "撤销此账号的所有连接？"
 
 #: src/routes/companella.tsx
 #~ msgid "Revoke every installation on this account?"
 #~ msgstr ""
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Revoke this connection? Companella on that computer stops sending plays right away."
+msgstr "撤销此连接？该电脑上的 Companella 会立即停止上传成绩。"
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
@@ -14482,6 +14573,7 @@ msgstr "设置"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
+#: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "设置"
 
@@ -14598,7 +14690,7 @@ msgstr "显示 {0} 个选项"
 #. placeholder {0}: revoked.length
 #: src/components/companella/InstallationList.tsx
 msgid "Show {0} revoked"
-msgstr ""
+msgstr "显示 {0} 个已撤销"
 
 #. placeholder {0}: mode.keyCount
 #: src/routes/player/$username.tsx
@@ -14883,6 +14975,10 @@ msgstr "请先用 osu! 登录，再关联 Discord。"
 #: src/routes/companella.tsx
 msgid "Sign in with osu! to connect Companella and see the plays it imported."
 msgstr ""
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Sign in with osu! to connect it."
+msgstr "使用 osu! 登录后即可连接。"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in with osu! to play blitz."
@@ -15202,6 +15298,14 @@ msgstr "部分打击音样本无法解码，已被略过。"
 #: src/lib/replay-export/errors.ts
 msgid "Some of the replay's files couldn't be loaded."
 msgstr "回放的部分文件无法加载。"
+
+#: src/routes/news_.companella.tsx
+msgid "Some of you might already know Companella, a desktop app for osu! (<0>erdbee.re</0>). You can now connect it to Mania Tracker to submit your plays here. This integration works with osu!stable only, so lazer plays can't be submitted this way."
+msgstr "有些人可能已经知道 Companella，它是一款 osu! 桌面应用（<0>erdbee.re</0>）。现在你可以将它连接到 Mania Tracker，把成绩上传到这里。这项集成仅支持 osu!stable，因此 lazer 的成绩无法通过这种方式上传。"
+
+#: src/routes/news_.companella.tsx
+#~ msgid "Some of you might've heard about Companella already. If not, it's a desktop app for osu! (<0>erdbee.re</0>), and it's what sends your plays here. It only works with osu!stable, so lazer plays can't be submitted this way."
+#~ msgstr "有些人可能已经听说过 Companella。如果还没有：它是一款 osu! 桌面应用（<0>erdbee.re</0>），你的成绩就是通过它上传到这里的。它只支持 osu!stable，lazer 的成绩无法通过这种方式上传。"
 
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -15678,6 +15782,10 @@ msgstr "提交"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
 msgstr ""
+
+#: src/routes/news_.companella.tsx
+msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
+msgstr "无论你是离线、在私服上游玩，还是被 osu! 限制，都可以通过 Companella 向你的账号上传成绩。"
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -17478,6 +17586,10 @@ msgstr ""
 msgid "Those images are no longer available."
 msgstr "这些图片已无法查看。"
 
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
+#~ msgstr "这些成绩会带着 Companella 图标显示在你个人资料的最近标签页和追踪器中。osu! 也收录的成绩只显示一次。"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "四"
@@ -18696,6 +18808,10 @@ msgstr "更新内容"
 msgid "When each card first joined your collection"
 msgstr "每张卡片最初加入你收藏册的时间"
 
+#: src/routes/news_.companella.tsx
+#~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
+#~ msgstr "当 osu! 也有同一局成绩时，你的技能评分会直接读取回放中的击打时机，而不是根据判定数量来估算。"
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
 msgstr "有人打出新的最佳成绩时，会自动发到你的频道，附带完整信息。"
@@ -18931,6 +19047,14 @@ msgstr "你的收藏册数量已达上限。"
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
 
+#: src/routes/news_.companella.tsx
+msgid "You can also submit ScoreV2 and Hard Rock plays this way."
+msgstr "你也可以用这种方式上传使用 ScoreV2 和 Hard Rock 的成绩。"
+
+#: src/routes/news_.companella.tsx
+#~ msgid "You can also submit ScoreV2 and Hard Rock plays through Companella."
+#~ msgstr "你也可以通过 Companella 上传使用 ScoreV2 和 Hard Rock 的成绩。"
+
 #: src/components/player/DisplayNameEditor.tsx
 msgid "You can change it once a week. Your profile link keeps your osu! name."
 msgstr "每周可以更改一次。你的主页链接仍使用你的 osu! 名字。"
@@ -18944,9 +19068,41 @@ msgstr "你可以在 {0} 再次更改名字。"
 msgid "You can change your name once a week."
 msgstr "每周可以更改一次名字。"
 
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
+#~ msgstr ""
+
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "你最多可以发布 {COMMUNITY_MAX_PER_USER} 个服务器。"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can now import plays from Companella"
+#~ msgstr "现在可以从 Companella 导入成绩"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can now import plays from Companella."
+#~ msgstr "现在可以从 Companella 导入成绩。"
+
+#: src/routes/news_.companella.tsx
+msgid "You can now submit plays through Companella"
+msgstr "现在可以通过 Companella 上传成绩"
+
+#: src/routes/news_.companella.tsx
+msgid "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!."
+msgstr "现在，无论你是离线、在私服上游玩，还是被 osu! 限制，都可以向你的 Mania Tracker 账号上传成绩。"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!. They're sent by Companella, a desktop app made by a different developer (<0>erdbee.re</0>). It only works with osu!stable, so lazer plays can't be submitted this way."
+#~ msgstr "现在，无论你是离线、在私服上游玩，还是被 osu! 限制，都可以向你的 Mania Tracker 账号上传成绩。成绩由 Companella 上传，这是一款由其他开发者制作的桌面应用（<0>erdbee.re</0>）。它只支持 osu!stable，lazer 的成绩无法通过这种方式上传。"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can revoke Companella's connection from <0>Integrations</0> in the user menu. It stops sending plays right away."
+#~ msgstr "你可以在用户菜单的<0>集成</0>中撤销 Companella 的连接。撤销后它会立即停止上传成绩。"
+
+#: src/routes/news_.companella.tsx
+msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
+msgstr "你可以在<0>设置</0>的偏好设置中撤销 Companella 的连接。撤销后它会立即停止上传成绩。"
 
 #: src/routes/farm-helper.tsx
 msgid "you could gain"
@@ -19307,6 +19463,10 @@ msgstr "你的卡组"
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "你的展示柜"
+
+#: src/routes/news_.companella.tsx
+msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
+msgstr "你的技能评分会用到你每个成绩的准确度，osu! 上的成绩通常是根据判定数量估算的。如果 Companella 也上传了你在 osu! 上某个成绩的回放，就会改为根据你每个音符按早或按晚了多少来读取。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"

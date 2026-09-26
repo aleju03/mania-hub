@@ -56,6 +56,7 @@ const LEADERBOARD_EXPLOSION_ASSETS: ReplaySkinImageAsset[] = [1, 2].map((part) =
 // Pointer this close to the stage bottom edge is past any overlay it was
 // reaching for, so the bottom chrome may reveal there (CSS px).
 const OVERLAY_APPROACH_EDGE_PX = 12;
+const OVERLAY_TOUCH_TARGET_PX = 44;
 // Arrow keys nudge the selected overlays one CSS px at a time, Shift ten, the
 // way every editor with a drag-and-drop canvas does it.
 const OVERLAY_NUDGE_PX = 1;
@@ -2900,13 +2901,34 @@ export class ManiaReplayRenderer {
     };
   }
 
-  private getOverlayAtPoint(x: number, y: number): ReplayOverlayHitbox | null {
+  private getOverlayAtPoint(x: number, y: number, pointerType = "mouse"): ReplayOverlayHitbox | null {
     for (let index = this.overlayHitboxes.length - 1; index >= 0; index -= 1) {
       const box = this.overlayHitboxes[index];
       const frame = this.getOverlayInteractionFrame(box);
       if (x >= frame.x && x <= frame.x + frame.width && y >= frame.y && y <= frame.y + frame.height) {
         return box;
       }
+    }
+    if (pointerType === "touch") {
+      // Thin skin art (especially HP bars) needs a finger-sized target. Keep
+      // actual hits above padded hits, then choose the closest visible piece.
+      const rect = this.canvas.getBoundingClientRect();
+      const minWidth = OVERLAY_TOUCH_TARGET_PX * this.cssWidth / Math.max(1, rect.width);
+      const minHeight = OVERLAY_TOUCH_TARGET_PX * this.cssHeight / Math.max(1, rect.height);
+      let closest: ReplayOverlayHitbox | null = null;
+      let closestDistance = Infinity;
+      for (let index = this.overlayHitboxes.length - 1; index >= 0; index -= 1) {
+        const box = this.overlayHitboxes[index];
+        const dx = Math.max(box.x - x, 0, x - box.x - box.width);
+        const dy = Math.max(box.y - y, 0, y - box.y - box.height);
+        if (dx > Math.max(0, (minWidth - box.width) / 2) || dy > Math.max(0, (minHeight - box.height) / 2)) continue;
+        const distance = dx * dx + dy * dy;
+        if (distance < closestDistance) {
+          closest = box;
+          closestDistance = distance;
+        }
+      }
+      return closest;
     }
     return null;
   }
@@ -3009,13 +3031,18 @@ export class ManiaReplayRenderer {
     return Math.max(6, Math.min(12, Math.min(box.width, box.height) * 0.25));
   }
 
-  private getOverlayResizeDirection(box: ReplayOverlayHitbox, x: number, y: number): ReplayOverlayResizeDirection | null {
+  private getOverlayResizeDirection(box: ReplayOverlayHitbox, x: number, y: number, pointerType = "mouse"): ReplayOverlayResizeDirection | null {
+    // One finger moves; two fingers resize. Edge handles are too ambiguous
+    // on touch, and used to consume the entire width of a narrow HP bar.
+    if (pointerType === "touch") return null;
     const frame = this.getOverlayInteractionFrame(box);
     const size = this.getOverlayResizeZoneSize(frame);
-    const nearTop = y >= frame.y && y <= frame.y + size;
-    const nearRight = x >= frame.x + frame.width - size && x <= frame.x + frame.width;
-    const nearBottom = y >= frame.y + frame.height - size && y <= frame.y + frame.height;
-    const nearLeft = x >= frame.x && x <= frame.x + size;
+    const sizeX = Math.min(size, frame.width / 4);
+    const sizeY = Math.min(size, frame.height / 4);
+    const nearTop = y >= frame.y && y <= frame.y + sizeY;
+    const nearRight = x >= frame.x + frame.width - sizeX && x <= frame.x + frame.width;
+    const nearBottom = y >= frame.y + frame.height - sizeY && y <= frame.y + frame.height;
+    const nearLeft = x >= frame.x && x <= frame.x + sizeX;
     if (nearTop && nearRight) return "ne";
     if (nearTop && nearLeft) return "nw";
     if (nearBottom && nearRight) return "se";
@@ -3095,7 +3122,7 @@ export class ManiaReplayRenderer {
         return;
       }
     }
-    const hitbox = this.getOverlayAtPoint(point.x, point.y);
+    const hitbox = this.getOverlayAtPoint(point.x, point.y, event.pointerType);
     const desktopSelection = this.canUseDesktopOverlaySelection(event);
     // preventDefault below prevents the browser's normal focus change.
     // Return keyboard control to the canvas after using a settings button.
@@ -3152,7 +3179,7 @@ export class ManiaReplayRenderer {
       return;
     }
 
-    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y);
+    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y, event.pointerType);
     if (resizeDirection) {
       this.resizingOverlay = {
         id: hitbox.id,
@@ -3868,9 +3895,9 @@ export class ManiaReplayRenderer {
     layout: Layout,
     id: ReplayOverlayId,
     base: ReplayOverlayFrame,
-    art?: { asset: ReplaySkinImageAsset; rotatedCcw?: boolean },
+    art?: { asset: ReplaySkinImageAsset; rotatedCcw?: boolean; bounds?: SkinArtBounds },
   ): (ReplayOverlayFrame & { scale: number }) | null {
-    const bounds = art ? getSkinArtOpaqueBounds(art.asset.src) : null;
+    const bounds = art?.bounds ?? (art ? getSkinArtOpaqueBounds(art.asset.src) : null);
     const blank = bounds != null && (bounds.right <= bounds.left || bounds.bottom <= bounds.top);
     if (!blank) this.stageArtOverlayIds.add(id);
     const placement = this.getOverlayPlacement(id);
@@ -4038,26 +4065,47 @@ export class ManiaReplayRenderer {
     const reference = this.overlaySettings.hitError.reference ?? this.getOverlayReference(layout);
     const spacing = (reference.spacingScale ?? 1) * h / reference.height;
     const baseX = playfieldX + playfieldWidth + 8 * spacing;
-    const baseThickness = (bgNative?.height ?? colourNative.height) * pieceScale;
+    const bgBaseThickness = (bgNative?.height ?? colourNative.height) * pieceScale;
+    const colourBaseThickness = colourNative.height * pieceScale;
+    const colourBaseLength = colourNative.width * pieceScale;
+    const colourOffsetX = Math.max(0, (bgBaseThickness - colourBaseThickness) / 2);
+    const baseThickness = Math.max(bgBaseThickness, colourBaseThickness);
     const baseLength = Math.max(bgNative?.width ?? 0, colourNative.width) * pieceScale;
-    // The whole bar moves as one piece, so the frame is the bg's box (or the
-    // fill's, for a skin that ships no bg) and every part scales with it.
+    // Some skins hide scorebar-bg with a transparent 1x1 image. Hit-test the
+    // union of the background and full fill, or the visible bar has no target.
+    // Full HP keeps its grab area stable while the replay's health changes.
+    const parts = [{ asset: colour, x: colourOffsetX, y: baseLength - colourBaseLength, width: colourBaseThickness, height: colourBaseLength }];
+    if (stage.scorebarBg && bgNative) {
+      const length = bgNative.width * pieceScale;
+      parts.push({ asset: stage.scorebarBg, x: 0, y: baseLength - length, width: bgBaseThickness, height: length });
+    }
+    const visibleParts = parts.flatMap(({ asset, ...rect }) => {
+      const bounds = getSkinArtOpaqueBounds(asset.src);
+      if (bounds && (bounds.right <= bounds.left || bounds.bottom <= bounds.top)) return [];
+      return [bounds ? this.getStageArtHitbox(rect, bounds, true) : rect];
+    });
+    const bounds = visibleParts.length > 0 ? {
+      left: Math.min(...visibleParts.map((part) => part.x)) / baseThickness,
+      top: Math.min(...visibleParts.map((part) => part.y)) / baseLength,
+      right: Math.max(...visibleParts.map((part) => part.x + part.width)) / baseThickness,
+      bottom: Math.max(...visibleParts.map((part) => part.y + part.height)) / baseLength,
+    } : { left: 0, top: 0, right: 0, bottom: 0 };
     const frame = this.getStageArtFrame(layout, "healthBar", {
       x: baseX, y: h - baseLength, width: baseThickness, height: baseLength,
-    }, { asset: stage.scorebarBg ?? colour, rotatedCcw: true });
+    }, { asset: colour, bounds });
     // The skin still owns the bar even while it is hidden; falling through
     // would draw our own over a skin that has its own.
     if (!frame) return true;
     const x = frame.x;
     const bottom = frame.y + frame.height;
-    const bgThickness = baseThickness * frame.scale;
+    const bgThickness = bgBaseThickness * frame.scale;
 
     if (stage.scorebarBg && bgNative) {
       this.drawSkinImageRotatedCcw(stage.scorebarBg, x, bottom, bgNative.width * pieceScale * frame.scale, bgThickness, 1);
     }
-    const colourThickness = colourNative.height * pieceScale * frame.scale;
-    const colourX = x + Math.max(0, (bgThickness - colourThickness) / 2);
-    const colourLength = colourNative.width * pieceScale * frame.scale;
+    const colourThickness = colourBaseThickness * frame.scale;
+    const colourX = x + colourOffsetX * frame.scale;
+    const colourLength = colourBaseLength * frame.scale;
     if (health > 0) {
       this.drawSkinImageRotatedCcw(colour, colourX, bottom, colourLength, colourThickness, 0.98, health);
     }

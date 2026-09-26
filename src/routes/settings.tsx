@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { SettingsPanel } from "../components/settings/SettingsPanel";
+import { SettingsPanel, isSettingsTabId, type SettingsTabId } from "../components/settings/SettingsPanel";
 
 export const Route = createFileRoute("/settings")({
+  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTabId } => ({
+    tab: isSettingsTabId(search.tab) ? search.tab : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Settings" },
@@ -14,5 +17,6 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  return <SettingsPanel variant="page" />;
+  const { tab } = Route.useSearch();
+  return <SettingsPanel variant="page" initialTab={tab} />;
 }

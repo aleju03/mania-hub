@@ -43,7 +43,9 @@ import { Route as AdminBannedUsersRouteImport } from './routes/admin/banned-user
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
 import { Route as AdminBugReportsRouteImport } from './routes/admin/bug-reports'
 import { Route as AdminCollectionsRouteImport } from './routes/admin/collections'
+import { Route as AdminCompanellaRouteImport } from './routes/admin/companella'
 import { Route as AdminCompanellaFlagsRouteImport } from './routes/admin/companella-flags'
+import { Route as AdminCompanellaPlayersRouteImport } from './routes/admin/companella-players'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDynamicRendersRouteImport } from './routes/admin/dynamic-renders'
@@ -76,6 +78,7 @@ import { Route as CompanellaDocsRouteImport } from './routes/companella_.docs'
 import { Route as CompanellaTestCallbackRouteImport } from './routes/companella_.test-callback'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
+import { Route as NewsCompanellaRouteImport } from './routes/news_.companella'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ReplayCommunityRouteImport } from './routes/replay_.community'
@@ -280,9 +283,19 @@ const AdminCollectionsRoute = AdminCollectionsRouteImport.update({
   path: '/admin/collections',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCompanellaRoute = AdminCompanellaRouteImport.update({
+  id: '/admin/companella',
+  path: '/admin/companella',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCompanellaFlagsRoute = AdminCompanellaFlagsRouteImport.update({
   id: '/admin/companella-flags',
   path: '/admin/companella-flags',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCompanellaPlayersRoute = AdminCompanellaPlayersRouteImport.update({
+  id: '/admin/companella-players',
+  path: '/admin/companella-players',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
@@ -444,6 +457,11 @@ const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
 const DevRecentRatingsPreviewRoute = DevRecentRatingsPreviewRouteImport.update({
   id: '/dev/recent-ratings-preview',
   path: '/dev/recent-ratings-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewsCompanellaRoute = NewsCompanellaRouteImport.update({
+  id: '/news_/companella',
+  path: '/news/companella',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PacksCollectionsRoute = PacksCollectionsRouteImport.update({
@@ -659,7 +677,9 @@ export interface FileRoutesByFullPath {
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
+  '/admin/companella': typeof AdminCompanellaRoute
   '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
+  '/admin/companella-players': typeof AdminCompanellaPlayersRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
@@ -692,6 +712,7 @@ export interface FileRoutesByFullPath {
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
+  '/news/companella': typeof NewsCompanellaRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/community': typeof ReplayCommunityRoute
@@ -761,7 +782,9 @@ export interface FileRoutesByTo {
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
+  '/admin/companella': typeof AdminCompanellaRoute
   '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
+  '/admin/companella-players': typeof AdminCompanellaPlayersRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
@@ -794,6 +817,7 @@ export interface FileRoutesByTo {
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
+  '/news/companella': typeof NewsCompanellaRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay/community': typeof ReplayCommunityRoute
@@ -864,7 +888,9 @@ export interface FileRoutesById {
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
+  '/admin/companella': typeof AdminCompanellaRoute
   '/admin/companella-flags': typeof AdminCompanellaFlagsRoute
+  '/admin/companella-players': typeof AdminCompanellaPlayersRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/dynamic-renders': typeof AdminDynamicRendersRoute
@@ -897,6 +923,7 @@ export interface FileRoutesById {
   '/companella_/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
+  '/news_/companella': typeof NewsCompanellaRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/replay_/community': typeof ReplayCommunityRoute
@@ -968,7 +995,9 @@ export interface FileRouteTypes {
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
+    | '/admin/companella'
     | '/admin/companella-flags'
+    | '/admin/companella-players'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
@@ -1001,6 +1030,7 @@ export interface FileRouteTypes {
     | '/companella/test-callback'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
+    | '/news/companella'
     | '/packs/collections'
     | '/player/$username'
     | '/replay/community'
@@ -1070,7 +1100,9 @@ export interface FileRouteTypes {
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
+    | '/admin/companella'
     | '/admin/companella-flags'
+    | '/admin/companella-players'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
@@ -1103,6 +1135,7 @@ export interface FileRouteTypes {
     | '/companella/test-callback'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
+    | '/news/companella'
     | '/packs/collections'
     | '/player/$username'
     | '/replay/community'
@@ -1172,7 +1205,9 @@ export interface FileRouteTypes {
     | '/admin/bbcode-images'
     | '/admin/bug-reports'
     | '/admin/collections'
+    | '/admin/companella'
     | '/admin/companella-flags'
+    | '/admin/companella-players'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/dynamic-renders'
@@ -1205,6 +1240,7 @@ export interface FileRouteTypes {
     | '/companella_/test-callback'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
+    | '/news_/companella'
     | '/packs_/collections'
     | '/player/$username'
     | '/replay_/community'
@@ -1275,7 +1311,9 @@ export interface RootRouteChildren {
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
   AdminBugReportsRoute: typeof AdminBugReportsRoute
   AdminCollectionsRoute: typeof AdminCollectionsRoute
+  AdminCompanellaRoute: typeof AdminCompanellaRoute
   AdminCompanellaFlagsRoute: typeof AdminCompanellaFlagsRoute
+  AdminCompanellaPlayersRoute: typeof AdminCompanellaPlayersRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminDynamicRendersRoute: typeof AdminDynamicRendersRoute
@@ -1308,6 +1346,7 @@ export interface RootRouteChildren {
   CompanellaTestCallbackRoute: typeof CompanellaTestCallbackRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   DevRecentRatingsPreviewRoute: typeof DevRecentRatingsPreviewRoute
+  NewsCompanellaRoute: typeof NewsCompanellaRoute
   PacksCollectionsRoute: typeof PacksCollectionsRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   ReplayCommunityRoute: typeof ReplayCommunityRoute
@@ -1571,11 +1610,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCollectionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/companella': {
+      id: '/admin/companella'
+      path: '/admin/companella'
+      fullPath: '/admin/companella'
+      preLoaderRoute: typeof AdminCompanellaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/companella-flags': {
       id: '/admin/companella-flags'
       path: '/admin/companella-flags'
       fullPath: '/admin/companella-flags'
       preLoaderRoute: typeof AdminCompanellaFlagsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/companella-players': {
+      id: '/admin/companella-players'
+      path: '/admin/companella-players'
+      fullPath: '/admin/companella-players'
+      preLoaderRoute: typeof AdminCompanellaPlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/dan-classifier': {
@@ -1800,6 +1853,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/recent-ratings-preview'
       fullPath: '/dev/recent-ratings-preview'
       preLoaderRoute: typeof DevRecentRatingsPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/news_/companella': {
+      id: '/news_/companella'
+      path: '/news/companella'
+      fullPath: '/news/companella'
+      preLoaderRoute: typeof NewsCompanellaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/packs_/collections': {
@@ -2163,7 +2223,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
   AdminBugReportsRoute: AdminBugReportsRoute,
   AdminCollectionsRoute: AdminCollectionsRoute,
+  AdminCompanellaRoute: AdminCompanellaRoute,
   AdminCompanellaFlagsRoute: AdminCompanellaFlagsRoute,
+  AdminCompanellaPlayersRoute: AdminCompanellaPlayersRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminDynamicRendersRoute: AdminDynamicRendersRoute,
@@ -2196,6 +2258,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaTestCallbackRoute: CompanellaTestCallbackRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   DevRecentRatingsPreviewRoute: DevRecentRatingsPreviewRoute,
+  NewsCompanellaRoute: NewsCompanellaRoute,
   PacksCollectionsRoute: PacksCollectionsRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   ReplayCommunityRoute: ReplayCommunityRoute,

@@ -7,9 +7,13 @@ show on the tracker and on the player's profile Recent tab (see "Privacy").
 
 **Status: off by default.** `COMPANELLA_MODE` is `disabled` unless a deployment
 sets it, and nothing in this integration affects snipes, packs, goals or any
-official projection. The one public total it produces is simulated pp for
-accounts osu! turned away (see "Simulated pp for restricted players"); a public
-row may show the play's own pp beside it. See
+official projection, with one exception: an import's key-press timing can stand
+in for the accuracy estimate of the official play osu! delivered for the same
+run (see "Timing for official plays"). Checked imports also contribute to
+regular players' public site Dan estimates through a read-time overlay (see
+"Dan credit for regular players"). Simulated pp remains limited to accounts
+osu! turned away (see "Simulated pp for restricted players"); a public row
+may show the play's own pp beside it. See
 `companella-operations.md` for the rollout switch and
 `companella-client-guide.md` for the client contract.
 
@@ -80,6 +84,10 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `lzma.ts`, `replay-file.ts` | Bounded LZMA1 and `.osr` parsing. |
 | `validation.ts` | Identity, completion and the mod capability matrix. |
 | `replay-timing.ts` | Judges the replay's key presses: the Wife3 goals the rating runs at, and the header check. |
+| `admin-accounts.ts` | The admin list behind the Players tab on `/admin/companella`: every account that has used Companella, and one account's plays. |
+| `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
+| `dan-overlay.ts` | Public Dan credit for active osu! accounts: checked imports combined with retained official evidence at read time. |
+| `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
 | `preview.ts` | The experimental aggregate, and its deduplication. |
 | `process.ts` | The job body: validate, store, match, analyze, recompute. |
@@ -372,9 +380,10 @@ A flag holds nothing back: the play keeps its review state and counts like any
 other. The verdict is stored on the timing row as `rate_check_json` (with
 `suspicious`), the owner's copy of the timing leaves it out, and no security
 event is written, so the player never sees it. Each flag logs
-`companella_rate_suspicious`, and `/admin/companella-flags` lists flagged plays
-(backend `GET /api/admin/companella/rate-flags`, admin token) with a Hold
-button that goes through the review route.
+`companella_rate_suspicious`, and `/admin/companella?tab=flags` lists flagged plays
+(backend `GET /api/admin/companella/rate-flags`, admin token) with Exclude and
+Restore actions that go through the review route. Player names open their
+moderation details in the Players tab.
 
 Measured 2026-09-22 on 7,514 cached stable replays (6,183 NoMod, 758 DT/NC,
 573 HT, clients from 2015 to 2026) and re-checked by a second, independent
@@ -385,6 +394,46 @@ unreadable, 4 steadily at 0.85, which looks like a slowed game clock), 44 of
 757 DT/NC (41 unreadable, 3 frame-locked), none of 573 HT (scripts in
 `local-notes/companella-anticheat-check/rate/`). It is a tripwire, not proof:
 respacing the idle frames defeats it.
+
+## Timing for official plays
+
+The one place an import reaches an official rating. A Bancho play's skill
+ratings normally run at an accuracy estimated from its six counts
+(`calibrateScoreForMsd`). When the player also sent that run through
+Companella, the replay's measured timing stands in for the estimate; osu!
+still decides that the play exists and counts.
+
+- **What is stored.** After an import is accepted, `process.ts` writes a
+  `companella_official_timing` row when the chart is the exact file of an
+  official map (`resolveExactBeatmap`), the review state is clear, the mods are
+  supported, completion is `consistent_with_completed_play` and the client is
+  native. It holds the header's six counts, mods, total, play time, online
+  score id and the two measured targets, then queues the owner's debounced
+  skill recompute (`enqueuePlayerSkillsAfterSession`).
+- **Which targets.** `countPressTarget` / `countLnTarget` from
+  `measureReplayTiming`: the calibration's own replay targets, with every head
+  osu! judged a miss scored as missed. The Etterna reading imports are rated at
+  (`pressTarget`) credits those presses and sat about 0.2 pp above the estimate
+  on the same replays; the count reading's bias is under 0.05 pp.
+- **Pairing.** `compute_player_skills` reads the owner's rows
+  (`readOfficialTimingClaims`, empty while the mode is off or the beta does not
+  admit the account) and pairs a stable score with a row on the same beatmap,
+  speed and window mods (DT/NC, HT, EZ, HR, V2) and all six counts, plus either
+  the replay's online score id or the same total dated within 5 minutes. Either
+  may arrive first. Invert, DA and lazer scores never pair.
+- **The band.** The measured goals are clamped to the estimate plus or minus
+  0.01 (press/hold) and 0.02 (LN axis), and a play the estimate leaves at the
+  calc floor stays there. Measured 2026-09-25 on 5,796 cached stable replays:
+  press p99 0.89 pp and LN p99 1.87 pp where the judge reproduced the header
+  exactly (1.75 / 4.31 pp over every replay). An edited replay gains the band
+  at most. The play is stored with `replayTimed: true`.
+- **What removes it.** An owner delete leaves the row, so deleting the imports
+  that measured low changes nothing. A withdrawal (`discardLocalScore`) drops
+  it; a review hold (`setReviewState`, the restricted-pp removal) sets `held`
+  and the review route queues a recompute; the account wipe deletes it.
+  Timing writes read the import's current review state in the same SQL
+  statement, so excluding a play during processing also excludes its timing
+  when processing finishes. Restore can enable that stored timing later.
 
 ## Chart identity and rates
 
@@ -633,6 +682,38 @@ carries the play, never the replay: every private response is `no-store`. The
 exception is a restricted player's play in their current top-200 list (next
 section), whose replay is public.
 
+## Dan credit for regular players
+
+An active Bancho account's eligible Companella imports contribute to its public
+site Dan estimate, even when osu! has no official score for that run. In
+particular, stable +V2 imports carry their actual `scoreV2Accuracy` into the
+4K LN ladder's 97% bar; the stable-only accuracy fallback does not apply.
+
+`dan-overlay.ts` reads accepted, completed native imports with clear review
+state, while the integration admits that account. It shares import placement
+and analysis validation with `restricted-profile.ts`: an exact official file
+or a verified clean rate copy can contribute; unmapped, pending, unsupported
+and vibro-excluded plays cannot. Existing OD, EZ, chart eligibility, accuracy,
+family limits and quorum rules still apply.
+
+Retained osu! plays and imports are folded together through the ordinary Dan
+rules. All attempts reach Dan selection, so the best Dan accuracy wins even
+when another attempt has a higher MSD value. One chart/effective rate counts
+once across official plays, imports, ScoreV1/ScoreV2 and verified rate-copy
+family members. Existing official course credentials remain in the fold.
+
+The overlay supplies the profile's public Dan summary, Dan evidence, and Dan
+leaderboard columns, including tracked players with no official skill row yet.
+Profile reads use the existing read workers and inspect current eligibility;
+Dan boards pick up changes on their normal five-minute rebuild. Excluding or
+deleting an import removes its Dan contribution on the next fresh read, and
+Restore makes it eligible again. Existing imports need no reprocessing.
+
+This changes only public site Dan results. Ordinary players' official MSD
+totals, pp, histories, `player_skill_ratings`, score ingest, snipes, goals and
+packs are untouched. Their imported replays keep the existing privacy rules.
+Restricted accounts retain their existing separate profile/pp window below.
+
 ## Simulated pp for restricted players
 
 osu! prices none of the plays of an account it turned away, so
@@ -681,7 +762,17 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
 - **Control.** `/admin/banned-users` shows each account's simulated pp and its
   plays, and removes flagged, chosen or all plays (the ordinary `quarantined`
   review hold, reversible) through
-  `GET`/`POST /api/admin/companella/restricted-pp/<id>`.
+  `GET`/`POST /api/admin/companella/restricted-pp/<id>`. The same row blocks
+  the account from Companella (`POST /api/admin/companella/block/<id>`,
+  `account-blocks.ts`): its connections are revoked, and connecting,
+  exchanging a code, refreshing and every credentialed request answer as for
+  an account outside the beta until it is unblocked. A block removes no play;
+  the cheated ones are removed as above. The Players tab on `/admin/companella` does the
+  same for any account, restricted on osu! or not: it lists everyone with an
+  import, a connection or a block (`GET /api/admin/companella/accounts`,
+  `?filter=blocked`, `?q=` name or id), each account's plays
+  (`GET /api/admin/companella/accounts/<id>/plays`), removes and restores
+  single plays through the review route (Exclude / Restore), and blocks.
 - **Play count and time.** The standing's play count and play time (shown on
   the profile rail beside the simulated pp) count every checked import in the
   window, priced or not: each chart's length at the played rate. An account
@@ -752,6 +843,7 @@ sha256)` as the key.
 | Incomplete reservations | 72 hours |
 | Test-client scores | 7 days |
 | Accepted beta imports | kept until the owner deletes them |
+| Official-play timing rows | kept after the import is deleted; removed with a withdrawal or the account wipe |
 | Deleted score rows | hard-deleted 30 days after `deleted_at` |
 | Unreferenced replays and charts | collected 24 hours after their last write or the end of their last reference, whichever is later |
 | Security events | 30 days |

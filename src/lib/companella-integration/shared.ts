@@ -211,3 +211,6 @@ export function describeMatchOutcome(match: CompanellaChartMatch | null): string
 export function encodeActorName(username: string): string {
   return encodeURIComponent(Array.from(username.trim()).slice(0, 60).join(""));
 }
+
+/** Where the Companella app is downloaded, linked from its announcement. */
+export const COMPANELLA_DOWNLOAD_URL = "https://www.erdbee.re/download";
