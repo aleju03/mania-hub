@@ -6399,9 +6399,17 @@ msgstr "Salir de pantalla completa"
 msgid "Export cancelled."
 msgstr "Exportación cancelada."
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Export end time"
+msgstr "Fin del video"
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Export failed"
 msgstr "La exportación falló"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Export start time"
+msgstr "Inicio del video"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Export video"

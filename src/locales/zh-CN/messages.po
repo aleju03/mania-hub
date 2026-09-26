@@ -6408,9 +6408,17 @@ msgstr "退出全屏"
 msgid "Export cancelled."
 msgstr "导出已取消。"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Export end time"
+msgstr "导出结束时间"
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Export failed"
 msgstr "导出失败"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Export start time"
+msgstr "导出开始时间"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Export video"

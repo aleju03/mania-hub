@@ -6430,9 +6430,17 @@ msgstr "Exit fullscreen"
 msgid "Export cancelled."
 msgstr "Export cancelled."
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Export end time"
+msgstr "Export end time"
+
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Export failed"
 msgstr "Export failed"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Export start time"
+msgstr "Export start time"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Export video"
