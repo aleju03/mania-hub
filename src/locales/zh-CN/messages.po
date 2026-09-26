@@ -2093,6 +2093,10 @@ msgstr "0:00"
 msgid "12 PM"
 msgstr "12:00"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "16:9 video"
+msgstr "16:9 视频"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "200"
@@ -3225,6 +3229,10 @@ msgstr "箭头"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Arrows"
 msgstr "箭头"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "As shown"
+msgstr "保持当前画面"
 
 #: src/routes/skins.tsx
 msgid "ascending"
@@ -4632,6 +4640,10 @@ msgstr "社区投票选出新的 GOAT"
 #~ msgid "Compact"
 #~ msgstr "紧凑"
 
+#: src/components/replay/ReplayLeaderboardControls.tsx
+msgid "Compact while playing"
+msgstr "播放时收起"
+
 #: src/routes/companella_.test-callback.tsx
 #: src/routes/companella.tsx
 #: src/routes/news_.companella.tsx
@@ -5394,6 +5406,10 @@ msgstr "当前背景"
 #: src/components/me/GoalsPanel.tsx
 msgid "current pp"
 msgstr "当前 pp"
+
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Current view"
+#~ msgstr "当前视图"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cursor trail"
@@ -6913,6 +6929,10 @@ msgstr "第一个抽到这张卡片"
 msgid "Fit"
 msgstr "适应宽度"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Fits the overlays to a 16:9 frame."
+msgstr "将叠加组件调整到 16:9 画面中。"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Five duplicate copies of one tier forge one card of the tier above. Your last copy of a card is never used."
 #~ msgstr "用某一等级的五张重复卡，熔铸出一张高一级的卡。每张卡的最后一张永远不会被用掉。"
@@ -8296,6 +8316,10 @@ msgstr "保留"
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
 msgstr "此浏览器不支持在该倍速下保持音高。请用 1x 导出，或让音高随倍速变化。"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Keeps the layout you're watching."
+msgstr "保留当前观看时的布局。"
+
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key"
@@ -8552,6 +8576,10 @@ msgstr "lazer 成绩会根据判定数重新计算，所以这里使用的准确
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
 #~ msgstr "同样的判定下，lazer 显示的准确率会比 stable 略低，所以这里会把 lazer 成绩换算成 stable 准确率。lazer 的 95.5% 可以按 96% 的通过计入，因为 stable 玩家打出同样的判定就是 96%。这不是加成，Classic mod 也不会改变这一点。"
+
+#: src/components/replay/ReplayLeaderboardControls.tsx
+msgid "Lazer: keep ranks and avatars visible. Pause or hover to show score details."
+msgstr "Lazer 排行榜：播放时仅保留名次和头像，暂停或将鼠标悬停在排行榜上即可显示成绩详情。"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Leader"
@@ -18440,6 +18468,10 @@ msgstr "视频码率"
 #: src/components/replay/ReplayControls.tsx
 msgid "Video bitrate (Mbps)"
 msgstr "视频码率（Mbps）"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Video layout"
+msgstr "视频布局"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"

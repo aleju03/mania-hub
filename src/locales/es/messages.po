@@ -2084,6 +2084,10 @@ msgstr "12 a. m."
 msgid "12 PM"
 msgstr "12 p. m."
 
+#: src/components/replay/ReplayControls.tsx
+msgid "16:9 video"
+msgstr "Video 16:9"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "200"
@@ -3216,6 +3220,10 @@ msgstr "flechas"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Arrows"
 msgstr "Flechas"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "As shown"
+msgstr "Como se ve"
 
 #: src/routes/skins.tsx
 msgid "ascending"
@@ -4623,6 +4631,10 @@ msgstr "Votación comunitaria para un nuevo GOAT"
 #~ msgid "Compact"
 #~ msgstr "Compacto"
 
+#: src/components/replay/ReplayLeaderboardControls.tsx
+msgid "Compact while playing"
+msgstr "Compactar al reproducir"
+
 #: src/routes/companella_.test-callback.tsx
 #: src/routes/companella.tsx
 #: src/routes/news_.companella.tsx
@@ -5385,6 +5397,10 @@ msgstr "Fondo actual"
 #: src/components/me/GoalsPanel.tsx
 msgid "current pp"
 msgstr "pp actual"
+
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Current view"
+#~ msgstr "Vista actual"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cursor trail"
@@ -6904,6 +6920,10 @@ msgstr "Primero en sacar esta carta"
 msgid "Fit"
 msgstr "Ajustar"
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Fits the overlays to a 16:9 frame."
+msgstr "Ajusta los overlays a un formato 16:9."
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Five duplicate copies of one tier forge one card of the tier above. Your last copy of a card is never used."
 #~ msgstr "Cinco copias duplicadas de un nivel forjan una carta del nivel superior. Tu última copia de una carta nunca se usa."
@@ -8287,6 +8307,10 @@ msgstr "Conservarlo"
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
 msgstr "Mantener el tono a esta velocidad no está soportado aquí. Exporta a 1x, o deja que el tono siga a la velocidad."
 
+#: src/components/replay/ReplayControls.tsx
+msgid "Keeps the layout you're watching."
+msgstr "Conserva el layout que estás viendo."
+
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Key"
@@ -8543,6 +8567,10 @@ msgstr "Los scores de lazer se recalculan a partir de sus judgements, así que l
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer shows slightly lower accuracy than stable for the same hits, so lazer plays are converted to stable accuracy here. A lazer 95.5% can count as a 96% clear because a stable player with the same hits would have 96%. This is not a bonus, and the Classic mod does not change it."
 #~ msgstr "Lazer muestra una acc un poco más baja que stable con los mismos hits, así que aquí las plays de lazer se convierten a acc de stable. Un 95.5% en lazer puede contar como un clear de 96% porque un jugador de stable con los mismos hits tendría 96%. No es un bonus, y el mod Classic no cambia nada."
+
+#: src/components/replay/ReplayLeaderboardControls.tsx
+msgid "Lazer: keep ranks and avatars visible. Pause or hover to show score details."
+msgstr "Lazer: mantiene visibles las posiciones y los avatares. Pausa o pasa el cursor para ver los detalles de las puntuaciones."
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "Leader"
@@ -18431,6 +18459,10 @@ msgstr "Bitrate de video"
 #: src/components/replay/ReplayControls.tsx
 msgid "Video bitrate (Mbps)"
 msgstr "Bitrate de video (Mbps)"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Video layout"
+msgstr "Layout del video"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Video URL or id"

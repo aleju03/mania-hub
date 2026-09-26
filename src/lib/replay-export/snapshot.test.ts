@@ -121,7 +121,7 @@ describe("buildReplayExportSpec", () => {
     const capture = makeCapture({ viewport: {
       width: 2040, height: 930, fullscreen: false, fullHeight: false, coarsePointer: false,
     } });
-    const spec = buildReplayExportSpec(capture, options);
+    const spec = buildReplayExportSpec(capture, { ...options, layout: "fullscreen" });
     expect(spec.output).toMatchObject({ width: 1280, height: 720 });
     expect(spec.output.videoBitrate).toBe(2_500_000);
     expect(parseReplayExportSpec(JSON.parse(JSON.stringify(spec))).visual.viewport).toEqual({
@@ -129,6 +129,36 @@ describe("buildReplayExportSpec", () => {
     });
     capture.viewport!.height = 1080;
     expect(spec.visual.viewport?.height).toBe(2040 * 9 / 16);
+  });
+
+  it("defaults to the current view and budgets the actual encoded picture", () => {
+    const capture = makeCapture({ viewport: {
+      width: 2040, height: 930, fullscreen: false, fullHeight: false, coarsePointer: false,
+    } });
+    const spec = buildReplayExportSpec(capture, options);
+    expect(spec.output).toMatchObject({ width: 1280, height: 584 });
+    expect(spec.output.videoBitrate).toBe(Math.round(2_500_000 * 584 / 720));
+    expect(parseReplayExportSpec(JSON.parse(JSON.stringify(spec))).visual.viewport).toEqual(capture.viewport);
+    capture.viewport!.height = 1080;
+    expect(spec.visual.viewport?.height).toBe(930);
+  });
+
+  it("captures distinct render intents for current view and fullscreen without changing the live overlays", () => {
+    const capture = makeCapture({ viewport: {
+      width: 1440, height: 700, fullscreen: false, fullHeight: false, coarsePointer: false,
+    } });
+    capture.overlaySettings.judgements.reference = {
+      width: 1440, height: 700, playfieldX: 450, playfieldWidth: 540, hudScale: 1,
+    };
+    const before = structuredClone(capture);
+    const current = buildReplayExportSpec(capture, { ...options, layout: "current" });
+    const fullscreen = buildReplayExportSpec(capture, { ...options, layout: "fullscreen" });
+    expect(current.visual.viewport).toEqual(before.viewport);
+    expect(fullscreen.visual.viewport).toEqual({ ...before.viewport, height: 810, fullscreen: true });
+    expect(current.visual.overlaySettings).toEqual(before.overlaySettings);
+    expect(fullscreen.visual.overlaySettings).toEqual(before.overlaySettings);
+    expect(canonicalReplayExportSpecJson(current)).not.toEqual(canonicalReplayExportSpecJson(fullscreen));
+    expect(capture).toEqual(before);
   });
 
   it("retains the viewer's authored overlay geometry independently of export resolution", () => {
@@ -159,6 +189,15 @@ describe("buildReplayExportSpec", () => {
     expect(spec.output.audioCodec).toBeNull();
     expect(spec.audio.songEnabled).toBe(false);
     expect(spec.audio.hitsoundsEnabled).toBe(false);
+  });
+
+  it("preserves the opt-in compact leaderboard through capture and spec parsing", () => {
+    const capture = makeCapture();
+    capture.overlaySettings.leaderboard.collapseDuringPlay = true;
+    const spec = parseReplayExportSpec(JSON.parse(JSON.stringify(buildReplayExportSpec(capture, options))));
+    expect(spec.visual.overlaySettings.leaderboard.collapseDuringPlay).toBe(true);
+    capture.overlaySettings.leaderboard.collapseDuringPlay = false;
+    expect(spec.visual.overlaySettings.leaderboard.collapseDuringPlay).toBe(true);
   });
 
   it("stays exportable without a score id", () => {

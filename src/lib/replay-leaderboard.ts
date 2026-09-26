@@ -28,6 +28,7 @@ export interface LazerLeaderboardRow extends ReplayLeaderboardEntry {
 // Copyright (c) ppy Pty Ltd. MIT licence: /licenses/osu-lazer-leaderboard.txt.
 export const LAZER_LEADERBOARD = {
   width: 277.6,
+  compactWidth: 115,
   height: 300,
   rowHeight: 38,
   rowGap: 2.5,
@@ -36,6 +37,7 @@ export const LAZER_LEADERBOARD = {
   sortIntervalMs: 1000,
   moveDurationMs: 450,
   panelDurationMs: 500,
+  textDurationMs: 200,
   scrollDecay: 0.01,
   guestAvatar: "/images/replay/leaderboard/lazer-avatar-guest.png",
   colors: { leader: 0x99eb47, player: 0xebc247, other: 0x2e576b, friend: 0xff66ab },

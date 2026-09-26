@@ -9,6 +9,7 @@ import type { I18n, MessageDescriptor } from "@lingui/core";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 import { ReplayMasterOverlayControls } from "./ReplayMasterOverlayControls";
+import { ReplayLeaderboardControls } from "./ReplayLeaderboardControls";
 import { SelectMenu } from "#/components/ui/SelectMenu";
 import { ensureReplayFontStylesheet } from "../../lib/replay-fonts";
 import {
@@ -4439,6 +4440,11 @@ function ReplayOverlaySettingsRow({
           </div>
         </div>
       </button>
+      {id === "leaderboard" && (
+        <div className="px-3 pb-3 text-osu-l1">
+          <ReplayLeaderboardControls placement={placement} onChange={onChange} />
+        </div>
+      )}
       {id === "misses" && (
         <div className="flex items-center gap-2 px-3 pb-3 text-xs text-osu-l1">
           <span><Trans>Style</Trans></span>

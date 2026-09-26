@@ -56,6 +56,18 @@ describe("replay overlay settings", () => {
     expect(settings.leaderboard.lazerPosition?.reference).not.toBe(reference);
   });
 
+  it("opts into compact lazer rows without losing the setting when either leaderboard is moved", () => {
+    expect(normalizeReplayOverlaySettings({}).leaderboard.collapseDuringPlay).toBe(false);
+    expect(normalizeReplayOverlaySettings({ leaderboard: { collapseDuringPlay: "true" } }).leaderboard.collapseDuringPlay).toBe(false);
+    let settings = normalizeReplayOverlaySettings({ leaderboard: { collapseDuringPlay: true } });
+    settings = updateReplayOverlayPlacement(settings, "leaderboard", { x: 0.08, scale: 1.5 }, true);
+    settings = updateReplayOverlayPlacement(settings, "leaderboard", { x: 0.2 }, false);
+    const restored = normalizeReplayOverlaySettings(JSON.parse(JSON.stringify(settings)));
+    expect(restored.leaderboard.collapseDuringPlay).toBe(true);
+    expect(getReplayOverlayPlacement(restored, "leaderboard", true)).toMatchObject({ x: 0.08, scale: 1.5, collapseDuringPlay: true });
+    expect(getReplayOverlayPlacement(restored, "leaderboard", false)).toMatchObject({ x: 0.2, collapseDuringPlay: true });
+  });
+
   it("lets the lazer leaderboard cross the edge while leaving enough visible to drag it back", () => {
     const width = 400;
     const stageWidth = 1000;
