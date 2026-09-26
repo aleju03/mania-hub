@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { MutableRefObject, ReactNode } from "react";
+import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Film, Loader2, Maximize2, Settings, Share2 } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -7,6 +7,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { ReplayRendererLike } from "#/lib/replay-types";
 import { withReplayShareTime } from "#/lib/replay-share";
 import { formatBytes } from "#/lib/format";
+import { formatReplayTimeInput, parseReplayTimeInput } from "#/lib/replay-time-input";
 import {
   DEFAULT_EXPORT_CLIP_SECONDS,
   DEFAULT_REPLAY_EXPORT_PRESET,
@@ -78,6 +79,9 @@ interface ReplayControlsProps {
   videoExportBusy?: boolean;
   /** False where this browser has no save dialog, so output is in-memory. */
   videoExportCanSaveToFile?: boolean;
+  /** Export dialog choices, held by the page so they outlive the drawer. */
+  videoExportDraft: ReplayVideoExportDraft;
+  onVideoExportDraftChange: Dispatch<SetStateAction<ReplayVideoExportDraft>>;
   /** Canonical link to this replay; the Share button hides without one. */
   shareUrl?: string | null;
   onTogglePlay: () => void;
@@ -115,6 +119,28 @@ export type ReplayVideoExportOptions = {
   startTimeMs?: number;
   endTimeMs?: number;
   preset: ReplayExportPresetId;
+};
+
+export type ReplayVideoExportDraft = {
+  kind: ReplayVideoExportOptions["kind"];
+  /** True while Custom is picked and the seek bar shows the marks. */
+  marking: boolean;
+  /** Game-clock ms, like the renderer's time. */
+  startMs: number | null;
+  endMs: number | null;
+  preset: ReplayExportPresetId;
+  encodingMode: ReplayExportEncodingMode;
+  customBitrateMbps: string | null;
+};
+
+export const DEFAULT_REPLAY_VIDEO_EXPORT_DRAFT: ReplayVideoExportDraft = {
+  kind: "clip",
+  marking: false,
+  startMs: null,
+  endMs: null,
+  preset: DEFAULT_REPLAY_EXPORT_PRESET,
+  encodingMode: DEFAULT_REPLAY_EXPORT_ENCODING_MODE,
+  customBitrateMbps: null,
 };
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -178,6 +204,8 @@ export function ReplayControls({
   ownerSkinName,
   videoExportBusy = false,
   videoExportCanSaveToFile = false,
+  videoExportDraft,
+  onVideoExportDraftChange,
   shareUrl: replayShareUrl = null,
   onTogglePlay,
   onToggleFullscreen,
@@ -217,13 +245,26 @@ export function ReplayControls({
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
   const [videoMenuLayout, setVideoMenuLayout] = useState({ alignRight: false, maxHeight: 512 });
-  const [videoClipMode, setVideoClipMode] = useState(false);
-  const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("clip");
-  const [videoCustomStartMs, setVideoCustomStartMs] = useState<number | null>(null);
-  const [videoCustomEndMs, setVideoCustomEndMs] = useState<number | null>(null);
-  const [videoPreset, setVideoPreset] = useState<ReplayExportPresetId>(DEFAULT_REPLAY_EXPORT_PRESET);
-  const [preferredVideoEncodingMode, setPreferredVideoEncodingMode] = useState<ReplayExportEncodingMode>(DEFAULT_REPLAY_EXPORT_ENCODING_MODE);
-  const [customBitrateMbps, setCustomBitrateMbps] = useState<string | null>(null);
+  // The export choices live with the page: the overlay drawer unmounts these
+  // controls whenever it auto-hides, and marks must survive watching the play.
+  const {
+    marking: videoClipMode,
+    kind: videoExportKind,
+    startMs: videoCustomStartMs,
+    endMs: videoCustomEndMs,
+    preset: videoPreset,
+    encodingMode: preferredVideoEncodingMode,
+    customBitrateMbps,
+  } = videoExportDraft;
+  const patchVideoExportDraft = (patch: Partial<ReplayVideoExportDraft>) =>
+    onVideoExportDraftChange((draft) => ({ ...draft, ...patch }));
+  const setVideoClipMode = (marking: boolean) => patchVideoExportDraft({ marking });
+  const setVideoExportKind = (kind: ReplayVideoExportOptions["kind"]) => patchVideoExportDraft({ kind });
+  const setVideoCustomStartMs = (startMs: number | null) => patchVideoExportDraft({ startMs });
+  const setVideoCustomEndMs = (endMs: number | null) => patchVideoExportDraft({ endMs });
+  const setVideoPreset = (preset: ReplayExportPresetId) => patchVideoExportDraft({ preset });
+  const setPreferredVideoEncodingMode = (encodingMode: ReplayExportEncodingMode) => patchVideoExportDraft({ encodingMode });
+  const setCustomBitrateMbps = (value: string | null) => patchVideoExportDraft({ customBitrateMbps: value });
   const [fastEncodingSupport, setFastEncodingSupport] = useState<{ key: string; available: boolean } | null>(null);
   const [scrollSpeedInput, setScrollSpeedInput] = useState(String(scrollSpeed));
   const [editingScrollSpeed, setEditingScrollSpeed] = useState(false);
@@ -786,14 +827,8 @@ export function ReplayControls({
             <button
               type="button"
               onClick={() => {
-                if (videoMarkingActive) {
-                  setVideoClipMode(false);
-                  setVideoCustomStartMs(null);
-                  setVideoCustomEndMs(null);
-                } else {
-                  setVideoExportKind("custom");
-                  setVideoClipMode(true);
-                }
+                setVideoExportKind("custom");
+                setVideoClipMode(true);
               }}
               className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
                 videoMarkingActive ? "text-white" : "text-osu-f0"
@@ -834,19 +869,27 @@ export function ReplayControls({
                     {t`End here`}
                   </button>
                 </div>
-                <div className="rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-tight text-osu-f1">
-                  <div className="flex justify-between gap-2">
+                <div className="space-y-0.5 rounded bg-osu-b4/60 px-1.5 py-1 text-[11px] leading-tight text-osu-f1">
+                  <label className="flex items-center justify-between gap-2">
                     <span>{t`Start`}</span>
-                    <span className={videoCustomStartMs != null ? "font-semibold text-white" : ""}>
-                      {videoCustomStartMs != null ? formatReplayMs(videoCustomStartMs / modRate) : "--:--"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-2">
+                    <ExportTimeInput
+                      valueMs={videoCustomStartMs}
+                      modRate={modRate}
+                      durationMs={replayDurationMs}
+                      label={t`Export start time`}
+                      onCommit={setVideoCustomStartMs}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-2">
                     <span>{t`End`}</span>
-                    <span className={videoCustomEndMs != null ? "font-semibold text-white" : ""}>
-                      {videoCustomEndMs != null ? formatReplayMs(videoCustomEndMs / modRate) : "--:--"}
-                    </span>
-                  </div>
+                    <ExportTimeInput
+                      valueMs={videoCustomEndMs}
+                      modRate={modRate}
+                      durationMs={replayDurationMs}
+                      label={t`Export end time`}
+                      onCommit={setVideoCustomEndMs}
+                    />
+                  </label>
                 </div>
                 {(videoCustomStartMs != null || videoCustomEndMs != null) && (
                   <button
@@ -1958,6 +2001,67 @@ function ClipPreviewMarker({ left, label }: { left: number; label: string }) {
     >
       {label}
     </div>
+  );
+}
+
+// A typed mark in wall-clock time (what the seek bar shows); commits on
+// Enter or blur, Escape puts the old value back.
+function ExportTimeInput({
+  valueMs,
+  modRate,
+  durationMs,
+  label,
+  onCommit,
+}: {
+  valueMs: number | null;
+  modRate: number;
+  durationMs: number;
+  label: string;
+  onCommit: (gameMs: number | null) => void;
+}) {
+  const shown = valueMs != null ? formatReplayTimeInput(valueMs / modRate) : "";
+  const [draft, setDraft] = useState<string | null>(null);
+  const cancelRef = useRef(false);
+  const commit = () => {
+    const text = draft;
+    setDraft(null);
+    if (cancelRef.current) {
+      cancelRef.current = false;
+      return;
+    }
+    if (text == null || text === shown) return;
+    if (text.trim() === "") {
+      onCommit(null);
+      return;
+    }
+    const wallMs = parseReplayTimeInput(text);
+    if (wallMs == null) return;
+    const gameMs = wallMs * modRate;
+    onCommit(Math.max(0, durationMs > 0 ? Math.min(durationMs, gameMs) : gameMs));
+  };
+  const invalid = draft != null && draft.trim() !== "" && parseReplayTimeInput(draft) == null;
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      placeholder="0:00.0"
+      value={draft ?? shown}
+      onChange={(event) => setDraft(event.target.value)}
+      onFocus={(event) => event.currentTarget.select()}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") {
+          cancelRef.current = true;
+          event.currentTarget.blur();
+        }
+      }}
+      className={`w-16 rounded bg-osu-b3 px-1.5 py-0.5 text-right font-semibold tabular-nums text-white outline-none placeholder:text-osu-f1/50 focus:ring-1 ${
+        invalid ? "ring-1 ring-osu-red focus:ring-osu-red" : "focus:ring-osu-pink/60"
+      }`}
+    />
   );
 }
 

@@ -18,9 +18,9 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { exitNativeFullscreen, getNativeFullscreenElement, requestNativeFullscreen } from "../lib/fullscreen";
 import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/ReplayBrowseView";
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
-import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
+import { DEFAULT_REPLAY_VIDEO_EXPORT_DRAFT, ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import { ReplayBufferingIndicator } from "../components/replay/ReplayBufferingIndicator";
-import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
+import type { ReplayVideoExportDraft, ReplayVideoExportOptions } from "../components/replay/ReplayControls";
 import { ReplaySideBySideView } from "../components/replay/ReplaySideBySideView";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
@@ -2128,6 +2128,11 @@ function ReplayViewer({
   // stage and the settings card so it scrolls under the pinned player.
   children?: ReactNode;
 }) {
+  const [videoExportDraft, setVideoExportDraft] = useState<ReplayVideoExportDraft>(DEFAULT_REPLAY_VIDEO_EXPORT_DRAFT);
+  // Marks belong to the replay they were set on; format choices carry over.
+  useEffect(() => {
+    setVideoExportDraft((draft) => (draft.startMs == null && draft.endMs == null ? draft : { ...draft, startMs: null, endMs: null }));
+  }, [replay]);
   const { t, i18n } = useLingui();
   const auth = useAuth();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -4554,6 +4559,8 @@ function ReplayViewer({
       onTogglePlay={togglePlay}
       onToggleFullscreen={toggleReplayFullscreen}
       onExportVideo={startReplayVideoExport}
+      videoExportDraft={videoExportDraft}
+      onVideoExportDraftChange={setVideoExportDraft}
       onSetSpeed={(nextSpeed) => {
         setSpeed(nextSpeed);
         rendererRef.current?.setSpeed(nextSpeed);
