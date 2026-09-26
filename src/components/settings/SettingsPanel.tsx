@@ -1037,6 +1037,7 @@ function ViewerPanel({
 
 function PreferencesPanel() {
   const { t } = useLingui();
+  const auth = useAuth();
   const noDans = useNoDans();
   const setNoDans = useAppStore((state) => state.setNoDans);
   const packsSkipAnimations = usePacksSkipAnimations();
@@ -1147,8 +1148,8 @@ function PreferencesPanel() {
         </div>
       </PanelGroup>
 
-      {/* Dev-only until the Companella release. */}
-      {import.meta.env.DEV ? <CompanellaGroup /> : null}
+      {/* Admin preview until the Companella release. */}
+      {auth.canUseAdminFeatures ? <CompanellaGroup /> : null}
 
       <PanelGroup label={t`Hide players`}>
         <p className="text-[12px] leading-relaxed text-osu-f1">

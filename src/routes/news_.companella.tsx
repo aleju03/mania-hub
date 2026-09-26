@@ -3,6 +3,7 @@ import { Trans } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 
 import { getI18n } from "../lib/i18n";
+import { canUseAdminFeatures } from "../lib/auth-shared";
 import { useLocale } from "../lib/locale-context";
 import { PageHeader } from "../components/layout/PageHeader";
 import { ScoreRow } from "../components/player/ScoreRows";
@@ -11,12 +12,12 @@ import { COMPANELLA_DOWNLOAD_URL } from "../lib/companella-integration/shared";
 import type { OsuScore } from "../lib/types";
 
 /*
- * /news/companella: the Companella announcement. Dev-only until the release,
+ * /news/companella: the Companella announcement. Admin preview until the release,
  * like the Companella group in Settings.
  */
 
 export const Route = createFileRoute("/news_/companella")({
-  beforeLoad: () => { if (!import.meta.env.DEV) throw notFound(); },
+  beforeLoad: ({ context }) => { if (!canUseAdminFeatures(context.auth)) throw notFound(); },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
