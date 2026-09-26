@@ -40,7 +40,7 @@ import {
 } from "./render-spec";
 import type { LocalExportResources, ReplayExportLeaderboardEntry } from "./types";
 import { REPLAY_EXPORT_AV1_QUANTIZER } from "./video-quality";
-import { replayExportDimensions, replayExportViewport } from "./composition";
+import { replayExportDimensions, replayExportViewport, type ReplayExportLayout } from "./composition";
 
 export type ReplayExportCapture = {
   /** Identity, for the filename and the spec. None of it is required. */
@@ -118,6 +118,7 @@ export type ReplayExportCapture = {
 
 export type ReplayExportSpecOptions = {
   preset: ReplayExportPresetId;
+  layout?: ReplayExportLayout;
   encodingMode?: ReplayExportEncodingMode;
   /** Optional explicit video bitrate in bits per second. */
   videoBitrate?: number;
@@ -185,7 +186,7 @@ export function buildReplayExportSpec(
     throw new RangeError("Custom video bitrate must be between 0.5 and 20 Mbps.");
   }
   const quantizerMode = encodingMode === "compact" && options.videoBitrate === undefined;
-  const dimensions = replayExportDimensions(capture.viewport ?? preset, preset);
+  const dimensions = replayExportDimensions(capture.viewport ?? preset, preset, options.layout);
   const wantsAudio = options.includeAudio && capture.audioEnabled;
   const hitsoundsEnabled = wantsAudio && capture.hitsoundsEnabled;
 
@@ -244,7 +245,7 @@ export function buildReplayExportSpec(
       leaderboardVisible: capture.leaderboardVisible,
       skinSettings: structuredClone(capture.skinSettings),
       overlaySettings: structuredClone(capture.overlaySettings),
-      ...(capture.viewport ? { viewport: replayExportViewport(capture.viewport, dimensions) } : {}),
+      ...(capture.viewport ? { viewport: replayExportViewport(capture.viewport, dimensions, options.layout) } : {}),
     },
     audio: {
       songEnabled: wantsAudio && capture.songUrl !== null,

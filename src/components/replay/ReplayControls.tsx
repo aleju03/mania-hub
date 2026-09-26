@@ -26,7 +26,7 @@ import {
   type ReplayExportEncodingMode,
 } from "#/lib/replay-export/limits";
 import { MIN_EXPORT_RANGE_MS } from "#/lib/replay-export/timeline";
-import { replayExportDimensions } from "#/lib/replay-export/composition";
+import { DEFAULT_REPLAY_EXPORT_LAYOUT, replayExportDimensions, type ReplayExportLayout } from "#/lib/replay-export/composition";
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 
 // The mobile/fullscreen seek bar can live outside this controls component.
@@ -111,6 +111,7 @@ interface ReplayControlsProps {
 }
 
 export type ReplayVideoExportOptions = {
+  layout?: ReplayExportLayout;
   encodingMode?: ReplayExportEncodingMode;
   videoBitrate?: number;
   kind: "clip" | "full" | "custom";
@@ -123,6 +124,7 @@ export type ReplayVideoExportOptions = {
 
 export type ReplayVideoExportDraft = {
   kind: ReplayVideoExportOptions["kind"];
+  layout: ReplayExportLayout;
   /** True while Custom is picked and the seek bar shows the marks. */
   marking: boolean;
   /** Game-clock ms, like the renderer's time. */
@@ -135,6 +137,7 @@ export type ReplayVideoExportDraft = {
 
 export const DEFAULT_REPLAY_VIDEO_EXPORT_DRAFT: ReplayVideoExportDraft = {
   kind: "clip",
+  layout: DEFAULT_REPLAY_EXPORT_LAYOUT,
   marking: false,
   startMs: null,
   endMs: null,
@@ -253,6 +256,7 @@ export function ReplayControls({
     startMs: videoCustomStartMs,
     endMs: videoCustomEndMs,
     preset: videoPreset,
+    layout: videoLayout,
     encodingMode: preferredVideoEncodingMode,
     customBitrateMbps,
   } = videoExportDraft;
@@ -263,6 +267,7 @@ export function ReplayControls({
   const setVideoCustomStartMs = (startMs: number | null) => patchVideoExportDraft({ startMs });
   const setVideoCustomEndMs = (endMs: number | null) => patchVideoExportDraft({ endMs });
   const setVideoPreset = (preset: ReplayExportPresetId) => patchVideoExportDraft({ preset });
+  const setVideoLayout = (layout: ReplayExportLayout) => patchVideoExportDraft({ layout });
   const setPreferredVideoEncodingMode = (encodingMode: ReplayExportEncodingMode) => patchVideoExportDraft({ encodingMode });
   const setCustomBitrateMbps = (value: string | null) => patchVideoExportDraft({ customBitrateMbps: value });
   const [fastEncodingSupport, setFastEncodingSupport] = useState<{ key: string; available: boolean } | null>(null);
@@ -438,7 +443,8 @@ export function ReplayControls({
   // how long the file will be, roughly how big, and where it will land.
   const effectiveExportRate = Math.max(0.01, speed * modRate);
   const exportPreset = REPLAY_EXPORT_PRESETS[videoPreset];
-  const exportDimensions = replayExportDimensions(rendererRef.current?.getViewportSnapshot?.() ?? exportPreset, exportPreset);
+  const exportViewport = rendererRef.current?.getViewportSnapshot?.() ?? exportPreset;
+  const exportDimensions = replayExportDimensions(exportViewport, exportPreset, videoLayout);
   const customVideoBitrate = customBitrateMbps === null ? undefined : Math.round(Number(customBitrateMbps) * 1_000_000);
   const customBitrateInvalid = customVideoBitrate !== undefined
     && (customBitrateMbps?.trim() === "" || !isCustomVideoBitrateAllowed(customVideoBitrate));
@@ -501,12 +507,13 @@ export function ReplayControls({
   const submitVideoExport = () => {
     if (!onExportVideo || videoExportBusy || !exportRangeReady || exportOverLimit || fastSupportChecking || customBitrateInvalid) return;
     setVideoMenuOpen(false);
+    const outputOptions = { preset: videoPreset, layout: videoLayout, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate };
     if (videoExportKind === "full") {
-      onExportVideo({ kind: "full", preset: videoPreset, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate });
+      onExportVideo({ kind: "full", ...outputOptions });
     } else if (videoExportKind === "clip") {
-      onExportVideo({ kind: "clip", durationSeconds: DEFAULT_EXPORT_CLIP_SECONDS, preset: videoPreset, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate });
+      onExportVideo({ kind: "clip", durationSeconds: DEFAULT_EXPORT_CLIP_SECONDS, ...outputOptions });
     } else {
-      onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, preset: videoPreset, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate });
+      onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, ...outputOptions });
     }
   };
 
@@ -906,19 +913,51 @@ export function ReplayControls({
               </div>
             )}
             <div className="my-1 h-px bg-osu-b2" />
+            <fieldset>
+              <legend className="px-1 pb-1.5 text-[10px] font-semibold text-osu-f1">{t`Video layout`}</legend>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(["current", "fullscreen"] as const).map((layout) => {
+                  const selected = videoLayout === layout;
+                  const aspect = layout === "current" ? exportViewport.width / exportViewport.height : 16 / 9;
+                  return (
+                    <button
+                      key={layout}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setVideoLayout(layout)}
+                      className={`flex cursor-pointer flex-col items-center gap-1 rounded-md border px-1.5 py-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-osu-pink ${
+                        selected ? "border-osu-pink bg-osu-pink/15 text-white" : "border-osu-b2 bg-osu-b4/40 text-osu-f1 hover:border-osu-f1/50 hover:text-white"
+                      }`}
+                    >
+                      <VideoLayoutGlyph aspect={aspect} />
+                      <span>{layout === "current" ? t`As shown` : t`16:9 video`}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <div className="px-1 py-1 text-[10px] leading-tight text-osu-f1">
+              {videoLayout === "current"
+                ? t`Keeps the layout you're watching.`
+                : t`Fits the overlays to a 16:9 frame.`}
+            </div>
+            <div className="my-1 h-px bg-osu-b2" />
             <div className="grid grid-cols-2 gap-1">
               {REPLAY_EXPORT_PRESET_ORDER.map((presetId) => {
                 const preset = REPLAY_EXPORT_PRESETS[presetId];
+                const dimensions = replayExportDimensions(exportViewport, preset, videoLayout);
                 return (
                   <button
                     key={presetId}
                     type="button"
+                    aria-pressed={videoPreset === presetId}
                     onClick={() => setVideoPreset(presetId)}
                     className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold tabular-nums transition-colors ${
                       videoPreset === presetId ? "bg-osu-pink text-white hover:bg-osu-pink-dark" : "text-osu-f0 hover:bg-osu-b4"
                     }`}
                   >
-                    {preset.height}p{preset.fps}
+                    <span className="block">{dimensions.width}×{dimensions.height}</span>
+                    <span className="block text-[10px] font-normal opacity-75">{preset.fps} FPS</span>
                   </button>
                 );
               })}
@@ -1285,6 +1324,44 @@ export function ReplayControls({
         </div>
       )}
     </div>
+  );
+}
+
+const LAYOUT_GLYPH_NOTES = [
+  { lane: 0, y: 7 },
+  { lane: 3, y: 4 },
+  { lane: 1, y: 11 },
+  { lane: 2, y: 16 },
+  { lane: 0, y: 18 },
+];
+
+function VideoLayoutGlyph({ aspect }: { aspect: number }) {
+  const height = 28;
+  const width = Math.round(Math.min(64, Math.max(height, height * aspect)));
+  const lane = 5;
+  const stageX = Math.round((width - lane * 4) / 2);
+  const side = Math.min(10, stageX - 5);
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <rect x="0.5" y="0.5" width={width - 1} height={height - 1} rx="3" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeOpacity="0.4" />
+      <rect x={stageX} y="1" width={lane * 4} height={height - 2} fill="#0b0b11" />
+      <rect x={stageX + lane * 3 + 1} y="8" width={lane - 2} height="9" fill="currentColor" fillOpacity="0.35" />
+      {LAYOUT_GLYPH_NOTES.map((note) => (
+        <rect key={`${note.lane}-${note.y}`} x={stageX + lane * note.lane + 0.5} y={note.y} width={lane - 1} height="2" fill="currentColor" fillOpacity="0.9" />
+      ))}
+      <rect x={stageX} y={height - 7} width={lane * 4} height="1" fill="currentColor" fillOpacity="0.6" />
+      {side >= 4 && (
+        <>
+          {[0, 1, 2, 3].map((index) => (
+            <rect key={index} x="3" y={9 + index * 3} width={side} height="2" rx="0.5" fill="currentColor" fillOpacity={index === 3 ? 0.7 : 0.3} />
+          ))}
+          <rect x={width - 3 - side * 0.75} y="3" width={side * 0.75} height="2.5" rx="0.5" fill="currentColor" fillOpacity="0.7" />
+          {[0, 1, 2, 3].map((index) => (
+            <rect key={index} x={width - 3 - side * 0.6} y={9 + index * 3} width={side * 0.6} height="2" rx="0.5" fill="currentColor" fillOpacity="0.3" />
+          ))}
+        </>
+      )}
+    </svg>
   );
 }
 

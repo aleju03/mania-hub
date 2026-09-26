@@ -5,6 +5,10 @@ import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-ov
 
 type Box = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type PointerRenderer = {
+  _isPlaying: boolean;
+  overlaySettings: ReplayOverlaySettings;
+  lazerLeaderboardFrameTime: number | null;
+  isLazerLeaderboardExpanded(): boolean;
   overlayHitboxes: Box[];
   getOverlayAtPoint(x: number, y: number, pointerType?: string): Box | null;
   getOverlayResizeDirection(box: Box, x: number, y: number, pointerType?: string): string | null;
@@ -94,5 +98,48 @@ describe("thin replay overlay gestures", () => {
     expect(internal.getOverlayResizeDirection(bar, 242, 300)).toBe("e");
     expect(internal.getOverlayResizeDirection(bar, 241, 260)).toBe("n");
     expect(internal.getOverlayResizeDirection(bar, 240, 300, "touch")).toBeNull();
+  });
+});
+
+describe("compact lazer leaderboard interaction", () => {
+  it("expands on mouse hover and pause, and collapses again after leaving or resuming", () => {
+    const { canvas, renderer, internal } = viewer();
+    internal.overlaySettings.leaderboard.collapseDuringPlay = true;
+    internal.overlayHitboxes = [{ id: "leaderboard", x: 10, y: 20, width: 115, height: 300 }];
+    const move = (x: number, y: number) => {
+      const event = new MouseEvent("pointermove", { clientX: x, clientY: y, buttons: 0 });
+      Object.defineProperties(event, { pointerType: { value: "mouse" }, pointerId: { value: 1 } });
+      canvas.dispatchEvent(event);
+    };
+    internal._isPlaying = true;
+    expect(internal.isLazerLeaderboardExpanded()).toBe(false);
+    move(40, 40);
+    expect(internal.isLazerLeaderboardExpanded()).toBe(true);
+    // Once expanded, hovering the score-details area must keep it open.
+    internal.overlayHitboxes[0].width = 277.6;
+    move(200, 40);
+    expect(internal.isLazerLeaderboardExpanded()).toBe(true);
+    canvas.dispatchEvent(new MouseEvent("pointerleave"));
+    expect(internal.isLazerLeaderboardExpanded()).toBe(false);
+    renderer.pause();
+    expect(internal.isLazerLeaderboardExpanded()).toBe(true);
+    internal._isPlaying = true;
+    expect(internal.isLazerLeaderboardExpanded()).toBe(false);
+    move(40, 40);
+    window.dispatchEvent(new Event("blur"));
+    expect(internal.isLazerLeaderboardExpanded()).toBe(false);
+  });
+
+  it("keeps old settings expanded and treats offline export frames as playback", () => {
+    const { internal } = viewer();
+    internal._isPlaying = true;
+    expect(internal.isLazerLeaderboardExpanded()).toBe(true);
+    internal.overlaySettings.leaderboard.collapseDuringPlay = true;
+    internal._isPlaying = false;
+    expect(internal.isLazerLeaderboardExpanded()).toBe(true);
+    internal.lazerLeaderboardFrameTime = 0;
+    expect(internal.isLazerLeaderboardExpanded()).toBe(false);
+    internal.lazerLeaderboardFrameTime = 1000;
+    expect(internal.isLazerLeaderboardExpanded()).toBe(false);
   });
 });

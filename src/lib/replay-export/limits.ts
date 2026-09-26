@@ -16,9 +16,9 @@ export function isCustomVideoBitrateAllowed(value: number): boolean {
 
 export type ReplayExportPreset = {
   id: ReplayExportPresetId;
-  /** Exact encoded width; presets use standard 16:9 dimensions. */
+  /** Maximum encoded width; fullscreen uses the exact 16:9 dimensions. */
   width: number;
-  /** Exact encoded picture height. */
+  /** Maximum encoded picture height. */
   height: number;
   fps: number;
   /** Size estimate for quality encoding; target bitrate for compatibility encoders. */
@@ -41,7 +41,7 @@ export const DEFAULT_REPLAY_EXPORT_PRESET: ReplayExportPresetId = "720p60";
 /** Order the preset picker lists them in. */
 export const REPLAY_EXPORT_PRESET_ORDER: ReplayExportPresetId[] = ["720p60", "720p30", "1080p60", "1080p30"];
 
-/** Legacy wide captures remain readable; new presets are 1280×720 or 1920×1080. */
+/** Legacy wide captures remain readable; new exports fit within 1920×1080. */
 export const MAX_EXPORT_WIDTH = 4096;
 export const MAX_EXPORT_HEIGHT = 1080;
 export const MAX_EXPORT_FPS = 60;

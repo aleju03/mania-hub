@@ -207,6 +207,8 @@ export interface ReplayOverlayPlacement {
   transparentBackground?: boolean;
   /** Scroll Replay Master with the map's SV instead of constant time. */
   followSv?: boolean;
+  /** Lazer leaderboard: fold score details away during playback. */
+  collapseDuringPlay?: boolean;
 }
 
 export interface ReplayOverlaySizeReference {
@@ -469,6 +471,7 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       ? { ...DEFAULT_REPLAY_OVERLAY_SETTINGS[id], ...(placement.style ? { style: placement.style } : {}) }
       : placement;
     if (id === "leaderboard") {
+      settings.leaderboard.collapseDuringPlay = (raw[id] as { collapseDuringPlay?: unknown } | undefined)?.collapseDuringPlay === true;
       // Old settings had one placement for both modes. Seed lazer from it
       // before stable's left-edge clamp, then persist the two independently.
       const legacy = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id], REPLAY_LEADERBOARD_MIN_X);

@@ -5,7 +5,7 @@ import { DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayOverlaySettings } from 
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayStage } from "../../lib/replay-overlay-layout";
 import type { ReplayViewportSnapshot } from "../../lib/replay-types";
-import { fitReplayComposition, replayExportViewport } from "../../lib/replay-export/composition";
+import { fitReplayComposition, replayExportDimensions, replayExportViewport } from "../../lib/replay-export/composition";
 import { LAZER_LEADERBOARD } from "../../lib/replay-leaderboard";
 
 
@@ -119,6 +119,41 @@ function judgementFrame(renderer: OverlayRenderer): OverlayBox {
 }
 
 describe("overlay layout across fullscreen and video export", () => {
+  it("reserves compact leaderboard space independently of hover/pause expansion", () => {
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard.collapseDuringPlay = true;
+    const viewer = overlayRenderer(settings);
+    viewer.ruleset.accuracyMode = "lazer";
+    const layout = viewer.getLayout();
+    const scale = viewer.getOverlayScale(layout, "leaderboard");
+    const capture = (width: number) => {
+      viewer.overlayHitboxes = [];
+      viewer.getOverlayFrame(layout, "leaderboard", width * scale, LAZER_LEADERBOARD.height * scale);
+      return viewer.getOverlaySettingsSnapshot({ resolveLayout: true });
+    };
+    expect(capture(LAZER_LEADERBOARD.width)).toEqual(capture(LAZER_LEADERBOARD.compactWidth));
+  });
+
+  it("fits the compact rank/avatar column at a larger readable scale in a narrow fullscreen gutter", () => {
+    const resized = (compact: boolean) => {
+      const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+      settings.leaderboard.collapseDuringPlay = compact;
+      const viewer = overlayRenderer(settings);
+      viewer.ruleset.accuracyMode = "lazer";
+      const skinSettings = { ...DEFAULT_REPLAY_SKIN_SETTINGS, columnWidth: 75 };
+      Object.assign(viewer, { fullHeightLayout: true, skinSettings, skinProfile: getReplaySkinProfile(skinSettings, 7) });
+      const layout = viewer.getLayout();
+      const scale = viewer.getOverlayScale(layout, "leaderboard");
+      viewer.getOverlayFrame(layout, "leaderboard", LAZER_LEADERBOARD.width * scale, LAZER_LEADERBOARD.height * scale);
+      viewer.prepareOverlayLayout();
+      viewer.cssHeight = 1800;
+      viewer.fullscreenLayout = true;
+      viewer.invalidateLayoutCache();
+      return viewer.getOverlayScale(viewer.getLayout(), "leaderboard");
+    };
+    expect(resized(true)).toBeGreaterThan(resized(false));
+  });
+
   it.each(["move", "resize", "multi-selection", "style change"] as const)("preserves authored sizes after a %s in a narrow window", (edit) => {
     const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };
@@ -331,7 +366,7 @@ describe("overlay layout across fullscreen and video export", () => {
     const captured = viewer.getOverlaySettingsSnapshot({ resolveLayout: true });
     for (const height of [720, 1080]) {
       const output = { width: height * 16 / 9, height };
-      const viewport = replayExportViewport(viewer.getViewportSnapshot(), output);
+      const viewport = replayExportViewport(viewer.getViewportSnapshot(), output, "fullscreen");
       const fit = fitReplayComposition(viewport, output);
       const exporter = overlayRenderer(captured);
       Object.assign(exporter, { keyCount, skinProfile: getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, keyCount),
@@ -404,12 +439,13 @@ describe("overlay layout across fullscreen and video export", () => {
     expect(stableAgain.overlaySettings.leaderboard).toMatchObject({ x: 0.12, y: 0.15, scale: 0.8, reference: savedStable.reference });
   });
 
-  it("exports the captured inline composition without shrinking gaps between overlays", () => {
+  it.each(["stable", "lazer"] as const)("exports the current %s view without moving or shrinking overlays", (mode) => {
     const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     settings.leaderboard = { enabled: true, x: 0, y: 0.24, scale: 1 };
     settings.handAccuracy = { enabled: true, x: 0.16, y: 0.46, scale: 1 };
     settings.misses = { enabled: true, x: 0.15, y: 0.58, scale: 1 };
     const viewer = overlayRenderer(settings);
+    viewer.ruleset.accuracyMode = mode;
     viewer.cssHeight = 930;
     const draw = (renderer: OverlayRenderer) => {
       const layout = renderer.getLayout();
@@ -419,12 +455,15 @@ describe("overlay layout across fullscreen and video export", () => {
       });
     };
     const original = draw(viewer);
-    const viewport = viewer.getViewportSnapshot();
-    const captured = viewer.getOverlaySettingsSnapshot();
+    const sourceViewport = viewer.getViewportSnapshot();
+    const captured = viewer.getOverlaySettingsSnapshot({ resolveLayout: true });
     for (const height of [720, 1080]) {
-      const output = { width: height * 16 / 9, height };
+      const output = replayExportDimensions(sourceViewport, { width: height * 16 / 9, height });
+      const viewport = replayExportViewport(sourceViewport, output);
       const fit = fitReplayComposition(viewport, output);
+      expect(fit).toMatchObject({ x: 0, y: 0, width: output.width, height: output.height });
       const exporter = overlayRenderer(captured);
+      exporter.ruleset.accuracyMode = mode;
       Object.assign(exporter, {
         canvas: { style: {}, getBoundingClientRect: () => output },
         renderViewport: viewport, renderResolution: fit.scale,

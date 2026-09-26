@@ -62,6 +62,16 @@ export class LazerReplayLeaderboard {
   private visibilityTarget = 1;
   private visibilityFrom = 1;
   private visibilityAt = -Infinity;
+  private expandedFrom = 1;
+  private expandedTo = 1;
+  private expandedAt = -Infinity;
+  private detailsFrom = 1;
+  private expansion = 1;
+
+  /** Current animated footprint, including the rank/leader extension. */
+  get width(): number {
+    return STYLE.compactWidth + (STYLE.width - STYLE.compactWidth) * this.expansion;
+  }
 
   constructor(private readonly textureForAvatar: (url: string) => Texture) {
     this.container.addChild(this.flow, this.fadeMask);
@@ -104,10 +114,18 @@ export class LazerReplayLeaderboard {
 
   update(
     entries: readonly ReplayLeaderboardEntry[], player: ReplayLeaderboardEntry, options: ReplayLeaderboardOptions,
-    frame: { x: number; y: number; scale: number }, now: number, reset: boolean,
+    frame: { x: number; y: number; scale: number }, now: number, reset: boolean, expanded = true,
   ) {
     this.setVisibility(true, now);
     const fresh = reset || !this.initialized || now < this.previousTime;
+    const target = expanded ? 1 : 0;
+    if (fresh || target !== this.expandedTo) {
+      this.expandedFrom = fresh ? target : this.expansionAt(now);
+      this.detailsFrom = fresh ? target : this.detailsAlpha(now);
+      this.expandedTo = target;
+      this.expandedAt = now;
+    }
+    this.expansion = this.expansionAt(now);
     if (fresh || now >= this.nextSortAt) {
       this.rows = buildLazerLeaderboardRows(entries, player, options.isPartial ?? entries.length >= 50);
       this.nextSortAt = now + STYLE.sortIntervalMs;
@@ -176,6 +194,16 @@ export class LazerReplayLeaderboard {
     return card.fromY + (card.toY - card.fromY) * lazerOutQuint((now - card.moveAt) / STYLE.moveDurationMs);
   }
 
+  private expansionAt(now: number): number {
+    return this.expandedFrom + (this.expandedTo - this.expandedFrom)
+      * lazerOutQuint((now - this.expandedAt) / STYLE.panelDurationMs);
+  }
+
+  private detailsAlpha(now: number): number {
+    const duration = this.expandedTo ? STYLE.panelDurationMs : STYLE.textDurationMs;
+    return this.detailsFrom + (this.expandedTo - this.detailsFrom) * lazerOutQuint((now - this.expandedAt) / duration);
+  }
+
   private createCard(y: number): Card {
     const root = new Container();
     const panel = new Container();
@@ -226,11 +254,11 @@ export class LazerReplayLeaderboard {
     const extension = card.extensionFrom + (card.extensionTo - card.extensionFrom)
       * lazerOutElastic((now - card.extensionAt) / STYLE.panelDurationMs);
     const leftWidth = 57 + extension;
-    const rightWidth = STYLE.width - 77 - 19;
+    const rightWidth = 19 + (STYLE.width - 77 - 38) * this.expansion;
     const panelWidth = leftWidth + rightWidth;
     const color = row.position === 1 ? STYLE.colors.leader : row.tracked ? STYLE.colors.player
       : row.isFriend ? STYLE.colors.friend : STYLE.colors.other;
-    const geometry = `${leftWidth}|${color}`;
+    const geometry = `${leftWidth}|${rightWidth}|${color}`;
     if (card.geometry !== geometry) {
       const gradients = this.panelGradients(color);
       card.backgrounds.clear()
@@ -242,6 +270,10 @@ export class LazerReplayLeaderboard {
     }
     card.panel.setFromMatrix(new Matrix(1, 0, -STYLE.shear, 1, 20 - extension, 0));
     card.avatar.position.set(leftWidth - 17.7, 1.3);
+    const alpha = this.detailsAlpha(now);
+    for (const text of [card.name, card.score, card.accuracy, card.combo]) text.alpha = alpha;
+    card.name.visible = card.score.visible = rightWidth >= 50;
+    card.accuracy.visible = card.combo.visible = rightWidth >= 150;
     if (!card.root.visible) return;
 
     const texture = this.textureForAvatar(row.avatarUrl ?? STYLE.guestAvatar);
@@ -262,8 +294,8 @@ export class LazerReplayLeaderboard {
     card.name.position.set(textLeft, 5);
     card.score.position.set(textLeft, 17);
     card.name.tint = row.isFriend && !row.tracked && row.position !== 1 ? STYLE.colors.friend : 0xffffff;
-    this.truncate(card.name, row.name, textRight - textLeft - card.accuracy.width);
-    this.truncate(card.score, Math.round(row.score).toLocaleString("en-US"), textRight - textLeft - card.combo.width);
+    this.truncate(card.name, row.name, Math.max(0, textRight - textLeft - (card.accuracy.visible ? card.accuracy.width : 0)));
+    this.truncate(card.score, Math.round(row.score).toLocaleString("en-US"), Math.max(0, textRight - textLeft - (card.combo.visible ? card.combo.width : 0)));
   }
 
   private truncate(text: Text, value: string, width: number) {

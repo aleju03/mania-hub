@@ -69,7 +69,7 @@ export async function createExportRenderer(
   // A host detached from the replay route's DOM lifecycle: navigating away
   // unmounts the route, not this.
   const host = document.createElement("div");
-  host.dataset.replayFullscreen = "true";
+  host.dataset.replayFullscreen = String(viewport.fullscreen);
   host.dataset.replayExportHost = "true";
   host.style.cssText = [
     "position:fixed",

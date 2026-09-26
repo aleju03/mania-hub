@@ -928,6 +928,7 @@ export class ManiaReplayRenderer {
   private leaderboardOptions: ReplayLeaderboardOptions = {};
   private lazerLeaderboard: LazerReplayLeaderboard | null = null;
   private lazerLeaderboardFrameTime: number | null = null;
+  private lazerLeaderboardHovered = false;
   private leaderboardAvatarLoads = new Map<string, Promise<Texture | null>>();
   private lazerLeaderboardFadeRaf: number | null = null;
   private leaderboardSlotYs = new Map<string, number>();
@@ -1446,18 +1447,23 @@ export class ManiaReplayRenderer {
   setLeaderboardVisible(visible: boolean) {
     if (this.leaderboardHidden === !visible) return;
     this.leaderboardHidden = !visible;
-    if (this.lazerLeaderboard) {
-      if (this.lazerLeaderboardFadeRaf != null) cancelAnimationFrame(this.lazerLeaderboardFadeRaf);
-      const finishAt = performance.now() + 100;
-      const redraw = () => {
-        this.lazerLeaderboardFadeRaf = null;
-        if (this.destroyed) return;
-        if (!this._isPlaying) this.render();
-        if (performance.now() < finishAt) this.lazerLeaderboardFadeRaf = requestAnimationFrame(redraw);
-      };
-      this.lazerLeaderboardFadeRaf = requestAnimationFrame(redraw);
-    }
+    this.animateLazerLeaderboard(100);
     if (!this._isPlaying) this.render();
+  }
+
+  private animateLazerLeaderboard(durationMs: number) {
+    if (!this.lazerLeaderboard || this.destroyed || this._isPlaying || this.lazerLeaderboardFrameTime != null) return;
+    if (this.lazerLeaderboardFadeRaf != null) cancelAnimationFrame(this.lazerLeaderboardFadeRaf);
+    const finishAt = performance.now() + durationMs;
+    // Start the transition now so its last frame reaches the target exactly.
+    this.render();
+    const redraw = () => {
+      this.lazerLeaderboardFadeRaf = null;
+      if (this.destroyed || this._isPlaying || this.lazerLeaderboardFrameTime != null) return;
+      this.render();
+      if (performance.now() < finishAt) this.lazerLeaderboardFadeRaf = requestAnimationFrame(redraw);
+    };
+    this.lazerLeaderboardFadeRaf = requestAnimationFrame(redraw);
   }
 
   // Live watcher count shown osu!-style above the scoreboard.
@@ -2186,11 +2192,13 @@ export class ManiaReplayRenderer {
   }
 
   pause() {
+    const wasPlaying = this._isPlaying;
     this._isPlaying = false;
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = 0;
     }
+    if (wasPlaying && this.overlaySettings.leaderboard.collapseDuringPlay) this.animateLazerLeaderboard(LAZER_LEADERBOARD.panelDurationMs);
   }
 
   get isPlaying() { return this._isPlaying; }
@@ -2312,7 +2320,7 @@ export class ManiaReplayRenderer {
     if (this.ruleset.accuracyMode === "lazer") {
       // Sequential export frames advance the same UI timeline as playback.
       // A backward jump is still a seek and must snap the leaderboard.
-      this.suppressOvertakeFlash = wasSuppressed || this.currentTime < previousTime;
+      this.suppressOvertakeFlash = this.lazerLeaderboardFrameTime == null || wasSuppressed || this.currentTime < previousTime;
       this.lazerLeaderboardFrameTime = this.currentTime / (this.modRate * this.playbackSpeed);
     }
     // Keep this clock for asset/font-triggered redraws between encoded frames.
@@ -2633,9 +2641,12 @@ export class ManiaReplayRenderer {
     // Focus/prefs refreshes must not re-author a resized layout and make
     // repeated fullscreen transitions progressively change its size.
     if (signature === this.overlaySettingsInputSignature) return;
+    const collapseChanged = (normalized.leaderboard.collapseDuringPlay === true)
+      !== (this.overlaySettings.leaderboard.collapseDuringPlay === true);
     this.overlaySettingsInputSignature = signature;
     this.overlaySettings = normalized;
     this.overlayLayoutPrepared = false;
+    if (collapseChanged && this.ruleset.accuracyMode === "lazer") this.prepareOverlayLayout();
     this.pruneSelectedOverlays();
     if (!this._isPlaying) this.render();
   }
@@ -2652,7 +2663,12 @@ export class ManiaReplayRenderer {
     // Only moved art joins HUD fitting, using its visible bounds rather than
     // the transparent canvas. Untouched art still belongs to the skin layout.
     const boxes = options?.resolveLayout
-      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id))
+      ? this.overlayHitboxes.filter((box) => !isReplayStageArtOverlay(box.id) || this.isStageArtPlaced(box.id)).map((box) => (
+          box.id === "leaderboard" && this.ruleset.accuracyMode === "lazer"
+            // Hover/pause changes the hitbox, never the saved fitting geometry.
+            ? { ...box, width: this.getLazerLeaderboardLayoutWidth() * this.getOverlayScale(layout, "leaderboard") }
+            : box
+        ))
       : [];
     // Scores arrive separately from the replay. Reserve an enabled board's
     // footprint even before that request finishes (or while Tab hides it),
@@ -2662,7 +2678,7 @@ export class ManiaReplayRenderer {
       const scale = this.getOverlayScale(layout, "leaderboard");
       const rows = this.leaderboardEntries?.length ? Math.min(6, this.leaderboardEntries.length + 1) : 6;
       const frame = this.getOverlayBounds(layout, "leaderboard",
-        (isLazer ? LAZER_LEADERBOARD.width : 112) * scale,
+        (isLazer ? this.getLazerLeaderboardLayoutWidth() : 112) * scale,
         (isLazer ? LAZER_LEADERBOARD.height : rows * 46 - 2) * scale);
       if (frame) boxes.push({ id: "leaderboard", ...frame });
     }
@@ -3220,6 +3236,10 @@ export class ManiaReplayRenderer {
     if (event.pointerType === "mouse" && event.buttons === 0) this.cancelOverlayInteractions();
     const layout = this.cachedLayout ?? this.getLayout();
     const point = this.getCanvasPointerPoint(event);
+    this.lazerLeaderboardHovered = event.pointerType === "mouse" && this.overlayHitboxes.some((box) => (
+      box.id === "leaderboard" && point.x >= box.x && point.x <= box.x + box.width
+      && point.y >= box.y && point.y <= box.y + box.height
+    ));
     const activePointer = this.activeOverlayPointers.get(event.pointerId);
     if (activePointer) {
       this.activeOverlayPointers.set(event.pointerId, { ...activePointer, ...point });
@@ -3372,7 +3392,10 @@ export class ManiaReplayRenderer {
     this.finishOverlayPointerInteraction(event.pointerId);
   };
 
-  private handleOverlayWindowBlur = () => this.cancelOverlayInteractions();
+  private handleOverlayWindowBlur = () => {
+    this.lazerLeaderboardHovered = false;
+    this.cancelOverlayInteractions();
+  };
 
   private finishOverlayPointerInteraction(pointerId: number) {
     const hadMarquee = this.selectingOverlays?.pointerId === pointerId;
@@ -3398,6 +3421,7 @@ export class ManiaReplayRenderer {
   }
 
   private handleOverlayPointerLeave = () => {
+    this.lazerLeaderboardHovered = false;
     this.setMissThumbTagHovered(false);
     if (!this.draggingOverlay && !this.resizingOverlay && !this.pinchingOverlay && !this.selectingOverlays) this.canvas.style.cursor = "";
   };
@@ -3571,6 +3595,7 @@ export class ManiaReplayRenderer {
     this.fireHitsounds();
     this.updateFpsCounter(now);
     this.render();
+    if (!this._isPlaying && this.overlaySettings.leaderboard.collapseDuringPlay) this.animateLazerLeaderboard(LAZER_LEADERBOARD.panelDurationMs);
   }
 
   private getSmoothedExternalTime(audioTime: number, now: number): number {
@@ -6236,6 +6261,18 @@ export class ManiaReplayRenderer {
     }
   }
 
+  private getLazerLeaderboardLayoutWidth(): number {
+    return this.overlaySettings.leaderboard.collapseDuringPlay ? LAZER_LEADERBOARD.compactWidth : LAZER_LEADERBOARD.width;
+  }
+
+  private isLazerLeaderboardExpanded(): boolean {
+    if (!this.overlaySettings.leaderboard.collapseDuringPlay) return true;
+    // Frame-driven exports are playback even though their live ticker is off.
+    if (this.lazerLeaderboardFrameTime != null) return false;
+    return !this._isPlaying || this.lazerLeaderboardHovered
+      || this.draggingOverlay?.id === "leaderboard" || this.resizingOverlay?.id === "leaderboard" || this.pinchingOverlay?.id === "leaderboard";
+  }
+
   private renderLazerLeaderboard(layout: Layout) {
     if (this.leaderboardHidden || !this.app) {
       this.lazerLeaderboard?.hide(this.lazerLeaderboardFrameTime ?? performance.now());
@@ -6243,7 +6280,7 @@ export class ManiaReplayRenderer {
       return;
     }
     const scale = this.getOverlayScale(layout, "leaderboard");
-    const frame = this.getOverlayFrame(layout, "leaderboard", LAZER_LEADERBOARD.width * scale, LAZER_LEADERBOARD.height * scale);
+    const frame = this.getOverlayBounds(layout, "leaderboard", this.getLazerLeaderboardLayoutWidth() * scale, LAZER_LEADERBOARD.height * scale);
     if (!frame) return;
     if (!this.lazerLeaderboard) {
       this.lazerLeaderboard = new LazerReplayLeaderboard((src) => peekStoryboardTexture(src) ?? Texture.EMPTY);
@@ -6255,7 +6292,8 @@ export class ManiaReplayRenderer {
       combo: this.maxComboSoFar,
       accuracy: this.getAccuracy() / 100,
       avatarUrl: this.leaderboardOptions.playerAvatarUrl,
-    }, this.leaderboardOptions, { ...frame, scale }, this.lazerLeaderboardFrameTime ?? performance.now(), this.suppressOvertakeFlash);
+    }, this.leaderboardOptions, { ...frame, scale }, this.lazerLeaderboardFrameTime ?? performance.now(), this.suppressOvertakeFlash, this.isLazerLeaderboardExpanded());
+    this.overlayHitboxes.push({ id: "leaderboard", ...frame, width: this.lazerLeaderboard.width * scale });
     this.suppressOvertakeFlash = false;
   }
 

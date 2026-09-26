@@ -80,6 +80,7 @@ import {
 } from "../lib/replay-overlays";
 import type { ReplayColumnStatMetric, ReplayColumnStatStyle, ReplayHandAccuracyStyle, ReplayHitErrorStyle, ReplayJudgementLayout, ReplayMissStyle, ReplayThumbHand } from "../lib/replay-overlays";
 import { ReplayMasterOverlayControls } from "../components/replay/ReplayMasterOverlayControls";
+import { ReplayLeaderboardControls } from "../components/replay/ReplayLeaderboardControls";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { getUploadedReplayBeatmapResolution, getUploadedReplayOpenData } from "../lib/uploaded-replay-open";
@@ -4428,6 +4429,7 @@ function ReplayViewer({
 
     const spec = buildReplayExportSpec(capture, {
       preset: options.preset,
+      layout: options.layout,
       encodingMode: options.encodingMode,
       videoBitrate: options.videoBitrate,
       startMs: range.startMs,
@@ -4749,6 +4751,17 @@ function ReplayViewer({
           >
             {overlayMenu.targetId ? (
               <>
+                {overlayMenu.targetId === "leaderboard" && judgeAsLazer && (
+                  <div className="border-b border-white/10 px-3 py-2 text-white/85" onKeyDown={(event) => event.stopPropagation()}>
+                    <ReplayLeaderboardControls
+                      placement={overlaySettings.leaderboard}
+                      onChange={(patch) => {
+                        const current = overlaySettingsRef.current;
+                        applyOverlaySettings({ ...current, leaderboard: { ...current.leaderboard, ...patch } });
+                      }}
+                    />
+                  </div>
+                )}
                 {overlayMenu.targetId === "replayMaster" && (
                   <div className="border-b border-white/10 px-3 py-2 text-white/85" onKeyDown={(event) => event.stopPropagation()}>
                     <ReplayMasterOverlayControls

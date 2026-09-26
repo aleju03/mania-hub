@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ManiaReplayRenderer } from "./ReplayCanvas";
+import { DEFAULT_REPLAY_OVERLAY_SETTINGS } from "../../lib/replay-overlays";
 
 // Exercise the real transport/tick/smoothing methods without initializing GPU
 // resources. Rendering and score processing are irrelevant to the clock.
@@ -15,6 +16,7 @@ function createPlayback(readClock: () => { time: number; stalled: boolean }) {
     audioClockAnchorNow: 0,
     audioClockRunning: false,
     externalClock: readClock,
+    overlaySettings: structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS),
     advanceStats: vi.fn(),
     fireHitsounds: vi.fn(),
     updateFpsCounter: vi.fn(),
@@ -49,6 +51,43 @@ describe("replay pause/resume timing", () => {
     frames.clear();
     for (const callback of pending) callback(now);
   }
+
+  it("finishes the leaderboard's expansion while paused without advancing the replay clock", () => {
+    const clock = { time: 10_000, stalled: false };
+    const renderer = createPlayback(() => clock);
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard.collapseDuringPlay = true;
+    Object.assign(renderer, { overlaySettings: settings, lazerLeaderboard: {} });
+    renderer.play();
+    drawFrame();
+    renderer.pause();
+    expect(frames.size).toBe(1);
+    renderer.render.mockClear();
+    now += 250;
+    drawFrame();
+    expect(renderer.currentTime).toBe(clock.time);
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+    expect(frames.size).toBe(1);
+    now += 250;
+    drawFrame();
+    expect(renderer.currentTime).toBe(clock.time);
+    expect(frames.size).toBe(0);
+  });
+
+  it("does not leave a paused leaderboard animation running after disposal", () => {
+    const renderer = createPlayback(() => ({ time: 10_000, stalled: false }));
+    const settings = structuredClone(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    settings.leaderboard.collapseDuringPlay = true;
+    Object.assign(renderer, { overlaySettings: settings, lazerLeaderboard: {} });
+    renderer.play();
+    drawFrame();
+    renderer.pause();
+    Object.assign(renderer, { destroyed: true });
+    renderer.render.mockClear();
+    drawFrame();
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect(frames.size).toBe(0);
+  });
 
   it("queues both sides before drawing the first resumed frame", () => {
     const clock = { time: 10_000, stalled: false };
