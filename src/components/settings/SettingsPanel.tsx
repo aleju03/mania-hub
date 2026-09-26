@@ -17,6 +17,8 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { SelectMenu } from "../ui/SelectMenu";
 import { ReplaySkinSettingsModal, loadReplaySkinSettingsModal, preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { TranslationReportForm } from "./TranslationReportForm";
+import { CompanellaGroup } from "./CompanellaGroup";
+import { PanelGroup } from "./PanelGroup";
 import {
   ReplaySkinColorWheel,
   ReplaySkinValueSlider,
@@ -126,7 +128,8 @@ const STYLE_LABELS: Record<ReplaySkinStyle, ReturnType<typeof msg>> = {
   arrows: msg`Arrows`,
 };
 
-type TabId = "skin" | "viewer" | "preferences" | "appearance";
+export type SettingsTabId = "skin" | "viewer" | "preferences" | "appearance";
+type TabId = SettingsTabId;
 const TABS: { id: TabId; label: ReturnType<typeof msg> }[] = [
   { id: "skin", label: msg`skin & layout` },
   { id: "viewer", label: msg`playback` },
@@ -139,9 +142,14 @@ type Variant = "page" | "drawer";
 interface SettingsPanelProps {
   variant?: Variant;
   onClose?: () => void;
+  initialTab?: SettingsTabId;
 }
 
-export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps) {
+export function isSettingsTabId(value: unknown): value is SettingsTabId {
+  return TABS.some((tab) => tab.id === value);
+}
+
+export function SettingsPanel({ variant = "page", onClose, initialTab = "skin" }: SettingsPanelProps) {
   const { t, i18n } = useLingui();
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
@@ -160,7 +168,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [cursorSettings, setCursorSettings] = useState(DEFAULT_CURSOR_SETTINGS);
   /* Same reason: the switch renders differently once the stored value is in. */
   const [spectatorNameShown, setSpectatorNameShown] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("skin");
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   // Reset throws away every setting on this browser, so one click is not
   // enough: the button asks first and forgets the question on its own.
   const [confirmingReset, setConfirmingReset] = useState(false);
@@ -428,19 +436,6 @@ function VolumeIcon({ volume, className }: { volume: number; className?: string 
   if (volume <= 0.001) return <VolumeX className={className} />;
   if (volume < 0.5) return <Volume1 className={className} />;
   return <Volume2 className={className} />;
-}
-
-function PanelGroup({ label, children, action }: { label: string; children: ReactNode; action?: ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-osu-pink-light">{label}</span>
-        <span className="h-px flex-1 bg-osu-b3/35" />
-        {action}
-      </div>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
 }
 
 // Option labels stay in their own language on purpose: a visitor stranded in
@@ -1151,6 +1146,9 @@ function PreferencesPanel() {
           <Switch checked={packsRevealAll} onChange={setPacksRevealAll} label={t`Always reveal all`} />
         </div>
       </PanelGroup>
+
+      {/* Dev-only until the Companella release. */}
+      {import.meta.env.DEV ? <CompanellaGroup /> : null}
 
       <PanelGroup label={t`Hide players`}>
         <p className="text-[12px] leading-relaxed text-osu-f1">

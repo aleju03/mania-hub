@@ -915,7 +915,7 @@ function TeamSkillsPanel({ teamId, members, onReady }: { teamId: number; members
               </span>
             </div>
             {sides.length > 0 ? (
-              <div className={`mt-5 grid gap-x-10 gap-y-7 ${sides.length > 1 ? "lg:grid-cols-2" : ""}`}>
+              <div className={`mt-5 grid grid-cols-1 gap-x-10 gap-y-7 ${sides.length > 1 ? "lg:grid-cols-2" : ""}`}>
                 {sides.map(({ side, groups }) => (
                   <DanHistogram
                     key={side}
@@ -982,9 +982,9 @@ function DanHistogram({
   }, [active]);
   const activeGroup = active ? groups.find((group) => group.label === active.label) ?? null : null;
   return (
-    <div>
+    <div className="min-w-0">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{title}</div>
-      <div className="mt-3 flex items-end gap-1 overflow-x-auto pb-1 sm:gap-2">
+      <div className="mt-3 flex items-end gap-1 overflow-x-auto pb-1 sm:gap-2" onScroll={() => setActive(null)}>
         {groups.map((group) => {
           return (
             <button

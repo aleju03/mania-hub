@@ -416,6 +416,11 @@ msgstr "{0} collections"
 msgid "{0} columns selected"
 msgstr "{0} columns selected"
 
+#. placeholder {0}: active.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0} connected"
+msgstr "{0} connected"
+
 #. placeholder {0}: formatNumber(history.records.mostCopies.copies, locale)
 #: src/routes/packs_.collections_.history.$collector.tsx
 #~ msgid "{0} copies"
@@ -1093,6 +1098,10 @@ msgstr "{collectedShown}/{0} collected"
 #: src/routes/packs_.collections.tsx
 #~ msgid "{collector}'s collection"
 #~ msgstr "{collector}'s collection"
+
+#: src/routes/integrations.tsx
+#~ msgid "{connected} connected"
+#~ msgstr "{connected} connected"
 
 #: src/components/packs/CardSpotlight.tsx
 #~ msgid "{copiesText} of these copies were gifts, from {sendersText}"
@@ -2502,6 +2511,7 @@ msgstr "a while"
 msgid "A-Z"
 msgstr "A-Z"
 
+#: src/components/settings/CompanellaGroup.tsx
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
@@ -3196,6 +3206,10 @@ msgstr "approved"
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Approving a new connection needs a recent sign-in. Sign in again, then approve."
 #~ msgstr "Approving a new connection needs a recent sign-in. Sign in again, then approve."
+
+#: src/routes/integrations.tsx
+#~ msgid "Apps connected to your account."
+#~ msgstr "Apps connected to your account."
 
 #: src/components/communities/field-options.tsx
 msgid "Arabic"
@@ -4638,6 +4652,7 @@ msgstr "Community vote for a new GOAT"
 
 #: src/routes/companella_.test-callback.tsx
 #: src/routes/companella.tsx
+#: src/routes/news_.companella.tsx
 msgid "Companella"
 msgstr "Companella"
 
@@ -4648,6 +4663,22 @@ msgstr "Companella"
 #: src/routes/companella.tsx
 #~ msgid "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the installation, and the approval is bound to that installation only."
 #~ msgstr "Companella can send completed osu!stable mania plays here after you approve it. Approve from the app: it opens this site in your browser, you name the installation, and the approval is bound to that installation only."
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella is a desktop app for osu!stable made by a different developer (<0>erdbee.re</0>). If you use it, you can connect it to your account and it sends every mania play you finish on stable, with its replay."
+#~ msgstr "Companella is a desktop app for osu!stable made by a different developer (<0>erdbee.re</0>). If you use it, you can connect it to your account and it sends every mania play you finish on stable, with its replay."
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella is a desktop app for osu!stable. Once you connect it to your account, it sends every mania play you finish on stable, with its replay."
+#~ msgstr "Companella is a desktop app for osu!stable. Once you connect it to your account, it sends every mania play you finish on stable, with its replay."
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella now connects to Mania Tracker"
+#~ msgstr "Companella now connects to Mania Tracker"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Companella now connects to Mania Tracker."
+#~ msgstr "Companella now connects to Mania Tracker."
 
 #: src/routes/farm-helper.tsx
 msgid "compared to {range} pp"
@@ -4938,6 +4969,7 @@ msgstr "Could not rename that connection."
 msgid "Could not resize the image."
 msgstr "Could not resize the image."
 
+#: src/components/settings/CompanellaGroup.tsx
 #: src/routes/companella.tsx
 msgid "Could not revoke that connection."
 msgstr "Could not revoke that connection."
@@ -5737,6 +5769,10 @@ msgstr "Discard draft"
 msgid "disconnect"
 msgstr "disconnect"
 
+#: src/routes/integrations.tsx
+#~ msgid "Disconnect this computer? Companella on it stops sending plays right away."
+#~ msgstr "Disconnect this computer? Companella on it stops sending plays right away."
+
 #: src/components/layout/Nav.tsx
 msgid "Discord bot"
 msgstr "Discord bot"
@@ -5895,6 +5931,10 @@ msgstr "Download {0}"
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Download again"
 msgstr "Download again"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Download Companella"
+#~ msgstr "Download Companella"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Download replay"
@@ -7774,6 +7814,22 @@ msgstr "Hybrid"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Hybrid chart: {0}, {1}"
 
+#: src/routes/news_.companella.tsx
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
+#~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and the ones on ranked maps count toward your pp on the rankings."
+
+#: src/routes/news_.companella.tsx
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings."
+#~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings."
+
+#: src/routes/news_.companella.tsx
+msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating can still get you banned from Mania Tracker though."
+
+#: src/routes/news_.companella.tsx
+#~ msgid "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
+#~ msgstr "If osu! restricts your account, your profile keeps showing the plays you submit, and your pp is calculated from the ones on ranked maps the same way osu! calculates it, so you still show up on the rankings. Cheating still gets you banned from Mania Tracker."
+
 #: src/routes/__root.tsx
 msgid "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
 msgstr "If the site has been useful to you, consider supporting it. Donations help cover hosting and keep development going."
@@ -8021,6 +8077,10 @@ msgstr "Inspect {0}'s maniacard"
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Installation name"
 #~ msgstr "Installation name"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Integrations"
+msgstr "Integrations"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Interface language"
@@ -8443,6 +8503,11 @@ msgstr "last seen"
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Last seen"
 #~ msgstr "Last seen"
+
+#. placeholder {0}: formatTimeAgo(installation.lastSeenAt, locale)
+#: src/components/settings/CompanellaGroup.tsx
+msgid "last seen {0}"
+msgstr "last seen {0}"
 
 #. placeholder {0}: formatDetailedTimeAgo(user.last_visit, locale)
 #: src/routes/player/$username.tsx
@@ -9952,6 +10017,7 @@ msgid "never loaded here"
 msgstr "never loaded here"
 
 #: src/components/companella/InstallationList.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "never seen"
 msgstr "never seen"
 
@@ -10803,9 +10869,25 @@ msgstr "Not a team id."
 msgid "Not analyzed yet."
 msgstr "Not analyzed yet."
 
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not available for this account yet."
+msgstr "Not available for this account yet."
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not available for this account."
+msgstr "Not available for this account."
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not available yet."
+msgstr "Not available yet."
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Not connected"
 msgstr "Not connected"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not connected. Connect from inside Companella."
+msgstr "Not connected. Connect from inside Companella."
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -10865,6 +10947,10 @@ msgstr "not rated"
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not rated."
 msgstr "Not rated."
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Not reachable right now."
+msgstr "Not reachable right now."
 
 #: src/components/communities/field-options.tsx
 msgid "not set"
@@ -11142,8 +11228,8 @@ msgstr "Oldest Top Play"
 #~ msgstr "on"
 
 #: src/components/replay/ReplayControls.tsx
-msgid "On"
-msgstr "On"
+#~ msgid "On"
+#~ msgstr "On"
 
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -11183,6 +11269,10 @@ msgstr "On Showcase"
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "on the to-do list"
+
+#: src/routes/news_.companella.tsx
+msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
+msgstr "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
 
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "One copy for a friend. You keep {remaining}."
@@ -13642,6 +13732,7 @@ msgstr "Revealing the rest..."
 #~ msgstr "Review ingredients ({available}/{0})"
 
 #: src/components/companella/InstallationList.tsx
+#: src/components/settings/CompanellaGroup.tsx
 msgid "Revoke"
 msgstr "Revoke"
 
@@ -13656,6 +13747,10 @@ msgstr "Revoke every connection on this account?"
 #: src/routes/companella.tsx
 #~ msgid "Revoke every installation on this account?"
 #~ msgstr "Revoke every installation on this account?"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Revoke this connection? Companella on that computer stops sending plays right away."
+msgstr "Revoke this connection? Companella on that computer stops sending plays right away."
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
@@ -14508,6 +14603,7 @@ msgstr "settings"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
+#: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "Settings"
 
@@ -14914,6 +15010,10 @@ msgstr "Sign in with osu! first, then connect Discord."
 msgid "Sign in with osu! to connect Companella and see the plays it imported."
 msgstr "Sign in with osu! to connect Companella and see the plays it imported."
 
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Sign in with osu! to connect it."
+msgstr "Sign in with osu! to connect it."
+
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in with osu! to play blitz."
 msgstr "Sign in with osu! to play blitz."
@@ -15232,6 +15332,14 @@ msgstr "Some hitsound samples couldn't be decoded and were left out."
 #: src/lib/replay-export/errors.ts
 msgid "Some of the replay's files couldn't be loaded."
 msgstr "Some of the replay's files couldn't be loaded."
+
+#: src/routes/news_.companella.tsx
+msgid "Some of you might already know Companella, a desktop app for osu! (<0>erdbee.re</0>). You can now connect it to Mania Tracker to submit your plays here. This integration works with osu!stable only, so lazer plays can't be submitted this way."
+msgstr "Some of you might already know Companella, a desktop app for osu! (<0>erdbee.re</0>). You can now connect it to Mania Tracker to submit your plays here. This integration works with osu!stable only, so lazer plays can't be submitted this way."
+
+#: src/routes/news_.companella.tsx
+#~ msgid "Some of you might've heard about Companella already. If not, it's a desktop app for osu! (<0>erdbee.re</0>), and it's what sends your plays here. It only works with osu!stable, so lazer plays can't be submitted this way."
+#~ msgstr "Some of you might've heard about Companella already. If not, it's a desktop app for osu! (<0>erdbee.re</0>), and it's what sends your plays here. It only works with osu!stable, so lazer plays can't be submitted this way."
 
 #: src/routes/privacy.tsx
 msgid "Some signed-in features store data on the server, tied to your osu! user ID: goals you create (goal type, target, progress, and status), your card pack wallet and collection (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats dashboard does not store anything extra; it only shows you data the site already holds about your account."
@@ -15708,6 +15816,10 @@ msgstr "Submit"
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
 msgstr "Submit play"
+
+#: src/routes/news_.companella.tsx
+msgid "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
+msgstr "Submit plays to your account whether you're offline, on a private server or restricted from osu!, through Companella."
 
 #: src/components/layout/CountrySelector.tsx
 msgid "Subregions"
@@ -17516,6 +17628,10 @@ msgstr "This will allow {appNameInline} to"
 msgid "Those images are no longer available."
 msgstr "Those images are no longer available."
 
+#: src/routes/integrations_.companella.tsx
+#~ msgid "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
+#~ msgstr "Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Thu"
 msgstr "Thu"
@@ -18734,6 +18850,10 @@ msgstr "What's new"
 msgid "When each card first joined your collection"
 msgstr "When each card first joined your collection"
 
+#: src/routes/news_.companella.tsx
+#~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
+#~ msgstr "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
+
 #: src/components/discord/CommandShowcase.tsx
 msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
 msgstr "When someone lands a new top play, it drops in your channel automatically, in full detail."
@@ -18969,6 +19089,14 @@ msgstr "You already have the maximum number of collections."
 msgid "You are cutting through the cards"
 msgstr "You are cutting through the cards"
 
+#: src/routes/news_.companella.tsx
+msgid "You can also submit ScoreV2 and Hard Rock plays this way."
+msgstr "You can also submit ScoreV2 and Hard Rock plays this way."
+
+#: src/routes/news_.companella.tsx
+#~ msgid "You can also submit ScoreV2 and Hard Rock plays through Companella."
+#~ msgstr "You can also submit ScoreV2 and Hard Rock plays through Companella."
+
 #: src/components/player/DisplayNameEditor.tsx
 msgid "You can change it once a week. Your profile link keeps your osu! name."
 msgstr "You can change it once a week. Your profile link keeps your osu! name."
@@ -18982,9 +19110,41 @@ msgstr "You can change your name again on {0}."
 msgid "You can change your name once a week."
 msgstr "You can change your name once a week."
 
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
+#~ msgstr "You can disconnect Companella from <0>Integrations</0> in the user menu. It stops sending plays right away."
+
 #: src/components/communities/field-options.tsx
 msgid "You can list up to {COMMUNITY_MAX_PER_USER} servers."
 msgstr "You can list up to {COMMUNITY_MAX_PER_USER} servers."
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can now import plays from Companella"
+#~ msgstr "You can now import plays from Companella"
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can now import plays from Companella."
+#~ msgstr "You can now import plays from Companella."
+
+#: src/routes/news_.companella.tsx
+msgid "You can now submit plays through Companella"
+msgstr "You can now submit plays through Companella"
+
+#: src/routes/news_.companella.tsx
+msgid "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!."
+msgstr "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!."
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!. They're sent by Companella, a desktop app made by a different developer (<0>erdbee.re</0>). It only works with osu!stable, so lazer plays can't be submitted this way."
+#~ msgstr "You can now submit plays to your Mania Tracker account whether you're offline, playing on a private server or restricted from osu!. They're sent by Companella, a desktop app made by a different developer (<0>erdbee.re</0>). It only works with osu!stable, so lazer plays can't be submitted this way."
+
+#: src/routes/integrations_.companella.tsx
+#~ msgid "You can revoke Companella's connection from <0>Integrations</0> in the user menu. It stops sending plays right away."
+#~ msgstr "You can revoke Companella's connection from <0>Integrations</0> in the user menu. It stops sending plays right away."
+
+#: src/routes/news_.companella.tsx
+msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
+msgstr "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
 
 #: src/routes/farm-helper.tsx
 msgid "you could gain"
@@ -19345,6 +19505,10 @@ msgstr "Your sets"
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "your showcase"
 msgstr "your showcase"
+
+#: src/routes/news_.companella.tsx
+msgid "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
+msgstr "Your skill ratings use your accuracy on each play, which for osu! plays is normally guessed from your judgement counts. If Companella also sent the replay of a play you set on osu!, it's read from how early or late you hit each note instead."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Your skin"

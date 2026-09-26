@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
-/* The admin list of Companella rate flags (/admin/companella-flags): imported
+/* The admin list of Companella rate flags (/admin/companella?tab=flags): imported
    plays whose replay frames did not confirm the speed their mods claim. A flag
    holds nothing back and the player never sees it; holding a play is the
    admin's call from the list, through the ordinary review route. */

@@ -21,6 +21,7 @@ import {
   type RestrictedPpAdminPlay,
   type RestrictedPpAdminView,
   type RestrictedPpRemovalScope,
+  setCompanellaAccountBlocked,
 } from "../../lib/banned-users";
 import { publishBannedUsersAlert } from "../../lib/banned-users-alert";
 import { formatAccuracy, formatNumber, formatTimeAgo } from "../../lib/format";
@@ -44,6 +45,7 @@ import {
  * While osu! has them gone, their Companella imports on ranked maps price into
  * a simulated pp that ranks like anyone's. The Plays panel is where a play
  * leaves it: removal is the ordinary review hold, so Restore undoes it.
+ * Block Companella stops the account sending more (account-blocks.ts).
  *
  * Rows open one at a time; opening one loads its removal preview and plays.
  */
@@ -149,6 +151,7 @@ function BannedUserRow({
   onClearName,
   onWipe,
   onChangePlays,
+  onBlock,
   onRetry,
 }: {
   entry: BannedUser;
@@ -163,6 +166,7 @@ function BannedUserRow({
   onClearName: () => void;
   onWipe: () => void;
   onChangePlays: (scope: RestrictedPpRemovalScope, restore: boolean, play?: RestrictedPpAdminPlay) => void;
+  onBlock: () => void;
   onRetry: () => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -232,6 +236,7 @@ function BannedUserRow({
               </span>
             ) : null}
             {entry.companellaPlays > 0 ? <span className="text-osu-l2">{plural(entry.companellaPlays, "Companella play")}</span> : null}
+            {entry.companellaBlocked ? <span className="text-osu-red-light">blocked from Companella</span> : null}
             {entry.deactivatedAt ? <When iso={entry.deactivatedAt} prefix="deactivated" /> : null}
             {reason ? <span>{reason}</span> : null}
             {entry.lastLoginAt ? <When iso={entry.lastLoginAt} prefix="signed in" /> : null}
@@ -263,6 +268,9 @@ function BannedUserRow({
           <div className="flex flex-wrap items-center gap-2">
             <button disabled={busy} onClick={onReactivate} className={ACTION_CLASS}>Reactivate</button>
             {entry.displayName ? <button disabled={busy} onClick={onClearName} className={ACTION_CLASS}>Clear name</button> : null}
+            <button disabled={busy} onClick={onBlock} className={entry.companellaBlocked ? ACTION_CLASS : DANGER_CLASS}>
+              {entry.companellaBlocked ? "Unblock Companella" : "Block Companella"}
+            </button>
             <a href={`https://osu.ppy.sh/users/${entry.userId}`} target="_blank" rel="noreferrer" className={ACTION_CLASS}>
               osu! page
               <ExternalLink size={12} />
@@ -571,6 +579,7 @@ function BannedUsersAdminPage() {
   const [previews, setPreviews] = useState<Record<number, Loadable<LiveBackendUserWipePreview>>>({});
   const [playViews, setPlayViews] = useState<Record<number, Loadable<RestrictedPpAdminView | null>>>({});
   const [wipeAsk, setWipeAsk] = useState<LiveBackendUserWipePreview | null>(null);
+  const [blockAsk, setBlockAsk] = useState<BannedUser | null>(null);
   const [playsAsk, setPlaysAsk] = useState<{ entry: BannedUser; scope: "flagged" | "all"; count: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -675,6 +684,13 @@ function BannedUsersAdminPage() {
       await loadPlays(entry.userId);
     });
 
+  const setBlocked = (entry: BannedUser, blocked: boolean) =>
+    act(
+      entry.userId,
+      () => setCompanellaAccountBlocked({ data: { userId: entry.userId, blocked } }),
+      blocked ? `Blocked ${entry.username} from Companella.` : `${entry.username} can connect Companella again.`,
+    );
+
   const askChangePlays = (entry: BannedUser, scope: RestrictedPpRemovalScope, restore: boolean, play?: RestrictedPpAdminPlay) => {
     if (scope === "plays" || restore) {
       void changePlays(entry, scope, restore, play);
@@ -777,6 +793,7 @@ function BannedUsersAdminPage() {
                       if (preview && preview !== "error") setWipeAsk(preview);
                     }}
                     onChangePlays={(scope, restore, play) => askChangePlays(entry, scope, restore, play)}
+                    onBlock={() => entry.companellaBlocked ? void setBlocked(entry, false) : setBlockAsk(entry)}
                     onRetry={() => loadDetails(entry)}
                   />
                 ))}
@@ -805,6 +822,17 @@ function BannedUsersAdminPage() {
             `Removed ${wipeAsk.username}'s content.`,
           )}
           onClose={() => setWipeAsk(null)}
+        />
+      ) : null}
+
+      {blockAsk ? (
+        <ConfirmModal
+          title={`Block ${blockAsk.username} from Companella?`}
+          body="Disconnects Companella on every computer they connected, and they can't connect it again or send plays until you unblock them. Plays they already sent stay until you remove them."
+          confirmLabel="Block"
+          danger
+          onConfirm={() => void setBlocked(blockAsk, true)}
+          onClose={() => setBlockAsk(null)}
         />
       ) : null}
 

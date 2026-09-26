@@ -1002,16 +1002,20 @@ export function ReplayControls({
                   {exportRangeReady && !customBitrateInvalid ? formatBytes(exportEstimatedBytes) : "--"}
                 </span>
               </div>
-              <div className="flex justify-between gap-2">
-                {/* Own context: the bare "Speed" id is the skillset axis,
-                    which stays English on purpose. */}
-                <span>{t({ context: "Replay export", message: "Speed" })}</span>
-                <span className="tabular-nums text-white">{effectiveExportRate.toFixed(2)}x</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span>{t`Audio`}</span>
-                <span className="text-white">{audioEnabled ? t`On` : t`Off`}</span>
-              </div>
+              {effectiveExportRate !== 1 && (
+                <div className="flex justify-between gap-2">
+                  {/* Own context: the bare "Speed" id is the skillset axis,
+                      which stays English on purpose. */}
+                  <span>{t({ context: "Replay export", message: "Speed" })}</span>
+                  <span className="tabular-nums text-white">{effectiveExportRate.toFixed(2)}x</span>
+                </div>
+              )}
+              {!audioEnabled && (
+                <div className="flex justify-between gap-2">
+                  <span>{t`Audio`}</span>
+                  <span className="text-white">{t`Off`}</span>
+                </div>
+              )}
             </div>
             {!videoExportCanSaveToFile && (
               <div className="px-1 pt-1 text-[10px] leading-tight text-osu-f1">
