@@ -495,6 +495,9 @@ function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdic
 export function MsdBlock({
   entry,
   msdLn,
+  analysisMsd,
+  analysisDan,
+  analysisLnIdentity,
   rate = 1,
   rateMsd = null,
   rateDan = null,
@@ -503,6 +506,9 @@ export function MsdBlock({
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
+  analysisMsd?: Record<string, number> | null;
+  analysisDan?: { label: string; family: string; rawDan: number } | null;
+  analysisLnIdentity?: boolean | null;
   // The rate a play on this chart was set at; 1 whenever the modal is not
   // standing in for a rate-modded play.
   rate?: number;
@@ -525,7 +531,7 @@ export function MsdBlock({
   // with player ratings. Bulk search rows carry them, so the number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
-  const msd = rateAdjusted ? rateMsd : msdLn ?? entry.msdLn ?? entry.msd ?? null;
+  const msd = rateAdjusted ? rateMsd : msdLn ?? analysisMsd ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
   // Independent LN is 4K-only, including when an older cached artifact
   // still contains obsolete LN values for another keymode. The backend
@@ -533,7 +539,7 @@ export function MsdBlock({
   // or not; identity only decides whether LN can be the headline.
   const hasLnIdentity = rateAdjusted
     ? rateDan == null || rateDan.family === "ln"
-    : entry.primaryPattern === "ln" || entry.dan?.family === "ln";
+    : analysisLnIdentity ?? (entry.primaryPattern === "ln" || entry.dan?.family === "ln");
   const skillsetNames = entry.keyCount === 4 && Number(msd.LN ?? 0) > 0
     ? [...MSD_SKILLSETS, "LN"]
     : MSD_SKILLSETS;
@@ -549,7 +555,7 @@ export function MsdBlock({
   const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
   const topName = skillsets[0]?.name;
 
-  const dan = noDans ? null : rateAdjusted ? rateDan : entry.dan ?? null;
+  const dan = noDans ? null : rateAdjusted ? rateDan : analysisDan !== undefined ? analysisDan : entry.dan ?? null;
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
   const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
@@ -593,7 +599,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name === "LN" ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
+            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
@@ -1004,13 +1010,16 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd ? (
+                {active.msd || activeAnalysis?.msd ? (
                   ratePending ? (
                     <PendingMsdBlock label={t`MSD at ${formatRate(playRate)}`} />
                   ) : (
                     <MsdBlock
                       entry={active}
                       msdLn={activeAnalysis?.msdLn ?? null}
+                      analysisMsd={activeAnalysis?.msd}
+                      analysisDan={activeAnalysis?.status === "ready" ? activeAnalysis.primaryDan : undefined}
+                      analysisLnIdentity={activeAnalysis?.lnIdentity}
                       rate={playRate}
                       rateMsd={rateMsd}
                       rateDan={rateDan}

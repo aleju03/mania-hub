@@ -26,10 +26,29 @@ it("headlines the LN value on a 4K LN chart when it is the hardest axis", () => 
   expect(screen.getByTitle("Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.")).toBeTruthy();
 });
 
+it("shows only one LN MSD even when cached values contain Dan family ratings", () => {
+  const entry = { ...LN_ENTRY, msd: { ...LN_ENTRY.msd, LNHybrid: 11, LNTechnical: 18, LNWalls: 9, LNSpeed: 6 } };
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={entry} /></I18nProvider>);
+  for (const [label, value] of [["LN Hybrid", "11.00"], ["LN Technical", "18.00"], ["LN Walls", "9.00"], ["LN Speed", "6.00"]]) {
+    expect(screen.queryByText(label)).toBeNull();
+    expect(screen.queryByText(value)).toBeNull();
+  }
+  expect(headline()).toBe("22.29");
+});
+
 it("keeps Overall as the headline on a rice chart", () => {
   const entry = { ...LN_ENTRY, lnCount: 0, primaryPattern: "jack", patterns: { jack: 1 }, dan: null, msd: { Overall: 21.4, Stream: 20, LN: 0 } };
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={entry} /></I18nProvider>);
   expect(headline()).toBe("21.40");
+});
+
+it("prefers fresh analysis over a cached map entry, including its LN identity", () => {
+  const stale = { ...LN_ENTRY, primaryPattern: "tech", dan: null, msd: { Overall: 20, LN: 10 }, msdLn: { Overall: 21, LN: 11 } };
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={stale} analysisMsd={{ Overall: 22, LN: 25 }}
+    analysisLnIdentity={true} analysisDan={{ label: "9", family: "ln", rawDan: 9 }} /></I18nProvider>);
+  expect(headline()).toBe("25.00");
+  expect(screen.getByText("LN").previousElementSibling?.textContent).toBe("25.00");
+  expect(screen.getByText("LN dan est.")).toBeTruthy();
 });
 
 it("follows the rate-adjusted values when a play used a rate mod", () => {

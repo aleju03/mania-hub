@@ -299,6 +299,7 @@ const SEARCH_PATTERN_VALUES = [
   // subfamilies (matched against detected-pattern tags, not dominance)
   "speedjack", "handjack", "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
+  "lnhybrid", "lntechnical", "lnwalls", "lnspeed",
 ];
 // SEARCH_SORT_VALUES lives in components/maps/searchSortPreference.ts.
 

@@ -7790,6 +7790,7 @@ msgid "hybrid"
 msgstr "híbrido"
 
 #: src/components/player/ActivityPanel.tsx
+#: src/lib/skill-axes.ts
 msgid "Hybrid"
 msgstr "Híbrido"
 
@@ -8829,6 +8830,10 @@ msgstr "Color de la cabeza del LN"
 msgid "LN Head color"
 msgstr "Color de la cabeza del LN"
 
+#: src/lib/pattern-labels.ts
+msgid "LN Hybrid"
+msgstr "LN híbrido"
+
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 msgid "LN Inverse"
@@ -8856,6 +8861,10 @@ msgid "LN share"
 msgstr "Proporción de LN"
 
 #: src/lib/pattern-labels.ts
+msgid "LN Speed"
+msgstr "Velocidad LN"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Stairs"
 #~ msgstr "Escaleras LN"
 
@@ -8874,8 +8883,16 @@ msgid "LN Tech"
 msgstr "LN Tech"
 
 #: src/lib/pattern-labels.ts
+msgid "LN Technical"
+msgstr "LN técnico"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Trills"
 #~ msgstr "Trinos LN"
+
+#: src/lib/pattern-labels.ts
+msgid "LN Walls"
+msgstr "Muros LN"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -18691,6 +18708,10 @@ msgstr "esperando el próximo cálculo"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 msgstr "Esperando el próximo cálculo. El play se calcula entonces y esta lista se actualiza sola."
+
+#: src/lib/skill-axes.ts
+msgid "Walls"
+msgstr "Muros"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Warm copper foil and drifting sparks."

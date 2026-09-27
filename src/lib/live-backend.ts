@@ -2915,6 +2915,9 @@ export interface LiveChartAnalysisDetail {
   // Direct metadata fallback for detail views whose map-search index row has
   // not yet been refreshed with OD.
   od?: number | null;
+  msd?: Record<string, number> | null;
+  primaryDan?: { label: string; family: string; rawDan: number } | null;
+  lnIdentity?: boolean | null;
   patterns: LiveChartAnalysisPatternHit[];
   clusters: LiveChartAnalysisCluster[];
   clusterCategory: string | null;
@@ -2934,7 +2937,7 @@ export interface LiveChartAnalysisDetail {
 
 export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveChartAnalysisDetail | null> {
   try {
-    return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`);
+    return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`, { cache: "no-store" });
   } catch {
     return null;
   }

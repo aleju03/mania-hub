@@ -7799,6 +7799,7 @@ msgid "hybrid"
 msgstr "混合"
 
 #: src/components/player/ActivityPanel.tsx
+#: src/lib/skill-axes.ts
 msgid "Hybrid"
 msgstr "混合"
 
@@ -8838,6 +8839,10 @@ msgstr "长条头颜色"
 msgid "LN Head color"
 msgstr "长条头颜色"
 
+#: src/lib/pattern-labels.ts
+msgid "LN Hybrid"
+msgstr "混合长条"
+
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 msgid "LN Inverse"
@@ -8865,6 +8870,10 @@ msgid "LN share"
 msgstr "LN 占比"
 
 #: src/lib/pattern-labels.ts
+msgid "LN Speed"
+msgstr "速度长条"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Stairs"
 #~ msgstr "LN 楼梯"
 
@@ -8883,8 +8892,16 @@ msgid "LN Tech"
 msgstr "LN 技"
 
 #: src/lib/pattern-labels.ts
+msgid "LN Technical"
+msgstr "技巧长条"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Trills"
 #~ msgstr "LN 交互"
+
+#: src/lib/pattern-labels.ts
+msgid "LN Walls"
+msgstr "长条墙"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -18700,6 +18717,10 @@ msgstr "等待下一轮评分"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Waiting for the next rating pass. The play is rated then, and this list updates on its own."
 msgstr "等待下一轮评分。届时会评分，此列表会自动更新。"
+
+#: src/lib/skill-axes.ts
+msgid "Walls"
+msgstr "条墙"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Warm copper foil and drifting sparks."

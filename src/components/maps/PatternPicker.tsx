@@ -19,7 +19,7 @@ const PATTERN_OPTIONS = ["jack", "stream", "jumpstream", "handstream", "stamina"
 const SUBFAMILIES: Record<string, string[]> = {
   jack: ["speedjack", "handjack", "quadstream"],
   stream: ["dumpstream", "chordstream", "delay", "bracket"],
-  ln: ["lngeneral", "lnrelease", "lninverse", "lntech"],
+  ln: ["lnhybrid", "lntechnical", "lnwalls", "lnspeed", "lngeneral", "lnrelease", "lninverse", "lntech"],
 };
 
 // Each keymode speaks its own pattern vocabulary, mirroring the per-keymode
@@ -27,11 +27,8 @@ const SUBFAMILIES: Record<string, string[]> = {
 // dumpstream and jack subfamilies, 7K charts with chordstream/delay/bracket,
 // everything else with the wide-key stream set. Jack and stream stay in every
 // list: the analyzer detects both for all keymodes. The LN subfamilies are 4K
-// and 7K only, and 4K omits LN Release: the release ramps are measured on 7K
-// charts, so the old classifier doesn't emit that broad tag on 4 columns.
-// The shield facets the backend indexes (lnshield, lnreverseshield) are not
-// offered: a tap right after a release is ordinary LN texture, so the owner
-// pulled the buttons until the tags mean something to players.
+// and 7K only: 4K uses the four course stages, while 7K retains General,
+// Release, Inverse and Tech.
 // The full generic list only shows when the Keys facet is empty or mixed.
 const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
   "4k": ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"],
@@ -43,7 +40,7 @@ const KEYMODE_SUBFAMILIES: Record<string, Record<string, string[]>> = {
   "4k": {
     jack: ["speedjack", "handjack", "quadstream"],
     stream: ["dumpstream"],
-    ln: ["lngeneral", "lninverse", "lntech"],
+    ln: ["lnhybrid", "lntechnical", "lnwalls", "lnspeed"],
   },
   "7k": { ln: ["lngeneral", "lnrelease", "lninverse", "lntech"] },
   other: {},

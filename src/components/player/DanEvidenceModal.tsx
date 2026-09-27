@@ -272,7 +272,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // The loading state stands in for the same column strip the loaded window
   // opens on, so nothing jumps when the estimate lands. Only 7K LN has skill
   // buckets on the LN side; every other LN keymode is the one "all" column.
-  const skeletonColumns = side === "ln" && keyCount !== 7 ? 1 : 5;
+  const skeletonColumns = side === "ln" && keyCount !== 4 && keyCount !== 7 ? 1 : 5;
   // A lone column has nothing to sit beside, so it takes the whole row instead
   // of half of one - otherwise the only reading in the window hugs the left
   // edge on phones, where the columns wrap two to a row.

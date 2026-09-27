@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { qualifyingSkillModes, lnPlayShare, skillModeEntries, topSharePercent } from "./skill-axes";
+import { qualifyingSkillModes, lnPlayShare, skillModeEntries, skillAxisMeta, DAN_SKILLSET_META, topSharePercent } from "./skill-axes";
 
 describe.each(Array.from({ length: 15 }, (_, i) => i + 4))("%iK LN presentation", keyCount => {
   it("preserves the LN axis and limits independent-model evidence to 4K", () => {
@@ -47,6 +47,17 @@ it("keeps a newly certified keymode reachable alongside a well-established main"
 
 describe("skillModeEntries", () => {
   const ratings = { Overall: 9, Stream: 8, Jumpstream: 9, Handstream: 7, Stamina: 7.5, JackSpeed: 6, Chordjack: 5, Technical: 3 };
+
+  it("keeps cached Dan families out of numerical rating axes", () => {
+    const ids = ["lnhybrid", "lntechnical", "lnwalls", "lnspeed"];
+    const patterns = ids.map(id => ({ id, rating: 20, plays: 5 }));
+    for (const id of ids) {
+      expect(skillModeEntries({ keyCount: 4, analyzedPlays: 20, ratings, patterns }).some(entry => entry.key === id)).toBe(false);
+      expect(skillAxisMeta(`pattern:${id}`)).toBeNull();
+      expect(DAN_SKILLSET_META[id]).toBeDefined();
+      expect(skillModeEntries({ keyCount: 7, analyzedPlays: 20, ratings, patterns }).some(entry => entry.key === id)).toBe(false);
+    }
+  });
 
   it("keeps a 6K/7K card on the MSD skillsets until three patterns are rated", () => {
     const thin = { keyCount: 7, analyzedPlays: 13, ratings, patterns: [{ id: "tech", rating: 4, plays: 4 }, { id: "chordstream", rating: 7, plays: 3 }] };
