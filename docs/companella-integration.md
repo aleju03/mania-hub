@@ -540,7 +540,7 @@ calibrated goal and the analysis version (`LOCAL_ANALYSIS_VERSION`, now 3). A
 family id alone would be wrong.
 
 Vibro is decided the way the official pass decides it for a chart with no pp
-behind it (`rateVibroVerdictWithoutPpTrust`, so no clear-evidence exception). A
+behind it (`rateVibroVerdictWithoutPpTrust`). A
 non-4K chart flagged vibro at 1.0x is unrated `chart_vibro`. Where the official
 pass checks the rate (4K, and other keymodes away from 1.0x), an excluded
 result is unrated `rate_vibro`, an adjusted one lowers the goal and LN goal with

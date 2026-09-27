@@ -2,7 +2,6 @@ import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { VibroAnalysis } from "#dan/vibro-sections";
-import type { VibroClearEvidenceSummary } from "#dan/vibro-clear-evidence";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
@@ -30,7 +29,6 @@ export interface LivePlayerSkillPlay {
   /** The play's own SSR vector at its accuracy and rate, not base chart MSD. */
   skillRatings?: Record<string, number>;
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
-  vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
   beatmapsetId: number | null;
   title: string;

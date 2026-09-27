@@ -2548,8 +2548,8 @@ msgstr "Accept"
 #. placeholder {0}: formatAccuracy(quality.stableAccuracy)
 #. placeholder {1}: quality.od
 #: src/components/maps/MapDetailModal.tsx
-msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
-msgstr "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgstr "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/layout/Nav.tsx

@@ -2286,7 +2286,7 @@ msgstr "Un + significa «al menos»: osu! no entrega más de tus 200 mejores jug
 
 #: src/components/layout/ChangelogModal.tsx
 msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
-msgstr"Aparece un <0><1>punto</1></0> junto a <2>novedades</2> al final de la página cuando hay algo nuevo."
+msgstr "Aparece un <0><1>punto</1></0> junto a <2>novedades</2> al final de la página cuando hay algo nuevo."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -2525,8 +2525,8 @@ msgstr "Aceptar"
 #. placeholder {0}: formatAccuracy(quality.stableAccuracy)
 #. placeholder {1}: quality.od
 #: src/components/maps/MapDetailModal.tsx
-msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
-msgstr "Jugada aceptada en un mapa de vibro: {0} de precisión, MAX:300 de {qualityRatio}:1, OD{1}."
+#~ msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgstr "Jugada aceptada en un mapa de vibro: {0} de precisión, MAX:300 de {qualityRatio}:1, OD{1}."
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/layout/Nav.tsx

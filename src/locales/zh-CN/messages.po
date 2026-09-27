@@ -2295,7 +2295,7 @@ msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低
 
 #: src/components/layout/ChangelogModal.tsx
 msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
-msgstr"有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0><1>圆点</1></0>。"
+msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0><1>圆点</1></0>。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -2534,8 +2534,8 @@ msgstr "接受"
 #. placeholder {0}: formatAccuracy(quality.stableAccuracy)
 #. placeholder {1}: quality.od
 #: src/components/maps/MapDetailModal.tsx
-msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
-msgstr "Vibro 谱面的有效成绩：准确率 {0}，MAX:300 比值 {qualityRatio}:1，OD{1}。"
+#~ msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgstr "Vibro 谱面的有效成绩：准确率 {0}，MAX:300 比值 {qualityRatio}:1，OD{1}。"
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/layout/Nav.tsx
