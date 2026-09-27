@@ -2307,6 +2307,10 @@ msgstr "A {chart} chart, credited as {credit} at this accuracy"
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 msgstr "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
+msgstr "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -14952,6 +14956,7 @@ msgstr "Showing the newest {0}."
 msgid "Shows"
 msgstr "Shows"
 
+#: src/components/layout/ChangelogModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Shows a dot on the changelog link when there are new updates"

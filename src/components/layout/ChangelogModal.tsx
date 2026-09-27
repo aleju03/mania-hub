@@ -121,6 +121,7 @@ function NotifyToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) =
       role="switch"
       aria-checked={on}
       aria-label={t`Notify me`}
+      title={t`Shows a dot on the changelog link when there are new updates`}
       onClick={toggle}
       className={`relative ml-auto inline-flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-full bg-osu-b3/70 pl-2.5 pr-3 text-[11px] font-semibold transition-[color,filter] duration-200 hover:brightness-110 ${
         on ? "text-white" : "text-osu-f1 hover:text-white"
@@ -164,16 +165,20 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
   const [openDays, setOpenDays] = useState<string[]>(DEFAULT_OPEN_DAYS);
   const notify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
+  // Says where the notification shows up, right after turning it on, until the modal closes.
+  const [showNotifyHint, setShowNotifyHint] = useState(false);
   const setNotify = (next: boolean) => {
     // Turning it on counts what is already here as read, so the dot waits for the next update.
     if (next) markChangelogSeen();
     setChangelogNotify(next);
+    setShowNotifyHint(next);
   };
 
   // Each visit starts from the newest day again: a day left open two sessions
   // ago is not a preference, it is leftover state.
   useEffect(() => {
     if (open) setOpenDays(DEFAULT_OPEN_DAYS);
+    else setShowNotifyHint(false);
   }, [open]);
 
   const toggleDay = useCallback((date: string) => {
@@ -236,6 +241,24 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            <AnimatePresence initial={false}>
+              {showNotifyHint ? (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="shrink-0 overflow-hidden border-b border-white/[0.07]"
+                >
+                  <p className="px-4 py-2.5 text-[12px] leading-snug text-osu-c2/85">
+                    <Trans>
+                      A <span className="mx-0.5 inline-block h-1.5 w-1.5 rounded-full bg-osu-pink align-middle"><span className="sr-only">dot</span></span> shows next to <em>changelog</em> at the bottom of the page when there are new updates.
+                    </Trans>
+                  </p>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
               {DAYS.map((day) => {
