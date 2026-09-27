@@ -313,6 +313,7 @@ interface AppState {
   packsSkipAnimations: boolean;
   packsRevealAll: boolean;
   recentPlayRatings: boolean;
+  changelogNotify: boolean;
   hiddenUsers: Record<number, HiddenUser>;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
@@ -339,6 +340,7 @@ interface AppState {
   setPacksSkipAnimations: (skip: boolean) => void;
   setPacksRevealAll: (revealAll: boolean) => void;
   setRecentPlayRatings: (show: boolean) => void;
+  setChangelogNotify: (notify: boolean) => void;
   addHiddenUser: (user: HiddenUser) => void;
   removeHiddenUser: (userId: number) => void;
   resetThemeHue: () => void;
@@ -598,6 +600,7 @@ export const useAppStore = create<AppState>()(
       packsSkipAnimations: false,
       packsRevealAll: false,
       recentPlayRatings: false,
+      changelogNotify: false,
       hiddenUsers: initialClientHiddenUsers,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
@@ -638,6 +641,7 @@ export const useAppStore = create<AppState>()(
       setPacksSkipAnimations: (skip) => set({ packsSkipAnimations: skip }),
       setPacksRevealAll: (revealAll) => set({ packsRevealAll: revealAll }),
       setRecentPlayRatings: (show) => set({ recentPlayRatings: show }),
+      setChangelogNotify: (notify) => set({ changelogNotify: notify }),
       addHiddenUser: (user) =>
         set((state) => {
           // Re-adding an existing entry refreshes its stored username/avatar
@@ -1011,6 +1015,9 @@ export const useAppStore = create<AppState>()(
           recentPlayRatings: typeof nextState.recentPlayRatings === "boolean"
             ? nextState.recentPlayRatings
             : currentState.recentPlayRatings,
+          changelogNotify: typeof nextState.changelogNotify === "boolean"
+            ? nextState.changelogNotify
+            : currentState.changelogNotify,
           // Dedicated key wins. The legacy blob fallback only matters for
           // returning users whose accents still live in `mania-hub-cache-v5`
           // and haven't been re-fetched since this migration landed; those
@@ -1072,6 +1079,7 @@ export const useAppStore = create<AppState>()(
         packsSkipAnimations: state.packsSkipAnimations,
         packsRevealAll: state.packsRevealAll,
         recentPlayRatings: state.recentPlayRatings,
+        changelogNotify: state.changelogNotify,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
         // drop a theme change on the floor.
@@ -1194,6 +1202,12 @@ export function usePacksRevealAll(): boolean {
   const revealAll = useAppStore((state) => state.packsRevealAll);
   const hydrated = useHasHydrated();
   return hydrated && revealAll;
+}
+
+export function useChangelogNotify(): boolean {
+  const notify = useAppStore((state) => state.changelogNotify);
+  const hydrated = useHasHydrated();
+  return hydrated && notify;
 }
 
 export function useRecentPlayRatings(): boolean {

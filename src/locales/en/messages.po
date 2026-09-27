@@ -4037,6 +4037,10 @@ msgstr "changelog"
 msgid "Changelog"
 msgstr "Changelog"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Changelog notifications"
+msgstr "Changelog notifications"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Changes"
 msgstr "Changes"
@@ -10108,6 +10112,10 @@ msgstr "New set"
 msgid "New top plays will show up here as players set them."
 msgstr "New top plays will show up here as players set them."
 
+#: src/routes/__root.tsx
+msgid "new updates"
+msgstr "new updates"
+
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -11129,6 +11137,14 @@ msgstr "Nothing uploaded yet."
 #: src/routes/bbcode.tsx
 msgid "Notice"
 msgstr "Notice"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notify me"
+msgstr "Notify me"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notifying"
+msgstr "Notifying"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
@@ -14935,6 +14951,10 @@ msgstr "Showing the newest {0}."
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "Shows"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows a dot on the changelog link when there are new updates"
+msgstr "Shows a dot on the changelog link when there are new updates"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"

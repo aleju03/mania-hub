@@ -4019,6 +4019,10 @@ msgstr "更新日志"
 msgid "Changelog"
 msgstr "更新日志"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Changelog notifications"
+msgstr "更新日志通知"
+
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Changes"
 msgstr "更新"
@@ -10078,6 +10082,10 @@ msgstr "新建卡组"
 msgid "New top plays will show up here as players set them."
 msgstr "玩家打出新的顶级成绩后会显示在这里。"
 
+#: src/routes/__root.tsx
+msgid "new updates"
+msgstr "有新更新"
+
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -11099,6 +11107,14 @@ msgstr "还没有上传任何内容。"
 #: src/routes/bbcode.tsx
 msgid "Notice"
 msgstr "提示框"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notify me"
+msgstr "通知我"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notifying"
+msgstr "已开启通知"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
@@ -14905,6 +14921,10 @@ msgstr "显示最新的 {0} 个。"
 #: src/routes/replay.tsx
 msgid "Shows"
 msgstr "显示"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows a dot on the changelog link when there are new updates"
+msgstr "有新更新时在更新日志链接上显示一个圆点"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"

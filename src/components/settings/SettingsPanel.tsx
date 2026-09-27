@@ -93,7 +93,8 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
+import { useAppStore, useChangelogNotify, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
+import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -1046,6 +1047,8 @@ function PreferencesPanel() {
   const setPacksRevealAll = useAppStore((state) => state.setPacksRevealAll);
   const recentPlayRatings = useRecentPlayRatings();
   const setRecentPlayRatings = useAppStore((state) => state.setRecentPlayRatings);
+  const changelogNotify = useChangelogNotify();
+  const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
   const addHiddenUser = useAppStore((state) => state.addHiddenUser);
   const removeHiddenUser = useAppStore((state) => state.removeHiddenUser);
@@ -1123,6 +1126,22 @@ function PreferencesPanel() {
             checked={recentPlayRatings}
             onChange={setRecentPlayRatings}
             label={noDans ? t`MSD on recent plays` : t`MSD and dan on recent plays`}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Changelog notifications</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Shows a dot on the changelog link when there are new updates</Trans>
+            </div>
+          </div>
+          <Switch
+            checked={changelogNotify}
+            onChange={(next) => {
+              if (next) markChangelogSeen();
+              setChangelogNotify(next);
+            }}
+            label={t`Changelog notifications`}
           />
         </div>
       </PanelGroup>

@@ -43,6 +43,8 @@ import { DEFAULT_LOCALE, normalizeLocale } from "../lib/locale";
 import type { AppLocale } from "../lib/locale";
 import { LocaleContext, useLocale } from "../lib/locale-context";
 import { getI18n } from "../lib/i18n";
+import { CHANGELOG_SEEN_KEY, hasUnseenChangelog, markChangelogSeen, readChangelogSeen } from "../lib/changelog";
+import { UPDATES } from "../data/changelog";
 import { I18nProvider } from "@lingui/react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -56,7 +58,7 @@ import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
 import { isWindowActive, subscribeWindowActivity } from "../lib/window-activity";
-import { reapplyThemeToDom } from "../store";
+import { reapplyThemeToDom, useChangelogNotify } from "../store";
 import appCss from "../styles.css?url";
 
 /* Origin is resolved through a configured canonical URL first, then through
@@ -616,6 +618,22 @@ function KofiSupportButton() {
 
 function ChangelogFooterLink() {
   const [open, setOpen] = useState(false);
+  // Opt-in from the changelog or Settings. Read after mount: localStorage is empty during SSR,
+  // so the dot never renders on the server.
+  const notify = useChangelogNotify();
+  const [unseen, setUnseen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setUnseen(notify && hasUnseenChangelog(UPDATES, readChangelogSeen()));
+    sync();
+    // Opening it in one tab clears the dot in the others.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === CHANGELOG_SEEN_KEY) sync();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [notify]);
+
   return (
     <>
       <button
@@ -623,10 +641,18 @@ function ChangelogFooterLink() {
         onClick={() => {
           track("changelog_open");
           setOpen(true);
+          markChangelogSeen();
+          setUnseen(false);
         }}
         className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-osu-pink-light/60"
       >
         <Trans>changelog</Trans>
+        {unseen ? (
+          <>
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-osu-pink" />
+            <span className="sr-only"><Trans>new updates</Trans></span>
+          </>
+        ) : null}
       </button>
       <ChangelogModal open={open} onClose={() => setOpen(false)} />
     </>

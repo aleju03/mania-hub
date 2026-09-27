@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, stagger, useAnimate, useReducedMotion } from "framer-motion";
-import { ChevronRight, X } from "lucide-react";
+import { Bell, BellRing, ChevronRight, X } from "lucide-react";
 
 import { UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
 import { formatReleaseAge, groupUpdatesByDay } from "#/lib/changelog";
 import { formatDate } from "#/lib/format";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { markChangelogSeen } from "#/lib/changelog";
+import { useAppStore, useChangelogNotify } from "#/store";
 
 const DAYS = groupUpdatesByDay(UPDATES);
 /** Newest day only: it is the one the reader came for, and every other day
@@ -98,9 +100,75 @@ function UpdateText({ update }: { update: ChangelogUpdate }) {
   );
 }
 
+/** Pink floods out from the bell when it turns on, and the bell swings once. */
+function NotifyToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  const { t } = useLingui();
+  const reduceMotion = useReducedMotion();
+  const [bell, animateBell] = useAnimate<HTMLSpanElement>();
+  const ease = [0.3, 0, 0.2, 1] as const;
+
+  const toggle = () => {
+    const next = !on;
+    onChange(next);
+    if (next && !reduceMotion && bell.current) {
+      void animateBell(bell.current, { rotate: [0, -24, 18, -12, 7, -3, 0] }, { duration: 0.75, ease: "easeOut" });
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={t`Notify me`}
+      onClick={toggle}
+      className={`relative ml-auto inline-flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-full bg-osu-b3/70 pl-2.5 pr-3 text-[11px] font-semibold transition-[color,filter] duration-200 hover:brightness-110 ${
+        on ? "text-white" : "text-osu-f1 hover:text-white"
+      }`}
+    >
+      <motion.span
+        aria-hidden="true"
+        className="absolute inset-0 bg-osu-pink"
+        initial={false}
+        animate={{ clipPath: on ? "circle(160% at 17px 50%)" : "circle(0% at 17px 50%)" }}
+        transition={{ duration: reduceMotion ? 0 : 0.4, ease }}
+      />
+      <span ref={bell} aria-hidden="true" className="relative grid origin-[50%_15%] place-items-center">
+        {on ? <BellRing className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+      </span>
+      {/* Both labels share one cell so the pill keeps its width while they roll past each other. */}
+      <span aria-hidden="true" className="relative grid overflow-hidden">
+        <motion.span
+          className="[grid-area:1/1]"
+          initial={false}
+          animate={{ y: on ? "-110%" : "0%" }}
+          transition={{ duration: reduceMotion ? 0 : 0.28, ease }}
+        >
+          <Trans>Notify me</Trans>
+        </motion.span>
+        <motion.span
+          className="[grid-area:1/1]"
+          initial={false}
+          animate={{ y: on ? "0%" : "110%" }}
+          transition={{ duration: reduceMotion ? 0 : 0.28, ease }}
+        >
+          <Trans>Notifying</Trans>
+        </motion.span>
+      </span>
+    </button>
+  );
+}
+
 export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useLingui();
   const [openDays, setOpenDays] = useState<string[]>(DEFAULT_OPEN_DAYS);
+  const notify = useChangelogNotify();
+  const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
+  const setNotify = (next: boolean) => {
+    // Turning it on counts what is already here as read, so the dot waits for the next update.
+    if (next) markChangelogSeen();
+    setChangelogNotify(next);
+  };
 
   // Each visit starts from the newest day again: a day left open two sessions
   // ago is not a preference, it is leftover state.
@@ -158,11 +226,12 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
           >
             <div className="flex items-center gap-3 border-b border-osu-b3/50 px-4 py-3">
               <div className="text-sm font-bold text-white">{t`What's new`}</div>
+              <NotifyToggle on={notify} onChange={setNotify} />
               <button
                 type="button"
                 onClick={onClose}
                 aria-label={t`Close`}
-                className="ml-auto cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
+                className="cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
