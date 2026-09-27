@@ -1,4 +1,4 @@
-import { getCookie, getRequest, setResponseHeader } from "@tanstack/react-start/server";
+import { getCookie, getRequest, setCookie, setResponseHeader } from "@tanstack/react-start/server";
 import {
   AUTH_COOKIE_MAX_AGE_SECONDS,
   AUTH_COOKIE_NAME,
@@ -20,6 +20,9 @@ const OSU_OAUTH_TIMEOUT_MS = 10_000;
 // restricted player's profile appears on their next sign-in instead.
 const LOGIN_REPORT_TIMEOUT_MS = 2_500;
 const COOKIE_PATH = "/";
+// Sessions slide: a visit re-issues the cookie once it is a day old, so only
+// 30 days without a visit signs someone out.
+const AUTH_COOKIE_RENEW_AFTER_MS = 24 * 60 * 60 * 1000;
 
 interface AuthCookiePayload extends AuthViewer {
   issuedAt: number;
@@ -260,9 +263,29 @@ export async function readCurrentAuth(): Promise<AuthState> {
   }
 }
 
+async function renewAuthCookieIfStale(request: Request): Promise<void> {
+  const payload = await verifySignedJson<unknown>(getCookie(AUTH_COOKIE_NAME));
+  if (!isAuthCookiePayload(payload)) return;
+  const now = Date.now();
+  if (payload.expiresAt <= now || now - payload.issuedAt < AUTH_COOKIE_RENEW_AFTER_MS) return;
+  const viewer: AuthViewer = {
+    id: payload.id,
+    username: payload.username,
+    avatarUrl: payload.avatarUrl,
+    countryCode: payload.countryCode,
+  };
+  setCookie(AUTH_COOKIE_NAME, await signAuthCookiePayload(viewer, now), authCookieOptions(request, AUTH_COOKIE_MAX_AGE_SECONDS));
+}
+
 export async function getCurrentAuthHandler(): Promise<AuthState> {
-  if (hasAuthCookieHeader(getRequest().headers.get("cookie"))) {
+  const request = getRequest();
+  if (hasAuthCookieHeader(request.headers.get("cookie"))) {
     setResponseHeader("Cache-Control", "private, no-store");
+    try {
+      await renewAuthCookieIfStale(request);
+    } catch {
+      // A failed renewal leaves the current cookie in place.
+    }
   }
   return readCurrentAuth();
 }
@@ -320,16 +343,19 @@ export function authCookieOptions(request: Request, maxAge: number): CookieOptio
   };
 }
 
-export async function createAuthCookieHeader(viewer: AuthViewer, request: Request): Promise<string> {
-  const now = Date.now();
+function signAuthCookiePayload(viewer: AuthViewer, now: number): Promise<string> {
   const payload: AuthCookiePayload = {
     ...viewer,
     issuedAt: now,
     expiresAt: now + AUTH_COOKIE_MAX_AGE_SECONDS * 1000,
   };
+  return signJson(payload);
+}
+
+export async function createAuthCookieHeader(viewer: AuthViewer, request: Request): Promise<string> {
   return serializeCookie(
     AUTH_COOKIE_NAME,
-    await signJson(payload),
+    await signAuthCookiePayload(viewer, Date.now()),
     authCookieOptions(request, AUTH_COOKIE_MAX_AGE_SECONDS),
   );
 }
