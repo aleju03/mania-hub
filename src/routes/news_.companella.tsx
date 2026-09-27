@@ -75,7 +75,7 @@ function CompanellaAnnouncement() {
         )}
       />
       <div className="bg-osu-b5 min-h-[80vh]">
-        <article className="mx-auto max-w-2xl px-4 py-8 sm:px-5 sm:py-12">
+        <article className="mx-auto max-w-2xl px-4 pt-4 pb-8 sm:px-5 sm:pb-12">
           <div className="text-[12px] text-osu-f1">{published}</div>
           <h1 className="mt-2 text-2xl font-semibold leading-tight text-white sm:text-3xl">
             <Trans>You can now submit plays through Companella</Trans>
