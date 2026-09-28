@@ -3788,8 +3788,8 @@ msgid "Browse collections"
 msgstr "浏览收藏册"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Browse every image and sound this skin ships, without downloading it."
-msgstr "无需下载即可浏览这个皮肤自带的每一张图片和每一个音效。"
+#~ msgid "Browse every image and sound this skin ships, without downloading it."
+#~ msgstr "无需下载即可浏览这个皮肤自带的每一张图片和每一个音效。"
 
 #: src/routes/maps.tsx
 msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
@@ -8059,8 +8059,8 @@ msgid "Insert"
 msgstr "插入"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Inside the .osk"
-msgstr ".osk 内部"
+#~ msgid "Inside the .osk"
+#~ msgstr ".osk 内部"
 
 #. placeholder {0}: card.username
 #: src/components/packs/collections/ShowcaseWall.tsx
@@ -15200,6 +15200,10 @@ msgstr "皮肤与布局"
 msgid "Skin description"
 msgstr "皮肤简介"
 
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Skin files"
+msgstr "皮肤文件"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Skin hitsounds"
 msgstr "皮肤打击音"
@@ -18598,6 +18602,12 @@ msgstr "查看主页"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "查看战队"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "View the images and sounds in this skin without downloading it."
+msgstr "无需下载即可查看这个皮肤里的图片和音效。"
+
+#: src/components/skins/SkinAssetExplorer.tsx
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"

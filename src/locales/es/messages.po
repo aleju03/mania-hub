@@ -3779,8 +3779,8 @@ msgid "Browse collections"
 msgstr "Ver colecciones"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Browse every image and sound this skin ships, without downloading it."
-msgstr "Explora todas las imágenes y sonidos que trae esta skin, sin descargarla."
+#~ msgid "Browse every image and sound this skin ships, without downloading it."
+#~ msgstr "Explora todas las imágenes y sonidos que trae esta skin, sin descargarla."
 
 #: src/routes/maps.tsx
 msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
@@ -8050,8 +8050,8 @@ msgid "Insert"
 msgstr "Insertar"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Inside the .osk"
-msgstr "Dentro del .osk"
+#~ msgid "Inside the .osk"
+#~ msgstr "Dentro del .osk"
 
 #. placeholder {0}: card.username
 #: src/components/packs/collections/ShowcaseWall.tsx
@@ -15191,6 +15191,10 @@ msgstr "skin y diseño"
 msgid "Skin description"
 msgstr "Descripción de la skin"
 
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Skin files"
+msgstr "Archivos de la skin"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Skin hitsounds"
 msgstr "Hitsounds de la skin"
@@ -18589,6 +18593,12 @@ msgstr "Ver perfil"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "Ver equipo"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "View the images and sounds in this skin without downloading it."
+msgstr "Mira las imágenes y sonidos de esta skin sin descargarla."
+
+#: src/components/skins/SkinAssetExplorer.tsx
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"
