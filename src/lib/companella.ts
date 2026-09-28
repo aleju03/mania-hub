@@ -1,5 +1,5 @@
 import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser";
-import { classifyChart, isMarathonCorrectionCandidate, type ChartClassification, type ClassifyChartInput } from "#dan/chart-classifier";
+import { classifyChart, classifyChartRc, type ChartRcClassification, isMarathonCorrectionCandidate, type ChartClassification, type ClassifyChartInput } from "#dan/chart-classifier";
 import { getInputRate } from "#dan/dan-estimator/labels";
 import { prepareVibroChart } from "#dan/vibro-sections";
 import type { CompanellaEstimate } from "#leoblack/estimator/companellaEstimator";
@@ -65,18 +65,64 @@ export async function computeCompanellaEstimate(
   }
 }
 
+// Companella has no rate constraint, so a verdict it refines can dip as the
+// rate rises: about 6% of 0.05x steps across 800 sampled 4K charts, by up to
+// 0.7 of a dan. A faster play of a chart must not rate below a slower one, so
+// a Companella-refined RC half is floored by the Companella-refined RC halves
+// at the rates these steps below it. Each step costs one more classification,
+// and only where Companella applies.
+export const COMPANELLA_RATE_FLOOR_STEPS = [0.05, 0.1] as const;
+const COMPANELLA_RATE_FLOOR_MIN_RATE = 0.5;
+
 /**
  * Obtain marathon MSD before classifying, then resolve any Companella plan
- * using the resulting star value. Other charts obtain MSD only if they need
+ * using the resulting star value, floored by the rates just below
+ * (COMPANELLA_RATE_FLOOR_STEPS). Other charts obtain MSD only if they need
  * Companella. skipCompanella keeps the benchmark's marathon correction active
- * while isolating the optional fusion.
+ * while isolating the optional fusion; rateFloor: false leaves the verdict as
+ * upstream computes it, for parity checks.
  */
 export async function classifyChartWithCompanella(
   map: ManiaBeatmap,
   osuText: string,
   input: ClassifyChartInput = {},
-  options: { msdValues?: Record<string, number> | null; skipCompanella?: boolean } = {},
+  options: { msdValues?: Record<string, number> | null; skipCompanella?: boolean; rateFloor?: boolean } = {},
 ): Promise<ChartClassification> {
+  input = { ...input, mixedCacheId: crypto.randomUUID() };
+  const resolved = await resolveCompanella(map, osuText, input, classifyChart, options);
+  if (!resolved.companella) return resolved.first;
+  const rcFloor = options.rateFloor === false ? null : await companellaRcFloor(map, osuText, input);
+  return classifyChart(map, osuText, { ...resolved.classifyInput, companella: resolved.companella, rcFloor });
+}
+
+async function companellaRcFloor(
+  map: ManiaBeatmap,
+  osuText: string,
+  input: ClassifyChartInput,
+): Promise<ClassifyChartInput["rcFloor"]> {
+  const rate = getInputRate(input);
+  let floor: ClassifyChartInput["rcFloor"] = null;
+  for (const step of COMPANELLA_RATE_FLOOR_STEPS) {
+    const lowerRate = Math.round((rate - step) * 100) / 100;
+    if (lowerRate < COMPANELLA_RATE_FLOOR_MIN_RATE) break;
+    const lower = await resolveCompanella(map, osuText,
+      { ...input, rate: lowerRate, marathonMsdValues: undefined, companella: undefined, rcFloor: undefined }, classifyChartRc);
+    if (!lower.companella) continue;
+    const { rc } = classifyChartRc(map, osuText, { ...lower.classifyInput, companella: lower.companella });
+    if (rc?.source === "leoblack-companella" && rc.rawDan > (floor?.numeric ?? -Infinity)) {
+      floor = { text: rc.raw, numeric: rc.rawDan };
+    }
+  }
+  return floor;
+}
+
+async function resolveCompanella<T extends Pick<ChartRcClassification, "sunnySr" | "companellaPending">>(
+  map: ManiaBeatmap,
+  osuText: string,
+  input: ClassifyChartInput,
+  classify: (map: ManiaBeatmap, osuText: string, input: ClassifyChartInput) => T,
+  options: { msdValues?: Record<string, number> | null; skipCompanella?: boolean } = {},
+): Promise<{ first: T; classifyInput: ClassifyChartInput; companella: CompanellaEstimate | null }> {
   const rate = getInputRate(input);
   const prepared = input.adjustVibro ? prepareVibroChart(osuText, rate, map) : null;
   const effectiveText = prepared?.osuText ?? osuText;
@@ -89,11 +135,12 @@ export async function classifyChartWithCompanella(
         .then((msd) => msd.values).catch(() => null);
   }
   const classifyInput = { ...input, marathonMsdValues: msdValues };
-  const first = classifyChart(map, osuText, classifyInput);
-  if (options.skipCompanella || !first.companellaPending || first.sunnySr == null) return first;
+  const first = classify(map, osuText, classifyInput);
+  const unrefined = { first, classifyInput, companella: null };
+  if (options.skipCompanella || !first.companellaPending || first.sunnySr == null) return unrefined;
   // A failed marathon MSD pass cannot supply Companella either. Do not retry
   // the same calculator a second time during this request.
-  if (marathon && !msdValues) return first;
+  if (marathon && !msdValues) return unrefined;
 
   const companella = await computeCompanellaEstimate({
     osuText: effectiveText,
@@ -101,7 +148,5 @@ export async function classifyChartWithCompanella(
     keyCount: map.keyCount,
     sunnyStar: first.sunnySr,
   });
-  if (!companella) return first;
-
-  return classifyChart(map, osuText, { ...classifyInput, companella });
+  return { first, classifyInput, companella };
 }
