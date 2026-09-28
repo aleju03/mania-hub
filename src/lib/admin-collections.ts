@@ -66,6 +66,10 @@ export interface AdminCollectionOverview {
   walletRev: number;
   walletUpdatedAt: number | null;
   hasWallet: boolean;
+  /* Server draws since the audit shipped, and the reveals the page reported
+     for them. */
+  auditDraws: number;
+  auditReports: number;
   distinctCards: number;
   totalCopies: number;
   collection: {
@@ -244,6 +248,24 @@ export const setAdminCollectionWallet = createServerFn({ method: "POST" })
     });
     if (!response.ok) throw await failure(response, "Wallet grant");
     return await response.json() as { ok: boolean; economy: AdminCollectionEconomy };
+  });
+
+/* Accounts whose server draws mostly never came back as a reveal report. */
+export interface AdminUnreportedPackDrawer {
+  userId: number;
+  username: string | null;
+  draws: number;
+  reports: number;
+}
+
+export const fetchAdminUnreportedPackDrawers = createServerFn({ method: "GET" })
+  .handler(async (): Promise<AdminUnreportedPackDrawer[]> => {
+    await requireTrueAdminAccess("Collections draw audit");
+    const response = await fetch(`${requireLiveBackendBase()}/api/admin/packs/collection/unreported`, {
+      headers: headers(),
+    });
+    if (!response.ok) throw await failure(response, "Draw audit read");
+    return ((await response.json()) as { drawers?: AdminUnreportedPackDrawer[] }).drawers ?? [];
   });
 
 export const grantAdminCollectionCard = createServerFn({ method: "POST" })

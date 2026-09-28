@@ -68,13 +68,13 @@ export const fetchServerPackTeamCollection = createServerFn({ method: "GET" })
 /* The reveal finished: the team pulls the draw logged are held off the pull
    feed until now, so the feed never shows a card before its opener saw it. */
 export const releaseServerTeamPackPulls = createServerFn({ method: "POST" })
-  .validator((input: { eventIds?: unknown }) => {
+  .validator((input: { eventIds?: unknown; drawId?: unknown }) => {
     const eventIds = (Array.isArray(input?.eventIds) ? input.eventIds : [])
       .slice(0, 12)
       .map((id: unknown) => Math.floor(Number(id) || 0))
       .filter((id: number) => id > 0);
-    if (eventIds.length === 0) throw new Error("Invalid team pull release.");
-    return { eventIds };
+    if (eventIds.length === 0 && typeof input.drawId !== "string") throw new Error("Invalid team pull release.");
+    return { eventIds, drawId: typeof input.drawId === "string" ? input.drawId.slice(0, 64) : undefined };
   })
   .handler(async ({ data }): Promise<{ released: number } | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -90,7 +90,7 @@ export const releaseServerTeamPackPulls = createServerFn({ method: "POST" })
     const response = await fetch(`${base}/api/packs/team-pulls/release`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ userId: auth.viewer.id, eventIds: data.eventIds }),
+      body: JSON.stringify({ userId: auth.viewer.id, eventIds: data.eventIds, drawId: data.drawId }),
     });
     if (!response.ok) throw new Error(`Team pull release failed (${response.status}).`);
     const body = (await response.json()) as { released?: unknown };

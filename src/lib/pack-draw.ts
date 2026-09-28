@@ -88,6 +88,8 @@ export interface ServerWalletState {
 }
 
 export interface ServerPackDrawResult {
+  /* Single-use reveal receipt, absent only during a backend rollout. */
+  drawId?: string;
   poolTotal: number;
   players: ServerPackDrawSlot[];
   /* Card snapshots for the dealt hand. Players the backend has nothing
@@ -176,6 +178,7 @@ export const drawServerPack = createServerFn({ method: "POST" })
     return {
       status: "dealt",
       result: {
+        ...(typeof body.drawId === "string" ? { drawId: body.drawId } : {}),
         poolTotal: Math.max(0, Math.floor(Number(body.poolTotal) || 0)),
         players,
         cards: Array.isArray(body.cards) ? (body.cards as ServerPackDrawCard[]) : [],
