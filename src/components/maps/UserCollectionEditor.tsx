@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, ChevronUp, Disc3, Layers, ListMusic, Loader2, Plus, Search, X } from "lucide-react";
-import { fetchLiveMapSearch, type LiveMapSearchEntry, type LiveMapSearchParams } from "../../lib/live-backend";
+import { fetchLiveMapSearch, lookupLiveMapSearchEntry, type LiveMapSearchEntry, type LiveMapSearchParams } from "../../lib/live-backend";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import {
   USER_COLLECTION_DESCRIPTION_MAX_LENGTH,
@@ -51,12 +51,19 @@ function idQueryLadder(query: string): string[] {
   return /^\d{4,10}$/.test(query) ? [`id=${query}`, `set=${query}`, query] : [query];
 }
 
+/*
+ * The catalog only holds maps someone here has played, so an id or link that
+ * still finds nothing is looked up on osu! and indexed on the spot. Plain text
+ * never gets here: it names no map to fetch.
+ */
 async function searchPickerMaps(query: string): Promise<LiveMapSearchEntry[]> {
   for (const attempt of idQueryLadder(query)) {
     const result = await fetchLiveMapSearch(emptySearchParams(attempt));
     if (result.items.length > 0) return result.items;
   }
-  return [];
+  if (!/^\d{5,10}$/.test(query) && !/ppy\.sh\//i.test(query)) return [];
+  const entry = await lookupLiveMapSearchEntry(query);
+  return entry ? [entry] : [];
 }
 
 function emptySearchParams(query: string): LiveMapSearchParams {

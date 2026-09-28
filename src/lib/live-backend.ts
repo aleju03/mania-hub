@@ -2794,6 +2794,18 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
 
+/* The search's miss path for a pasted id or link: the backend reads the map
+   from osu! and indexes it, so a chart nobody here has played can still be
+   picked. Null when osu! has no mania chart under that id. */
+export async function lookupLiveMapSearchEntry(q: string): Promise<LiveMapSearchEntry | null> {
+  const result = await fetchLiveJson<{ status: string; entry?: LiveMapSearchEntry }>("/api/map-search/lookup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ q }),
+  });
+  return result.status === "found" && result.entry ? result.entry : null;
+}
+
 // Single set entry for /maps?map=<beatmapId> share links; the requested diff is
 // the representative and `diffs` carries the whole set. Null when the map is
 // unknown to the catalog; throws when the backend could not answer at all, so a
