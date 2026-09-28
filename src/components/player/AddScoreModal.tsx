@@ -27,6 +27,14 @@ import {
   type LeaderboardImportStatus,
 } from "../../lib/leaderboard-import";
 import { StatusChip } from "../maps/FilterChips";
+import type { OsuScore } from "../../lib/types";
+import { useNoDans } from "../../store";
+import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
+import {
+  recentPlayRatingKey,
+  useRecentPlayRatingLookup,
+  type RecentPlayRatingView,
+} from "./recent-play-ratings";
 
 /*
  * Adding a missing score to a player, from their profile page.
@@ -79,6 +87,27 @@ interface AcceptedPlay {
   /* Catalog detail (cover, keymode), fetched after the fact. Null until it
      lands, and for charts the map catalog does not know. */
   entry: LiveMapSearchEntry | null;
+  addedAt: number;
+}
+
+/* The accepted play in the shape the Recent tab's rating lookup reads. It is
+   dated to when it was added, not played: the skill recompute the add queued
+   is what the MSD is waiting on, and the lookup only calls a missing MSD
+   pending for plays newer than the last recompute. Null on a backend too old
+   to name the legacy id, which is what the Skills tab keys a play by. */
+function ratingScore(item: AcceptedPlay): OsuScore | null {
+  const { play, entry } = item;
+  const keyCount = play.keyCount ?? entry?.keyCount ?? null;
+  if (play.legacyScoreId === undefined || play.beatmapId == null || keyCount == null) return null;
+  return {
+    id: play.scoreId,
+    legacy_score_id: play.legacyScoreId,
+    beatmap: { id: play.beatmapId, cs: keyCount },
+    mods: play.mods ?? [],
+    rank: play.rank ?? "",
+    passed: true,
+    ended_at: new Date(item.addedAt).toISOString(),
+  } as unknown as OsuScore;
 }
 
 export function AddScoreModal({
@@ -183,7 +212,7 @@ export function AddScoreModal({
       if (mountedRef.current) {
         const key = `${result.play.scoreId}:${item.key}`;
         setAccepted((current) => [
-          { key, play: result.play, alreadyTracked: result.alreadyTracked, entry: null },
+          { key, play: result.play, alreadyTracked: result.alreadyTracked, entry: null, addedAt: Date.now() },
           ...current.filter((accepted) => accepted.play.scoreId !== result.play.scoreId),
         ]);
         setSubmissions((current) => current.filter((queued) => queued.key !== item.key));
@@ -288,6 +317,13 @@ export function AddScoreModal({
     }
   };
 
+  const ratingScores = accepted.map(ratingScore);
+  const ratings = useRecentPlayRatingLookup(userId, ratingScores.filter((score): score is OsuScore => score != null), true, { gain: true });
+  const ratingOf = (index: number): RecentPlayRatingView | null | undefined => {
+    const score = ratingScores[index];
+    return score ? ratings.get(recentPlayRatingKey(score)) : null;
+  };
+
   const [latest, ...older] = accepted;
   const busy = submissions.some((item) => item.status !== "failed");
 
@@ -329,13 +365,13 @@ export function AddScoreModal({
           ) : null}
 
           <AnimatePresence mode="popLayout" initial={false}>
-            {latest ? <ScorePanel key={latest.key} item={latest} locale={locale} /> : null}
+            {latest ? <ScorePanel key={latest.key} item={latest} rating={ratingOf(0)} locale={locale} /> : null}
           </AnimatePresence>
 
           {older.length > 0 ? (
             <div className="max-h-64 overflow-y-auto divide-y divide-white/[0.06] border-t border-white/[0.06]">
-              {older.map((item) => (
-                <AcceptedRow key={item.key} item={item} />
+              {older.map((item, index) => (
+                <AcceptedRow key={item.key} item={item} rating={ratingOf(index + 1)} />
               ))}
             </div>
           ) : null}
@@ -887,8 +923,9 @@ function ImportChartRow({ chart, state, locale, onImport }: { chart: LiveMapSear
 
 /* The play that just landed, as the panel the dialog is built around: its own
    cover art behind it, its accuracy at the size the number deserves. */
-function ScorePanel({ item, locale }: { item: AcceptedPlay; locale: AppLocale }) {
+function ScorePanel({ item, rating, locale }: { item: AcceptedPlay; rating: RecentPlayRatingView | null | undefined; locale: AppLocale }) {
   const { t } = useLingui();
+  const noDans = useNoDans();
   const { play, entry, alreadyTracked } = item;
   const cover = entry?.covers?.["cover@2x"]
     ?? entry?.covers?.cover
@@ -896,6 +933,7 @@ function ScorePanel({ item, locale }: { item: AcceptedPlay; locale: AppLocale })
   const title = play.title ?? entry?.title ?? t`Unknown chart`;
   const version = play.version ?? entry?.version ?? null;
   const mods = getModDisplayList(play.mods);
+  const keyCount = play.keyCount ?? entry?.keyCount ?? null;
   return (
     <motion.a
       // Server-verified URL: the two osu! id spaces overlap, so a link built
@@ -953,6 +991,18 @@ function ScorePanel({ item, locale }: { item: AcceptedPlay; locale: AppLocale })
         <div className="min-w-0 max-w-[55%] text-right">
           <div className="truncate text-[15px] font-bold text-white">{title}</div>
           {version ? <div className="truncate text-[11px] text-osu-f1">[{version}]</div> : null}
+          {/* What the play counts for on the Skills tab. Null when the chart or
+              the backend cannot say; the cells explain a missing value. */}
+          {rating !== null ? (
+            <div className="mt-1.5 flex items-center justify-end gap-2.5">
+              <RecentPlayRatingCells rating={rating} keyCount={play.keyCount ?? entry?.keyCount ?? 4} hideDan={noDans} compact />
+            </div>
+          ) : null}
+          {rating?.gain != null && keyCount ? (
+            <div className="mt-1 flex justify-end">
+              <RatingGain gain={rating.gain} keyCount={keyCount} />
+            </div>
+          ) : null}
           <div className={`mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] ${alreadyTracked ? "text-osu-f1" : "text-osu-green-light"}`}>
             {alreadyTracked ? t`already tracked` : t`added`}
           </div>
@@ -962,9 +1012,25 @@ function ScorePanel({ item, locale }: { item: AcceptedPlay; locale: AppLocale })
   );
 }
 
-/* A play the next paste pushed off the panel. */
-function AcceptedRow({ item }: { item: AcceptedPlay }) {
+/* What the play adds to the player's keymode rating: the rating with it minus
+   the rating without it. Most plays below the player's best add nothing at
+   two decimals, and that reads as +0.00 rather than disappearing. */
+function RatingGain({ gain, keyCount }: { gain: number; keyCount?: number }) {
   const { t } = useLingui();
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className={`text-xs font-bold tabular-nums ${gain > 0 ? "text-osu-green-light" : "text-osu-f1"}`}>
+        +{gain.toFixed(2)}
+      </span>
+      {keyCount ? <span className="text-[11px] text-osu-f1">{t`to ${keyCount}K rating`}</span> : null}
+    </span>
+  );
+}
+
+/* A play the next paste pushed off the panel. */
+function AcceptedRow({ item, rating }: { item: AcceptedPlay; rating: RecentPlayRatingView | null | undefined }) {
+  const { t } = useLingui();
+  const noDans = useNoDans();
   const { play, entry, alreadyTracked } = item;
   const title = play.title ?? entry?.title ?? t`Unknown chart`;
   const version = play.version ?? entry?.version ?? null;
@@ -991,6 +1057,12 @@ function AcceptedRow({ item }: { item: AcceptedPlay }) {
       <span className={`shrink-0 text-[11px] tabular-nums text-osu-f1 ${mods.length > 0 ? "" : "ml-auto"}`}>
         {play.accuracy != null ? formatAccuracy(play.accuracy) : null}
       </span>
+      {rating !== null ? (
+        <span className="flex shrink-0 items-center gap-2 self-center">
+          <RecentPlayRatingCells rating={rating} keyCount={play.keyCount ?? entry?.keyCount ?? 4} hideDan={noDans} compact />
+          {rating?.gain != null ? <RatingGain gain={rating.gain} /> : null}
+        </span>
+      ) : null}
       <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] ${alreadyTracked ? "text-osu-f1" : "text-osu-green-light"}`}>
         {alreadyTracked ? t`already tracked` : t`added`}
       </span>

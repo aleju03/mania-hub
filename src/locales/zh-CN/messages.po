@@ -17698,6 +17698,10 @@ msgstr "标题"
 msgid "to"
 msgstr "至"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "to {keyCount}K rating"
+msgstr "{keyCount}K 评分"
+
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"

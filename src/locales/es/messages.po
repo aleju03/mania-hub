@@ -17689,6 +17689,10 @@ msgstr "Título"
 msgid "to"
 msgstr "a"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "to {keyCount}K rating"
+msgstr "al nivel de {keyCount}K"
+
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 msgstr "Para prevenir el abuso, el servidor cuenta las peticiones por dirección IP con fines de limitación de tasa y limita las conexiones en vivo simultáneas por IP. Estos contadores existen solo en memoria: el backend no escribe direcciones IP ni user agents en su base de datos ni en sus registros. Los proveedores de alojamiento conservan registros de peticiones estándar, y el servidor registra detalles operativos como la actividad de los trabajos, las llamadas a la API de osu! de origen y los errores para monitorizar el estado del servicio."

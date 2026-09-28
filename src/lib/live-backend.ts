@@ -1933,6 +1933,8 @@ export async function fetchLivePlayerUnratedPlaysDirect(
 /** A recent play's own MSD (null unless the skill pool rated it) and its chart's dan at the played rate. */
 export interface LiveRecentPlayRating {
   msd: number | null;
+  /** What the play adds to its keymode's Overall rating, present with `msd`. */
+  gain?: number;
   dan: { rawDan: number; side: "rc" | "ln"; label: string | null } | null;
   missing?: { msd?: LiveRecentRatingMissingReason; dan?: LiveRecentRatingMissingReason };
   /** A missing value backed by a real analysis job. */
@@ -1957,7 +1959,7 @@ export async function fetchLiveRecentPlayRatingsDirect(
   userId: number,
   plays: LiveRecentPlayRatingRequest[],
   importIds: string[],
-  options: { signal?: AbortSignal; fresh?: boolean } = {},
+  options: { signal?: AbortSignal; fresh?: boolean; gain?: boolean } = {},
 ): Promise<{ items: Record<string, LiveRecentPlayRating>; imports: Record<string, LiveRecentPlayRating> }> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   if (plays.length === 0 && importIds.length === 0) return { items: {}, imports: {} };
@@ -1968,6 +1970,7 @@ export async function fetchLiveRecentPlayRatingsDirect(
       .join(","));
   }
   if (importIds.length > 0) query.set("imports", importIds.slice(0, 100).join(","));
+  if (options.gain) query.set("gain", "1");
   const page = await fetchLiveJson<{ items?: Record<string, LiveRecentPlayRating>; imports?: Record<string, LiveRecentPlayRating> }>(
     `/api/profiles/${userId}/recent-ratings?${query.toString()}`,
     {
@@ -3372,6 +3375,10 @@ export interface LiveScoreSubmissionPlay {
      resolves to it. Never rebuild it from scoreId: the solo and legacy id
      spaces overlap, so /scores/{legacyId} can open a stranger's play. */
   scoreUrl: string | null;
+  /* What the Skills tab keys a play by, and the chart's key count, so the
+     dialog can ask for the play's MSD and dan. Absent on older backends. */
+  legacyScoreId?: number | null;
+  keyCount?: number | null;
 }
 
 export type LiveScoreSubmissionResult =

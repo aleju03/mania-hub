@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { getI18n, loadLocaleCatalog } from "../../lib/i18n";
 import { fetchLiveScoreImportStatuses, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
 import { AddScoreModal } from "./AddScoreModal";
+import { useRecentPlayRatingLookup } from "./recent-play-ratings";
 
 vi.mock("../../lib/live-backend", () => ({
   submitLiveMissingScore: vi.fn(),
@@ -15,6 +16,11 @@ vi.mock("../../lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => ({ canUseAdminFeatures: false }) }));
 vi.mock("../../lib/locale-context", () => ({ useLocale: () => "en" }));
 vi.mock("../../lib/leaderboard-import", () => ({}));
+vi.mock("../../store", () => ({ useNoDans: () => false }));
+vi.mock("./recent-play-ratings", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./recent-play-ratings")>(),
+  useRecentPlayRatingLookup: vi.fn(() => new Map()),
+}));
 
 function deferred() {
   let resolve!: (result: LiveScoreSubmissionResult) => void;
@@ -174,5 +180,23 @@ describe("AddScoreModal queue", () => {
     await act(async () => first.resolve(success(1)));
     expect(submitLiveMissingScore).toHaveBeenCalledTimes(2);
     expect(view.onSubmitted).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the added play's MSD, dan and rating gain, looked up by its legacy id", async () => {
+    const result = success(9001);
+    if (!result.ok) throw new Error("unreachable");
+    result.play = { ...result.play, beatmapId: 55, legacyScoreId: 7001, keyCount: 4 };
+    vi.mocked(submitLiveMissingScore).mockResolvedValueOnce(result);
+    vi.mocked(useRecentPlayRatingLookup).mockImplementation((_userId, scores) => new Map(
+      scores.map((score) => [String(score.legacy_score_id), { msd: 25.31, gain: 0.19, dan: { rawDan: 7.2, side: "rc" as const, label: "7th" } }]),
+    ));
+    const view = setup();
+    await act(async () => view.paste(9001));
+    expect(view.getByText("25.31")).toBeTruthy();
+    expect(view.getByText("+0.19")).toBeTruthy();
+    expect(view.getByText("to 4K rating")).toBeTruthy();
+    expect(vi.mocked(useRecentPlayRatingLookup).mock.lastCall?.[1]).toEqual([
+      expect.objectContaining({ id: 9001, legacy_score_id: 7001, beatmap: { id: 55, cs: 4 } }),
+    ]);
   });
 });

@@ -107,24 +107,29 @@ it("sleeps through a scheduled session wait and refreshes only the affected play
   expect(fetchRatings).toHaveBeenCalledTimes(1);
   fetchRatings.mockResolvedValue({ items: { "1": rated }, imports: {} });
   jobEvent({ id: 123, status: "done" });
-  await advance(1);
+  await advance(250);
   expect(fetchRatings.mock.calls[1][1].map((play) => play.scoreId)).toEqual([1]);
   expect(fetchRatings.mock.calls[1][3]?.fresh).toBe(true);
   expect(hook.result.current.get("1")).toEqual(rated);
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it("waits out the origin cache after a fast completion and coalesces repeated events", async () => {
+it("rechecks right after a fast completion, coalesces repeated events, and waits out the origin cache on a stale answer", async () => {
   fetchRatings.mockResolvedValue({ items: { "1": pending }, imports: {} });
   renderHook(() => useRecentPlayRatingLookup(userId, [score(1)], true));
   await flush();
   jobEvent({ id: 123, status: "done" });
   jobEvent({ id: 123, status: "done" });
-  await advance(30_000);
+  await advance(249);
   expect(fetchRatings).toHaveBeenCalledTimes(1);
+  await advance(1);
+  expect(fetchRatings).toHaveBeenCalledTimes(2);
+  // Still naming the finished job: a backend answering from its cache.
+  await advance(30_000);
+  expect(fetchRatings).toHaveBeenCalledTimes(2);
   fetchRatings.mockResolvedValue({ items: { "1": rated }, imports: {} });
   await advance(1_000);
-  expect(fetchRatings).toHaveBeenCalledTimes(2);
+  expect(fetchRatings).toHaveBeenCalledTimes(3);
   expect(vi.getTimerCount()).toBe(0);
 });
 
@@ -161,8 +166,51 @@ it("updates a play when a new skill job completes after the initial unavailable 
   await advance(1);
   expect(fetchRatings).toHaveBeenCalledTimes(1);
   jobEvent({ id: 456, type: "compute_player_skills", userId, status: "done" });
-  await advance(1);
+  await advance(250);
   expect(hook.result.current.get("1")?.msd).toBe(30);
+});
+
+it("rechecks once after the cache window when a finished job's answer comes back unchanged", async () => {
+  renderHook(() => useRecentPlayRatingLookup(userId, [score(1)], true));
+  await flush();
+  jobEvent({ id: 456, type: "compute_player_skills", userId, status: "done" });
+  await advance(250);
+  expect(fetchRatings).toHaveBeenCalledTimes(2);
+  await advance(31_000);
+  expect(fetchRatings).toHaveBeenCalledTimes(3);
+  await advance(30 * 60_000);
+  expect(fetchRatings).toHaveBeenCalledTimes(3);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("spaces event rechecks ten seconds apart and leaves queued or failed jobs on the old wait", async () => {
+  const other = (id: number) => ({ id, beatmap: { id: 20 + id, cs: 4 }, mods: [] }) as unknown as OsuScore;
+  fetchRatings.mockImplementation(async (_user, plays) => ({ items: Object.fromEntries(plays.map((play) => [play.scoreId, pending])), imports: {} }));
+  renderHook(() => useRecentPlayRatingLookup(userId, [other(1), other(2)], true));
+  await flush();
+  jobEvent({ id: 9, type: "analyze_beatmap_chart", beatmapId: 21, status: "done" });
+  await advance(250);
+  expect(fetchRatings).toHaveBeenCalledTimes(2);
+  jobEvent({ id: 10, type: "analyze_beatmap_chart", beatmapId: 22, status: "done" });
+  await advance(9_000);
+  expect(fetchRatings).toHaveBeenCalledTimes(2);
+  await advance(1_000);
+  expect(fetchRatings).toHaveBeenCalledTimes(3);
+  expect(fetchRatings.mock.calls[2][1].map((play) => play.scoreId)).toEqual([2]);
+  fetchRatings.mockClear();
+  jobEvent({ id: 123, status: "queued" });
+  await advance(20_000);
+  expect(fetchRatings).not.toHaveBeenCalled();
+});
+
+it("asks for the rating gain only when told to, and keeps those answers apart", async () => {
+  renderHook(() => useRecentPlayRatingLookup(userId, [score(1)], true));
+  await flush();
+  expect(fetchRatings.mock.calls[0][3]?.gain).toBe(false);
+  renderHook(() => useRecentPlayRatingLookup(userId, [score(1)], true, { gain: true }));
+  await flush();
+  expect(fetchRatings).toHaveBeenCalledTimes(2);
+  expect(fetchRatings.mock.calls[1][3]?.gain).toBe(true);
 });
 
 it("shows a retryable error for every unfetched batch instead of leaving loading cells", async () => {
