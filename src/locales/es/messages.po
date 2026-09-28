@@ -2451,6 +2451,7 @@ msgstr "Un play solo cuenta si de verdad fue el dan. Easy, No Fail y Random lo d
 #~ msgid "A run only counts if it was really the course. Easy, No Fail, Half Time, Daycore, Random, the key mods and anything that slows the chart down disqualify it; Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A pass the site recorded before it stored mods cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 #~ msgstr "Una partida solo cuenta si de verdad fue el curso. Easy, No Fail, Half Time, Daycore, Random, los mods de teclas y cualquier cosa que ralentice el chart la descalifican; Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect y Double Time están bien. Un pase que el sitio registró antes de guardar los mods no se puede comprobar, así que no cuenta para nada en vez de darse por bueno. <0>Al hacer clic en tu insignia de dan verás el curso que fijó tu estimación, si lo hubo.</0>"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 msgstr "No se pudo leer la captura como PNG, JPEG o WebP de menos de 4 MB."
@@ -18315,6 +18316,7 @@ msgstr "Subiendo imagen..."
 msgid "Uploading previews."
 msgstr "Subiendo vistas previas."
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Uploading screenshot {shotNumber} of {shotCount}."
 msgstr "Subiendo captura {shotNumber} de {shotCount}."
@@ -18597,8 +18599,6 @@ msgstr "Ver equipo"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "View the images and sounds in this skin without downloading it."
 msgstr "Mira las imágenes y sonidos de esta skin sin descargarla."
-
-#: src/components/skins/SkinAssetExplorer.tsx
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"

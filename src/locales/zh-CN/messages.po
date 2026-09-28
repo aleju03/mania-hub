@@ -2460,6 +2460,7 @@ msgstr "只有真的按课题打的成绩才算。Easy、No Fail 和 Random 会�
 #~ msgid "A run only counts if it was really the course. Easy, No Fail, Half Time, Daycore, Random, the key mods and anything that slows the chart down disqualify it; Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A pass the site recorded before it stored mods cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 #~ msgstr "只有真的按课题打的成绩才算。Easy、No Fail、Half Time、Daycore、Random、按键 mod，以及任何拖慢谱面的东西都会让它作废；Mirror、Hidden、Fade In、Flashlight、Hard Rock、Sudden Death、Perfect 和 Double Time 都没问题。本站在开始记录 mod 之前存下的成绩无法核对，所以宁可不算，也不会默认它没问题。<0>点开你的段位徽章，就能看到是哪个课题定下了你的估算，如果有的话。</0>"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 msgstr "有一张截图无法读取为 4 MB 以内的 PNG、JPEG 或 WebP。"
@@ -18324,6 +18325,7 @@ msgstr "正在上传图片…"
 msgid "Uploading previews."
 msgstr "正在上传预览图。"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Uploading screenshot {shotNumber} of {shotCount}."
 msgstr "正在上传第 {shotNumber} / {shotCount} 张截图。"
@@ -18606,8 +18608,6 @@ msgstr "查看战队"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "View the images and sounds in this skin without downloading it."
 msgstr "无需下载即可查看这个皮肤里的图片和音效。"
-
-#: src/components/skins/SkinAssetExplorer.tsx
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"

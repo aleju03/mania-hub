@@ -7,8 +7,7 @@ import { SKIN_MAX_SCREENSHOTS, SKIN_SCREENSHOT_LABEL_MAX_LENGTH } from "../../li
 // card cover, and (where the caller allows it) add and remove them. Shared by
 // the upload modal, the bulk queue's per-file editor, and the post-publish
 // preview editor, which all offer the same thing over different sources - two
-// hold local drafts, one holds what is already stored, and only the drafts can
-// still grow or shrink.
+// hold local drafts, one holds what is already stored plus new drafts.
 //
 // Naming a shot is what titles it in the skin page's gallery ("Score screen"
 // rather than "Shot 2"); starring one puts it on the browse card in place of a
@@ -30,8 +29,8 @@ export function SkinScreenshotFields({
 }: {
   screenshots: SkinScreenshotField[];
   onRename: (index: number, label: string) => void;
-  // Left out where images cannot arrive or leave: a published skin's shots are
-  // fixed, and only their names and the cover star are still editable.
+  // Left out where images cannot arrive or leave, which leaves only the names
+  // and the cover star editable.
   onAdd?: (files: FileList | null) => void;
   onRemove?: (index: number) => void;
   // Which shot fronts the browse card, if one does. Leaving onCover out drops
