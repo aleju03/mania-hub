@@ -3,7 +3,7 @@ import type { CommunityUploadEntry } from "./uploaded-replay-payload";
 
 const mocks = vi.hoisted(() => ({
   readFile: vi.fn(), writeFile: vi.fn(async () => {}), rename: vi.fn(async () => {}), mkdir: vi.fn(async () => {}),
-  list: vi.fn(), read: vi.fn(), describe: vi.fn(), owners: vi.fn(), assets: vi.fn(), waitUntil: vi.fn(), needsStars: vi.fn((_upload: { starRatingAtRate?: number }) => false),
+  list: vi.fn(), read: vi.fn(), describe: vi.fn(), owners: vi.fn(), cover: vi.fn(), waitUntil: vi.fn(), needsStars: vi.fn((_upload: { starRatingAtRate?: number }) => false),
 }));
 vi.mock("node:fs/promises", () => mocks);
 vi.mock("@vercel/functions", () => ({ waitUntil: mocks.waitUntil }));
@@ -11,7 +11,7 @@ vi.mock("./uploaded-replay-store", () => ({ listRecentUploadedReplays: mocks.lis
 vi.mock("./uploaded-replay-describe", () => ({ DESCRIPTION_VERSION: 3, readUploadedReplayDescription: mocks.read,
   describeUploadedReplayById: mocks.describe, needsStarRatingAtRate: mocks.needsStars }));
 vi.mock("./uploaded-replay-index", () => ({ fetchUploadedReplayIndexRows: mocks.owners }));
-vi.mock("./community-beatmap-store", () => ({ getCommunityBeatmapAssets: mocks.assets }));
+vi.mock("./community-beatmap-stand-in", () => ({ resolveUnknownMapCover: mocks.cover }));
 
 const upload = { id: "abcdefghijklmnop", playerName: "Player", mods: [], keyCount: 4, accuracy: .99, uploadedAt: 123,
   beatmap: { title: "Map" }, version: 3, uploadedBy: null } as unknown as CommunityUploadEntry;
@@ -31,7 +31,7 @@ beforeEach(() => {
   mocks.read.mockResolvedValue(upload);
   mocks.describe.mockResolvedValue(upload);
   mocks.owners.mockResolvedValue(new Map());
-  mocks.assets.mockResolvedValue({ background: false, audio: false });
+  mocks.cover.mockResolvedValue({ communityBackground: false, standInBeatmapsetId: null });
   mocks.needsStars.mockReturnValue(false);
 });
 
@@ -86,6 +86,19 @@ describe("community replay catalog", () => {
     await finish();
     expect(mocks.describe).toHaveBeenCalledWith(upload.id);
     expect((await server.getUploadsFeed(query)).uploads[0]).toMatchObject({ starRatingAtRate: 6.68 });
+  });
+
+  it("checks a cached unknown-map card once for a stand-in cover", async () => {
+    const unknown = { ...upload, beatmap: null, beatmapHash: "739ea51d42664a13230063c424920ad8", communityBackground: false };
+    mocks.readFile.mockResolvedValue(JSON.stringify({ version: 1, entries: [{ upload: unknown, checkedAt: Date.now() }] }));
+    mocks.list.mockResolvedValue([{ id: upload.id, uploadedAt: upload.uploadedAt }]);
+    mocks.describe.mockResolvedValue(unknown);
+    mocks.cover.mockResolvedValue({ communityBackground: false, standInBeatmapsetId: 292994 });
+    const server = await import("./uploaded-replay-community-server");
+    await server.getUploadsFeed(query);
+    await finish();
+    expect(mocks.cover).toHaveBeenCalledWith(unknown.beatmapHash);
+    expect((await server.getUploadsFeed(query)).uploads[0]).toMatchObject({ standInBeatmapsetId: 292994 });
   });
 
   it("does not resurrect an upload deleted during hydration", async () => {

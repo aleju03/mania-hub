@@ -265,7 +265,9 @@ function communityUploadToRecentEntry(upload: CommunityUploadEntry, unknownBeatm
       ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/list.jpg`
       : upload.communityBackground && upload.beatmapHash
         ? getCommunityBeatmapAssetUrl(upload.beatmapHash, "background")
-        : undefined,
+        : upload.standInBeatmapsetId
+          ? `https://assets.ppy.sh/beatmaps/${upload.standInBeatmapsetId}/covers/list.jpg`
+          : undefined,
     grade: upload.grade,
     accuracy: upload.accuracy,
     mods: withModRate(upload.mods, upload.modRate),

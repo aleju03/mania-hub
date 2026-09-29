@@ -1,15 +1,14 @@
 import { fetchBeatmapFileWithMeta, fetchWithCacheLock, osuFetch } from "./api";
+import { lookupChartStandIn } from "./community-beatmap-stand-in";
 import { getCommunityBeatmapAssets, getCommunityBeatmapFile } from "./community-beatmap-store";
 import type { BeatmapChecksumLookupResult } from "./osu/replay";
 import { withTimeout } from "./promise-timeout";
 import { getJsonArtifact, getUploadedReplayPackedStorageKey, putJsonArtifact } from "./r2-cache";
 import { packReplayFrames } from "./replay-pack";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
-import { fetchUploadedReplayChartStandIn } from "./uploaded-replay-index";
 import {
   UPLOADED_REPLAY_PACKED_VERSION,
   type UploadedReplayBeatmapResolution,
-  type UploadedReplayChartStandIn,
   type UploadedReplayPacked,
 } from "./uploaded-replay-payload";
 import { normalizeUploadedReplayId, readUploadedReplay, uploadedReplaysUseR2 } from "./uploaded-replay-store";
@@ -30,7 +29,6 @@ const PACKED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const PACKED_LOCK_TTL_MS = 30_000;
 const BEATMAP_LOOKUP_CACHE_TTL_MS = 5 * 60_000;
 const COMMUNITY_LOOKUP_TIMEOUT_MS = 3_000;
-const STAND_IN_CACHE_TTL_MS = 30 * 60_000;
 
 export type StoredPackedUpload = { replay: UploadedReplayPacked; filename: string | null };
 
@@ -149,22 +147,6 @@ async function readCommunityCopy(
     "Chart stand-in lookup timed out",
   ).catch(() => null);
   return standIn ? { content, assets, standIn } : { content, assets };
-}
-
-// A bare .osu contribution has no song or background; an indexed map with the
-// same notes at the same timing can lend its own. Keyed by checksum, since the
-// community copy for a checksum never changes. A backend outage comes back
-// bare null, which the cache treats as a miss, so only real answers stick.
-async function lookupChartStandIn(checksum: string, content: string): Promise<UploadedReplayChartStandIn | null> {
-  const cached = await fetchWithCacheLock(
-    `uploaded-replay-stand-in:v1:${checksum.toLowerCase()}`,
-    STAND_IN_CACHE_TTL_MS,
-    async (): Promise<{ standIn: UploadedReplayChartStandIn | null } | null> => {
-      const standIn = await fetchUploadedReplayChartStandIn(content);
-      return standIn === undefined ? null : { standIn };
-    },
-  );
-  return cached?.standIn ?? null;
 }
 
 // The chart for a replay's checksum, as far as the server can take it. A

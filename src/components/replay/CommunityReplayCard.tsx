@@ -24,7 +24,8 @@ export const CommunityReplayCard = memo(function CommunityReplayCard({ upload }:
   const stars = uploadStarRating(upload);
   const cover = upload.beatmap?.beatmapsetId
     ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/cover@2x.jpg`
-    : upload.communityBackground && upload.beatmapHash ? getCommunityBeatmapAssetUrl(upload.beatmapHash, "background") : null;
+    : upload.communityBackground && upload.beatmapHash ? getCommunityBeatmapAssetUrl(upload.beatmapHash, "background")
+      : upload.standInBeatmapsetId ? `https://assets.ppy.sh/beatmaps/${upload.standInBeatmapsetId}/covers/cover@2x.jpg` : null;
   return (
     <Link
       to="/replay"

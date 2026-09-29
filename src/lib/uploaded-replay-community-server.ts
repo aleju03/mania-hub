@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { waitUntil } from "@vercel/functions";
-import { getCommunityBeatmapAssets } from "./community-beatmap-store";
+import { resolveUnknownMapCover } from "./community-beatmap-stand-in";
 import { DESCRIPTION_VERSION, describeUploadedReplayById, needsStarRatingAtRate, readUploadedReplayDescription } from "./uploaded-replay-describe";
 import { fetchUploadedReplayIndexRows } from "./uploaded-replay-index";
 import { queryCommunityUploads, type CommunityUploadsQuery } from "./uploaded-replay-feed";
@@ -128,7 +128,10 @@ async function refreshCatalog(): Promise<void> {
     const cached = catalog.get(entry.id);
     return repairs.has(entry.id) || (cached && (Date.now() - cached.checkedAt >= DESCRIPTION_REFRESH_MS
       || (cached.upload.version ?? 1) < DESCRIPTION_VERSION
-      || needsStarRatingAtRate(cached.upload)));
+      || needsStarRatingAtRate(cached.upload)
+      // Unknown-map cards cached before stand-in covers existed: check once.
+      || (!cached.upload.beatmap && !!cached.upload.beatmapHash && !cached.upload.communityBackground
+        && cached.upload.standInBeatmapsetId === undefined)));
   });
   pending = repairs.size;
   next = 0;
@@ -137,13 +140,13 @@ async function refreshCatalog(): Promise<void> {
       const entry = toRefresh[next++];
       const previous = catalog.get(entry.id);
       const description = await describeUploadedReplayById(entry.id).catch(() => null);
-      const communityBackground = description && !description.beatmap && description.beatmapHash
-        ? (await getCommunityBeatmapAssets(description.beatmapHash).catch(() => null))?.background ?? false
-        : false;
+      const cover = description && !description.beatmap && description.beatmapHash
+        ? await resolveUnknownMapCover(description.beatmapHash)
+        : { communityBackground: false, standInBeatmapsetId: null };
       if (revision !== generation) return;
       if (description) catalog.set(entry.id, { upload: {
         ...description, uploadedAt: entry.uploadedAt,
-        uploadedBy: ownerRows.get(entry.id) ?? previous?.upload.uploadedBy ?? null, communityBackground,
+        uploadedBy: ownerRows.get(entry.id) ?? previous?.upload.uploadedBy ?? null, ...cover,
       }, checkedAt: Date.now() });
       if (repairs.has(entry.id)) pending -= 1;
       if (next % 24 === 0) await saveCatalog();

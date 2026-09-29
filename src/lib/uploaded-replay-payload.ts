@@ -83,4 +83,8 @@ export type CommunityUploadEntry = UploadedReplayDescription & {
   /** A map osu! doesn't know whose background a contributor supplied; the
    *  card draws it where a submitted map's cover would go. */
   communityBackground: boolean;
+  /** Without one, the set of an indexed map with the same notes, whose osu!
+   *  cover stands in. Null once checked and none matched; absent on catalog
+   *  entries from before the check existed. */
+  standInBeatmapsetId?: number | null;
 };

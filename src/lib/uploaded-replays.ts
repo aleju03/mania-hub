@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { describeUploadedReplayById, type UploadedReplayDescription } from "./uploaded-replay-describe";
-import { getCommunityBeatmapAssets } from "./community-beatmap-store";
+import { resolveUnknownMapCover } from "./community-beatmap-stand-in";
 import {
   deleteUploadedReplayIndexRow,
   fetchUploadedReplayIndexPage,
@@ -42,14 +42,18 @@ export interface MyUploadedReplay {
   description: UploadedReplayDescription | null;
   /** A map osu! doesn't know whose background a contributor supplied. */
   communityBackground: boolean;
+  /** Otherwise, the set of an indexed map with the same notes, for its cover. */
+  standInBeatmapsetId: number | null;
 }
 
-async function describeWithCommunityBackground(id: string): Promise<Pick<MyUploadedReplay, "description" | "communityBackground">> {
+async function describeWithCommunityBackground(
+  id: string,
+): Promise<Pick<MyUploadedReplay, "description" | "communityBackground" | "standInBeatmapsetId">> {
   const description = await describeUploadedReplayById(id).catch(() => null);
-  const communityBackground = description && !description.beatmap && description.beatmapHash
-    ? (await getCommunityBeatmapAssets(description.beatmapHash)).background
-    : false;
-  return { description, communityBackground };
+  const cover = description && !description.beatmap && description.beatmapHash
+    ? await resolveUnknownMapCover(description.beatmapHash)
+    : { communityBackground: false, standInBeatmapsetId: null };
+  return { description, ...cover };
 }
 
 export interface MyUploadedReplayPage {

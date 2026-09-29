@@ -262,7 +262,9 @@ function UploadRow({
     ? `https://assets.ppy.sh/beatmaps/${description.beatmap.beatmapsetId}/covers/list.jpg`
     : upload.communityBackground && description?.beatmapHash
       ? getCommunityBeatmapAssetUrl(description.beatmapHash, "background")
-      : null;
+      : upload.standInBeatmapsetId
+        ? `https://assets.ppy.sh/beatmaps/${upload.standInBeatmapsetId}/covers/list.jpg`
+        : null;
   // "[Insane] 7K // player", with whatever parts the description has; a row
   // whose file is gone still renders (and deletes) from the index row alone.
   const chart = description
