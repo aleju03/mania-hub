@@ -14,6 +14,7 @@ import {
   fetchMyDataSkills,
   fetchMyDataTopPlays,
   MY_DATA_PAGE_SIZE,
+  removeMyTrackedScores,
   type MyDataArchiveFilter,
   type MyDataInsights,
   type MyDataModFilter,
@@ -46,6 +47,8 @@ import {
 } from "./MyStatsInsights";
 import { ModBadge } from "../ui/ModBadge";
 import { RosterOptInCard } from "./RosterOptInCard";
+import { RemovalPill, RemovePlaysSheet, type RemovePlaysSheetKind } from "./RemovePlaysSheet";
+import { removeSelfFromRoster } from "../../lib/roster-self-track";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -60,6 +63,7 @@ const DAY_NAMES: MessageDescriptor[] = [
   msg`Saturdays`,
 ];
 type FeedTabId = "tracked" | "top";
+
 
 const MOD_FILTER_OPTIONS: Array<{ value: MyDataModFilter; label: MessageDescriptor }> = [
   { value: "all", label: msg`All mods` },
@@ -198,6 +202,11 @@ export function MyDataPanel() {
   const newKeysRef = useRef<Set<string>>(new Set());
   const filterFetchReadyRef = useRef(false);
   const trackedFiltersRef = useRef<MyDataTrackedFeedParams>({ key: "all", mods: "all", archive: "all", sort: "recent_desc" });
+  // Plays picked for removal, kept across pages so the sheet can show them.
+  const [selectedPlays, setSelectedPlays] = useState<Map<string, MyDataTrackedPlay>>(() => new Map());
+  const [removalSheet, setRemovalSheet] = useState<RemovePlaysSheetKind | null>(null);
+  const [removalBusy, setRemovalBusy] = useState(false);
+  const [removalError, setRemovalError] = useState<string | null>(null);
 
   const applyTrackedPage = useCallback((page: MyDataPage<MyDataTrackedPlay>) => {
     setFeed(page.items);
@@ -257,8 +266,8 @@ export function MyDataPanel() {
     trackedFiltersRef.current = trackedFilters;
   }, [trackedFilters]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { quiet?: boolean }) => {
+    if (!options?.quiet) setLoading(true);
     // Insights are a second read on purpose: they scan the player's whole ref
     // history, and the feed shouldn't wait on them to paint.
     void fetchMyDataInsights().then(setInsights).catch(() => setInsights(null));
@@ -312,6 +321,73 @@ export function MyDataPanel() {
     }
     void load();
   }, [viewer, load]);
+
+  useEffect(() => {
+    setSelectedPlays(new Map());
+    setRemovalSheet(null);
+  }, [viewer?.id]);
+
+  const toggleSelectedPlay = useCallback((identity: string, play: MyDataTrackedPlay) => {
+    setSelectedPlays((current) => {
+      const next = new Map(current);
+      if (next.has(identity)) next.delete(identity);
+      else next.set(identity, play);
+      return next;
+    });
+  }, []);
+
+  const openRemovalSheet = useCallback((kind: RemovePlaysSheetKind) => {
+    setRemovalError(null);
+    setRemovalSheet(kind);
+  }, []);
+
+  const finishRemoval = useCallback(async () => {
+    setSelectedPlays(new Map());
+    setRemovalSheet(null);
+    await load({ quiet: true });
+  }, [load]);
+
+  const runRemoval = useCallback(async (all: boolean) => {
+    setRemovalBusy(true);
+    setRemovalError(null);
+    const result = await removeMyTrackedScores({ data: all ? { all: true } : { scoreIdentities: [...selectedPlays.keys()] } })
+      .catch(() => ({ ok: false, removed: 0 }));
+    setRemovalBusy(false);
+    if (!result.ok) {
+      setRemovalError(t`Couldn't remove those plays right now. Try again in a moment.`);
+      return;
+    }
+    await finishRemoval();
+  }, [finishRemoval, selectedPlays, t]);
+
+  // "Remove all" ignores the feed filters, so it counts every tracked play.
+  const allTrackedCount = Math.max(summary?.totalScores ?? 0, trackedTotal);
+  // Only self-added players: the top 100 is tracked whether it asked or not.
+  const canRemovePlays = summary?.tracked === true && summary.rankedMember === false;
+
+  // Untrack first, so no new play lands between the removal and the opt-out.
+  const runStopTracking = useCallback(async (removePlays: boolean) => {
+    setRemovalBusy(true);
+    setRemovalError(null);
+    const stopped = await removeSelfFromRoster().catch(() => null);
+    if (!stopped?.ok) {
+      setRemovalBusy(false);
+      setRemovalError(t`Couldn't stop tracking right now. Try again in a moment.`);
+      return;
+    }
+    if (removePlays) {
+      const removed = await removeMyTrackedScores({ data: { all: true } }).catch(() => ({ ok: false, removed: 0 }));
+      if (!removed.ok) {
+        // Tracking is already off; the retry is the plain "remove all".
+        setRemovalBusy(false);
+        setRemovalError(t`Tracking is off, but your plays couldn't be removed right now. Try again in a moment.`);
+        setRemovalSheet("all");
+        return;
+      }
+    }
+    setRemovalBusy(false);
+    await finishRemoval();
+  }, [finishRemoval, t]);
 
   useEffect(() => {
     if (!viewer || !summary?.tracked || loading) return;
@@ -539,10 +615,13 @@ export function MyDataPanel() {
       </div>
 
       {!tracked ? (
-        <RosterOptInCard
-          description={t`Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play.`}
-          onTracked={load}
-        />
+        <>
+          <RosterOptInCard
+            description={t`Your plays aren't being recorded yet because you're not in your country's top 100. Add yourself to the tracker and this page comes alive: a live feed of your plays, your playstyle, and records. Then you can set goals that auto-complete as you play.`}
+            onTracked={load}
+          />
+          {removalError ? <div className="text-center text-[12px] text-osu-red-light">{removalError}</div> : null}
+        </>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -556,6 +635,15 @@ export function MyDataPanel() {
                       <FeedTab active={activeSkillPlaysView === "msd"} onClick={() => setSkillPlaysView("msd")}>{t`MSD plays`}</FeedTab>
                       {!noDans ? <FeedTab active={activeSkillPlaysView === "dan"} onClick={() => setSkillPlaysView("dan")}>{t`Dan plays`}</FeedTab> : null}
                     </>
+                  ) : null}
+                  {canRemovePlays && !activeSkillPlaysView && feedTab === "tracked" && trackedTotal > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => openRemovalSheet("all")}
+                      className="ml-auto px-2 py-1 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light"
+                    >
+                      {t`Remove all`}
+                    </button>
                   ) : null}
                 </div>
                 {!activeSkillPlaysView ? (
@@ -602,7 +690,16 @@ export function MyDataPanel() {
                   <div translate="no" className="space-y-1.5">
                     {feed.map((score) => {
                       const key = `${score.beatmap?.id}-${getScoreTimestamp(score)}-${score.pp}`;
-                      return <MeScoreRow key={key} score={score} isNew={newKeysRef.current.has(key)} />;
+                      const identity = score.scoreIdentity;
+                      return (
+                        <MeScoreRow
+                          key={key}
+                          score={score}
+                          isNew={newKeysRef.current.has(key)}
+                          selected={canRemovePlays && identity ? selectedPlays.has(identity) : undefined}
+                          onToggleSelected={canRemovePlays && identity ? () => toggleSelectedPlay(identity, score) : undefined}
+                        />
+                      );
                     })}
                     <Pagination
                       pageIndex={trackedPageIndex}
@@ -692,9 +789,41 @@ export function MyDataPanel() {
             <Link to="/goals" className="inline-flex items-center rounded-lg border border-osu-b3/40 bg-osu-b5/60 px-3.5 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-pink/10 hover:text-osu-pink-light">
               {summary?.goalsOpen ? t`Goals (${summary.goalsOpen} open)` : t`Goals`}
             </Link>
+            {canRemovePlays ? (
+              <button
+                type="button"
+                disabled={removalBusy}
+                onClick={() => {
+                  setRemovalError(null);
+                  openRemovalSheet("stop");
+                }}
+                className="ml-auto px-2 py-2 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light disabled:cursor-default disabled:opacity-50"
+              >
+                {t`Stop tracking`}
+              </button>
+            ) : null}
           </div>
         </>
       )}
+      {canRemovePlays && !removalSheet ? (
+        <RemovalPill count={selectedPlays.size} onRemove={() => openRemovalSheet("some")} onClear={() => setSelectedPlays(new Map())} />
+      ) : null}
+      {removalSheet ? (
+        <RemovePlaysSheet
+          kind={removalSheet}
+          plays={removalSheet === "some" ? [...selectedPlays.values()] : feed.slice(0, 3)}
+          count={removalSheet === "some" ? selectedPlays.size : allTrackedCount}
+          busy={removalBusy}
+          error={removalError}
+          onRemove={() => void runRemoval(removalSheet === "all")}
+          onStopTracking={(removePlays) => void runStopTracking(removePlays)}
+          onClose={() => {
+            setRemovalSheet(null);
+            // A failed removal after tracking went off still leaves the page on the old state.
+            if (removalError && summary?.tracked) void load({ quiet: true });
+          }}
+        />
+      ) : null}
     </PageShell>
   );
 }

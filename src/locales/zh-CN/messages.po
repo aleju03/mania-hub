@@ -1101,6 +1101,14 @@ msgstr "已收集 {collectedShown}/{0}"
 msgid "{count, plural, one {# card} other {# cards}}"
 msgstr "{count, plural, other {# 张卡片}}"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "{count, plural, one {# play} other {# plays}}"
+msgstr "{count} 个成绩"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "{count, plural, one {# tracked play} other {# tracked plays}}"
+msgstr "{count} 个追踪成绩"
+
 #: src/lib/streak-game.ts
 msgid "{count} 7K top plays"
 msgstr "{count} 个 7K 最佳成绩"
@@ -4298,6 +4306,10 @@ msgstr "清除玩家筛选"
 msgid "Clear search"
 msgstr "清除搜索"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Clear selection"
+msgstr "清除选择"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the {label} score"
 msgstr "清除{label}的成绩"
@@ -4418,6 +4430,7 @@ msgstr "客户端"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/UserCollectionEditor.tsx
+#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -5223,6 +5236,10 @@ msgstr "无法读取投票。"
 msgid "Couldn't remove that nominee."
 msgstr "无法移除该提名。"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't remove those plays right now. Try again in a moment."
+msgstr "暂时无法移除这些成绩，请稍后再试。"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save that goal. Check the values and try again."
 msgstr "目标保存失败，请检查数值后重试。"
@@ -5258,6 +5275,10 @@ msgstr "保存失败，请重试。"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Couldn't start the comparison"
 msgstr "无法开始对比"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't stop tracking right now. Try again in a moment."
+msgstr "暂时无法停止追踪，请稍后再试。"
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -7686,6 +7707,14 @@ msgstr "长按回收"
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "长按回收所有重复卡，价值 {recyclable} 碎片"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to remove"
+msgstr "按住以移除"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to stop tracking"
+msgstr "按住以停止追踪"
+
 #. placeholder {0}: formatNumber(completionCounts.owned)
 #. placeholder {1}: formatNumber(completionCounts.total)
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -8321,6 +8350,10 @@ msgstr "保留"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Keep it"
 msgstr "保留"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Keep my plays"
+msgstr "保留我的成绩"
 
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -10087,6 +10120,10 @@ msgstr "新的邀请链接"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "New link"
 msgstr "新链接"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "New plays stop being recorded."
+msgstr "新成绩将不再被记录。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New preset"
@@ -13384,6 +13421,7 @@ msgstr "移除失败。"
 msgid "remove"
 msgstr "移除"
 
+#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -13428,6 +13466,10 @@ msgstr "移除 {overlayMenuTargetLabel}"
 msgid "Remove {tag}"
 msgstr "移除 {tag}"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Remove all"
+msgstr "全部移除"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
 msgstr "移除颜色"
@@ -13448,6 +13490,14 @@ msgstr "移除链接"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "remove listing"
 msgstr "移除收录"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Remove my {count, plural, one {# play} other {# plays}}"
+msgstr "移除我的 {count} 个成绩"
+
+#: src/components/me/MeScoreRow.tsx
+msgid "Remove play"
+msgstr "移除成绩"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -13478,6 +13528,10 @@ msgstr "去掉图中的流速变化。"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "移除截图失败。请重试。"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Removing…"
+msgstr "正在移除…"
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
@@ -15763,6 +15817,15 @@ msgstr "停止分享这一张"
 msgid "stop sim"
 msgstr "停止模拟"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Stop tracking"
+msgstr "停止追踪"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Stopping…"
+msgstr "正在停止…"
+
 #: src/routes/companella.tsx
 msgid "Storage is not configured, so uploads will fail until it is."
 msgstr ""
@@ -17309,6 +17372,10 @@ msgstr "对方已经没有那张卡片可以送出了。"
 msgid "They're already a GOAT."
 msgstr "他们已经是 GOAT 了。"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "They're removed from your tracked plays, recent plays and activity on this site."
+msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。"
+
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Third pull"
 msgstr "第三个抽到"
@@ -17920,6 +17987,10 @@ msgstr "{0} 上已追踪的成绩"
 #: src/components/layout/Nav.tsx
 msgid "tracker"
 msgstr "追踪器"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Tracking is off, but your plays couldn't be removed right now. Try again in a moment."
+msgstr "追踪已关闭，但暂时无法移除你的成绩，请稍后再试。"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Tracking is on"

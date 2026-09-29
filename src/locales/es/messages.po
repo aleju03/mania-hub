@@ -1092,6 +1092,14 @@ msgstr "{collectedShown}/{0} obtenidas"
 msgid "{count, plural, one {# card} other {# cards}}"
 msgstr "{count, plural, one {# carta} other {# cartas}}"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "{count, plural, one {# play} other {# plays}}"
+msgstr "{count, plural, one {# jugada} other {# jugadas}}"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "{count, plural, one {# tracked play} other {# tracked plays}}"
+msgstr "{count, plural, one {# jugada trackeada} other {# jugadas trackeadas}}"
+
 #: src/lib/streak-game.ts
 msgid "{count} 7K top plays"
 msgstr "{count} top plays de 7K"
@@ -4289,6 +4297,10 @@ msgstr "Quitar filtro de jugador"
 msgid "Clear search"
 msgstr "Limpiar búsqueda"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Clear selection"
+msgstr "Quitar selección"
+
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the {label} score"
 msgstr "Quitar el score de {label}"
@@ -4409,6 +4421,7 @@ msgstr "Cliente"
 #: src/components/layout/ChangelogModal.tsx
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/UserCollectionEditor.tsx
+#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/packs/CardCollectors.tsx
 #: src/components/packs/CardSpotlight.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -5214,6 +5227,10 @@ msgstr "No se pudieron leer los votos."
 msgid "Couldn't remove that nominee."
 msgstr "No se pudo eliminar ese nominado."
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't remove those plays right now. Try again in a moment."
+msgstr "No se pudieron eliminar esas jugadas en este momento. Inténtalo de nuevo en un momento."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save that goal. Check the values and try again."
 msgstr "No se pudo guardar esa meta. Revisa los valores e inténtalo de nuevo."
@@ -5249,6 +5266,10 @@ msgstr "No se pudo guardar. Inténtalo de nuevo."
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Couldn't start the comparison"
 msgstr "No se pudo iniciar la comparación"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't stop tracking right now. Try again in a moment."
+msgstr "No se pudo dejar de trackear en este momento. Inténtalo de nuevo en un momento."
 
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
@@ -7677,6 +7698,14 @@ msgstr "mantén para reciclar"
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "Mantén pulsado para reciclar todos los duplicados, valen {recyclable} fragmentos"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to remove"
+msgstr "Mantén para eliminar"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to stop tracking"
+msgstr "Mantén para dejar de trackear"
+
 #. placeholder {0}: formatNumber(completionCounts.owned)
 #. placeholder {1}: formatNumber(completionCounts.total)
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -8312,6 +8341,10 @@ msgstr "conservarlo"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Keep it"
 msgstr "Conservarlo"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Keep my plays"
+msgstr "Conservar mis jugadas"
 
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -10078,6 +10111,10 @@ msgstr "Nuevo enlace de invitación"
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "New link"
 msgstr "Nuevo enlace"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "New plays stop being recorded."
+msgstr "Tus jugadas nuevas dejan de registrarse."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "New preset"
@@ -13375,6 +13412,7 @@ msgstr "No se pudo eliminar."
 msgid "remove"
 msgstr "eliminar"
 
+#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -13419,6 +13457,10 @@ msgstr "Eliminar {overlayMenuTargetLabel}"
 msgid "Remove {tag}"
 msgstr "Eliminar {tag}"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Remove all"
+msgstr "Eliminar todas"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
 msgstr "Quitar color"
@@ -13439,6 +13481,14 @@ msgstr "Quitar enlace"
 #: src/components/communities/CommunityEditModal.tsx
 msgid "remove listing"
 msgstr "eliminar el listado"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Remove my {count, plural, one {# play} other {# plays}}"
+msgstr "Eliminar {count, plural, one {mi # jugada} other {mis # jugadas}}"
+
+#: src/components/me/MeScoreRow.tsx
+msgid "Remove play"
+msgstr "Eliminar jugada"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -13469,6 +13519,10 @@ msgstr "Quita los cambios de velocidad de scroll del mapa."
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Removing the screenshot failed. Try again."
 msgstr "No se pudo eliminar la captura. Inténtalo de nuevo."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Removing…"
+msgstr "Eliminando…"
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
@@ -15754,6 +15808,15 @@ msgstr "Dejar de compartir este"
 msgid "stop sim"
 msgstr "parar sim"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Stop tracking"
+msgstr "Dejar de trackear"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Stopping…"
+msgstr "Deteniendo…"
+
 #: src/routes/companella.tsx
 msgid "Storage is not configured, so uploads will fail until it is."
 msgstr ""
@@ -17300,6 +17363,10 @@ msgstr "Esa persona ya no tiene esa carta para dar."
 msgid "They're already a GOAT."
 msgstr "Ya es un GOAT."
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "They're removed from your tracked plays, recent plays and activity on this site."
+msgstr "Se eliminan de tus jugadas trackeadas, jugadas recientes y actividad en este sitio."
+
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Third pull"
 msgstr "Tercera en sacarse"
@@ -17911,6 +17978,10 @@ msgstr "Runs del Tracker en {0}"
 #: src/components/layout/Nav.tsx
 msgid "tracker"
 msgstr "Tracker"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Tracking is off, but your plays couldn't be removed right now. Try again in a moment."
+msgstr "El tracking está desactivado, pero tus jugadas no se pudieron eliminar en este momento. Inténtalo de nuevo en un momento."
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Tracking is on"

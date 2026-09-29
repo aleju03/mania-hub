@@ -225,3 +225,95 @@ export function playAdminActionFailedSound(): void {
     }
   });
 }
+
+/**
+ * "Hold to confirm", in the manner of osu!'s hold-to-delete: soft ticks that
+ * speed up and climb in pitch while the button is held, scheduled up front on
+ * the audio clock. Returns a stop that fades the rest out when the hold is let
+ * go early or completes. ~durationMs.
+ */
+export function startHoldToConfirmSound(durationMs: number): () => void {
+  let stop = () => {};
+  withAudioContext((ctx) => {
+    const t0 = ctx.currentTime + 0.01;
+    const seconds = durationMs / 1000;
+    const master = ctx.createGain();
+    master.gain.value = 0.1;
+    master.connect(ctx.destination);
+    const oscillators: OscillatorNode[] = [];
+
+    // Gaps shrink from 110ms to 35ms, pitch climbs from ~A4 to ~E6.
+    let offset = 0;
+    while (offset < seconds - 0.02) {
+      const progress = offset / seconds;
+      const start = t0 + offset;
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.value = 440 * Math.pow(2, progress * 1.6);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.35 + progress * 0.45, start + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.045);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(start);
+      osc.stop(start + 0.05);
+      oscillators.push(osc);
+      offset += 0.11 - progress * 0.075;
+    }
+
+    stop = () => {
+      const now = ctx.currentTime;
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(master.gain.value, now);
+      master.gain.linearRampToValueAtTime(0, now + 0.03);
+      for (const osc of oscillators) {
+        try {
+          osc.stop(now + 0.04);
+        } catch {
+          // already stopped
+        }
+      }
+    };
+  });
+  return () => stop();
+}
+
+/**
+ * The hold landed: a short low-mid thump with a bright click on top, drier
+ * than the goal-cleared ta-da since removing things is not a celebration.
+ * ~0.25s.
+ */
+export function playHoldConfirmedSound(): void {
+  withAudioContext((ctx) => {
+    const t0 = ctx.currentTime + 0.01;
+    const master = ctx.createGain();
+    master.gain.value = 0.14;
+    master.connect(ctx.destination);
+
+    const body = ctx.createOscillator();
+    body.type = "sine";
+    body.frequency.setValueAtTime(1320, t0);
+    body.frequency.exponentialRampToValueAtTime(330, t0 + 0.12);
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(0.0001, t0);
+    bodyGain.gain.exponentialRampToValueAtTime(0.7, t0 + 0.006);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+    body.connect(bodyGain);
+    bodyGain.connect(master);
+    body.start(t0);
+    body.stop(t0 + 0.25);
+
+    const click = ctx.createOscillator();
+    click.type = "sine";
+    click.frequency.value = 2637;
+    const clickGain = ctx.createGain();
+    clickGain.gain.setValueAtTime(0.0001, t0);
+    clickGain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.003);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+    click.connect(clickGain);
+    clickGain.connect(master);
+    click.start(t0);
+    click.stop(t0 + 0.08);
+  });
+}
