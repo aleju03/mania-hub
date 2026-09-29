@@ -12,6 +12,7 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SelectMenu, type SelectMenuOption } from "../../components/ui/SelectMenu";
 import {
   fetchAdminCollection,
+  fetchAdminUnreportedPackDrawers,
   grantAdminCollectionCard,
   grantAdminTeamCard,
   removeAdminCollectionCard,
@@ -19,6 +20,7 @@ import {
   setAdminCollectionWallet,
   type AdminCollectionCard,
   type AdminCollectionOverview,
+  type AdminUnreportedPackDrawer,
   type AdminTeamCard,
   type AdminTeamSearchResult,
 } from "../../lib/admin-collections";
@@ -347,6 +349,15 @@ function CollectionsAdminPage() {
             {overview ? <TargetSummary overview={overview} target={target} /> : <EmptySummary />}
           </SectionCard>
 
+          <UnreportedDrawsPanel
+            onPick={(drawer) => pick({
+              id: drawer.userId,
+              username: drawer.username ?? String(drawer.userId),
+              avatarUrl: "",
+              countryCode: "",
+            })}
+          />
+
           {overview ? (
             <>
               <WalletPanel
@@ -355,6 +366,8 @@ function CollectionsAdminPage() {
                 onDone={(message) => { showAdminToast(message); void refresh(); }}
                 onError={(message) => showAdminToast(message, "error")}
               />
+
+              <PackOpeningPanel overview={overview} />
 
               <div ref={grantRef}>
                 <GrantPanel
@@ -398,6 +411,49 @@ function CollectionsAdminPage() {
 
       <AdminToasts />
     </div>
+  );
+}
+
+/* Missing reports can mean skipped reveals or failed requests. This panel
+   surfaces the gap for review and is hidden while nobody qualifies. */
+function UnreportedDrawsPanel({ onPick }: { onPick: (drawer: AdminUnreportedPackDrawer) => void }) {
+  const [drawers, setDrawers] = useState<AdminUnreportedPackDrawer[]>([]);
+  useEffect(() => {
+    fetchAdminUnreportedPackDrawers().then(setDrawers).catch(() => setDrawers([]));
+  }, []);
+  if (drawers.length === 0) return null;
+  return (
+    <SectionCard title="Draws without a reveal">
+      <div className="divide-y divide-white/[0.07]">
+        {drawers.map((drawer) => (
+          <button
+            key={drawer.userId}
+            type="button"
+            onClick={() => onPick(drawer)}
+            className="flex w-full items-center gap-3 px-1 py-1.5 text-left hover:bg-osu-b3/30 cursor-pointer"
+          >
+            <Avatar url="" userId={drawer.userId} size={24} />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-c1">
+              {drawer.username ?? `#${drawer.userId}`}
+            </span>
+            <span className="text-[13px] text-white tabular-nums">
+              {formatNumber(drawer.reports)} of {formatNumber(drawer.draws)} revealed
+            </span>
+          </button>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+function PackOpeningPanel({ overview }: { overview: AdminCollectionOverview }) {
+  return (
+    <SectionCard title="Pack opening">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Stat label="Draws" value={formatNumber(overview.auditDraws)} />
+        <Stat label="Revealed" value={formatNumber(overview.auditReports)} />
+      </div>
+    </SectionCard>
   );
 }
 
@@ -476,6 +532,8 @@ const EMPTY_OVERVIEW: AdminCollectionOverview = {
   walletRev: 0,
   walletUpdatedAt: null,
   hasWallet: false,
+  auditDraws: 0,
+  auditReports: 0,
   distinctCards: 0,
   totalCopies: 0,
   collection: { cards: [], total: 0, tierCounts: {}, duplicateShardTotal: 0, filteredShardTotal: 0 },

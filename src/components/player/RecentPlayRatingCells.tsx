@@ -57,7 +57,7 @@ function RatingStatus({ axis, reason, rating, compact }: {
       type="button"
       aria-label={`${axis}: ${label}`}
       aria-describedby={open ? id : undefined}
-      onClick={(event) => { event.stopPropagation(); if (rating?.loadError) rating.onRetry?.(); else setOpen(true); }}
+      onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (rating?.loadError) rating.onRetry?.(); else setOpen(true); }}
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
       onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); } }}

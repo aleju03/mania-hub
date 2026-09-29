@@ -24,9 +24,9 @@ Keep one-off audits, investigation notes, and capture reports in `local-notes/` 
 ## Structure
 
 - `src/routes/`: file-based routes (`createFileRoute`); shared shell, auth, country context, theme bootstrap, and live-backend bootstrap in `src/routes/__root.tsx`. Search params are validated per route and drive country scope, pagination, and filters. API/proxy routes in `src/routes/api/` (`/api/sync` is the analytics capture proxy into the backend's in-house analytics store, not a live-data fallback); admin pages in `src/routes/admin/`. Files prefixed with `-` are tests, not routes; do not delete them as stale.
-- `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities). `src/lib/osu.ts` is a facade over `src/lib/osu/` domain modules (rankings, maps, replay, snipes, tracker, top-plays, pattern-analysis, dan, users, beatmaps, plus shared support modules).
+- `src/components/` (feature folders), `src/store.ts` (Zustand store), `src/lib/` (server/data utilities). `src/lib/osu.ts` is a facade over `src/lib/osu/` domain modules (rankings, beatmaps, replay, dan, users, pattern-analysis, plus shared support modules).
 - `live-backend/src/`: `server.ts` (boot), `ingest/`, `osc/`, `jobs/` + `workers.ts`, `features/` (one module per surface), `http/`, `live/` (SSE), `discord/`, `dan/`, `replay-video/`; schema in `migrations/001_initial.sql`, later tables migrated in `db.ts`.
-- `scripts/`: dan benchmark, replay capture, mascot atlas, dev helpers. Static assets in `public/`.
+- `scripts/`: replay capture and validation, bug-report export, i18n generators, dev helpers in `scripts/dev/`. Static assets in `public/`.
 
 ## Commands
 
@@ -35,7 +35,6 @@ The user usually has dev servers running locally (frontend `3000`, live backend 
 - Frontend: `npm run dev` / `npm run build` / `npm run test` / `npx tsc --noEmit`. Single test: `npx vitest run path/to/file.test.ts` (`-t "name"` for one case).
 - Backend (inside `live-backend/`): `npm run dev` / `npm test` / `npx tsc --noEmit` / `npm run verify` (tests + build).
 - Sync prod DB to local (dev PC only, overwrites the local DB, never run on the VPS): `npm run live-db:update` (fresh VPS snapshot) or `npm run live-db:sync-from-vps` (reuses the newest existing backup, `--dry-run` supported). `--with-analytics` also pulls the separate analytics DB; `--analytics-only` pulls just that one.
-- Dan tooling: `npm run dan:benchmark` (via `scripts/dan-benchmark.ts`, against curated labels), `npm run dan:analyze`.
 - Production bug reports: `npm run bugs:pull` exports open reports, reporter identities, threads, and images to a new gitignored `local-notes/bug-reports/` folder. Use `-- --status all`, `-- --id <id>`, or `-- --search "text"` to narrow/expand; read the printed `README.md` and report files, and inspect local image paths as needed. Read-only; does not mark reports seen. Setup in `docs/admin.md`.
 
 Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `live-backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root. Tests are Vitest, colocated as `*.test.ts(x)` next to source (plus the `-`-prefixed files in `src/routes/`).
@@ -57,7 +56,7 @@ There is one copy of the dan estimator, at `live-backend/src/dan/dan-estimator/`
 - Each alias is declared in three places that must move together: `paths` in `tsconfig.json`, `imports` in `package.json`, and `vitest.config.ts` (which deliberately does not load `vite.config.ts`).
 - Tests for the shared estimator live in `live-backend/tests/dan-*.test.ts`, so edits there need the backend suite, and the root `npx tsc --noEmit` covers both sides. The chart classifier (`#dan/chart-classifier`) is shared on the same terms.
 - The mania replay judge is shared on the same terms: `live-backend/src/replay-judge/` (`mania-replay-judgement.ts`, and `stable-frames.ts` for decoding .osr rows), reached as `#replay-judge/*`. The replay viewer draws with it and the backend rates Companella imports from the offsets it finds. Its tests are `live-backend/tests/replay-judge.test.ts`. Keep its imports type-only: the root `replay:*` scripts load it under plain node, which does not map `.js` specifiers onto `.ts`.
-- `src/lib/daniel-estimator.ts` is an alternative algorithm, not a copy. `companella.ts` is the one deliberately divergent pair: the backend routes MSD through `msd.ts` so MinaCalc stays serialized against the job lanes, so it stays hand-synced.
+- `companella.ts` is the one deliberately divergent pair: the backend routes MSD through `msd.ts` so MinaCalc stays serialized against the job lanes, so it stays hand-synced.
 
 ## Hard rules
 

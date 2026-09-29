@@ -592,6 +592,7 @@ function PacksPage() {
   /* True once the server draw has spent for the pack on screen: the slash
      and the auto-open charge must not pay a second time locally. */
   const serverPaidRef = useRef(false);
+  const drawIdRef = useRef<string | undefined>(undefined);
   /* Set synchronously when a deal lands so PackStage's delayed onOpened can
      protect an Eternal even if its damage callback races the React render. */
   const dealtPlayersRef = useRef<PackPlayer[] | null>(null);
@@ -749,11 +750,13 @@ function PacksPage() {
     setDealError(null);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
+    drawIdRef.current = undefined;
     dealtPlayersRef.current = null;
     mintPassRef.current = null;
     if (packId === 0) {
       const pending = readPendingPack();
       if (pending) {
+        drawIdRef.current = pending.drawId;
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(pending.players.filter((player) => !player.team).map((player) => player.user.id)).catch(() => {});
         }
@@ -819,6 +822,7 @@ function PacksPage() {
           }
           if (outcome.kind === "dealt") {
             const dealt = outcome.deal;
+            drawIdRef.current = dealt.drawId;
             serverIsNewRef.current = dealt.isNewByCardKey;
             serverPaidRef.current = true;
             if (dealt.wallet) walletApi.applyServerWallet(dealt.wallet.payload, dealt.wallet.rev);
@@ -880,7 +884,7 @@ function PacksPage() {
      one as cards flip into the wallet. */
   useEffect(() => {
     if (phase !== "reveal" || !cards) return;
-    writePendingPack(cards.map((card) => card.player), damage);
+    writePendingPack(cards.map((card) => card.player), damage, drawIdRef.current);
   }, [phase, cards, damage]);
 
   useEffect(() => {
@@ -1272,7 +1276,8 @@ function PacksPage() {
                              until the collection's repair path re-mints it,
                              never a card. */
                           /* Team cards are already complete on the server:
-                             no mint pass and no pull report. */
+                             no mint pass or player pull report. Their release
+                             call also acknowledges the draw receipt. */
                           const playerPulls = pulls.filter((pull) => !pull.player.team);
                           // A team card's serial came with the draw, so its
                           // "Nth to pull this" line is there from the start.
@@ -1288,8 +1293,8 @@ function PacksPage() {
                           const teamPullEventIds = pulls.flatMap((pull) =>
                             pull.player.team && pull.player.teamPullEventId ? [pull.player.teamPullEventId] : [],
                           );
-                          if (auth.viewer && teamPullEventIds.length > 0) {
-                            void releaseServerTeamPackPulls({ data: { eventIds: teamPullEventIds } })
+                          if (auth.viewer && (teamPullEventIds.length > 0 || (drawIdRef.current && pulls.some((pull) => pull.player.team)))) {
+                            void releaseServerTeamPackPulls({ data: { eventIds: teamPullEventIds, drawId: drawIdRef.current } })
                               .then((result) => {
                                 if (result && result.released > 0) refreshPackPulseFeed();
                               })
@@ -1316,6 +1321,7 @@ function PacksPage() {
                           if (auth.viewer && playerPulls.length > 0) {
                             void recordServerPackPulls({
                               data: {
+                                drawId: drawIdRef.current,
                                 packType: selectedType.id,
                                 cards: playerPulls.map((pull) => ({
                                   userId: pull.player.user.id,

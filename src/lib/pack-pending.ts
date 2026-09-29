@@ -11,6 +11,7 @@ import { packPlayerVariantFields, parsePackTeamCard, teamPackCardKey, type PackP
 export const PENDING_PACK_STORAGE_KEY = "mania-hub-pending-pack-v1";
 
 export interface PendingPack {
+  drawId?: string;
   players: PackPlayer[];
   damage: PackDamage | null;
 }
@@ -88,25 +89,27 @@ export function readPendingPack(): PendingPack | null {
           ? {
               players: (parsed as { players?: unknown }).players,
               damage: sanitizePackDamage((parsed as { damage?: unknown }).damage),
+              drawId: (parsed as { drawId?: unknown }).drawId,
             }
           : null;
     if (!record || !Array.isArray(record.players) || record.players.length === 0) return null;
     const players = record.players.map(sanitizePlayer);
     if (players.some((player) => player === null)) return null;
-    return { players: players as PackPlayer[], damage: record.damage };
+    const drawId = "drawId" in record && typeof record.drawId === "string" && record.drawId.length <= 64 ? record.drawId : undefined;
+    return { players: players as PackPlayer[], damage: record.damage, ...(drawId ? { drawId } : {}) };
   } catch {
     return null;
   }
 }
 
-export function writePendingPack(players: PackPlayer[], damage: PackDamage | null = null): void {
+export function writePendingPack(players: PackPlayer[], damage: PackDamage | null = null, drawId?: string): void {
   if (typeof window === "undefined") return;
   try {
     if (players.length === 0) {
       localStorage.removeItem(PENDING_PACK_STORAGE_KEY);
       return;
     }
-    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify({ players, damage }));
+    localStorage.setItem(PENDING_PACK_STORAGE_KEY, JSON.stringify({ players, damage, ...(drawId ? { drawId } : {}) }));
   } catch {
     // Quota or privacy mode: the reveal still works this session, the pack
     // just won't survive leaving the page.
@@ -123,7 +126,7 @@ export function consumePendingPackCard(userId: number, cardKey?: string): void {
   if (index === -1) return;
   pending.players.splice(index, 1);
   // The remainder of a cut pack is still cut.
-  writePendingPack(pending.players, pending.damage);
+  writePendingPack(pending.players, pending.damage, pending.drawId);
 }
 
 export function clearPendingPack(): void {

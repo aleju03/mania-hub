@@ -1,6 +1,6 @@
 import { msg } from "@lingui/core/macro";
 
-import { type ChangelogUpdate } from "../data/changelog";
+import { UPDATES, type ChangelogUpdate } from "../data/changelog";
 import { getI18n } from "./i18n";
 import type { AppLocale } from "./locale";
 
@@ -84,4 +84,48 @@ export function groupUpdatesByDay(updates: readonly ChangelogUpdate[]): Changelo
     else days.push({ date: update.date, updates: [update] });
   }
   return days;
+}
+
+/**
+ * Marker for the newest changelog entry a reader has seen: the newest day plus
+ * how many entries that day has, so a second release on the same day still
+ * counts as new. Folding a fix into an existing line changes neither, which is
+ * intended: that is not something new to come back for.
+ */
+export function changelogSeenMarker(updates: readonly ChangelogUpdate[]): string | null {
+  const newest = updates[0]?.date;
+  if (!newest) return null;
+  return `${newest}:${updates.filter((update) => update.date === newest).length}`;
+}
+
+/** Whether the changelog has entries newer than a stored marker. No marker counts as unseen. */
+export function hasUnseenChangelog(updates: readonly ChangelogUpdate[], seen: string | null): boolean {
+  const current = changelogSeenMarker(updates);
+  if (!current) return false;
+  if (!seen) return true;
+  const [seenDate, seenCount] = seen.split(":");
+  const [date, count] = current.split(":");
+  if (date !== seenDate) return date > seenDate;
+  return Number(count) > Number(seenCount);
+}
+
+export const CHANGELOG_SEEN_KEY = "mania-hub-changelog-seen-v1";
+
+export function readChangelogSeen(): string | null {
+  try {
+    return window.localStorage.getItem(CHANGELOG_SEEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Records the current changelog as read, on opening it or turning on notifications. */
+export function markChangelogSeen(): void {
+  const marker = changelogSeenMarker(UPDATES);
+  if (!marker) return;
+  try {
+    window.localStorage.setItem(CHANGELOG_SEEN_KEY, marker);
+  } catch {
+    // Private mode or a full quota: the dot just comes back next visit.
+  }
 }

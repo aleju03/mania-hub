@@ -13,6 +13,21 @@ import {
 import type { CompanellaAccess, CompanellaInstallation } from "../../lib/companella-integration/shared";
 import { PanelGroup } from "./PanelGroup";
 
+interface CompanellaSnapshot {
+  viewerId: number | null;
+  access: CompanellaAccess | null;
+  installations: CompanellaInstallation[];
+  expiresAt: number;
+}
+
+// Settings unmounts a tab's panel when you switch away, so without this every return to Preferences refetched both.
+const SNAPSHOT_TTL_MS = 60_000;
+let snapshot: CompanellaSnapshot | null = null;
+
+function freshSnapshot(viewerId: number | null): CompanellaSnapshot | null {
+  return snapshot && snapshot.viewerId === viewerId && snapshot.expiresAt > Date.now() ? snapshot : null;
+}
+
 /*
  * The Integrations group in Settings, with Companella its only entry so far: whether it is connected, and each
  * connected computer with a Revoke. Connecting happens from inside the app.
@@ -22,24 +37,31 @@ export function CompanellaGroup() {
   const { t } = useLingui();
   const auth = useAuth();
   const locale = useLocale();
-  const [access, setAccess] = useState<CompanellaAccess | null>(null);
-  const [installations, setInstallations] = useState<CompanellaInstallation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const viewerId = auth.viewer?.id ?? null;
+  const cached = freshSnapshot(viewerId);
+  const [access, setAccess] = useState<CompanellaAccess | null>(cached?.access ?? null);
+  const [installations, setInstallations] = useState<CompanellaInstallation[]>(cached?.installations ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (currentAccess: CompanellaAccess | null) => {
     const result = await fetchCompanellaInstallations().catch(() => ({ installations: [] }));
     setInstallations(result.installations);
-  }, []);
+    snapshot = { viewerId, access: currentAccess, installations: result.installations, expiresAt: Date.now() + SNAPSHOT_TTL_MS };
+  }, [viewerId]);
 
   useEffect(() => {
+    if (freshSnapshot(viewerId)) return;
     let cancelled = false;
+    setLoading(true);
+    setInstallations([]);
     void fetchCompanellaAccess()
       .then(async (result) => {
         if (cancelled) return;
         setAccess(result);
-        if (result.allowed || result.hasData) await load();
+        if (result.allowed || result.hasData) await load(result);
+        else snapshot = { viewerId, access: result, installations: [], expiresAt: Date.now() + SNAPSHOT_TTL_MS };
       })
       .catch(() => {
         if (!cancelled) setAccess(null);
@@ -50,7 +72,7 @@ export function CompanellaGroup() {
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [viewerId, load]);
 
   const active = installations.filter((installation) => installation.status === "active");
   const status = loading ? null
@@ -101,7 +123,7 @@ export function CompanellaGroup() {
                   setBusyId(installation.id);
                   setFailed(false);
                   void revokeCompanellaInstallation({ data: { installationId: installation.id } })
-                    .then(() => load())
+                    .then(() => load(access))
                     .catch(() => setFailed(true))
                     .finally(() => setBusyId(null));
                 }}

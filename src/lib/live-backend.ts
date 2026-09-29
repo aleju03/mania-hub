@@ -2,7 +2,6 @@ import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
 import type { VibroAnalysis } from "#dan/vibro-sections";
-import type { VibroClearEvidenceSummary } from "#dan/vibro-clear-evidence";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
@@ -30,7 +29,6 @@ export interface LivePlayerSkillPlay {
   /** The play's own SSR vector at its accuracy and rate, not base chart MSD. */
   skillRatings?: Record<string, number>;
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
-  vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
   beatmapsetId: number | null;
   title: string;
@@ -1935,6 +1933,8 @@ export async function fetchLivePlayerUnratedPlaysDirect(
 /** A recent play's own MSD (null unless the skill pool rated it) and its chart's dan at the played rate. */
 export interface LiveRecentPlayRating {
   msd: number | null;
+  /** What the play adds to its keymode's Overall rating, present with `msd`. */
+  gain?: number;
   dan: { rawDan: number; side: "rc" | "ln"; label: string | null } | null;
   missing?: { msd?: LiveRecentRatingMissingReason; dan?: LiveRecentRatingMissingReason };
   /** A missing value backed by a real analysis job. */
@@ -1959,7 +1959,7 @@ export async function fetchLiveRecentPlayRatingsDirect(
   userId: number,
   plays: LiveRecentPlayRatingRequest[],
   importIds: string[],
-  options: { signal?: AbortSignal; fresh?: boolean } = {},
+  options: { signal?: AbortSignal; fresh?: boolean; gain?: boolean } = {},
 ): Promise<{ items: Record<string, LiveRecentPlayRating>; imports: Record<string, LiveRecentPlayRating> }> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   if (plays.length === 0 && importIds.length === 0) return { items: {}, imports: {} };
@@ -1970,6 +1970,7 @@ export async function fetchLiveRecentPlayRatingsDirect(
       .join(","));
   }
   if (importIds.length > 0) query.set("imports", importIds.slice(0, 100).join(","));
+  if (options.gain) query.set("gain", "1");
   const page = await fetchLiveJson<{ items?: Record<string, LiveRecentPlayRating>; imports?: Record<string, LiveRecentPlayRating> }>(
     `/api/profiles/${userId}/recent-ratings?${query.toString()}`,
     {
@@ -2796,6 +2797,18 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
 
+/* The search's miss path for a pasted id or link: the backend reads the map
+   from osu! and indexes it, so a chart nobody here has played can still be
+   picked. Null when osu! has no mania chart under that id. */
+export async function lookupLiveMapSearchEntry(q: string): Promise<LiveMapSearchEntry | null> {
+  const result = await fetchLiveJson<{ status: string; entry?: LiveMapSearchEntry }>("/api/map-search/lookup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ q }),
+  });
+  return result.status === "found" && result.entry ? result.entry : null;
+}
+
 // Single set entry for /maps?map=<beatmapId> share links; the requested diff is
 // the representative and `diffs` carries the whole set. Null when the map is
 // unknown to the catalog; throws when the backend could not answer at all, so a
@@ -3365,6 +3378,10 @@ export interface LiveScoreSubmissionPlay {
      resolves to it. Never rebuild it from scoreId: the solo and legacy id
      spaces overlap, so /scores/{legacyId} can open a stranger's play. */
   scoreUrl: string | null;
+  /* What the Skills tab keys a play by, and the chart's key count, so the
+     dialog can ask for the play's MSD and dan. Absent on older backends. */
+  legacyScoreId?: number | null;
+  keyCount?: number | null;
 }
 
 export type LiveScoreSubmissionResult =

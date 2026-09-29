@@ -49,6 +49,11 @@ it.each(["write_pressure", "rate_limited"] as const)("preserves a signed-in %s r
   expect(await drawPackPlayersFromServer("legend")).toEqual({ kind: "busy", reason });
 });
 
+it("carries the server draw receipt through the reveal mapper", () => {
+  expect(mapServerPackDraw({ drawId: "receipt-for-this-pack", players: [], cards: [], poolTotal: 0, wallet: null }).drawId)
+    .toBe("receipt-for-this-pack");
+});
+
 vi.mock("./live-backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./live-backend")>()),
   isLiveBackendConfigured: vi.fn(() => true),

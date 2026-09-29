@@ -20,7 +20,6 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
-import type { VibroClearEvidenceSummary } from "#dan/vibro-clear-evidence";
 import { msdHeadline } from "#dan/msd-headline";
 import { useNoDans } from "../../store";
 import {
@@ -111,7 +110,6 @@ export interface MapDetailPlayContext {
     family?: "rc" | "ln" | null;
   };
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
-  vibroClearEvidence?: VibroClearEvidenceSummary;
   beatmapId: number;
   username: string;
   accuracy: number | null;
@@ -218,8 +216,6 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
   const noDans = useNoDans();
   const score = play.score;
   const grade = score?.rank || (play.accuracy != null ? getManiaGradeFromAccuracy(play.accuracy, play.mods ?? []) : null);
-  const quality = play.vibroClearEvidence;
-  const qualityRatio = quality?.max300Ratio == null ? "∞" : `${quality.ratioIsLowerBound ? "≥" : ""}${quality.max300Ratio.toFixed(2)}`;
   const scoreAccuracy = play.accuracy == null ? null : formatAccuracy(play.accuracy);
   const danAccuracy = play.dan?.accuracy == null ? null : formatAccuracy(play.dan.accuracy);
   const showRail = !noDans && play.dan != null && play.dan.chartRating != null;
@@ -272,7 +268,6 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
         ) : !play.dan ? <PlaySkillRatings play={play} /> : null}
       </div>
       {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
-      {quality && <p className="text-[11px] text-[#ffcf70]"><Trans>Accepted clear on a vibro chart: {formatAccuracy(quality.stableAccuracy)} accuracy, {qualityRatio}:1 MAX:300, OD{quality.od}.</Trans></p>}
       {play.dan?.rejection ? (
         <div className="flex flex-col gap-1 rounded-lg bg-osu-red/10 px-3.5 py-2.5 text-osu-red-light">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em]"><Trans>does not count</Trans></span>

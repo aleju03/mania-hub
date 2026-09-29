@@ -2307,6 +2307,10 @@ msgstr "A {chart} chart, credited as {credit} at this accuracy"
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 msgstr "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
+msgstr "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
@@ -2470,6 +2474,7 @@ msgstr "A run only counts if it was really the course. Easy, No Fail and Random 
 #~ msgid "A run only counts if it was really the course. Easy, No Fail, Half Time, Daycore, Random, the key mods and anything that slows the chart down disqualify it; Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A pass the site recorded before it stored mods cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 #~ msgstr "A run only counts if it was really the course. Easy, No Fail, Half Time, Daycore, Random, the key mods and anything that slows the chart down disqualify it; Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A pass the site recorded before it stored mods cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 msgstr "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
@@ -2544,8 +2549,8 @@ msgstr "Accept"
 #. placeholder {0}: formatAccuracy(quality.stableAccuracy)
 #. placeholder {1}: quality.od
 #: src/components/maps/MapDetailModal.tsx
-msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
-msgstr "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgstr "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/layout/Nav.tsx
@@ -3802,8 +3807,8 @@ msgid "Browse collections"
 msgstr "Browse collections"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Browse every image and sound this skin ships, without downloading it."
-msgstr "Browse every image and sound this skin ships, without downloading it."
+#~ msgid "Browse every image and sound this skin ships, without downloading it."
+#~ msgstr "Browse every image and sound this skin ships, without downloading it."
 
 #: src/routes/maps.tsx
 msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
@@ -4036,6 +4041,10 @@ msgstr "changelog"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changelog"
 msgstr "Changelog"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Changelog notifications"
+msgstr "Changelog notifications"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Changes"
@@ -8082,8 +8091,8 @@ msgid "Insert"
 msgstr "Insert"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Inside the .osk"
-msgstr "Inside the .osk"
+#~ msgid "Inside the .osk"
+#~ msgstr "Inside the .osk"
 
 #. placeholder {0}: card.username
 #: src/components/packs/collections/ShowcaseWall.tsx
@@ -10125,6 +10134,10 @@ msgstr "New set"
 msgid "New top plays will show up here as players set them."
 msgstr "New top plays will show up here as players set them."
 
+#: src/routes/__root.tsx
+msgid "new updates"
+msgstr "new updates"
+
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -11146,6 +11159,14 @@ msgstr "Nothing uploaded yet."
 #: src/routes/bbcode.tsx
 msgid "Notice"
 msgstr "Notice"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notify me"
+msgstr "Notify me"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notifying"
+msgstr "Notifying"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
@@ -14953,6 +14974,11 @@ msgstr "Showing the newest {0}."
 msgid "Shows"
 msgstr "Shows"
 
+#: src/components/layout/ChangelogModal.tsx
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows a dot on the changelog link when there are new updates"
+msgstr "Shows a dot on the changelog link when there are new updates"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"
 msgstr "Shows the MSD and dan of each play in Recent Plays"
@@ -15225,6 +15251,10 @@ msgstr "skin & layout"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Skin description"
 msgstr "Skin description"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Skin files"
+msgstr "Skin files"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Skin hitsounds"
@@ -17727,6 +17757,10 @@ msgstr "Title"
 msgid "to"
 msgstr "to"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "to {keyCount}K rating"
+msgstr "to {keyCount}K rating"
+
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 msgstr "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
@@ -18354,6 +18388,7 @@ msgstr "Uploading image..."
 msgid "Uploading previews."
 msgstr "Uploading previews."
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Uploading screenshot {shotNumber} of {shotCount}."
 msgstr "Uploading screenshot {shotNumber} of {shotCount}."
@@ -18632,6 +18667,10 @@ msgstr "View profile"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "View team"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "View the images and sounds in this skin without downloading it."
+msgstr "View the images and sounds in this skin without downloading it."
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"

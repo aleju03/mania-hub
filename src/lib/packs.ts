@@ -831,6 +831,7 @@ export async function drawPackPlayers(
 }
 
 export interface ServerPackDeal {
+  drawId?: string;
   draw: PackDraw;
   /* Stored best-score windows the draw response carried, keyed by player id.
      Players absent here mint through the existing cold path. */
@@ -943,6 +944,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }
   }
   return {
+    ...(result.drawId ? { drawId: result.drawId } : {}),
     draw: { players, poolTotal: result.poolTotal > 0 ? result.poolTotal : null },
     scoresByUserId,
     isNewByCardKey,

@@ -12,22 +12,33 @@ import type { OsuScore } from "#/lib/types";
 
 export type RecentPlayRatingView = LiveRecentPlayRating & { loadError?: true; onRetry?: () => void };
 type Entry = { rating: LiveRecentPlayRating; at: number };
-const ratingsByUser = new Map<number, Map<string, Entry>>();
+// Answers with and without the rating gain are kept apart, so the dialog
+// never reuses a Recent tab answer that lacks it.
+const ratingsByUser = new Map<string, Map<string, Entry>>();
 const BATCH_SIZE = 100;
 const MAX_USERS = 20;
 const MAX_RATINGS_PER_USER = 500;
 const REASK_MS = 10 * 60_000;
-// Let the 30s origin result cache expire before rechecking a completed job.
+// The backend drops a cached answer as soon as the job behind it finishes, so
+// a finished job is rechecked right away, after a beat that folds a burst of
+// events (chart analysis, dan estimate, skills) into one read. An answer that
+// still names a finished job is rechecked once the 30s origin cache has
+// expired, which also covers a backend that predates that invalidation.
+const EVENT_SETTLE_MS = 250;
 const MIN_REASK_MS = 31_000;
+// Rechecks after events are spaced so a list whose charts finish analysis one
+// by one stays inside the 30 per minute public read limit.
+const CHANGED_READ_GAP_MS = 10_000;
 const RECOVERY_MS = 5 * 60_000;
 const UNAVAILABLE: LiveRecentPlayRating = { msd: null, dan: null, missing: { msd: "not_analyzed", dan: "not_analyzed" } };
 const UNSUPPORTED: LiveRecentPlayRating = { msd: null, dan: null, missing: { msd: "unsupported", dan: "unsupported" } };
 const EMPTY_LOOKUP = new Map<string, RecentPlayRatingView>();
 
-function userRatings(userId: number): Map<string, Entry> {
-  const known = ratingsByUser.get(userId) ?? new Map<string, Entry>();
-  ratingsByUser.delete(userId);
-  ratingsByUser.set(userId, known);
+function userRatings(userId: number, gain: boolean): Map<string, Entry> {
+  const slot = gain ? `${userId}:gain` : String(userId);
+  const known = ratingsByUser.get(slot) ?? new Map<string, Entry>();
+  ratingsByUser.delete(slot);
+  ratingsByUser.set(slot, known);
   while (ratingsByUser.size > MAX_USERS) ratingsByUser.delete(ratingsByUser.keys().next().value!);
   return known;
 }
@@ -54,18 +65,29 @@ function toAsk(score: OsuScore): Ask {
 }
 
 /** Undefined cells are loading; absent ratings and failed requests are explicit. */
-export function useRecentPlayRatingLookup(userId: number | undefined, scores: OsuScore[], enabled: boolean): Map<string, RecentPlayRatingView> {
+export function useRecentPlayRatingLookup(
+  userId: number | undefined,
+  scores: OsuScore[],
+  enabled: boolean,
+  options: { gain?: boolean } = {},
+): Map<string, RecentPlayRatingView> {
+  const gain = options.gain === true;
   const [result, setResult] = useState<{ userId: number; lookup: Map<string, RecentPlayRatingView> }>();
   const signature = enabled ? JSON.stringify(scores.map(toAsk)) : "[]";
 
   useEffect(() => {
     if (!enabled || !userId) return;
     const asks = [...new Map((JSON.parse(signature) as Ask[]).map((ask) => [ask.key, ask])).values()];
-    const known = userRatings(userId);
+    const known = userRatings(userId, gain);
     const controller = new AbortController();
     const errors = new Set<string>();
     // Preserve notifications racing an in-flight snapshot.
-    const changed = new Set<string>();
+    const changed = new Map<string, number>();
+    const markChanged = (key: string, due: number) => changed.set(key, Math.min(due, changed.get(key) ?? Infinity));
+    // Keys an event asked to recheck. If the answer comes back unchanged it may
+    // be a cached one, so it gets a single recheck after the cache window.
+    const eventChanged = new Set<string>();
+    let lastChangedRead = -Infinity;
     const observedJobs = new Set<number>();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let source: ReturnType<typeof openLiveEventSource> = null;
@@ -83,7 +105,8 @@ export function useRecentPlayRatingLookup(userId: number | undefined, scores: Os
     };
 
     const nextCheck = (entry: Entry, key: string) => {
-      if (changed.has(key)) return entry.at + MIN_REASK_MS;
+      const changedDue = changed.get(key);
+      if (changedDue != null) return Math.max(changedDue, lastChangedRead + CHANGED_READ_GAP_MS);
       if (!entry.rating.pending) return Infinity;
       const due = Math.min(...(entry.rating.jobs ?? []).map((job) => Date.parse(job.runAfter)).filter(Number.isFinite));
       // Scheduled sessions sleep until work is due. Slow recovery covers a
@@ -113,15 +136,18 @@ export function useRecentPlayRatingLookup(userId: number | undefined, scores: Os
         for (let start = 0; start < missing.length; start += BATCH_SIZE) {
           if (controller.signal.aborted || document.visibilityState !== "visible") break;
           const batch = missing.slice(start, start + BATCH_SIZE);
+          const recheckIfSame = new Map<string, string>();
+          if (batch.some((ask) => changed.has(ask.key))) lastChangedRead = now;
           for (const ask of batch) {
             changed.delete(ask.key);
+            if (eventChanged.delete(ask.key)) recheckIfSame.set(ask.key, JSON.stringify(known.get(ask.key)?.rating ?? null));
             for (const job of known.get(ask.key)?.rating.jobs ?? []) observedJobs.delete(job.id);
           }
           const plays = batch.flatMap((ask) => ("play" in ask ? [ask.play] : []));
           const importIds = batch.flatMap((ask) => ("importId" in ask ? [ask.importId] : []));
           try {
             const fresh = mode !== "list" || batch.some((ask) => known.has(ask.key));
-            const found = await fetchLiveRecentPlayRatingsDirect(userId, plays, importIds, { signal: controller.signal, fresh });
+            const found = await fetchLiveRecentPlayRatingsDirect(userId, plays, importIds, { signal: controller.signal, fresh, gain });
             if (controller.signal.aborted) return;
             const at = Date.now();
             for (const ask of batch) {
@@ -129,7 +155,9 @@ export function useRecentPlayRatingLookup(userId: number | undefined, scores: Os
               errors.delete(ask.key);
               known.delete(ask.key);
               known.set(ask.key, { rating, at });
-              if (rating.jobs?.some((job) => observedJobs.has(job.id))) changed.add(ask.key);
+              if (rating.jobs?.some((job) => observedJobs.has(job.id)) || recheckIfSame.get(ask.key) === JSON.stringify(rating)) {
+                markChanged(ask.key, at + MIN_REASK_MS);
+              }
             }
             while (known.size > MAX_RATINGS_PER_USER) known.delete(known.keys().next().value!);
             publish();
@@ -164,7 +192,15 @@ export function useRecentPlayRatingLookup(userId: number | undefined, scores: Os
             const targeted = job.status === "done" && "play" in ask && (
               (job.type === "compute_player_skills" && job.userId === userId)
               || ((job.type === "analyze_beatmap_chart" || job.type === "compute_dan_estimate") && job.beatmapId === ask.play.beatmapId));
-            if (targeted || known.get(ask.key)?.rating.jobs?.some((pending) => pending.id === job.id)) changed.add(ask.key);
+            if (!targeted && !known.get(ask.key)?.rating.jobs?.some((pending) => pending.id === job.id)) continue;
+            // Only a finished job has a new answer behind it. A queued or
+            // failed one waits out the origin cache like it always did.
+            if (job.status === "done") {
+              markChanged(ask.key, Date.now() + EVENT_SETTLE_MS);
+              eventChanged.add(ask.key);
+            } else {
+              markChanged(ask.key, (known.get(ask.key)?.at ?? Date.now()) + MIN_REASK_MS);
+            }
           }
           schedule();
         } catch { /* Ignore malformed events. */ }
@@ -185,7 +221,7 @@ export function useRecentPlayRatingLookup(userId: number | undefined, scores: Os
       source?.close();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [enabled, userId, signature]);
+  }, [enabled, userId, signature, gain]);
 
   return enabled && result && result.userId === userId ? result.lookup : EMPTY_LOOKUP;
 }

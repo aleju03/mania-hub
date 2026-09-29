@@ -148,7 +148,7 @@ export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
             : <FolderOpen className="h-4 w-4" aria-hidden="true" />}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-bold leading-tight text-white"><Trans>Inside the .osk</Trans></span>
+          <span className="block text-[13px] font-bold leading-tight text-white"><Trans>Skin files</Trans></span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11.5px] text-osu-f1">
             {state.phase === "error" ? (
               <span className="font-semibold text-osu-red-light"><Trans>The archive could not be read. Tap to try again.</Trans></span>
@@ -166,7 +166,7 @@ export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
                 </span>
               </>
             ) : (
-              <span><Trans>Browse every image and sound this skin ships, without downloading it.</Trans></span>
+              <span><Trans>View the images and sounds in this skin without downloading it.</Trans></span>
             )}
           </span>
         </span>

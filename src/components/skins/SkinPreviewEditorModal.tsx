@@ -14,12 +14,14 @@ import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/
 import type { BackdropScope, PreviewBackdrop } from "../../lib/skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "../../lib/skin-preview-patterns";
 import { renderSkinPreview } from "../../lib/skin-preview-render";
+import { processScreenshot, type DraftScreenshot } from "../../lib/skin-screenshot-process";
 import {
   finishSkinEdit,
   formatSkinFileSize,
   markSkinsListStale,
   removeSkinScreenshot,
   setSkinCover,
+  SKIN_MAX_SCREENSHOTS,
   setSkinScreenshotLabels,
   skinOskFileUrl,
   SkinUploadError,
@@ -33,8 +35,8 @@ import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
 // Post-publish editing of what a skin looks like on the browse card and in its
 // gallery: which image fronts it, what map cover sits behind the rendered
-// playfields, and what the uploader's own screenshots are called. All of it is
-// decided at upload time and was stuck there afterwards.
+// playfields, and which screenshots it carries and what they are called. All of
+// it is decided at upload time and was stuck there afterwards.
 //
 // Moving the cover is a pointer move on the backend (every candidate image is
 // already stored), and so is renaming a screenshot. Changing a backdrop is a
@@ -104,6 +106,8 @@ export function SkinPreviewEditorModal({
   const [coverKeymode, setCoverKeymode] = useState<number | null>(
     publishedCoverKeymode ?? skin.previews[0]?.keys ?? null,
   );
+  // Positions below skin.screenshots.length are stored shots; the ones past it
+  // are the new shots in `addedShots`, in order.
   const [coverShot, setCoverShot] = useState<number | null>(publishedCoverShot);
   // Renaming is per screenshot and saves with everything else, so the drafts
   // sit here until the save.
@@ -114,6 +118,11 @@ export function SkinPreviewEditorModal({
   // draft like the renames: it only lands on save, so closing the modal keeps
   // the shot. Storage-side cleanup is the backend's job.
   const [removedShots, setRemovedShots] = useState<number[]>([]);
+  // New screenshots, processed the way the upload form does it and uploaded
+  // through an edit ticket on save. A lazer skin's look changes with updates,
+  // and this is how its gallery follows.
+  const [addedShots, setAddedShots] = useState<DraftScreenshot[]>([]);
+  const addedUrlsRef = useRef<string[]>([]);
 
   // Retargeted keymodes only: a keymode with no entry here keeps the render it
   // was published with, so opening the editor and saving nothing changes
@@ -191,6 +200,16 @@ export function SkinPreviewEditorModal({
   }, []);
 
   useEffect(() => releaseRenders, [releaseRenders]);
+
+  const releaseAddedShots = useCallback(() => {
+    addedUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    addedUrlsRef.current = [];
+    setAddedShots([]);
+  }, []);
+
+  useEffect(() => () => {
+    addedUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   // Pulls the published .osk back down and parses it, which is what the
   // re-renders draw from. Runs once per opening, on the first pick.
@@ -416,7 +435,7 @@ export function SkinPreviewEditorModal({
   const labelsChanged = labelDrafts.some(
     (label, index) => index < skin.screenshots.length && label.trim() !== (skin.screenshots[index]?.label ?? ""),
   );
-  const dirty = renders.size > 0 || coverChanged || labelsChanged || removedShots.length > 0;
+  const dirty = renders.size > 0 || coverChanged || labelsChanged || removedShots.length > 0 || addedShots.length > 0;
   // A pick whose render has not landed yet (the archive may still be coming
   // down) holds the save button, so a pick is never silently dropped.
   const retargeted = useMemo(
@@ -432,9 +451,13 @@ export function SkinPreviewEditorModal({
     setError(null);
     // Ordered by keymode so the progress bar reads in a predictable order.
     const uploads = [...renders.entries()].sort(([a], [b]) => a - b);
+    const shots = addedShots;
+    const renderBytes = uploads.reduce((sum, [, render]) => sum + render.blob.size, 0);
+    const totalBytes = renderBytes + shots.reduce((sum, shot) => sum + shot.blob.size, 0);
     try {
       let current: SkinSummary | null = null;
-      if (uploads.length > 0) {
+      let ticket: { id: string; token: string } | null = null;
+      if (uploads.length > 0 || shots.length > 0) {
         setProgress({ done: 0, total: 0, label: t`Preparing the update.` });
         const started = await startSkinEdit({ data: { id: skin.id, scope: "previews" } });
         if (!started.ok) {
@@ -444,12 +467,15 @@ export function SkinPreviewEditorModal({
           setSaving(false);
           return;
         }
-        const totalBytes = uploads.reduce((sum, [, render]) => sum + render.blob.size, 0);
+        ticket = { id: started.id, token: started.token };
+      }
+      if (ticket && uploads.length > 0) {
+        const { id: ticketId, token: ticketToken } = ticket;
         await uploadSkinPreviewsParallel(
           uploads.map(([keys, render]) => ({ keys, sizeBytes: render.blob.size, render })),
           ({ keys, render }, onProgress) => uploadSkinPart({
-            id: started.id,
-            token: started.token,
+            id: ticketId,
+            token: ticketToken,
             part: "preview",
             blob: render.blob,
             width: render.width,
@@ -468,10 +494,56 @@ export function SkinPreviewEditorModal({
             label: skinPreviewUploadLabel(activeKeys, completed, total),
           }),
         );
+      }
+      if (labelsChanged) {
+        const result = await setSkinScreenshotLabels({
+          data: { id: skin.id, labels: labelDrafts.slice(0, skin.screenshots.length).map((label) => label.trim()) },
+        });
+        if (!result.ok) {
+          setError(t`The screenshot names could not be saved. Try again.`);
+          setSaving(false);
+          return;
+        }
+        current = result.skin ?? current;
+      }
+      // Removals go after the renames (which still address the original
+      // positions) and highest position first, so each one names the position
+      // the row still holds after the previous. They also go before the new
+      // shots, which need the room under the limit.
+      for (const index of [...removedShots].sort((a, b) => b - a)) {
+        const result = await removeSkinScreenshot({ data: { id: skin.id, screenshot: index } });
+        if (!result.ok || !result.skin) {
+          setError(t`A screenshot could not be removed. Try again.`);
+          setSaving(false);
+          return;
+        }
+        current = result.skin;
+      }
+      if (ticket && shots.length > 0) {
+        let sent = renderBytes;
+        for (const [position, shot] of shots.entries()) {
+          const shotNumber = position + 1;
+          const shotCount = shots.length;
+          const label = t`Uploading screenshot ${shotNumber} of ${shotCount}.`;
+          setProgress({ done: sent, total: totalBytes, label });
+          await uploadSkinPart({
+            id: ticket.id,
+            token: ticket.token,
+            part: "screenshot",
+            blob: shot.blob,
+            width: shot.width,
+            height: shot.height,
+            label: shot.label,
+            onProgress: (sentBytes) => setProgress({ done: sent + sentBytes, total: totalBytes, label }),
+          });
+          sent += shot.blob.size;
+        }
+      }
+      if (ticket) {
         setProgress({ done: totalBytes, total: totalBytes, label: t`Saving.` });
         current = await finishSkinEdit(
-          started.id,
-          started.token,
+          ticket.id,
+          ticket.token,
           uploads.map(([keys]) => ({
             keys,
             recipe: {
@@ -485,9 +557,16 @@ export function SkinPreviewEditorModal({
       // image work involved. A starred screenshot is always one of those, and
       // it has to be re-asserted after any upload: re-rendering the keymode
       // that fronted the card drags the cover onto the new render server-side.
+      // It goes last, by the position the shot holds once the removals and
+      // additions above have landed.
       const coverCarriedByUpload = coverShot == null && coverKeymode != null && renders.has(coverKeymode);
       if (!coverCarriedByUpload && (coverChanged || (coverShot != null && uploads.length > 0))) {
-        const target = coverShot != null ? { screenshot: coverShot } : coverKeymode != null ? { keys: coverKeymode } : null;
+        const finalShot = coverShot == null
+          ? null
+          : coverShot < skin.screenshots.length
+            ? coverShot - removedShots.filter((index) => index < coverShot).length
+            : skin.screenshots.length - removedShots.length + (coverShot - skin.screenshots.length);
+        const target = finalShot != null ? { screenshot: finalShot } : coverKeymode != null ? { keys: coverKeymode } : null;
         if (target) {
           const result = await setSkinCover({ data: { id: skin.id, ...target } });
           if (!result.ok) {
@@ -497,29 +576,6 @@ export function SkinPreviewEditorModal({
           }
           current = result.skin ?? current;
         }
-      }
-      if (labelsChanged) {
-        const result = await setSkinScreenshotLabels({
-          data: { id: skin.id, labels: labelDrafts.slice(0, skin.screenshots.length).map((label) => label.trim()) },
-        });
-        if (!result.ok) {
-          setError(t`The screenshot names could not be saved. Try again.`);
-          setSaving(false);
-          return;
-        }
-        current = result.skin ?? current;
-      }
-      // Removals go last (cover and labels above still address the original
-      // positions) and highest position first, so each one names the position
-      // the row still holds after the previous.
-      for (const index of [...removedShots].sort((a, b) => b - a)) {
-        const result = await removeSkinScreenshot({ data: { id: skin.id, screenshot: index } });
-        if (!result.ok || !result.skin) {
-          setError(t`A screenshot could not be removed. Try again.`);
-          setSaving(false);
-          return;
-        }
-        current = result.skin;
       }
       if (!current) {
         setSaving(false);
@@ -531,9 +587,11 @@ export function SkinPreviewEditorModal({
         skin_cover_changed: coverChanged,
         skin_screenshots_renamed: labelsChanged,
         skin_screenshots_removed: removedShots.length,
+        skin_screenshots_added: shots.length,
       });
       markSkinsListStale();
       revertPreviews();
+      releaseAddedShots();
       setSaving(false);
       onSaved(current);
       onClose();
@@ -543,8 +601,8 @@ export function SkinPreviewEditorModal({
         ? saveError.message
         : t`The previews could not be updated. Try again.`);
     }
-  }, [saving, dirty, renders, skin.id, skin.screenshots.length, coverKeymode, coverShot, coverChanged,
-    labelsChanged, labelDrafts, removedShots, revertPreviews, onSaved, onClose, backdropFor, patternFor, t]);
+  }, [saving, dirty, renders, addedShots, skin.id, skin.screenshots.length, coverKeymode, coverShot, coverChanged,
+    labelsChanged, labelDrafts, removedShots, revertPreviews, releaseAddedShots, onSaved, onClose, backdropFor, patternFor, t]);
 
   const handleDismiss = useCallback(() => {
     if (saving) return;
@@ -574,8 +632,9 @@ export function SkinPreviewEditorModal({
     setCoverShot(publishedCoverShot);
     setLabelDrafts(skin.screenshots.map((shot) => shot.label ?? ""));
     setRemovedShots([]);
+    releaseAddedShots();
     setSelectedKeymode(publishedCoverKeymode ?? keymodes[0] ?? 4);
-  }, [open, revertPreviews, publishedCoverKeymode, publishedCoverShot, skin.previews, skin.screenshots, keymodes]);
+  }, [open, revertPreviews, releaseAddedShots, publishedCoverKeymode, publishedCoverShot, skin.previews, skin.screenshots, keymodes]);
 
   useEffect(() => {
     if (!open) return;
@@ -598,9 +657,31 @@ export function SkinPreviewEditorModal({
   // list until the save applies it (or closing forgets it). The callbacks
   // below translate a visible position back to the row's own, which is what
   // the label drafts, the cover star, and the save all address.
-  const visibleShots = skin.screenshots
-    .map((shot, index) => ({ shot, index }))
-    .filter(({ index }) => !removedShots.includes(index));
+  const visibleShots = [
+    ...skin.screenshots
+      .map((shot, index) => ({ url: shot.url, index }))
+      .filter(({ index }) => !removedShots.includes(index)),
+    ...addedShots.map((shot, added) => ({ url: shot.url, index: skin.screenshots.length + added })),
+  ];
+  const shotLabel = (index: number) => (index < skin.screenshots.length
+    ? labelDrafts[index] ?? ""
+    : addedShots[index - skin.screenshots.length]?.label ?? "");
+
+  const addShots = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const room = SKIN_MAX_SCREENSHOTS - visibleShots.length;
+    const processed: DraftScreenshot[] = [];
+    for (const file of Array.from(files).slice(0, Math.max(0, room))) {
+      const result = await processScreenshot(file).catch(() => null);
+      if (result) {
+        processed.push({ ...result, label: "" });
+        addedUrlsRef.current.push(result.url);
+      } else {
+        setError(t`A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB.`);
+      }
+    }
+    if (processed.length > 0) setAddedShots((previous) => [...previous, ...processed]);
+  };
 
   const heroUrl = renders.get(selectedKeymode)?.url ?? publishedPreviewUrl(selectedKeymode) ?? skin.previewUrl;
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
@@ -782,47 +863,62 @@ export function SkinPreviewEditorModal({
                   </p>
                 ) : null}
 
-                {/* The screenshots this skin was published with: renaming one
-                    retitles it in the gallery, starring one puts it on the
-                    browse card in place of a rendered playfield, and the X
-                    marks one for removal (a shot that has nothing to do with
-                    the skin), applied on save. New ones are not accepted here -
-                    the .osk flow is where images arrive. */}
-                {visibleShots.length > 0 && (
-                  <div className="mt-4">
-                    <SkinScreenshotFields
-                      screenshots={visibleShots.map(({ shot, index }) => ({
-                        url: shot.url,
-                        label: labelDrafts[index] ?? "",
-                      }))}
-                      onRename={(visible, label) => {
-                        const original = visibleShots[visible]?.index;
-                        if (original == null) return;
-                        setLabelDrafts((previous) => {
-                          const next = skin.screenshots.map((_, i) => previous[i] ?? "");
-                          next[original] = label;
-                          return next;
-                        });
-                      }}
-                      onRemove={(visible) => {
-                        const original = visibleShots[visible]?.index;
-                        if (original == null) return;
-                        setRemovedShots((previous) => [...previous, original]);
-                        // A removed shot cannot keep the card; the star goes
-                        // back to the keymode renders.
-                        setCoverShot((previous) => (previous === original ? null : previous));
-                      }}
-                      cover={coverShot == null
-                        ? null
-                        : (() => {
-                            const visible = visibleShots.findIndex((entry) => entry.index === coverShot);
-                            return visible >= 0 ? visible : null;
-                          })()}
-                      onCover={(visible) => setCoverShot(visible == null ? null : visibleShots[visible]?.index ?? null)}
-                      disabled={saving}
-                    />
-                  </div>
-                )}
+                {/* The screenshots: renaming one retitles it in the gallery,
+                    starring one puts it on the browse card in place of a
+                    rendered playfield, the X marks one for removal, and new
+                    ones can be added up to the limit. All of it applies on
+                    save. */}
+                <div className="mt-4">
+                  <SkinScreenshotFields
+                    screenshots={visibleShots.map(({ url, index }) => ({ url, label: shotLabel(index) }))}
+                    onRename={(visible, label) => {
+                      const original = visibleShots[visible]?.index;
+                      if (original == null) return;
+                      if (original >= skin.screenshots.length) {
+                        const added = original - skin.screenshots.length;
+                        setAddedShots((previous) => previous.map((shot, i) => (i === added ? { ...shot, label } : shot)));
+                        return;
+                      }
+                      setLabelDrafts((previous) => {
+                        const next = skin.screenshots.map((_, i) => previous[i] ?? "");
+                        next[original] = label;
+                        return next;
+                      });
+                    }}
+                    onAdd={(files) => void addShots(files)}
+                    onRemove={(visible) => {
+                      const original = visibleShots[visible]?.index;
+                      if (original == null) return;
+                      if (original >= skin.screenshots.length) {
+                        // A new shot was never stored, so it just leaves the
+                        // list, and the positions after it close up.
+                        const added = original - skin.screenshots.length;
+                        const url = addedShots[added]?.url;
+                        if (url) {
+                          URL.revokeObjectURL(url);
+                          addedUrlsRef.current = addedUrlsRef.current.filter((entry) => entry !== url);
+                        }
+                        setAddedShots((previous) => previous.filter((_, i) => i !== added));
+                        setCoverShot((previous) => (previous == null || previous < original
+                          ? previous
+                          : previous === original ? null : previous - 1));
+                        return;
+                      }
+                      setRemovedShots((previous) => [...previous, original]);
+                      // A removed shot cannot keep the card; the star goes
+                      // back to the keymode renders.
+                      setCoverShot((previous) => (previous === original ? null : previous));
+                    }}
+                    cover={coverShot == null
+                      ? null
+                      : (() => {
+                          const visible = visibleShots.findIndex((entry) => entry.index === coverShot);
+                          return visible >= 0 ? visible : null;
+                        })()}
+                    onCover={(visible) => setCoverShot(visible == null ? null : visibleShots[visible]?.index ?? null)}
+                    disabled={saving}
+                  />
+                </div>
                 {removedShots.length > 0 && (
                   <p className="mt-1 text-[10.5px] leading-relaxed text-osu-f1/55">
                     <Plural

@@ -4,6 +4,7 @@ import { parseManiaBeatmap } from "./beatmap-parser";
 import { classifyChartWithCompanella } from "./companella";
 import * as leo from "#dan/leoblack-estimator";
 import { classifyCompanellaDifficulty } from "#leoblack/estimator/companellaEstimator.js";
+import * as patterns from "#leoblack/patterns/service.js";
 
 const values = { Overall: 20, Stream: 20, Jumpstream: 19, Handstream: 18,
   Stamina: 20, JackSpeed: 19, Chordjack: 18, Technical: 19 };
@@ -20,6 +21,23 @@ function chart(span: number, keys = 4): string {
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 describe("browser marathon MSD preparation", () => {
+  it("keeps both rate-floor readings while building patterns only once", async () => {
+    vi.mocked(analyzeEtternaFromText).mockResolvedValue({ keycount: 4, lnRatio: 0, metadata: {}, values });
+    vi.mocked(classifyCompanellaDifficulty).mockResolvedValue({ estDiff: "Reform 6 mid", numericDifficulty: 6,
+      numericDifficultyHint: null, danLabel: "6", variant: "", confidence: 1, rawModelOutput: 6 });
+    const text = chart(115);
+    const map = parseManiaBeatmap(text);
+    const unfloored = await Promise.all([0.75, 0.7, 0.65].map(rate =>
+      classifyChartWithCompanella(map, text, { rate }, { rateFloor: false })));
+    const clustering = vi.spyOn(patterns, "analyzePatternFromText");
+    vi.mocked(analyzeEtternaFromText).mockClear();
+    const floored = await classifyChartWithCompanella(map, text, { rate: 0.75 });
+    expect(floored.rc?.rawDan).toBe(Math.max(...unfloored.map(result => result.rc!.rawDan)));
+    expect(clustering).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(analyzeEtternaFromText).mock.calls.map(([, options]) => options?.musicRate))
+      .toEqual([0.75, 0.7, 0.65]);
+  });
+
   it("uses Sunny SR and a separate 0.74.0 pass even when native MSD is supplied", async () => {
     const text = chart(115);
     const modelValues = { ...values, Overall: 17, Stream: 16 };
@@ -27,8 +45,9 @@ describe("browser marathon MSD preparation", () => {
     vi.mocked(classifyCompanellaDifficulty).mockResolvedValue({ estDiff: "Reform 6 mid", numericDifficulty: 6,
       numericDifficultyHint: null, danLabel: "6", variant: "", confidence: 1, rawModelOutput: 6 });
     await classifyChartWithCompanella(parseManiaBeatmap(text), text, { rate: 0.75 }, { msdValues: values });
-    expect(analyzeEtternaFromText).toHaveBeenCalledExactlyOnceWith(text,
-      { musicRate: 0.75, keyOverride: 4, etternaVersion: "0.74.0" });
+    // Other calls belong to the slower rates the Companella rate floor reads.
+    expect(vi.mocked(analyzeEtternaFromText).mock.calls.filter(([, options]) => options?.musicRate === 0.75))
+      .toEqual([[text, { musicRate: 0.75, keyOverride: 4, etternaVersion: "0.74.0" }]]);
     expect(classifyCompanellaDifficulty).toHaveBeenCalledWith(expect.objectContaining({
       msdValues: modelValues, sunnyStar: leo.runLeoBlackSunny(text, { speedRate: 0.75 }).star,
     }));

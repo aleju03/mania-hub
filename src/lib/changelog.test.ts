@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatReleaseAge, groupUpdatesByDay } from "./changelog";
+import { changelogSeenMarker, formatReleaseAge, groupUpdatesByDay, hasUnseenChangelog } from "./changelog";
 import { UPDATES, WIP } from "../data/changelog";
 
 const NOW = Date.parse("2026-07-29T09:00:00Z");
@@ -108,5 +108,31 @@ describe("changelog content", () => {
     for (const item of WIP) {
       expect(item.length).toBeLessThanOrEqual(70);
     }
+  });
+});
+
+describe("hasUnseenChangelog", () => {
+  const updates = [
+    { date: "2026-09-25", text: "b" },
+    { date: "2026-09-25", text: "a" },
+    { date: "2026-09-24", text: "c" },
+  ];
+
+  it("marks the newest day and its entry count", () => {
+    expect(changelogSeenMarker(updates)).toBe("2026-09-25:2");
+    expect(changelogSeenMarker([])).toBeNull();
+  });
+
+  it("flags a newer day, or another entry on the same day", () => {
+    expect(hasUnseenChangelog(updates, null)).toBe(true);
+    expect(hasUnseenChangelog(updates, "2026-09-24:1")).toBe(true);
+    expect(hasUnseenChangelog(updates, "2026-09-25:1")).toBe(true);
+    expect(hasUnseenChangelog(updates, "2026-09-25:2")).toBe(false);
+  });
+
+  it("stays quiet when an entry is removed", () => {
+    expect(hasUnseenChangelog(updates, "2026-09-25:3")).toBe(false);
+    expect(hasUnseenChangelog(updates, "2026-09-26:1")).toBe(false);
+    expect(hasUnseenChangelog([], null)).toBe(false);
   });
 });

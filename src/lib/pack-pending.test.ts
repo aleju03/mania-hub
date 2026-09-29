@@ -56,6 +56,17 @@ describe("pack-pending", () => {
     expect(resumed?.players[0]).toMatchObject({ eternal: true, milestone: true, milestoneTarget: 3_000_000, cardKey: "8:v1", motif });
   });
 
+  it("keeps the draw receipt across reloads and partial reveals", () => {
+    const drawId = "12345678-1234-4123-8123-123456789abc";
+    writePendingPack([makePlayer(1), makePlayer(2)], null, drawId);
+    expect(readPendingPack()?.drawId).toBe(drawId);
+    consumePendingPackCard(1);
+    expect(readPendingPack()).toMatchObject({ drawId, players: [{ user: { id: 2 } }] });
+    clearPendingPack();
+    writePendingPack([makePlayer(3)]);
+    expect(readPendingPack()?.drawId).toBeUndefined();
+  });
+
   it("round-trips the unrevealed remainder", () => {
     const players = [makePlayer(1), makePlayer(2), makePlayer(3)];
     writePendingPack(players);

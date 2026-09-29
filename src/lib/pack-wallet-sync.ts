@@ -440,7 +440,7 @@ export interface PackPullRecordCard {
    identity always comes from the login cookie; a tampered client can only
    ever log pulls as itself, and the data is social flavor, never economy. */
 export const recordServerPackPulls = createServerFn({ method: "POST" })
-  .validator((input: { packType?: unknown; cards?: unknown }) => {
+  .validator((input: { packType?: unknown; cards?: unknown; drawId?: unknown }) => {
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
@@ -461,7 +461,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
       })
       .filter((card): card is PackPullRecordCard => card !== null);
     if (!packType || cards.length === 0) throw new Error("Invalid pack pull record.");
-    return { packType, cards };
+    return { packType, cards, drawId: typeof input.drawId === "string" ? input.drawId.slice(0, 64) : undefined };
   })
   .handler(async ({ data }): Promise<{ recorded: number; mints: PackPullMint[] } | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -482,6 +482,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
       body: JSON.stringify({
         userId: auth.viewer.id,
         username: auth.viewer.username,
+        drawId: data.drawId,
         packType: data.packType,
         cards: data.cards,
       }),

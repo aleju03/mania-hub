@@ -2293,6 +2293,10 @@ msgstr "谱面为 {chart}，按此准确率计为 {credit}"
 msgid "A + reads as \"at least\": osu! serves no more than your top 200 plays, so a keymode with plays under {0}pp is only counted as far as they go."
 msgstr "+ 表示「至少」：osu! 最多只给出前 200 个最佳成绩，低于 {0}pp 的成绩拿不到，该键数只统计到能看到的部分。"
 
+#: src/components/layout/ChangelogModal.tsx
+msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the page when there are new updates."
+msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0><1>圆点</1></0>。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A chart counts as an LN chart when hold notes are 45% or more of it, and as a regular chart below that. On 7K the line is 37.5% instead, because its mapping culture ships hybrid charts the community reads as LN. This is the same line the maps pages use to label a chart, so a chart cannot feed your LN rating and wear a regular badge at the same time."
 #~ msgstr "长条占到 45% 或以上的谱面算 LN 谱面，低于这个比例就算单点谱面。7K 的线改为 37.5%，因为它的作图文化会产出社区当作 LN 来看的混合谱面。这和谱面页面给谱面打标签用的是同一条线，所以一张谱面不可能一边喂你的 LN 评分，一边挂着单点的标签。"
@@ -2456,6 +2460,7 @@ msgstr "只有真的按课题打的成绩才算。Easy、No Fail 和 Random 会�
 #~ msgid "A run only counts if it was really the course. Easy, No Fail, Half Time, Daycore, Random, the key mods and anything that slows the chart down disqualify it; Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A pass the site recorded before it stored mods cannot be checked, so it counts for nothing rather than being taken on trust. <0>Clicking your dan badge shows the course that set your estimate, when one did.</0>"
 #~ msgstr "只有真的按课题打的成绩才算。Easy、No Fail、Half Time、Daycore、Random、按键 mod，以及任何拖慢谱面的东西都会让它作废；Mirror、Hidden、Fade In、Flashlight、Hard Rock、Sudden Death、Perfect 和 Double Time 都没问题。本站在开始记录 mod 之前存下的成绩无法核对，所以宁可不算，也不会默认它没问题。<0>点开你的段位徽章，就能看到是哪个课题定下了你的估算，如果有的话。</0>"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "A screenshot could not be read as a PNG, JPEG, or WebP under 4 MB."
 msgstr "有一张截图无法读取为 4 MB 以内的 PNG、JPEG 或 WebP。"
@@ -2530,8 +2535,8 @@ msgstr "接受"
 #. placeholder {0}: formatAccuracy(quality.stableAccuracy)
 #. placeholder {1}: quality.od
 #: src/components/maps/MapDetailModal.tsx
-msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
-msgstr "Vibro 谱面的有效成绩：准确率 {0}，MAX:300 比值 {qualityRatio}:1，OD{1}。"
+#~ msgid "Accepted clear on a vibro chart: {0} accuracy, {qualityRatio}:1 MAX:300, OD{1}."
+#~ msgstr "Vibro 谱面的有效成绩：准确率 {0}，MAX:300 比值 {qualityRatio}:1，OD{1}。"
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/layout/Nav.tsx
@@ -3784,8 +3789,8 @@ msgid "Browse collections"
 msgstr "浏览收藏册"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Browse every image and sound this skin ships, without downloading it."
-msgstr "无需下载即可浏览这个皮肤自带的每一张图片和每一个音效。"
+#~ msgid "Browse every image and sound this skin ships, without downloading it."
+#~ msgstr "无需下载即可浏览这个皮肤自带的每一张图片和每一个音效。"
 
 #: src/routes/maps.tsx
 msgid "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD."
@@ -4018,6 +4023,10 @@ msgstr "更新日志"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changelog"
 msgstr "更新日志"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Changelog notifications"
+msgstr "更新日志通知"
 
 #: src/components/player/SkillHistoryModal.tsx
 msgid "Changes"
@@ -8052,8 +8061,8 @@ msgid "Insert"
 msgstr "插入"
 
 #: src/components/skins/SkinAssetExplorer.tsx
-msgid "Inside the .osk"
-msgstr ".osk 内部"
+#~ msgid "Inside the .osk"
+#~ msgstr ".osk 内部"
 
 #. placeholder {0}: card.username
 #: src/components/packs/collections/ShowcaseWall.tsx
@@ -10095,6 +10104,10 @@ msgstr "新建卡组"
 msgid "New top plays will show up here as players set them."
 msgstr "玩家打出新的顶级成绩后会显示在这里。"
 
+#: src/routes/__root.tsx
+msgid "new updates"
+msgstr "有新更新"
+
 #: src/components/companella/SubmissionList.tsx
 #: src/lib/streak-game.ts
 msgid "Newer"
@@ -11116,6 +11129,14 @@ msgstr "还没有上传任何内容。"
 #: src/routes/bbcode.tsx
 msgid "Notice"
 msgstr "提示框"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notify me"
+msgstr "通知我"
+
+#: src/components/layout/ChangelogModal.tsx
+msgid "Notifying"
+msgstr "已开启通知"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "now"
@@ -14923,6 +14944,11 @@ msgstr "显示最新的 {0} 个。"
 msgid "Shows"
 msgstr "显示"
 
+#: src/components/layout/ChangelogModal.tsx
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows a dot on the changelog link when there are new updates"
+msgstr "有新更新时在更新日志链接上显示一个圆点"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"
 msgstr "在最近成绩中显示每个成绩的 MSD 和段位"
@@ -15191,6 +15217,10 @@ msgstr "皮肤与布局"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Skin description"
 msgstr "皮肤简介"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "Skin files"
+msgstr "皮肤文件"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Skin hitsounds"
@@ -17685,6 +17715,10 @@ msgstr "标题"
 msgid "to"
 msgstr "至"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "to {keyCount}K rating"
+msgstr "{keyCount}K 评分"
+
 #: src/routes/privacy.tsx
 msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
@@ -18312,6 +18346,7 @@ msgstr "正在上传图片…"
 msgid "Uploading previews."
 msgstr "正在上传预览图。"
 
+#: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Uploading screenshot {shotNumber} of {shotCount}."
 msgstr "正在上传第 {shotNumber} / {shotCount} 张截图。"
@@ -18590,6 +18625,10 @@ msgstr "查看主页"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "View team"
 msgstr "查看战队"
+
+#: src/components/skins/SkinAssetExplorer.tsx
+msgid "View the images and sounds in this skin without downloading it."
+msgstr "无需下载即可查看这个皮肤里的图片和音效。"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "view the score"
