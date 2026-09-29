@@ -92,6 +92,48 @@ export const OVERALL_AXIS_META: SkillAxisMeta = {
   color: "#c9cfdd",
 };
 
+// The Etterna way of building the headline Overall, derived by the backend on
+// read and served as ratings.EtternaOverall (player-skills.ts etternaOverall):
+// the average of the best 6 of the 7 MinaCalc skillsets plus LN (best 5 where
+// Technical is not rated). `Overall` stays the Classic aggregate. The pattern
+// keymodes have no Etterna Overall.
+export const ETTERNA_OVERALL_AXIS = "EtternaOverall";
+
+// The same average over a history snapshot, whose ratings carry the display
+// skillset values and `pattern:ln`. Mirrors etternaOverall in player-skills.ts.
+export function etternaOverallFromRatings(keyCount: number, ratings: Record<string, number>): number {
+  if (usesPatternSkillAxes(keyCount)) return 0;
+  const skillsets = MSD_SKILLSET_META.filter((meta) => meta.key !== "Technical" || keyCount === 4 || keyCount === 5);
+  const values = skillsets.map((meta) => Number(ratings[meta.key]) || 0).filter((value) => value >= 1);
+  const ln = Number(ratings["pattern:ln"]) || 0;
+  if (ln >= 1) values.push(ln);
+  const best = values.sort((a, b) => b - a).slice(0, skillsets.length - 1);
+  if (best.length === 0) return 0;
+  return Math.round((best.reduce((sum, value) => sum + value, 0) / best.length) * 100) / 100;
+}
+
+export type OverallMethod = "etterna" | "classic";
+
+/**
+ * The headline Overall of a mode under a method. Falls back to Classic where
+ * there is no Etterna Overall (6K/7K/8K, or a payload from before it existed).
+ */
+export function modeOverall(mode: MyDataSkillMode, method: OverallMethod): {
+  value: number;
+  percentile: MyDataSkillPercentile | undefined;
+  etterna: boolean;
+} {
+  const etterna = Number(mode.ratings[ETTERNA_OVERALL_AXIS]);
+  if (method === "etterna" && etterna > 0) {
+    return { value: etterna, percentile: mode.percentiles?.[ETTERNA_OVERALL_AXIS], etterna: true };
+  }
+  return { value: Number(mode.ratings.Overall ?? 0), percentile: mode.percentiles?.Overall, etterna: false };
+}
+
+export function hasEtternaOverall(mode: MyDataSkillMode): boolean {
+  return Number(mode.ratings[ETTERNA_OVERALL_AXIS]) > 0;
+}
+
 // Presentation for an axis key that arrived from the backend rather than from a
 // player's own breakdown, which is what the /rankings leaderboards get. Keys are
 // the wire form: a bare MSD skillset name, or `pattern:{id}`.
@@ -100,7 +142,7 @@ export function skillAxisMeta(axis: string): SkillAxisMeta | null {
     const id = axis.slice("pattern:".length);
     return PATTERN_RATING_META.find((meta) => meta.key === id) ?? null;
   }
-  if (axis === OVERALL_AXIS_META.key) return OVERALL_AXIS_META;
+  if (axis === OVERALL_AXIS_META.key || axis === ETTERNA_OVERALL_AXIS) return OVERALL_AXIS_META;
   return MSD_SKILLSET_META.find((meta) => meta.key === axis) ?? null;
 }
 

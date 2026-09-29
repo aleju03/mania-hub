@@ -9,7 +9,9 @@ import {
   type LivePlayerSkillHistoryEntry,
   type LivePlayerSkillHistorySnapshot,
 } from "../../lib/live-backend";
-import { skillAxisMeta } from "../../lib/skill-axes";
+import { etternaOverallFromRatings, skillAxisMeta, usesPatternSkillAxes } from "../../lib/skill-axes";
+import { useOverallMethod } from "../../lib/overall-method";
+import { OverallMethodToggle } from "./OverallMethodToggle";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 import { useNoDans } from "../../store";
@@ -130,6 +132,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
               {value === "history" ? <Trans>History</Trans> : <Trans>Changes</Trans>}
             </button>
           ))}
+          {mode === "history" && !usesPatternSkillAxes(keyCount) ? <OverallMethodToggle keyCount={keyCount} className="ml-auto" /> : null}
         </div>
         {mode === "changes" ? (
           <div className="min-h-0 overflow-y-auto overscroll-contain py-3">
@@ -146,7 +149,7 @@ export function SkillHistoryModal({ userId, keyCount, onClose }: {
           </div>
           <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
             {visibleItems.length > 0 ? (
-              <ol>{visibleRows.map((entry) => <HistoryEntry key={`${preview ? "preview" : "real"}:${entry.day}`} entry={entry} />)}</ol>
+              <ol>{visibleRows.map((entry) => <HistoryEntry key={`${preview ? "preview" : "real"}:${entry.day}`} entry={entry} keyCount={keyCount} />)}</ol>
             ) : !visibleLoading && !visibleError ? (
               <p className="px-4 py-8 text-center text-[12px] text-osu-f1"><Trans>No skill ratings have been recorded yet.</Trans></p>
             ) : null}
@@ -218,15 +221,23 @@ function changeColor(value: number): string {
   return value > 0 ? "text-osu-green-light" : value < 0 ? "text-osu-red-light" : "text-osu-f1";
 }
 
-function HistoryEntry({ entry }: { entry: LivePlayerSkillHistoryEntry & { day: string } }) {
+// The row's Overall under the reader's method, derived from the snapshot's
+// skillsets so older entries read on the same scale as the card.
+function snapshotOverall(snapshot: LivePlayerSkillHistorySnapshot, keyCount: number, etterna: boolean): number {
+  const derived = etterna ? etternaOverallFromRatings(keyCount, snapshot.ratings) : 0;
+  return derived > 0 ? derived : snapshot.ratings.Overall ?? 0;
+}
+
+function HistoryEntry({ entry, keyCount }: { entry: LivePlayerSkillHistoryEntry & { day: string }; keyCount: number }) {
   const { i18n, t } = useLingui();
   const locale = useLocale();
   const noDans = useNoDans();
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
   const { snapshot, previous } = entry;
-  const overall = snapshot.ratings.Overall ?? 0;
-  const delta = previous ? Number((overall - (previous.ratings.Overall ?? 0)).toFixed(2)) : 0;
+  const etterna = useOverallMethod() === "etterna";
+  const overall = snapshotOverall(snapshot, keyCount, etterna);
+  const delta = previous ? Number((overall - snapshotOverall(previous, keyCount, etterna)).toFixed(2)) : 0;
   const axes = previous ? Array.from(new Set([...Object.keys(snapshot.ratings), ...Object.keys(previous.ratings)]))
     .filter((axis) => axis !== "Overall" && snapshot.ratings[axis] !== previous.ratings[axis]) : [];
   const formatDan = (side: LivePlayerSkillHistorySnapshot["dan"]["rc"]) => side ? `${side.beyondTable ? "> " : ""}${side.label}` : "—";

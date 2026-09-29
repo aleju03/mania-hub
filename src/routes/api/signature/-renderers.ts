@@ -37,6 +37,7 @@ import {
   RADAR_RINGS,
   skillModeEntries,
   type SkillAxisEntry,
+  modeOverall,
 } from "../../../lib/skill-axes";
 import type { MyDataSkillBreakdown, MyDataSkillMode } from "../../../lib/my-data";
 import { getDanImageSrc } from "../../../lib/dan-images";
@@ -1389,7 +1390,8 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
   const accent = accentHex(ctx.style, entries[0]!.color);
   const background = await styleLayers(ctx, spec, await fetchBackgroundSources(ctx));
   const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
-  const overall = Number(mode.ratings.Overall ?? 0);
+  // No toggle on an image, so it shows the default (Etterna) Overall.
+  const overall = modeOverall(mode, "etterna").value;
   const keyChip = h("div", {
     key: "keys",
     style: {

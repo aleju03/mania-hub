@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { RangePill, type RangePillSkin } from "./RangePill";
 import { starRatingColor, starSpectrumGradient } from "./SearchCard";
@@ -13,6 +14,7 @@ interface Props {
   step: number;
   onChange: (min: number, max: number) => void;
   ariaLabel: string;
+  heading?: ReactNode;
 }
 
 const STAR_PATH = "M12 1.7l3.1 6.9 7.2.8-5.4 5 1.5 7.2L12 17.9l-6.4 3.7 1.5-7.2-5.4-5 7.2-.8L12 1.7z";
@@ -22,7 +24,7 @@ const SPECTRUM_END = 9;
 // Share of the rail given to the black SPECTRUM_END..hi tail.
 const TAIL_FRACTION = 0.15;
 
-export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: Props) {
+export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel, heading }: Props) {
   const { t } = useLingui();
   const span = hi - lo || 1;
   // osu-web's spectrum ends at 9★ (everything past it is pure black), but the
@@ -60,5 +62,5 @@ export function StarRangePill({ lo, hi, min, max, step, onChange, ariaLabel }: P
     placeholder: "3.6-6.7",
     typeHint: t`Type a range: 3.6-6.7, 5+, <4`,
   };
-  return <RangePill lo={lo} hi={hi} min={min} max={max} step={step} onChange={onChange} ariaLabel={ariaLabel} skin={skin} />;
+  return <RangePill lo={lo} hi={hi} min={min} max={max} step={step} onChange={onChange} ariaLabel={ariaLabel} skin={skin} heading={heading} />;
 }

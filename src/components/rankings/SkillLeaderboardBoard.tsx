@@ -4,7 +4,9 @@ import { Pagination } from "../ui/Pagination";
 import { LeaderboardTable, type LeaderboardRow } from "./LeaderboardTable";
 import { AxisPicker, KeymodeControl } from "./LeaderboardControls";
 import { loadSkillBoard, peekSkillBoard } from "../../lib/skill-leaderboard-cache";
-import { skillAxisMeta } from "../../lib/skill-axes";
+import { ETTERNA_OVERALL_AXIS, skillAxisMeta, usesPatternSkillAxes } from "../../lib/skill-axes";
+import { overallAxisFor, useOverallMethod } from "../../lib/overall-method";
+import { OverallMethodToggle } from "../player/OverallMethodToggle";
 import { formatNumber } from "../../lib/format";
 import { useHiddenUserIds } from "../../store";
 import {
@@ -37,7 +39,14 @@ export function SkillLeaderboardBoard({
   // No axis in the URL means the aggregate board, not a guess at which
   // specialty the reader wanted. Overall is the first chip on every keymode, so
   // clicking back to it is how you clear a skill selection.
-  const requestedAxis = axis ?? DEFAULT_LEADERBOARD_AXIS;
+  // The Overall chip reads Etterna's or the Classic board by the reader's
+  // Overall method; 6K/7K/8K only have Classic.
+  const overallMethod = useOverallMethod();
+  const hasEtterna = !usesPatternSkillAxes(keys);
+  const overallAxis = overallAxisFor(overallMethod, hasEtterna);
+  const hiddenOverallAxis = overallAxis === ETTERNA_OVERALL_AXIS ? DEFAULT_LEADERBOARD_AXIS : ETTERNA_OVERALL_AXIS;
+  const overallRequested = axis == null || axis === DEFAULT_LEADERBOARD_AXIS || axis === ETTERNA_OVERALL_AXIS;
+  const requestedAxis = overallRequested ? overallAxis : axis;
   const request = { country, keys, axis: requestedAxis, page };
   const [snapshot, setSnapshot] = useState<SkillLeaderboardSnapshot | null>(() => peekSkillBoard(request));
   const [loading, setLoading] = useState(!snapshot);
@@ -86,7 +95,7 @@ export function SkillLeaderboardBoard({
      network stall on every click; highlighting the table from the request would
      print the new axis's header and color over the old axis's numbers. */
   const servedAxis = snapshot?.axis ?? requestedAxis;
-  const isOverall = servedAxis === DEFAULT_LEADERBOARD_AXIS;
+  const isOverall = servedAxis === DEFAULT_LEADERBOARD_AXIS || servedAxis === ETTERNA_OVERALL_AXIS;
   const meta = skillAxisMeta(servedAxis);
   const axisLabel = meta ? i18n._(meta.labelMsg) : servedAxis;
 
@@ -133,10 +142,11 @@ export function SkillLeaderboardBoard({
           />
         )}
         <AxisPicker
-          axes={snapshot?.axes ?? []}
+          axes={(snapshot?.axes ?? []).filter((info) => info.axis !== hiddenOverallAxis)}
           value={requestedAxis}
-          onChange={(next) => onNavigate({ axis: next, page: 1 })}
+          onChange={(next) => onNavigate({ axis: next === overallAxis ? undefined : next, page: 1 })}
         />
+        {overallRequested && hasEtterna ? <OverallMethodToggle keyCount={keys} /> : null}
       </div>
 
       <LeaderboardTable

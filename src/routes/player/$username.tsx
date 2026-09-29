@@ -3127,9 +3127,9 @@ const PLAYS_VIEWS: SkillPlaysExplorerView[] = ["msd", "dan", "unrated"];
 // My Data card) with population percentiles and player dan chips. First-time
 // visitors start "pending" while the backend rates their plays, so the panel
 // polls until the breakdown lands.
-/* The ratings view is one column: the keymode strip, the open panel and the
-   add-a-score row all share this width and centre together on a wide screen.
-   The plays views stay full width - they are lists, not a card. */
+/* Every Skills view is one column: the view switch, the keymode strip, the
+   open panel, the add-a-score row and the plays lists all share this width
+   and centre together on a wide screen. */
 const SKILLS_COLUMN_CLASS = "mx-auto max-w-[880px]";
 
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
@@ -3309,7 +3309,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
      looking for a loved or graveyard play would otherwise take its absence
      for a bug. Older backends omit the flag, and then nothing is claimed. */
   const untrackedNote = skills?.tracked === false && !restricted ? (
-    <div className={`mb-4 ${view === "ratings" || !rated ? SKILLS_COLUMN_CLASS : ""}`}>
+    <div className={`mb-4 ${SKILLS_COLUMN_CLASS}`}>
       <SkillsUntrackedNotice
         username={user.username}
         isOwner={auth.viewer?.id === user.id}
@@ -3322,10 +3322,9 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       <SharedSkillPlay userId={user.id} username={user.username} />
       {untrackedNote}
       {rated ? (
-        /* Pinned to the page edge on every view: the ratings column below is
-           centred and the plays views are full width, and a switch that
-           followed either would jump sideways on each click. */
-        <div className="mb-3 flex">
+        /* Every view shares the one centred column, so the switch sits at the
+           same spot in all of them and stays under the pointer on a click. */
+        <div className={`mb-3 flex ${SKILLS_COLUMN_CLASS}`}>
           <Segmented
             ariaLabel={t`View`}
             value={switchView === "ratings" ? "ratings" : "plays"}
@@ -3349,7 +3348,9 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
            two-panel grid the tab used to open with. */
         <div>
           {/* The view switch lands first, at the size of its two labels. */}
-          <Skeleton className="mb-3 h-[30px] w-[140px] max-w-full rounded-lg" />
+          <div className={SKILLS_COLUMN_CLASS}>
+            <Skeleton className="mb-3 h-[30px] w-[140px] max-w-full rounded-lg" />
+          </div>
           <div className={SKILLS_COLUMN_CLASS}>
             <div className="mb-4 flex flex-wrap gap-x-7 gap-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -3369,15 +3370,17 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           </div>
         </div>
       ) : rated && view !== "ratings" ? (
-        <SkillPlaysExplorer
-          userId={user.id}
-          username={user.username}
-          modes={modes}
-          view={view}
-          views={playsViews}
-          onViewChange={selectView}
-          onListSettled={releaseHeldHeight}
-        />
+        <div className={SKILLS_COLUMN_CLASS}>
+          <SkillPlaysExplorer
+            userId={user.id}
+            username={user.username}
+            modes={modes}
+            view={view}
+            views={playsViews}
+            onViewChange={selectView}
+            onListSettled={releaseHeldHeight}
+          />
+        </div>
       ) : rated ? (
         /* One column, strip and panel the same width: a page-wide strip over a
            half-width panel read as a layout that had lost its other half. */

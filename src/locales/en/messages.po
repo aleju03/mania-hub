@@ -846,6 +846,7 @@ msgstr "{0} stars"
 #~ msgid "{0} still held"
 #~ msgstr "{0} still held"
 
+#. placeholder {0}: patternName("ln")
 #. placeholder {0}: patternName(pattern)
 #: src/components/maps/PatternPicker.tsx
 msgid "{0} subfamilies"
@@ -1066,12 +1067,10 @@ msgid "{appName} needs your Mania Tracker account to send plays to."
 msgstr "{appName} needs your Mania Tracker account to send plays to."
 
 #: src/components/maps/RangePill.tsx
-#: src/components/maps/RangeSlider.tsx
 msgid "{ariaLabel} maximum"
 msgstr "{ariaLabel} maximum"
 
 #: src/components/maps/RangePill.tsx
-#: src/components/maps/RangeSlider.tsx
 msgid "{ariaLabel} minimum"
 msgstr "{ariaLabel} minimum"
 
@@ -1151,6 +1150,10 @@ msgstr "{count} replays"
 #: src/routes/report.tsx
 msgid "{count} screenshots"
 msgstr "{count} screenshots"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "{count} skillsets"
+msgstr "{count} skillsets"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{count} still analyzing, so this estimate can still move."
@@ -1878,12 +1881,12 @@ msgid "#{grouped}"
 msgstr "#{grouped}"
 
 #: src/components/ui/Pagination.tsx
-msgid "← Prev"
-msgstr "← Prev"
+#~ msgid "← Prev"
+#~ msgstr "← Prev"
 
 #: src/components/maps/MapSearchSection.tsx
-msgid "+ bpm & length"
-msgstr "+ bpm & length"
+#~ msgid "+ bpm & length"
+#~ msgstr "+ bpm & length"
 
 #. placeholder {0}: formatNumber(hidden)
 #. placeholder {1}: formatNumber(ownersPerCard)
@@ -2070,8 +2073,8 @@ msgid "<1% weight"
 msgstr "<1% weight"
 
 #: src/components/maps/MapSearchSection.tsx
-msgid "− bpm & length"
-msgstr "− bpm & length"
+#~ msgid "− bpm & length"
+#~ msgstr "− bpm & length"
 
 #: src/routes/snipes.tsx
 #: src/routes/top-plays.tsx
@@ -3120,7 +3123,7 @@ msgid "any"
 msgstr "any"
 
 #: src/components/maps/MapSearchSection.tsx
-#: src/components/maps/RangeSlider.tsx
+#: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/routes/maps.tsx
@@ -4278,6 +4281,11 @@ msgstr "CJ"
 msgid "Classic"
 msgstr "Classic"
 
+#: src/components/player/OverallMethodToggle.tsx
+msgctxt "overall rating method"
+msgid "Classic"
+msgstr "Classic"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -4287,7 +4295,6 @@ msgstr "clear"
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/maps/RangePill.tsx
-#: src/components/maps/RangeSlider.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -6374,6 +6381,10 @@ msgstr "Estonian"
 #: src/components/packs/collections/CollectorDirectory.tsx
 #~ msgid "Eternals"
 #~ msgstr "Eternals"
+
+#: src/components/player/OverallMethodToggle.tsx
+msgid "Etterna"
+msgstr "Etterna"
 
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Europe, Central America, France"
@@ -8976,6 +8987,10 @@ msgstr "LN Speed"
 #~ msgid "LN structure"
 #~ msgstr "LN structure"
 
+#: src/components/maps/PatternPicker.tsx
+#~ msgid "LN subfamilies"
+#~ msgstr "LN subfamilies"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "LN tail"
@@ -9730,6 +9745,11 @@ msgstr "Message"
 msgid "Meters"
 msgstr "Meters"
 
+#: src/components/player/OverallMethodToggle.tsx
+msgctxt "overall rating method"
+msgid "Method"
+msgstr "Method"
+
 #: src/routes/replay.tsx
 msgid "Middle lane thumb"
 msgstr "Middle lane thumb"
@@ -10004,6 +10024,7 @@ msgstr "msd"
 
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/MapSearchSection.tsx
 #: src/routes/rankings.tsx
 msgid "MSD"
 msgstr "MSD"
@@ -10232,12 +10253,13 @@ msgstr "Newest Top Play"
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
+#: src/components/ui/Pagination.tsx
 msgid "Next"
 msgstr "Next"
 
 #: src/components/ui/Pagination.tsx
-msgid "Next →"
-msgstr "Next →"
+#~ msgid "Next →"
+#~ msgstr "Next →"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "Next album page"
@@ -11904,6 +11926,10 @@ msgstr "overall"
 msgid "Overall"
 msgstr "Overall"
 
+#: src/components/player/OverallMethodToggle.tsx
+msgid "Overall method"
+msgstr "Overall method"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
 msgstr "Overlay scroll speed"
@@ -12050,8 +12076,8 @@ msgid "pattern"
 msgstr "pattern"
 
 #: src/components/maps/MapSearchSection.tsx
-msgid "Pattern"
-msgstr "Pattern"
+#~ msgid "Pattern"
+#~ msgstr "Pattern"
 
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "Pattern evidence"
@@ -12070,6 +12096,7 @@ msgid "Pattern radar chart"
 msgstr "Pattern radar chart"
 
 #: src/components/maps/MapDetailModal.tsx
+#: src/components/maps/PatternPicker.tsx
 msgid "Patterns"
 msgstr "Patterns"
 
@@ -12688,6 +12715,7 @@ msgstr "Previews uploaded."
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/ui/ImageLightbox.tsx
+#: src/components/ui/Pagination.tsx
 msgid "Previous"
 msgstr "Previous"
 
@@ -15280,6 +15308,7 @@ msgstr "size"
 msgid "Size"
 msgstr "Size"
 
+#: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/LeaderboardControls.tsx
 msgid "Skill"
@@ -15296,6 +15325,14 @@ msgstr "Skill breakdown"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Skill breakdown unavailable"
 msgstr "Skill breakdown unavailable"
+
+#: src/components/maps/MapSearchSection.tsx
+#~ msgid "Skill detection is less tuned outside 4K."
+#~ msgstr "Skill detection is less tuned outside 4K."
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Skill detection outside 4K is not fully tuned yet."
+msgstr "Skill detection outside 4K is not fully tuned yet."
 
 #: src/lib/signature-shared.ts
 msgid "Skill radar"
@@ -16574,6 +16611,10 @@ msgstr "The album is unavailable right now. Try again in a bit."
 msgid "The archive could not be read. Tap to try again."
 msgstr "The archive could not be read. Tap to try again."
 
+#: src/components/player/OverallMethodToggle.tsx
+msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."
+msgstr "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
 #~ msgstr "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
@@ -17147,6 +17188,10 @@ msgstr "The previews could not be updated right now. Try again."
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "The previews could not be updated. Try again."
 msgstr "The previews could not be updated. Try again."
+
+#: src/components/player/OverallMethodToggle.tsx
+msgid "The previous Overall, which follows the hardest plays in any skillset."
+msgstr "The previous Overall, which follows the hardest plays in any skillset."
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "The rankings are here, but this country was added recently. New plays will start showing up once players submit them."
@@ -18247,6 +18292,18 @@ msgstr "Two players side by side: pp with rank, best play and the 4K/7K split, c
 #: src/routes/discord.tsx
 msgid "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
 msgstr "Type <0>/help</0> for a guided tour, or <1>/</1> to see every command."
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Type a range: 170-200, 220+, <150"
+msgstr "Type a range: 170-200, 220+, <150"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Type a range: 2:00-4:00, 5+, <1:30"
+msgstr "Type a range: 2:00-4:00, 5+, <1:30"
+
+#: src/components/maps/MapSearchSection.tsx
+msgid "Type a range: 24-28, 30+, <20"
+msgstr "Type a range: 24-28, 30+, <20"
 
 #: src/components/maps/StarRangePill.tsx
 msgid "Type a range: 3.6-6.7, 5+, <4"

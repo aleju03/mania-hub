@@ -2716,6 +2716,10 @@ export interface LiveMapSearchParams {
   statusesExclude: string[];
   patterns: string[];
   patternsExclude: string[];
+  skills?: string[];
+  skillsExclude?: string[];
+  // `key:min-max` pairs (lib/map-search-msd.ts); empty for none.
+  msd?: string;
   starMin: number | null;
   starMax: number | null;
   bpmMin: number | null;
@@ -2783,6 +2787,9 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.statusesExclude.length) query.set("statusesExclude", params.statusesExclude.join(","));
   if (params.patterns.length) query.set("patterns", params.patterns.join(","));
   if (params.patternsExclude.length) query.set("patternsExclude", params.patternsExclude.join(","));
+  if (params.skills?.length) query.set("skills", params.skills.join(","));
+  if (params.skillsExclude?.length) query.set("skillsExclude", params.skillsExclude.join(","));
+  if (params.msd) query.set("msd", params.msd);
   if (params.starMin != null) query.set("starMin", String(params.starMin));
   if (params.starMax != null) query.set("starMax", String(params.starMax));
   if (params.bpmMin != null) query.set("bpmMin", String(params.bpmMin));
