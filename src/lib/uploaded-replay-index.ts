@@ -7,6 +7,7 @@
 // that context.
 
 import { liveBridgeToken } from "./live-backend-tokens";
+import type { UploadedReplayChartStandIn } from "./uploaded-replay-payload";
 
 export interface UploadedReplayIndexRow {
   id: string;
@@ -162,5 +163,22 @@ export async function deleteUploadedReplayIndexRow(options: {
     return body.ok ? { ok: true, indexed: body.indexed !== false } : { ok: false, error: "unavailable" };
   } catch {
     return { ok: false, error: "unavailable" };
+  }
+}
+
+// The indexed map a community .osu is a note-for-note copy of, if any (the
+// backend owns the chart index). Null for a confirmed miss; undefined when the
+// backend could not answer, so the caller does not cache an outage as a miss.
+export async function fetchUploadedReplayChartStandIn(content: string): Promise<UploadedReplayChartStandIn | null | undefined> {
+  try {
+    const response = await callIndex("/api/uploaded-replays/chart-stand-in", {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+    if (!response?.ok) return undefined;
+    const body = (await response.json()) as { standIn?: UploadedReplayChartStandIn | null };
+    return body.standIn ?? null;
+  } catch {
+    return undefined;
   }
 }

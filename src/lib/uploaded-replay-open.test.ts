@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Only the packing and the chart-resolution rules are under test; the osu!
 // proxy, the .osu fetch and the community store are stubbed.
-const { osuFetch, fetchBeatmapFileWithMeta, getCommunityBeatmapFile, getCommunityBeatmapAssets } = vi.hoisted(() => ({
+const { osuFetch, fetchBeatmapFileWithMeta, getCommunityBeatmapFile, getCommunityBeatmapAssets, fetchUploadedReplayChartStandIn } = vi.hoisted(() => ({
+  fetchUploadedReplayChartStandIn: vi.fn(async (): Promise<unknown> => null),
   osuFetch: vi.fn(),
   fetchBeatmapFileWithMeta: vi.fn(),
   getCommunityBeatmapFile: vi.fn(async () => null as string | null),
@@ -15,6 +16,7 @@ vi.mock("./api", async (importActual) => {
 });
 vi.mock("./community-beatmap-store", () => ({ getCommunityBeatmapFile, getCommunityBeatmapAssets }));
 vi.mock("./osu/server", () => ({ edgeCache: () => {}, noStore: () => {} }));
+vi.mock("./uploaded-replay-index", () => ({ fetchUploadedReplayChartStandIn }));
 
 import type { UploadedReplayParseResult } from "./replay-upload";
 import { setCache } from "./api";
@@ -93,6 +95,9 @@ describe("resolveUploadedReplayBeatmap", () => {
     getCommunityBeatmapFile.mockResolvedValue(null);
     getCommunityBeatmapAssets.mockReset();
     getCommunityBeatmapAssets.mockResolvedValue({ audio: false, background: false });
+    setCache(`uploaded-replay-stand-in:v1:${CHECKSUM}`, null, 0);
+    fetchUploadedReplayChartStandIn.mockReset();
+    fetchUploadedReplayChartStandIn.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -205,6 +210,38 @@ describe("resolveUploadedReplayBeatmap", () => {
     await vi.advanceTimersByTimeAsync(3_000);
     expect((await resolution).community).toEqual({ content: "contributed", assets: { audio: false, background: false } });
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("borrows a note-for-note indexed map's song for a silent copy of a map osu! does not know", async () => {
+    osuFetch.mockRejectedValue(new Error("[lookup] 404 Not Found"));
+    getCommunityBeatmapFile.mockResolvedValue("contributed");
+    const standIn = { beatmapId: 659237, beatmapsetId: 292994, audioFilename: "song.mp3", backgroundFilename: "bg.png" };
+    fetchUploadedReplayChartStandIn.mockResolvedValue(standIn);
+
+    expect((await resolveUploadedReplayBeatmap(CHECKSUM)).community).toEqual({
+      content: "contributed",
+      assets: { audio: false, background: false },
+      standIn,
+    });
+    expect(fetchUploadedReplayChartStandIn).toHaveBeenCalledWith("contributed");
+    // Cached per checksum; an outage (undefined) would not have been.
+    await resolveUploadedReplayBeatmap(CHECKSUM);
+    expect(fetchUploadedReplayChartStandIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the stand-in when the copy has its own assets or osu! knows the map", async () => {
+    osuFetch.mockRejectedValue(new Error("[lookup] 404 Not Found"));
+    getCommunityBeatmapFile.mockResolvedValue("contributed");
+    getCommunityBeatmapAssets.mockResolvedValue({ audio: true, background: true });
+    await resolveUploadedReplayBeatmap(CHECKSUM);
+
+    setCache(`uploaded-replay-beatmap:v1:${CHECKSUM}`, null, 0);
+    osuFetch.mockReset();
+    osuFetch.mockResolvedValue({ id: 42, beatmapset_id: 7, mode: "mania", cs: 7 });
+    fetchBeatmapFileWithMeta.mockResolvedValue({ content: "old revision", cacheStatus: "miss", checksumMatched: false, source: "osu", cachedAt: 0 });
+    getCommunityBeatmapAssets.mockResolvedValue({ audio: false, background: false });
+    await resolveUploadedReplayBeatmap(CHECKSUM);
+    expect(fetchUploadedReplayChartStandIn).not.toHaveBeenCalled();
   });
 
   it("falls back to the community copy when the .osu itself cannot be fetched", async () => {

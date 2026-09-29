@@ -37,7 +37,18 @@ export type UploadedReplayPacked = {
 export type UploadedReplayBeatmapResolution = {
   meta: BeatmapChecksumLookupResult | null;
   file: { content: string; cacheStatus: "hit" | "miss"; checksumMatched: boolean | null } | null;
-  community: { content: string; assets: CommunityBeatmapAssets } | null;
+  community: { content: string; assets: CommunityBeatmapAssets; standIn?: UploadedReplayChartStandIn } | null;
+};
+
+// An indexed osu! map with the community copy's exact notes at the same
+// timing (a local OD or audio-name edit, a "1.00x" rate-tool copy). When the
+// contributor sent no song or background, the viewer borrows this set's; the
+// replay is still judged on the community chart.
+export type UploadedReplayChartStandIn = {
+  beatmapId: number;
+  beatmapsetId: number;
+  audioFilename: string;
+  backgroundFilename: string | null;
 };
 
 export type UploadedReplayOpenData = {

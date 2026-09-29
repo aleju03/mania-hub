@@ -1234,9 +1234,18 @@ function ReplayPage() {
       setReplayBeatmapFileStatus("fetched");
       // The song and background a contributor dropped with the .osz, when
       // they exist; for a map osu! knows the viewer's own set-id lookups win.
+      // A bare .osu contribution borrows them from the indexed map it is a
+      // note-for-note copy of, when the server found one.
+      const standIn = community.standIn;
       const communityAssets: LocalBeatmapAssets = {
-        audioUrl: community.assets.audio ? getCommunityBeatmapAssetUrl(checksum, "audio") : null,
-        backgroundUrl: community.assets.background ? getCommunityBeatmapAssetUrl(checksum, "background") : null,
+        audioUrl: community.assets.audio
+          ? getCommunityBeatmapAssetUrl(checksum, "audio")
+          : standIn ? getBeatmapAudioUrl(standIn.beatmapsetId, standIn.audioFilename) : null,
+        backgroundUrl: community.assets.background
+          ? getCommunityBeatmapAssetUrl(checksum, "background")
+          : standIn?.backgroundFilename
+            ? `/api/background?beatmapsetId=${encodeURIComponent(String(standIn.beatmapsetId))}&filename=${encodeURIComponent(standIn.backgroundFilename)}`
+            : null,
         remote: true,
       };
       const { beatmapsetId } = await finishBeatmapLoad({
@@ -1253,6 +1262,7 @@ function ReplayPage() {
         replay_beatmap_checksum: checksum,
         replay_beatmap_id: beatmapMeta?.id ?? null,
         replay_beatmapset_id: beatmapsetId ?? null,
+        replay_stand_in_beatmap_id: standIn?.beatmapId ?? null,
         replay_player: uploaded.replay.header.playerName,
       });
       return true;

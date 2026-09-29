@@ -5,9 +5,11 @@ import { withTimeout } from "./promise-timeout";
 import { getJsonArtifact, getUploadedReplayPackedStorageKey, putJsonArtifact } from "./r2-cache";
 import { packReplayFrames } from "./replay-pack";
 import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
+import { fetchUploadedReplayChartStandIn } from "./uploaded-replay-index";
 import {
   UPLOADED_REPLAY_PACKED_VERSION,
   type UploadedReplayBeatmapResolution,
+  type UploadedReplayChartStandIn,
   type UploadedReplayPacked,
 } from "./uploaded-replay-payload";
 import { normalizeUploadedReplayId, readUploadedReplay, uploadedReplaysUseR2 } from "./uploaded-replay-store";
@@ -28,6 +30,7 @@ const PACKED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const PACKED_LOCK_TTL_MS = 30_000;
 const BEATMAP_LOOKUP_CACHE_TTL_MS = 5 * 60_000;
 const COMMUNITY_LOOKUP_TIMEOUT_MS = 3_000;
+const STAND_IN_CACHE_TTL_MS = 30 * 60_000;
 
 export type StoredPackedUpload = { replay: UploadedReplayPacked; filename: string | null };
 
@@ -120,7 +123,10 @@ async function lookupBeatmapMeta(checksum: string): Promise<BeatmapChecksumLooku
   return meta;
 }
 
-async function readCommunityCopy(checksum: string): Promise<UploadedReplayBeatmapResolution["community"]> {
+async function readCommunityCopy(
+  checksum: string,
+  options: { allowStandIn: boolean },
+): Promise<UploadedReplayBeatmapResolution["community"]> {
   const content = await withTimeout(
     getCommunityBeatmapFile(checksum),
     COMMUNITY_LOOKUP_TIMEOUT_MS,
@@ -135,7 +141,30 @@ async function readCommunityCopy(checksum: string): Promise<UploadedReplayBeatma
     COMMUNITY_LOOKUP_TIMEOUT_MS,
     "Community beatmap asset lookup timed out",
   ).catch(() => ({ audio: false, background: false }));
-  return { content, assets };
+  // A map osu! knows already plays from its own set.
+  if (!options.allowStandIn || (assets.audio && assets.background)) return { content, assets };
+  const standIn = await withTimeout(
+    lookupChartStandIn(checksum, content),
+    COMMUNITY_LOOKUP_TIMEOUT_MS,
+    "Chart stand-in lookup timed out",
+  ).catch(() => null);
+  return standIn ? { content, assets, standIn } : { content, assets };
+}
+
+// A bare .osu contribution has no song or background; an indexed map with the
+// same notes at the same timing can lend its own. Keyed by checksum, since the
+// community copy for a checksum never changes. A backend outage comes back
+// bare null, which the cache treats as a miss, so only real answers stick.
+async function lookupChartStandIn(checksum: string, content: string): Promise<UploadedReplayChartStandIn | null> {
+  const cached = await fetchWithCacheLock(
+    `uploaded-replay-stand-in:v1:${checksum.toLowerCase()}`,
+    STAND_IN_CACHE_TTL_MS,
+    async (): Promise<{ standIn: UploadedReplayChartStandIn | null } | null> => {
+      const standIn = await fetchUploadedReplayChartStandIn(content);
+      return standIn === undefined ? null : { standIn };
+    },
+  );
+  return cached?.standIn ?? null;
 }
 
 // The chart for a replay's checksum, as far as the server can take it. A
@@ -152,6 +181,6 @@ export async function resolveUploadedReplayBeatmap(checksum: string): Promise<Up
       file = null;
     }
   }
-  const community = !meta || !file || file.checksumMatched === false ? await readCommunityCopy(checksum) : null;
+  const community = !meta || !file || file.checksumMatched === false ? await readCommunityCopy(checksum, { allowStandIn: !meta }) : null;
   return { meta, file, community };
 }

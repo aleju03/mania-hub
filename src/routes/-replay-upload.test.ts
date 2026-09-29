@@ -82,7 +82,7 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain("tryCommunityBeatmap(null)");
     expect(routeSource).toContain("tryCommunityBeatmap(beatmapMeta)");
     expect(routeSource).toContain("const community = resolved.community");
-    expect(openSource).toContain("file.checksumMatched === false ? await readCommunityCopy(checksum)");
+    expect(openSource).toContain("file.checksumMatched === false ? await readCommunityCopy(checksum, { allowStandIn: !meta })");
     expect(routeSource).toContain("submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } })");
     expect(lookupSource).toContain("export const getCommunityBeatmapFile");
     expect(lookupSource).toContain("export const submitCommunityBeatmap");
