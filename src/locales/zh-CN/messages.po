@@ -794,6 +794,11 @@ msgstr "{0} 个成绩"
 #~ msgid "{0} screenshots"
 #~ msgstr "{0} 张截图"
 
+#. placeholder {0}: selectedPlays.size
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "{0} selected"
+#~ msgstr "已选 {0} 个"
+
 #. placeholder {0}: compact(sessions.sessions)
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "{0} sessions"
@@ -2955,6 +2960,10 @@ msgstr "全部时间"
 msgid "All uploads"
 msgstr "全部上传"
 
+#: src/lib/skill-axes.ts
+msgid "All-round"
+msgstr "全能"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "快好了..."
@@ -2998,6 +3007,10 @@ msgstr "已设置"
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "已记录"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
+#~ msgstr "同时移除目前已记录的 {allTrackedCount} 个成绩吗？"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Alt = from center"
@@ -3229,6 +3242,10 @@ msgstr "已归档"
 #: src/components/me/MeScoreRow.tsx
 msgid "archived summary"
 msgstr "归档摘要"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Are you sure?"
+#~ msgstr "确定吗？"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Arrange your cards"
@@ -5574,7 +5591,6 @@ msgstr "段位估计：{0}（{1}）"
 #~ msgstr "这里的段位是根据玩家通过的谱面估算的，并非真实的段位通过记录。请当作大致排序看待，而不是正式排名。"
 
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
 msgid "Dan plays"
 msgstr "段位成绩"
 
@@ -7781,8 +7797,8 @@ msgid "how many players near you have it"
 msgstr "有多少与你水平相近的玩家打过它"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "How many plays of the same chart the list may repeat"
-msgstr "同一张谱面在列表中最多重复几次成绩"
+#~ msgid "How many plays of the same chart the list may repeat"
+#~ msgstr "同一张谱面在列表中最多重复几次成绩"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "How many plays of the same chart the list may repeat. Click to change."
@@ -7837,7 +7853,6 @@ msgid "hybrid"
 msgstr "混合"
 
 #: src/components/player/ActivityPanel.tsx
-#: src/lib/skill-axes.ts
 msgid "Hybrid"
 msgstr "混合"
 
@@ -8355,6 +8370,10 @@ msgstr "保留"
 msgid "Keep my plays"
 msgstr "保留我的成绩"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Keep them"
+#~ msgstr "保留"
+
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
 msgstr "此浏览器不支持在该倍速下保持音高。请用 1x 导出，或让音高随倍速变化。"
@@ -8820,6 +8839,10 @@ msgid "LN {0}"
 msgstr "长条 {0}"
 
 #: src/lib/pattern-labels.ts
+msgid "LN All-round"
+msgstr "全能长条"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Anchors"
 #~ msgstr "LN 锚定"
 
@@ -8882,8 +8905,8 @@ msgid "LN Head color"
 msgstr "长条头颜色"
 
 #: src/lib/pattern-labels.ts
-msgid "LN Hybrid"
-msgstr "混合长条"
+#~ msgid "LN Hybrid"
+#~ msgstr "混合长条"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -9970,7 +9993,6 @@ msgid "MSD on recent plays"
 msgstr "在最近成绩中显示 MSD"
 
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "MSD 成绩"
 
@@ -12344,6 +12366,11 @@ msgstr "游玩次数"
 msgid "Plays"
 msgstr "游玩"
 
+#: src/routes/player/$username.tsx
+msgctxt "Skills view"
+msgid "Plays"
+msgstr "成绩"
+
 #: src/components/me/MyStatsInsights.tsx
 msgid "Plays / session"
 msgstr "每场游玩次数"
@@ -12359,6 +12386,10 @@ msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在
 #: src/routes/companella.tsx
 #~ msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 #~ msgstr ""
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Plays list"
+msgstr "成绩列表"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
@@ -13462,6 +13493,14 @@ msgstr "移除 {0} 的连胜记录"
 msgid "Remove {overlayMenuTargetLabel}"
 msgstr "移除 {overlayMenuTargetLabel}"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove {selectedCount, plural, one {# play} other {# plays}}"
+#~ msgstr "移除 {selectedCount} 个成绩"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove {selectedCount, plural, one {# play} other {# plays}}?"
+#~ msgstr "移除 {selectedCount} 个成绩？"
+
 #: src/components/communities/TagInput.tsx
 msgid "Remove {tag}"
 msgstr "移除 {tag}"
@@ -13469,6 +13508,14 @@ msgstr "移除 {tag}"
 #: src/components/me/MyDataPanel.tsx
 msgid "Remove all"
 msgstr "全部移除"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove all {allTrackedCount, plural, one {# play} other {# plays}}"
+#~ msgstr "全部移除 {allTrackedCount} 个成绩"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove all {allTrackedCount, plural, one {# tracked play} other {# tracked plays}}?"
+#~ msgstr "全部移除 {allTrackedCount} 个追踪成绩？"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
@@ -13499,15 +13546,27 @@ msgstr "移除我的 {count} 个成绩"
 msgid "Remove play"
 msgstr "移除成绩"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove plays"
+#~ msgstr "移除成绩"
+
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove screenshot {0}"
 msgstr "移除截图 {0}"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove selected"
+#~ msgstr "移除所选"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Remove tag"
 msgstr "移除标签"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove them"
+#~ msgstr "移除"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove this screenshot"
@@ -13807,6 +13866,10 @@ msgstr "全部揭晓"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "正在揭晓剩下的…"
+
+#: src/components/packs/RevealStage.tsx
+msgid "Revealing your cards..."
+msgstr "正在揭晓你的卡片…"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Reverse Shields"
@@ -14482,6 +14545,10 @@ msgstr "选择国家/地区"
 #: src/components/packs/CollectionPanel.tsx
 msgid "select page"
 msgstr "选择本页"
+
+#: src/components/me/MeScoreRow.tsx
+#~ msgid "Select play"
+#~ msgstr "选择成绩"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "select text or type it here"
@@ -15821,6 +15888,10 @@ msgstr "停止模拟"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
 msgstr "停止追踪"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Stop tracking your plays?"
+#~ msgstr "停止追踪你的成绩？"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stopping…"
@@ -17413,6 +17484,10 @@ msgstr "此浏览器无法直接写入文件，视频会先保存在内存中，
 msgid "This browser can't save the video file."
 msgstr "此浏览器无法保存视频文件。"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "This can't be undone."
+#~ msgstr "此操作无法撤销。"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card already has a custom edition. Its appearance is protected."
 #~ msgstr "这张卡片已有定制版本，其外观受到保护。"
@@ -18273,13 +18348,14 @@ msgstr "未 ranked"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/rankings.tsx
 msgid "Unrated"
 msgstr "未评分"
 
 #: src/routes/player/$username.tsx
-msgid "Unrated plays"
-msgstr "未评分成绩"
+#~ msgid "Unrated plays"
+#~ msgstr "未评分成绩"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"

@@ -808,6 +808,11 @@ msgstr "{0} scores"
 #~ msgid "{0} screenshots"
 #~ msgstr "{0} screenshots"
 
+#. placeholder {0}: selectedPlays.size
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "{0} selected"
+#~ msgstr "{0} selected"
+
 #. placeholder {0}: compact(sessions.sessions)
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "{0} sessions"
@@ -2973,6 +2978,10 @@ msgstr "All time"
 msgid "All uploads"
 msgstr "All uploads"
 
+#: src/lib/skill-axes.ts
+msgid "All-round"
+msgstr "All-round"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "Almost there..."
@@ -3016,6 +3025,10 @@ msgstr "Already set"
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "already tracked"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
+#~ msgstr "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Alt = from center"
@@ -3247,6 +3260,10 @@ msgstr "Archived"
 #: src/components/me/MeScoreRow.tsx
 msgid "archived summary"
 msgstr "archived summary"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Are you sure?"
+#~ msgstr "Are you sure?"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Arrange your cards"
@@ -5592,7 +5609,6 @@ msgstr "Dan estimate: {0} ({1})"
 #~ msgstr "Dan levels here are estimated from the charts a player has passed, not from real course clears. Read this as a rough ordering, not a ranking."
 
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
 msgid "Dan plays"
 msgstr "Dan plays"
 
@@ -7803,8 +7819,8 @@ msgid "how many players near you have it"
 msgstr "how many players near you have it"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "How many plays of the same chart the list may repeat"
-msgstr "How many plays of the same chart the list may repeat"
+#~ msgid "How many plays of the same chart the list may repeat"
+#~ msgstr "How many plays of the same chart the list may repeat"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "How many plays of the same chart the list may repeat. Click to change."
@@ -7863,7 +7879,6 @@ msgid "hybrid"
 msgstr "hybrid"
 
 #: src/components/player/ActivityPanel.tsx
-#: src/lib/skill-axes.ts
 msgid "Hybrid"
 msgstr "Hybrid"
 
@@ -8385,6 +8400,10 @@ msgstr "Keep it"
 msgid "Keep my plays"
 msgstr "Keep my plays"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Keep them"
+#~ msgstr "Keep them"
+
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
 msgstr "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
@@ -8850,6 +8869,10 @@ msgid "LN {0}"
 msgstr "LN {0}"
 
 #: src/lib/pattern-labels.ts
+msgid "LN All-round"
+msgstr "LN All-round"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Anchors"
 #~ msgstr "LN Anchors"
 
@@ -8912,8 +8935,8 @@ msgid "LN Head color"
 msgstr "LN Head color"
 
 #: src/lib/pattern-labels.ts
-msgid "LN Hybrid"
-msgstr "LN Hybrid"
+#~ msgid "LN Hybrid"
+#~ msgstr "LN Hybrid"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -10000,7 +10023,6 @@ msgid "MSD on recent plays"
 msgstr "MSD on recent plays"
 
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "MSD plays"
 
@@ -12374,6 +12396,11 @@ msgstr "plays"
 msgid "Plays"
 msgstr "Plays"
 
+#: src/routes/player/$username.tsx
+msgctxt "Skills view"
+msgid "Plays"
+msgstr "Plays"
+
 #: src/components/me/MyStatsInsights.tsx
 msgid "Plays / session"
 msgstr "Plays / session"
@@ -12389,6 +12416,10 @@ msgstr "Plays are recorded automatically for the top 100 of each country. You're
 #: src/routes/companella.tsx
 #~ msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 #~ msgstr "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Plays list"
+msgstr "Plays list"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
@@ -13492,6 +13523,14 @@ msgstr "Remove {0}'s streak"
 msgid "Remove {overlayMenuTargetLabel}"
 msgstr "Remove {overlayMenuTargetLabel}"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove {selectedCount, plural, one {# play} other {# plays}}"
+#~ msgstr "Remove {selectedCount, plural, one {# play} other {# plays}}"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove {selectedCount, plural, one {# play} other {# plays}}?"
+#~ msgstr "Remove {selectedCount, plural, one {# play} other {# plays}}?"
+
 #: src/components/communities/TagInput.tsx
 msgid "Remove {tag}"
 msgstr "Remove {tag}"
@@ -13499,6 +13538,14 @@ msgstr "Remove {tag}"
 #: src/components/me/MyDataPanel.tsx
 msgid "Remove all"
 msgstr "Remove all"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove all {allTrackedCount, plural, one {# play} other {# plays}}"
+#~ msgstr "Remove all {allTrackedCount, plural, one {# play} other {# plays}}"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove all {allTrackedCount, plural, one {# tracked play} other {# tracked plays}}?"
+#~ msgstr "Remove all {allTrackedCount, plural, one {# tracked play} other {# tracked plays}}?"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
@@ -13529,15 +13576,27 @@ msgstr "Remove my {count, plural, one {# play} other {# plays}}"
 msgid "Remove play"
 msgstr "Remove play"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove plays"
+#~ msgstr "Remove plays"
+
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove screenshot {0}"
 msgstr "Remove screenshot {0}"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove selected"
+#~ msgstr "Remove selected"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Remove tag"
 msgstr "Remove tag"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove them"
+#~ msgstr "Remove them"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove this screenshot"
@@ -13837,6 +13896,10 @@ msgstr "reveal all"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "Revealing the rest..."
+
+#: src/components/packs/RevealStage.tsx
+msgid "Revealing your cards..."
+msgstr "Revealing your cards..."
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Reverse Shields"
@@ -14512,6 +14575,10 @@ msgstr "Select country"
 #: src/components/packs/CollectionPanel.tsx
 msgid "select page"
 msgstr "select page"
+
+#: src/components/me/MeScoreRow.tsx
+#~ msgid "Select play"
+#~ msgstr "Select play"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "select text or type it here"
@@ -15855,6 +15922,10 @@ msgstr "stop sim"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
 msgstr "Stop tracking"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Stop tracking your plays?"
+#~ msgstr "Stop tracking your plays?"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stopping…"
@@ -17455,6 +17526,10 @@ msgstr "This browser can't save directly to a file, so the video is held in memo
 msgid "This browser can't save the video file."
 msgstr "This browser can't save the video file."
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "This can't be undone."
+#~ msgstr "This can't be undone."
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card already has a custom edition. Its appearance is protected."
 #~ msgstr "This card already has a custom edition. Its appearance is protected."
@@ -18315,13 +18390,14 @@ msgstr "unranked"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/rankings.tsx
 msgid "Unrated"
 msgstr "Unrated"
 
 #: src/routes/player/$username.tsx
-msgid "Unrated plays"
-msgstr "Unrated plays"
+#~ msgid "Unrated plays"
+#~ msgstr "Unrated plays"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"

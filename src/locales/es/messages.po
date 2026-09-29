@@ -785,6 +785,11 @@ msgstr "{0} scores"
 #~ msgid "{0} screenshots"
 #~ msgstr "{0} capturas"
 
+#. placeholder {0}: selectedPlays.size
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "{0} selected"
+#~ msgstr "{0} seleccionadas"
+
 #. placeholder {0}: compact(sessions.sessions)
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "{0} sessions"
@@ -2946,6 +2951,10 @@ msgstr "Todo el tiempo"
 msgid "All uploads"
 msgstr "Todas las subidas"
 
+#: src/lib/skill-axes.ts
+msgid "All-round"
+msgstr "All-round"
+
 #: src/routes/maps.tsx
 msgid "Almost there..."
 msgstr "Casi listo..."
@@ -2989,6 +2998,10 @@ msgstr "Ya está configurada"
 #: src/components/player/AddScoreModal.tsx
 msgid "already tracked"
 msgstr "ya registrado"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Also remove the {allTrackedCount, plural, one {# play} other {# plays}} recorded so far?"
+#~ msgstr "¿Eliminar también {allTrackedCount, plural, one {la # jugada registrada} other {las # jugadas registradas}} hasta ahora?"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Alt = from center"
@@ -3220,6 +3233,10 @@ msgstr "Archivados"
 #: src/components/me/MeScoreRow.tsx
 msgid "archived summary"
 msgstr "resumen archivado"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Are you sure?"
+#~ msgstr "¿Seguro?"
 
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Arrange your cards"
@@ -5565,7 +5582,6 @@ msgstr "Estimación de dan: {0} ({1})"
 #~ msgstr "Los dans de aquí se estiman a partir de los mapas que cada jugador ha pasado, no de clears reales de dans. Tómalo como un orden aproximado, no como un ranking."
 
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
 msgid "Dan plays"
 msgstr "Jugadas de dan"
 
@@ -7772,8 +7788,8 @@ msgid "how many players near you have it"
 msgstr "cuántos jugadores cerca de ti lo tienen"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "How many plays of the same chart the list may repeat"
-msgstr "Cuántas jugadas del mismo mapa puede repetir la lista"
+#~ msgid "How many plays of the same chart the list may repeat"
+#~ msgstr "Cuántas jugadas del mismo mapa puede repetir la lista"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "How many plays of the same chart the list may repeat. Click to change."
@@ -7828,7 +7844,6 @@ msgid "hybrid"
 msgstr "híbrido"
 
 #: src/components/player/ActivityPanel.tsx
-#: src/lib/skill-axes.ts
 msgid "Hybrid"
 msgstr "Híbrido"
 
@@ -8346,6 +8361,10 @@ msgstr "Conservarlo"
 msgid "Keep my plays"
 msgstr "Conservar mis jugadas"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Keep them"
+#~ msgstr "Conservarlas"
+
 #: src/lib/replay-export/errors.ts
 msgid "Keeping the pitch at this speed isn't supported here. Export at 1x, or let the pitch follow the speed."
 msgstr "Mantener el tono a esta velocidad no está soportado aquí. Exporta a 1x, o deja que el tono siga a la velocidad."
@@ -8811,6 +8830,10 @@ msgid "LN {0}"
 msgstr "LN {0}"
 
 #: src/lib/pattern-labels.ts
+msgid "LN All-round"
+msgstr "LN All-round"
+
+#: src/lib/pattern-labels.ts
 #~ msgid "LN Anchors"
 #~ msgstr "Anclas LN"
 
@@ -8873,8 +8896,8 @@ msgid "LN Head color"
 msgstr "Color de la cabeza del LN"
 
 #: src/lib/pattern-labels.ts
-msgid "LN Hybrid"
-msgstr "LN híbrido"
+#~ msgid "LN Hybrid"
+#~ msgstr "LN híbrido"
 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
@@ -8904,7 +8927,7 @@ msgstr "Proporción de LN"
 
 #: src/lib/pattern-labels.ts
 msgid "LN Speed"
-msgstr "Velocidad LN"
+msgstr "LN Speed"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "LN Stairs"
@@ -8926,7 +8949,7 @@ msgstr "LN Tech"
 
 #: src/lib/pattern-labels.ts
 msgid "LN Technical"
-msgstr "LN técnico"
+msgstr "LN Technical"
 
 #: src/lib/pattern-labels.ts
 #~ msgid "LN Trills"
@@ -8934,7 +8957,7 @@ msgstr "LN técnico"
 
 #: src/lib/pattern-labels.ts
 msgid "LN Walls"
-msgstr "Muros LN"
+msgstr "LN Walls"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."
@@ -9961,7 +9984,6 @@ msgid "MSD on recent plays"
 msgstr "MSD en plays recientes"
 
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/player/$username.tsx
 msgid "MSD plays"
 msgstr "Jugadas de MSD"
 
@@ -12335,6 +12357,11 @@ msgstr "plays"
 msgid "Plays"
 msgstr "Plays"
 
+#: src/routes/player/$username.tsx
+msgctxt "Skills view"
+msgid "Plays"
+msgstr "Jugadas"
+
 #: src/components/me/MyStatsInsights.tsx
 msgid "Plays / session"
 msgstr "Plays / sesión"
@@ -12350,6 +12377,10 @@ msgstr "Los plays se registran automáticamente para el top 100 de cada país. A
 #: src/routes/companella.tsx
 #~ msgid "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 #~ msgstr ""
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Plays list"
+msgstr "Lista de jugadas"
 
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
@@ -13063,7 +13094,7 @@ msgstr "No se pudieron calificar tus plays. Se reintenta automáticamente, vuelv
 
 #: src/routes/player/$username.tsx
 msgid "Ratings"
-msgstr "Puntuaciones"
+msgstr "Ratings"
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "Ratings could not be loaded. Tap Retry to try again."
@@ -13453,6 +13484,14 @@ msgstr "Eliminar la racha de {0}"
 msgid "Remove {overlayMenuTargetLabel}"
 msgstr "Eliminar {overlayMenuTargetLabel}"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove {selectedCount, plural, one {# play} other {# plays}}"
+#~ msgstr "Eliminar {selectedCount, plural, one {# jugada} other {# jugadas}}"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove {selectedCount, plural, one {# play} other {# plays}}?"
+#~ msgstr "¿Eliminar {selectedCount, plural, one {# jugada} other {# jugadas}}?"
+
 #: src/components/communities/TagInput.tsx
 msgid "Remove {tag}"
 msgstr "Eliminar {tag}"
@@ -13460,6 +13499,14 @@ msgstr "Eliminar {tag}"
 #: src/components/me/MyDataPanel.tsx
 msgid "Remove all"
 msgstr "Eliminar todas"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove all {allTrackedCount, plural, one {# play} other {# plays}}"
+#~ msgstr "Eliminar {allTrackedCount, plural, one {la # jugada} other {las # jugadas}}"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove all {allTrackedCount, plural, one {# tracked play} other {# tracked plays}}?"
+#~ msgstr "¿Eliminar {allTrackedCount, plural, one {la # jugada trackeada} other {las # jugadas trackeadas}}?"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Remove color"
@@ -13490,15 +13537,27 @@ msgstr "Eliminar {count, plural, one {mi # jugada} other {mis # jugadas}}"
 msgid "Remove play"
 msgstr "Eliminar jugada"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove plays"
+#~ msgstr "Eliminar jugadas"
+
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove screenshot {0}"
 msgstr "Eliminar la captura {0}"
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove selected"
+#~ msgstr "Eliminar seleccionadas"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Remove tag"
 msgstr "Quitar etiqueta"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Remove them"
+#~ msgstr "Eliminarlas"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Remove this screenshot"
@@ -13798,6 +13857,10 @@ msgstr "revelar todo"
 #: src/components/packs/RevealStage.tsx
 msgid "Revealing the rest..."
 msgstr "Revelando el resto..."
+
+#: src/components/packs/RevealStage.tsx
+msgid "Revealing your cards..."
+msgstr "Revelando tus cartas..."
 
 #: src/lib/pattern-labels.ts
 #~ msgid "Reverse Shields"
@@ -14473,6 +14536,10 @@ msgstr "Seleccionar país"
 #: src/components/packs/CollectionPanel.tsx
 msgid "select page"
 msgstr "seleccionar página"
+
+#: src/components/me/MeScoreRow.tsx
+#~ msgid "Select play"
+#~ msgstr "Seleccionar jugada"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "select text or type it here"
@@ -15812,6 +15879,10 @@ msgstr "parar sim"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
 msgstr "Dejar de trackear"
+
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "Stop tracking your plays?"
+#~ msgstr "¿Dejar de trackear tus jugadas?"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stopping…"
@@ -17404,6 +17475,10 @@ msgstr "Este navegador no puede guardar directamente en un archivo, así que el 
 msgid "This browser can't save the video file."
 msgstr "Este navegador no puede guardar el archivo de video."
 
+#: src/components/me/MyDataPanel.tsx
+#~ msgid "This can't be undone."
+#~ msgstr "No se puede deshacer."
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "This card already has a custom edition. Its appearance is protected."
 #~ msgstr "Esta carta ya tiene una edición personalizada. Su apariencia está protegida."
@@ -18264,13 +18339,14 @@ msgstr "sin ranking"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/rankings.tsx
 msgid "Unrated"
 msgstr "Sin clasificar"
 
 #: src/routes/player/$username.tsx
-msgid "Unrated plays"
-msgstr "Jugadas sin clasificar"
+#~ msgid "Unrated plays"
+#~ msgstr "Jugadas sin clasificar"
 
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "unreadable"
@@ -18821,7 +18897,7 @@ msgstr "Esperando el próximo cálculo. El play se calcula entonces y esta lista
 
 #: src/lib/skill-axes.ts
 msgid "Walls"
-msgstr "Muros"
+msgstr "Walls"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Warm copper foil and drifting sparks."

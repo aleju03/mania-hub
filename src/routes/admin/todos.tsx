@@ -7,6 +7,7 @@ import {
   Bug,
   Check,
   ChevronDown,
+  Circle,
   Columns3,
   GripVertical,
   Lightbulb,
@@ -436,13 +437,18 @@ function gradeOf(acc: number): { label: string; text: string } {
 }
 
 // Mirrors the backend board order so optimistic local updates land where a refetch would put them:
-// open, then held, then done; open items follow the manual drag order (position asc), held items by
-// most recently parked, done items by most recently completed.
-const STATUS_ORDER: Record<TodoStatus, number> = { open: 0, hold: 1, done: 2 };
+// open and doing (both on the board), then held, then done; board items follow the manual drag order
+// (position asc), held items by most recently parked, done items by most recently completed.
+const STATUS_ORDER: Record<TodoStatus, number> = { open: 0, doing: 0, hold: 1, done: 2 };
+
+/** Open and doing tasks are the ones on the board; doing only marks one as started. */
+function onField(todo: AdminTodo): boolean {
+  return todo.status === "open" || todo.status === "doing";
+}
 
 function sortTodos(list: AdminTodo[]): AdminTodo[] {
   return list.slice().sort((a, b) => {
-    if (a.status !== b.status) return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+    if (STATUS_ORDER[a.status] !== STATUS_ORDER[b.status]) return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
     if (a.status === "done") return (b.doneAt ?? 0) - (a.doneAt ?? 0);
     if (a.status === "hold") return b.updatedAt - a.updatedAt;
     if (a.position !== b.position) return a.position - b.position;
@@ -492,6 +498,37 @@ function PrioritySegmented({ value, onChange }: { value: TodoPriority; onChange:
   );
 }
 
+// Status control for the edit modal. Done is not on it: a task is finished by hitting its note.
+const STATUS_OPTIONS: { key: Exclude<TodoStatus, "done">; label: string; Icon: typeof Play }[] = [
+  { key: "open", label: "Pending", Icon: Circle },
+  { key: "doing", label: "Doing", Icon: Play },
+  { key: "hold", label: "Hold", Icon: Pause },
+];
+
+function StatusSegmented({ value, onChange }: { value: TodoStatus; onChange: (value: Exclude<TodoStatus, "done">) => void }) {
+  return (
+    <div className="inline-flex rounded-md border border-osu-b3/50 bg-osu-b4/60 p-0.5" role="group" aria-label="Status">
+      {STATUS_OPTIONS.map(({ key, label, Icon }) => {
+        const active = key === value;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            aria-pressed={active}
+            className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+              active ? "bg-osu-b3/50 text-white" : "text-osu-f1 hover:text-osu-l2"
+            }`}
+          >
+            <Icon className={`h-3 w-3 ${active && key === "doing" ? "text-osu-green" : ""}`} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Task id chip
 // ---------------------------------------------------------------------------
@@ -521,6 +558,7 @@ interface EditPatch {
   category: TodoCategory;
   priority: TodoPriority;
   groupId: string | null;
+  status: TodoStatus;
 }
 
 function TodosPage() {
@@ -534,6 +572,7 @@ function TodosPage() {
   const [notes, setNotes] = useState("");
   const [category, setCategory] = useState<TodoCategory>("task");
   const [priority, setPriority] = useState<TodoPriority>("normal");
+  const [composerGroup, setComposerGroup] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
   const [adding, setAdding] = useState(false);
   const titleRef = useRef<HTMLInputElement | null>(null);
@@ -550,6 +589,8 @@ function TodosPage() {
   // Chip row filter: show only one group's tasks. null = everything.
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
+  // Narrows the board to the tasks marked as doing.
+  const [doingOnly, setDoingOnly] = useState(false);
 
   // Marquee selection: drag a box across the board to take several notes at once, then act on the
   // lot of them (group them, clear them, park them, drop them). Mouse only - a finger dragging over
@@ -637,7 +678,10 @@ function TodosPage() {
     [groupFilter, matchesSearch],
   );
 
-  const openFiltered = useMemo(() => todos.filter((t) => t.status === "open" && matchesFilters(t)), [todos, matchesFilters]);
+  const openFiltered = useMemo(
+    () => todos.filter((t) => onField(t) && (!doingOnly || t.status === "doing") && matchesFilters(t)),
+    [todos, matchesFilters, doingOnly],
+  );
   const doneFiltered = useMemo(() => todos.filter((t) => t.status === "done" && matchesFilters(t)), [todos, matchesFilters]);
   const holdFiltered = useMemo(() => todos.filter((t) => t.status === "hold" && matchesFilters(t)), [todos, matchesFilters]);
 
@@ -667,7 +711,8 @@ function TodosPage() {
   // current search is hiding and held rows, which keep their position while parked so resuming one
   // puts it back where it was.
   const positionPeers = useMemo(() => todos.filter((t) => t.status !== "done"), [todos]);
-  const openCount = useMemo(() => todos.filter((t) => t.status === "open").length, [todos]);
+  const openCount = useMemo(() => todos.filter(onField).length, [todos]);
+  const doingCount = useMemo(() => todos.filter((t) => t.status === "doing").length, [todos]);
   const doneAll = useMemo(() => todos.filter((t) => t.status === "done"), [todos]);
   const doneCount = doneAll.length;
   const holdCount = useMemo(() => todos.filter((t) => t.status === "hold").length, [todos]);
@@ -678,10 +723,24 @@ function TodosPage() {
   // selection rather than sitting in it invisibly.
   useEffect(() => {
     setSelectedIds((prev) => {
-      const alive = prev.filter((id) => todos.some((t) => t.id === id && t.status === "open"));
+      const alive = prev.filter((id) => todos.some((t) => t.id === id && onField(t)));
       return alive.length === prev.length ? prev : alive;
     });
   }, [todos]);
+
+  // A task added while the board is filtered to a group goes in that group, so it does not vanish
+  // from the board it was typed into.
+  useEffect(() => {
+    if (groupFilter !== null) setComposerGroup(groupFilter);
+  }, [groupFilter]);
+  useEffect(() => {
+    setComposerGroup((current) => (current && !groups.some((g) => g.id === current) ? null : current));
+  }, [groups]);
+
+  // Nothing left marked as doing turns the doing filter back off rather than leaving an empty board.
+  useEffect(() => {
+    if (doingCount === 0) setDoingOnly(false);
+  }, [doingCount]);
 
   useEffect(() => {
     const sync = (event: KeyboardEvent) => setSelectMode(event.ctrlKey || event.metaKey || event.shiftKey);
@@ -784,10 +843,10 @@ function TodosPage() {
     setAdding(true);
     setError(null);
     try {
-      const result = await createAdminTodo({ data: { title: trimmed, notes, category, priority } });
+      const result = await createAdminTodo({ data: { title: trimmed, notes, category, priority, groupId: composerGroup } });
       setTodos((prev) => upsertTodo(prev, result.todo));
       playTodoPlace(); // synced with the note dropping onto the field
-      // Keep category/priority so batches of the same kind stay fast; clear the rest.
+      // Keep category/priority/group so batches of the same kind stay fast; clear the rest.
       setTitle("");
       setNotes("");
       titleRef.current?.focus();
@@ -796,13 +855,13 @@ function TodosPage() {
     } finally {
       setAdding(false);
     }
-  }, [title, notes, category, priority, adding]);
+  }, [title, notes, category, priority, composerGroup, adding]);
 
   // Completing is optimistic so the hit lands instantly: the note bursts, the lane shows the
   // judgement, then the server response reconciles (or a refetch restores truth on failure).
   const handleToggle = useCallback(
     async (todo: AdminTodo) => {
-      const nextStatus: TodoStatus = todo.status === "open" ? "done" : "open";
+      const nextStatus: TodoStatus = todo.status === "done" ? "open" : "done";
       const now = Date.now();
       setTodos((prev) => upsertTodo(prev, { ...todo, status: nextStatus, doneAt: nextStatus === "done" ? now : null }));
       if (nextStatus === "done") {
@@ -849,7 +908,27 @@ function TodosPage() {
     [refetch],
   );
 
+  // Marking a task as doing leaves it where it is on the board; it only shows it as started.
+  const handleDoing = useCallback(
+    async (todo: AdminTodo) => {
+      const nextStatus: TodoStatus = todo.status === "doing" ? "open" : "doing";
+      setTodos((prev) => upsertTodo(prev, { ...todo, status: nextStatus, doneAt: null, updatedAt: Date.now() }));
+      playTodoDropTick();
+      setError(null);
+      try {
+        const result = await updateAdminTodo({ data: { id: todo.id, status: nextStatus } });
+        setTodos((prev) => upsertTodo(prev, result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [refetch],
+  );
+
   const handleSave = useCallback(async (id: string, patch: EditPatch) => {
+    // A task parked from the modal opens the shelf, so it is visibly somewhere.
+    if (patch.status === "hold" && todosRef.current.find((t) => t.id === id)?.status !== "hold") setShowHold(true);
     setError(null);
     try {
       const result = await updateAdminTodo({
@@ -860,6 +939,7 @@ function TodosPage() {
           category: patch.category,
           priority: patch.priority,
           groupId: patch.groupId,
+          status: patch.status,
         },
       });
       setTodos((prev) => upsertTodo(prev, result.todo));
@@ -872,8 +952,8 @@ function TodosPage() {
   const handleDelete = useCallback(
     async (todo: AdminTodo) => {
       setTodos((prev) => prev.filter((t) => t.id !== todo.id));
-      // Dropping an open note off the field is a miss; deleting a held or cleared row is cleanup.
-      if (todo.status === "open") {
+      // Dropping a note off the field is a miss; deleting a held or cleared row is cleanup.
+      if (onField(todo)) {
         punch(todo.category, "MISS");
         playTodoMiss();
       }
@@ -1004,10 +1084,12 @@ function TodosPage() {
   );
 
   const handleBulkStatus = useCallback(
-    async (next: "done" | "hold") => {
+    async (target: "done" | "hold" | "doing") => {
       const ids = selectedIdsRef.current;
-      const picked = todosRef.current.filter((t) => ids.includes(t.id) && t.status === "open");
+      const picked = todosRef.current.filter((t) => ids.includes(t.id) && onField(t));
       if (picked.length === 0) return;
+      // "Doing" on a selection that is already all doing takes the mark off again.
+      const next: TodoStatus = target === "doing" && picked.every((t) => t.status === "doing") ? "open" : target;
       const now = Date.now();
       setTodos((prev) =>
         picked.reduce(
@@ -1015,7 +1097,8 @@ function TodosPage() {
           prev,
         ),
       );
-      setSelectedIds([]);
+      // Marking doing keeps the selection, since the notes stay where they are.
+      if (next !== "doing" && next !== "open") setSelectedIds([]);
       if (next === "done") {
         // One judgement for the batch, taken from the note that sat on the field longest: clearing
         // a stack of old tasks at once should not read as a MAX.
@@ -1024,7 +1107,7 @@ function TodosPage() {
         punch(picked[0].category, judgement);
         playTodoHit(judgement);
       } else {
-        setShowHold(true);
+        if (next === "hold") setShowHold(true);
         playTodoDropTick();
       }
       setError(null);
@@ -1117,7 +1200,7 @@ function TodosPage() {
               <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Todo</h1>
             </div>
             <p className="mt-1 text-[11px] text-osu-f1">
-              {openCount} on the field{holdCount ? ` · ${holdCount} on hold` : ""}{doneCount ? ` · ${doneCount} cleared` : ""}
+              {openCount} on the field{doingCount ? ` · ${doingCount} doing` : ""}{holdCount ? ` · ${holdCount} on hold` : ""}{doneCount ? ` · ${doneCount} cleared` : ""}
               <span className="hidden sm:inline"> · private notes for the project</span>
             </p>
           </div>
@@ -1198,6 +1281,14 @@ function TodosPage() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <SelectMenu value={category} options={CATEGORY_OPTIONS} onChange={setCategory} ariaLabel="Category" />
             <PrioritySegmented value={priority} onChange={setPriority} />
+            {groups.length > 0 && (
+              <SelectMenu
+                value={composerGroup ?? NO_GROUP}
+                options={groupOptions(groups)}
+                onChange={(groupId) => setComposerGroup(groupId === NO_GROUP ? null : groupId)}
+                ariaLabel="Group"
+              />
+            )}
             <button
               type="button"
               onClick={() => setShowNotes((open) => !open)}
@@ -1225,6 +1316,20 @@ function TodosPage() {
         {/* Groups: the owner's own buckets over the board. A chip filters to one of them. */}
         {!loading && (
           <div className="flex flex-wrap items-center gap-1.5">
+            {doingCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setDoingOnly((on) => !on)}
+                aria-pressed={doingOnly}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                  doingOnly ? "border-osu-green/50 bg-osu-green/10 text-osu-green" : "border-osu-b3/40 bg-osu-b4/30 text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                <Play className="h-3 w-3" />
+                Doing
+                <span className="tabular-nums text-osu-f1/60">{doingCount}</span>
+              </button>
+            )}
             {groups.map((group) => {
               const meta = GROUP_COLOR_META[group.color];
               const active = groupFilter === group.id;
@@ -1305,7 +1410,7 @@ function TodosPage() {
                         <p className="rounded-md bg-osu-b6/70 px-3 py-1.5 text-xs text-osu-f1">
                           {todos.length === 0
                             ? "No notes on the field. Add the first one above."
-                            : query || groupFilter
+                            : query || groupFilter || doingOnly
                               ? "Nothing on the field matches this filter."
                               : "All clear. Nothing left on the field."}
                         </p>
@@ -1322,7 +1427,7 @@ function TodosPage() {
                   <p className="py-20 text-center text-xs text-osu-f1">
                     {todos.length === 0
                       ? "Nothing queued. Add the first task above."
-                      : query || groupFilter
+                      : query || groupFilter || doingOnly
                         ? "Nothing queued matches this filter."
                         : "All clear. Nothing left to do."}
                   </p>
@@ -1331,6 +1436,7 @@ function TodosPage() {
                     items={queue}
                     positionPeers={positionPeers}
                     onHit={handleToggle}
+                    onDoing={handleDoing}
                     onOpen={setEditing}
                     onReorderEnd={handleReorderEnd}
                     groupById={groupById}
@@ -1446,7 +1552,6 @@ function TodosPage() {
             onClose={() => setEditing(null)}
             onSave={handleSave}
             onDelete={handleDelete}
-            onHold={handleHold}
           />
         )}
       </AnimatePresence>
@@ -1460,6 +1565,7 @@ function TodosPage() {
             onCreateGroup={(name) => void handleCreateGroupForSelection(name)}
             onDone={() => void handleBulkStatus("done")}
             onHold={() => void handleBulkStatus("hold")}
+            onDoing={() => void handleBulkStatus("doing")}
             onDelete={() => void handleBulkDelete()}
             onClear={() => setSelectedIds([])}
           />
@@ -1748,6 +1854,7 @@ function LaneNote({
   onDragEnd: (id: string, point: { x: number; y: number }) => void;
 }) {
   const meta = CATEGORY_META[todo.category];
+  const doing = todo.status === "doing";
   // Distinguish a drag-drop from a plain click so dropping a note never opens the editor.
   const dragging = useRef(false);
 
@@ -1782,7 +1889,9 @@ function LaneNote({
       exit={{ opacity: 0, y: 12, scale: 0.9, transition: { duration: 0.14 } }}
       transition={{ duration: 0.18, ease: "easeOut" }}
       style={{ touchAction: "pan-y" }}
-      className={`group relative select-none rounded-md border border-osu-b3/50 border-t-2 bg-osu-b4/60 transition-colors hover:border-osu-b3 ${
+      className={`group relative select-none rounded-md border border-t-2 transition-colors hover:border-osu-b3 ${
+        doing ? "border-osu-green/50 bg-osu-green/10" : "border-osu-b3/50 bg-osu-b4/60"
+      } ${
         selectMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"
       } ${meta.edge} ${selected ? "ring-1 ring-osu-blue/80" : ""} ${todo.priority === "low" ? "opacity-70" : ""}`}
     >
@@ -1791,6 +1900,7 @@ function LaneNote({
           <p className="break-words text-[11px] leading-snug text-osu-l1 line-clamp-2">{todo.title}</p>
           <div className="mt-1 flex items-center gap-1.5 text-[9px] text-osu-f1/60">
             <TodoSeq seq={todo.seq} />
+            {doing && <Play className="h-2.5 w-2.5 shrink-0 fill-current text-osu-green" aria-label="Doing" />}
             {todo.priority === "high" && (
               <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-osu-red-light">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-osu-red-light" />
@@ -1834,6 +1944,7 @@ function Queue({
   items,
   positionPeers,
   onHit,
+  onDoing,
   onOpen,
   onReorderEnd,
   groupById,
@@ -1849,6 +1960,7 @@ function Queue({
   // dodge positions held by rows that aren't in this list.
   positionPeers: AdminTodo[];
   onHit: (todo: AdminTodo) => void;
+  onDoing: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onReorderEnd: (id: string, position: number) => void;
   groupById: Map<string, AdminTodoGroup>;
@@ -1968,6 +2080,7 @@ function Queue({
             selectMode={selectMode}
             carrying={blockDrag?.leader === todo.id ? blockDrag.count - 1 : 0}
             onHit={onHit}
+            onDoing={onDoing}
             onOpen={onOpen}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -1986,6 +2099,7 @@ function QueueRow({
   selectMode,
   carrying,
   onHit,
+  onDoing,
   onOpen,
   onDragStart,
   onDragEnd,
@@ -1998,10 +2112,12 @@ function QueueRow({
   // How many other rows this one is carrying, when it is the one in hand.
   carrying: number;
   onHit: (todo: AdminTodo) => void;
+  onDoing: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onDragStart: (id: string) => void;
   onDragEnd: (id: string) => void;
 }) {
+  const doing = todo.status === "doing";
   const meta = CATEGORY_META[todo.category];
   const CategoryIcon = meta.Icon;
   const dragging = useRef(false);
@@ -2031,7 +2147,9 @@ function QueueRow({
       exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.14 } }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       style={{ touchAction: "pan-y" }}
-      className={`group flex select-none items-center gap-2 rounded-md border border-osu-b3/40 border-l-2 bg-osu-b4/40 px-2 py-2 transition-colors hover:border-osu-b3 sm:py-1.5 ${
+      className={`group flex select-none items-center gap-2 rounded-md border border-l-2 px-2 py-2 transition-colors hover:border-osu-b3 sm:py-1.5 ${
+        doing ? "border-osu-green/50 bg-osu-green/10" : "border-osu-b3/40 bg-osu-b4/40"
+      } ${
         selectMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"
       } ${meta.edgeLeft} ${selected ? "ring-1 ring-osu-blue/80" : ""} ${todo.priority === "low" ? "opacity-70" : ""}`}
     >
@@ -2054,6 +2172,23 @@ function QueueRow({
       )}
       {todo.notes && <AlignLeft className="h-2.5 w-2.5 shrink-0 text-osu-f1/60" />}
       <span className="hidden shrink-0 text-[10px] tabular-nums text-osu-f1/50 sm:inline">{formatShortDate(todo.createdAt)}</span>
+      <button
+        type="button"
+        aria-label={doing ? "Back to pending" : "Mark as doing"}
+        title={doing ? "Back to pending" : "Doing"}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDoing(todo);
+        }}
+        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer sm:h-5 sm:w-5 ${
+          doing
+            ? "text-osu-green hover:text-osu-l1"
+            : "text-osu-f1/40 hover:text-osu-green sm:text-transparent sm:group-hover:text-osu-f1/60"
+        }`}
+      >
+        {doing ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+      </button>
       <button
         type="button"
         aria-label="Hit (mark as done)"
@@ -2225,14 +2360,12 @@ function NoteModal({
   onClose,
   onSave,
   onDelete,
-  onHold,
 }: {
   todo: AdminTodo;
   groups: AdminTodoGroup[];
   onClose: () => void;
   onSave: (id: string, patch: EditPatch) => Promise<void>;
   onDelete: (todo: AdminTodo) => void;
-  onHold: (todo: AdminTodo) => void;
 }) {
   const [draft, setDraft] = useState<EditPatch>({
     title: todo.title,
@@ -2240,6 +2373,7 @@ function NoteModal({
     category: todo.category,
     priority: todo.priority,
     groupId: todo.groupId,
+    status: todo.status,
   });
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -2341,6 +2475,11 @@ function NoteModal({
             />
           )}
         </div>
+        {todo.status !== "done" && (
+          <div className="mt-2">
+            <StatusSegmented value={draft.status} onChange={(status) => setDraft((d) => ({ ...d, status }))} />
+          </div>
+        )}
         <div className="mt-3 flex items-center gap-1.5">
           {confirmDelete ? (
             <button
@@ -2363,19 +2502,6 @@ function NoteModal({
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
-            </button>
-          )}
-          {todo.status !== "done" && (
-            <button
-              type="button"
-              onClick={() => {
-                onHold(todo);
-                onClose();
-              }}
-              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
-            >
-              {todo.status === "hold" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-              {todo.status === "hold" ? "Resume" : "Hold"}
             </button>
           )}
           <div className="ml-auto flex items-center gap-1.5">
@@ -2413,6 +2539,7 @@ function SelectionBar({
   onCreateGroup,
   onDone,
   onHold,
+  onDoing,
   onDelete,
   onClear,
 }: {
@@ -2422,6 +2549,7 @@ function SelectionBar({
   onCreateGroup: (name: string) => void;
   onDone: () => void;
   onHold: () => void;
+  onDoing: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
@@ -2524,6 +2652,14 @@ function SelectionBar({
       >
         <Check className="h-3.5 w-3.5" />
         Hit
+      </button>
+      <button
+        type="button"
+        onClick={onDoing}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-osu-green cursor-pointer"
+      >
+        <Play className="h-3.5 w-3.5" />
+        Doing
       </button>
       <button
         type="button"

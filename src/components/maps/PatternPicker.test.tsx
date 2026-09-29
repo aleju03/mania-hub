@@ -25,7 +25,7 @@ it("keeps the shield facets out of every keymode's LN dropdown", () => {
   render(<I18nProvider i18n={getI18n("en")}><PatternPicker keys={["4k"]} selected={[]} onToggle={vi.fn()} /></I18nProvider>);
   fireEvent.click(screen.getByRole("button", { name: "LN subfamilies" }));
   expect(screen.queryByRole("button", { name: "Shields" })).toBeNull();
-  for (const label of ["LN Hybrid", "LN Technical", "LN Walls", "LN Speed"]) {
+  for (const label of ["LN All-round", "LN Technical", "LN Walls", "LN Speed"]) {
     expect(screen.getByRole("button", { name: label })).toBeTruthy();
   }
   expect(validPatternIds(["4k"]).has("lninverse")).toBe(false);

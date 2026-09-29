@@ -11,7 +11,7 @@ and the rate-mod response (below), and the skillset classifier.
 
 ## Input and ownership
 
-`ln-analysis/timeline.ts` preserves paired heads/tails, taps, lanes and exact
+`ln-timeline.ts` preserves paired heads/tails, taps, lanes and exact
 times. Equal timestamps form rows. Near timestamps stay distinct. A same-lane
 tail/head at contact remains a release and a new press. Times divide by rate
 once; applying a rate and baking that rate into the note times give the same
@@ -35,6 +35,21 @@ The existing effective-hold and identity policy remains in
 tail, held-finger constraint, or LN recovery work. Eligible near-window
 release/repress chains retain their existing treatment. LN vibro cannot create
 chains merely from short written holds.
+
+A body past the release window is not enough on its own: an ordinary tap
+stays down for a while before it lets go. In 1,230 lazer 4K LN replays (2.46M
+taps) that time is log-normal, its median rising from 48ms when the same
+column comes back 55ms later to 80ms from 210ms on, with a log spread of 0.29.
+Each hold counts by the chance a tap is too short to release it inside the
+window, and a chart whose windows fall under 10% of notes on that count (the
+note-weighted median) reads rice unless its same-lane release/repress chains
+alone carry identity. The LN rating cannot lift it, and it publishes no LN
+number. The line sits between the owner's rice labels (up to 0.084, a
+1/4-held full-LN chart at 1.0x that plays as jumpstream) and LN labels (from
+0.112). At 1.0x it moves 391 of 9,858 LN charts to rice, 58 of 2,590 with an
+LN-named difficulty, and no inverse-named chart or course; at 1.5x it moves
+1,441 of 6,324, mostly full-LN streams whose bodies a tap covers at that
+rate, and six LN courses.
 
 Physical work reads the actual played OD. Identity retains its OD-5 minimum
 and its section-based long-tail/chain reading. Raw 4K hold share must reach 45%,
@@ -91,19 +106,36 @@ aggregation approach in the LN1 reference. The inherited response model is
 `exp(log(0.93) * (demand / skill)^4)`. A bounded binary search finds the skill
 that reaches the requested goal. Chart difficulty uses 0.93.
 
-The strain-to-rating conversion `3.40659 * strain^0.53908` is a log-log fit
-of strain to native Overall on the odd 4K LN courses (1st to 17th), the method
-behind the v9 constants. v13 first kept the v9 pair, which was fitted to v9's
-smaller strain, and read 4.7 above v9 and 4.2 above native Overall at the median
-of 2,674 cached LN charts. After the refit the even courses are off by 1.54 MSD
-on average and the corpus median sits 0.06 below native Overall. It does not
-make LN and native difficulty equal.
+The strain-to-rating conversion `6.6805 * strain^0.4316` is fitted on scores:
+a player at LN Dan N should read on LN what a player at regular Dan N reads
+on Overall from rice plays alone, both aggregated over up to 20 top plays.
+The fit matches the median of each Dan from 2 to 16 over 15.6k players; Dans
+4 to 15 then agree within 1.6, and players whose two Dans sit within
+a quarter level read within a point of their rice Overall at every skill level.
+The earlier conversion, a fit to native Overall on the odd LN courses, read
+those players 3.75 lower, because MinaCalc does not see releases. LN Dans 1
+to 3 still read 1 to 6 above: their LN plays rate 16 to 18 whatever the curve,
+and few players sit there.
 
-At 1.5x a third to a half of the holds become tap-covered and drop their LN
-work, so on strain alone the rating moved as rate^0.29 at 1.5x, against native
-Overall's rate^0.75 on the same charts. The rating therefore multiplies by
-`rate^0.436`, a least-squares fit over 157 cached LN charts' DT and HT native
-values, which lands at rate^0.72 at 1.5x and rate^0.91 at 0.75x.
+Each hold's release work is priced by the chance an ordinary tap is too short
+to release it in time (see Effective holds above): a tap-covered hold's head
+counts as a press only where a tap there would, and its tail, recovery and
+held-finger constraints scale by that chance. Holds in same-lane
+release/repress chains keep full weight, read as the chart is written (1.0x):
+a rate mod shrinks same-lane gaps under the window without writing inverse,
+and pricing those new chains in full made a chart's DT rating jump where the
+same players' 1.0x and DT plays show no such jump (per-chart consistency with
+native Overall 0.064 against 0.086, over the 21 charts with 8 or more such
+players).
+
+A rate mod multiplies the rating by `rate^0.649` when speeding up and
+`rate^0.110` when slowing down. Both are fitted on the same player's plays of
+the same chart at 1.0x and at the rate (1,262 DT and 893 HT pairs): the LN SSR
+moves between them as native Overall SSR does on those plays, 1.22x at DT and
+1.01x at HT at the median. Pairs cancel the pp-farm selection that lifts DT
+plays above a player's level on any model. The directions differ because
+tap-covered holds drop out of the strain faster going up than they return
+going down.
 
 LN is one strain and score-goal solution over all the work. `ln-ssr.ts`
 retains the 0.965 solver cap and extrapolates the cap/base slope above it. Native and LN use their existing separate calibrated
@@ -119,7 +151,7 @@ against the presses around them) are each read against ordinary 4K LN charts
 of the same row rate, since most rise with density on their own. The weights
 must keep physical signs:
 
-- **Hybrid:** LN chords count toward it.
+- **All-round** (wire id `lnhybrid`): LN chords count toward it.
 - **Technical:** fast LN jacks and tails between rows count only toward it.
 - **Walls:** presses made while other columns are held count toward it, and
   so do chords.
@@ -127,12 +159,18 @@ must keep physical signs:
   releases count against it.
 
 The reference is quantiles of 10.7k cached 4K charts with at least 30% holds.
-The weights are a logistic fit to the 64 course stages (1st to 16th), plus
-textbook patterns: flowing rolls, one-column and chord LN jacks, held walls,
-inverse, and LN chords. The fit places every stage and every textbook pattern.
-Tested one course at a time against a fit to the other 15, the top family
-matches the stage on 37 of 64, and no feature set tried did better than 40.
-The earlier per-action family split in `ln-workload.ts` matched 15 of 60 and
+The weights are a logistic fit to 1,639 labeled 4K LN charts: the 64 course
+stages (1st to 16th), charts whose pack title, difficulty name or mapper tags
+name one skillset (release and LN jack packs, wall and inverse packs, LN
+stream and speed tags), and textbook patterns (flowing rolls, one-column and
+chord LN jacks, held walls, inverse, LN chords). Classes are balanced, tags
+count at 0.3 and course stages at 5. Holding out a tenth of the packs at a
+time, it names the labeled skillset on 52% of Technical, Walls and Speed charts
+(balanced) against 39% for the earlier course-only fit, and on 41 of 64 course
+stages. Fitted on everything it places 48 of 64 stages and every textbook
+pattern; forcing all 64 cost 13 points on the other packs. Full-LN stream packs
+are left out, because every press lands under held columns and they measure as
+walls. The earlier per-action family split in `ln-workload.ts` matched 15 of 60 and
 was removed, along with its per-family ratings, which never moved the LN number
 (0 of 2,137 charts).
 
@@ -157,7 +195,7 @@ measurement withholds the badge until the bounded refresh reaches the chart.
 ## Persistence and rollout
 
 Current versions: LN skill **13**, player skills **51** (seeding 50 and earlier),
-rate cache **34**, effective-LN sweep **17**, subtype sweep **10**, player Dan
+rate cache **34**, effective-LN model **11** and sweep **22**, subtype sweep **10**, player Dan
 sweep **53**, and player pattern sweep **19**. Chart detail responses provide the fresh base MSD, identity and primary Dan
 so the modal can override an older cached map entry. The newer stamps invalidate the
 withdrawn v10 and intermediate v11/v12 local artifacts as well as older cached models. Retained score
@@ -165,8 +203,8 @@ evidence and native calculations remain reusable.
 
 Persist only scalars, the four-value family record, eligibility, version
 and calculation metadata. Full event rows, object ids, structural detections
-and interval previews stay out of production artifacts. Detailed structure
-remains an opt-in offline diagnostic. `compact:ln-artifacts` keeps removing
+and interval previews stay out of production artifacts; the structure
+analysis that produced them is retired. `compact:ln-artifacts` keeps removing
 legacy previews without discarding the scalar or family fields.
 
 ## Verification and manual inspection

@@ -29,7 +29,7 @@ it("headlines the LN value on a 4K LN chart when it is the hardest axis", () => 
 it("shows only one LN MSD even when cached values contain Dan family ratings", () => {
   const entry = { ...LN_ENTRY, msd: { ...LN_ENTRY.msd, LNHybrid: 11, LNTechnical: 18, LNWalls: 9, LNSpeed: 6 } };
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={entry} /></I18nProvider>);
-  for (const [label, value] of [["LN Hybrid", "11.00"], ["LN Technical", "18.00"], ["LN Walls", "9.00"], ["LN Speed", "6.00"]]) {
+  for (const [label, value] of [["LN All-round", "11.00"], ["LN Technical", "18.00"], ["LN Walls", "9.00"], ["LN Speed", "6.00"]]) {
     expect(screen.queryByText(label)).toBeNull();
     expect(screen.queryByText(value)).toBeNull();
   }

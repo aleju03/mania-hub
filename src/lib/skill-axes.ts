@@ -74,7 +74,7 @@ export const DAN_SKILLSET_META: Record<string, { label: string; labelMsg: Messag
   lntech: { label: "Tech", labelMsg: msg`Tech`, color: "#83cf6b" },
   lninverse: { label: "Inverse", labelMsg: msg`Inverse`, color: "#c59a5c" },
   lnrelease: { label: "Release", labelMsg: msg`Release`, color: "#46c7b8" },
-  lnhybrid: { label: "Hybrid", labelMsg: msg`Hybrid`, color: "#f07474" },
+  lnhybrid: { label: "All-round", labelMsg: msg`All-round`, color: "#f07474" },
   lntechnical: { label: "Technical", labelMsg: msg`Technical`, color: "#83cf6b" },
   lnwalls: { label: "Walls", labelMsg: msg`Walls`, color: "#c59a5c" },
   lnspeed: { label: "Speed", labelMsg: msg`Speed`, color: "#5ab2f2" },
