@@ -29,6 +29,7 @@ import {
   readSearchSortPreference,
   writeSearchSortPreference,
 } from "../components/maps/searchSortPreference";
+import { readSearchVibroPreference, writeSearchVibroPreference } from "../components/maps/searchVibroPreference";
 import {
   Chip,
   ChipGroup,
@@ -184,6 +185,7 @@ type MapsSearch = {
   sDanMax: number | null;
   sPatterns: string;
   sSkills: string;
+  sVibro: "only" | "hide" | "";
   sMsd: string;
   sCountryOnly: boolean;
   sSort: string;
@@ -285,6 +287,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sDanMax: null,
   sPatterns: "",
   sSkills: "",
+  sVibro: "",
   sMsd: "",
   sCountryOnly: false,
   sSort: DEFAULT_SEARCH_SORT.sort,
@@ -718,6 +721,7 @@ export const Route = createFileRoute("/maps")({
     sDanMax: clampDanLevel(search.sDanMax),
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sSkills: sanitizeSearchTriStateCsv(search.sSkills, SEARCH_SKILL_VALUES),
+    sVibro: search.sVibro === "only" || search.sVibro === "hide" ? search.sVibro : DEFAULT_MAPS_SEARCH.sVibro,
     sMsd: serializeMsdRanges(parseMsdRanges(search.sMsd)),
     sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
@@ -1116,6 +1120,7 @@ function MapsPage() {
       patternsExclude: [...patterns.excludes],
       skills: [...skills.includes],
       skillsExclude: [...skills.excludes],
+      vibro: mapsSearch.sVibro,
       msd: parseMsdRanges(mapsSearch.sMsd),
       starMin: mapsSearch.sStarMin,
       starMax: mapsSearch.sStarMax,
@@ -1150,6 +1155,12 @@ function MapsPage() {
     if (patch.skills !== undefined || patch.skillsExclude !== undefined) {
       const current = parseTriStateCsv(mapsSearchRef.current.sSkills, SEARCH_SKILL_VALUES);
       next.sSkills = serializeTriStateCsv(patch.skills ?? current.includes, patch.skillsExclude ?? current.excludes);
+    }
+    if (patch.vibro !== undefined) {
+      next.sVibro = patch.vibro;
+      // A standing preference, written synchronously like the sort below so
+      // the restore effect never reapplies a vibro setting just cleared.
+      writeSearchVibroPreference(patch.vibro);
     }
     if (patch.msd !== undefined) next.sMsd = serializeMsdRanges(patch.msd);
     if (patch.starMin !== undefined) next.sStarMin = patch.starMin;
@@ -1192,16 +1203,24 @@ function MapsPage() {
   useEffect(() => {
     if (!hasHydrated || tab !== "search") return;
     const current = mapsSearchRef.current;
+    const next: Partial<MapsSearch> = {};
     // Both at default means the URL specified no sort, so the stored preference
     // is safe to apply; a non-default in either half is an explicit URL intent.
-    if (current.sSort !== DEFAULT_MAPS_SEARCH.sSort || current.sDir !== DEFAULT_MAPS_SEARCH.sDir) return;
-    const pref = readSearchSortPreference();
-    const sSort = pref.sort ?? DEFAULT_MAPS_SEARCH.sSort;
-    const sDir = pref.dir ?? DEFAULT_MAPS_SEARCH.sDir;
-    if (sSort === current.sSort && sDir === current.sDir) return;
-    // A new ordering invalidates the current page, same as any sort change.
-    updateMapsSearch({ sSort, sDir, page: 0 });
-  }, [hasHydrated, tab, mapsSearch.sSort, mapsSearch.sDir, updateMapsSearch]);
+    if (current.sSort === DEFAULT_MAPS_SEARCH.sSort && current.sDir === DEFAULT_MAPS_SEARCH.sDir) {
+      const pref = readSearchSortPreference();
+      const sSort = pref.sort ?? DEFAULT_MAPS_SEARCH.sSort;
+      const sDir = pref.dir ?? DEFAULT_MAPS_SEARCH.sDir;
+      if (sSort !== current.sSort || sDir !== current.sDir) Object.assign(next, { sSort, sDir });
+    }
+    // The Vibro chip restores the same way: a URL without one takes the saved one.
+    if (current.sVibro === "") {
+      const sVibro = readSearchVibroPreference();
+      if (sVibro !== "") next.sVibro = sVibro;
+    }
+    if (Object.keys(next).length === 0) return;
+    // A new ordering or filter invalidates the current page.
+    updateMapsSearch({ ...next, page: 0 });
+  }, [hasHydrated, tab, mapsSearch.sSort, mapsSearch.sDir, mapsSearch.sVibro, updateMapsSearch]);
 
   const isLoading = liveBackendPaged ? liveMapsPagePending : loadingMaps;
 

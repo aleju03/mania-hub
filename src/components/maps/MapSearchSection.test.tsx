@@ -41,6 +41,7 @@ const DEFAULT_STATE: MapSearchUiState = {
   patternsExclude: [],
   skills: [],
   skillsExclude: [],
+  vibro: "",
   msd: {},
   starMin: 0,
   starMax: 0,

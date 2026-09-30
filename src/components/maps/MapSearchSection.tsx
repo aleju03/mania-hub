@@ -19,7 +19,8 @@ import { playPatternHit } from "./patternSfx";
 import { RangePill, type RangePillSkin } from "./RangePill";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { SearchCard, toPreviewTrack } from "./SearchCard";
-import { DEFAULT_SEARCH_SORT, savedSearchSortToRestore } from "./searchSortPreference";
+import { savedSearchSortToRestore } from "./searchSortPreference";
+import { savedSearchVibroToRestore } from "./searchVibroPreference";
 import { StarRangePill } from "./StarRangePill";
 import {
   ACCENT_CHIP_TEXT,
@@ -79,6 +80,8 @@ export interface MapSearchUiState {
   // Rice dan tiles (speed, stamina, tech, jack, stream).
   skills: string[];
   skillsExclude: string[];
+  // Vibro chip: "only" includes just vibro charts, "hide" excludes them.
+  vibro: "only" | "hide" | "";
   // Per-skillset MSD bounds, 0 for an open side (lib/map-search-msd.ts).
   msd: MsdRanges;
   starMin: number;
@@ -140,6 +143,7 @@ function stateKey(s: MapSearchUiState): string {
     [...s.patternsExclude].sort(),
     [...s.skills].sort(),
     [...s.skillsExclude].sort(),
+    s.vibro,
     serializeMsdRanges(s.msd),
     s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax,
     s.sort, s.dir, s.page,
@@ -186,8 +190,17 @@ function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   );
 }
 
+// Same amber as the Vibro tag on search cards.
+const VIBRO_COLOR = "#ffcf70";
+
+// Status pills, then the Vibro pill: include keeps only vibro charts, exclude
+// hides them.
 function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t, i18n } = useLingui();
+  const cycleVibro = (reverse: boolean) => {
+    const next = cycleFacet(ui.vibro === "only" ? ["vibro"] : [], ui.vibro === "hide" ? ["vibro"] : [], "vibro", reverse);
+    apply({ vibro: next.includes.length > 0 ? "only" : next.excludes.length > 0 ? "hide" : "", page: 0 });
+  };
   return (
     <ChipGroup label={t`Status`}>
       {STATUS_OPTIONS.map((option) => (
@@ -209,6 +222,16 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
           {i18n._(option.label)}
         </TriStatePill>
       ))}
+      <TriStatePill
+        color={VIBRO_COLOR}
+        pill
+        mode={ui.vibro === "only" ? "include" : ui.vibro === "hide" ? "exclude" : undefined}
+        hasAnyActive={false}
+        onClick={() => cycleVibro(false)}
+        onContextMenu={() => cycleVibro(true)}
+      >
+        {t`Vibro`}
+      </TriStatePill>
     </ChipGroup>
   );
 }
@@ -1164,13 +1187,13 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   // On a cold load the first client render must keep the SSR default sort; a
   // saved preference only lands afterwards (the post-hydration restore in
   // maps.tsx). If one is about to, a fetch now would be superseded the moment
-  // the restore lands, so the first fetch waits for the restored sort to reach
+  // the restore lands, so the first fetch waits for the restored sort (and Vibro chip) to reach
   // `ui`. Reading localStorage in the initializer is hydration-safe: the flag
   // only gates the fetch effect and never changes rendered output.
-  const [awaitingSavedSort, setAwaitingSavedSort] = useState(() => savedSearchSortToRestore(state));
+  const [awaitingSavedSort, setAwaitingSavedSort] = useState(() => savedSearchSortToRestore(state) || savedSearchVibroToRestore(state.vibro));
   useEffect(() => {
     if (!awaitingSavedSort) return;
-    if (ui.sort !== DEFAULT_SEARCH_SORT.sort || ui.dir !== DEFAULT_SEARCH_SORT.dir) {
+    if (!savedSearchSortToRestore(ui) && !savedSearchVibroToRestore(ui.vibro)) {
       setAwaitingSavedSort(false);
       return;
     }
@@ -1204,6 +1227,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       patternsExclude: ui.patternsExclude,
       skills: ui.skills,
       skillsExclude: ui.skillsExclude,
+      vibro: ui.vibro,
       msd: serializeMsdRanges(ui.msd),
       starMin: ui.starMin > 0 ? ui.starMin : null,
       starMax: ui.starMax > 0 ? ui.starMax : null,

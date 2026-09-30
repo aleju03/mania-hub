@@ -2726,6 +2726,9 @@ export interface LiveMapSearchParams {
   patternsExclude: string[];
   skills?: string[];
   skillsExclude?: string[];
+  // "only" keeps just vibro charts, "hide" drops them; skill picks drop them
+  // unless this is "only".
+  vibro?: "only" | "hide" | "";
   // `key:min-max` pairs (lib/map-search-msd.ts); empty for none.
   msd?: string;
   starMin: number | null;
@@ -2797,6 +2800,7 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.patternsExclude.length) query.set("patternsExclude", params.patternsExclude.join(","));
   if (params.skills?.length) query.set("skills", params.skills.join(","));
   if (params.skillsExclude?.length) query.set("skillsExclude", params.skillsExclude.join(","));
+  if (params.vibro) query.set("vibro", params.vibro);
   if (params.msd) query.set("msd", params.msd);
   if (params.starMin != null) query.set("starMin", String(params.starMin));
   if (params.starMax != null) query.set("starMax", String(params.starMax));
