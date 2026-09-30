@@ -209,6 +209,8 @@ export function SearchCard({
   const familyTags = (multi ? setPatterns(diffs) : familyPatternTags(entry)).filter((pattern) => !tiles.includes(pattern));
   const subTags = subPatternTags(diffs, familyTags);
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
+  // Unrateable only when no diff is vibro proper.
+  const unrateable = vibro && [entry, ...diffs].every((diff) => !diff.vibro || diff.unrateable === true);
   const clickable = !!onOpen;
 
   return (
@@ -297,9 +299,9 @@ export function SearchCard({
           {vibro && (
             <span
               className="px-2 py-1 rounded bg-[#ffb02e]/15 text-[#ffcf70] text-[10px] font-semibold leading-none"
-              title={t`Vibro chart: difficulty estimates are unreliable`}
+              title={unrateable ? t`Unrateable chart: plays on it do not count toward skill or dan ratings` : t`Vibro chart: difficulty estimates are unreliable`}
             >
-              {t`Vibro`}
+              {unrateable ? t`Unrateable` : t`Vibro`}
             </span>
           )}
         </div>

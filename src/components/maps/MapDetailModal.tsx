@@ -113,6 +113,7 @@ export interface MapDetailPlayContext {
     family?: "rc" | "ln" | null;
   };
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
+  unrateable?: boolean;
   beatmapId: number;
   username: string;
   accuracy: number | null;
@@ -303,7 +304,7 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
       {play.ratingExcluded ? (
         <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "pending_calibration" ? t`Skill rating recalculation pending`
           : play.ratingExclusionReason === "unverifiable_revision" ? t`Chart edited after this play`
-          : play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : t`Vibro detected`}</p>
+          : play.ratingExclusionReason === "msd_floor" ? t`Accuracy below skill rating range` : play.unrateable ? t`Unrateable chart` : t`Vibro detected`}</p>
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-2.5" aria-label={t`Skill breakdown`}>
           {skills.map(({ name, value }) => (
@@ -451,6 +452,13 @@ function danSuffix(label: string): string {
 // ClustersBlock below is where charts speak their own keymode's language.
 type DanBadgeVerdict = { label: string; family: string };
 
+// isJumptrillExclusion in #dan/vibro-sections, kept here so the modal does not
+// pull the detector into the client bundle.
+function isJumptrillExclusion(analysis: VibroAnalysis): boolean {
+  const reasons = Object.keys(analysis.reasonShares ?? {});
+  return analysis.status === "excluded" && reasons.length > 0 && reasons.every((reason) => reason === "jumptrill");
+}
+
 // A rice-and-LN hybrid is one chart with two faces, so it is one badge: the
 // side identity filed it on at full size, the other side riding top-right
 // after the tier suffix, small, the way an exponent does. Nothing overlaps
@@ -574,7 +582,8 @@ export function MsdBlock({
         <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{heading}</span>
         {(vibroAnalysis ? vibroAnalysis.status !== "clean" : entry.vibro) && (
           <span className="text-[9.5px] font-semibold text-[#ffcf70]">
-            {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected` : t`vibro chart, estimates unreliable`}
+            {vibroAnalysis?.status === "adjusted" ? t`localized vibro detected`
+              : (vibroAnalysis ? isJumptrillExclusion(vibroAnalysis) : entry.unrateable) ? t`unrateable chart` : t`vibro chart, estimates unreliable`}
           </span>
         )}
       </div>

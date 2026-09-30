@@ -726,6 +726,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             ratingExcluded: detail.play.ratingExcluded,
             ratingExclusionReason: detail.play.ratingExclusionReason,
             vibroAdjustment: detail.play.vibroAdjustment,
+            unrateable: detail.play.unrateable === true,
             ratingLabel: detail.ratingLabel,
             ratingColor: detail.ratingColor,
           }}
@@ -947,7 +948,9 @@ function UnratedPlayRow({
       ? t`Skill rating recalculation pending`
       : play.ratingExclusionReason === "unverifiable_revision"
         ? t`This chart was edited after this play was set, so the play cannot be matched to the chart's current notes and does not count.`
-        : t`Vibro detected. This play does not count toward skill or dan ratings.`;
+        : play.unrateable
+          ? t`Unrateable chart. This play does not count toward skill or dan ratings.`
+          : t`Vibro detected. This play does not count toward skill or dan ratings.`;
   return (
     <PlayRow
       play={play}
@@ -1282,7 +1285,9 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
   if (rejected.reason === "chart_repeat_limit") {
     return t`Only your two best rate plays on the same chart count toward Dan. This play is outside those two.`;
   }
-  const reason = rejected.reason === "rate_vibro"
+  const reason = (rejected.reason === "rate_vibro" || rejected.reason === "chart_vibro") && rejected.play.unrateable
+    ? t`Unrateable chart. This play does not count toward skill or dan ratings.`
+    : rejected.reason === "rate_vibro"
     ? t`Vibro detected. This play does not count toward skill or dan ratings.`
     : rejected.reason === "chart_vibro"
       ? t`Vibro detected in this chart. This play does not count toward skill or dan ratings.`
@@ -1564,7 +1569,7 @@ function UnratedPlaysList({
               },
             })}
             onPrefetch={() => prefetchLiveMapSearchEntry(item.play.beatmapId)}
-            badge={<UnratedReasonBadge reason={item.reason} rate={item.play.rate} />}
+            badge={<UnratedReasonBadge reason={item.reason} rate={item.play.rate} unrateable={item.play.unrateable === true} />}
             trailing={<UnratedValueCell item={item} keyCount={keyCount} unratedSort={unratedSort} />}
           />
         ))}
@@ -1588,9 +1593,11 @@ export function unratedRejection(item: LivePlayerUnratedPlay): LivePlayerDanReje
   };
 }
 
-function UnratedReasonBadge({ reason, rate }: { reason: LivePlayerUnratedPlay["reason"]; rate: number }) {
+function UnratedReasonBadge({ reason, rate, unrateable }: { reason: LivePlayerUnratedPlay["reason"]; rate: number; unrateable: boolean }) {
   const { t } = useLingui();
-  const label = reason === "rate_vibro"
+  const label = unrateable && reason !== "chart_ineligible"
+    ? t`unrateable`
+    : reason === "rate_vibro"
     ? t`vibro at ${rate.toFixed(2)}x`
     : reason === "chart_vibro"
       ? t`vibro`

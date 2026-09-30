@@ -18615,6 +18615,31 @@ msgstr "sin ranking"
 #~ msgid "Unranked plays wait until the site knows you are playing, which it learns from your first score on a ranked, qualified or loved chart. From there it checks your recent plays every couple of minutes until you stop, and everything in that window counts, unranked charts included. Start a session on a graveyard map and none of it is kept until that first leaderboard score lands."
 #~ msgstr "Las plays en charts sin rankear esperan hasta que el sitio sabe que estás jugando, cosa que aprende con tu primer score en un chart rankeado, calificado o loved. Desde ahí revisa tus plays recientes cada par de minutos hasta que pares, y todo lo de esa ventana cuenta, charts sin rankear incluidos. Si la sesión empieza en un mapa graveyard, nada se guarda hasta que cae ese primer score con tabla."
 
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "unrateable"
+msgstr "no calificable"
+
+#: src/components/maps/SearchCard.tsx
+msgid "Unrateable"
+msgstr "No calificable"
+
+#: src/components/maps/MapDetailModal.tsx
+#: src/routes/farm-helper/map/$beatmapId.tsx
+msgid "unrateable chart"
+msgstr "mapa no calificable"
+
+#: src/components/maps/MapDetailModal.tsx
+msgid "Unrateable chart"
+msgstr "Mapa no calificable"
+
+#: src/components/maps/SearchCard.tsx
+msgid "Unrateable chart: plays on it do not count toward skill or dan ratings"
+msgstr "Mapa no calificable: sus plays no cuentan para el rating de skillsets ni de dan"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Unrateable chart. This play does not count toward skill or dan ratings."
+msgstr "Mapa no calificable. Este play no cuenta para el rating de skillsets ni de dan."
+
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
