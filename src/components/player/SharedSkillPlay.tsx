@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useLocation } from "@tanstack/react-router";
-import { fetchLivePlayerDanEvidenceDirect, fetchLivePlayerSkillPlaysDirect, loadLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
+import { fetchLivePlayerDanEvidenceDirect, fetchLivePlayerSkillPlaysDirect, fetchLivePlayerUnratedPlaysDirect, loadLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
 import { parseSharedSkillPlaySearch, skillPlaySharePath } from "../../lib/skill-play-share";
 import { skillAxisMeta, OVERALL_AXIS_META } from "../../lib/skill-axes";
 import { MapDetailModal, type MapDetailPlayContext } from "../maps/MapDetailModal";
-import { DanRejectionExplanation } from "./SkillPlaysExplorer";
+import { DanRejectionExplanation, unratedRejection } from "./SkillPlaysExplorer";
 import { rateModFor, stubEntry } from "./SkillPlaysModal";
 
 /** Resolve a link against this player's retained evidence, never URL-supplied ratings. */
@@ -30,8 +30,13 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
       const evidence = side ? await fetchLivePlayerDanEvidenceDirect(userId, keys, side, { scoreId, includeRejected: true, signal: controller.signal }) : null;
       const clear = evidence?.clears.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map);
       const rejected = evidence?.rejected?.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map);
-      const play = side ? clear?.play ?? rejected?.play : await fetchLivePlayerSkillPlaysDirect(userId, keys, rating, { scoreId, includeRejected: true, signal: controller.signal })
+      const pooled = side ? clear?.play ?? rejected?.play : await fetchLivePlayerSkillPlaysDirect(userId, keys, rating, { scoreId, includeRejected: true, signal: controller.signal })
         .then((page) => [...page.items, ...(page.rejected ?? [])].find((item) => item.scoreId === scoreId && item.beatmapId === map));
+      // Plays the pool turned away (vibro, charts that cannot be rated) live
+      // only on the Unrated plays list, which shares them as Overall.
+      const unrated = pooled || side ? undefined : await fetchLivePlayerUnratedPlaysDirect(userId, keys, { sort: "recent", signal: controller.signal })
+        .then((page) => page.items.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map));
+      const play = pooled ?? unrated?.play;
       if (!play) {
         if (!controller.signal.aborted) setState("missing");
         return;
@@ -58,6 +63,10 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
             chartRating: rejected.chartDan, chartLabel: rejected.chartDanLabel,
             accuracy: rejected.clearAccuracy, currency: rejected.currency, family: rejected.side ?? side,
             rejection: <DanRejectionExplanation rejected={rejected} />,
+          } : unrated ? {
+            chartRating: unrated.dan?.rawDan ?? null, chartLabel: unrated.dan?.label ?? null,
+            accuracy: unrated.play.accuracy, family: unrated.dan?.side ?? null,
+            rejection: <DanRejectionExplanation rejected={unratedRejection(unrated)} />,
           } : undefined,
         },
       });

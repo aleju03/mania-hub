@@ -1568,7 +1568,7 @@ function UnratedPlaysList({
 
 /** The dan list's own shape for a turned-away play, so the map card can
  *  print the same sentence it does there. */
-function unratedRejection(item: LivePlayerUnratedPlay): LivePlayerDanRejectedPlay {
+export function unratedRejection(item: LivePlayerUnratedPlay): LivePlayerDanRejectedPlay {
   return {
     play: item.play,
     reason: item.reason,
