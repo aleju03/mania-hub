@@ -8,6 +8,7 @@ import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { MapPreviewButton, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
 import { starRatingColor, starSpectrumGradient, StarRatingBadge } from "../ui/StarRating";
+import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 
 // Shared presentation for a single chart-analyzed map across the global Search
 // results and inside Collection detail. Country-agnostic: no player avatars,
@@ -138,6 +139,41 @@ export function SubPatternChip({ pattern }: { pattern: string }) {
   );
 }
 
+// The rice dan tiles a card files under, merged across the set's diffs into
+// one list: the tile most diffs lead with first, then the rest by how many
+// diffs carry them ("tech speed" reads Tech/Speed).
+function skillTiles(diffs: LiveMapSearchEntry[]): string[] {
+  const leads = new Map<string, number>();
+  const counts = new Map<string, number>();
+  for (const diff of diffs) {
+    const tiles = (diff.danTiles ?? []).filter((tile) => DAN_SKILLSET_META[tile]);
+    if (tiles.length === 0) continue;
+    leads.set(tiles[0], (leads.get(tiles[0]) ?? 0) + 1);
+    for (const tile of tiles) counts.set(tile, (counts.get(tile) ?? 0) + 1);
+  }
+  return [...counts.keys()].sort((a, b) =>
+    (leads.get(b) ?? 0) - (leads.get(a) ?? 0) || (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+}
+
+// The skill a chart counts toward, each tile in its own color, on a fill of
+// the primary tile's color.
+function SkillTileChip({ tiles }: { tiles: string[] }) {
+  const { i18n } = useLingui();
+  return (
+    <span
+      className="px-2 py-1 rounded text-[10px] font-semibold leading-none"
+      style={{ background: `${DAN_SKILLSET_META[tiles[0]].color}26` }}
+    >
+      {tiles.map((tile, index) => (
+        <span key={tile}>
+          {index > 0 && <span className="text-osu-f1">/</span>}
+          <span style={{ color: DAN_SKILLSET_META[tile].color }}>{i18n._(DAN_SKILLSET_META[tile].labelMsg)}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function keyModeLabel(diffs: LiveMapSearchEntry[]): string {
   const modes = [...new Set(diffs.map((diff) => diff.keyCount))].sort((a, b) => a - b);
   if (modes.length > 2) return `${modes[0]}K–${modes[modes.length - 1]}K`;
@@ -150,10 +186,13 @@ export function SearchCard({
   entry,
   onOpen,
   preview,
+  showSkill = false,
 }: {
   entry: LiveMapSearchEntry;
   onOpen?: (entry: LiveMapSearchEntry) => void;
   preview?: MapPreviewAudio;
+  /** Lead the tag row with the skill tiles the chart counts toward. */
+  showSkill?: boolean;
 }) {
   const { t, i18n } = useLingui();
   const pill = beatmapStatusPill(entry.status);
@@ -165,7 +204,9 @@ export function SearchCard({
   const multi = diffs.length > 1;
   const starLo = Math.min(...diffs.map((diff) => diff.stars));
   const starHi = Math.max(...diffs.map((diff) => diff.stars));
-  const familyTags = multi ? setPatterns(diffs) : familyPatternTags(entry);
+  const tiles = showSkill ? skillTiles(diffs) : [];
+  // A family chip that names a skill already in the skill chip would repeat it.
+  const familyTags = (multi ? setPatterns(diffs) : familyPatternTags(entry)).filter((pattern) => !tiles.includes(pattern));
   const subTags = subPatternTags(diffs, familyTags);
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
   const clickable = !!onOpen;
@@ -246,8 +287,9 @@ export function SearchCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
+          {tiles.length > 0 && <SkillTileChip tiles={tiles} />}
           {familyTags.map((pattern, index) => (
-            <FamilyPatternChip key={pattern} pattern={pattern} primary={index === 0} />
+            <FamilyPatternChip key={pattern} pattern={pattern} primary={index === 0 && tiles.length === 0} />
           ))}
           {subTags.map((pattern) => (
             <SubPatternChip key={pattern} pattern={pattern} />

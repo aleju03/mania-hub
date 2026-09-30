@@ -2674,6 +2674,9 @@ export interface LiveMapSearchEntry {
   // lngeneral, ...), strongest first; empty (or absent on cached payloads)
   // until the analysis lands.
   patternTags?: string[];
+  // Rice dan tiles the chart files under (speed/stamina/tech/jack/stream), the
+  // primary first; empty for LN charts, absent on cached payloads.
+  danTiles?: string[];
   covers: Record<string, string> | null;
   // From the unified chart analysis; null until the chart's analysis job lands.
   dan?: { label: string; family: string; rawDan: number } | null;
