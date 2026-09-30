@@ -21,7 +21,7 @@ import {
 import { browserTimeZone } from "../../lib/time-zone";
 import { useViewerTimeZone } from "../../lib/use-viewer-time-zone";
 import type { SignatureImageProbe } from "../../routes/api/signature/-backgrounds";
-import { useNoDans } from "../../store";
+import { useExperimentalLn, useNoDans } from "../../store";
 import {
   signatureBBCode,
   signatureDesigns,
@@ -261,6 +261,7 @@ async function syncTimeZone(current: SignatureSettings): Promise<SignatureSettin
 export function DynamicRendersPanel() {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const experimentalLn = useExperimentalLn();
   const { viewer } = useAuth();
   const viewerTimeZone = useViewerTimeZone();
   const location = useLocation();
@@ -739,6 +740,14 @@ export function DynamicRendersPanel() {
                   onChange={(keys) => patchStyle({ lnKeyCount: keys })}
                 />
               </>
+            ) : null}
+            {/* Images have no reader to ask, so the render carries its own
+                choice, offered to owners who turned the model on. */}
+            {experimentalLn && (type === "skills" || type === "dan") ? (
+              <span className="flex items-center gap-2 text-[11.5px] font-semibold text-osu-l2">
+                {t`Experimental LN model`}
+                <Switch checked={style.ln4k} onChange={(ln4k) => patchStyle({ ln4k })} label={t`Experimental LN model`} />
+              </span>
             ) : null}
             <span className="text-[11.5px] tabular-nums text-osu-l3">{spec.width} x {spec.height}</span>
           </div>

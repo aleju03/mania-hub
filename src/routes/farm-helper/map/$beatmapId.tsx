@@ -15,7 +15,7 @@ import { FarmersList } from "../../../components/farm-helper/FarmersList";
 import { fetchLiveMapSearchEntry, type LiveFarmHelperKeyMode, type LiveFarmHelperReason, type LiveFarmHelperSpeedBucket, type LiveMapSearchEntry } from "../../../lib/live-backend";
 import { danBareLabel, getDanImageSrc } from "../../../lib/dan-images";
 import { pageSeo } from "../../../lib/seo";
-import { useNoDans } from "../../../store";
+import { useExperimentalLn, useNoDans } from "../../../store";
 import { msdHeadline } from "#dan/msd-headline";
 
 type FarmMapContext = {
@@ -137,6 +137,7 @@ export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
 function FarmMapDetailPage() {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const showLn = useExperimentalLn();
   const { beatmapId: beatmapIdRaw } = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -215,8 +216,8 @@ function FarmMapDetailPage() {
   }, [selectedBeatmap]);
 
   const metrics = useMemo(
-    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, i18n, farmRate),
-    [analysisState, farmRate, i18n, selectedBeatmap],
+    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, i18n, farmRate, showLn),
+    [analysisState, farmRate, i18n, selectedBeatmap, showLn],
   );
   const radarReady = analysisState.status === "ready" && metrics.radar.some((axis) => axis.value > 0);
   const osuUrl = selectedBeatmap?.url ?? (beatmapset ? `https://osu.ppy.sh/beatmapsets/${beatmapset.id}#mania/${selectedBeatmapId ?? beatmapId}` : `https://osu.ppy.sh/beatmaps/${beatmapId}`);
@@ -538,7 +539,7 @@ const RADAR_AXES: Array<{ id: string; label: MessageDescriptor }> = [
 
 const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
 
-function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, i18n: I18n, rate = 1) {
+function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, i18n: I18n, rate = 1, showLn = false) {
   const normalizedRate = Math.max(0.1, rate);
   const lengthSec = Math.max(1, (selected?.totalLength ?? 0) / normalizedRate);
   const objects = (selected?.countCircles ?? 0) + (selected?.countSliders ?? 0);
@@ -553,9 +554,9 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
   const dan = (preferDt && entry?.danDt ? entry.danDt : entry?.dan) ?? null;
   // Same LN identity guard as the /maps modal: the DT pair answers for itself,
   // the 1.0x pair follows the stored chart verdict.
-  const lnIdentity = preferDt && entry?.msdDt
+  const lnIdentity = (entry?.keyCount !== 4 || showLn) && (preferDt && entry?.msdDt
     ? dan == null || dan.family === "ln"
-    : entry?.primaryPattern === "ln" || entry?.dan?.family === "ln";
+    : entry?.primaryPattern === "ln" || entry?.dan?.family === "ln");
   const msdOverall = msd ? msdHeadline(msd, entry?.keyCount ?? 0, lnIdentity) : NaN;
   // Same readout as the /maps modal: the sub-1 values the 6K/7K calc engine
   // emits for skillsets it does not rate are noise, not data. LN joins the

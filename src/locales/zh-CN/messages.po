@@ -6629,6 +6629,11 @@ msgstr "退出全屏"
 #~ msgid "Experimental"
 #~ msgstr "实验性"
 
+#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/settings/SettingsPanel.tsx
+msgid "Experimental LN model"
+msgstr "实验性 LN 模型"
+
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Experimental local evidence"
 #~ msgstr ""
@@ -15261,6 +15266,10 @@ msgstr "显示"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "有新更新时在更新日志链接上显示一个圆点"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
+msgstr "在技能页显示 4K LN MSD、LN 轴和 4K LN 段位"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"

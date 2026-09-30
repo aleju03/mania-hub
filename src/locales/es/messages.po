@@ -6620,6 +6620,11 @@ msgstr "Salir de pantalla completa"
 #~ msgid "Experimental"
 #~ msgstr "Experimental"
 
+#: src/components/me/DynamicRendersPanel.tsx
+#: src/components/settings/SettingsPanel.tsx
+msgid "Experimental LN model"
+msgstr "Modelo LN experimental"
+
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Experimental local evidence"
 #~ msgstr ""
@@ -15252,6 +15257,10 @@ msgstr "Muestra"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Muestra un punto en el enlace de novedades cuando hay algo nuevo"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
+msgstr "Muestra el MSD LN de 4K, el eje LN y el dan LN de 4K en Skills"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows the MSD and dan of each play in Recent Plays"

@@ -1380,7 +1380,7 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
   if (unavailable) return renderPlate(ctx, unavailable);
   const mode = pickMode(ctx, skills!);
   if (!mode) return renderPlate(ctx, "None of these plays could be rated yet.");
-  const entries = skillModeEntries(mode);
+  const entries = skillModeEntries(mode, { ln4k: ctx.style.ln4k });
   if (entries.length < 3) return renderPlate(ctx, "Not enough rated plays for a radar yet.");
 
   /* Auto keeps the top skillset's own colour, which is what the profile panel
@@ -1391,7 +1391,7 @@ async function renderSkills(ctx: SignatureRenderContext): Promise<Buffer> {
   const background = await styleLayers(ctx, spec, await fetchBackgroundSources(ctx));
   const dim = background.custom ? TEXT_DIM_ON_ART : TEXT_DIM;
   // No toggle on an image, so it shows the default (Etterna) Overall.
-  const overall = modeOverall(mode, "etterna").value;
+  const overall = modeOverall(mode, "etterna", { ln4k: ctx.style.ln4k }).value;
   const keyChip = h("div", {
     key: "keys",
     style: {
@@ -1569,7 +1569,7 @@ async function renderDan(ctx: SignatureRenderContext): Promise<Buffer> {
   const lnMode = pickMode(ctx, skills!, ctx.style.lnKeyCount ?? ctx.style.keyCount);
   const sides = [
     { id: "rc", label: "Regular", side: riceMode?.dan?.rc, keyCount: riceMode?.keyCount },
-    { id: "ln", label: "LN", side: lnMode?.dan?.ln, keyCount: lnMode?.keyCount },
+    { id: "ln", label: "LN", side: lnMode?.keyCount === 4 && !ctx.style.ln4k ? null : lnMode?.dan?.ln, keyCount: lnMode?.keyCount },
   ].filter((entry) => entry.side != null && !entry.side.skillsetsOnly && entry.keyCount != null) as Array<{
     id: string; label: string; keyCount: number; side: { rawDan: number; label: string; clears: number };
   }>;

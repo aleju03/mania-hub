@@ -186,6 +186,9 @@ export interface SignatureStyle {
      ordinary thing to want to show. One keymode for the card forced a choice
      between two true things. null means "same as keyCount". */
   lnKeyCount: number | null;
+  /** Whether a skills or dan render shows the 4K LN model (LN axis, LN in
+      Etterna Overall, 4K LN dan). Off by default, like the site setting. */
+  ln4k: boolean;
 }
 
 export const SIGNATURE_OPACITY_RANGE = { min: 10, max: 100 } as const;
@@ -214,6 +217,7 @@ export const DEFAULT_SIGNATURE_STYLE: SignatureStyle = {
   keyCount: null,
   lnKeyCount: null,
   watermark: true,
+  ln4k: false,
 };
 
 /* https only, and no embedded credentials. The transport in
@@ -263,6 +267,7 @@ export function normalizeSignatureStyle(raw: unknown, type?: SignatureType): Sig
     lnKeyCount: normalizeSignatureKeyCount(input.lnKeyCount),
     // Absent means a style stored before the toggle existed, which is on.
     watermark: input.watermark !== false,
+    ln4k: input.ln4k === true,
   };
 }
 
@@ -310,6 +315,7 @@ export function serializeSignatureStyleMap(map: SignatureStyleMap): string {
       keyCount: style.keyCount,
       lnKeyCount: style.lnKeyCount,
       watermark: style.watermark,
+      ln4k: style.ln4k,
     };
   }
   return JSON.stringify(ordered);

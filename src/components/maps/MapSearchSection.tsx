@@ -32,7 +32,7 @@ import {
 } from "./FilterChips";
 import type { TriStateMode } from "../../lib/maps-random-filter";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
-import { useNoDans } from "../../store";
+import { useExperimentalLn, useNoDans } from "../../store";
 import { activeMsdKeys, MSD_FILTER_KEYS, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, serializeMsdRanges, type MsdRanges } from "../../lib/map-search-msd";
 import { MSD_SKILLSET_META, OVERALL_AXIS_META, PATTERN_RATING_META } from "../../lib/skill-axes";
 
@@ -719,11 +719,15 @@ function msdSkin(color: string, typeHint: string): RangePillSkin {
 function MsdPanel({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t, i18n } = useLingui();
   const active = activeMsdKeys(ui.msd);
+  // The LN range reads the 4K LN model, so it is offered with the model on
+  // (or while a range from a shared link is still set, so it can be cleared).
+  const showLn = useExperimentalLn();
+  const keys = MSD_FILTER_KEYS.filter((key) => key !== "ln" || showLn || active.includes("ln"));
   const [focus, setFocus] = useState<string>(() => {
     if (active.length > 0) return active[0];
     const skill = ui.skills.find((id) => SKILL_MSD_FOCUS[id]);
     if (skill) return SKILL_MSD_FOCUS[skill];
-    return ui.patterns.includes("ln") ? "ln" : "overall";
+    return ui.patterns.includes("ln") && showLn ? "ln" : "overall";
   });
   const metaFor = (key: string) => MSD_FILTER_META[MSD_FILTER_SKILLSET[key]];
   const labelFor = (key: string) => {
@@ -741,7 +745,7 @@ function MsdPanel({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   return (
     <div className="flex w-full flex-col gap-3 sm:w-[400px]">
       <div className="flex flex-wrap gap-1.5">
-        {MSD_FILTER_KEYS.map((key) => {
+        {keys.map((key) => {
           const color = metaFor(key)?.color ?? "#c9cfdd";
           const set = ui.msd[key] && (ui.msd[key].min > 0 || ui.msd[key].max > 0);
           const focused = key === focus;

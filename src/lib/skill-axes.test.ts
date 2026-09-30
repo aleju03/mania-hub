@@ -91,4 +91,16 @@ describe("Etterna Overall", () => {
     expect(modeOverall(mode, "classic")).toMatchObject({ value: 40, etterna: false, percentile: { value: 95 } });
     expect(modeOverall({ ...mode, ratings: rice }, "etterna")).toMatchObject({ value: 40, etterna: false });
   });
+
+  it("leaves LN out of the 4K Etterna Overall and the axes with the 4K LN model off", () => {
+    const mode = {
+      keyCount: 4, analyzedPlays: 100, patterns: [{ id: "ln", rating: 40, plays: 30 }],
+      ratings: { ...rice, EtternaOverall: 37.5 }, percentiles: { EtternaOverall: { value: 90, population: 10 } },
+    };
+    expect(modeOverall(mode, "etterna")).toMatchObject({ value: 37.5, percentile: { value: 90 } });
+    // LN was counted, so the percentile no longer describes the number.
+    expect(modeOverall(mode, "etterna", { ln4k: false })).toEqual({ value: 36.5, percentile: undefined, etterna: true });
+    expect(skillModeEntries(mode, { ln4k: false }).some((entry) => entry.key === "ln")).toBe(false);
+    expect(skillModeEntries({ ...mode, keyCount: 7 }, { ln4k: false }).some((entry) => entry.key === "ln")).toBe(true);
+  });
 });
