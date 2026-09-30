@@ -2198,8 +2198,8 @@ msgid "4K"
 msgstr "4K"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "4K jack"
-#~ msgstr "4K jack"
+msgid "4K jack"
+msgstr "4K jack"
 
 #: src/routes/dan-estimates.tsx
 msgid "4K LN"
@@ -11600,8 +11600,8 @@ msgid "On /skins, anyone can download the .osk."
 msgstr "On /skins, anyone can download the .osk."
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal there."
-#~ msgstr "On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal there."
+msgid "On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal there."
+msgstr "On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal there."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
@@ -13450,12 +13450,12 @@ msgid "Reach pp"
 msgstr "Reach pp"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
-#~ msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
+msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
+msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 
 #: src/routes/dan-estimates.tsx
-msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular charts it grows by the same amount with each point, and on LN charts it stays small until 99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
-msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular charts it grows by the same amount with each point, and on LN charts it stays small until 99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
+#~ msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular charts it grows by the same amount with each point, and on LN charts it stays small until 99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
+#~ msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular charts it grows by the same amount with each point, and on LN charts it stays small until 99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx
@@ -17131,24 +17131,24 @@ msgid "the chart's level {0}"
 msgstr "the chart's level {0}"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.03"
-#~ msgstr "the chart's level +0.03"
+msgid "the chart's level +0.03"
+msgstr "the chart's level +0.03"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.06"
-#~ msgstr "the chart's level +0.06"
+msgid "the chart's level +0.06"
+msgstr "the chart's level +0.06"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "the chart's level +0.07"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.1"
-#~ msgstr "the chart's level +0.1"
+msgid "the chart's level +0.1"
+msgstr "the chart's level +0.1"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.12"
-#~ msgstr "the chart's level +0.12"
+msgid "the chart's level +0.12"
+msgstr "the chart's level +0.12"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.13"
@@ -17171,12 +17171,12 @@ msgstr "the chart's level +0.16"
 #~ msgstr "the chart's level +0.18"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.19"
-msgstr "the chart's level +0.19"
+#~ msgid "the chart's level +0.19"
+#~ msgstr "the chart's level +0.19"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.2"
-#~ msgstr "the chart's level +0.2"
+msgid "the chart's level +0.2"
+msgstr "the chart's level +0.2"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.25"
@@ -17191,12 +17191,12 @@ msgid "the chart's level +0.3"
 msgstr "the chart's level +0.3"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.35"
-#~ msgstr "the chart's level +0.35"
+msgid "the chart's level +0.35"
+msgstr "the chart's level +0.35"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.38"
-msgstr "the chart's level +0.38"
+#~ msgid "the chart's level +0.38"
+#~ msgstr "the chart's level +0.38"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.49"
@@ -17211,12 +17211,12 @@ msgstr "the chart's level +0.5"
 #~ msgstr "the chart's level +0.53"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.55"
-#~ msgstr "the chart's level +0.55"
+msgid "the chart's level +0.55"
+msgstr "the chart's level +0.55"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.56"
-msgstr "the chart's level +0.56"
+#~ msgid "the chart's level +0.56"
+#~ msgstr "the chart's level +0.56"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
@@ -17231,8 +17231,8 @@ msgid "the chart's level +0.86"
 msgstr "the chart's level +0.86"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +1.1"
-#~ msgstr "the chart's level +1.1"
+msgid "the chart's level +1.1"
+msgstr "the chart's level +1.1"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.18"

@@ -574,7 +574,7 @@ export function SkillModePanel({
   return (
     <div className="flex h-full flex-col rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
       <div className="relative flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 pr-10 sm:pr-0">
+        <div className="pr-10 sm:pr-0">
           <div className="mb-1 flex items-center gap-2">
             <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>{mode.keyCount}K skill rating</Trans></span>
@@ -584,7 +584,7 @@ export function SkillModePanel({
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <div className="flex items-baseline gap-2">
             <RollingOverall value={overall} className="text-[30px] font-bold leading-none text-white tabular-nums" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3"><Trans>overall</Trans></span>
             {hasEtternaOverall(mode) ? <OverallMethodToggle keyCount={mode.keyCount} /> : null}
