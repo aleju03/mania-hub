@@ -17011,8 +17011,8 @@ msgstr "el nivel del chart +0.07"
 #~ msgstr "el nivel del chart +0.12"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.13"
-msgstr "el nivel del chart +0.13"
+#~ msgid "the chart's level +0.13"
+#~ msgstr "el nivel del chart +0.13"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.14"
@@ -17031,12 +17031,16 @@ msgstr "el nivel del chart +0.16"
 #~ msgstr "el nivel del chart +0.18"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.19"
+msgstr "el nivel del chart +0.19"
+
+#: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.2"
 #~ msgstr "el nivel del chart +0.2"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.25"
-msgstr "el nivel del chart +0.25"
+#~ msgid "the chart's level +0.25"
+#~ msgstr "el nivel del chart +0.25"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.28"
@@ -17071,12 +17075,16 @@ msgstr "el nivel del chart +0.5"
 #~ msgstr "el nivel del chart +0.55"
 
 #: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.56"
+msgstr "el nivel del chart +0.56"
+
+#: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
 msgstr "el nivel del chart +0.7"
 
 #: src/routes/dan-estimates.tsx
-#~ msgid "the chart's level +0.75"
-#~ msgstr "el nivel del chart +0.75"
+msgid "the chart's level +0.75"
+msgstr "el nivel del chart +0.75"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.86"

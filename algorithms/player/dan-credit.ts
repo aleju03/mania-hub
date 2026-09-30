@@ -34,14 +34,14 @@ export function danCreditBelowBarWindowFor(side: "rc" | "ln", keyCount: number):
 }
 
 /**
- * Rice bonus: an eighth of a level per accuracy point over the bar, on every
- * skillset tile, so +0.5 at 100% on the 96% bar. Across rice clears, a
- * player's level from their other clears rises in a straight line with the
- * accuracy a chart was cleared at, about 0.12-0.13 levels per point.
+ * Rice bonus: 0.1875 of a level per accuracy point over the bar, on every
+ * skillset tile, so +0.75 at 100% on the 96% bar. Players who cleared the same
+ * chart at different accuracies sit about 0.16 levels apart per point on their
+ * other clears, in a straight line.
  */
 export const DAN_CREDIT_RICE_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
   [0, 0],
-  [0.04, 0.5],
+  [0.04, 0.75],
 ];
 
 /**

@@ -29,7 +29,7 @@ export interface SkillHistoryNote {
 export const SKILL_HISTORY_NOTES: readonly SkillHistoryNote[] = [
   {
     date: "2026-09-30",
-    text: "Updated the dan credit curve for regular charts. The bonus for accuracy above 96% now grows evenly with each point, up to +0.5 at 100%, so 99% and 100% clears give less than before.",
+    text: "Updated the dan credit curve for regular charts. The bonus for accuracy above 96% now grows evenly with each point, up to +0.75 at 100%, so 99% and 100% clears give less than before.",
     keyCounts: [4, 6, 7],
   },
   {
