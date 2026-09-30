@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { animate, motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 import { useLingui } from "@lingui/react/macro";
 import { setOverallMethod, useOverallMethod, type OverallMethod } from "../../lib/overall-method";
+import { useExperimentalLn } from "../../store";
 
 // Etterna's mark, from its MIT-licensed repo (public/licenses/etterna.txt):
 // the E with its corner cut, and the triangle that fills the cut. The
@@ -68,6 +69,8 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
   const method = useOverallMethod();
   const reduceMotion = useReducedMotion();
   const classic = method === "classic";
+  // 4K leaves LN out of the average while the 4K LN model is off.
+  const lnCounted = useExperimentalLn() || keyCount !== 4;
 
   // One spring from 0 (Etterna face) to 1 (Classic face) drives the flip, the
   // pop and the word, so spamming it retargets instead of queueing. Hover
@@ -102,7 +105,9 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
   const best = keyCount === 4 || keyCount === 5 ? 6 : 5;
   const title = classic
     ? t`The previous Overall, which follows the hardest plays in any skillset.`
-    : t`The average of the best ${best} skillsets as Etterna rates players, with LN added as one more skillset.`;
+    : lnCounted
+      ? t`The average of the best ${best} skillsets as Etterna rates players, with LN added as one more skillset.`
+      : t`The average of the best ${best} skillsets as Etterna rates players.`;
 
   return (
     <button

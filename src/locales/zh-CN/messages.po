@@ -16764,6 +16764,10 @@ msgid "The average of the best {best} skillsets as Etterna rates players, with L
 msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平均值，并把 LN 作为额外的一个技能组加入。"
 
 #: src/components/player/OverallMethodToggle.tsx
+msgid "The average of the best {best} skillsets as Etterna rates players."
+msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平均值。"
+
+#: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."
 #~ msgstr "最好的 {best} 个技能组的平均值，LN 也算作一个技能组。这是 Etterna 评定玩家的方式。"
 

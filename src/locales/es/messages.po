@@ -16755,6 +16755,10 @@ msgid "The average of the best {best} skillsets as Etterna rates players, with L
 msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los jugadores, con LN agregado como un skillset más."
 
 #: src/components/player/OverallMethodToggle.tsx
+msgid "The average of the best {best} skillsets as Etterna rates players."
+msgstr "El promedio de los {best} mejores skillsets como Etterna califica a los jugadores."
+
+#: src/components/player/OverallMethodToggle.tsx
 #~ msgid "The average of the best {best} skillsets, with LN counted as a skillset. This is how Etterna rates players."
 #~ msgstr "El promedio de los {best} mejores skillsets, con LN contado como un skillset. Así es como Etterna califica a los jugadores."
 

@@ -10,7 +10,7 @@ import { DanLevelBadge } from "../player/DanLevelBadge";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { loadDanBoard, peekDanBoard } from "../../lib/skill-leaderboard-cache";
 import { formatNumber } from "../../lib/format";
-import { useHiddenUserIds } from "../../store";
+import { useExperimentalLn, useHiddenUserIds } from "../../store";
 import {
   DEFAULT_DAN_SKILLSET,
   DAN_LEADERBOARD_KEY_COUNTS,
@@ -27,7 +27,7 @@ import {
 export function DanLeaderboardBoard({
   country,
   keys,
-  side,
+  side: requestedSide,
   skillset,
   page,
   onNavigate,
@@ -41,6 +41,10 @@ export function DanLeaderboardBoard({
 }) {
   const { t, i18n } = useLingui();
   const hiddenUserIds = useHiddenUserIds();
+  // The 4K LN ladder shows only with the 4K LN model on; a link to it reads
+  // the regular ladder instead.
+  const lnShown = useExperimentalLn() || keys !== 4;
+  const side: DanSide = lnShown ? requestedSide : "rc";
   // No skillset in the URL is the every-clear board, the estimate a profile
   // chip shows. Overall is the first chip on every keymode, so clicking back to
   // it is how a skill selection is cleared.
@@ -129,7 +133,7 @@ export function DanLeaderboardBoard({
   const totalPages = Math.max(1, Math.ceil((snapshot?.total ?? 0) / LEADERBOARD_PAGE_SIZE));
   const sideOptions: Array<{ value: DanSide; label: string }> = [
     { value: "rc", label: t`Regular` },
-    { value: "ln", label: t`LN` },
+    ...(lnShown ? [{ value: "ln" as const, label: t`LN` }] : []),
   ];
 
   return (
