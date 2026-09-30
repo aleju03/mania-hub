@@ -102,7 +102,7 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
   const best = keyCount === 4 || keyCount === 5 ? 6 : 5;
   const title = classic
     ? t`The previous Overall, which follows the hardest plays in any skillset.`
-    : t`The average of the best ${best} skillsets, with LN counted as a skillset. This is how Etterna rates players.`;
+    : t`The average of the best ${best} skillsets as Etterna rates players, with LN added as one more skillset.`;
 
   return (
     <button

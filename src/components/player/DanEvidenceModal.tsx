@@ -232,8 +232,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // The window opens on the breakdown, never on a wall of plays: every row is
   // one dan number, and the clears behind it unfold on the click. The headline
   // estimate leads as the first row and is the average of the skill rows next
-  // to it, so "all clears" and "your jack clears" are the same gesture instead
-  // of two different-looking surfaces.
+  // to it (on 4K LN, of the best clears across them), so "all clears" and
+  // "your jack clears" are the same gesture instead of two different-looking
+  // surfaces.
   const sections = evidence
     ? [
       {
@@ -536,12 +537,28 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     })}
                   </div>
                   {/* Shown only while some column is short of the window, so a
-                      filled-out breakdown carries no caveat at all. */}
+                      filled-out breakdown carries no caveat at all. 4K LN
+                      always says where its dan comes from: unlike the other
+                      ladders it is not the average of the skillsets. */}
                   {sections.some((section) => !section.skillsetClear && section.weightedClears < averageWindow) ? (
                     <div className="px-2 pt-2 text-[11px] text-osu-f1">
+                      {keyCount === 4 && side === "ln" ? (
+                        <Trans>
+                          Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own.
+                          Only your two best rate plays per chart count. With less evidence, it averages what you have and the
+                          estimate is still filling in.
+                        </Trans>
+                      ) : (
+                        <Trans>
+                          Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count.
+                          With less evidence, it averages what you have and the estimate is still filling in.
+                        </Trans>
+                      )}
+                    </div>
+                  ) : keyCount === 4 && side === "ln" && sections.length > 1 ? (
+                    <div className="px-2 pt-2 text-[11px] text-osu-f1">
                       <Trans>
-                        Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count.
-                        With less evidence, it averages what you have and the estimate is still filling in.
+                        Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own.
                       </Trans>
                     </div>
                   ) : null}

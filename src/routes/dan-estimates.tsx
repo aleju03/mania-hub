@@ -11,6 +11,7 @@ import { danLabelFor } from "#dan/chart-classifier";
 import { formatDate, formatNumber } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
 import { ModBadge } from "../components/ui/ModBadge";
+import { DAN_SKILLSET_META } from "../lib/skill-axes";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 import { useHasHydrated, useNoDans } from "../store";
@@ -141,7 +142,7 @@ const RICE_4K_POPULATION: Array<{ level: string; players: number }> = [
 
 // Set by hand whenever this page's own text changes: the deploy checkout is
 // shallow, so git cannot supply the date at build time.
-const LAST_EDITED = "2026-09-16";
+const LAST_EDITED = "2026-09-29";
 
 function DanEstimatesPage() {
   const { t } = useLingui();
@@ -192,12 +193,12 @@ function DanEstimatesPage() {
     "6k-ln": t`6K LN`,
   };
 
-  const accuracyBars: Array<{ ladder: string; bar: string; source: string }> = [
-    { ladder: ladderName["4k-regular"], bar: "96%", source: t`DDMythical's Reform dan courses, stable accuracy` },
-    { ladder: ladderName["4k-ln"], bar: "97%", source: t`_Underjoy LN dan courses, ScoreV2 accuracy` },
-    { ladder: ladderName["7k-regular"], bar: t`96%, or 95% in the Normal Kyu band below 1st dan`, source: t`JinJin dan courses` },
-    { ladder: ladderName["7k-ln"], bar: "95%", source: t`JinJin LN dan courses` },
-    { ladder: t`6K regular and LN`, bar: t`the same 96% and 95%`, source: t`JinJin's numbers, reused for 6K` },
+  const accuracyBars: Array<{ ladder: string; bar: string }> = [
+    { ladder: ladderName["4k-regular"], bar: "96%" },
+    { ladder: ladderName["4k-ln"], bar: t`97%, on ScoreV2 accuracy` },
+    { ladder: ladderName["7k-regular"], bar: t`96%, or 95% below 1st dan` },
+    { ladder: ladderName["7k-ln"], bar: "95%" },
+    { ladder: t`6K regular and LN`, bar: t`96% and 95%` },
   ];
 
   return (
@@ -212,112 +213,43 @@ function DanEstimatesPage() {
           </p>
           <p className="text-[15px] leading-7 text-osu-f1">
             <Trans>
-              Every chart gets a dan level of its own, and your level is read from the
-              charts you have already passed. That is why every estimated dan is written with a "~" in
-              front of it and why the leaderboard is a rough ordering.
+              Every chart gets a dan level, and your dan is worked out from the charts you have passed.
+              That is why every estimate is written with a "~" in front of it.
             </Trans>
           </p>
         </header>
 
-        {/* The first thing on the page, because it is the answer to the question
-            that brings most people here: why the estimate is lower than they
-            expect. Automatic history still has limits, but a missing score with
-            an osu! score page can now be added from the player's Skills tab. */}
-        <div className="space-y-2 border-l-2 border-osu-pink-light pl-4 text-[15px] font-bold leading-7 text-white">
-          <p>
-            <Trans>
-              Automatic tracking only began on June 9, 2026. Older scores are included when they are
-              still in your osu! top plays, and any missing passed mania score with an osu! score link
-              can be added from your profile's Skills tab.
-            </Trans>
-          </p>
-          <p>
-            <Trans>
-              The same goes for any session where you never set a score on a ranked, qualified or loved
-              chart: tracking never notices you are playing, so nothing from that session is recorded
-              either.{' '}
-              <a
-                href="#limitations"
-                className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
-              >
-                Why that is
-              </a>
-              . If your estimate reads low, add the important missing scores from the Skills tab or keep
-              playing to let new scores fill it in.
-            </Trans>
-          </p>
-        </div>
+        {/* First on the page because it answers the question that brings most
+            people here: why the estimate is lower than they expect. */}
+        <p className="border-l-2 border-osu-pink-light pl-4 text-[15px] font-bold leading-7 text-white">
+          <Trans>
+            Automatic tracking began on June 9, 2026. Older scores count if they are still in your osu!
+            top plays, and any missing pass with an osu! score link can be added from the Skills tab on
+            your profile. Sessions with no score on a ranked, qualified or loved chart are not recorded
+            at all.{' '}
+            <a
+              href="#limitations"
+              className="text-osu-pink-light underline underline-offset-2 transition-colors hover:text-white"
+            >
+              Why that is
+            </a>
+          </Trans>
+        </p>
 
-        <Section title={t`A quick reminder of what a dan is`}>
-          <P>
-            <Trans>
-              A dan course is a fixed set of charts, played back to back in one sitting, with an
-              accuracy bar you have to finish above. Clearing the course awards you that level. Each
-              keymode has its own community ladder, run by different people: 4K regular uses
-              DDMythical's Reform courses, 4K LN uses the _Underjoy courses, 7K uses the JinJin courses,
-              and 6K has two of its own, Arkman's ladder on the regular side and sunnyxxy's on the LN
-              side.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Most dan courses are unranked, except JinJin's, loved up to Phase III.
-            </Trans>
-          </P>
-        </Section>
+        <Pipeline />
 
-        <Section title={t`Step 1: every chart gets its own dan level`}>
+        <Section id="chart-levels" title={t`1. Every chart gets a dan level`}>
           <P>
             <Trans>
-              The estimator downloads the chart file, reads the notes, and runs the pattern through a
-              rating engine. Which engine depends on the keymode, because no single one is best at all
-              of them:
-            </Trans>
-          </P>
-          <ul className="space-y-2 pl-5 text-[15px] leading-7 text-osu-f1">
-            <Li>
-              <Trans>
-                <B>4K regular</B> goes through the Mixed estimator from{' '}
-                <ExternalLink href="https://github.com/LeoBlackMT/osumania_map_analyser">Leo_Black's map analyser</ExternalLink>,
-                which blends four difficulty models:{' '}
-                <ExternalLink href="https://github.com/LeoBlackMT/osumania_map_analyser/blob/HEAD/docs/roxy_algorithm.md">Roxy</ExternalLink>,{' '}
-                <ExternalLink href="https://github.com/LeoBlackMT/osumania_map_analyser/blob/HEAD/docs/azusa_algorithm.md">Azusa</ExternalLink>,{' '}
-                <ExternalLink href="https://thebagelofman.github.io/Daniel/">Daniel</ExternalLink> and{' '}
-                <ExternalLink href="https://github.com/sunnyxxy/Star-Rating-Rebirth">Sunny</ExternalLink>.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>4K LN</B> goes through that same analyser's LN table, with a small supplementary model
-                filling in the easy charts that sit below where the table starts.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>6K and 7K</B> get a Sunny star rating, mapped through the published 6K and 7K dan
-                tables.
-              </Trans>
-            </Li>
-            <Li>
-              <Trans>
-                <B>Every other keymode</B> gets no dan at all. There is no ladder to map it onto.
-              </Trans>
-            </Li>
-          </ul>
-          <P>
-            <Trans>
-              The engine gives back a continuous number, and the number is what everything else uses.
-              The label you see is just that number printed in the ladder's own language. 4K regular
-              runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1
-              to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze,
-              Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. Both 6K ladders run
-              0 to 9th and then Terra, Celestial, Mystery, Nihility and Finish.
+              The site reads each chart's notes and rates them with an engine picked for its keymode.
+              The number that comes back is printed in the levels of that keymode's dan ladder.
+              Keymodes without a ladder get no dan.
             </Trans>
           </P>
           <div className="space-y-3 py-1">
             {LADDERS.map((ladder) => (
               <div key={ladder.key} className="space-y-1.5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-osu-f1">{ladderName[ladder.key]}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-osu-f1">{ladderName[ladder.key]}</p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                   {ladder.levels.map((level) => {
                     const src = getDanImageSrc(level, ladder.family, ladder.keyCount);
@@ -340,9 +272,8 @@ function DanEstimatesPage() {
           </div>
           <P>
             <Trans>
-              One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or
-              7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a
-              level, nothing more.
+              Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 7++, from the
+              easy end of 7th dan to the hard end.
             </Trans>
           </P>
           <Table
@@ -362,324 +293,238 @@ function DanEstimatesPage() {
               row.dan,
             ])}
           />
-          <P>
-            <Trans>
-              At the time of writing there were around 138,000 charts with a dan estimate: about 97,000
-              4K regular, 22,000 7K regular, 8,500 4K LN, 7,500 7K LN and 3,000 6K regular.
-            </Trans>
-          </P>
+          <Details summary={t`Rating engines and LN charts`}>
+            <ul className="space-y-2 pl-5">
+              <Li>
+                <Trans>
+                  <B>4K regular</B> uses the Mixed estimator from{' '}
+                  <ExternalLink href="https://github.com/LeoBlackMT/osumania_map_analyser">Leo_Black's map analyser</ExternalLink>,
+                  which blends{' '}
+                  <ExternalLink href="https://github.com/LeoBlackMT/osumania_map_analyser/blob/HEAD/docs/roxy_algorithm.md">Roxy</ExternalLink>,{' '}
+                  <ExternalLink href="https://github.com/LeoBlackMT/osumania_map_analyser/blob/HEAD/docs/azusa_algorithm.md">Azusa</ExternalLink>,{' '}
+                  <ExternalLink href="https://thebagelofman.github.io/Daniel/">Daniel</ExternalLink> and{' '}
+                  <ExternalLink href="https://github.com/sunnyxxy/Star-Rating-Rebirth">Sunny</ExternalLink>.
+                </Trans>
+              </Li>
+              <Li>
+                <Trans>
+                  <B>4K LN</B> uses the same analyser's LN table, with a small model for the easy charts
+                  below where the table starts.
+                </Trans>
+              </Li>
+              <Li>
+                <Trans>
+                  <B>6K and 7K</B> use a Sunny star rating, mapped through the published 6K and 7K dan
+                  tables.
+                </Trans>
+              </Li>
+            </ul>
+            <p>
+              <Trans>
+                A 4K chart is LN when holds make up at least 45% of its notes and those holds still
+                need real releases at the rate you played. Holds short enough to play like taps make it
+                a regular chart. On 7K the line is 37.5%.
+              </Trans>
+            </p>
+          </Details>
         </Section>
 
-        <Section title={t`Step 2: what makes a chart LN`}>
+        <Section id="credit" title={t`2. Your passes earn credit by accuracy`}>
           <P>
             <Trans>
-              In 4K, hold notes must first make up at least 45% of the chart. The site then checks
-              whether those holds still demand releases at the played rate; short tails that can be
-              played like ordinary taps can make the chart regular, but this check can never promote
-              a chart below the 45% hold line to LN. On 7K the hold line is 37.5% instead, because its
-              mapping culture ships hybrid charts the community reads as LN. The maps pages and your
-              skill rating use the same verdict.
-            </Trans>
-          </P>
-        </Section>
-
-        <Section title={t`Step 3: which of your plays count`}>
-          <P>
-            <Trans>
-              The pool is your osu! top plays, everything recorded while you were tracked, and any score
-              links added manually, keeping only your best play on each chart at each speed.
-              Automatic history below your top plays only exists if you are on your country's roster,
-              which is its top 100 plus anyone who turned tracking on themselves, and it starts the day
-              tracking does. Charts flagged as vibro are thrown out everywhere, because the rating
-              engines read a mash wall as enormous density and rate it absurdly.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Out of that pool, a play earns credit by where its accuracy sits against the bar the real
-              course asks for. Each ladder sets its own bar:
+              Each ladder has a pass bar, taken from its real dan courses:
             </Trans>
           </P>
           <Table
-            head={[t`Ladder`, t`Pass bar`, t`Where it comes from`]}
-            rows={accuracyBars.map((row) => [row.ladder, row.bar, row.source])}
+            head={[t`Ladder`, t`Pass bar`]}
+            rows={accuracyBars.map((row) => [row.ladder, row.bar])}
           />
           <P>
             <Trans>
-              The site recalculates accuracy from the score's judgements instead of using the number
-              shown in-game. This matters because stable and lazer calculate accuracy differently.
-              Regular 4K uses stable accuracy, while 4K LN uses ScoreV2 accuracy. Recalculating it
-              lets scores from either client count the same way.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Hitting the accuracy bar gives full credit for the chart's level. The next 1% above the
-              bar still gives full credit. After that, bonus credit starts. It stays small until 99%,
-              then rises faster. On 4K jack charts the bonus is halved, since very high accuracy is
-              normal there. Scores below the bar can still count at a lower level. On regular
-              charts, the penalty rises smoothly from zero at 96% to about half a level at 95%.
-              A near miss can keep the same dan label while contributing less to the estimate;
-              it still falls short of a full clear. Regular charts count down to 5 percentage points
-              below the bar, for 1.5 levels less credit. 6K/7K LN charts count down to 92%, for 1.75
-              levels less. 4K LN counts down to 91%, with the same penalty as regular charts at
-              each point below the bar and 1.75 levels less at 91%, and its bonus stops rising
-              at 99.7%:
+              Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays
+              small until 99%, and a score under the bar still counts for less, down to about five
+              points below it. Accuracy is recalculated from your judgements, so stable and lazer
+              scores count the same way.
             </Trans>
           </P>
           <CreditCurveTabs />
           <P>
             <Trans>
-              Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x,
-              at <ModPill mod="DT" /> or <ModPill mod="NC" /> (1.5x), at <ModPill mod="HT" /> or{' '}
-              <ModPill mod="DC" /> (0.75x), or at any custom lazer rate from 0.5x to 2.0x is credited
-              against the chart's dan at that exact rate, with each speed rated separately. Runengon
-              [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <ModPill mod="DT" />, so a{' '}
-              <ModPill mod="DT" /> pass on it is credited as 9th, not as 4th. ANiMA
-              [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works
-              in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its
-              normal level. A speed nobody has rated that chart at yet is worked out the first time
-              your estimate needs it, so a play at an unusual rate can take a little while to start
-              counting.
+              Rates count at the speed you played. Runengon [4K Hard] is 4th dan at 1.0x and about 9th
+              under <ModPill mod="DT" />, so a <ModPill mod="DT" /> pass on it counts as 9th, and a
+              0.75x pass counts for what the chart is worth at 0.75x. OD works the same way:{' '}
+              <ModPill mod="HR" /> and <ModPill mod="DA" /> rate the chart at the OD you played.
             </Trans>
           </P>
           <P>
             <Trans>
-              The OD counts the same way. A chart is rated at the OD you actually played it at:{' '}
-              <ModPill mod="DA" /> sets it outright and <ModPill mod="HR" /> raises it, and the chart is
-              then worth what it is at that OD. On 4K it can also decide which ladder the pass lands on,
-              because holds you can release inside a wide low-OD window stop counting as LN work.
+              A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN
+              and 5 on 7K LN. <ModPill mod="EZ" /> never counts.
             </Trans>
           </P>
-          <P>
-            <Trans>
-              Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN.
-              A <ModPill mod="DA" /> play that drops the OD under its ladder's minimum earns no dan
-              credit, and <ModPill mod="EZ" /> earns none anywhere, because it widens every hit window.
-            </Trans>
-          </P>
-        </Section>
-
-        <Section title={t`Step 4: your passes are sorted into four skills`}>
-          <P>
-            <Trans>
-              Every qualifying pass lands in one of four skills, and those four are what the estimate is
-              built out of. On 4K they are jack, tech, speed and stamina, taken from the play's own MSD
-              skillset ratings and normally filed under whichever skillset is strongest on that chart: jack
-              (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina
-              (Handstream and Stamina).
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Some charts are two of those things at once, and those count in both. A chart lands in two
-              skills when the reading is genuinely split between speed and tech, or when it is a jack chart
-              long enough that the endurance is half of what it asks for, which puts it in jack and stamina.
-              A pass on a chart like that counts toward both skills' levels, but only toward the four-pass
-              minimum of the stronger one, so it can raise a skill you already have and cannot start one
-              on its own.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Speed and tech are told apart by how the chart is played rather than by the ratings, and
-              when the reading is not sure the chart counts as both.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              6K and 7K cannot use those skillsets, because that engine does not rate Technical at all
-              and everything collapses onto Handstream. They use pattern tags from the chart analysis
-              instead, so a chart tagged both chordjack and tech backs both skills. On the LN side only
-              7K gets a split, into general, tech, inverse and release, because those are the only LN
-              subtypes the analyzer separates in any volume. The other LN ladders are read as one skill.
-            </Trans>
-          </P>
-        </Section>
-
-        <Section title={t`Step 5: each skill's dan is an average of your best passes`}>
-          <P>
-            <Trans>
-              Take your credited passes in one skill, sort them by the level each one credited, and
-              average the best 20 eligible clears. That is your dan in that skill. Nothing is added on top of the
-              evidence, and no single pass can set it on its own.
-            </Trans>
-          </P>
-          <div className="space-y-2 border-l-2 border-osu-b3 pl-4 text-[15px] leading-7 text-osu-f1">
+          <Details summary={t`Which plays are looked at`}>
             <p>
-              <Trans>Say the levels your 4K jack passes credit come out as:</Trans>
-            </p>
-            <p className="font-bold tabular-nums text-white">
-              <span className="text-osu-pink-light">gamma, beta+, beta, alpha++, alpha, 10+, 10, 9++ ...</span>
+              <Trans>
+                Your osu! top plays, everything recorded while you were tracked, and any score links you
+                added, keeping your best play on each chart at each rate. Charts flagged as vibro are
+                left out. A rate nobody has rated a chart at yet is worked out the first time your
+                estimate needs it, so a play at an unusual rate can take a little while to count.
+              </Trans>
             </p>
             <p>
               <Trans>
-                With different charts, your jack dan is the average of your 20 best of these. The gamma pass does not make
-                you gamma on its own: averaged against everything below it, it can pull your dan up a
-                fraction of a level, but it cannot set it.
+                On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal
+                there.
               </Trans>
             </p>
-          </div>
-          <P>
-            <Trans>
-              Only your two best rate plays on the same chart count toward each Dan ladder,
-              chosen by their accuracy-adjusted Dan credit before skillset grouping. Both count
-              fully. Verified rate reuploads share this limit, and further rate plays cannot
-              fill the average or satisfy a clear requirement. A better play can replace either one.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              With fewer than 20 eligible clears the average is over the evidence you have;
-              you do not need 20 different charts. A skill you have fewer than four qualifying passes in gets no
-              dan of its own, and a side you have fewer than four on gets no estimate at all rather
-              than a shaky one.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Up to three passes in a skill are left out of its average when they credit more than five
-              levels below the average of your best five in it. They still show in the dan window,
-              marked <B>not counted</B>.
-            </Trans>
-          </P>
+          </Details>
         </Section>
 
-        <Section title={t`Step 6: your dan is the average of your skills`}>
+        <Section id="skills" title={t`3. Passes are sorted into skills`}>
           <P>
             <Trans>
-              Your estimate for a side is the plain arithmetic average of the skill dans you have. Skills
-              at 10, 9, 7 and 6 make an estimate of 8. If it lands at the very top of a ladder, the badge
-              switches from "~" to "&gt;" and reads as <B>beyond</B> that level instead of pinning you to
-              it, because the ladder has run out of levels to measure you with.
+              Each pass goes into the skill its chart asks for most. A chart that is clearly two things
+              at once, such as a long jack chart, counts in both.
             </Trans>
           </P>
-          <P>
-            <Trans>
-              7K LN is the one exception. Its General skill already mixes every kind of long note, so
-              the estimate stays within one level of your General dan, whichever way Tech, Inverse and
-              Release point. Those dans stop well under General for almost everyone, whether because
-              few hard maps of those kinds exist or because the site does not recognise all of them, so
-              they no longer get to decide the number on their own. Your Tech, Inverse and Release dans
-              still show their own numbers; only the overall estimate is held near General.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              Skills you do not have four passes in are left out of the average rather than counted as
-              zero, because a missing skill is nearly always a short play history rather than a hole in
-              your playing. Players with fewer than two rated skills are read off the same average over
-              their 20 best passes overall.
-            </Trans>
-          </P>
+          <SkillGrid />
+          <Details summary={t`How a chart's skill is picked`}>
+            <p>
+              <Trans>
+                4K regular reads the play's MSD skillsets: jack from JackSpeed and Chordjack, tech from
+                Technical and Jumpstream, speed from Stream, and stamina from Handstream and Stamina.
+                Speed and tech are told apart by how the chart is played, and a chart that could be
+                either counts as both.
+              </Trans>
+            </p>
+            <p>
+              <Trans>
+                6K and 7K use the pattern tags from the chart analysis instead, because MinaCalc does
+                not rate Technical on those keymodes. 4K LN follows the four skillsets the 4K LN dan
+                course stages are named for.
+              </Trans>
+            </p>
+            <p>
+              <Trans>
+                A pass that counts in two skills only counts toward the four-pass minimum of the
+                stronger one, so it can raise a skill you already have but cannot start one.
+              </Trans>
+            </p>
+          </Details>
         </Section>
 
-        <Section title={t`Extra: clearing a real course overrides all of it`}>
+        <Section id="your-dan" title={t`4. Your dan is the average of your skills`}>
           <P>
             <Trans>
-              If your recorded plays show that you passed a dan course, your estimate for that side{' '}
-              <B>cannot read below that course</B>, whatever your skills average to. Clear EXTRA-EPSILON
-              and you read as epsilon even if your skills average out to delta. The rest of this page
-              works a number out from your plays. A course hands you one directly, so it wins.
+              Each skill's dan is the average of your best 20 passes in it, by the level each one
+              credited. A skill needs at least four passes. Your dan is the average of your skill dans,
+              so skills at 10, 9, 7 and 6 give 8.
             </Trans>
           </P>
           <P>
             <Trans>
-              It only ever raises the number. If your skills already average higher, the average stands.
-              The skill rows underneath are untouched either way, which is why they can read lower than
-              the number above them.
+              Skills with fewer than four passes are left out rather than counted as zero. At the top
+              of a ladder the "~" becomes "&gt;", meaning beyond that level.
             </Trans>
           </P>
-          <P>
-            <Trans>
-              Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the
-              delta course reads as <B>delta</B>, 97.5% as <B>delta+</B>, and 98% and up as{' '}
-              <B>delta++</B>. Come up short and you still get something for it: 95% reads as{' '}
-              <B>delta-</B> and 94% as <B>delta--</B>. Below 94% you get nothing. Ladders that ask for a
-              different accuracy shift the whole scale with them.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              These are the packs checked, matched by beatmap. A pass has to be on one of these exact
-              difficulties. Clearing the same courses from a different upload is still a clear, but that
-              upload is not currently checked. More packs can be added.
-            </Trans>
-          </P>
-          <CourseList />
-          <P>
-            <Trans>
-              A few difficulties inside those packs are left out, because they sit below the first level
-              their ladder measures: REFORM's three INTRO courses, and the 0th to 2nd of Jinjin's LN
-              Phase I.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              A run only counts if it was really the course. Easy, No Fail and Random disqualify it, and
-              so does anything that slows the chart down: Half Time, Daycore, or a custom rate under
-              1.0x. Mirror, Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double
-              Time are all fine, because none of them make the course easier. A pass recorded before mod
-              data was stored cannot be checked, so it counts for nothing rather than being taken on
-              trust.{' '}
-              <strong className="text-[17px] font-bold text-white">
-                Clicking your dan badge shows the course that set your estimate, when one did.
-              </strong>
-            </Trans>
-          </P>
+          <Details summary={t`Other rules`}>
+            <ul className="space-y-2 pl-5">
+              <Li>
+                <Trans>
+                  Only your two best rate plays on the same chart count per ladder, rate reuploads
+                  included.
+                </Trans>
+              </Li>
+              <Li>
+                <Trans>
+                  Up to three passes in a skill are left out when they credit more than five levels
+                  below the average of your best five in it. The dan window marks them <B>not counted</B>.
+                </Trans>
+              </Li>
+              <Li>
+                <Trans>
+                  7K LN stays within one level of your General dan, because few hard Tech, Inverse and
+                  Release charts exist. Those three still show their own numbers.
+                </Trans>
+              </Li>
+              <Li>
+                <Trans>
+                  With fewer than two rated skills, your dan is the average of your 20 best passes
+                  overall.
+                </Trans>
+              </Li>
+            </ul>
+          </Details>
         </Section>
 
-        <Section title={t`Extra: practice charts set one skill directly`}>
+        <Section id="courses" title={t`5. Dan courses and practice charts`}>
           <P>
             <Trans>
-              Some skillset practice packs are checked the same way the courses are. Clearing one of
-              their charts at its ladder's bar sets that skill's dan outright, without the four passes a
-              skill normally needs. For example, clearing{' '}
+              If your plays show a dan course pass, your dan for that side <B>cannot read below that
+              course</B>. It only ever raises the number, so the skill rows under it can read lower.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Your accuracy sets the tier. On a ladder whose courses ask for 96%, a 96% pass on the
+              delta course reads <B>delta</B>, 97.5% reads <B>delta+</B> and 98% and up reads{' '}
+              <B>delta++</B>. 95% reads <B>delta-</B>, 94% reads <B>delta--</B>, and below that it
+              gives nothing.
+            </Trans>
+          </P>
+          <P>
+            <Trans>
+              Skillset practice charts do the same for one skill. Clearing{' '}
               <Link
                 to="/maps"
                 search={{ map: 4969890 } as never}
                 className="text-osu-pink-light transition-colors hover:text-white"
               >Volcanic ~ Delta ~</Link>{' '}
-              sets your 4K speed dan to <B>delta</B>.
+              at the bar sets your 4K speed dan to <B>delta</B>, without the four passes a skill
+              normally needs. Every ladder has them except 6K.
             </Trans>
           </P>
-          <P>
-            <Trans>
-              Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K
-              regular, and general, tech, inverse and release on 7K LN. 4K LN and 6K have none for now.
-            </Trans>
-          </P>
-          <P>
-            <Trans>
-              A pass only counts if it was really that chart, played straight. <ModPill mod="NF" />,{' '}
-              <ModPill mod="EZ" /> and anything that changes the OD (<ModPill mod="HR" />,{' '}
-              <ModPill mod="DA" />) disqualify it, and so does slowing the chart down; Mirror, the
-              visibility mods and <ModPill mod="DT" />/<ModPill mod="NC" /> are fine. The charts are
-              matched by their notes and OD rather than by beatmap id, so any upload of the same file
-              counts, while edits and rate versions do not.
-            </Trans>
-          </P>
+          <p className="text-[17px] font-bold leading-7 text-white">
+            <Trans>Clicking your dan badge shows the course that set your estimate, when one did.</Trans>
+          </p>
+          <Details summary={t`Course packs and allowed mods`}>
+            <CourseList />
+            <p>
+              <Trans>
+                A pass has to be on one of these exact difficulties. REFORM's three INTRO courses and
+                the 0th to 2nd of Jinjin's LN Phase I are left out, because they sit below the first
+                level their ladder measures.
+              </Trans>
+            </p>
+            <p>
+              <Trans>
+                Easy, No Fail, Random and anything that slows the chart down void a course run. Mirror,
+                Hidden, Fade In, Flashlight, Hard Rock, Sudden Death, Perfect and Double Time are fine. A
+                pass recorded before mod data was stored does not count.
+              </Trans>
+            </p>
+            <p>
+              <Trans>
+                Practice charts are matched by their notes and OD, so any upload of the same file
+                counts. <ModPill mod="NF" />, <ModPill mod="EZ" />, <ModPill mod="HR" />,{' '}
+                <ModPill mod="DA" /> and slowing the chart down void them.
+              </Trans>
+            </p>
+          </Details>
         </Section>
 
         <Section id="limitations" title={t`Limitations`}>
           <P>
             <Trans>
-              The estimate only sees scores it has. Your osu! top plays are always included, and history
-              below them is recorded automatically while you are tracked. Missing older scores are not
-              permanently lost: open the Skills tab on your profile, choose <B>Add a missing score</B>,
-              and paste the osu! score link. A player who quit years ago may start with a low estimate
-              from their top 200 alone, but qualifying old clears can be added instead of replayed.
+              The estimate only sees scores the site has. Missing older scores can be added with{' '}
+              <B>Add a missing score</B> on the Skills tab of your profile.
             </Trans>
           </P>
           <P>
             <Trans>
-              The site notices you are playing through osu!'s feed of new
-              scores, and that feed only lists scores on charts with a leaderboard, so a play on a
-              graveyarded chart never shows up in it. Your recent plays are a separate lookup that does
-              include graveyarded charts, but it has to be asked per player, so the site only starts
-              asking once a leaderboard score shows you are playing, and keeps asking every few minutes
-              until you stop, meaning 30 minutes pass without a new play. Everything it finds during
-              that time counts, including unranked charts.{' '}
+              The site notices you are playing from osu!'s feed of new scores, which only lists charts
+              with a leaderboard. Once it sees one, it checks your recent plays every few minutes,
+              unranked charts included, until 30 minutes pass without a new play.{' '}
               <strong className="text-[17px] font-bold text-white">
                 If you only play unranked charts, nothing is recorded automatically.
               </strong>
@@ -687,12 +532,10 @@ function DanEstimatesPage() {
           </P>
         </Section>
 
-        <Section title={t`What it looks like across everyone`}>
+        <Section title={t`Where players land`}>
           <P>
             <Trans>
-              At the time of writing there were skill ratings for 14,385 players on 4K, 4,119 on 7K and
-              2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and
-              5,038 for an LN dan. This is where the 4K regular estimates landed:
+              At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:
             </Trans>
           </P>
           <DanDistribution rows={RICE_4K_POPULATION} />
@@ -703,7 +546,7 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               Your own estimate is on the Skills tab of your player page. Click any dan badge there to
-              see the passes behind it, broken down by skill. The whole population is on the{' '}
+              see the passes behind it. Everyone else is on the{' '}
               <Link
                 to="/rankings"
                 search={{ tab: "dan" as const, country: undefined }}
@@ -711,7 +554,7 @@ function DanEstimatesPage() {
               >
                 Dan tab of the rankings page
               </Link>
-              , per country and per keymode.
+              .
             </Trans>
           </P>
         </Section>
@@ -1127,6 +970,145 @@ function Li({ children }: { children: ReactNode }) {
   return <li className="list-disc marker:text-osu-b3">{children}</li>;
 }
 
+// The long tail of each section: rules a reader only looks for when their own
+// estimate surprises them, folded under a hairline so the page reads short.
+function Details({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="group border-t border-white/[0.07] pt-3">
+      <summary className="cursor-pointer list-none text-[13px] font-bold text-osu-f1 transition-colors hover:text-white [&::-webkit-details-marker]:hidden">
+        <span className="mr-1.5 inline-block text-osu-f2 transition-transform group-open:rotate-90">&rsaquo;</span>
+        {summary}
+      </summary>
+      <div className="mt-3 space-y-3 text-[14px] leading-6 text-osu-f1">{children}</div>
+    </details>
+  );
+}
+
+/* The whole article in one row, worked through one real chart: the page's
+   sections in order, each column a link down to its section. The chart level
+   and the credit are computed with the estimator's own functions, so the
+   figures cannot drift from what the site does. */
+const PIPELINE_CHART = CHART_EXAMPLES.find((chart) => chart.id === 3729620)!;
+const PIPELINE_ACCURACY = 0.98;
+const PIPELINE_SKILLS: Array<{ id: string; dan: number }> = [
+  { id: "jack", dan: 12 },
+  { id: "tech", dan: 11 },
+  { id: "speed", dan: 10 },
+  { id: "stamina", dan: 11 },
+];
+
+function Pipeline() {
+  const { t, i18n } = useLingui();
+  const credited = creditedDanFor(PIPELINE_CHART.rawDan, PIPELINE_ACCURACY, 0.96, "rc", 4);
+  const creditedLabel = credited == null ? PIPELINE_CHART.dan : danLabelFor(credited, "rc", 4);
+  const average = PIPELINE_SKILLS.reduce((sum, skill) => sum + skill.dan, 0) / PIPELINE_SKILLS.length;
+  const badge = (label: string, size: "sm" | "md" = "md", approximate = false) => (
+    <DanLevelBadge label={label} keyCount={4} side="rc" size={size} approximate={approximate} formatLabel={(value) => value} />
+  );
+  const steps: Array<{ href: string; label: string; visual: ReactNode; caption: string }> = [
+    {
+      href: "#chart-levels",
+      label: t`Chart`,
+      visual: badge(PIPELINE_CHART.dan),
+      caption: PIPELINE_CHART.map,
+    },
+    {
+      href: "#credit",
+      label: t`Your pass`,
+      visual: (
+        <span className="flex items-center gap-3">
+          <span className="text-2xl font-bold tabular-nums text-white">98%</span>
+          <svg viewBox="0 0 24 12" aria-hidden="true" className="-mr-2 h-3 w-6 shrink-0 text-osu-f1">
+            <path d="M1 6h21M17 1.5 22 6l-5 4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {badge(creditedLabel)}
+        </span>
+      ),
+      caption: t`credited by accuracy against a 96% bar`,
+    },
+    {
+      href: "#skills",
+      label: t`Skills`,
+      visual: (
+        <span className="grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-1">
+          {PIPELINE_SKILLS.map((skill) => {
+            const meta = DAN_SKILLSET_META[skill.id];
+            return (
+              <span key={skill.id} className="contents">
+                <span className="text-[12px] font-bold" style={{ color: meta.color }}>{i18n._(meta.labelMsg)}</span>
+                {badge(danLabelFor(skill.dan, "rc", 4), "sm")}
+              </span>
+            );
+          })}
+        </span>
+      ),
+      caption: t`each the average of your best 20 passes in it`,
+    },
+    {
+      href: "#your-dan",
+      label: t`Your dan`,
+      visual: badge(danLabelFor(average, "rc", 4), "md", true),
+      caption: t`the average of your skills`,
+    },
+  ];
+  return (
+    <ol className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-white/[0.07] py-5 sm:grid-cols-4">
+      {steps.map((step, index) => (
+        <li key={step.href}>
+          <a href={step.href} className="group flex h-full flex-col">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-osu-f1">
+              {index + 1}. {step.label}
+            </span>
+            <span className="mt-3 flex min-h-[64px] items-center">{step.visual}</span>
+            <span className="mt-2 text-[12px] leading-5 text-osu-f1 transition-colors group-hover:text-white">{step.caption}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// The skills each ladder is split into, mirroring the backend's
+// danSkillsetBuckets. 6K LN has no split and is averaged as one.
+const SKILL_LADDERS: Array<{ ladder: string; skills: string[] }> = [
+  { ladder: "4K regular", skills: ["jack", "tech", "speed", "stamina"] },
+  { ladder: "4K LN", skills: ["lnhybrid", "lntechnical", "lnwalls", "lnspeed"] },
+  { ladder: "6K/7K regular", skills: ["jack", "tech", "speed", "stream"] },
+  { ladder: "7K LN", skills: ["lngeneral", "lntech", "lninverse", "lnrelease"] },
+  { ladder: "6K LN", skills: [] },
+];
+
+function SkillGrid() {
+  const { t, i18n } = useLingui();
+  return (
+    <div className="py-1">
+      {SKILL_LADDERS.map((row) => (
+        <div
+          key={row.ladder}
+          className="grid grid-cols-[96px_1fr] items-center gap-3 border-t border-white/[0.07] py-2.5 first:border-t-0 sm:grid-cols-[120px_1fr]"
+        >
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-osu-f1">{row.ladder}</span>
+          {row.skills.length > 0 ? (
+            <span className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+              {row.skills.map((id) => {
+                const meta = DAN_SKILLSET_META[id];
+                return (
+                  <span key={id} className="flex items-center gap-2 text-[15px] font-bold text-white">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
+                    {i18n._(meta.labelMsg)}
+                  </span>
+                );
+              })}
+            </span>
+          ) : (
+            <span className="text-[15px] text-osu-f1">{t`one skill, no split`}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* One series over the ladder itself, so it is one hue and the x axis is the dan
    artwork. The numbered levels collapse into two columns by default: they are
    two thirds of the population and flatten the greek tail otherwise. Clicking
@@ -1357,11 +1339,13 @@ function CreditCurveTabs() {
         jackCurve={active.ladder.jackCurve}
         example={CHART_EXAMPLES.find((chart) => chart.id === active.ladder.example)}
       />
-      <Table head={active.head} rows={active.rows} />
-      <p className="text-[12px] leading-5 text-osu-f2">{active.note}</p>
-      <p className="text-[12px] leading-5 text-osu-f2">
-        <Trans>These numbers are subject to change.</Trans>
-      </p>
+      <Details summary={t`The credit as a table`}>
+        <Table head={active.head} rows={active.rows} />
+        <p className="text-[12px] leading-5 text-osu-f1">{active.note}</p>
+        <p className="text-[12px] leading-5 text-osu-f1">
+          <Trans>These numbers are subject to change.</Trans>
+        </p>
+      </Details>
     </div>
   );
 }
