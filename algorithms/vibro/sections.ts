@@ -21,7 +21,8 @@ export type VibroReason =
   | "hand_action_ceiling"
   | "four_key_cycle"
   | "locked_hands"
-  | "fast_trill";
+  | "fast_trill"
+  | "sustained_density";
 
 export interface VibroSection {
   /** Original chart timestamps, before applying the music rate. */
@@ -86,6 +87,7 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   scanIsolatedJacks(scan);
   scanFastRolls(scan, countFastFingerReturns(scan, 70));
   scanExtremeDensity(scan);
+  scanSustainedDensity(scan);
   scanRecurringRepetitions(scan);
 
   result.reasonShares = measureReasonShares(scan.intervals, rate, result.activeDurationMs);
@@ -722,6 +724,29 @@ function scanExtremeDensity(scan: VibroScan): void {
   }
 }
 
+/** Ten seconds in which all four fingers average 12.2 hits a second each, at
+ * the played rate. No single-finger or hand ceiling fires on it, since every
+ * note is in reach of a finger, but nobody jacks four columns that fast for ten
+ * seconds without vibrating. The densest chordjack ruled legit stops at 11.9,
+ * the DT chordjack walls ruled vibro start at 12.4. Excludes whatever the
+ * coverage. */
+const SUSTAINED_WINDOW_MS = 10_000;
+const SUSTAINED_FINGER_RATE = 12.2;
+
+function scanSustainedDensity(scan: VibroScan): void {
+  const { times, prefixNotes, rate } = scan;
+  const minNotes = SUSTAINED_FINGER_RATE * 4 * SUSTAINED_WINDOW_MS / 1000;
+  let windowStart = 0;
+  for (let i = 0; i < times.length; i++) {
+    // The slack keeps an exact ten-second window the same whether the rate is
+    // applied here or already baked into the timestamps.
+    while ((times[i] - times[windowStart]) / rate > SUSTAINED_WINDOW_MS + 1e-6) windowStart++;
+    if (prefixNotes[i + 1] - prefixNotes[windowStart] >= minNotes) {
+      addSection(scan, times[windowStart], times[i], "sustained_density");
+    }
+  }
+}
+
 // Recurring short repetitions
 
 /** Alternating fixed jumps (two disjoint 2-note chords trading at <=50ms, each
@@ -879,7 +904,10 @@ function measureSectionCoverage(result: VibroAnalysis, map: ManiaBeatmap, scan: 
   // Time and note coverage both matter. The remaining chart is rated again from
   // scratch, so easy padding cannot keep the spam-inflated difficulty.
   const noteCap = result.repeatShare >= REPEAT_BODY_SHARE ? REPEAT_BODY_NOTE_CAP : 0.25;
-  result.status = result.timeShare <= 0.15 && result.noteShare <= noteCap
+  // Ten seconds of four-finger density is the body of the chart at this rate,
+  // not an accent to cut around.
+  result.status = !result.reasonShares.sustained_density
+    && result.timeShare <= 0.15 && result.noteShare <= noteCap
     && result.remainingNotes >= 300 && result.activeDurationMs - result.excludedDurationMs >= 20_000
     ? "adjusted" : "excluded";
 }

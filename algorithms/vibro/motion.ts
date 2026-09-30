@@ -43,6 +43,16 @@ const SPLIT_RUN_MIN_CYCLE_RATE = 12;
 // name. The line sits above every ranked chart and below the loved maximum.
 const FINGER_CEILING_RATE = 13.5;
 const FINGER_CEILING_WINDOW_MS = 1000;
+// A finger on every row of its window is the anchor of a chordjack struck on
+// the chart's own pulse: the hand plays each chord and moves on, with nothing
+// to do between hits. It gets slightly more room than a finger whose hand also
+// plays faster rows around it, enough for 1/4 chordjack at 211 BPM (71ms rows),
+// and only in a chart whose fast rows are chordjack: at least a fifth of the
+// rows within the quadjack reload of the last one are quads. Charts ruled vibro
+// at this speed sit at 1-13% (jump walls, hands trading fingers), the dense
+// chordjack ruled legit at 25-54%.
+const ANCHOR_CEILING_RATE = 14.1;
+const ANCHOR_MIN_QUAD_SHARE = 0.2;
 
 // Arm D. Peak actions per second for one hand. Notes at the same instant are
 // one action (the hand moves once); notes 40ms apart are two. Counting actions
@@ -145,9 +155,21 @@ export function scanFingerRateCeiling(map: ManiaBeatmap, rate: number): MotionIn
   const out: MotionInterval[] = [];
   const columns: number[][] = [[], [], [], []];
   for (const note of map.notes) columns[note.column]?.push(note.time);
+  const { times, rows } = decompose(map);
+  let fastRows = 0;
+  let fastQuads = 0;
+  for (let k = 1; k < times.length; k++) {
+    if ((times[k] - times[k - 1]) / rate > REPEATED_QUAD_GAP_MS) continue;
+    fastRows++;
+    if (rows[k] === 0b1111) fastQuads++;
+  }
+  const anchorsAllowed = fastRows > 0 && fastQuads / fastRows >= ANCHOR_MIN_QUAD_SHARE;
   for (const column of columns) {
     column.sort((a, b) => a - b);
-    out.push(...breachingWindows(column, rate, FINGER_CEILING_WINDOW_MS, FINGER_CEILING_RATE, "finger_rate_ceiling"));
+    const ceiling = (first: number, last: number) => anchorsAllowed
+      && lowerBound(times, column[last]) - lowerBound(times, column[first]) === last - first
+      ? ANCHOR_CEILING_RATE : FINGER_CEILING_RATE;
+    out.push(...breachingWindows(column, rate, FINGER_CEILING_WINDOW_MS, ceiling, "finger_rate_ceiling"));
   }
   return out;
 }
@@ -258,7 +280,7 @@ function breachingWindows(
   times: readonly number[],
   rate: number,
   windowMs: number,
-  ceilingRate: number,
+  ceilingRate: number | ((first: number, last: number) => number),
   reason: VibroReason,
 ): MotionInterval[] {
   const out: MotionInterval[] = [];
@@ -269,7 +291,7 @@ function breachingWindows(
     while ((times[i] - times[start]) / rate > windowMs) start++;
     const span = (times[i] - times[start]) / rate;
     if (span < windowMs * 0.9) continue;
-    if ((i - start) / (span / 1000) < ceilingRate) continue;
+    if ((i - start) / (span / 1000) < (typeof ceilingRate === "number" ? ceilingRate : ceilingRate(start, i))) continue;
     if (openFrom >= 0 && times[start] <= openTo) { openTo = times[i]; continue; }
     if (openFrom >= 0) out.push({ startTime: openFrom, endTime: openTo, reason });
     openFrom = times[start];
