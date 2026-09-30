@@ -1,29 +1,27 @@
-// A player's LN SSR for one play: the LN rating solved at the play's own
-// release-aware accuracy instead of the chart goal. Like the press SSR from
-// MinaCalc, the solver never runs above a 0.965 goal; higher accuracy
-// extrapolates the slope between 0.93 and 0.965.
+import { parseManiaBeatmap } from "../chart/beatmap";
+import { lnRatingAtGoal, lnSkillOfWorkload, type LnSkillResult } from "./skill";
+import { buildLnWorkload } from "./workload";
 
-import { analyzeLnSkillFromText, type LnSkillResult } from "./skill";
-
-/** Highest goal either SSR solver (native and LN) runs at. */
+// Shared native/LN SSR extrapolation window. Keep both axes on the same cap.
 export const SSR_CALC_GOAL_CAP = 0.965;
-/** Lower end of the slope used to extrapolate above the cap. */
 export const SSR_EXTRAPOLATION_BASE_GOAL = 0.93;
-/** Bound on the 0.93-to-0.965 rating ratio used as the extrapolation base (measured around 1.07-1.11). */
+// Safety bound on the chart’s 0.93→0.965 slope (measured ~1.07–1.11).
 export const SSR_EXTRAPOLATION_MAX_SLOPE = 1.2;
 
-/** The goal the LN solver runs at for a play's accuracy. */
+/** The goal the LN solver actually runs at for a play. Same cap as the
+ * MinaCalc SSR: the solver never sees a goal above SSR_CALC_GOAL_CAP. */
 export function lnSsrSolverGoal(goal: number): number {
   return Math.min(SSR_CALC_GOAL_CAP, Math.max(0, Math.min(0.999, goal)));
 }
 
 /**
- * LN SSR for a play. Solved directly, the LN response runs away toward 100%:
- * a perfect play on a chart rated 24.8 solved to 38.7, above the hardest 4K
- * LN course. So above the cap the result is
- *   ssr(cap) * min(ssr(cap) / ssr(0.93), 1.2) ^ ((goal - 0.965) / (0.965 - 0.93)),
- * the same way the press axis prices high accuracy. The returned scoreGoal
- * is the solver goal, not the play's accuracy.
+ * LN SSR for a play, on the same terms as the press SSR from runMsdAtGoal:
+ * solve at most at SSR_CALC_GOAL_CAP and extrapolate the cap-to-base slope
+ * above it. The LN solver's own response runs away toward 100% (a perfect
+ * play on a 24.8 chart solved to 38.7, above the hardest 4K LN course),
+ * which is not how the press axis prices an SS. The stored scoreGoal is the
+ * solver goal, so playLnSkillCurrent can tell a capped result from an old
+ * uncapped one without a model version bump.
  */
 export function analyzeLnSsr(
   osuText: string,
@@ -31,10 +29,13 @@ export function analyzeLnSsr(
 ): LnSkillResult | null {
   const goal = Math.max(0, Math.min(0.999, options.scoreGoal));
   const solverGoal = lnSsrSolverGoal(goal);
-  const capped = analyzeLnSkillFromText(osuText, { rate: options.rate, od: options.od, scoreGoal: solverGoal });
-  if (!capped || goal <= SSR_CALC_GOAL_CAP || !(capped.rating != null && capped.rating > 0)) return capped;
-  const base = analyzeLnSkillFromText(osuText, { rate: options.rate, od: options.od, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL });
-  const atCap = capped.rating, atBase = base?.rating ?? 0;
+  const map = parseManiaBeatmap(osuText);
+  // The workload does not depend on the goal, so both goals share one.
+  const workload = buildLnWorkload(map, { rate: options.rate, od: options.od });
+  if (!workload) return null;
+  const capped = lnSkillOfWorkload(map, workload, { scoreGoal: solverGoal });
+  if (goal <= SSR_CALC_GOAL_CAP || !(capped.rating != null && capped.rating > 0)) return capped;
+  const atCap = capped.rating, atBase = lnRatingAtGoal(workload, SSR_EXTRAPOLATION_BASE_GOAL);
   if (!(atBase > 0) || atCap <= atBase) return capped;
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
   return { ...capped, rating: atCap * Math.pow(Math.min(atCap / atBase, SSR_EXTRAPOLATION_MAX_SLOPE), exponent) };

@@ -10,7 +10,7 @@ The code that rates charts and players on [mania-tracker.com](https://mania-trac
 | `vibro/` | Whether a chart, or a chart at a given rate, can be played by shaking instead of hitting notes |
 | `classification/` | A chart's dan verdict and pattern tags at a given rate, and whether it can count toward a player's dan |
 | `dan-estimator/` | Chart features, pattern analysis, dan labels, LN identity and the in-house LN estimator |
-| `ln/` | The LN model: hold timeline, LN structure, the LN rating axis |
+| `ln/` | The LN model: hold timeline, required-action workload, the 4K LN rating and its four skillsets |
 | `msd/` | How MinaCalc is called and how its skillsets become a chart's MSD |
 | `leoblack/` | The wrapper around LeoBlack's estimators and the Companella refinement |
 | `player/` | Accuracy to Wife3 goal, per-play SSRs, skill ratings, dan clears, dan courses |
