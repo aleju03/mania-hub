@@ -22,6 +22,7 @@ export type VibroReason =
   | "four_key_cycle"
   | "locked_hands"
   | "fast_trill"
+  | "jumptrill"
   | "sustained_density";
 
 export interface VibroSection {
@@ -56,6 +57,15 @@ export interface VibroAnalysis {
   reasonShares: Partial<Record<VibroReason, number>>;
 }
 
+/** An exclusion the jumptrill rule alone made. Players see it as an
+ * unrateable chart, not vibro: nothing in it is past a human hand, it is the
+ * rating that cannot follow what the hands do. */
+export function isJumptrillExclusion(analysis: Pick<VibroAnalysis, "status" | "reasonShares"> | null | undefined): boolean {
+  if (analysis?.status !== "excluded") return false;
+  const reasons = Object.keys(analysis.reasonShares ?? {});
+  return reasons.length > 0 && reasons.every((reason) => reason === "jumptrill");
+}
+
 /** Charts the section detector handles: 4K with at most 10% holds. */
 export function usesSectionVibro(map: ManiaBeatmap): boolean {
   return map.keyCount === 4 && map.notes.length > 0
@@ -80,6 +90,8 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   scanQuadBody(scan);
   scanLockedHands(scan);
   scanFastTrills(scan);
+  scanJumptrills(scan);
+  scanHammeredChords(scan);
   scanOneFingerBody(scan);
   scanRepeatedJackStreams(scan);
   scanRepeatedPairs(scan);
@@ -363,13 +375,105 @@ function scanFastTrills(scan: VibroScan): void {
   }
 }
 
-// One-finger body. One finger jacking on every row at 11.4+ hits/s while the
+// A roll or split-hand stream whose two notes per hand land close enough to
+// hit as one press is a jumptrill in the hands: each hand pushes one jump
+// while the other lifts, whatever order the columns are written in. MinaCalc
+// prices the notes as separate finger motions (a 23ms roll reads as ~25 MSD,
+// and the same run written as jumps still does), so a chart built from it
+// rates far above what the hands actually do. A hand press gathers that
+// hand's notes within 30ms; a burst is 8+ presses alternating hands at 65ms
+// or less, three quarters of them full jumps. Bursts stay in the chart until
+// they hold 30% of its notes; past that the chart is the jumptrill and every
+// burst goes. Measured over the cached 4K charts at 1.0x and 1.5x: no ranked
+// or loved chart outside a vibro anthology passes 17% at 1.0x, no dan course
+// passes 22%, and charts past 30% are jumptrill, vibro and meme packs, plus a
+// loved jumptrill chart and two loved speedcore charts at 1.5x. At 55ms a
+// chart written as jumps alternating at 61/40ms swing read clean; 75ms starts
+// catching charts ruled not vibro.
+const JUMPTRILL_PRESS_MS = 30;
+const JUMPTRILL_GAP_MS = 65;
+const JUMPTRILL_MIN_PRESSES = 8;
+const JUMPTRILL_FULL_SHARE = 0.75;
+const JUMPTRILL_CHART_SHARE = 0.3;
+
+function scanJumptrills(scan: VibroScan): void {
+  const { times, rows, prefixNotes, rate } = scan;
+  type Press = { start: number; end: number; hand: number; mask: number };
+  const presses: Press[] = [];
+  const open: (Press | null)[] = [null, null];
+  for (let i = 0; i < times.length; i++) {
+    for (let hand = 0; hand < 2; hand++) {
+      const bits = (rows[i] >> (hand * 2)) & 3;
+      if (!bits) continue;
+      const press = open[hand];
+      if (press && times[i] - press.start <= JUMPTRILL_PRESS_MS * rate && !(press.mask & bits)) {
+        press.mask |= bits;
+        press.end = times[i];
+        continue;
+      }
+      const next = { start: times[i], end: times[i], hand, mask: bits };
+      presses.push(next);
+      open[hand] = next;
+    }
+  }
+  const bursts: VibroSection[] = [];
+  let burstNotes = 0;
+  let start = 0;
+  for (let i = 1; i <= presses.length; i++) {
+    if (i < presses.length && presses[i].hand !== presses[i - 1].hand
+      && presses[i].start - presses[i - 1].start <= JUMPTRILL_GAP_MS * rate) continue;
+    const run = presses.slice(start, i);
+    if (run.length >= JUMPTRILL_MIN_PRESSES && run.filter((press) => press.mask === 3).length >= run.length * JUMPTRILL_FULL_SHARE) {
+      bursts.push({ startTime: run[0].start, endTime: run.at(-1)!.end, reasons: ["jumptrill"] });
+      burstNotes += run.reduce((sum, press) => sum + bitCount(press.mask), 0);
+    }
+    start = i;
+  }
+  if (burstNotes >= prefixNotes.at(-1)! * JUMPTRILL_CHART_SHARE) scan.intervals.push(...bursts);
+}
+
+// Triples hammered in place: 24+ rows of 3+ note chords at 92ms or faster, two
+// thirds of them in runs of one triple hit 4+ times. Each triple is too short a
+// wall for the 12-row rule, but the hand never leaves the keys. Diverse
+// chordjack changes chord every row or two and stays out, and quad runs are
+// left to the quad rules: dense chordjack walls of quads with a triple between
+// are chordjack. Measured over
+// the played 4K chart+rate pairs in the local snapshot: no ranked or loved
+// chart changes status at 1.0x, one ranked chart gains a 3% trim at 1.5x, and
+// 16-row stretches would tip a loved chordjack chart from trimmed to excluded.
+const HAMMER_GAP_MS = 92;
+const HAMMER_MIN_REPEATS = 4;
+const HAMMER_MIN_ROWS = 24;
+const HAMMER_RUN_SHARE = 0.66;
+
+function scanHammeredChords(scan: VibroScan): void {
+  const { times, rows, rate } = scan;
+  let start = 0;
+  for (let i = 1; i <= times.length; i++) {
+    if (i < times.length && bitCount(rows[i]) >= 3 && bitCount(rows[i - 1]) >= 3
+      && times[i] - times[i - 1] <= HAMMER_GAP_MS * rate) continue;
+    if (i - start >= HAMMER_MIN_ROWS && bitCount(rows[start]) >= 3) {
+      let inRuns = 0;
+      let runStart = start;
+      for (let k = start + 1; k <= i; k++) {
+        if (k < i && rows[k] === rows[k - 1]) continue;
+        if (k - runStart >= HAMMER_MIN_REPEATS && bitCount(rows[runStart]) === 3) inRuns += k - runStart;
+        runStart = k;
+      }
+      if (inRuns >= (i - start) * HAMMER_RUN_SHARE) addSection(scan, times[start], times[i - 1], "repeated_chord");
+    }
+    start = i;
+  }
+}
+
+// One-finger body. One finger jacking on every row at 11.1+ hits/s while the
 // others add little, handed from column to column so no single run is long.
-// Each run is 7+ hits at <=88ms, on 90% of the rows it spans, carrying 40% of
+// Each run is 7+ hits at <=90ms, on 90% of the rows it spans, carrying 40% of
 // the notes there. It counts once such runs hold a quarter of the chart. At
-// every rate played no ranked or loved chart passes 19%; the 88ms bound keeps
-// longjack training at ~10.8 hits/s out.
-const ONE_FINGER_GAP_MS = 88;
+// every rate played no ranked or loved chart passes 19%; the 90ms bound keeps
+// longjack training at ~10.8 hits/s out. At 88ms a vibro pack chart jacking at
+// 89-90ms read clean; 90ms moves one ranked chart, at 1.5x only.
+const ONE_FINGER_GAP_MS = 90;
 const ONE_FINGER_MIN_HITS = 7;
 const ONE_FINGER_COVERAGE = 0.9;
 const ONE_FINGER_DOMINANCE = 0.4;
@@ -904,9 +1008,10 @@ function measureSectionCoverage(result: VibroAnalysis, map: ManiaBeatmap, scan: 
   // Time and note coverage both matter. The remaining chart is rated again from
   // scratch, so easy padding cannot keep the spam-inflated difficulty.
   const noteCap = result.repeatShare >= REPEAT_BODY_SHARE ? REPEAT_BODY_NOTE_CAP : 0.25;
+  const hammered = measureChordRunShare(scan.rate > 1 ? { ...scan, rate: 1 } : scan) >= CHORD_RUN_BODY_SHARE;
   // Ten seconds of four-finger density is the body of the chart at this rate,
   // not an accent to cut around.
-  result.status = !result.reasonShares.sustained_density
+  result.status = !result.reasonShares.sustained_density && !hammered
     && result.timeShare <= 0.15 && result.noteShare <= noteCap
     && result.remainingNotes >= 300 && result.activeDurationMs - result.excludedDurationMs >= 20_000
     ? "adjusted" : "excluded";
@@ -935,6 +1040,33 @@ function measureRepeatShare(scan: VibroScan): number {
 }
 
 /** Whether [start, end] touches any section. Sections are sorted and disjoint. */
+/** Notes in runs of one chord (2+ notes) hit 4+ times back to back at 95ms or
+ * faster, read at the chart's own speed like the repeat share. A chart with
+ * proven vibro whose body is 30% this is excluded rather than trimmed: vibro
+ * packs put their walls between sections the detector cannot prove, while
+ * jumpjack and chordjack repeat a chord 2-3 times and move on. Measured over
+ * the played 4K pairs in the local snapshot: no ranked, loved or dan course
+ * chart reaches it; a loved chordjack chart sits at 14% and a chordjack
+ * training chart at 18%. */
+const CHORD_RUN_GAP_MS = 95;
+const CHORD_RUN_MIN_REPEATS = 4;
+const CHORD_RUN_BODY_SHARE = 0.3;
+
+function measureChordRunShare(scan: VibroScan): number {
+  const { times, rows, prefixNotes, rate } = scan;
+  const total = prefixNotes.at(-1)!;
+  if (total === 0) return 0;
+  let notes = 0;
+  let start = 0;
+  for (let i = 1; i <= rows.length; i++) {
+    if (i < rows.length && rows[i] === rows[i - 1] && bitCount(rows[i]) >= 2
+      && times[i] - times[i - 1] <= CHORD_RUN_GAP_MS * rate) continue;
+    if (i - start >= CHORD_RUN_MIN_REPEATS && bitCount(rows[start]) >= 2) notes += prefixNotes[i] - prefixNotes[start];
+    start = i;
+  }
+  return notes / total;
+}
+
 function overlapsVibro(start: number, end: number, sections: VibroSection[]): boolean {
   let low = 0;
   let high = sections.length;
