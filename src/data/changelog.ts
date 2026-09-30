@@ -37,12 +37,13 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-29", text: "Overall now uses Etterna's method, the average of your best skillsets with LN counted as one, and you can switch back to Classic next to Overall.", bold: "Overall", label: "Classic", to: "/my-stats" },
-  { date: "2026-09-29", text: "Reworked 4K LN ratings.", to: "/dan-estimates" },
-  { date: "2026-09-29", text: "Added All-round, Technical, Walls and Speed skillsets to 4K LN, in the dan window and the LN filter on maps.", to: "/dan-estimates" },
-  { date: "2026-09-29", text: "Added Skill and MSD filters to maps, and you can type a range into BPM, Length and MSD.", to: "/maps" },
-  { date: "2026-09-29", text: "Moved the plays list switch on the Skills tab into the plays toolbar." },
-  { date: "2026-09-29", text: "Fixed some maps and plays getting the wrong MSD." },
+  { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings to see them.", to: "/settings" },
+  { date: "2026-09-30", text: "Overall now uses Etterna's method, the average of your best skillsets, and you can switch back to Classic next to Overall.", bold: "Overall", label: "Classic", to: "/my-stats" },
+  { date: "2026-09-30", text: "Reworked 4K LN ratings.", to: "/dan-estimates" },
+  { date: "2026-09-30", text: "Added All-round, Technical, Walls and Speed skillsets to 4K LN, in the dan window and the LN filter on maps.", to: "/dan-estimates" },
+  { date: "2026-09-30", text: "Added Skill and MSD filters to maps, and you can type a range into BPM, Length and MSD.", to: "/maps" },
+  { date: "2026-09-30", text: "Moved the plays list switch on the Skills tab into the plays toolbar." },
+  { date: "2026-09-30", text: "Fixed some maps and plays getting the wrong MSD." },
   { date: "2026-09-27", text: "Less densejack maps flag as vibro" },
   { date: "2026-09-25", text: "Updated MinaCalc to 0.75.0 for 5K and up, and skill rating cards now show the MinaCalc version. 5K+ ratings will update gradually.", bold: "MinaCalc" },
   { date: "2026-09-25", text: "Snipes are now available for every country and region, and for Global, which counts the top 100 players.", bold: "Snipes", to: "/snipes" },
