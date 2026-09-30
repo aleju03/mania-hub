@@ -37,7 +37,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings to see them.", to: "/settings" },
+  { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings if you wanna see it.", to: "/settings" },
   { date: "2026-09-30", text: "Overall now uses Etterna's method, the average of your best skillsets, and you can switch back to Classic next to Overall.", bold: "Overall", label: "Classic", to: "/my-stats" },
   { date: "2026-09-30", text: "Reworked 4K LN ratings.", to: "/dan-estimates" },
   { date: "2026-09-30", text: "Added All-round, Technical, Walls and Speed skillsets to 4K LN, in the dan window and the LN filter on maps.", to: "/dan-estimates" },

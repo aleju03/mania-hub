@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchLiveChartAnalysis, fetchLiveRateChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry, type LiveRateChartAnalysis, type LivePlayerSkillScoreDetails } from "../../lib/live-backend";
@@ -812,6 +812,25 @@ export function MapDetailModal({
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
   const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(1);
+  // The panel is centered, so a rate switch that changes its height would move
+  // all of it. Switching pins its top where it was and lets it grow down.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pinnedTop, setPinnedTop] = useState<number | null>(null);
+  const switchModRate = (rate: 1.5 | 0.75) => {
+    const top = panelRef.current?.getBoundingClientRect().top;
+    if (top != null && pinnedTop == null) setPinnedTop(top);
+    setModRate((current) => (current === rate ? 1 : rate));
+  };
+  const pinKey = entry && active ? active.beatmapId : null;
+  useEffect(() => {
+    setPinnedTop(null);
+  }, [pinKey]);
+  useEffect(() => {
+    if (pinnedTop == null) return;
+    const release = () => setPinnedTop(null);
+    window.addEventListener("resize", release);
+    return () => window.removeEventListener("resize", release);
+  }, [pinnedTop]);
   const playRate = playedRate === 1 ? modRate : playedRate;
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
@@ -854,7 +873,8 @@ export function MapDetailModal({
       {entry && active && (
         <motion.div
           key="map-detail"
-          className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
+          className={`fixed inset-0 z-[120] flex justify-center p-3 sm:p-6 ${pinnedTop == null ? "items-center" : "items-start"}`}
+          style={pinnedTop == null ? undefined : { paddingTop: pinnedTop }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -862,6 +882,8 @@ export function MapDetailModal({
         >
           <div className="absolute inset-0 bg-black/85" onClick={onClose} />
           <motion.div
+            ref={panelRef}
+            style={pinnedTop == null ? undefined : { maxHeight: `calc(100dvh - ${pinnedTop}px - 0.75rem)` }}
             className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[760px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1013,9 +1035,9 @@ export function MapDetailModal({
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
                 {active.msd || activeAnalysis?.msd ? (
-                  ratePending ? (
-                    <PendingMsdBlock label={t`MSD at ${formatRate(playRate)}`} />
-                  ) : (
+                  // While a rate loads, the 1.0x block stays up dimmed, so
+                  // the panel keeps its height instead of dropping to a skeleton.
+                  <div className={`transition-opacity ${ratePending ? "opacity-50" : ""}`} aria-busy={ratePending}>
                     <MsdBlock
                       entry={active}
                       msdLn={activeAnalysis?.msdLn ?? null}
@@ -1026,9 +1048,9 @@ export function MapDetailModal({
                       rateMsd={rateMsd}
                       rateDan={rateDan}
                       secondaryDan={activeAnalysis?.secondaryDan ?? null}
-                      vibroAnalysis={playRate === 1 ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
+                      vibroAnalysis={playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
-                  )
+                  </div>
                 ) : pending ? <PendingMsdBlock /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
@@ -1087,7 +1109,7 @@ export function MapDetailModal({
                         key={mod}
                         type="button"
                         aria-pressed={modRate === rate}
-                        onClick={() => setModRate((current) => (current === rate ? 1 : rate))}
+                        onClick={() => switchModRate(rate)}
                         className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-bold hover:brightness-110 ${modRate === rate ? "bg-osu-pink/20 text-osu-pink" : "text-osu-f1"}`}
                       >
                         {mod}
