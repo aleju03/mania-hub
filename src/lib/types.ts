@@ -678,27 +678,6 @@ export interface BeatmapScoreLookupStatus {
 }
 
 // Replay types
-export interface ReplayHeader {
-  gameMode: number;
-  gameVersion: number;
-  beatmapHash: string;
-  playerName: string;
-  replayHash: string;
-  count300: number;
-  count100: number;
-  count50: number;
-  countGeki: number;  // mania: MAX (rainbow 300)
-  countKatu: number;  // mania: 200
-  countMiss: number;
-  totalScore: number;
-  maxCombo: number;
-  isPerfect: boolean;
-  modsUsed: number;   // bitmask
-  lifeBarGraph: string;
-  timestamp: number;
-  replayDataLength: number;
-}
-
 export interface ReplayFrame {
   time: number;     // absolute time in ms
   keyState: number; // bitmask: bit N = column N pressed
@@ -709,10 +688,3 @@ export interface ReplayLifeBarFrame {
   health: number; // 0..1
 }
 
-export interface ParsedReplay {
-  header: ReplayHeader;
-  frames: ReplayFrame[];
-  lifeBarFrames: ReplayLifeBarFrame[];
-  keyCount: number;
-  stableScrollSpeedScale?: number;
-}

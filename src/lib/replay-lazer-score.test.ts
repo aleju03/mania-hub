@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { compress } from "lzma-js-simple-v2";
 
-import { readLazerReplayMods } from "./replay-lazer-score";
+import { lazerReplayMods } from "./replay-lazer-score";
+import { readOsr } from "./replay-osr";
+
+const readLazerReplayMods = (replay: ArrayBuffer) => lazerReplayMods(readOsr(replay).scoreInfoBlock);
 
 const LAZER_VERSION = 30000019;
 const STABLE_VERSION = 20231019;

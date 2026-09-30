@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { readLazerReplayMods } = vi.hoisted(() => ({ readLazerReplayMods: vi.fn() }));
-vi.mock("./replay-lazer-score", () => ({ readLazerReplayMods }));
+const { lazerReplayMods } = vi.hoisted(() => ({ lazerReplayMods: vi.fn() }));
+vi.mock("./replay-lazer-score", () => ({ lazerReplayMods }));
 
 import { extractReplayScoreIdFromFilename, readUploadedReplayMods, scoreMatchesUploadedReplay, stableModBitmaskToMods } from "./replay-upload";
 
@@ -28,15 +28,15 @@ describe("replay upload helpers", () => {
       { acronym: "DT", settings: { speed_change: 1.1 } },
       { acronym: "DA", settings: { overall_difficulty: 9 } },
     ];
-    readLazerReplayMods.mockResolvedValueOnce(lazerMods);
+    lazerReplayMods.mockReturnValueOnce(lazerMods);
 
-    expect(await readUploadedReplayMods(new ArrayBuffer(0), 1 << 6)).toEqual(lazerMods);
+    expect(readUploadedReplayMods(null, 1 << 6)).toEqual(lazerMods);
   });
 
   it("falls back to the bitfield for a stable replay, which carries no mod list", async () => {
-    readLazerReplayMods.mockResolvedValueOnce(null);
+    lazerReplayMods.mockReturnValueOnce(null);
 
-    expect(await readUploadedReplayMods(new ArrayBuffer(0), (1 << 6) | (1 << 3))).toEqual([
+    expect(readUploadedReplayMods(null, (1 << 6) | (1 << 3))).toEqual([
       { acronym: "HD" },
       { acronym: "DT" },
     ]);
