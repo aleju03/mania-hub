@@ -725,9 +725,13 @@ export function MapDetailModal({
   play,
   status = "ready",
   actions,
+  initialRate = 1,
 }: {
   entry: LiveMapSearchEntry | null;
   onClose: () => void;
+  /** The DT/HT toggle the modal opens on when there is no play, for a list
+      that recommended the chart at that rate. */
+  initialRate?: 1 | 1.5 | 0.75;
   /** Extra buttons for the footer, after Share. */
   actions?: ReactNode;
   play?: MapDetailPlayContext | null;
@@ -830,7 +834,10 @@ export function MapDetailModal({
   const playedRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
   // Without a play, the chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
-  const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(1);
+  const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(initialRate);
+  useEffect(() => {
+    setModRate(initialRate);
+  }, [entry?.beatmapId, initialRate]);
   // The panel is centered, so a rate switch that changes its height would move
   // all of it. Switching pins its top where it was and lets it grow down.
   const panelRef = useRef<HTMLDivElement>(null);

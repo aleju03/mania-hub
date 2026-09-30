@@ -26,6 +26,7 @@ import { Route as MyStatsRouteImport } from './routes/my-stats'
 import { Route as PacksRouteImport } from './routes/packs'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RankingsRouteImport } from './routes/rankings'
+import { Route as RecommendationsRouteImport } from './routes/recommendations'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as ReportRouteImport } from './routes/report'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -78,6 +79,7 @@ import { Route as CompanellaDocsRouteImport } from './routes/companella_.docs'
 import { Route as CompanellaTestCallbackRouteImport } from './routes/companella_.test-callback'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as DevRecentRatingsPreviewRouteImport } from './routes/dev.recent-ratings-preview'
+import { Route as FarmHelperSplatRouteImport } from './routes/farm-helper/$'
 import { Route as NewsCompanellaRouteImport } from './routes/news_.companella'
 import { Route as PacksCollectionsRouteImport } from './routes/packs_.collections'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
@@ -92,13 +94,13 @@ import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/
 import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
 import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
 import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
-import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
 import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
 import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
 import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
 import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
 import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
 import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$cardId'
+import { Route as RecommendationsMapBeatmapIdRouteImport } from './routes/recommendations/map/$beatmapId'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
@@ -196,6 +198,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const RankingsRoute = RankingsRouteImport.update({
   id: '/rankings',
   path: '/rankings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecommendationsRoute = RecommendationsRouteImport.update({
+  id: '/recommendations',
+  path: '/recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReplayRoute = ReplayRouteImport.update({
@@ -459,6 +466,11 @@ const DevRecentRatingsPreviewRoute = DevRecentRatingsPreviewRouteImport.update({
   path: '/dev/recent-ratings-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FarmHelperSplatRoute = FarmHelperSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => FarmHelperRoute,
+} as any)
 const NewsCompanellaRoute = NewsCompanellaRouteImport.update({
   id: '/news_/companella',
   path: '/news/companella',
@@ -531,11 +543,6 @@ const CompanellaDocsReferenceClientDotmjsRoute =
     path: '/companella/docs/reference-client.mjs',
     getParentRoute: () => rootRouteImport,
   } as any)
-const FarmHelperMapBeatmapIdRoute = FarmHelperMapBeatmapIdRouteImport.update({
-  id: '/map/$beatmapId',
-  path: '/map/$beatmapId',
-  getParentRoute: () => FarmHelperRoute,
-} as any)
 const PlayerUsernameAboutRoute = PlayerUsernameAboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -566,6 +573,12 @@ const PullOwnerIdCardIdRoute = PullOwnerIdCardIdRouteImport.update({
   path: '/pull/$ownerId/$cardId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecommendationsMapBeatmapIdRoute =
+  RecommendationsMapBeatmapIdRouteImport.update({
+    id: '/map/$beatmapId',
+    path: '/map/$beatmapId',
+    getParentRoute: () => RecommendationsRoute,
+  } as any)
 const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   id: '/videos/$id/$filename',
   path: '/videos/$id/$filename',
@@ -660,6 +673,7 @@ export interface FileRoutesByFullPath {
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
+  '/recommendations': typeof RecommendationsRouteWithChildren
   '/replay': typeof ReplayRoute
   '/report': typeof ReportRoute
   '/settings': typeof SettingsRoute
@@ -712,6 +726,7 @@ export interface FileRoutesByFullPath {
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
+  '/farm-helper/$': typeof FarmHelperSplatRoute
   '/news/companella': typeof NewsCompanellaRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -726,13 +741,13 @@ export interface FileRoutesByFullPath {
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
-  '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
+  '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
@@ -765,6 +780,7 @@ export interface FileRoutesByTo {
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
+  '/recommendations': typeof RecommendationsRouteWithChildren
   '/replay': typeof ReplayRoute
   '/report': typeof ReportRoute
   '/settings': typeof SettingsRoute
@@ -817,6 +833,7 @@ export interface FileRoutesByTo {
   '/companella/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
+  '/farm-helper/$': typeof FarmHelperSplatRoute
   '/news/companella': typeof NewsCompanellaRoute
   '/packs/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -831,13 +848,13 @@ export interface FileRoutesByTo {
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
-  '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
+  '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
@@ -871,6 +888,7 @@ export interface FileRoutesById {
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
+  '/recommendations': typeof RecommendationsRouteWithChildren
   '/replay': typeof ReplayRoute
   '/report': typeof ReportRoute
   '/settings': typeof SettingsRoute
@@ -923,6 +941,7 @@ export interface FileRoutesById {
   '/companella_/test-callback': typeof CompanellaTestCallbackRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/dev/recent-ratings-preview': typeof DevRecentRatingsPreviewRoute
+  '/farm-helper/$': typeof FarmHelperSplatRoute
   '/news_/companella': typeof NewsCompanellaRoute
   '/packs_/collections': typeof PacksCollectionsRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -937,13 +956,13 @@ export interface FileRoutesById {
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
-  '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
+  '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
@@ -978,6 +997,7 @@ export interface FileRouteTypes {
     | '/packs'
     | '/privacy'
     | '/rankings'
+    | '/recommendations'
     | '/replay'
     | '/report'
     | '/settings'
@@ -1030,6 +1050,7 @@ export interface FileRouteTypes {
     | '/companella/test-callback'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
+    | '/farm-helper/$'
     | '/news/companella'
     | '/packs/collections'
     | '/player/$username'
@@ -1044,13 +1065,13 @@ export interface FileRouteTypes {
     | '/api/companella/replay'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
-    | '/farm-helper/map/$beatmapId'
     | '/player/$username/about'
     | '/player/$username/activity'
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
+    | '/recommendations/map/$beatmapId'
     | '/videos/$id/$filename'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
@@ -1083,6 +1104,7 @@ export interface FileRouteTypes {
     | '/packs'
     | '/privacy'
     | '/rankings'
+    | '/recommendations'
     | '/replay'
     | '/report'
     | '/settings'
@@ -1135,6 +1157,7 @@ export interface FileRouteTypes {
     | '/companella/test-callback'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
+    | '/farm-helper/$'
     | '/news/companella'
     | '/packs/collections'
     | '/player/$username'
@@ -1149,13 +1172,13 @@ export interface FileRouteTypes {
     | '/api/companella/replay'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
-    | '/farm-helper/map/$beatmapId'
     | '/player/$username/about'
     | '/player/$username/activity'
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
+    | '/recommendations/map/$beatmapId'
     | '/videos/$id/$filename'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
@@ -1188,6 +1211,7 @@ export interface FileRouteTypes {
     | '/packs'
     | '/privacy'
     | '/rankings'
+    | '/recommendations'
     | '/replay'
     | '/report'
     | '/settings'
@@ -1240,6 +1264,7 @@ export interface FileRouteTypes {
     | '/companella_/test-callback'
     | '/dev/opt-in-preview'
     | '/dev/recent-ratings-preview'
+    | '/farm-helper/$'
     | '/news_/companella'
     | '/packs_/collections'
     | '/player/$username'
@@ -1254,13 +1279,13 @@ export interface FileRouteTypes {
     | '/api/companella/replay'
     | '/companella_/docs_/openapi.yaml'
     | '/companella_/docs_/reference-client.mjs'
-    | '/farm-helper/map/$beatmapId'
     | '/player/$username/about'
     | '/player/$username/activity'
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
     | '/pull/$ownerId/$cardId'
+    | '/recommendations/map/$beatmapId'
     | '/videos/$id/$filename'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
@@ -1294,6 +1319,7 @@ export interface RootRouteChildren {
   PacksRoute: typeof PacksRoute
   PrivacyRoute: typeof PrivacyRoute
   RankingsRoute: typeof RankingsRoute
+  RecommendationsRoute: typeof RecommendationsRouteWithChildren
   ReplayRoute: typeof ReplayRoute
   ReportRoute: typeof ReportRoute
   SettingsRoute: typeof SettingsRoute
@@ -1489,6 +1515,13 @@ declare module '@tanstack/react-router' {
       path: '/rankings'
       fullPath: '/rankings'
       preLoaderRoute: typeof RankingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recommendations': {
+      id: '/recommendations'
+      path: '/recommendations'
+      fullPath: '/recommendations'
+      preLoaderRoute: typeof RecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/replay': {
@@ -1855,6 +1888,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevRecentRatingsPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/farm-helper/$': {
+      id: '/farm-helper/$'
+      path: '/$'
+      fullPath: '/farm-helper/$'
+      preLoaderRoute: typeof FarmHelperSplatRouteImport
+      parentRoute: typeof FarmHelperRoute
+    }
     '/news_/companella': {
       id: '/news_/companella'
       path: '/news/companella'
@@ -1953,13 +1993,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CompanellaDocsReferenceClientDotmjsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/farm-helper/map/$beatmapId': {
-      id: '/farm-helper/map/$beatmapId'
-      path: '/map/$beatmapId'
-      fullPath: '/farm-helper/map/$beatmapId'
-      preLoaderRoute: typeof FarmHelperMapBeatmapIdRouteImport
-      parentRoute: typeof FarmHelperRoute
-    }
     '/player/$username/about': {
       id: '/player/$username/about'
       path: '/about'
@@ -2001,6 +2034,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/pull/$ownerId/$cardId'
       preLoaderRoute: typeof PullOwnerIdCardIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/recommendations/map/$beatmapId': {
+      id: '/recommendations/map/$beatmapId'
+      path: '/map/$beatmapId'
+      fullPath: '/recommendations/map/$beatmapId'
+      preLoaderRoute: typeof RecommendationsMapBeatmapIdRouteImport
+      parentRoute: typeof RecommendationsRoute
     }
     '/videos/$id/$filename': {
       id: '/videos/$id/$filename'
@@ -2097,15 +2137,27 @@ declare module '@tanstack/react-router' {
 }
 
 interface FarmHelperRouteChildren {
-  FarmHelperMapBeatmapIdRoute: typeof FarmHelperMapBeatmapIdRoute
+  FarmHelperSplatRoute: typeof FarmHelperSplatRoute
 }
 
 const FarmHelperRouteChildren: FarmHelperRouteChildren = {
-  FarmHelperMapBeatmapIdRoute: FarmHelperMapBeatmapIdRoute,
+  FarmHelperSplatRoute: FarmHelperSplatRoute,
 }
 
 const FarmHelperRouteWithChildren = FarmHelperRoute._addFileChildren(
   FarmHelperRouteChildren,
+)
+
+interface RecommendationsRouteChildren {
+  RecommendationsMapBeatmapIdRoute: typeof RecommendationsMapBeatmapIdRoute
+}
+
+const RecommendationsRouteChildren: RecommendationsRouteChildren = {
+  RecommendationsMapBeatmapIdRoute: RecommendationsMapBeatmapIdRoute,
+}
+
+const RecommendationsRouteWithChildren = RecommendationsRoute._addFileChildren(
+  RecommendationsRouteChildren,
 )
 
 interface PlayerUsernameRouteChildren {
@@ -2206,6 +2258,7 @@ const rootRouteChildren: RootRouteChildren = {
   PacksRoute: PacksRoute,
   PrivacyRoute: PrivacyRoute,
   RankingsRoute: RankingsRoute,
+  RecommendationsRoute: RecommendationsRouteWithChildren,
   ReplayRoute: ReplayRoute,
   ReportRoute: ReportRoute,
   SettingsRoute: SettingsRoute,

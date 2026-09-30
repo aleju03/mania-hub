@@ -284,11 +284,11 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
       props.rankings_sort = parseUnratedPlaysSort(params.get("sort"));
       props.rankings_range = parseUnratedPlaysRange(params.get("range"));
     }
-  } else if (pathname === "/farm-helper") {
+  } else if (pathname === "/recommendations") {
     const user = params.get("user");
     if (user) props.farm_helper_user = user;
-  } else if (pathname.startsWith("/farm-helper/map/")) {
-    const beatmapId = pathname.slice("/farm-helper/map/".length).split("/")[0];
+  } else if (pathname.startsWith("/recommendations/map/")) {
+    const beatmapId = pathname.slice("/recommendations/map/".length).split("/")[0];
     const context = readFarmMapContext(beatmapId);
     if (context.title) props.farm_map_title = context.title;
     if (context.user) props.farm_map_user = context.user;

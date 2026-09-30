@@ -3199,102 +3199,79 @@ async function renderDefaultBrandOg(request: Request): Promise<Response> {
   return response;
 }
 
-/* Farm helper layout: deliberately quieter than the scrapbook cards.
-   Flat surface, no avatar backdrop, no scatter. Left: the pink
-   "farm helper" title sticker. Right: a tidy stack of three paper
-   cards, one per recommendation reason (missing / improve / old pb in
-   the app's accent colours), each with an illustrative pp gain and an
-   abstract title bar standing in for the map name. Reads as "this tool
-   hands you a short list of maps", which is exactly what it does.
-   Behind it all sits a heavily dimmed mosaic of actual farmed-map cover
-   art (the maps snapshot's farmed tab), so the surface has texture
-   without competing with the foreground. The backdrop is optional: with
-   no farmed data the card renders on the flat surface. */
-function farmHelperRecCard(props: {
-  reason: string;
-  reasonColor: string;
-  gain: string;
-  barWidth: number;
-  rotate: number;
-  top: number;
-  left: number;
+/* Recommendations layout (the page was the farm helper until 2026-09-30):
+   one paper list shaped like the page's own rows, with the title sticker
+   pinned over its top-left corner. Rows mix the two things the page hands
+   out: pp gains with their reason chip (missing / improve in the app's
+   accent colours) and skill picks with their MSD and skillset, one on DT.
+   Covers are real farmed-map art; title and artist stay abstract bars.
+   Behind it sits a heavily dimmed mosaic of farmed-map covers (the maps
+   snapshot's farmed tab); with no farmed data the card renders on the flat
+   surface and the thumbnails as dark blocks. */
+function recommendationRow(props: {
+  rank: number;
+  cover: string | null;
+  titleBarWidth: number;
+  subBarWidth: number;
+  chip: { text: string; background: string } | null;
+  value: string;
+  label: string | null;
+  last: boolean;
   key: string;
 }) {
-  const { reason, reasonColor, gain, barWidth, rotate, top, left, key } = props;
+  const { rank, cover, titleBarWidth, subBarWidth, chip, value, label, last, key } = props;
   return h(
     "div",
     {
       key,
       style: {
-        position: "absolute",
-        top: `${top}px`,
-        left: `${left}px`,
         display: "flex",
-        flexDirection: "column",
-        width: "480px",
-        padding: "24px 28px",
-        background: "#f3ece4",
-        boxSizing: "border-box",
-        transform: `rotate(${rotate}deg)`,
-        gap: "16px",
+        flexDirection: "row",
+        alignItems: "center",
+        padding: "14px 0",
+        gap: "20px",
+        borderBottom: last ? "none" : "2px solid #e2d8cd",
       },
     },
     [
       h(
         "div",
-        {
-          key: "row",
-          style: {
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-          },
-        },
+        { key: "rank", style: { display: "flex", width: "28px", justifyContent: "flex-end", fontSize: "26px", fontWeight: 900, color: "#9a8f86" } },
+        String(rank),
+      ),
+      h(
+        "div",
+        { key: "thumb", style: { display: "flex", width: "112px", height: "63px", background: PHOTO_BG_COLOR, overflow: "hidden", flexShrink: 0 } },
+        cover ? h("img", { src: cover, style: { width: "112px", height: "63px", objectFit: "cover" } }) : null,
+      ),
+      h(
+        "div",
+        { key: "bars", style: { display: "flex", flexDirection: "column", gap: "12px", width: "300px", flexShrink: 0 } },
         [
-          h(
+          h("div", { key: "title", style: { display: "flex", width: `${titleBarWidth}px`, height: "16px", borderRadius: "8px", background: "#cfc4b8" } }),
+          h("div", { key: "sub", style: { display: "flex", width: `${subBarWidth}px`, height: "12px", borderRadius: "6px", background: "#ddd3c8" } }),
+        ],
+      ),
+      chip
+        ? h(
             "div",
             {
               key: "chip",
-              style: {
-                display: "flex",
-                padding: "8px 14px",
-                background: reasonColor,
-                color: "#1a1317",
-                fontSize: "28px",
-                fontWeight: 900,
-                lineHeight: "1.0",
-              },
+              style: { display: "flex", padding: "6px 12px", background: chip.background, color: "#1a1317", fontSize: "24px", fontWeight: 900, lineHeight: "1.0" },
             },
-            reason,
-          ),
-          h(
-            "div",
-            {
-              key: "gain",
-              style: {
-                marginLeft: "auto",
-                fontSize: "44px",
-                fontWeight: 900,
-                color: "#1a1317",
-                lineHeight: "1.0",
-              },
-            },
-            gain,
-          ),
+            chip.text,
+          )
+        : null,
+      h(
+        "div",
+        { key: "value", style: { display: "flex", flexDirection: "column", alignItems: "flex-end", marginLeft: "auto", flexShrink: 0 } },
+        [
+          h("div", { key: "num", style: { fontSize: "44px", fontWeight: 900, color: "#1a1317", lineHeight: "1.0" } }, value),
+          label
+            ? h("div", { key: "label", style: { marginTop: "4px", fontSize: "20px", fontWeight: 900, color: "#8a7f76", lineHeight: "1.0" } }, label)
+            : null,
         ],
       ),
-      // Abstract map-title bar: a placeholder shape instead of a fake
-      // beatmap name.
-      h("div", {
-        key: "bar",
-        style: {
-          display: "flex",
-          width: `${barWidth}px`,
-          height: "14px",
-          borderRadius: "7px",
-          background: "#cfc4b8",
-        },
-      }),
     ],
   );
 }
@@ -3537,12 +3514,14 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
     );
   }
 
-  // Reason colours mirror REASON_META in src/routes/farm-helper.tsx
-  // (osu-blue, osu-green-light, osu-yellow).
-  const recs = [
-    { reason: "missing", reasonColor: "#66ccff", gain: "+41pp", barWidth: 300, rotate: -1.4, top: 105, left: 660 },
-    { reason: "improve", reasonColor: "#b3d944", gain: "+24pp", barWidth: 250, rotate: 1.2, top: 253, left: 642 },
-    { reason: "old pb", reasonColor: "#ffcc22", gain: "+18pp", barWidth: 330, rotate: -0.8, top: 401, left: 668 },
+  // Reason colours mirror REASON_META in src/routes/recommendations.tsx
+  // (osu-blue, osu-green-light); DT is the site's mod-badge purple.
+  const covers = pool ? shuffle(pool.covers, mulberry32(hashString("recommendations"))).slice(0, 4) : [];
+  const rows = [
+    { chip: { text: "missing", background: "#66ccff" }, value: "+41pp", label: null, titleBarWidth: 250, subBarWidth: 160 },
+    { chip: { text: "DT", background: "#c79bff" }, value: "21.94", label: "tech", titleBarWidth: 210, subBarWidth: 180 },
+    { chip: { text: "improve", background: "#b3d944" }, value: "+24pp", label: null, titleBarWidth: 280, subBarWidth: 140 },
+    { chip: null, value: "21.90", label: "stream", titleBarWidth: 240, subBarWidth: 170 },
   ];
 
   const response = new ImageResponse(
@@ -3564,36 +3543,53 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
         // Dimmed farmed-map cover mosaic (when available).
         mosaic,
 
-        // Title sticker on the left, vertically centred against the
-        // card stack. Sub-line echoes the app's own "you could gain"
-        // header copy.
+        // The list, one paper sheet.
+        h(
+          "div",
+          {
+            key: "list",
+            style: {
+              position: "absolute",
+              top: "176px",
+              left: "236px",
+              display: "flex",
+              flexDirection: "column",
+              width: "880px",
+              padding: "22px 36px 8px",
+              background: "#f3ece4",
+              boxSizing: "border-box",
+              transform: "rotate(0.8deg)",
+            },
+          },
+          rows.map((row, i) =>
+            recommendationRow({
+              key: `row-${i}`,
+              rank: i + 1,
+              cover: covers[i] ?? null,
+              titleBarWidth: row.titleBarWidth,
+              subBarWidth: row.subBarWidth,
+              chip: row.chip,
+              value: row.value,
+              label: row.label,
+              last: i === rows.length - 1,
+            }),
+          ),
+        ),
+
+        // Title sticker pinned over the list's top-left corner.
         sticker({
           key: "title",
-          text: "farm helper",
-          subText: "PP YOU COULD GAIN",
-          fontSize: 76,
+          text: "recommendations",
+          subText: "MAPS WORTH PLAYING",
+          fontSize: 64,
           background: "#ff66aa",
           color: "#1a1317",
-          paddingX: 32,
-          paddingY: 24,
+          paddingX: 28,
+          paddingY: 20,
           rotate: -2,
-          top: 238,
+          top: 76,
           left: 80,
         }),
-
-        // The recommendation stack.
-        ...recs.map((rec, i) =>
-          farmHelperRecCard({
-            key: `rec-${i}`,
-            reason: rec.reason,
-            reasonColor: rec.reasonColor,
-            gain: rec.gain,
-            barWidth: rec.barWidth,
-            rotate: rec.rotate,
-            top: rec.top,
-            left: rec.left,
-          }),
-        ),
 
         // Small brand mark, bottom-left corner.
         sticker({

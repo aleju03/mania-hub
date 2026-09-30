@@ -118,16 +118,16 @@ const SPEED_RATES: Record<LiveFarmHelperSpeedBucket, number> = {
 const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v2:";
 const FARM_MAP_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 
-export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
+export const Route = createFileRoute("/recommendations/map/$beatmapId")({
   validateSearch: (search: Record<string, unknown>): FarmMapSearch => ({
     user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 80) : undefined,
     key: parseFarmKeyMode(search.key),
     speed: parseFarmSpeed(search.speed),
   }),
   head: ({ match }) => pageSeo({
-    title: "Farm Map Detail",
-    description: "osu!mania farm map detail with difficulty metrics, radar chart, density timeline, and chart preview.",
-    path: `/farm-helper/map/${match.params.beatmapId}`,
+    title: "Recommended Map Detail",
+    description: "osu!mania recommended map detail with difficulty metrics, radar chart, density timeline, and chart preview.",
+    path: `/recommendations/map/${match.params.beatmapId}`,
     origin: match.context.origin,
     imageKind: "farm-helper",
   }),
@@ -241,13 +241,13 @@ function FarmMapDetailPage() {
               if (typeof window !== "undefined" && window.history.length > 1) {
                 window.history.back();
               } else {
-                void navigate({ to: "/farm-helper" });
+                void navigate({ to: "/recommendations" });
               }
             }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>{t`farm helper`}</span>
+            <span>{t`recommendations`}</span>
           </button>
         }
       />

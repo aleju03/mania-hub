@@ -43,7 +43,7 @@ const NAV_LEAVES = {
   packs: { id: "packs", to: "/packs", label: "open packs" },
   skins: { id: "skins", to: "/skins", label: "skins" },
   snipes: { id: "snipes", to: "/snipes", label: "snipes" },
-  "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
+  "farm-helper": { id: "farm-helper", to: "/recommendations", label: "recommendations" },
   replay: { id: "replay", to: "/replay", label: "watch replays" },
   bbcode: { id: "bbcode", to: "/bbcode", label: "BBCode editor" },
   discord: { id: "discord", to: "/discord", label: "Discord bot" },
@@ -88,7 +88,7 @@ const NAV_LABELS: Record<NavLeafId, ReturnType<typeof msg>> = {
   packs: msg`open packs`,
   skins: msg`skins`,
   snipes: msg`snipes`,
-  "farm-helper": msg`farm helper`,
+  "farm-helper": msg`recommendations`,
   replay: msg`watch replays`,
   bbcode: msg`BBCode editor`,
   discord: msg`Discord bot`,
@@ -599,8 +599,8 @@ export function Nav() {
       navigate({ to: "/snipes", search: preserveSearchWithCountry(country), replace: true });
       return;
     }
-    if (location.pathname === "/farm-helper") {
-      // Farm Helper is global; changing country only updates the app shell.
+    if (location.pathname === "/recommendations") {
+      // Recommendations are global; changing country only updates the app shell.
       return;
     }
     if (location.pathname === "/maps") {

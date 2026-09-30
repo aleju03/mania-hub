@@ -227,6 +227,7 @@ export function eventLabelForPath(path: string | null, username?: string | null)
     snipes: "SNIPES",
     replay: "REPLAY",
     "farm-helper": "FARM HELPER",
+    recommendations: "RECOMMENDATIONS",
     goals: "GOALS",
     packs: "CARD PACKS",
     skins: "SKINS",

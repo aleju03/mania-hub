@@ -339,7 +339,7 @@ describe("describeAnalyticsEvent", () => {
     });
     expect(describeAnalyticsEvent(row({ path: "/farm-helper", farmHelperUser: "juan" }))).toMatchObject({
       kind: "farm",
-      subject: "farm help for juan",
+      subject: "recommendations for juan",
     });
     expect(describeAnalyticsEvent(row({ event: "pack_open", packType: "elite", signedIn: true }))).toMatchObject({
       kind: "pack",

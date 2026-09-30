@@ -315,7 +315,7 @@ const SHARE_SURFACE_LABELS: Record<string, string> = {
   tracker: "Tracker",
   "top-plays": "Top plays",
   snipes: "Snipes",
-  "farm-helper": "Farm helper",
+  "farm-helper": "Recommendations",
   goals: "Goals",
   packs: "Packs",
   skins: "Skins",

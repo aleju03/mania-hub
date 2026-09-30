@@ -28,6 +28,7 @@ export const SALVAGEABLE_ROUTES = [
   "packs",
   "privacy",
   "rankings",
+  "recommendations",
   "replay",
   "report",
   "settings",

@@ -129,7 +129,9 @@ msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, other {{2} 次游玩}}"
 
 #. placeholder {0}: onCharts.charts
+#. placeholder {0}: skillBoard?.recs.length ?? 0
 #: src/components/player/SkillBreakdown.tsx
+#: src/routes/recommendations.tsx
 msgid "{0, plural, one {# chart} other {# charts}}"
 msgstr "{0, plural, other {# 张谱面}}"
 
@@ -166,7 +168,7 @@ msgstr "{0, plural, other {# 个 mania 难度}}"
 #. placeholder {0}: summary.memberCount
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/UserCollectionsSection.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{0, plural, one {# map} other {# maps}}"
 msgstr "{0, plural, other {# 个谱面}}"
 
@@ -186,7 +188,7 @@ msgid "{0, plural, one {# member} other {# members}}"
 msgstr "{0, plural, other {# 名成员}}"
 
 #. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
 msgstr "{0, plural, other {还有 # 张图被隐藏，因为它们对你来说加不到 1pp}}"
 
@@ -364,7 +366,7 @@ msgstr "{0} / {BINDER_MAX_PER_COLLECTOR} 个卡组 · 每组最多 {BINDER_MAX_C
 #. placeholder {0}: farmContext?.artist ?? t`unknown artist`
 #. placeholder {1}: beatmapset.creator
 #. placeholder {1}: farmContext?.creator ?? t`unknown`
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "{0} / mapped by {1}"
 msgstr "{0} / 谱师 {1}"
 
@@ -603,7 +605,7 @@ msgstr "{0} 多"
 #. placeholder {1}: entries.length
 #. placeholder {1}: formatPp(totalQualifying)
 #: src/components/skins/SkinAssetExplorer.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{0} of {1}"
 msgstr "第 {0} / {1}"
 
@@ -731,6 +733,7 @@ msgstr "{0} 名玩家"
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
+#: src/routes/recommendations.tsx
 msgid "{0} plays"
 msgstr "{0} 次游玩"
 
@@ -823,7 +826,7 @@ msgstr "来自 {1} 的 {0} 个音效"
 
 #. placeholder {0}: farmContext.stars.toFixed(2)
 #. placeholder {0}: selectedBeatmap.difficultyRating.toFixed(2)
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "{0} stars"
 msgstr "{0} 星"
 
@@ -1206,7 +1209,7 @@ msgid "{days} days ago"
 msgstr "{days} 天前"
 
 #: src/lib/goal-format.ts
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{days}d"
 msgstr "{days} 天"
 
@@ -1290,7 +1293,7 @@ msgstr "{have} / {want} 个成绩"
 #~ msgid "{headRate}/s · {duration}ms median hold"
 #~ msgstr "{headRate}/秒 · 长键时长中位数 {duration}ms"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
 msgstr "{hiddenByMarks, plural, other {有 # 张谱面被你的标记隐藏}}"
 
@@ -1385,7 +1388,7 @@ msgstr "还差 {left}%"
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
 msgstr "{mapCount, plural, other {# 条最佳成绩}}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
 msgstr "{mapCount, plural, other {共 # 张谱面}}"
 
@@ -1422,7 +1425,7 @@ msgid "{months} months ago"
 msgstr "{months} 个月前"
 
 #: src/lib/goal-format.ts
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{months}mo"
 msgstr "{months} 个月"
 
@@ -1535,27 +1538,27 @@ msgstr "{ordinal} 段"
 msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 msgstr "在<0>{0}</0>中找到 {otherTabMatches, plural, other {# 个匹配}}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of players near you farm this"
 msgstr "与你水平相近的玩家中有 {pct}% 在刷这张"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this {rowMods} and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
 msgstr "与你 pp 相近的玩家中有 {pct}% 用 {rowMods} 刷这张，平均 {median}pp。你在这张谱面上的最好成绩是 {otherPp}pp {otherMods}。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
 msgstr "与你 pp 相近的玩家中有 {pct}% 在刷这张，平均 {median}pp。你在这张谱面上的最好成绩是 {otherPp}pp {otherMods}。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this and hold {median}pp on it, but its difficulty sits above what your plays have shown so far. Practice material, not farm yet."
 msgstr "你 pp 附近有 {pct}% 的玩家在刷这张图，平均拿到 {median}pp，但它的难度超出了你目前成绩所展示的水平。适合练习，还不适合刷分。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this and it is not in your top plays. They average {median}pp on it."
 msgstr "与你 pp 相近的玩家中有 {pct}% 在刷这张，而它不在你的最佳成绩里。他们在这张上平均 {median}pp。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this. You already have {yourPp}pp here against their {median}pp median."
 msgstr "与你 pp 相近的玩家中有 {pct}% 在刷这张。你在这里已有 {yourPp}pp，他们的中位数是 {median}pp。"
 
@@ -1641,7 +1644,7 @@ msgstr "{rated, plural, other {# 名成员}}"
 msgid "{rest} others"
 msgstr "其他 {rest} 人"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
 msgstr "{sample, plural, other {采样了你 pp 附近的 # 名玩家}}"
 
@@ -1832,7 +1835,7 @@ msgid "{years} years ago"
 msgstr "{years} 年前"
 
 #: src/lib/goal-format.ts
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{years}y"
 msgstr "{years} 年"
 
@@ -1974,7 +1977,7 @@ msgstr "<0>{username} 未被追踪</0>，所以这里只对该玩家上架谱面
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> 会把每个新的 {country} 最佳成绩发到运行该命令的频道里。其他 feed 还有狙击和新刷分谱面，<1>min_pp</1> 可以跳过低于阈值的成绩。<2>/subscriptions</2> 列出服务器已启用的 feed，<3>/unsubscribe</3> 停止其中一个。订阅需要「管理服务器」权限。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> 是你达到目标分数后的预计收益，已按你当前的最佳成绩加权。"
 
@@ -2585,7 +2588,7 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "a while"
 msgstr "一段时间"
 
@@ -3111,15 +3114,15 @@ msgstr "一个外部应用"
 msgid "an imported skin"
 msgstr "导入的皮肤"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "An old PB you could probably beat."
 msgstr "一个你多半能超过的旧 PB。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "一个你多半能超过的旧成绩"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
 msgstr "分析"
 
@@ -3131,7 +3134,7 @@ msgstr "分析"
 msgid "Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating."
 msgstr "已安排分析。结果准备好后，评级会在此处自动更新。部分成绩可能不符合评级要求。"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis unavailable"
 msgstr "暂无分析"
 
@@ -3171,7 +3174,7 @@ msgstr "已有一个回放视频正在导出，请先完成或取消它。"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "any"
 msgstr "不限"
@@ -3467,7 +3470,7 @@ msgstr "平均强度，0-100"
 #~ msgid "Avg length"
 #~ msgstr "平均时长"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "avg nps"
 msgstr "平均 nps"
 
@@ -3610,7 +3613,7 @@ msgstr "没有单独设置的列所使用的长条头基础颜色。"
 msgid "Base tap color used for any column without a per-column override."
 msgstr "没有单独设置的列所使用的单点基础颜色。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
 msgstr "基于相近 pp 的玩家都在刷什么："
 
@@ -3625,7 +3628,7 @@ msgid "BBCode editor"
 msgstr "BBCode 编辑器"
 
 #. placeholder {0}: mark.beatmapId
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "beatmap #{0}"
 msgstr "谱面 #{0}"
 
@@ -3770,7 +3773,7 @@ msgid "Biggest"
 msgstr "谱面最多"
 
 #. placeholder {0}: formatGainWithUnit(biggest, unit)
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "biggest {0}"
 msgstr "最大 {0}"
 
@@ -3778,7 +3781,7 @@ msgstr "最大 {0}"
 msgid "Biggest day"
 msgstr "最多的一天"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "biggest jump first"
 msgstr "涨幅最大优先"
 
@@ -4087,7 +4090,7 @@ msgstr "居中"
 msgid "Ch"
 msgstr "断"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "change"
 msgstr "更换"
 
@@ -4120,7 +4123,7 @@ msgstr "更改名字"
 msgid "Change name on {0}"
 msgstr "{0} 可更改名字"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "change player"
 msgstr "更换玩家"
 
@@ -4316,8 +4319,8 @@ msgstr "请选择另一位收藏者收礼。"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Chordjack"
 msgstr "大叠"
 
@@ -4351,7 +4354,7 @@ msgstr "经典"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "clear"
 msgstr "清除"
 
@@ -4369,8 +4372,8 @@ msgstr "清除"
 msgid "Clear all"
 msgstr "清除全部"
 
-#: src/routes/farm-helper.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "clear attempt"
 msgstr "通关尝试"
 
@@ -4404,8 +4407,8 @@ msgstr "清除玩家筛选"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
 msgid "Clear search"
 msgstr "清除搜索"
@@ -4427,7 +4430,7 @@ msgid "Clear the search"
 msgstr "清除搜索"
 
 #: src/components/me/GoalsPanel.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "cleared"
 msgstr "已通关"
 
@@ -4590,7 +4593,7 @@ msgstr "关闭选择器"
 msgid "Close player"
 msgstr "关闭播放器"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Close preview"
 msgstr "关闭预览"
 
@@ -4746,7 +4749,7 @@ msgstr "ComboPosition"
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
 msgstr "每个标签后面加逗号。最多 {COMMUNITY_MAX_TAGS} 个，它们会变成别人浏览时的筛选项，所以请用别人真的会搜的词。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "common pick"
 msgstr "常见选择"
 
@@ -4804,7 +4807,7 @@ msgstr "Companella"
 #~ msgid "Companella now connects to Mania Tracker."
 #~ msgstr "Companella 现已可以连接 Mania Tracker。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
 msgstr "对比 {range} pp"
 
@@ -5138,7 +5141,7 @@ msgstr ""
 msgid "Could not submit that. Try again."
 msgstr "提交失败，请再试一次。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Couldn't build recommendations"
 msgstr "无法生成推荐"
 
@@ -5231,6 +5234,10 @@ msgstr "暂时无法加载最近成绩。"
 msgid "Couldn't load search results. Try again."
 msgstr "无法加载搜索结果。请重试。"
 
+#: src/routes/recommendations.tsx
+msgid "Couldn't load skill charts"
+msgstr ""
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load skills right now."
 msgstr "暂时无法加载技能。"
@@ -5280,7 +5287,7 @@ msgstr "无法加载上传列表，刷新重试。"
 msgid "Couldn't load the uploads."
 msgstr "无法加载上传的回放。"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Couldn't load this beatmapset."
 msgstr "无法加载这个谱面集。"
 
@@ -5300,11 +5307,11 @@ msgstr "现在无法加载这名玩家的成绩。卡片已经在你的收藏册
 msgid "Couldn't load this team right now."
 msgstr "暂时无法加载这个战队。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "couldn't load this view"
 msgstr "无法加载此视图"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Couldn't load this view"
 msgstr "无法加载此视图"
 
@@ -5356,7 +5363,7 @@ msgstr "目标保存失败，请检查数值后重试。"
 msgid "Couldn't save that goal. Try again in a moment."
 msgstr "目标保存失败，请稍后再试。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Couldn't save that. Try again in a moment."
 msgstr "保存失败。请稍后再试。"
 
@@ -5665,7 +5672,7 @@ msgid "Dan credit"
 msgstr "段位贡献"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "dan est."
 msgstr "段位估计"
 
@@ -5885,18 +5892,18 @@ msgstr "{hidden} 加入 osu! 比 {shown} 更早还是更晚？"
 msgid "Difference: {0}"
 msgstr "差额：{0}"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "difficulty"
 msgstr "难度"
 
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
 msgid "Difficulty"
 msgstr "难度"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Difficulty radar chart"
 msgstr "难度雷达图"
 
@@ -6038,7 +6045,7 @@ msgstr "不计入"
 #~ msgid "Does not count for dan."
 #~ msgstr "不计入段位。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "done"
 msgstr "刷够"
 
@@ -6048,7 +6055,7 @@ msgstr "刷够"
 msgid "Done"
 msgstr "完成"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "done with it"
 msgstr "刷够了"
 
@@ -6318,7 +6325,7 @@ msgstr "拿到 <0/>（<1/>）"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "在 {mapSlot} 上拿到 <0/>（<1/>）"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "easy"
 msgstr "易"
 
@@ -6439,7 +6446,7 @@ msgstr "每张谱面等概率"
 msgid "Equal chance per player"
 msgstr "每位玩家等概率"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "error"
 msgstr "错误"
 
@@ -6455,7 +6462,7 @@ msgstr "估算谱面的段位等级，并附上段位徽章。"
 msgid "Estimated dan"
 msgstr "段位估算"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "estimated gain"
 msgstr "预计收益"
 
@@ -6472,7 +6479,7 @@ msgstr "以此成绩替换你在该谱面上的先前最佳后估计增加的 pp
 msgid "Estimated size"
 msgstr "预计大小"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "estimates are rough until we've analyzed more of this player's plays"
 msgstr "在分析该玩家更多成绩之前，估算会比较粗略"
 
@@ -6520,7 +6527,7 @@ msgstr "每张谱面都有一个段位，你的段位根据你通过过的谱面
 msgid "every collector"
 msgstr "全部收藏者"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
 msgstr "你 pp 附近的玩家实际在打的所有刷分谱面，按持有人数排序。已通关的谱面也会保留，方便你看到自己已有的位置。"
 
@@ -6536,7 +6543,7 @@ msgstr "你已经贴出去的图片都会失效。"
 #~ msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
 #~ msgstr "每个段位系统还有最低 OD 要求：常规谱面 5.5，4K LN 是 7，7K LN 是 5。用 <0/> 把 OD 降到该系统的最低值以下，这个成绩就得不到段位认定；<1/> 在任何地方都得不到，因为它会放宽所有判定窗。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
 msgstr "这里的每张谱面都是提升技能的推荐。默认隐藏，直到你打出其中一个成绩。"
 
@@ -6590,7 +6597,7 @@ msgstr "所有人"
 msgid "Everyone watching your replays sees this skin."
 msgstr "看你回放的人都会看到这套皮肤。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "everything"
 msgstr "全部"
 
@@ -6720,30 +6727,30 @@ msgstr "下落音符"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
-msgid "farm helper"
-msgstr "刷 pp 助手"
+#~ msgid "farm helper"
+#~ msgstr "刷 pp 助手"
 
 #: src/routes/farm-helper.tsx
-msgid "Farm Helper"
-msgstr "刷图助手"
+#~ msgid "Farm Helper"
+#~ msgstr "刷图助手"
 
 #: src/routes/farm-helper.tsx
-msgid "Farm helper needs a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
-msgstr "Farm Helper 需要玩家的前 200 成绩，而这个账号从未在这里加载过。打开一次该玩家的个人主页即可。"
+#~ msgid "Farm helper needs a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
+#~ msgstr "Farm Helper 需要玩家的前 200 成绩，而这个账号从未在这里加载过。打开一次该玩家的个人主页即可。"
 
 #: src/routes/farm-helper.tsx
-msgid "Farm Helper needs the server"
-msgstr "刷图助手需要服务器"
+#~ msgid "Farm Helper needs the server"
+#~ msgstr "刷图助手需要服务器"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Farm map alert"
 msgstr "刷分谱面提醒"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Farm map detail"
 msgstr "刷图谱面详情"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "farm verdict"
 msgstr "刷图评估"
 
@@ -6820,7 +6827,7 @@ msgstr "Feed"
 msgid "Feeds are currently disabled on the backend."
 msgstr "后端当前已关闭 feed。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
 msgstr "感觉和你的水平不符？标记一下，推荐就会随之调整"
 
@@ -6906,15 +6913,15 @@ msgstr "筛选 {0} 的成绩…"
 msgid "Filter by keymode"
 msgstr "按键数筛选"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Filter maps"
 msgstr "筛选谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "filter maps..."
 msgstr "筛选谱面…"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "filtered out"
 msgstr "已被筛掉"
 
@@ -6996,13 +7003,22 @@ msgid "Find an osu!mania Discord server to join, or post your own."
 msgstr "找一个 osu!mania 的 Discord 服务器加入，或者发布你自己的。"
 
 #. placeholder {0}: viewer.username
-#: src/routes/farm-helper.tsx
-msgid "Find farm maps for {0}"
-msgstr "为 {0} 查找刷分谱面"
+#: src/routes/recommendations.tsx
+#~ msgid "Find farm maps for {0}"
+#~ msgstr "为 {0} 查找刷分谱面"
+
+#. placeholder {0}: viewer.username
+#: src/routes/recommendations.tsx
+msgid "Find maps for {0}"
+msgstr "为 {0} 查找谱面"
 
 #: src/routes/farm-helper.tsx
-msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
-msgstr "根据水平相近的玩家、没打过的谱面、可提升的成绩和陈旧的个人最好成绩，找出值得刷的 osu!mania 谱面。"
+#~ msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
+#~ msgstr "根据水平相近的玩家、没打过的谱面、可提升的成绩和陈旧的个人最好成绩，找出值得刷的 osu!mania 谱面。"
+
+#: src/routes/recommendations.tsx
+msgid "Find osu!mania maps worth playing, based on nearby players, missing clears, improvable scores, old PBs and your skillsets."
+msgstr "根据水平相近的玩家、没打过的谱面、可提升的成绩、陈旧的个人最好成绩和你的技能组，找出值得打的 osu!mania 谱面。"
 
 #: src/components/layout/Nav.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -7025,8 +7041,8 @@ msgstr "正在收尾文件"
 msgid "Finishing the test client connection."
 msgstr ""
 
-#: src/routes/farm-helper.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Finishing this looks risky for you; treat it as a clear attempt, not a farm"
 msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是刷分"
 
@@ -7176,7 +7192,7 @@ msgstr "垂直翻转"
 msgid "Follow SV changes"
 msgstr "跟随 SV 变化"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "for"
 msgstr "为"
 
@@ -7200,7 +7216,7 @@ msgstr ""
 msgid "For screenshots that have nothing to do with the skin."
 msgstr "用于与皮肤无关的截图。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "for you"
 msgstr "为你推荐"
 
@@ -7293,7 +7309,7 @@ msgstr "完整"
 msgid "Full activity"
 msgstr "完整活跃度"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "full breakdown"
 msgstr "完整分析"
 
@@ -7421,8 +7437,8 @@ msgid "global favs"
 msgstr "全球收藏"
 
 #: src/routes/farm-helper.tsx
-msgid "Global mania farm helper"
-msgstr "全球 mania 刷图助手"
+#~ msgid "Global mania farm helper"
+#~ msgstr "全球 mania 刷图助手"
 
 #: src/routes/rankings.tsx
 msgid "Global mania rankings"
@@ -7545,6 +7561,7 @@ msgstr "坟场"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "Graveyard"
 msgstr "坟场"
 
@@ -7576,11 +7593,11 @@ msgstr "三押叠"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "三押切"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "hard"
 msgstr "难"
 
@@ -7642,11 +7659,11 @@ msgstr "已隐藏"
 msgid "Hidden"
 msgstr "已隐藏"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "hidden from your recs for 60 days, or until you set a new score on it"
 msgstr "已从你的推荐中隐藏 60 天，或直到你在上面打出新成绩"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "hidden from your recs until you clear it or set a score on it"
 msgstr "已从你的推荐中隐藏，直到你通关或在上面打出成绩"
 
@@ -7945,11 +7962,11 @@ msgstr "实际效果"
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
 #~ msgstr "Mania Tracker 如何为每张 osu!mania 谱面给出段位等级，以及如何根据玩家通过的谱面推算其段位。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "how many players near you farm it"
 msgstr "有多少与你水平相近的玩家在刷它"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "how many players near you have it"
 msgstr "有多少与你水平相近的玩家打过它"
 
@@ -8159,7 +8176,7 @@ msgstr "导入中"
 msgid "Importing… {0}%"
 msgstr "导入中… {0}%"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "improve"
 msgstr "可提升"
 
@@ -8301,7 +8318,7 @@ msgstr "国际"
 msgid "international servers"
 msgstr "国际服务器"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "谱面 ID 无效。"
 
@@ -8389,8 +8406,8 @@ msgstr "斜体"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jack"
 msgstr "叠"
 
@@ -8400,7 +8417,7 @@ msgstr "叠"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jackspeed"
 msgstr "速叠"
 
@@ -8494,8 +8511,8 @@ msgstr "跳转到某一页"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jumpstream"
 msgstr "双押切"
 
@@ -8562,7 +8579,7 @@ msgstr "按键音效"
 
 #: src/components/rankings/LeaderboardControls.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Key mode"
 msgstr "键数模式"
 
@@ -8602,7 +8619,7 @@ msgstr "键数"
 msgid "Keypresses"
 msgstr "按键数"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "keys"
 msgstr "键数"
@@ -8677,7 +8694,7 @@ msgstr "语言"
 msgid "Large"
 msgstr "大"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "large gap"
 msgstr "差距较大"
 
@@ -8989,8 +9006,8 @@ msgstr "实时更新已开启"
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "LN"
 msgstr "LN"
 
@@ -9036,7 +9053,7 @@ msgid "LN dan"
 msgstr "长条段位"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "LN dan est."
 msgstr "长条段位估计"
 
@@ -9248,7 +9265,7 @@ msgstr "正在加载历史…"
 msgid "Loading image…"
 msgstr "正在加载图片…"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Loading map shape analysis"
 msgstr "正在加载谱面形态分析"
 
@@ -9410,7 +9427,7 @@ msgstr "用 osu! 登录以上传皮肤"
 msgid "Logout"
 msgstr "退出登录"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
 msgstr "长条占比"
 
@@ -9458,6 +9475,7 @@ msgstr "社区喜爱"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "Loved"
 msgstr "社区喜爱"
 
@@ -9693,11 +9711,11 @@ msgstr "谱面搜索"
 msgid "map search unavailable"
 msgstr "谱面搜索不可用"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Map shape"
 msgstr "谱面构成"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "谱面不可用"
 
@@ -9717,7 +9735,7 @@ msgid "mapped by {0} · {1} plays"
 msgstr "谱师 {0} · {1} 次游玩"
 
 #: src/components/layout/Nav.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "maps"
 msgstr "谱面"
 
@@ -9738,11 +9756,11 @@ msgstr "谱面数据构建失败。"
 msgid "Maps played"
 msgstr "打过的谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "maps players near you farm"
 msgstr "你附近的玩家在刷的谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "maps players near you farm that sit above your shown skills"
 msgstr "你附近的玩家在刷、但难度超出你目前水平的图"
 
@@ -9750,9 +9768,13 @@ msgstr "你附近的玩家在刷、但难度超出你目前水平的图"
 msgid "Maps ready."
 msgstr "谱面数据已就绪。"
 
-#: src/routes/farm-helper.tsx
-msgid "maps worth farming"
-msgstr "值得刷的谱面"
+#: src/routes/recommendations.tsx
+#~ msgid "maps worth farming"
+#~ msgstr "值得刷的谱面"
+
+#: src/routes/recommendations.tsx
+#~ msgid "maps worth playing"
+#~ msgstr "值得打的谱面"
 
 #. placeholder {0}: formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))
 #: src/routes/snipes.tsx
@@ -9763,15 +9785,15 @@ msgstr "领先 <0>+{0}</0>"
 #~ msgid "Mark the export range"
 #~ msgstr "标记导出范围"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "marked done"
 msgstr "已标记刷够"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "marked easy"
 msgstr "已标记太易"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "marked hard"
 msgstr "已标记太难"
 
@@ -9819,15 +9841,15 @@ msgstr "MAX:300 之比"
 msgid "Mean"
 msgstr "平均偏差"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "median"
 msgstr "中位数"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "median {median}pp"
 msgstr "中位数 {median}pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "median {target}pp"
 msgstr "中位数 {target}pp"
 
@@ -9940,7 +9962,7 @@ msgstr "Miss"
 #~ msgid "Misses per 1k notes"
 #~ msgstr "每千物件 Miss 数"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "missing"
 msgstr "未打过"
 
@@ -9980,10 +10002,15 @@ msgstr "审核皮肤"
 msgid "moderation"
 msgstr "审核"
 
+#: src/routes/recommendations.tsx
+msgid "mods"
+msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "Mods"
 msgstr "Mod"
 
@@ -10139,7 +10166,7 @@ msgstr "上移"
 msgid "MP4 isn't available here, so the file is WebM."
 msgstr "此浏览器不支持 MP4，文件将保存为 WebM。"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "msd"
 msgstr "msd"
 
@@ -10246,7 +10273,7 @@ msgstr "为预设命名"
 msgid "Named {0}"
 msgstr "已命名为 {0}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
 msgstr "附近玩家的分数比你高"
 
@@ -10262,7 +10289,7 @@ msgstr "需要一个指向其 osu! 主页的 web.archive.org 链接。"
 #~ msgid "Never"
 #~ msgstr ""
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "never loaded here"
 msgstr "从未在此加载过"
 
@@ -10436,7 +10463,7 @@ msgstr "下一批玩家"
 msgid "Next preview"
 msgstr "下一段试听"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "next tier"
 msgstr "下一阶段"
 
@@ -10454,7 +10481,7 @@ msgid "no"
 msgstr "否"
 
 #. placeholder {0}: i18n._(REASON_META[reasonFilter].label)
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "No {0} maps right now"
 msgstr "现在没有{0}的谱面"
 
@@ -10525,6 +10552,14 @@ msgstr "还没有卡片。开一个卡包，开始你的收藏册。"
 msgid "No change in the last 7 days"
 msgstr "最近 7 天无变化"
 
+#: src/routes/recommendations.tsx
+msgid "no charts"
+msgstr ""
+
+#: src/routes/recommendations.tsx
+msgid "No charts in this range"
+msgstr ""
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "No collections here yet. Post the first one."
 msgstr "这里还没有收藏册，来发布第一个吧。"
@@ -10549,7 +10584,7 @@ msgstr "无段位贡献"
 msgid "No Dans"
 msgstr "隐藏段位"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no data"
 msgstr "无数据"
 
@@ -10569,7 +10604,7 @@ msgstr "没有符合筛选条件的收藏。试着放宽一些。"
 #~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
 #~ msgstr "还没有文件夹。建一个来随意归类你的卡片，想展示的话还能放到展示柜上。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no gains here"
 msgstr "这里没有提升空间"
 
@@ -10645,11 +10680,11 @@ msgstr "没有符合这些筛选条件的谱面。"
 msgid "No maps match your filters"
 msgstr "没有符合筛选条件的谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "No maps match your search"
 msgstr "没有符合搜索条件的谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no matches"
 msgstr "无匹配"
 
@@ -10748,7 +10783,7 @@ msgstr "没有符合筛选条件的成绩"
 #~ msgid "No plays sent through Companella yet."
 #~ msgstr "还没有通过 Companella 提交的成绩。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no pp range"
 msgstr "无 pp 区间"
 
@@ -10801,6 +10836,10 @@ msgstr "暂无评级，目前也未安排分析。"
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No rating system changes yet."
 msgstr "评分系统暂无更新。"
+
+#: src/routes/recommendations.tsx
+msgid "no ratings"
+msgstr ""
 
 #: src/routes/index.tsx
 msgid "No recent scores"
@@ -10890,6 +10929,10 @@ msgstr "这个战队的成员还没有技能评分。"
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
 msgstr "尚未记录任何技能评分。"
+
+#: src/routes/recommendations.tsx
+msgid "No skill ratings in this key mode yet"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "No skin loaded in the editor"
@@ -11157,7 +11200,7 @@ msgstr "不计入"
 msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
 msgstr "不计入：这次通过比本列表中最好的通过低五个以上段位，因此不参与平均"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Not enough data near your pp yet"
 msgstr "你 pp 附近的数据还不够"
 
@@ -11170,7 +11213,7 @@ msgstr "达标通过还不足以估算（{0}/{quorum}）。"
 msgid "Not enough room"
 msgstr "空间不足"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "not found"
 msgstr "未找到"
 
@@ -11178,8 +11221,8 @@ msgstr "未找到"
 msgid "Not here? Search osu! for \"{trimmedQuery}\""
 msgstr "不在列表里？在 osu! 上搜索“{trimmedQuery}”"
 
-#: src/routes/farm-helper.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "not in top plays"
 msgstr "不在最佳成绩里"
 
@@ -11287,7 +11330,7 @@ msgstr "没有叫这个名字的。"
 msgid "Nothing has been submitted yet."
 msgstr ""
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Nothing here would move your total"
 msgstr "这里没有能提升你总 pp 的谱面"
 
@@ -11340,9 +11383,13 @@ msgstr "没有缺少的卡牌。你已收集此卡池中的所有卡牌。"
 #~ msgid "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "本站上的任何东西都不是真正的段位通过。这里没有人是按段位课题认定过的。本站做的是另一件事：给每一张谱面自己评一个段位，再看你已经通过的那些谱面，从中读出一个段位。这就是为什么站内每个段位前面都写着「~」，也是为什么排行榜只把自己称作一个大致的排序。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
 msgstr "当前筛选下暂时没有符合的谱面，但其他理由下还有。"
+
+#: src/routes/recommendations.tsx
+msgid "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
+msgstr ""
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
@@ -11386,7 +11433,7 @@ msgstr "有序列表"
 msgid "Numbers only"
 msgstr "仅数字"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "objects"
 msgstr "物件数"
 
@@ -11400,7 +11447,7 @@ msgstr "获得于 {dateText}"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "OD"
 msgstr "OD"
 
@@ -11419,11 +11466,11 @@ msgstr "共 {0} 位可抽"
 msgid "of {0} shards left today"
 msgstr "/ 今日共 {0} 个碎片"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "of players near you"
 msgstr "占附近玩家比例"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "of players near you farm this"
 msgstr "与你水平相近的玩家刷这张"
 
@@ -11455,7 +11502,7 @@ msgstr "好的"
 msgid "old"
 msgstr "旧"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "old pb"
 msgstr "旧 PB"
 
@@ -11614,7 +11661,7 @@ msgstr "只有被限制的账号可以在这里更改名字。"
 msgid "Only scores tracked on this site are on the boards."
 msgstr "榜上只有本站追踪到的成绩。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Only skillboost maps right now"
 msgstr "当前只有提升技能的谱面"
 
@@ -11735,7 +11782,7 @@ msgstr "在此打开"
 msgid "Open in osu!"
 msgstr "在 osu! 中打开"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "open in osu! client"
 msgstr "在 osu! 客户端打开"
 
@@ -11752,7 +11799,7 @@ msgstr "在 BBCode 编辑器中打开"
 msgid "Open link"
 msgstr "打开链接"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Open map on osu!"
 msgstr "在 osu! 上打开谱面"
 
@@ -11787,7 +11834,7 @@ msgstr "用模拟的高强度数据打开当天弹窗"
 msgid "Open the in-browser replay viewer for a score."
 msgstr "在浏览器里打开某个成绩的回放播放器。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "open their profile"
 msgstr "打开其个人主页"
 
@@ -11854,11 +11901,11 @@ msgstr "选填"
 #~ msgid "Optional follow-up"
 #~ msgstr "可选补充说明"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "or pick someone else"
 msgstr "或选择其他玩家"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "或其他玩家"
 
@@ -12261,11 +12308,11 @@ msgstr "暂停试听"
 msgid "Peak"
 msgstr "最高"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "同水平在刷"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "peers hold"
 msgstr "玩家平均"
 
@@ -12339,7 +12386,7 @@ msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更�
 msgid "Pick another file"
 msgstr "换一个文件"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Pick any map on the left to preview it here."
 msgstr "点击左侧任意谱面即可在此预览。"
 
@@ -12359,7 +12406,7 @@ msgstr ""
 msgid "Pick one to load it into the editor."
 msgstr "选一个载入编辑器。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "pick the active one again to flip direction"
 msgstr "再次点击当前选项可切换排序方向"
 
@@ -12436,7 +12483,7 @@ msgstr "游玩习惯与打法分析：活跃天数、游玩场次和技能构成
 msgid "Play preview"
 msgstr "播放试听"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "play this"
 msgstr "在刷这张"
 
@@ -12515,8 +12562,8 @@ msgstr "玩家的皮肤"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/dan-estimates.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "players"
 msgstr "玩家"
 
@@ -12538,7 +12585,7 @@ msgstr "已制卡玩家"
 msgid "Players near your pp"
 msgstr "与你 pp 相近的玩家"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Players near your pp are farming maps, but right now every one of them would add less than 1pp for you. The popular view still shows what they play."
 msgstr "与你 pp 相近的玩家在刷谱面，但现在每一张对你来说都不到 1pp 的提升。热门视图里仍然能看到他们在打什么。"
 
@@ -12656,23 +12703,23 @@ msgstr "点"
 msgid "Polish"
 msgstr "波兰语"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popular"
 msgstr "热门"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popular near you"
 msgstr "你附近的热门"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popular nearby, you haven't played it"
 msgstr "附近很热门，你还没打过"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Popular with the players around you, and you have no top play on it with these mods."
 msgstr "在你附近的玩家中很热门，而你在这些 Mod 下还没有它的最佳成绩。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popularity"
 msgstr "热门程度"
 
@@ -12738,7 +12785,7 @@ msgstr "pp 分布"
 msgid "PP Distribution"
 msgstr "pp 分布"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "pp gain"
 msgstr "pp 提升"
 
@@ -12834,7 +12881,7 @@ msgstr "预览"
 
 #. placeholder {0}: rec.title
 #. placeholder {1}: rec.version
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Preview {0} [{1}]"
 msgstr "预览 {0} [{1}]"
 
@@ -13327,7 +13374,7 @@ msgstr "无法加载评级。点击“重试”以重新加载。"
 msgid "Ratio"
 msgstr "比值"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "raw difficulty"
 msgstr "原始难度"
 
@@ -13437,7 +13484,7 @@ msgstr "共被赠送 {timesText} 次，来自 {sendersText}"
 msgid "Received as a gift from {sendersText}"
 msgstr "由 {sendersText} 赠送而来"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "recent"
 msgstr "最近"
 
@@ -13511,6 +13558,24 @@ msgstr "最近观看"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "receptor art"
 msgstr "键位图像"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
+msgid "recommendations"
+msgstr "推荐"
+
+#: src/routes/recommendations.tsx
+msgid "Recommendations"
+msgstr "推荐"
+
+#: src/routes/recommendations.tsx
+msgid "Recommendations need a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
+msgstr "推荐需要玩家的前 200 成绩，而这个账号从未在这里加载过。打开一次该玩家的个人主页即可。"
+
+#: src/routes/recommendations.tsx
+msgid "Recommendations need the server"
+msgstr "推荐需要服务器"
 
 #. placeholder {0}: card.copies - 1
 #: src/components/packs/CollectionPanel.tsx
@@ -13687,7 +13752,7 @@ msgid "Remove {0}"
 msgstr "移除 {0}"
 
 #. placeholder {0}: player.username
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Remove {0} from recent"
 msgstr "从最近记录中移除 {0}"
 
@@ -14525,7 +14590,7 @@ msgstr "搜索玩家，或粘贴成绩 ID"
 msgid "Search a player, or paste a score link..."
 msgstr "搜索玩家，或粘贴成绩链接…"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "search a player..."
 msgstr "搜索玩家…"
 
@@ -15144,7 +15209,7 @@ msgstr "显示全部 {0} 个"
 msgid "Show details for {0}"
 msgstr "查看 {0} 的详情"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "show everything"
 msgstr "显示全部"
 
@@ -15209,11 +15274,11 @@ msgstr "改为从旧到新"
 msgid "Show on Showcase"
 msgstr "在展示区显示"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "show popular maps"
 msgstr "查看热门谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "show skillboost"
 msgstr "显示技能提升谱面"
 
@@ -15472,9 +15537,14 @@ msgstr "大小"
 msgid "Size"
 msgstr "大小"
 
+#: src/routes/recommendations.tsx
+msgid "skill"
+msgstr ""
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/LeaderboardControls.tsx
+#: src/routes/recommendations.tsx
 msgid "Skill"
 msgstr "技能"
 
@@ -15489,6 +15559,10 @@ msgstr "技能明细"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Skill breakdown unavailable"
 msgstr "技能明细不可用"
+
+#: src/routes/recommendations.tsx
+msgid "Skill charts need rated plays in 4K or 7K."
+msgstr ""
 
 #: src/components/maps/MapSearchSection.tsx
 #~ msgid "Skill detection is less tuned outside 4K."
@@ -15524,17 +15598,21 @@ msgstr "技能评分暂时不可用。"
 msgid "Skill shape: {shape}"
 msgstr "技能形态：{shape}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "skillboost"
 msgstr "技能提升"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "skillboost {target}pp"
 msgstr "技能提升 {target}pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "skillboost only"
 msgstr "仅技能提升"
+
+#: src/routes/recommendations.tsx
+msgid "skills"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
@@ -15767,13 +15845,17 @@ msgstr "出错了"
 msgid "Something else"
 msgstr "其他问题"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Something went wrong loading these maps. Try the toggle again in a moment."
 msgstr "加载这些谱面时出错。请稍后再切换一次。"
 
-#: src/routes/farm-helper.tsx
-msgid "Something went wrong loading this player's farm data. Try again in a moment."
-msgstr "加载这名玩家的刷图数据时出错。请稍后再试。"
+#: src/routes/recommendations.tsx
+#~ msgid "Something went wrong loading this player's farm data. Try again in a moment."
+#~ msgstr "加载这名玩家的刷图数据时出错。请稍后再试。"
+
+#: src/routes/recommendations.tsx
+msgid "Something went wrong loading this player's recommendations. Try again in a moment."
+msgstr "加载这名玩家的推荐时出错。请稍后再试。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Something went wrong."
@@ -15791,7 +15873,7 @@ msgstr "歌曲、艺术家或谱师"
 msgid "soon"
 msgstr "很快"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "sort"
 msgstr "排序"
 
@@ -15955,8 +16037,8 @@ msgstr "耐力"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stamina"
 msgstr "耐力"
 
@@ -15965,17 +16047,17 @@ msgid "Standard"
 msgstr "标准"
 
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
 msgid "Star rating"
 msgstr "星级"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "star rating shown for 1.0x"
 msgstr "星级按 1.0x 显示"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "stars"
 msgstr "星级"
 
@@ -16170,8 +16252,8 @@ msgstr "连续天数"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stream"
 msgstr "切"
 
@@ -16394,7 +16476,7 @@ msgstr "点击任意一个即可预览它的回复"
 msgid "Tap the stack or drag the top card to draw"
 msgstr "点击卡堆，或拖走最上面的卡片来抽卡"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "target"
 msgstr "目标"
 
@@ -16410,7 +16492,7 @@ msgstr "目标成绩数"
 msgid "Target rank"
 msgstr "目标排名"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "target score"
 msgstr "目标分数"
 
@@ -16418,7 +16500,7 @@ msgstr "目标分数"
 msgid "Target total pp"
 msgstr "目标总 pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "targets on this chart will aim higher until you set the score"
 msgstr "在你打出成绩之前，这张谱面的目标会定得更高"
 
@@ -16461,8 +16543,8 @@ msgstr "撕开 maniacard 补充包：随机的 osu!mania 玩家被制成收藏�
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Tech"
 msgstr "技"
 
@@ -17348,7 +17430,7 @@ msgstr "页面遇到意外错误，未能完成渲染。重新加载通常可以
 msgid "The page is over osu!'s 60,000 character limit."
 msgstr "页面超过了 osu! 的 60,000 字符上限。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
 msgstr "玩家面板可以留在这里，但这个视图没有返回新的谱面数据。"
 
@@ -17820,7 +17902,7 @@ msgstr "该谱面的构成方式无法从通过成绩中读出段位水平。"
 msgid "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
 msgstr "这张谱面不在谱面库里，所以除了成绩本身没有别的可显示。"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "这张谱面还没有被分析。"
 
@@ -17929,11 +18011,11 @@ msgstr "这个功能还不可用。请稍后再来。"
 msgid "this map"
 msgstr "这张谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "this map is below your level: targets on it will aim higher"
 msgstr "这张图低于你的水平：它的目标分会定得更高"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "this map is beyond your level: hides it from your recs until you set a score on it"
 msgstr "这张图超出你的水平：会从你的推荐中隐藏，直到你在上面打出成绩"
 
@@ -18083,7 +18165,7 @@ msgstr "此标签页已切到后台，导出可能会被暂停。"
 msgid "This team has no description."
 msgstr "这个战队没有简介。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "这个工具需要从服务器读取跨国家/地区的刷图数据，而当前环境没有配置服务器。"
 
@@ -18185,7 +18267,7 @@ msgstr "切换菜单"
 msgid "Toggles"
 msgstr "开关"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "too easy"
 msgstr "太简单"
 
@@ -18194,11 +18276,11 @@ msgstr "太简单"
 #~ msgid "Too far under {0} to count its whole distance"
 #~ msgstr "比{0}低太多，不会按全部差距计算"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "too hard"
 msgstr "太难"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
 msgstr "「太难」会把该谱面从你的收益视图中隐藏，「刷够了」同样隐藏 60 天；打出真实成绩也会清除标记"
 
@@ -18268,7 +18350,7 @@ msgstr "前 1000 名"
 msgid "Top 2%, new cards first"
 msgstr "前 2%，新卡优先"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "top 25% {target}pp"
 msgstr "前 25% {target}pp"
 
@@ -18407,7 +18489,7 @@ msgstr "三角形"
 #~ msgid "Tries before a PB"
 #~ msgstr "刷出 PB 前的尝试次数"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."
 msgstr "换一个标题、艺术家或难度名试试。"
 
@@ -18450,7 +18532,7 @@ msgstr "二"
 msgid "Tuesdays"
 msgstr "周二"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "tune your recs"
 msgstr "调整你的推荐"
 
@@ -18539,7 +18621,7 @@ msgstr "乌克兰语"
 msgid "Unanalyzed"
 msgstr "未分析"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "unavailable"
 msgstr "不可用"
 
@@ -18582,7 +18664,7 @@ msgstr "取消隐藏"
 #: src/components/packs/collections/RecordBoards.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/skins/SkinUpdateModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "unknown"
 msgstr "未知"
 
@@ -18593,7 +18675,7 @@ msgstr "未知"
 msgid "Unknown"
 msgstr "未知"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "unknown artist"
 msgstr "未知艺术家"
 
@@ -18667,7 +18749,7 @@ msgid "Unrateable"
 msgstr "无法评分"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "unrateable chart"
 msgstr "无法评分的谱面"
 
@@ -18936,7 +19018,7 @@ msgstr "用户名"
 msgid "Username"
 msgstr "用户名"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "username..."
 msgstr "用户名…"
 
@@ -18966,7 +19048,7 @@ msgstr "Vibro"
 msgid "vibro at {0}x"
 msgstr "{0}x 下为 vibro"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "vibro chart, estimate unreliable"
 msgstr "Vibro 谱面，估计值不可靠"
 
@@ -19027,6 +19109,12 @@ msgstr "越南语"
 msgid "View"
 msgstr "视图"
 
+#. placeholder {0}: rec.title
+#. placeholder {1}: rec.version
+#: src/routes/recommendations.tsx
+msgid "View {0} [{1}]"
+msgstr ""
+
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
 #: src/components/packs/CollectionPanel.tsx
@@ -19074,7 +19162,7 @@ msgstr "查看谱面详情"
 msgid "View map details"
 msgstr "查看谱面详情"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "View mode"
 msgstr "视图模式"
 
@@ -19091,7 +19179,7 @@ msgstr "在 osu! 上查看"
 msgid "View on osu! →"
 msgstr "在 osu! 上查看 →"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "view on osu! web"
 msgstr "在 osu! 网站查看"
 
@@ -19311,7 +19399,7 @@ msgstr "用玩家自己的皮肤观看（{ownerSkinName}）"
 msgid "Watermark"
 msgstr "水印"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "We don't have enough data on players near your pp to build recommendations. Try another key mode, or check back once more nearby players are tracked."
 msgstr "我们对你 pp 附近玩家的数据还不够，无法生成推荐。换一个键数试试，或者等更多相近玩家被追踪后再来。"
 
@@ -19354,11 +19442,11 @@ msgstr "服务器简介"
 #~ msgid "What it looks like across everyone"
 #~ msgstr "所有人加起来是什么样"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"
 msgstr "附近玩家实际在刷的谱面"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "what players near you played last"
 msgstr "与你水平相近的玩家最近在打什么"
 
@@ -19374,7 +19462,7 @@ msgstr "哪里看起来不对？"
 msgid "What you play"
 msgstr "你在玩什么"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "what you're browsing"
 msgstr "你在浏览的内容"
 
@@ -19436,11 +19524,11 @@ msgstr "追踪期间"
 msgid "Who can join"
 msgstr "谁可以加入"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "who farms this"
 msgstr "谁在刷这张"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Who farms this"
 msgstr "谁在刷这张"
 
@@ -19452,7 +19540,7 @@ msgstr "谁拥有你的卡片"
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
 msgstr "服务器面向哪些人、里面在做什么、什么时候热闹。换行会保留。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "who you're compared to"
 msgstr "你在和谁比较"
 
@@ -19460,7 +19548,7 @@ msgstr "你在和谁比较"
 msgid "Whole pool, new cards first"
 msgstr "整个卡池，新卡优先"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "why a map shows up"
 msgstr "谱面为何出现在这里"
 
@@ -19498,7 +19586,7 @@ msgstr "愿望单"
 msgid "Wishlist is full (5)"
 msgstr "愿望单已满（5）"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "with {mods}"
 msgstr "使用 {mods}"
 
@@ -19518,7 +19606,7 @@ msgstr "使用 {mods}"
 msgid "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
 msgstr "已评定的技能少于两个时，你的段位是你全部通过中最好的 20 次的平均。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "with no mods"
 msgstr "不使用 Mod"
 
@@ -19592,27 +19680,27 @@ msgstr "你"
 msgid "You"
 msgstr "你"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp."
 msgstr "你在这张上已经超过了附近玩家，但更高 acc 的重打仍然值 pp。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores."
 msgstr "你在这张上已经超过了附近玩家，但更高 acc 的重打仍然值 pp。默认隐藏，直到你达成其中一个目标成绩。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with {yourPp}pp, but that run had {misses, plural, one {# miss} other {# misses}}. Cutting them out is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平，但那次有 {misses, plural, other {# 个 miss}}。去掉它们能拿到大约 {target}pp。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。打一次准确率更干净的能拿到大约 {target}pp。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "你在这里已经打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "你在这里已经无 miss 打出 {yourPp}pp，超过了常见水平。把 320 加权准确率从 {from}% 提到 {to}% 能拿到大约 {target}pp。"
 
@@ -19698,7 +19786,7 @@ msgstr "现在，无论你是离线、在私服上游玩，还是被 osu! 限制
 msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
 msgstr "你可以在<0>设置</0>的偏好设置中撤销 Companella 的连接。撤销后它会立即停止上传成绩。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you could gain"
 msgstr "潜在收益"
 
@@ -19718,7 +19806,7 @@ msgstr "你答对了 {streak} 题。"
 msgid "You have a few reports waiting to be read already. Give a moderator a chance to catch up."
 msgstr "你已经有几条举报还没被处理。给管理员一点时间。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You have a score, but players near you score higher on it."
 msgstr "你有成绩，但附近玩家的分数更高。"
 
@@ -19730,7 +19818,7 @@ msgstr "你还没有发布过皮肤"
 msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
 msgstr "已达到 {HIDDEN_USERS_LIMIT} 名隐藏玩家的上限。移除一些后才能继续添加。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you have too many active marks, clear some first"
 msgstr "你标记的谱面太多了，先清掉一些"
 
@@ -19746,15 +19834,15 @@ msgstr "你还没有喜欢过任何收藏册。"
 msgid "You haven't posted a collection yet."
 msgstr "你还没有发布过收藏册。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You marked this done with it"
 msgstr "你已把它标记为刷够了"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You marked this too easy"
 msgstr "你已把这张标记为太简单"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You marked this too hard"
 msgstr "你已把这张标记为太难"
 
@@ -19778,7 +19866,7 @@ msgstr "你已没有这张卡片了。"
 #~ msgid "You pick where the file is saved."
 #~ msgstr "由你选择文件保存的位置。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
 msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以再打一次还有提升空间。"
 
@@ -19804,11 +19892,11 @@ msgstr "你已经被追踪了"
 #~ msgid "You're being tracked now. Your recent plays are being pulled in and will be rated here in a few minutes."
 #~ msgstr "你已经被追踪了。正在拉取你最近的成绩，几分钟后会在这里评分。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you're done improving this map: hides it from your recs for 60 days"
 msgstr "这张图你已经刷够了：会从你的推荐中隐藏 60 天"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you're logged out, log in again to save marks"
 msgstr "你已退出登录，重新登录后才能保存标记"
 
@@ -19839,15 +19927,15 @@ msgstr "你的"
 #~ msgid "Your {0} edition"
 #~ msgstr "你的{0}特别版"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your {yourPp}pp"
 msgstr "你的 {yourPp}pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your {yourPp}pp · {age} old"
 msgstr "你的 {yourPp}pp · 已过去 {age}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家中前四分之一在 {p75}pp。"
 
@@ -19867,7 +19955,7 @@ msgstr "准确率决定档位。在课程要求 96% 的段位表上，delta 课�
 #~ msgid "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, and 98% and up as <2>delta++</2>. Come up short at 94% and you still get <3>delta--</3>, since getting that close is worth something. Below that you get nothing. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "档次由你的准度决定。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>。94% 差一点没过，你仍然能拿到 <3>delta--</3>，因为差这么一点也算数。再低就什么都没有。要求别的准度的段位系统，整条刻度也跟着平移。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your best"
 msgstr "你的最佳"
 
@@ -19875,6 +19963,10 @@ msgstr "你的最佳"
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Your best play on each map, each day ({0})."
 #~ msgstr "每张图每天的最佳成绩（{0}）。"
+
+#: src/routes/recommendations.tsx
+msgid "your best plays"
+msgstr "你的最佳成绩"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
@@ -19976,7 +20068,7 @@ msgstr "你的动态渲染图已被关闭。"
 msgid "Your lowest rating is {0}."
 msgstr "你最低的评分是 {0}。"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your marks"
 msgstr "你的标记"
 
@@ -20032,6 +20124,10 @@ msgstr "你的私有皮肤"
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "你的私有皮肤在上方的架子上，你发布的皮肤会出现在这里。"
 
+#: src/routes/recommendations.tsx
+msgid "your rating"
+msgstr "你的评分"
+
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
 #~ msgstr "正在拉取你最近的成绩，几分钟后会在这里评分。"
@@ -20065,7 +20161,7 @@ msgstr "回复已发送，但至少有一张图片没能上传。"
 msgid "Your reports"
 msgstr "我的反馈"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "your score"
 msgstr "你的成绩"
 

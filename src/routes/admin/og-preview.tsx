@@ -148,11 +148,11 @@ const PRESETS: Preset[] = [
   },
   {
     key: "farm-helper",
-    label: "Farm Helper",
+    label: "Recommendations",
     kind: "farm-helper",
-    title: "Farm Helper",
-    subtitle: "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs.",
-    path: "/farm-helper",
+    title: "Recommendations",
+    subtitle: "Find osu!mania maps worth playing, based on nearby players, missing clears, improvable scores, old PBs and your skillsets.",
+    path: "/recommendations",
   },
   {
     key: "packs",

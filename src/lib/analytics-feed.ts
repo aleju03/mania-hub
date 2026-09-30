@@ -779,17 +779,20 @@ export function describeAnalyticsEvent(
       detail: row.replayPlayer ? `by ${row.replayPlayer}` : null,
     };
   }
-  if (path === "/farm-helper") {
+  // Recommendations was the farm helper until 2026-09-30; older events keep
+  // the old paths.
+  if (path === "/recommendations" || path === "/farm-helper") {
     const user = row.farmHelperUser || analyticsUrlParam(row.viewUrl, "user");
     return {
       kind: "farm",
       verb: "checked",
-      subject: user ? `farm help for ${user}` : "the farm helper",
+      subject: user ? `recommendations for ${user}` : "recommendations",
       detail: null,
     };
   }
-  if (path.startsWith("/farm-helper/map/")) {
-    const beatmapId = path.slice("/farm-helper/map/".length).split("/")[0];
+  const farmMapPrefix = ["/recommendations/map/", "/farm-helper/map/"].find((prefix) => path.startsWith(prefix));
+  if (farmMapPrefix) {
+    const beatmapId = path.slice(farmMapPrefix.length).split("/")[0];
     return {
       kind: "farm",
       verb: "opened",

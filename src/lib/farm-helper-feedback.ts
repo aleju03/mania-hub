@@ -140,23 +140,37 @@ export const clearMyFarmHelperFeedback = createServerFn({ method: "POST" })
 
    Returns null when nobody is signed in or the backend is unconfigured; the
    caller then takes the ordinary public path. */
+interface OwnFarmHelperRequest {
+  keyMode?: string;
+  view?: string;
+  skill?: string;
+  skillMods?: string;
+  limit?: number;
+}
+
+// The subject comes from the verified session, not caller-controlled server
+// function input. Besides preserving feedback ownership, this is what lets
+// the backend allow one exception to its known-subject gate: a new player
+// may cold-mint their own profile, never an arbitrary account.
+function ownFarmHelperSnapshotUrl(backend: FeedbackBackend, data: OwnFarmHelperRequest): string {
+  const query = new URLSearchParams({ user: String(backend.userId), viewerUserId: String(backend.userId) });
+  if (data.keyMode) query.set("key", data.keyMode);
+  if (data.view) query.set("view", data.view);
+  if (data.skill) query.set("skill", data.skill);
+  if (data.skillMods) query.set("mods", data.skillMods);
+  if (data.limit != null) query.set("limit", String(data.limit));
+  return `${backend.base}/api/snapshots/farm-helper?${query.toString()}`;
+}
+
 export const getOwnFarmHelperSnapshot = createServerFn({ method: "GET" })
-  .validator((data: { user: string; keyMode?: string; view?: string; limit?: number }) => data)
+  .validator((data: { user: string } & OwnFarmHelperRequest) => data)
   .handler(async ({ data }): Promise<{ ok: true; snapshot: LiveFarmHelperSnapshot } | { ok: false; status: number | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await resolveFeedbackBackend();
     if (!cfg.ok) return { ok: false, status: null };
-    // The subject comes from the verified session, not caller-controlled server
-    // function input. Besides preserving feedback ownership, this is what lets
-    // the backend allow one exception to its known-subject gate: a new player
-    // may cold-mint their own profile, never an arbitrary account.
-    const query = new URLSearchParams({ user: String(cfg.backend.userId), viewerUserId: String(cfg.backend.userId) });
-    if (data.keyMode) query.set("key", data.keyMode);
-    if (data.view) query.set("view", data.view);
-    if (data.limit != null) query.set("limit", String(data.limit));
     try {
-      const response = await fetch(`${cfg.backend.base}/api/snapshots/farm-helper?${query.toString()}`, {
+      const response = await fetch(ownFarmHelperSnapshotUrl(cfg.backend, data), {
         headers: cfg.backend.headers,
       });
       if (!response.ok) return { ok: false, status: response.status };
@@ -164,4 +178,22 @@ export const getOwnFarmHelperSnapshot = createServerFn({ method: "GET" })
     } catch {
       return { ok: false, status: null };
     }
+  });
+
+/* Starts the signed-in player's own board building while the page renders on
+   the server, so the request their browser makes after hydration (seconds
+   later) finds it built or still in flight: the backend coalesces identical
+   builds and caches the result. Same URL as getOwnFarmHelperSnapshot, so both
+   land on the same build. Nothing waits on it; a failure only means the
+   browser's request does the work. Own board only, which already goes
+   through the bridge: warming someone else's board here would bill it to the
+   bridge's rate bucket instead of the visitor's. */
+export const warmOwnFarmHelperSnapshot = createServerFn({ method: "GET" })
+  .validator((data: OwnFarmHelperRequest) => data)
+  .handler(async ({ data }): Promise<void> => {
+    const cfg = await resolveFeedbackBackend();
+    if (!cfg.ok) return;
+    void fetch(ownFarmHelperSnapshotUrl(cfg.backend, data), { headers: cfg.backend.headers })
+      .then((response) => response.arrayBuffer())
+      .catch(() => {});
   });

@@ -2297,7 +2297,8 @@ export async function fetchLiveTrackerSnapshot(
 // "practice" only ever appears on `practiceRecs` rows, never in `recs`.
 export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push" | "practice";
 export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
-export type LiveFarmHelperView = "gain" | "popular";
+export type LiveFarmHelperView = "gain" | "popular" | "skills";
+export type LiveFarmHelperSkillMods = "nm" | "dt";
 export type LiveFarmHelperSpeedBucket = "ht" | "normal" | "dt";
 
 export interface LiveFarmHelperPeer {
@@ -2420,8 +2421,56 @@ export interface LiveFarmHelperSnapshot {
   // sit above the player's shown skills. Their benchmarkPp is the raw peer
   // median, not a personal target. Optional so older backends still parse.
   practiceRecs?: LiveFarmHelperRec[];
+  // Skills view only: the player's skill axes and ranked charts a little
+  // above their rating in the chosen one. `recs` is empty on that view.
+  skills?: LiveFarmHelperSkillBoard;
   recs: LiveFarmHelperRec[];
   generatedAt: string;
+}
+
+// An axis key is a MinaCalc skillset name or `pattern:{id}`, the same keys
+// skillModeEntries (src/lib/skill-axes.ts) uses.
+export interface LiveFarmHelperSkillAxis {
+  keyCount: number;
+  axis: string;
+  rating: number;
+}
+
+export interface LiveFarmHelperSkillRec {
+  beatmapId: number;
+  beatmapsetId: number;
+  speedBucket: LiveFarmHelperSpeedBucket;
+  recommendedMods: string[];
+  title: string;
+  artist: string;
+  creator: string;
+  version: string;
+  cover: string;
+  listCover: string;
+  status: string;
+  stars: number;
+  keys: number;
+  bpm: number;
+  lengthSec: number;
+  mapUrl: string;
+  // The chosen axis' value on the chart at the lane's rate.
+  msd: number;
+  playCount: number;
+}
+
+export interface LiveFarmHelperSkillBoard {
+  // The chosen axis' keymode. The "any" view lists every rated keymode's axes.
+  keyCount: number | null;
+  axes: LiveFarmHelperSkillAxis[];
+  axis: string | null;
+  rating: number | null;
+  // The chart value the picks sit above: the median chart of the player's
+  // best plays on the axis, or their rating when they have too few.
+  anchor: number | null;
+  anchorSource: "plays" | "rating" | null;
+  bandMin: number | null;
+  bandMax: number | null;
+  recs: LiveFarmHelperSkillRec[];
 }
 
 export async function fetchLiveFarmHelperSnapshot(
@@ -2429,6 +2478,9 @@ export async function fetchLiveFarmHelperSnapshot(
   params?: {
     keyMode?: LiveFarmHelperKeyMode;
     view?: LiveFarmHelperView;
+    skill?: string;
+    // Skills view lane filter: "nm" or "dt" alone; absent means both.
+    skillMods?: LiveFarmHelperSkillMods;
     limit?: number;
     fresh?: boolean | number;
     signal?: AbortSignal;
@@ -2437,6 +2489,8 @@ export async function fetchLiveFarmHelperSnapshot(
   const query = new URLSearchParams({ user: userKey });
   if (params?.keyMode) query.set("key", params.keyMode);
   if (params?.view) query.set("view", params.view);
+  if (params?.skill) query.set("skill", params.skill);
+  if (params?.skillMods) query.set("mods", params.skillMods);
   if (params?.limit != null) query.set("limit", String(params.limit));
   // Cache-buster: the endpoint serves max-age=60, so fetches right after a
   // feedback mutation must skip the browser HTTP cache. Passing a number uses

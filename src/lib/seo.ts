@@ -15,7 +15,9 @@ export const DEFAULT_DESCRIPTION =
 // 48: the replay card draws the play's mods as the site's own badges (with a
 // custom rate on the tail) instead of spelling them out, and drops the dot
 // separators from the map line.
-export const OG_IMAGE_VERSION = "48";
+// 49: the farm helper card became the Recommendations card, one list of
+// rows mixing pp gains and skill picks.
+export const OG_IMAGE_VERSION = "49";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text

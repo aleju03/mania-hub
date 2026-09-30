@@ -120,7 +120,9 @@ msgid "{0, plural, one {{1} play} other {{2} plays}}"
 msgstr "{0, plural, one {{1} play} other {{2} plays}}"
 
 #. placeholder {0}: onCharts.charts
+#. placeholder {0}: skillBoard?.recs.length ?? 0
 #: src/components/player/SkillBreakdown.tsx
+#: src/routes/recommendations.tsx
 msgid "{0, plural, one {# chart} other {# charts}}"
 msgstr "{0, plural, one {# chart} other {# charts}}"
 
@@ -157,7 +159,7 @@ msgstr "{0, plural, one {# diff de mania} other {# diffs de mania}}"
 #. placeholder {0}: summary.memberCount
 #: src/components/maps/MapCollectionsSection.tsx
 #: src/components/maps/UserCollectionsSection.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{0, plural, one {# map} other {# maps}}"
 msgstr "{0, plural, one {# mapa} other {# mapas}}"
 
@@ -177,7 +179,7 @@ msgid "{0, plural, one {# member} other {# members}}"
 msgstr "{0, plural, one {# miembro} other {# miembros}}"
 
 #. placeholder {0}: visibleSnapshot?.belowGainFloorCount ?? 0
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{0, plural, one {# more map is hidden because it would add less than 1pp for you} other {# more maps are hidden because they would add less than 1pp for you}}"
 msgstr "{0, plural, one {# mapa más está oculto porque te daría menos de 1pp} other {# mapas más están ocultos porque te darían menos de 1pp}}"
 
@@ -355,7 +357,7 @@ msgstr "{0} / {BINDER_MAX_PER_COLLECTOR} conjuntos · Hasta {BINDER_MAX_CARDS} c
 #. placeholder {0}: farmContext?.artist ?? t`unknown artist`
 #. placeholder {1}: beatmapset.creator
 #. placeholder {1}: farmContext?.creator ?? t`unknown`
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "{0} / mapped by {1}"
 msgstr "{0} / mapeado por {1}"
 
@@ -594,7 +596,7 @@ msgstr "{0} con más packs abiertos"
 #. placeholder {1}: entries.length
 #. placeholder {1}: formatPp(totalQualifying)
 #: src/components/skins/SkinAssetExplorer.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{0} of {1}"
 msgstr "{0} de {1}"
 
@@ -722,6 +724,7 @@ msgstr "{0} jugadores"
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 #: src/routes/rankings.tsx
+#: src/routes/recommendations.tsx
 msgid "{0} plays"
 msgstr "{0} plays"
 
@@ -814,7 +817,7 @@ msgstr "{0} sonidos de {1}"
 
 #. placeholder {0}: farmContext.stars.toFixed(2)
 #. placeholder {0}: selectedBeatmap.difficultyRating.toFixed(2)
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "{0} stars"
 msgstr "{0} estrellas"
 
@@ -1197,7 +1200,7 @@ msgid "{days} days ago"
 msgstr "hace {days} días"
 
 #: src/lib/goal-format.ts
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{days}d"
 msgstr "{days}d"
 
@@ -1281,7 +1284,7 @@ msgstr "{have} / {want} plays"
 #~ msgid "{headRate}/s · {duration}ms median hold"
 #~ msgstr "{headRate}/s · {duration}ms de duración mediana"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{hiddenByMarks, plural, one {# map hidden by your marks} other {# maps hidden by your marks}}"
 msgstr "{hiddenByMarks, plural, one {# mapa oculto por tus marcas} other {# mapas ocultos por tus marcas}}"
 
@@ -1376,7 +1379,7 @@ msgstr "falta {left}%"
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
 msgstr "{mapCount, plural, one {# mejor jugada} other {# mejores jugadas}}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
 msgstr "{mapCount, plural, one {en # mapa} other {en # mapas}}"
 
@@ -1413,7 +1416,7 @@ msgid "{months} months ago"
 msgstr "hace {months} meses"
 
 #: src/lib/goal-format.ts
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{months}mo"
 msgstr "{months}mo"
 
@@ -1526,27 +1529,27 @@ msgstr "{ordinal} dan"
 msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 msgstr "{otherTabMatches, plural, one {# coincidencia} other {# coincidencias}} en <0>{0}</0>"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of players near you farm this"
 msgstr "El {pct}% de los jugadores cerca de ti farmea esto"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this {rowMods} and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
 msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto {rowMods} y promedian {median}pp. Tu mejor marca en el mapa es {otherPp}pp {otherMods}."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this and average {median}pp. Your best on the map is {otherPp}pp {otherMods}."
 msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto y promedian {median}pp. Tu mejor marca en el mapa es {otherPp}pp {otherMods}."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this and hold {median}pp on it, but its difficulty sits above what your plays have shown so far. Practice material, not farm yet."
 msgstr "El {pct}% de los jugadores cerca de tu pp farmean esto y tienen {median}pp ahí, pero su dificultad está por encima de lo que muestran tus plays. Material de práctica, todavía no de farmeo."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this and it is not in your top plays. They average {median}pp on it."
 msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto y no está en tus top plays. Promedian {median}pp en él."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{pct}% of the players around your pp farm this. You already have {yourPp}pp here against their {median}pp median."
 msgstr "El {pct}% de los jugadores cerca de tu pp farmea esto. Ya tienes {yourPp}pp aquí contra su mediana de {median}pp."
 
@@ -1632,7 +1635,7 @@ msgstr "{rated, plural, one {# miembro} other {# miembros}}"
 msgid "{rest} others"
 msgstr "otros {rest}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{sample, plural, one {# player sampled around your pp} other {# players sampled around your pp}}"
 msgstr "{sample, plural, one {# jugador muestreado cerca de tu pp} other {# jugadores muestreados cerca de tu pp}}"
 
@@ -1823,7 +1826,7 @@ msgid "{years} years ago"
 msgstr "hace {years} años"
 
 #: src/lib/goal-format.ts
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "{years}y"
 msgstr "{years}y"
 
@@ -1965,7 +1968,7 @@ msgstr "<0>{username} no está trackeado</0>, así que aquí solo se califican s
 msgid "<0>/subscribe feed:Top plays country:{country}</0> posts every new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and <1>min_pp</1> skips scores below a threshold. <2>/subscriptions</2> lists a server's active feeds, <3>/unsubscribe</3> stops one. Subscribing needs Manage Server."
 msgstr "<0>/subscribe feed:Top plays country:{country}</0> publica cada nuevo top play de {country} en el canal donde se use. Los demás feeds son snipes y nuevos mapas de farm, y <1>min_pp</1> omite los scores por debajo de un umbral. <2>/subscriptions</2> lista los feeds activos de un servidor y <3>/unsubscribe</3> detiene uno. Para suscribirte se necesita el permiso Administrar servidor."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> es la ganancia estimada si logras el puntaje objetivo, ponderada contra tus top plays actuales."
 
@@ -2576,7 +2579,7 @@ msgstr "Un snipe es cuando tu nuevo mejor score en un mapa pasa a un jugador que
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart, así que quedarse corto nunca se lee como el clear completo. En 4K LN ese paso es de al menos tres cuartos de nivel."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "a while"
 msgstr "un tiempo"
 
@@ -3102,15 +3105,15 @@ msgstr "Una aplicación externa"
 msgid "an imported skin"
 msgstr "una skin importada"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "An old PB you could probably beat."
 msgstr "Un PB viejo que probablemente podrías superar."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "un puntaje viejo que probablemente podrías superar"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis"
 msgstr "análisis"
 
@@ -3122,7 +3125,7 @@ msgstr "análisis"
 msgid "Analysis is scheduled. This rating will update here automatically when the result is ready. Some plays may not qualify for a rating."
 msgstr "El análisis está programado. La valoración se actualizará aquí automáticamente cuando esté lista. Algunas jugadas podrían no cumplir los requisitos para recibir una valoración."
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "analysis unavailable"
 msgstr "análisis no disponible"
 
@@ -3162,7 +3165,7 @@ msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "any"
 msgstr "cualquiera"
@@ -3458,7 +3461,7 @@ msgstr "intensidad promedio, 0-100"
 #~ msgid "Avg length"
 #~ msgstr "Duración media"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "avg nps"
 msgstr "nps promedio"
 
@@ -3601,7 +3604,7 @@ msgstr "Color base de la cabeza de las LN, usado en cualquier columna sin color 
 msgid "Base tap color used for any column without a per-column override."
 msgstr "Color base de tap, usado en cualquier columna sin color propio."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "based on what players near the same pp are farming:"
 msgstr "basado en lo que farmean jugadores con pp similar:"
 
@@ -3616,7 +3619,7 @@ msgid "BBCode editor"
 msgstr "Editor de BBCode"
 
 #. placeholder {0}: mark.beatmapId
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "beatmap #{0}"
 msgstr "beatmap #{0}"
 
@@ -3761,7 +3764,7 @@ msgid "Biggest"
 msgstr "Más grandes"
 
 #. placeholder {0}: formatGainWithUnit(biggest, unit)
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "biggest {0}"
 msgstr "mayor {0}"
 
@@ -3769,7 +3772,7 @@ msgstr "mayor {0}"
 msgid "Biggest day"
 msgstr "Día más grande"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "biggest jump first"
 msgstr "mayor salto primero"
 
@@ -4078,7 +4081,7 @@ msgstr "Centrar"
 msgid "Ch"
 msgstr "Ch"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "change"
 msgstr "cambiar"
 
@@ -4111,7 +4114,7 @@ msgstr "Cambiar nombre"
 msgid "Change name on {0}"
 msgstr "Cambiar nombre el {0}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "change player"
 msgstr "cambiar jugador"
 
@@ -4307,8 +4310,8 @@ msgstr "Elige otro coleccionista para tu regalo."
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Chordjack"
 msgstr "Chordjack"
 
@@ -4342,7 +4345,7 @@ msgstr "Clásico"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "clear"
 msgstr "limpiar"
 
@@ -4360,8 +4363,8 @@ msgstr "Limpiar"
 msgid "Clear all"
 msgstr "Limpiar todo"
 
-#: src/routes/farm-helper.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "clear attempt"
 msgstr "intento de pasarlo"
 
@@ -4395,8 +4398,8 @@ msgstr "Quitar filtro de jugador"
 #: src/components/me/MyDataPanel.tsx
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/settings/SettingsPanel.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
 msgid "Clear search"
 msgstr "Limpiar búsqueda"
@@ -4418,7 +4421,7 @@ msgid "Clear the search"
 msgstr "Limpiar la búsqueda"
 
 #: src/components/me/GoalsPanel.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "cleared"
 msgstr "Pass"
 
@@ -4581,7 +4584,7 @@ msgstr "Cerrar selector"
 msgid "Close player"
 msgstr "Cerrar reproductor"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Close preview"
 msgstr "Cerrar vista previa"
 
@@ -4737,7 +4740,7 @@ msgstr "ComboPosition"
 msgid "Comma after each one. Up to {COMMUNITY_MAX_TAGS}, and they become filters people browse by, so use words someone would actually search for."
 msgstr "Separados por comas. Hasta {COMMUNITY_MAX_TAGS}, y se convierten en filtros por los que la gente navega, así que usa palabras que alguien de verdad buscaría."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "common pick"
 msgstr "elección común"
 
@@ -4795,7 +4798,7 @@ msgstr "Companella"
 #~ msgid "Companella now connects to Mania Tracker."
 #~ msgstr "Companella ya se conecta a Mania Tracker."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "compared to {range} pp"
 msgstr "comparado con {range} pp"
 
@@ -5129,7 +5132,7 @@ msgstr ""
 msgid "Could not submit that. Try again."
 msgstr "No se pudo enviar. Inténtalo de nuevo."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Couldn't build recommendations"
 msgstr "No se pudieron generar recomendaciones"
 
@@ -5222,6 +5225,10 @@ msgstr "No se pudieron cargar los scores recientes en este momento."
 msgid "Couldn't load search results. Try again."
 msgstr "No se pudieron cargar los resultados de búsqueda. Inténtalo de nuevo."
 
+#: src/routes/recommendations.tsx
+msgid "Couldn't load skill charts"
+msgstr ""
+
 #: src/components/team/TeamProfilePage.tsx
 msgid "Couldn't load skills right now."
 msgstr "No se pudieron cargar las skills en este momento."
@@ -5271,7 +5278,7 @@ msgstr "No se pudieron cargar las subidas; actualiza para reintentar."
 msgid "Couldn't load the uploads."
 msgstr "No se pudieron cargar las repeticiones."
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Couldn't load this beatmapset."
 msgstr "No se pudo cargar este beatmapset."
 
@@ -5291,11 +5298,11 @@ msgstr "No se pudieron cargar las plays de este jugador en este momento. La cart
 msgid "Couldn't load this team right now."
 msgstr "No se pudo cargar este equipo en este momento."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "couldn't load this view"
 msgstr "no se pudo cargar esta vista"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Couldn't load this view"
 msgstr "No se pudo cargar esta vista"
 
@@ -5347,7 +5354,7 @@ msgstr "No se pudo guardar esa meta. Revisa los valores e inténtalo de nuevo."
 msgid "Couldn't save that goal. Try again in a moment."
 msgstr "No se pudo guardar esa meta. Inténtalo de nuevo en un momento."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Couldn't save that. Try again in a moment."
 msgstr "No se pudo guardar. Inténtalo de nuevo en un momento."
 
@@ -5656,7 +5663,7 @@ msgid "Dan credit"
 msgstr "Crédito de dan"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "dan est."
 msgstr "dan est."
 
@@ -5876,18 +5883,18 @@ msgstr "¿{hidden} se unió a osu! antes o después que {shown}?"
 msgid "Difference: {0}"
 msgstr "Diferencia: {0}"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "difficulty"
 msgstr "dificultad"
 
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
 msgid "Difficulty"
 msgstr "Dificultad"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Difficulty radar chart"
 msgstr "Gráfico de radar de dificultad"
 
@@ -6029,7 +6036,7 @@ msgstr "no cuenta"
 #~ msgid "Does not count for dan."
 #~ msgstr "No cuenta para dan."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "done"
 msgstr "suficiente"
 
@@ -6039,7 +6046,7 @@ msgstr "suficiente"
 msgid "Done"
 msgstr "Listo"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "done with it"
 msgstr "suficiente"
 
@@ -6309,7 +6316,7 @@ msgstr "Consigue <0/> <1/>"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "Logra <0/> <1/> en {mapSlot}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "easy"
 msgstr "fácil"
 
@@ -6430,7 +6437,7 @@ msgstr "Misma probabilidad por mapa"
 msgid "Equal chance per player"
 msgstr "Misma probabilidad por jugador"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "error"
 msgstr "error"
 
@@ -6446,7 +6453,7 @@ msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
 msgid "Estimated dan"
 msgstr "Dan estimado"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "estimated gain"
 msgstr "ganancia estimada"
 
@@ -6463,7 +6470,7 @@ msgstr "Ganancia de pp estimada al reemplazar tu mejor score anterior en este ma
 msgid "Estimated size"
 msgstr "Tamaño estimado"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "estimates are rough until we've analyzed more of this player's plays"
 msgstr "las estimaciones son aproximadas hasta que analicemos más plays de este jugador"
 
@@ -6511,7 +6518,7 @@ msgstr "Cada chart recibe un nivel de dan, y tu dan se calcula a partir de los c
 msgid "every collector"
 msgstr "todos los coleccionistas"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
 msgstr "Todos los mapas de farm que los jugadores cerca de tu pp realmente juegan, ordenados por cuántos lo tienen. Los mapas con clear se quedan, para que veas dónde ya estás."
 
@@ -6527,7 +6534,7 @@ msgstr "Todas las imágenes que ya pegaste dejarán de funcionar."
 #~ msgid "Every ladder also asks for a minimum OD: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. A <0/> play that drops the OD under its ladder's minimum earns no dan credit, and <1/> earns none anywhere, because it widens every hit window."
 #~ msgstr "Cada ladder pide además un OD mínimo: 5.5 en mapas regulares, 7 en 4K LN y 5 en 7K LN. Un pase con <0/> que baje el OD por debajo del mínimo de su ladder no recibe crédito de dan, y <1/> no lo recibe en ningún caso, porque ensancha todas las ventanas de hit."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
 msgstr "Cada mapa aquí es una sugerencia de skillboost. Están ocultos por defecto hasta que consigues alguno de sus scores."
 
@@ -6581,7 +6588,7 @@ msgstr "Todos"
 msgid "Everyone watching your replays sees this skin."
 msgstr "Todos los que vean tus replays verán esta skin."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "everything"
 msgstr "todo"
 
@@ -6711,30 +6718,30 @@ msgstr "Notas que caen"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/farm-helper/map/$beatmapId.tsx
-msgid "farm helper"
-msgstr "Farm Helper"
+#~ msgid "farm helper"
+#~ msgstr "Farm Helper"
 
 #: src/routes/farm-helper.tsx
-msgid "Farm Helper"
-msgstr "Farm Helper"
+#~ msgid "Farm Helper"
+#~ msgstr "Farm Helper"
 
 #: src/routes/farm-helper.tsx
-msgid "Farm helper needs a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
-msgstr "Farm helper necesita el top 200 de un jugador, y esta cuenta nunca se ha cargado aquí. Con abrir su perfil una vez basta."
+#~ msgid "Farm helper needs a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
+#~ msgstr "Farm helper necesita el top 200 de un jugador, y esta cuenta nunca se ha cargado aquí. Con abrir su perfil una vez basta."
 
 #: src/routes/farm-helper.tsx
-msgid "Farm Helper needs the server"
-msgstr "Farm Helper necesita el servidor"
+#~ msgid "Farm Helper needs the server"
+#~ msgstr "Farm Helper necesita el servidor"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Farm map alert"
 msgstr "Alerta de mapa de farm"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Farm map detail"
 msgstr "Detalle del mapa de farm"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "farm verdict"
 msgstr "veredicto de farm"
 
@@ -6811,7 +6818,7 @@ msgstr "Feeds"
 msgid "Feeds are currently disabled on the backend."
 msgstr "Los feeds están desactivados en el backend por ahora."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
 msgstr "¿se siente raro para tu nivel? márcalo y tus recs se ajustarán"
 
@@ -6897,15 +6904,15 @@ msgstr "Filtrar las jugadas de {0}..."
 msgid "Filter by keymode"
 msgstr "Filtrar por modo"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Filter maps"
 msgstr "Filtrar mapas"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "filter maps..."
 msgstr "filtrar mapas..."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "filtered out"
 msgstr "filtrados"
 
@@ -6987,13 +6994,22 @@ msgid "Find an osu!mania Discord server to join, or post your own."
 msgstr "Encuentra un servidor de Discord de osu!mania al que unirte, o publica el tuyo."
 
 #. placeholder {0}: viewer.username
-#: src/routes/farm-helper.tsx
-msgid "Find farm maps for {0}"
-msgstr "Buscar mapas de farm para {0}"
+#: src/routes/recommendations.tsx
+#~ msgid "Find farm maps for {0}"
+#~ msgstr "Buscar mapas de farm para {0}"
+
+#. placeholder {0}: viewer.username
+#: src/routes/recommendations.tsx
+msgid "Find maps for {0}"
+msgstr "Buscar mapas para {0}"
 
 #: src/routes/farm-helper.tsx
-msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
-msgstr "Encuentra mapas de farm de osu!mania que valgan la pena jugar, según jugadores cercanos, clears pendientes, scores mejorables y PBs antiguos."
+#~ msgid "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs."
+#~ msgstr "Encuentra mapas de farm de osu!mania que valgan la pena jugar, según jugadores cercanos, clears pendientes, scores mejorables y PBs antiguos."
+
+#: src/routes/recommendations.tsx
+msgid "Find osu!mania maps worth playing, based on nearby players, missing clears, improvable scores, old PBs and your skillsets."
+msgstr "Encuentra mapas de osu!mania que valgan la pena jugar, según jugadores cercanos, clears pendientes, scores mejorables, PBs antiguos y tus skillsets."
 
 #: src/components/layout/Nav.tsx
 #: src/components/player/bbcode/BBCodeEditor.tsx
@@ -7016,8 +7032,8 @@ msgstr "Finalizando el archivo"
 msgid "Finishing the test client connection."
 msgstr ""
 
-#: src/routes/farm-helper.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Finishing this looks risky for you; treat it as a clear attempt, not a farm"
 msgstr "Terminarlo se ve arriesgado para ti; trátalo como un intento de clear, no como farm"
 
@@ -7167,7 +7183,7 @@ msgstr "Voltear verticalmente"
 msgid "Follow SV changes"
 msgstr "Seguir cambios de SV"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "for"
 msgstr "para"
 
@@ -7191,7 +7207,7 @@ msgstr ""
 msgid "For screenshots that have nothing to do with the skin."
 msgstr "Para capturas que no tienen nada que ver con la skin."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "for you"
 msgstr "para ti"
 
@@ -7284,7 +7300,7 @@ msgstr "Completo"
 msgid "Full activity"
 msgstr "Actividad completa"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "full breakdown"
 msgstr "análisis completo"
 
@@ -7412,8 +7428,8 @@ msgid "global favs"
 msgstr "favs globales"
 
 #: src/routes/farm-helper.tsx
-msgid "Global mania farm helper"
-msgstr "Farm Helper global de mania"
+#~ msgid "Global mania farm helper"
+#~ msgstr "Farm Helper global de mania"
 
 #: src/routes/rankings.tsx
 msgid "Global mania rankings"
@@ -7536,6 +7552,7 @@ msgstr "abandonado"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "Graveyard"
 msgstr "Abandonado"
 
@@ -7567,11 +7584,11 @@ msgstr "Handjack"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "Handstream"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "hard"
 msgstr "difícil"
 
@@ -7633,11 +7650,11 @@ msgstr "oculta"
 msgid "Hidden"
 msgstr "Oculto"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "hidden from your recs for 60 days, or until you set a new score on it"
 msgstr "oculto de tus recs por 60 días, o hasta que pongas un puntaje nuevo en él"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "hidden from your recs until you clear it or set a score on it"
 msgstr "oculto de tus recs hasta que lo pases o pongas un puntaje en él"
 
@@ -7936,11 +7953,11 @@ msgstr "Cómo se verá"
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
 #~ msgstr "Cómo Mania Tracker asigna un nivel de dan a cada chart de osu!mania y cómo deduce el dan de un jugador a partir de los charts que ha pasado."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "how many players near you farm it"
 msgstr "cuántos jugadores cerca de ti lo farmean"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "how many players near you have it"
 msgstr "cuántos jugadores cerca de ti lo tienen"
 
@@ -8150,7 +8167,7 @@ msgstr "importando"
 msgid "Importing… {0}%"
 msgstr "Importando… {0}%"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "improve"
 msgstr "mejorar"
 
@@ -8292,7 +8309,7 @@ msgstr "internacional"
 msgid "international servers"
 msgstr "servidores internacionales"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Invalid beatmap id."
 msgstr "ID de beatmap no válido."
 
@@ -8380,8 +8397,8 @@ msgstr "Cursiva"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jack"
 msgstr "Jack"
 
@@ -8391,7 +8408,7 @@ msgstr "JACK"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jackspeed"
 msgstr "Jackspeed"
 
@@ -8485,8 +8502,8 @@ msgstr "Ir a una página"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Jumpstream"
 msgstr "Jumpstream"
 
@@ -8553,7 +8570,7 @@ msgstr "Hitsounds de teclas"
 
 #: src/components/rankings/LeaderboardControls.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Key mode"
 msgstr "Modo"
 
@@ -8593,7 +8610,7 @@ msgstr "Modos de teclas"
 msgid "Keypresses"
 msgstr "Pulsaciones"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "keys"
 msgstr "modo"
@@ -8668,7 +8685,7 @@ msgstr "Idioma"
 msgid "Large"
 msgstr "Grande"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "large gap"
 msgstr "gran diferencia"
 
@@ -8980,8 +8997,8 @@ msgstr "Actualizaciones en vivo activas"
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "LN"
 msgstr "LN"
 
@@ -9027,7 +9044,7 @@ msgid "LN dan"
 msgstr "Dan LN"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "LN dan est."
 msgstr "Est. de dan LN"
 
@@ -9239,7 +9256,7 @@ msgstr "Cargando historial…"
 msgid "Loading image…"
 msgstr "Cargando imagen…"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Loading map shape analysis"
 msgstr "Cargando el análisis de forma del mapa"
 
@@ -9401,7 +9418,7 @@ msgstr "Inicia sesión con osu! para subir una skin"
 msgid "Logout"
 msgstr "Cerrar sesión"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
 msgstr "notas largas"
 
@@ -9449,6 +9466,7 @@ msgstr "amado"
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "Loved"
 msgstr "Amado"
 
@@ -9684,11 +9702,11 @@ msgstr "Búsqueda de mapas"
 msgid "map search unavailable"
 msgstr "búsqueda de mapas no disponible"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Map shape"
 msgstr "Forma del mapa"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "map unavailable"
 msgstr "mapa no disponible"
 
@@ -9708,7 +9726,7 @@ msgid "mapped by {0} · {1} plays"
 msgstr "mapeado por {0} · {1} plays"
 
 #: src/components/layout/Nav.tsx
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "maps"
 msgstr "Mapas"
 
@@ -9729,11 +9747,11 @@ msgstr "Error al construir los mapas."
 msgid "Maps played"
 msgstr "Mapas jugados"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "maps players near you farm"
 msgstr "mapas que farmean jugadores cerca de ti"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "maps players near you farm that sit above your shown skills"
 msgstr "mapas que farmean los jugadores cerca tuyo pero que están por encima de tu nivel demostrado"
 
@@ -9741,9 +9759,13 @@ msgstr "mapas que farmean los jugadores cerca tuyo pero que están por encima de
 msgid "Maps ready."
 msgstr "Mapas listos."
 
-#: src/routes/farm-helper.tsx
-msgid "maps worth farming"
-msgstr "mapas farmeables"
+#: src/routes/recommendations.tsx
+#~ msgid "maps worth farming"
+#~ msgstr "mapas farmeables"
+
+#: src/routes/recommendations.tsx
+#~ msgid "maps worth playing"
+#~ msgstr "mapas que vale la pena jugar"
 
 #. placeholder {0}: formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))
 #: src/routes/snipes.tsx
@@ -9754,15 +9776,15 @@ msgstr "Margen <0>+{0}</0>"
 #~ msgid "Mark the export range"
 #~ msgstr "Marcar el rango de la exportación"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "marked done"
 msgstr "marcado suficiente"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "marked easy"
 msgstr "marcado fácil"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "marked hard"
 msgstr "marcado difícil"
 
@@ -9810,15 +9832,15 @@ msgstr "Ratio MAX:300"
 msgid "Mean"
 msgstr "Media"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "median"
 msgstr "mediana"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "median {median}pp"
 msgstr "mediana {median}pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "median {target}pp"
 msgstr "mediana {target}pp"
 
@@ -9931,7 +9953,7 @@ msgstr "Misses"
 #~ msgid "Misses per 1k notes"
 #~ msgstr "Misses por cada 1k notas"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "missing"
 msgstr "falta"
 
@@ -9971,10 +9993,15 @@ msgstr "Moderar skin"
 msgid "moderation"
 msgstr "moderación"
 
+#: src/routes/recommendations.tsx
+msgid "mods"
+msgstr ""
+
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "Mods"
 msgstr "Mods"
 
@@ -10130,7 +10157,7 @@ msgstr "Subir"
 msgid "MP4 isn't available here, so the file is WebM."
 msgstr "MP4 no está disponible aquí, así que el archivo es WebM."
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "msd"
 msgstr "msd"
 
@@ -10237,7 +10264,7 @@ msgstr "Nombrar preset"
 msgid "Named {0}"
 msgstr "Guardado como {0}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
 msgstr "jugadores cercanos te superan"
 
@@ -10253,7 +10280,7 @@ msgstr "Necesita un enlace de web.archive.org a su perfil de osu!."
 #~ msgid "Never"
 #~ msgstr ""
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "never loaded here"
 msgstr "nunca cargado aquí"
 
@@ -10427,7 +10454,7 @@ msgstr "Siguientes jugadores"
 msgid "Next preview"
 msgstr "Siguiente preview"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "next tier"
 msgstr "siguiente nivel"
 
@@ -10445,7 +10472,7 @@ msgid "no"
 msgstr "no"
 
 #. placeholder {0}: i18n._(REASON_META[reasonFilter].label)
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "No {0} maps right now"
 msgstr "No hay mapas {0} por ahora"
 
@@ -10516,6 +10543,14 @@ msgstr "Aún no tienes cartas. Abre un pack para empezar tu colección."
 msgid "No change in the last 7 days"
 msgstr "Sin cambios en los últimos 7 días"
 
+#: src/routes/recommendations.tsx
+msgid "no charts"
+msgstr ""
+
+#: src/routes/recommendations.tsx
+msgid "No charts in this range"
+msgstr ""
+
 #: src/components/maps/UserCollectionsSection.tsx
 msgid "No collections here yet. Post the first one."
 msgstr "Todavía no hay colecciones. Publica la primera."
@@ -10540,7 +10575,7 @@ msgstr "Sin crédito de dan"
 msgid "No Dans"
 msgstr "No Dans"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no data"
 msgstr "sin datos"
 
@@ -10560,7 +10595,7 @@ msgstr "Ningún favorito coincide con tus filtros. Intenta relajarlos."
 #~ msgid "No folders yet. Make one to group your cards however you like, then show it on your shelf if you want."
 #~ msgstr "Aún no hay carpetas. Crea una para agrupar tus cartas como quieras y, si quieres, muéstrala en tu vitrina."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no gains here"
 msgstr "sin ganancias aquí"
 
@@ -10636,11 +10671,11 @@ msgstr "Ningún mapa coincide con estos filtros."
 msgid "No maps match your filters"
 msgstr "Ningún mapa coincide con tus filtros"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "No maps match your search"
 msgstr "Ningún mapa coincide con tu búsqueda"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no matches"
 msgstr "sin coincidencias"
 
@@ -10739,7 +10774,7 @@ msgstr "Ninguna jugada coincide con estos filtros"
 #~ msgid "No plays sent through Companella yet."
 #~ msgstr "Todavía no hay plays enviadas con Companella."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "no pp range"
 msgstr "sin rango de pp"
 
@@ -10792,6 +10827,10 @@ msgstr "No hay una valoración disponible ni un análisis programado."
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No rating system changes yet."
 msgstr "Aún no hay cambios en el sistema de valoración."
+
+#: src/routes/recommendations.tsx
+msgid "no ratings"
+msgstr ""
 
 #: src/routes/index.tsx
 msgid "No recent scores"
@@ -10881,6 +10920,10 @@ msgstr "Todavía no hay ratings de skills para los miembros de este equipo."
 #: src/components/player/SkillHistoryModal.tsx
 msgid "No skill ratings have been recorded yet."
 msgstr "Aún no se han registrado ratings de habilidad."
+
+#: src/routes/recommendations.tsx
+msgid "No skill ratings in this key mode yet"
+msgstr ""
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "No skin loaded in the editor"
@@ -11148,7 +11191,7 @@ msgstr "no cuenta"
 msgid "Not counted: this clear sits more than five levels under the best clears in this list, so it is left out of the average"
 msgstr "No cuenta: este clear está más de cinco niveles por debajo de los mejores clears de esta lista, así que queda fuera del promedio"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Not enough data near your pp yet"
 msgstr "Aún no hay suficientes datos cerca de tu pp"
 
@@ -11161,7 +11204,7 @@ msgstr "Aún no hay suficientes clears válidos para una estimación ({0} de {qu
 msgid "Not enough room"
 msgstr "No hay suficiente espacio"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "not found"
 msgstr "no encontrado"
 
@@ -11169,8 +11212,8 @@ msgstr "no encontrado"
 msgid "Not here? Search osu! for \"{trimmedQuery}\""
 msgstr "¿No aparece? Buscar \"{trimmedQuery}\" en osu!"
 
-#: src/routes/farm-helper.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "not in top plays"
 msgstr "no está en top plays"
 
@@ -11278,7 +11321,7 @@ msgstr "No hay nada con ese nombre."
 msgid "Nothing has been submitted yet."
 msgstr ""
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Nothing here would move your total"
 msgstr "Nada de esto movería tu total"
 
@@ -11331,9 +11374,13 @@ msgstr "No falta nada. Todas las cartas de este pool están en tu colección."
 #~ msgid "Nothing on this site is a real dan clear. Nobody here has been checked against a dan course. What the site does instead is give every chart a dan level of its own, look at the charts you have already passed, and read a level off them. That is why every dan on the site is written with a \"~\" in front of it and why the leaderboard calls itself a rough ordering."
 #~ msgstr "Nada en este sitio es un clear de dan real. A nadie aquí se le ha comprobado contra un dan. Lo que el sitio hace es darle a cada chart su propio nivel de dan, mirar los charts que ya pasaste y leer un nivel a partir de ellos. Por eso cada dan del sitio lleva un \"~\" delante y por eso la tabla se llama a sí misma un orden aproximado."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Nothing qualifies under this filter at the moment, but other reasons still have maps."
 msgstr "Nada cumple este filtro por ahora, pero otras razones todavía tienen mapas."
+
+#: src/routes/recommendations.tsx
+msgid "Nothing ranked sits a little above your {axisLabel} rating that you haven't played yet."
+msgstr ""
 
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
@@ -11377,7 +11424,7 @@ msgstr "Lista numerada"
 msgid "Numbers only"
 msgstr "Solo números"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "objects"
 msgstr "objetos"
 
@@ -11391,7 +11438,7 @@ msgstr "Obtenida el {dateText}"
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "OD"
 msgstr "OD"
 
@@ -11410,11 +11457,11 @@ msgstr "de {0} sacables"
 msgid "of {0} shards left today"
 msgstr "de {0} fragmentos restantes hoy"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "of players near you"
 msgstr "de jugadores cerca de ti"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "of players near you farm this"
 msgstr "de jugadores cerca de ti farmean esto"
 
@@ -11446,7 +11493,7 @@ msgstr "Ok"
 msgid "old"
 msgstr "antiguo"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "old pb"
 msgstr "pb viejo"
 
@@ -11605,7 +11652,7 @@ msgstr "Solo las cuentas restringidas pueden cambiar su nombre aquí."
 msgid "Only scores tracked on this site are on the boards."
 msgstr "En los leaderboards solo están los scores registrados en este sitio."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Only skillboost maps right now"
 msgstr "Por ahora solo hay mapas skillboost"
 
@@ -11726,7 +11773,7 @@ msgstr "Abrir en"
 msgid "Open in osu!"
 msgstr "Abrir en osu!"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "open in osu! client"
 msgstr "abrir en el cliente de osu!"
 
@@ -11743,7 +11790,7 @@ msgstr "Abrir en el editor de BBCode"
 msgid "Open link"
 msgstr "Abrir enlace"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Open map on osu!"
 msgstr "Abrir mapa en osu!"
 
@@ -11778,7 +11825,7 @@ msgstr "Abre el modal del día con datos simulados de un día ocupado"
 msgid "Open the in-browser replay viewer for a score."
 msgstr "Abre el visor de replays en el navegador para un score."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "open their profile"
 msgstr "abrir su perfil"
 
@@ -11845,11 +11892,11 @@ msgstr "opcional"
 #~ msgid "Optional follow-up"
 #~ msgstr "Seguimiento opcional"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "or pick someone else"
 msgstr "o elige a alguien más"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "or someone else"
 msgstr "o alguien más"
 
@@ -12252,11 +12299,11 @@ msgstr "Pausar preview"
 msgid "Peak"
 msgstr "Peak"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "peers farming"
 msgstr "jugadores cercanos farmeando"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "peers hold"
 msgstr "ellos tienen"
 
@@ -12330,7 +12377,7 @@ msgstr "Elige una meta arriba. El progreso se actualiza conforme llegan tus play
 msgid "Pick another file"
 msgstr "Elige otro archivo"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Pick any map on the left to preview it here."
 msgstr "Elige cualquier mapa a la izquierda para verlo aquí."
 
@@ -12350,7 +12397,7 @@ msgstr ""
 msgid "Pick one to load it into the editor."
 msgstr "Elige uno para cargarlo en el editor."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "pick the active one again to flip direction"
 msgstr "elige el activo de nuevo para invertir el orden"
 
@@ -12427,7 +12474,7 @@ msgstr "Hábitos de juego y desglose del estilo de juego: días activos, sesione
 msgid "Play preview"
 msgstr "Reproducir vista previa"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "play this"
 msgstr "juegan este"
 
@@ -12506,8 +12553,8 @@ msgstr "Skin del jugador"
 
 #: src/components/layout/Nav.tsx
 #: src/routes/dan-estimates.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 msgid "players"
 msgstr "jugadores"
 
@@ -12529,7 +12576,7 @@ msgstr "jugadores con cartas"
 msgid "Players near your pp"
 msgstr "Jugadores cerca de tu pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Players near your pp are farming maps, but right now every one of them would add less than 1pp for you. The popular view still shows what they play."
 msgstr "Los jugadores cerca de tu pp están farmeando mapas, pero ahora mismo cada uno te sumaría menos de 1pp. La vista popular igual muestra lo que juegan."
 
@@ -12647,23 +12694,23 @@ msgstr "puntos"
 msgid "Polish"
 msgstr "Polaco"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popular"
 msgstr "popular"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popular near you"
 msgstr "popular cerca de ti"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popular nearby, you haven't played it"
 msgstr "popular cerca, no lo has jugado"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Popular with the players around you, and you have no top play on it with these mods."
 msgstr "Popular entre los jugadores a tu alrededor, y no tienes top play en él con estos mods."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "popularity"
 msgstr "popularidad"
 
@@ -12729,7 +12776,7 @@ msgstr "Distribución de pp"
 msgid "PP Distribution"
 msgstr "Distribución de pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "pp gain"
 msgstr "ganancia de pp"
 
@@ -12825,7 +12872,7 @@ msgstr "Vista previa"
 
 #. placeholder {0}: rec.title
 #. placeholder {1}: rec.version
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Preview {0} [{1}]"
 msgstr "Vista previa de {0} [{1}]"
 
@@ -13318,7 +13365,7 @@ msgstr "No se pudieron cargar las valoraciones. Pulsa Reintentar para intentarlo
 msgid "Ratio"
 msgstr "Ratio"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "raw difficulty"
 msgstr "dificultad bruta"
 
@@ -13428,7 +13475,7 @@ msgstr "Recibida como regalo {timesText} veces, de {sendersText}"
 msgid "Received as a gift from {sendersText}"
 msgstr "Recibida como regalo de {sendersText}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "recent"
 msgstr "recientes"
 
@@ -13502,6 +13549,24 @@ msgstr "Vistos recientemente"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "receptor art"
 msgstr "arte de receptores"
+
+#: src/components/layout/Nav.tsx
+#: src/routes/recommendations.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
+msgid "recommendations"
+msgstr "recomendaciones"
+
+#: src/routes/recommendations.tsx
+msgid "Recommendations"
+msgstr "Recomendaciones"
+
+#: src/routes/recommendations.tsx
+msgid "Recommendations need a player's top 200, and this account has never been loaded here. Opening their profile once is enough."
+msgstr "Las recomendaciones necesitan el top 200 de un jugador, y esta cuenta nunca se ha cargado aquí. Con abrir su perfil una vez basta."
+
+#: src/routes/recommendations.tsx
+msgid "Recommendations need the server"
+msgstr "Las recomendaciones necesitan el servidor"
 
 #. placeholder {0}: card.copies - 1
 #: src/components/packs/CollectionPanel.tsx
@@ -13678,7 +13743,7 @@ msgid "Remove {0}"
 msgstr "Quitar {0}"
 
 #. placeholder {0}: player.username
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Remove {0} from recent"
 msgstr "Quitar a {0} de recientes"
 
@@ -14516,7 +14581,7 @@ msgstr "Busca un jugador o pega un ID de score"
 msgid "Search a player, or paste a score link..."
 msgstr "Busca un jugador o pega un link de score..."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "search a player..."
 msgstr "buscar un jugador..."
 
@@ -15135,7 +15200,7 @@ msgstr "Mostrar los {0}"
 msgid "Show details for {0}"
 msgstr "Ver detalles de {0}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "show everything"
 msgstr "mostrar todo"
 
@@ -15200,11 +15265,11 @@ msgstr "Mostrar más antiguos primero"
 msgid "Show on Showcase"
 msgstr "Mostrar en Destacados"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "show popular maps"
 msgstr "ver mapas populares"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "show skillboost"
 msgstr "mostrar skillboost"
 
@@ -15463,9 +15528,14 @@ msgstr "tamaño"
 msgid "Size"
 msgstr "Tamaño"
 
+#: src/routes/recommendations.tsx
+msgid "skill"
+msgstr ""
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/LeaderboardControls.tsx
+#: src/routes/recommendations.tsx
 msgid "Skill"
 msgstr "Skillset"
 
@@ -15480,6 +15550,10 @@ msgstr "Desglose de habilidades"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Skill breakdown unavailable"
 msgstr "Desglose de habilidades no disponible"
+
+#: src/routes/recommendations.tsx
+msgid "Skill charts need rated plays in 4K or 7K."
+msgstr ""
 
 #: src/components/maps/MapSearchSection.tsx
 #~ msgid "Skill detection is less tuned outside 4K."
@@ -15515,17 +15589,21 @@ msgstr "Los niveles de habilidad no están disponibles por ahora."
 msgid "Skill shape: {shape}"
 msgstr "Forma de habilidad: {shape}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "skillboost"
 msgstr "skillboost"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "skillboost {target}pp"
 msgstr "skillboost {target}pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "skillboost only"
 msgstr "solo skillboost"
+
+#: src/routes/recommendations.tsx
+msgid "skills"
+msgstr ""
 
 #: src/components/team/TeamProfilePage.tsx
 #: src/routes/dan-estimates.tsx
@@ -15758,13 +15836,17 @@ msgstr "Algo se rompió"
 msgid "Something else"
 msgstr "Otra cosa"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Something went wrong loading these maps. Try the toggle again in a moment."
 msgstr "Algo salió mal al cargar estos mapas. Vuelve a usar el toggle en un momento."
 
-#: src/routes/farm-helper.tsx
-msgid "Something went wrong loading this player's farm data. Try again in a moment."
-msgstr "Algo salió mal al cargar los datos de farm de este jugador. Inténtalo de nuevo en un momento."
+#: src/routes/recommendations.tsx
+#~ msgid "Something went wrong loading this player's farm data. Try again in a moment."
+#~ msgstr "Algo salió mal al cargar los datos de farm de este jugador. Inténtalo de nuevo en un momento."
+
+#: src/routes/recommendations.tsx
+msgid "Something went wrong loading this player's recommendations. Try again in a moment."
+msgstr "Algo salió mal al cargar las recomendaciones de este jugador. Inténtalo de nuevo en un momento."
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Something went wrong."
@@ -15782,7 +15864,7 @@ msgstr "Canción, artista o mapper"
 msgid "soon"
 msgstr "pronto"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "sort"
 msgstr "ordenar"
 
@@ -15946,8 +16028,8 @@ msgstr "STAM"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stamina"
 msgstr "Stamina"
 
@@ -15956,17 +16038,17 @@ msgid "Standard"
 msgstr "Estándar"
 
 #: src/components/maps/MapSearchSection.tsx
-#: src/routes/farm-helper.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
 msgid "Star rating"
 msgstr "Rating de estrellas"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "star rating shown for 1.0x"
 msgstr "rating de estrellas mostrado a 1.0x"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "stars"
 msgstr "estrellas"
 
@@ -16161,8 +16243,8 @@ msgstr "Racha"
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Stream"
 msgstr "Stream"
 
@@ -16385,7 +16467,7 @@ msgstr "toca uno para previsualizar su respuesta"
 msgid "Tap the stack or drag the top card to draw"
 msgstr "Toca las cartas o arrastra la de arriba para sacar una"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "target"
 msgstr "meta"
 
@@ -16401,7 +16483,7 @@ msgstr "Meta de plays"
 msgid "Target rank"
 msgstr "Meta de rank"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "target score"
 msgstr "puntaje objetivo"
 
@@ -16409,7 +16491,7 @@ msgstr "puntaje objetivo"
 msgid "Target total pp"
 msgstr "Meta de pp totales"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "targets on this chart will aim higher until you set the score"
 msgstr "los objetivos en este chart apuntarán más alto hasta que pongas el puntaje"
 
@@ -16452,8 +16534,8 @@ msgstr "Abre packs de maniacards: jugadores aleatorios de osu!mania convertidos 
 #: src/components/player/ActivityPanel.tsx
 #: src/lib/pattern-labels.ts
 #: src/lib/skill-axes.ts
-#: src/routes/farm-helper/map/$beatmapId.tsx
 #: src/routes/maps.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Tech"
 msgstr "Tech"
 
@@ -17339,7 +17421,7 @@ msgstr "La página tuvo un error inesperado y no pudo terminar de renderizarse. 
 msgid "The page is over osu!'s 60,000 character limit."
 msgstr "La página supera el límite de 60.000 caracteres de osu!."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
 msgstr "El panel del jugador puede quedarse aquí, pero esta vista no devolvió datos actualizados del mapa."
 
@@ -17811,7 +17893,7 @@ msgstr "Este mapa no está construido de forma que un pase permita leer un nivel
 msgid "This chart is not in the map catalog, so there is nothing to show beyond the play itself."
 msgstr "Este mapa no está en el catálogo de mapas, así que no hay nada más que mostrar aparte del play."
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "This chart isn't analyzed yet."
 msgstr "Este mapa aún no está analizado."
 
@@ -17920,11 +18002,11 @@ msgstr "Esto aún no está disponible. Vuelve pronto."
 msgid "this map"
 msgstr "este mapa"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "this map is below your level: targets on it will aim higher"
 msgstr "este mapa está por debajo de tu nivel: sus targets van a apuntar más alto"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "this map is beyond your level: hides it from your recs until you set a score on it"
 msgstr "este mapa está por encima de tu nivel: se oculta de tus recs hasta que pongas un puntaje en él"
 
@@ -18074,7 +18156,7 @@ msgstr "Esta pestaña pasó a segundo plano, lo que puede pausar la exportación
 msgid "This team has no description."
 msgstr "Este equipo no tiene descripción."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "This tool reads cross-country farm data from the server, which isn't configured in this environment."
 msgstr "Esta herramienta lee datos de farm entre países desde el servidor, algo que no está configurado en este entorno."
 
@@ -18176,7 +18258,7 @@ msgstr "Mostrar u ocultar el menú"
 msgid "Toggles"
 msgstr "Opciones"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "too easy"
 msgstr "muy fácil"
 
@@ -18185,11 +18267,11 @@ msgstr "muy fácil"
 #~ msgid "Too far under {0} to count its whole distance"
 #~ msgstr "Demasiado por debajo de {0} para contar toda su distancia"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "too hard"
 msgstr "muy difícil"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "too hard hides the lane from your gain views, done with it does the same for 60 days; setting a real score also clears a mark"
 msgstr "muy difícil oculta el mapa de tus vistas de ganancia, suficiente hace lo mismo por 60 días; poner un puntaje real también borra la marca"
 
@@ -18259,7 +18341,7 @@ msgstr "Top 1000"
 msgid "Top 2%, new cards first"
 msgstr "Top 2%, cartas nuevas primero"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "top 25% {target}pp"
 msgstr "top 25% {target}pp"
 
@@ -18398,7 +18480,7 @@ msgstr "Triángulos"
 #~ msgid "Tries before a PB"
 #~ msgstr "Intentos antes de un PB"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Try a different title, artist, or difficulty name."
 msgstr "Prueba con otro título, artista o nombre de dificultad."
 
@@ -18441,7 +18523,7 @@ msgstr "mar"
 msgid "Tuesdays"
 msgstr "Martes"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "tune your recs"
 msgstr "ajusta tus recs"
 
@@ -18530,7 +18612,7 @@ msgstr "Ucraniano"
 msgid "Unanalyzed"
 msgstr "Sin analizar"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "unavailable"
 msgstr "no disponible"
 
@@ -18573,7 +18655,7 @@ msgstr "Dejar de ocultar"
 #: src/components/packs/collections/RecordBoards.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/skins/SkinUpdateModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "unknown"
 msgstr "desconocido"
 
@@ -18584,7 +18666,7 @@ msgstr "desconocido"
 msgid "Unknown"
 msgstr "Desconocido"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "unknown artist"
 msgstr "artista desconocido"
 
@@ -18658,7 +18740,7 @@ msgid "Unrateable"
 msgstr "No calificable"
 
 #: src/components/maps/MapDetailModal.tsx
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "unrateable chart"
 msgstr "mapa no calificable"
 
@@ -18927,7 +19009,7 @@ msgstr "usuario"
 msgid "Username"
 msgstr "Nombre de usuario"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "username..."
 msgstr "usuario..."
 
@@ -18957,7 +19039,7 @@ msgstr "Vibro"
 msgid "vibro at {0}x"
 msgstr "vibro a {0}x"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "vibro chart, estimate unreliable"
 msgstr "mapa vibro, estimación poco confiable"
 
@@ -19018,6 +19100,12 @@ msgstr "Vietnamita"
 msgid "View"
 msgstr "Vista"
 
+#. placeholder {0}: rec.title
+#. placeholder {1}: rec.version
+#: src/routes/recommendations.tsx
+msgid "View {0} [{1}]"
+msgstr ""
+
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
 #: src/components/packs/CollectionPanel.tsx
@@ -19065,7 +19153,7 @@ msgstr "ver detalles del mapa"
 msgid "View map details"
 msgstr "Ver detalles del mapa"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "View mode"
 msgstr "Modo de vista"
 
@@ -19082,7 +19170,7 @@ msgstr "Ver en osu!"
 msgid "View on osu! →"
 msgstr "Ver en osu! →"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "view on osu! web"
 msgstr "ver en la web de osu!"
 
@@ -19302,7 +19390,7 @@ msgstr "Ver con la skin del jugador ({ownerSkinName})"
 msgid "Watermark"
 msgstr "Marca de agua"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "We don't have enough data on players near your pp to build recommendations. Try another key mode, or check back once more nearby players are tracked."
 msgstr "No tenemos suficientes datos de jugadores cerca de tu pp para armar recomendaciones. Prueba con otro modo de teclas o vuelve cuando haya más jugadores cercanos en el tracker."
 
@@ -19345,11 +19433,11 @@ msgstr "Descripción"
 #~ msgid "What it looks like across everyone"
 #~ msgstr "Cómo se reparte entre todos"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"
 msgstr "lo que los jugadores cercanos realmente farmean"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "what players near you played last"
 msgstr "lo último que jugaron los jugadores cerca de ti"
 
@@ -19365,7 +19453,7 @@ msgstr "¿Qué parece estar mal?"
 msgid "What you play"
 msgstr "Lo que juegas"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "what you're browsing"
 msgstr "lo que estás viendo"
 
@@ -19427,11 +19515,11 @@ msgstr "mientras estuviste en el tracker"
 msgid "Who can join"
 msgstr "Quién puede unirse"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "who farms this"
 msgstr "quién farmea este"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Who farms this"
 msgstr "Quién farmea este mapa"
 
@@ -19443,7 +19531,7 @@ msgstr "Quién tiene tu carta"
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
 msgstr "Para quién es el servidor, qué pasa en él, cuándo está activo. Los saltos de línea se conservan."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "who you're compared to"
 msgstr "con quién te comparamos"
 
@@ -19451,7 +19539,7 @@ msgstr "con quién te comparamos"
 msgid "Whole pool, new cards first"
 msgstr "Todo el pool, cartas nuevas primero"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "why a map shows up"
 msgstr "por qué aparece un mapa"
 
@@ -19489,7 +19577,7 @@ msgstr "Lista de deseos"
 msgid "Wishlist is full (5)"
 msgstr "La lista de deseos está llena (5)"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "with {mods}"
 msgstr "con {mods}"
 
@@ -19509,7 +19597,7 @@ msgstr "con {mods}"
 msgid "With fewer than two rated skills, your dan is the average of your 20 best passes overall."
 msgstr "Con menos de dos skills calificados, tu dan es el promedio de tus 20 mejores pases en general."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "with no mods"
 msgstr "sin mods"
 
@@ -19583,27 +19671,27 @@ msgstr "tú"
 msgid "You"
 msgstr "Tú"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp."
 msgstr "Ya superaste a los jugadores cerca de ti aquí, pero una repetición con más acc todavía vale pp."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the players near you here, but a higher-acc rerun is still worth pp. Hidden by default until you achieve one of its scores."
 msgstr "Ya superaste a los jugadores cerca de ti aquí, pero una repetición con más acc todavía vale pp. Oculto por defecto hasta que logres uno de sus puntajes."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with {yourPp}pp, but that run had {misses, plural, one {# miss} other {# misses}}. Cutting them out is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp, pero esa run tuvo {misses, plural, one {# miss} other {# misses}}. Quitarlos vale unos {target}pp."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with {yourPp}pp. A cleaner acc run is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Una run con mejor acc vale unos {target}pp."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You already beat the typical score here with a miss-free {yourPp}pp. Raising your 320-weighted acc from {from}% to {to}% is worth about {target}pp."
 msgstr "Ya superaste el score típico de aquí con {yourPp}pp sin misses. Subir tu acc ponderada a 320 de {from}% a {to}% vale unos {target}pp."
 
@@ -19689,7 +19777,7 @@ msgstr "Ya puedes enviar partidas a tu cuenta de Mania Tracker aunque estés off
 msgid "You can revoke Companella's connection in <0>Settings</0>, under Preferences. It stops sending plays right away."
 msgstr "Puedes revocar la conexión de Companella en <0>Ajustes</0>, en Preferencias. Deja de enviar partidas de inmediato."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you could gain"
 msgstr "ganancia potencial"
 
@@ -19709,7 +19797,7 @@ msgstr "Acertaste {streak}."
 msgid "You have a few reports waiting to be read already. Give a moderator a chance to catch up."
 msgstr "Ya tienes algunos reportes esperando ser leídos. Dale un chance a un moderador para ponerse al día."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You have a score, but players near you score higher on it."
 msgstr "Tienes puntaje, pero jugadores cerca de ti puntúan más alto."
 
@@ -19721,7 +19809,7 @@ msgstr "Todavía no has publicado una skin"
 msgid "You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more."
 msgstr "Llegaste al límite de {HIDDEN_USERS_LIMIT} jugadores ocultos. Quita a alguien para agregar más."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you have too many active marks, clear some first"
 msgstr "tienes demasiadas marcas activas, borra algunas primero"
 
@@ -19737,15 +19825,15 @@ msgstr "Todavía no le has dado me gusta a ninguna colección."
 msgid "You haven't posted a collection yet."
 msgstr "Todavía no has publicado ninguna colección."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You marked this done with it"
 msgstr "Marcaste este mapa como suficiente"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You marked this too easy"
 msgstr "Marcaste este como muy fácil"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You marked this too hard"
 msgstr "Marcaste este como muy difícil"
 
@@ -19769,7 +19857,7 @@ msgstr "Ya no tienes ninguna copia de esta carta."
 #~ msgid "You pick where the file is saved."
 #~ msgstr "Tú eliges dónde se guarda el archivo."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
 msgstr "Estás en {yourPp}pp mientras los jugadores cerca de ti promedian {median}pp, así que hay margen de mejora en una rerun."
 
@@ -19795,11 +19883,11 @@ msgstr "Ya estás en el tracker"
 #~ msgid "You're being tracked now. Your recent plays are being pulled in and will be rated here in a few minutes."
 #~ msgstr "Ya estás en el tracker. Se están trayendo tus plays recientes y se calificarán aquí en unos minutos."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you're done improving this map: hides it from your recs for 60 days"
 msgstr "ya no piensas mejorar este mapa: se oculta de tus recs por 60 días"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "you're logged out, log in again to save marks"
 msgstr "cerraste sesión, vuelve a iniciar sesión para guardar tus marcas"
 
@@ -19830,15 +19918,15 @@ msgstr "tu"
 #~ msgid "Your {0} edition"
 #~ msgstr "Tu edición {0}"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your {yourPp}pp"
 msgstr "tu {yourPp}pp"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your {yourPp}pp · {age} old"
 msgstr "tu {yourPp}pp · {age} de antigüedad"
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "Your {yourPp}pp score is {age} old. The top quarter of players near you sits at {p75}pp."
 msgstr "Tu score de {yourPp}pp tiene {age} de antigüedad. El 25% superior de los jugadores cerca de ti está en {p75}pp."
 
@@ -19858,7 +19946,7 @@ msgstr "Tu acc define el nivel. En una escala cuyos cursos piden 96%, un pase de
 #~ msgid "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, and 98% and up as <2>delta++</2>. Come up short at 94% and you still get <3>delta--</3>, since getting that close is worth something. Below that you get nothing. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "Tu precisión marca el escalón. En un ladder cuyos cursos piden 96%, un pase justo de 96% en el curso delta se lee como <0>delta</0>, un 97.5% como <1>delta+</1> y un 98% o más como <2>delta++</2>. Quédate corto en 94% y aún te llevas <3>delta--</3>, porque quedarte así de cerca vale algo. Por debajo de eso no te llevas nada. Los ladders que piden otra precisión desplazan toda la escala con ellos."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your best"
 msgstr "tu mejor"
 
@@ -19866,6 +19954,10 @@ msgstr "tu mejor"
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Your best play on each map, each day ({0})."
 #~ msgstr "Tu mejor play en cada mapa, cada día ({0})."
+
+#: src/routes/recommendations.tsx
+msgid "your best plays"
+msgstr "tus mejores plays"
 
 #: src/components/discord/CommandShowcase.tsx
 msgid "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else."
@@ -19967,7 +20059,7 @@ msgstr "Se desactivaron tus renders dinámicos."
 msgid "Your lowest rating is {0}."
 msgstr "Tu rating más bajo es {0}."
 
-#: src/routes/farm-helper.tsx
+#: src/routes/recommendations.tsx
 msgid "your marks"
 msgstr "tus marcas"
 
@@ -20023,6 +20115,10 @@ msgstr "Tus skins privadas"
 msgid "Your private skins are on the shelf above; anything you publish lands here."
 msgstr "Tus skins privadas están en el estante de arriba; todo lo que publiques aparece aquí."
 
+#: src/routes/recommendations.tsx
+msgid "your rating"
+msgstr "tu rating"
+
 #: src/components/player/SkillsUntrackedNotice.tsx
 #~ msgid "Your recent plays are being pulled in and will be rated here in a few minutes."
 #~ msgstr "Se están trayendo tus plays recientes y se calificarán aquí en unos minutos."
@@ -20056,7 +20152,7 @@ msgstr "Tu respuesta se envió, pero al menos una imagen no se subió."
 msgid "Your reports"
 msgstr "Tus reportes"
 
-#: src/routes/farm-helper/map/$beatmapId.tsx
+#: src/routes/recommendations/map/$beatmapId.tsx
 msgid "your score"
 msgstr "tu score"
 

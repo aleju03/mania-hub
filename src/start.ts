@@ -158,7 +158,7 @@ const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
   "/top-plays": DEFAULT_DOCUMENT_CACHE,
   "/snipes": DEFAULT_DOCUMENT_CACHE,
   "/maps": DEFAULT_DOCUMENT_CACHE,
-  "/farm-helper": DEFAULT_DOCUMENT_CACHE,
+  "/recommendations": DEFAULT_DOCUMENT_CACHE,
   // Replay pages are an app shell; the real replay/beatmap data is loaded
   // via server functions. Long TTL since the shell rarely changes.
   "/replay": { sMaxage: 300, swr: 1800 },
@@ -183,7 +183,7 @@ function getDocumentCacheForPathname(pathname: string): DocumentCacheConfig | nu
   // document TTL only affects the first paint.
   if (pathname.startsWith("/player/")) return { sMaxage: 300, swr: 1800 };
   if (pathname.startsWith("/skins/")) return DEFAULT_DOCUMENT_CACHE;
-  if (pathname.startsWith("/farm-helper/map/")) return DEFAULT_DOCUMENT_CACHE;
+  if (pathname.startsWith("/recommendations/map/")) return DEFAULT_DOCUMENT_CACHE;
   // A pull share page describes one card pull that already happened, so it
   // never changes. These are made to be pasted into chat, which means repeat
   // visitors arriving from the same link.
@@ -332,7 +332,7 @@ function shareSubjectType(pathname: string): string {
   if (pathname === "/tracker") return "tracker";
   if (pathname === "/top-plays") return "top-plays";
   if (pathname === "/snipes") return "snipes";
-  if (pathname === "/farm-helper") return "farm-helper";
+  if (pathname === "/recommendations" || pathname === "/farm-helper") return "farm-helper";
   if (pathname === "/goals") return "goals";
   if (pathname === "/packs") return "packs";
   if (pathname.startsWith("/skins")) return "skins";

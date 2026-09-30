@@ -12,7 +12,7 @@ const STATIC_PATHS = [
   { path: "/teams", changefreq: "daily", priority: "0.7" },
   { path: "/maps", changefreq: "daily", priority: "0.8" },
   { path: "/replay", changefreq: "weekly", priority: "0.8" },
-  { path: "/farm-helper", changefreq: "daily", priority: "0.7" },
+  { path: "/recommendations", changefreq: "daily", priority: "0.7" },
   { path: "/skins", changefreq: "daily", priority: "0.7" },
   { path: "/communities", changefreq: "daily", priority: "0.7" },
   { path: "/packs", changefreq: "weekly", priority: "0.6" },
