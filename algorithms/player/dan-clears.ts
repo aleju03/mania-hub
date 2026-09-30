@@ -407,11 +407,7 @@ export function collectDanClears(
         currency = "stable";
       }
       if (play.vibroAdjustment) accuracy = conservativeVibroAccuracy(accuracy, play.vibroAdjustment.judgementShare);
-      // The jack tile's bonus is damped, so the credit needs the primary tile.
-      const primaryTile = side === "rc" && keyCount === 4
-        ? danSkillsetBucketsForPlay(danSkillsetBuckets(keyCount, side), play, info)[0]?.id ?? null
-        : null;
-      const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount, { primaryTile });
+      const creditedDan = creditedDanFor(rawDan, accuracy, threshold, side, keyCount);
       if (creditedDan == null) {
         // Passes under the bar credit down to the window edge, so that edge is
         // what this play missed.

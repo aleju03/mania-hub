@@ -4,10 +4,9 @@
 import { danTableCeilingFor, danTableFloorFor } from "../classification/chart-classifier";
 
 /**
- * Anchor tables are normalized so one table serves every bar. Above the bar,
- * t = (accuracy - bar) / max(1 - bar, DAN_CREDIT_BONUS_MIN_SPAN). Below it,
- * s = (bar - accuracy) / window. 4K LN keys its bonus in absolute points
- * because its ScoreV2 bar rarely allows 100%.
+ * Rice and 4K LN key their bonus in absolute points over the bar. The 6K/7K LN
+ * bonus reads t = (accuracy - bar) / max(1 - bar, DAN_CREDIT_BONUS_MIN_SPAN).
+ * Below the bar, every ladder reads s = (bar - accuracy) / window.
  */
 export type DanCreditAnchors = ReadonlyArray<readonly [at: number, offset: number]>;
 
@@ -19,13 +18,6 @@ export const DAN_CREDIT_BELOW_BAR_WINDOW = 0.05;
  * window so changing the window does not rescale the bonus.
  */
 export const DAN_CREDIT_BONUS_MIN_SPAN = 0.04;
-
-/**
- * Share of the above-bar bonus kept by a 4K rice clear whose primary tile is
- * jack. About a third of 4K jack clears land at 99%+. Halving brings the tile's
- * mean bonus in line with tech and stamina.
- */
-export const DAN_CREDIT_JACK_BONUS_SCALE = 0.5;
 
 /**
  * The 6K/7K LN decay window, three points under the 95% bar. Accuracy is cheap
@@ -42,9 +34,20 @@ export function danCreditBelowBarWindowFor(side: "rc" | "ln", keyCount: number):
 }
 
 /**
- * Bonus half, on the headroom scale. The first quarter is flat, so the point
- * above the bar is a bare clear. The curve reaches only +0.2 under 99% and
- * rises from there to +1.5 at 100%.
+ * Rice bonus: an eighth of a level per accuracy point over the bar, on every
+ * skillset tile, so +0.5 at 100% on the 96% bar. Across rice clears, a
+ * player's level from their other clears rises in a straight line with the
+ * accuracy a chart was cleared at, about 0.12-0.13 levels per point.
+ */
+export const DAN_CREDIT_RICE_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
+  [0, 0],
+  [0.04, 0.5],
+];
+
+/**
+ * 6K/7K LN bonus, on the headroom scale. The first quarter is flat, so the
+ * point above the bar is a bare clear. The curve reaches only +0.2 under 99%
+ * and rises from there to +1.5 at 100%.
  */
 export const DAN_CREDIT_ABOVE_BAR_ANCHORS: DanCreditAnchors = [
   [0, 0],
@@ -121,13 +124,6 @@ export interface DanCreditOptions {
    * them in absolute accuracy points over the bar.
    */
   aboveBarScale?: "headroom" | "delta";
-  /** Multiplier on the above-bar offset only. Carries the jack tile damping. */
-  bonusScale?: number;
-}
-
-export interface DanCreditClearContext {
-  /** The clear's primary skillset tile. Only "jack" on 4K rice changes anything. */
-  primaryTile?: string | null;
 }
 
 /**
@@ -146,13 +142,12 @@ export function danCreditOffset(accuracy: number, bar: number, options: DanCredi
     return Math.min(offset, -(options.nearBarCap ?? 0));
   }
   const aboveBar = options.aboveBar ?? DAN_CREDIT_ABOVE_BAR_ANCHORS;
-  const bonusScale = options.bonusScale ?? 1;
   if ((options.aboveBarScale ?? "headroom") === "delta") {
-    return interpolateAnchors(aboveBar, Math.max(0, delta)) * bonusScale;
+    return interpolateAnchors(aboveBar, Math.max(0, delta));
   }
   const headroom = Math.max(1 - bar, DAN_CREDIT_BONUS_MIN_SPAN);
   const t = headroom > 0 ? Math.min(1, Math.max(0, delta) / headroom) : 1;
-  return interpolateAnchors(aboveBar, t) * bonusScale;
+  return interpolateAnchors(aboveBar, t);
 }
 
 /**
@@ -163,27 +158,24 @@ export function danCreditNearBarCapFor(_side: "rc" | "ln", _keyCount: number): n
   return 0;
 }
 
-/** Whether a clear's primary tile takes the damped jack bonus. */
-export function danCreditTakesJackDamping(side: "rc" | "ln", keyCount: number, context?: DanCreditClearContext): boolean {
-  return side === "rc" && keyCount === 4 && context?.primaryTile === "jack";
-}
-
 /**
- * Ladder options for the chart-clear curve. 4K LN has its own tables on both
- * halves, 6K/7K LN has its own decay, and a 4K rice jack clear takes the
- * damped bonus.
+ * Ladder options for the chart-clear curve. Rice reads its straight-line
+ * bonus, 4K LN has its own tables on both halves, and 6K/7K LN has its own
+ * decay.
  */
-export function danCreditOptionsFor(side: "rc" | "ln", keyCount: number, context?: DanCreditClearContext): DanCreditOptions {
+export function danCreditOptionsFor(side: "rc" | "ln", keyCount: number): DanCreditOptions {
   const options: DanCreditOptions = {
     nearBarCap: danCreditNearBarCapFor(side, keyCount),
     belowBarWindow: danCreditBelowBarWindowFor(side, keyCount),
   };
-  if (danCreditTakesJackDamping(side, keyCount, context)) options.bonusScale = DAN_CREDIT_JACK_BONUS_SCALE;
-  if (side === "ln" && keyCount === 4) {
+  if (side === "rc") {
+    options.aboveBar = DAN_CREDIT_RICE_ABOVE_BAR_ANCHORS;
+    options.aboveBarScale = "delta";
+  } else if (keyCount === 4) {
     options.aboveBar = DAN_CREDIT_4K_LN_ABOVE_BAR_ANCHORS;
     options.aboveBarScale = "delta";
     options.belowBar = DAN_CREDIT_4K_LN_BELOW_BAR_ANCHORS;
-  } else if (side === "ln") {
+  } else {
     options.belowBar = DAN_CREDIT_LN_BELOW_BAR_ANCHORS;
   }
   return options;
@@ -200,9 +192,8 @@ export function creditedDanFor(
   bar: number,
   side: "rc" | "ln",
   keyCount: number,
-  context?: DanCreditClearContext,
 ): number | null {
-  const offset = danCreditOffset(accuracy, bar, danCreditOptionsFor(side, keyCount, context));
+  const offset = danCreditOffset(accuracy, bar, danCreditOptionsFor(side, keyCount));
   if (offset == null) return null;
   let credited = chartDan + offset;
   const ceiling = danTableCeilingFor(side, keyCount);

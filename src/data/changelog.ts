@@ -37,6 +37,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-09-30", text: "Updated the dan credit curve and the dan estimates page. The bonus for accuracy above the pass bar now grows evenly with each point, 99% and 100% clears give less than before.", to: "/dan-estimates" },
   { date: "2026-09-30", text: "4K LN MSD and dans are hidden while the new LN model is being tested, turn on Experimental LN model in settings if you wanna see it.", to: "/settings" },
   { date: "2026-09-30", text: "Overall now uses Etterna's method, the average of your best skillsets, and you can switch back to Classic next to Overall.", bold: "Overall", label: "Classic", to: "/my-stats" },
   { date: "2026-09-30", text: "Reworked 4K LN ratings.", to: "/dan-estimates" },

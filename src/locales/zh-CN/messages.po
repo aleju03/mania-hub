@@ -2181,8 +2181,8 @@ msgid "4K"
 msgstr "4K"
 
 #: src/routes/dan-estimates.tsx
-msgid "4K jack"
-msgstr "4K 叠键"
+#~ msgid "4K jack"
+#~ msgstr "4K 叠键"
 
 #: src/routes/dan-estimates.tsx
 msgid "4K LN"
@@ -11508,8 +11508,8 @@ msgid "On /skins, anyone can download the .osk."
 msgstr "出现在 /skins，任何人都可以下载 .osk。"
 
 #: src/routes/dan-estimates.tsx
-msgid "On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal there."
-msgstr "在 4K 叠谱上，通过线以上的加分减半，因为这类谱面打出很高的准确率很常见。"
+#~ msgid "On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal there."
+#~ msgstr "在 4K 叠谱上，通过线以上的加分减半，因为这类谱面打出很高的准确率很常见。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "On 4K the slices come from the play's own MSD skillset ratings, bucketed by whichever skillset is strongest on that chart: jack (JackSpeed and Chordjack), tech (Technical and Jumpstream), speed (Stream) and stamina (Handstream and Stamina). Jumpstream sits with tech on purpose. MinaCalc's Jumpstream fires hard on dense jumptrill, which feels a lot more like tech than like speed, so pairing it with Stream put charts like Blastix Riotz [GRAVITY] on a tile labelled speed. Checked against a 25 chart pack of real gamma speed charts, Stream alone picks all 25 and rejects the jumptrill charts by a wide margin."
@@ -13358,8 +13358,12 @@ msgid "Reach pp"
 msgstr "总 pp"
 
 #: src/routes/dan-estimates.tsx
-msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
-msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带来加分，99% 之前加得很少；低于通过线的成绩仍按较低段位计入，最多到通过线以下约五个百分点。准确率根据你的判定重新计算，所以 stable 和 lazer 的成绩按同样方式计入。"
+#~ msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays small until 99%, and a score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
+#~ msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带来加分，99% 之前加得很少；低于通过线的成绩仍按较低段位计入，最多到通过线以下约五个百分点。准确率根据你的判定重新计算，所以 stable 和 lazer 的成绩按同样方式计入。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular charts it grows by the same amount with each point, and on LN charts it stays small until 99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
+msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带来加分。单点谱面每高一个百分点加分相同，LN 谱面在 99% 之前加得很少。低于通过线的成绩仍按较低段位计入，最多到通过线以下约五个百分点。准确率根据你的判定重新计算，所以 stable 和 lazer 的成绩按同样方式计入。"
 
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx
@@ -16996,24 +17000,28 @@ msgid "the chart's level {0}"
 msgstr "谱面段位 {0}"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.03"
-msgstr "谱面段位 +0.03"
+#~ msgid "the chart's level +0.03"
+#~ msgstr "谱面段位 +0.03"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.06"
-msgstr "谱面段位 +0.06"
+#~ msgid "the chart's level +0.06"
+#~ msgstr "谱面段位 +0.06"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.07"
 msgstr "谱面段位 +0.07"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.1"
-msgstr "谱面段位 +0.1"
+#~ msgid "the chart's level +0.1"
+#~ msgstr "谱面段位 +0.1"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.12"
-msgstr "谱面段位 +0.12"
+#~ msgid "the chart's level +0.12"
+#~ msgstr "谱面段位 +0.12"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.13"
+msgstr "谱面段位 +0.13"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.14"
@@ -17032,8 +17040,12 @@ msgstr "谱面段位 +0.16"
 #~ msgstr "谱面段位 +0.18"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.2"
-msgstr "谱面段位 +0.2"
+#~ msgid "the chart's level +0.2"
+#~ msgstr "谱面段位 +0.2"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.25"
+msgstr "谱面段位 +0.25"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.28"
@@ -17044,8 +17056,12 @@ msgid "the chart's level +0.3"
 msgstr "谱面段位 +0.3"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.35"
-msgstr "谱面段位 +0.35"
+#~ msgid "the chart's level +0.35"
+#~ msgstr "谱面段位 +0.35"
+
+#: src/routes/dan-estimates.tsx
+msgid "the chart's level +0.38"
+msgstr "谱面段位 +0.38"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "the chart's level +0.49"
@@ -17060,24 +17076,24 @@ msgstr "谱面段位 +0.5"
 #~ msgstr "谱面段位 +0.53"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.55"
-msgstr "谱面段位 +0.55"
+#~ msgid "the chart's level +0.55"
+#~ msgstr "谱面段位 +0.55"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.7"
 msgstr "谱面段位 +0.7"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +0.75"
-msgstr "谱面段位 +0.75"
+#~ msgid "the chart's level +0.75"
+#~ msgstr "谱面段位 +0.75"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +0.86"
 msgstr "谱面段位 +0.86"
 
 #: src/routes/dan-estimates.tsx
-msgid "the chart's level +1.1"
-msgstr "谱面段位 +1.1"
+#~ msgid "the chart's level +1.1"
+#~ msgstr "谱面段位 +1.1"
 
 #: src/routes/dan-estimates.tsx
 msgid "the chart's level +1.18"
@@ -18922,6 +18938,7 @@ msgstr "纵向"
 msgid "vibro"
 msgstr "vibro"
 
+#: src/components/maps/MapSearchSection.tsx
 #: src/components/maps/SearchCard.tsx
 msgid "Vibro"
 msgstr "Vibro"

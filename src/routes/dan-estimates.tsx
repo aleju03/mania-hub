@@ -6,7 +6,7 @@ import { msg } from "@lingui/core/macro";
 import { getI18n } from "../lib/i18n";
 import { getDanImageSrc } from "../lib/dan-images";
 import { DanLevelBadge } from "../components/player/DanLevelBadge";
-import { creditedDanFor, danCreditOptionsFor, danCreditOffset, type DanCreditClearContext } from "#dan/dan-credit";
+import { creditedDanFor, danCreditOptionsFor, danCreditOffset } from "#dan/dan-credit";
 import { danLabelFor } from "#dan/chart-classifier";
 import { formatDate, formatNumber } from "../lib/format";
 import { useLocale } from "../lib/locale-context";
@@ -341,9 +341,9 @@ function DanEstimatesPage() {
           />
           <P>
             <Trans>
-              Reaching the bar gives the chart's full level. Higher accuracy adds a bonus that stays
-              small until 99%, and a score under the bar still counts for less, down to about five
-              points below it. Accuracy is recalculated from your judgements, so stable and lazer
+              Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular
+              charts it grows by the same amount with each point, and on LN charts it stays small until
+              99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer
               scores count the same way.
             </Trans>
           </P>
@@ -369,12 +369,6 @@ function DanEstimatesPage() {
                 added, keeping your best play on each chart at each rate. Charts flagged as vibro are
                 left out. A rate nobody has rated a chart at yet is worked out the first time your
                 estimate needs it, so a play at an unusual rate can take a little while to count.
-              </Trans>
-            </p>
-            <p>
-              <Trans>
-                On 4K jack charts the bonus above the bar is halved, since very high accuracy is normal
-                there.
               </Trans>
             </p>
           </Details>
@@ -1241,31 +1235,27 @@ function CreditCurveTabs() {
   const stableFormulaNote = t`Lazer scores are recalculated from their judgements, so the accuracy used here may be higher than the displayed value. For example, a 95.5% play could count as a 96% clear. On charts with a lot of long notes the recalculation is only close to what stable would show, because the two clients judge holds differently. The Classic mod makes no difference.`;
   const tabs: Array<{
     label: string;
-    ladder: { key: string; bar: number; side: "rc" | "ln"; keyCount: number; example: number; jackCurve?: boolean };
+    ladder: { key: string; bar: number; side: "rc" | "ln"; keyCount: number; example: number };
     head: string[];
     note: string;
     rows: string[][];
   }> = [
     {
       label: t`Regular 4K/6K/7K`,
-      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620, jackCurve: true },
-      /* The third column is the 4K jack tile's bonus (DAN_CREDIT_JACK_BONUS_SCALE):
-         half of the shared one above the bar, the same below it. */
-      head: [t`Stable-formula acc (96%)`, t`Credit`, t`4K jack`],
+      ladder: { key: "4k-regular", bar: 0.96, side: "rc" as const, keyCount: 4, example: 3729620 },
+      head: [t`Stable-formula acc (96%)`, t`Credit`],
       rows: [
-        ["100%", t`the chart's level +1.5`, t`the chart's level +0.75`],
-        ["99.5%", t`the chart's level +1.1`, t`the chart's level +0.55`],
-        ["99%", t`the chart's level +0.7`, t`the chart's level +0.35`],
-        ["98.7%", t`the chart's level +0.2`, t`the chart's level +0.1`],
-        ["98%", t`the chart's level +0.12`, t`the chart's level +0.06`],
-        ["97.5%", t`the chart's level +0.06`, t`the chart's level +0.03`],
-        ["96-97%", t`the chart's full level`, t`the chart's full level`],
-        ["95.5%", t`the chart's level -0.25`, t`the chart's level -0.25`],
-        ["95%", t`the chart's level -0.51`, t`the chart's level -0.51`],
-        ["94%", t`the chart's level -0.76`, t`the chart's level -0.76`],
-        ["92%", t`the chart's level -1.25`, t`the chart's level -1.25`],
-        ["91%", t`the chart's level -1.5`, t`the chart's level -1.5`],
-        [t`below 91%`, t`nothing`, t`nothing`],
+        ["100%", t`the chart's level +0.5`],
+        ["99%", t`the chart's level +0.38`],
+        ["98%", t`the chart's level +0.25`],
+        ["97%", t`the chart's level +0.13`],
+        ["96%", t`the chart's full level`],
+        ["95.5%", t`the chart's level -0.25`],
+        ["95%", t`the chart's level -0.51`],
+        ["94%", t`the chart's level -0.76`],
+        ["92%", t`the chart's level -1.25`],
+        ["91%", t`the chart's level -1.5`],
+        [t`below 91%`, t`nothing`],
       ],
       note: stableFormulaNote,
     },
@@ -1336,7 +1326,6 @@ function CreditCurveTabs() {
         bar={active.ladder.bar}
         side={active.ladder.side}
         keyCount={active.ladder.keyCount}
-        jackCurve={active.ladder.jackCurve}
         example={CHART_EXAMPLES.find((chart) => chart.id === active.ladder.example)}
       />
       <Details summary={t`The credit as a table`}>
@@ -1377,13 +1366,11 @@ function formatCreditOffset(offset: number): string {
   return `${offset < 0 ? "-" : "+"}${body}`;
 }
 
-function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
+function CreditCurvePlot({ ladder, bar, side, keyCount, example }: {
   ladder: string;
   bar: number;
   side: "rc" | "ln";
   keyCount: number;
-  /** Also draw the 4K jack tile's damped bonus above the bar, dashed. */
-  jackCurve?: boolean;
   example?: (typeof CHART_EXAMPLES)[number];
 }) {
   const { t } = useLingui();
@@ -1432,23 +1419,16 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
 
   // Split at the bar: LN's near-bar cap makes the credit jump there, and one
   // polyline would draw that cliff as a slope through values nothing scores.
-  const sample = (from: number, to: number, at = offsetAt) => {
+  const sample = (from: number, to: number) => {
     const points: string[] = [];
     for (let i = 0; i <= CURVE_SAMPLES; i += 1) {
       const value = from + ((to - from) * i) / CURVE_SAMPLES;
-      const offset = at(value);
+      const offset = offsetAt(value);
       if (offset == null) continue;
       points.push(`${x(value).toFixed(2)},${y(offset).toFixed(2)}`);
     }
     return points.join(" ");
   };
-  // The jack tile's bonus, drawn under the shared line so the gap between the
-  // two is the halving itself; below the bar the two coincide and it is not
-  // drawn twice.
-  const jackOptions: DanCreditClearContext = { primaryTile: "jack" };
-  const jackOffsetAt = (value: number) => danCreditOffset(value, bar, danCreditOptionsFor(side, keyCount, jackOptions));
-  const jackAboveBarPoints = jackCurve ? sample(bar, 1, jackOffsetAt) : null;
-  const jackTop = jackCurve ? jackOffsetAt(1) : null;
   const hasBarCliff = (options.nearBarCap ?? 0) > 0;
   const belowBarPoints = sample(lo, hasBarCliff ? bar - 1e-6 : bar);
   const aboveBarPoints = sample(bar, 1);
@@ -1551,12 +1531,6 @@ function CreditCurvePlot({ ladder, bar, side, keyCount, jackCurve, example }: {
         <text x={x(1)} y={CURVE_HEIGHT - 8} textAnchor="end" className="fill-osu-f1 text-[11px] tabular-nums">100%</text>
         <polyline points={belowBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
         <polyline points={aboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" className="stroke-osu-blue" />
-        {jackAboveBarPoints && jackTop != null && (
-          <>
-            <polyline points={jackAboveBarPoints} fill="none" strokeWidth={2} strokeLinecap="round" strokeDasharray="4 4" className="stroke-osu-blue/50" />
-            <text x={x(1)} y={y(jackTop) + 24} textAnchor="end" className="fill-osu-f2 text-[11px]">{t`4K jack`}</text>
-          </>
-        )}
         {hasBarCliff && barEdgeOffset != null && (
           <>
             <line
