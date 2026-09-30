@@ -22,7 +22,6 @@ import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { msdHeadline } from "#dan/msd-headline";
 import { useExperimentalLn, useNoDans } from "../../store";
-import { useAuth } from "../../lib/auth-context";
 import {
   FamilyPatternChip,
   PATTERN_COLOR,
@@ -810,10 +809,10 @@ export function MapDetailModal({
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
   const playedRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
-  // Admins can read a chart at DT without a play, for vibro review.
-  const isAdmin = useAuth().isAdmin;
-  const [adminDt, setAdminDt] = useState(false);
-  const playRate = adminDt && playedRate === 1 ? 1.5 : playedRate;
+  // Without a play, the chart can be read at DT or HT: the preview plays at
+  // that speed and the MSD and dan are rated there.
+  const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(1);
+  const playRate = playedRate === 1 ? modRate : playedRate;
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
@@ -1081,16 +1080,19 @@ export function MapDetailModal({
 
                 {/* Chart preview, held as an empty box of its own height while
                     the entry is in flight so it lands without moving. */}
-                {isAdmin && playedRate === 1 && previewSet ? (
-                  <div className="-mb-1 flex justify-end">
-                    <button
-                      type="button"
-                      aria-pressed={adminDt}
-                      onClick={() => setAdminDt((value) => !value)}
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold hover:brightness-110 ${adminDt ? "bg-osu-pink/20 text-osu-pink" : "text-osu-f1"}`}
-                    >
-                      DT
-                    </button>
+                {playedRate === 1 && previewSet ? (
+                  <div className="-mb-1 flex justify-end gap-1">
+                    {([["HT", 0.75], ["DT", 1.5]] as const).map(([mod, rate]) => (
+                      <button
+                        key={mod}
+                        type="button"
+                        aria-pressed={modRate === rate}
+                        onClick={() => setModRate((current) => (current === rate ? 1 : rate))}
+                        className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-bold hover:brightness-110 ${modRate === rate ? "bg-osu-pink/20 text-osu-pink" : "text-osu-f1"}`}
+                      >
+                        {mod}
+                      </button>
+                    ))}
                   </div>
                 ) : null}
                 {previewSet ? (
