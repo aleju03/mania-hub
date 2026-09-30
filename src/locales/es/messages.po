@@ -7678,6 +7678,10 @@ msgid "Hide plays on graveyarded charts"
 msgstr "Ocultar jugadas en mapas abandonados"
 
 #: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on loved charts"
+msgstr "Ocultar jugadas en mapas loved"
+
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on ranked, approved and qualified charts"
 msgstr "Ocultar jugadas en mapas ranked, approved y qualified"
 
@@ -9437,6 +9441,7 @@ msgstr "Buscando el score{elapsedLabel}"
 msgid "Lost the run. The board could not be reached."
 msgstr "Perdiste la partida. No se pudo conectar con el leaderboard."
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "loved"
 msgstr "amado"

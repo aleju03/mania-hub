@@ -315,6 +315,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   const [sort, setSort] = useState<"rating" | "recent">(storedPrefs.sort);
   const [hideRanked, setHideRanked] = useState(storedPrefs.hideRanked);
   const [hideGraveyard, setHideGraveyard] = useState(storedPrefs.hideGraveyard);
+  const [hideLoved, setHideLoved] = useState(storedPrefs.hideLoved);
   const [maxPerChart, setMaxPerChart] = useState<number>(storedPrefs.maxPerChart);
   const [showRejected, setShowRejected] = useState(storedPrefs.showRejected);
   const [unratedSort, setUnratedSort] = useState<UnratedSortKey>(storedPrefs.unratedSort);
@@ -400,6 +401,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
     + Object.keys(modFilter).length
     + (hideRanked ? 1 : 0)
     + (hideGraveyard ? 1 : 0)
+    + (hideLoved ? 1 : 0)
     + (view !== "unrated" && sort === "recent" && !showRejected ? 1 : 0);
 
   const cycleMod = useCallback((mod: string, reverse: boolean) => {
@@ -414,8 +416,8 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
   // effects above make: what is stored is the state the reader was last left
   // looking at, which is the only thing worth restoring.
   useEffect(() => {
-    writeSkillPlaysPrefs({ keyCount, axis, side, sort, hideRanked, hideGraveyard, maxPerChart, showRejected, unratedSort });
-  }, [axis, hideGraveyard, hideRanked, keyCount, maxPerChart, showRejected, side, sort, unratedSort]);
+    writeSkillPlaysPrefs({ keyCount, axis, side, sort, hideRanked, hideGraveyard, hideLoved, maxPerChart, showRejected, unratedSort });
+  }, [axis, hideGraveyard, hideLoved, hideRanked, keyCount, maxPerChart, showRejected, side, sort, unratedSort]);
 
   // Which axes this keymode actually rates, so the picker never offers a list
   // that would come back empty. Overall leads: it is the one axis every
@@ -633,6 +635,13 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
                   pressed: hideGraveyard,
                   onChange: () => setHideGraveyard((current) => !current),
                 },
+                {
+                  key: "loved",
+                  label: t`loved`,
+                  title: t`Hide plays on loved charts`,
+                  pressed: hideLoved,
+                  onChange: () => setHideLoved((current) => !current),
+                },
                 ...(view !== "unrated" && sort === "recent"
                   ? [{
                     key: "uncounted",
@@ -674,6 +683,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           sort={sort}
           hideRanked={hideRanked}
           hideGraveyard={hideGraveyard}
+          hideLoved={hideLoved}
           maxPerChart={maxPerChart}
           showRejected={showRejected}
           modFilter={modFilter}
@@ -690,6 +700,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           sort={sort}
           hideRanked={hideRanked}
           hideGraveyard={hideGraveyard}
+          hideLoved={hideLoved}
           maxPerChart={maxPerChart}
           modFilter={modFilter}
           refreshNonce={refreshNonce}
@@ -705,6 +716,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
           sort={sort}
           hideRanked={hideRanked}
           hideGraveyard={hideGraveyard}
+          hideLoved={hideLoved}
           maxPerChart={maxPerChart}
           showRejected={showRejected}
           modFilter={modFilter}
@@ -759,6 +771,7 @@ function MsdPlaysList({
   sort,
   hideRanked,
   hideGraveyard,
+  hideLoved,
   maxPerChart,
   showRejected,
   modFilter,
@@ -775,6 +788,7 @@ function MsdPlaysList({
   sort: "rating" | "recent";
   hideRanked: boolean;
   hideGraveyard: boolean;
+  hideLoved: boolean;
   maxPerChart: number;
   showRejected: boolean;
   modFilter: ModFilterState;
@@ -840,7 +854,7 @@ function MsdPlaysList({
   }, [axis, cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideRanked, maxPerChart, showRejected, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLoved, hideRanked, maxPerChart, showRejected, modKey]);
 
   // The chips on offer come from the whole cohort, not from what the other
   // filters left, so narrowing by mod never removes the chip that would undo it.
@@ -861,6 +875,7 @@ function MsdPlaysList({
       if (!showRejected && play.ratingExcluded && play.ratingExclusionReason !== "pending_calibration") return false;
       if (hideRanked && isRankedStatus(play.beatmapStatus ?? null)) return false;
       if (hideGraveyard && play.beatmapStatus === "graveyard") return false;
+      if (hideLoved && play.beatmapStatus === "loved") return false;
       if (!matchesPlayModFilter(play, modFilter)) return false;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(play.beatmapId) ?? 0;
@@ -869,7 +884,7 @@ function MsdPlaysList({
       }
       return true;
     });
-  }, [cohort, hideGraveyard, hideRanked, maxPerChart, modFilter, showRejected]);
+  }, [cohort, hideGraveyard, hideLoved, hideRanked, maxPerChart, modFilter, showRejected]);
   const items = filtered.slice(0, visibleLimit);
 
   const axisLabel = i18n._(axisMeta.labelMsg);
@@ -1003,6 +1018,7 @@ function DanPlaysList({
   sort,
   hideRanked,
   hideGraveyard,
+  hideLoved,
   maxPerChart,
   showRejected,
   modFilter,
@@ -1017,6 +1033,7 @@ function DanPlaysList({
   sort: "rating" | "recent";
   hideRanked: boolean;
   hideGraveyard: boolean;
+  hideLoved: boolean;
   maxPerChart: number;
   showRejected: boolean;
   modFilter: ModFilterState;
@@ -1075,7 +1092,7 @@ function DanPlaysList({
   }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, side, sort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideRanked, maxPerChart, showRejected, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLoved, hideRanked, maxPerChart, showRejected, modKey]);
 
   const cohortMods = useMemo(
     () => relevantModFilterKeys(cohort.flatMap((row) => {
@@ -1093,6 +1110,7 @@ function DanPlaysList({
       if (!showRejected && row.kind === "rejected") continue;
       if (hideRanked && isRankedStatus(row.play.beatmapStatus ?? null)) continue;
       if (hideGraveyard && row.play.beatmapStatus === "graveyard") continue;
+      if (hideLoved && row.play.beatmapStatus === "loved") continue;
       if (!matchesPlayModFilter(row.play, modFilter)) continue;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(row.play.beatmapId) ?? 0;
@@ -1102,7 +1120,7 @@ function DanPlaysList({
       kept.push(row);
     }
     return { rows: kept, hidden: cohort.length - kept.length };
-  }, [cohort, hideGraveyard, hideRanked, maxPerChart, showRejected, modFilter]);
+  }, [cohort, hideGraveyard, hideLoved, hideRanked, maxPerChart, showRejected, modFilter]);
   const visibleRows = rows.slice(0, visibleLimit);
 
   return (
@@ -1464,6 +1482,7 @@ function UnratedPlaysList({
   sort,
   hideRanked,
   hideGraveyard,
+  hideLoved,
   maxPerChart,
   modFilter,
   refreshNonce,
@@ -1477,6 +1496,7 @@ function UnratedPlaysList({
   sort: "rating" | "recent";
   hideRanked: boolean;
   hideGraveyard: boolean;
+  hideLoved: boolean;
   maxPerChart: number;
   modFilter: ModFilterState;
   /** Bumped by the toolbar's refresh; a change fetches past every cache. */
@@ -1530,7 +1550,7 @@ function UnratedPlaysList({
   }, [cacheKey, keyCount, listIdentity, onSettled, refreshNonce, sort, unratedSort, userId]);
 
   const modKey = modFilterKey(modFilter);
-  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideRanked, maxPerChart, modKey]);
+  useEffect(() => setVisibleLimit(PLAYS_REVEAL_STEP), [cacheKey, hideGraveyard, hideLoved, hideRanked, maxPerChart, modKey]);
 
   const cohortMods = useMemo(
     () => relevantModFilterKeys(cohort.flatMap((item) => {
@@ -1546,6 +1566,7 @@ function UnratedPlaysList({
     return cohort.filter((item) => {
       if (hideRanked && isRankedStatus(item.play.beatmapStatus ?? null)) return false;
       if (hideGraveyard && item.play.beatmapStatus === "graveyard") return false;
+      if (hideLoved && item.play.beatmapStatus === "loved") return false;
       if (!matchesPlayModFilter(item.play, modFilter)) return false;
       if (maxPerChart > 0) {
         const seen = seenPerChart.get(item.play.beatmapId) ?? 0;
@@ -1554,7 +1575,7 @@ function UnratedPlaysList({
       }
       return true;
     });
-  }, [cohort, hideGraveyard, hideRanked, maxPerChart, modFilter]);
+  }, [cohort, hideGraveyard, hideLoved, hideRanked, maxPerChart, modFilter]);
   const items = filtered.slice(0, visibleLimit);
 
   return (

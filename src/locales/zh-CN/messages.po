@@ -7687,6 +7687,10 @@ msgid "Hide plays on graveyarded charts"
 msgstr "隐藏坟场谱面上的成绩"
 
 #: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on loved charts"
+msgstr "隐藏社区喜爱谱面上的成绩"
+
+#: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on ranked, approved and qualified charts"
 msgstr "隐藏上架、approved 和 qualified 谱面上的成绩"
 
@@ -9446,6 +9450,7 @@ msgstr "正在查找成绩{elapsedLabel}"
 msgid "Lost the run. The board could not be reached."
 msgstr "本局结束。无法连接排行榜。"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "loved"
 msgstr "社区喜爱"

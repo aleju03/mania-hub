@@ -25,6 +25,7 @@ export interface SkillPlaysPrefs {
   sort: "rating" | "recent";
   hideRanked: boolean;
   hideGraveyard: boolean;
+  hideLoved: boolean;
   maxPerChart: number;
   /**
    * Dan list only: whether the plays the clear rules turned away are listed
@@ -43,6 +44,7 @@ export const DEFAULT_SKILL_PLAYS_PREFS: SkillPlaysPrefs = {
   sort: "rating",
   hideRanked: false,
   hideGraveyard: false,
+  hideLoved: false,
   maxPerChart: 0,
   showRejected: true,
   unratedSort: "msd",
@@ -66,6 +68,7 @@ export function normalizeSkillPlaysPrefs(raw: unknown): SkillPlaysPrefs {
     sort: value.sort === "recent" ? "recent" : "rating",
     hideRanked: value.hideRanked === true,
     hideGraveyard: value.hideGraveyard === true,
+    hideLoved: value.hideLoved === true,
     // Defaults on, so an entry written before this existed keeps showing them.
     showRejected: value.showRejected !== false,
     maxPerChart: (SKILL_PLAYS_RATE_CAPS as readonly number[]).includes(maxPerChart) ? maxPerChart : 0,
