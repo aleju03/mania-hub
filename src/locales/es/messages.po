@@ -7528,6 +7528,7 @@ msgstr "Degradado"
 msgid "Gradient text"
 msgstr "Texto con degradado"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "graveyard"
 msgstr "abandonado"
@@ -7671,6 +7672,10 @@ msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "Ocultar jugadores"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on graveyarded charts"
+msgstr "Ocultar jugadas en mapas abandonados"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on ranked, approved and qualified charts"

@@ -7559,6 +7559,7 @@ msgstr "Gradient"
 msgid "Gradient text"
 msgstr "Gradient text"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "graveyard"
 msgstr "graveyard"
@@ -7702,6 +7703,10 @@ msgstr "Hide it from everyone else, instead of showing it with no way in"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "Hide players"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on graveyarded charts"
+msgstr "Hide plays on graveyarded charts"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on ranked, approved and qualified charts"

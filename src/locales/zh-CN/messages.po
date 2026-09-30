@@ -7537,6 +7537,7 @@ msgstr "渐变"
 msgid "Gradient text"
 msgstr "渐变文字"
 
+#: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
 msgid "graveyard"
 msgstr "坟场"
@@ -7680,6 +7681,10 @@ msgstr "对其他人隐藏，而不是显示出来却进不去"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Hide players"
 msgstr "隐藏玩家"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Hide plays on graveyarded charts"
+msgstr "隐藏坟场谱面上的成绩"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Hide plays on ranked, approved and qualified charts"
