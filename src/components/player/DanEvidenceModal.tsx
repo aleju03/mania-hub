@@ -661,7 +661,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             mods: detail.play.mods ?? null,
             daOd: detail.play.daOd ?? null,
             scoreId: detail.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, `dan:${side}`),
+            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, `dan:${side}`),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
             rating: detail.clear?.chartDan ?? 0,

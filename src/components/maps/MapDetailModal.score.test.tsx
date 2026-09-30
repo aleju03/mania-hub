@@ -28,7 +28,7 @@ const play: MapDetailPlayContext = {
   rateMod: null, playedAt: "2026-09-01T00:00:00Z", source: "tracked",
   rating: 29.44, ratingLabel: "Overall", ratingColor: "white",
   skillRatings: { Overall: 29.44, Stream: 23.62, Stamina: 28.54 },
-  sharePath: "/player/player/skills?score=123&keys=4&map=101&rating=Overall",
+  sharePath: "/player/player/skills?play=4k-123",
   score: {
     statistics: { perfect: 3228, great: 1501, good: 196, ok: 13, meh: 6, miss: 19 },
     maxCombo: 1173, totalScore: 895710, rank: "S", scoreUrl: "https://osu.ppy.sh/scores/9876543210",

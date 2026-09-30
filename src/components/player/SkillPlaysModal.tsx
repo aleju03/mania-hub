@@ -369,7 +369,7 @@ export function SkillPlaysModal({
             mods: detail.play.mods ?? null,
             daOd: detail.play.daOd ?? null,
             scoreId: detail.play.scoreId,
-            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, detail.play.beatmapId, axis),
+            sharePath: skillPlaySharePath(username, detail.play.scoreId, detail.play.keyCount, axis),
             score: detail.play.score,
             skillRatings: detail.play.skillRatings,
             rating: detail.play.rating,

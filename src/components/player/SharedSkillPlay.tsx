@@ -20,7 +20,7 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    if (!scoreId || !keys || !map || !rating) return;
+    if (!scoreId || !keys || !rating) return;
     const controller = new AbortController();
     requestRef.current = controller;
     setResult(null);
@@ -28,14 +28,14 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
     const load = async () => {
       const side = rating === "dan:rc" ? "rc" : rating === "dan:ln" ? "ln" : null;
       const evidence = side ? await fetchLivePlayerDanEvidenceDirect(userId, keys, side, { scoreId, includeRejected: true, signal: controller.signal }) : null;
-      const clear = evidence?.clears.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map);
-      const rejected = evidence?.rejected?.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map);
+      const clear = evidence?.clears.find((item) => item.play.scoreId === scoreId && (!map || item.play.beatmapId === map));
+      const rejected = evidence?.rejected?.find((item) => item.play.scoreId === scoreId && (!map || item.play.beatmapId === map));
       const pooled = side ? clear?.play ?? rejected?.play : await fetchLivePlayerSkillPlaysDirect(userId, keys, rating, { scoreId, includeRejected: true, signal: controller.signal })
-        .then((page) => [...page.items, ...(page.rejected ?? [])].find((item) => item.scoreId === scoreId && item.beatmapId === map));
+        .then((page) => [...page.items, ...(page.rejected ?? [])].find((item) => item.scoreId === scoreId && (!map || item.beatmapId === map)));
       // Plays the pool turned away (vibro, charts that cannot be rated) live
       // only on the Unrated plays list, which shares them as Overall.
       const unrated = pooled || side ? undefined : await fetchLivePlayerUnratedPlaysDirect(userId, keys, { sort: "recent", signal: controller.signal })
-        .then((page) => page.items.find((item) => item.play.scoreId === scoreId && item.play.beatmapId === map));
+        .then((page) => page.items.find((item) => item.play.scoreId === scoreId && (!map || item.play.beatmapId === map)));
       const play = pooled ?? unrated?.play;
       if (!play) {
         if (!controller.signal.aborted) setState("missing");
@@ -51,7 +51,7 @@ export function SharedSkillPlay({ userId, username }: { userId: number; username
           ...play,
           username,
           score: play.score,
-          sharePath: skillPlaySharePath(username, scoreId, keys, map, rating),
+          sharePath: skillPlaySharePath(username, scoreId, keys, rating),
           rateMod: rateModFor(play.rate, play.rateMod),
           ratingLabel: i18n._(axis.labelMsg),
           ratingColor: axis.color,
