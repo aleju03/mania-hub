@@ -85,7 +85,7 @@ describe("Etterna Overall", () => {
     expect(etternaOverallFromRatings(7, rice)).toBe(0);
   });
 
-  it("falls back to Classic where the payload has no Etterna Overall", () => {
+  it("falls back to Legacy where the payload has no Etterna Overall", () => {
     const mode = { keyCount: 4, analyzedPlays: 100, patterns: [], ratings: { ...rice, EtternaOverall: 36.5 }, percentiles: { EtternaOverall: { value: 90, population: 10 }, Overall: { value: 95, population: 10 } } };
     expect(modeOverall(mode, "etterna")).toMatchObject({ value: 36.5, etterna: true, percentile: { value: 90 } });
     expect(modeOverall(mode, "classic")).toMatchObject({ value: 40, etterna: false, percentile: { value: 95 } });

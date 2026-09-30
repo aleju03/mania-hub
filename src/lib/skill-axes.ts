@@ -95,7 +95,7 @@ export const OVERALL_AXIS_META: SkillAxisMeta = {
 // The Etterna way of building the headline Overall, derived by the backend on
 // read and served as ratings.EtternaOverall (player-skills.ts etternaOverall):
 // the average of the best 6 of the 7 MinaCalc skillsets plus LN (best 5 where
-// Technical is not rated). `Overall` stays the Classic aggregate. The pattern
+// Technical is not rated). `Overall` stays the Legacy aggregate. The pattern
 // keymodes have no Etterna Overall.
 export const ETTERNA_OVERALL_AXIS = "EtternaOverall";
 // The backend's 4K EtternaOverall with the LN rating left out, which the
@@ -118,7 +118,7 @@ export function etternaOverallFromRatings(keyCount: number, ratings: Record<stri
 export type OverallMethod = "etterna" | "classic";
 
 /**
- * The headline Overall of a mode under a method. Falls back to Classic where
+ * The headline Overall of a mode under a method. Falls back to Legacy where
  * there is no Etterna Overall (6K/7K/8K, or a payload from before it existed).
  */
 export function modeOverall(mode: MyDataSkillMode, method: OverallMethod, options: { ln4k?: boolean } = {}): {

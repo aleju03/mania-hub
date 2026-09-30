@@ -1,8 +1,8 @@
 // Which Overall the skill surfaces headline: Etterna's (the average of the
-// best skillsets, LN included; the default) or Classic (the SSR aggregate the
+// best skillsets, LN included; the default) or Legacy (the SSR aggregate the
 // site showed before). A view preference like the plays explorer's, so it
 // lives in its own small localStorage key. The server snapshot is always the
-// default, so SSR and hydration agree and a stored Classic applies right after.
+// default, so SSR and hydration agree and a stored Legacy applies right after.
 
 import { useSyncExternalStore } from "react";
 import { ETTERNA_OVERALL_AXIS, ETTERNA_OVERALL_NO_LN_AXIS, OVERALL_AXIS_META, type OverallMethod } from "./skill-axes";

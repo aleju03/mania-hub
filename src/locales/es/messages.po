@@ -4338,9 +4338,9 @@ msgid "Classic"
 msgstr "Clásico"
 
 #: src/components/player/OverallMethodToggle.tsx
-msgctxt "overall rating method"
-msgid "Classic"
-msgstr "Clásico"
+#~ msgctxt "overall rating method"
+#~ msgid "Classic"
+#~ msgstr "Clásico"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
@@ -8857,6 +8857,11 @@ msgstr "Pulgar izquierdo"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Left vs right hand miss totals."
 msgstr "Totales de misses: mano izquierda contra derecha."
+
+#: src/components/player/OverallMethodToggle.tsx
+msgctxt "overall rating method"
+msgid "Legacy"
+msgstr "Legacy"
 
 #: src/routes/legal.tsx
 msgid "Legal notice"

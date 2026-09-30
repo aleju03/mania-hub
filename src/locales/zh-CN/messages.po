@@ -4347,9 +4347,9 @@ msgid "Classic"
 msgstr "经典"
 
 #: src/components/player/OverallMethodToggle.tsx
-msgctxt "overall rating method"
-msgid "Classic"
-msgstr "经典"
+#~ msgctxt "overall rating method"
+#~ msgid "Classic"
+#~ msgstr "经典"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
@@ -8866,6 +8866,11 @@ msgstr "左手拇指"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Left vs right hand miss totals."
 msgstr "左右手各自的 Miss 总数。"
+
+#: src/components/player/OverallMethodToggle.tsx
+msgctxt "overall rating method"
+msgid "Legacy"
+msgstr "旧版"
 
 #: src/routes/legal.tsx
 msgid "Legal notice"

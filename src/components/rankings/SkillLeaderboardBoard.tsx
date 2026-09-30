@@ -39,8 +39,8 @@ export function SkillLeaderboardBoard({
   // No axis in the URL means the aggregate board, not a guess at which
   // specialty the reader wanted. Overall is the first chip on every keymode, so
   // clicking back to it is how you clear a skill selection.
-  // The Overall chip reads Etterna's or the Classic board by the reader's
-  // Overall method; 6K/7K/8K only have Classic.
+  // The Overall chip reads Etterna's or the Legacy board by the reader's
+  // Overall method; 6K/7K/8K only have Legacy.
   const overallMethod = useOverallMethod();
   const hasEtterna = !usesPatternSkillAxes(keys);
   // Without the 4K LN model, 4K reads the Etterna board that leaves LN out

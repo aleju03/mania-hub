@@ -4365,9 +4365,9 @@ msgid "Classic"
 msgstr "Classic"
 
 #: src/components/player/OverallMethodToggle.tsx
-msgctxt "overall rating method"
-msgid "Classic"
-msgstr "Classic"
+#~ msgctxt "overall rating method"
+#~ msgid "Classic"
+#~ msgstr "Classic"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/packs/CollectionPanel.tsx
@@ -8896,6 +8896,11 @@ msgstr "Left thumb"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Left vs right hand miss totals."
 msgstr "Left vs right hand miss totals."
+
+#: src/components/player/OverallMethodToggle.tsx
+msgctxt "overall rating method"
+msgid "Legacy"
+msgstr "Legacy"
 
 #: src/routes/legal.tsx
 msgid "Legal notice"

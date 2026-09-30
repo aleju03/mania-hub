@@ -18,7 +18,7 @@ function EtternaMark({ className }: { className?: string }) {
   );
 }
 
-// The Classic face is the site's own logo, for the Overall it showed before,
+// The Legacy face is the site's own logo, for the Overall it showed before,
 // turned from its built-in pink (hue 333, the default theme) to the reader's
 // theme the way the home page tints its backdrop.
 const CLASSIC_LOGO_SRC = "/images/favicon-256.png";
@@ -28,7 +28,7 @@ const WORD_HEIGHT = 14;
 const BURST_COUNT = 7;
 
 // A handful of the destination's shapes thrown off the coin on a flip: the
-// logo's triangle going to Etterna, arrowheads going to Classic.
+// logo's triangle going to Etterna, arrowheads going to Legacy.
 function Burst({ to, onDone }: { to: OverallMethod; onDone: () => void }) {
   const [pieces] = useState(() => Array.from({ length: BURST_COUNT }, (_, index) => {
     const angle = (index / BURST_COUNT) * Math.PI * 2 + Math.random() * 0.6;
@@ -59,7 +59,7 @@ function Burst({ to, onDone }: { to: OverallMethod; onDone: () => void }) {
   );
 }
 
-// Etterna | Classic beside an Overall number, so a reader whose number moved
+// Etterna | Legacy beside an Overall number, so a reader whose number moved
 // when the headline switched to Etterna's method can see the one they had.
 // One preference for every surface that shows it. The method is a coin: a
 // click flips it, throws off a few of the new side's shapes, and rolls the
@@ -72,7 +72,7 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
   // 4K leaves LN out of the average while the 4K LN model is off.
   const lnCounted = useExperimentalLn() || keyCount !== 4;
 
-  // One spring from 0 (Etterna face) to 1 (Classic face) drives the flip, the
+  // One spring from 0 (Etterna face) to 1 (Legacy face) drives the flip, the
   // pop and the word, so spamming it retargets instead of queueing. Hover
   // leans the coin a little toward its other side.
   // It starts on the side already chosen: jumping there from an effect lost
@@ -158,7 +158,7 @@ export function OverallMethodToggle({ keyCount, className = "" }: { keyCount: nu
       <span className="block overflow-hidden text-[11px] font-semibold uppercase leading-[14px] tracking-wide" style={{ height: WORD_HEIGHT }}>
         <motion.span className="block" style={{ y: wordY }}>
           <span className="block text-[#b89be0] transition-[filter] group-hover:brightness-125">{t`Etterna`}</span>
-          <span className="block text-osu-pink-light transition-[filter] group-hover:brightness-110">{t({ message: "Classic", context: "overall rating method" })}</span>
+          <span className="block text-osu-pink-light transition-[filter] group-hover:brightness-110">{t({ message: "Legacy", context: "overall rating method" })}</span>
         </motion.span>
       </span>
     </button>
