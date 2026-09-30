@@ -22,6 +22,7 @@ import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { msdHeadline } from "#dan/msd-headline";
 import { useNoDans } from "../../store";
+import { useAuth } from "../../lib/auth-context";
 import {
   FamilyPatternChip,
   PATTERN_COLOR,
@@ -805,7 +806,11 @@ export function MapDetailModal({
 
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
-  const playRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  const playedRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  // Admins can read a chart at DT without a play, for vibro review.
+  const isAdmin = useAuth().isAdmin;
+  const [adminDt, setAdminDt] = useState(false);
+  const playRate = adminDt && playedRate === 1 ? 1.5 : playedRate;
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
@@ -1073,6 +1078,18 @@ export function MapDetailModal({
 
                 {/* Chart preview, held as an empty box of its own height while
                     the entry is in flight so it lands without moving. */}
+                {isAdmin && playedRate === 1 && previewSet ? (
+                  <div className="-mb-1 flex justify-end">
+                    <button
+                      type="button"
+                      aria-pressed={adminDt}
+                      onClick={() => setAdminDt((value) => !value)}
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold hover:brightness-110 ${adminDt ? "bg-osu-pink/20 text-osu-pink" : "text-osu-f1"}`}
+                    >
+                      DT
+                    </button>
+                  </div>
+                ) : null}
                 {previewSet ? (
                   <ChartPreviewPanel
                     beatmapset={previewSet}
@@ -1082,7 +1099,7 @@ export function MapDetailModal({
                     // longer known keeps the panel's default (pitch follows
                     // rate), which is what NC sounds like.
                     playbackRate={playRate}
-                    preservePitch={playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
+                    preservePitch={playRate !== playedRate ? true : playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"
                     flatBackdrop
                   />
