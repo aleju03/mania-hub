@@ -9,6 +9,9 @@ import { GradeImg } from "../ui/GradeImg";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
+import { getBeatmapFile } from "../../lib/osu";
+import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
+import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { PatternRadar } from "./PatternRadar";
 import { danBareLabel, danScaleContextFor, danTierColor, getDanImageSrc } from "../../lib/dan-images";
 import { DanProgressRail } from "./DanProgressRail";
@@ -120,7 +123,10 @@ export interface MapDetailPlayContext {
   rateMod: { acronym: string; rate: number; pitched: boolean } | null;
   playedAt: string | null;
   source: "top" | "tracked";
-  rating: number;
+  /** Replaces the source line under the play's time, for plays from neither list. */
+  sourceLabel?: string;
+  /** Absent for a play no skill list rated, which leaves the score without a side panel. */
+  rating?: number;
   ratingExcluded?: boolean;
   ratingExclusionReason?: "msd_floor" | "pending_calibration" | "unverifiable_revision";
   ratingLabel: string;
@@ -220,10 +226,11 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
   const danAccuracy = play.dan?.accuracy == null ? null : formatAccuracy(play.dan.accuracy);
   const showRail = !noDans && play.dan != null && play.dan.chartRating != null;
   const rejected = play.dan?.rejection != null;
+  const showSkills = !play.dan && play.rating != null;
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className={`grid gap-2.5 ${showRail || !play.dan ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
+      <div className={`grid gap-2.5 ${showRail || showSkills ? "sm:grid-cols-[minmax(0,1fr)_15rem]" : ""}`}>
         <div className="flex min-w-0 flex-col gap-5 rounded-xl bg-osu-b4/50 p-4 sm:p-5">
           <div className="flex min-h-5 items-start justify-between gap-3">
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`${play.username}'s play`}</span>
@@ -249,7 +256,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
             <div className="flex flex-col" title={play.playedAt ? formatTimeAgoTooltip(play.playedAt, locale) : undefined}>
               <span className="text-[16px] font-bold text-osu-l1 tabular-nums leading-none">{play.playedAt ? formatTimeAgo(play.playedAt, locale) : "—"}</span>
               <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
-                {play.source === "top" ? t`profile top play` : t`tracked history`}
+                {play.sourceLabel ?? (play.source === "top" ? t`profile top play` : t`tracked history`)}
               </span>
             </div>
           </div>
@@ -265,7 +272,7 @@ export function PlayContextBlock({ play, entry }: { play: MapDetailPlayContext; 
               rejected={rejected}
             />
           </div>
-        ) : !play.dan ? <PlaySkillRatings play={play} /> : null}
+        ) : showSkills ? <PlaySkillRatings play={play} /> : null}
       </div>
       {play.vibroAdjustment && <p className="text-[11px] text-[#ffcf70]"><Trans>Vibro sections excluded from rating. Credit uses a conservative accuracy estimate for the remaining notes.</Trans></p>}
       {play.dan?.rejection ? (
@@ -291,7 +298,7 @@ function PlaySkillRatings({ play }: { play: MapDetailPlayContext }) {
           <div className="text-[10px] font-bold uppercase tracking-wide text-osu-f1/60"><Trans>MSD skill rating</Trans></div>
           <div className="mt-1 text-xs text-osu-l2">{play.ratingLabel}</div>
         </div>
-        {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: play.ratingColor }}>{play.rating.toFixed(2)}</span>}
+        {!play.ratingExcluded && <span className="text-[30px] font-black tabular-nums leading-none" style={{ color: play.ratingColor }}>{(play.rating ?? 0).toFixed(2)}</span>}
       </div>
       {play.ratingExcluded ? (
         <p className="text-xs text-osu-red-light">{play.ratingExclusionReason === "pending_calibration" ? t`Skill rating recalculation pending`
@@ -708,9 +715,12 @@ export function MapDetailModal({
   onClose,
   play,
   status = "ready",
+  actions,
 }: {
   entry: LiveMapSearchEntry | null;
   onClose: () => void;
+  /** Extra buttons for the footer, after Share. */
+  actions?: ReactNode;
   play?: MapDetailPlayContext | null;
   // "pending" means `entry` is the stub a list already had in hand (title,
   // cover, keys) and the catalog entry is still in flight, so the modal opens
@@ -861,6 +871,27 @@ export function MapDetailModal({
   const rateMsd = rateAnalysis?.msd ?? entryDt?.msd ?? null;
   const rateDan = rateAnalysis?.dan ?? entryDt?.dan ?? null;
   const ratePending = needsRateFetch && rateAnalysis === undefined;
+  // The catalog carries the 1.0x star rating only, so off 1.0x the lazer
+  // calculator is run on the .osu here; the badge holds the 1.0x value dimmed
+  // until it lands.
+  const [rateStarsByKey, setRateStarsByKey] = useState<Record<string, number | null>>({});
+  const starsKey = playRate !== 1 && active ? `${active.beatmapId}:${active.beatmapsetId}:${playRate}` : null;
+  useEffect(() => {
+    if (starsKey == null || rateStarsByKey[starsKey] !== undefined) return;
+    const [beatmapId, beatmapsetId, rate] = starsKey.split(":").map(Number);
+    getBeatmapFile({ data: { beatmapId, beatmapsetId } })
+      .then((result) => {
+        const beatmap = parseCachedManiaBeatmap(beatmapId, result.content);
+        const stars = calculateManiaStarRating(beatmap.notes, beatmap.keyCount, rate);
+        setRateStarsByKey((prev) => ({ ...prev, [starsKey]: stars > 0 ? stars : null }));
+      })
+      .catch(() => {
+        setRateStarsByKey((prev) => ({ ...prev, [starsKey]: null }));
+      });
+  }, [rateStarsByKey, starsKey]);
+  const rateStars = starsKey != null ? rateStarsByKey[starsKey] : undefined;
+  const starsPending = starsKey != null && rateStars === undefined;
+  const shownStars = active ? rateStars ?? active.stars : 0;
 
   if (typeof document === "undefined") return null;
 
@@ -911,7 +942,7 @@ export function MapDetailModal({
                     <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{active.keyCount}K</span>
                     {numbersKnown ? (
                       <>
-                        <StarRatingBadge stars={active.stars} />
+                        <StarRatingBadge stars={shownStars} className={`transition-opacity ${starsPending ? "opacity-50" : ""}`} />
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">
                           {BEATMAP_STATUS_LABELS[active.status.toLowerCase()]
                             ? i18n._(BEATMAP_STATUS_LABELS[active.status.toLowerCase()])
@@ -1126,6 +1157,7 @@ export function MapDetailModal({
                     // longer known keeps the panel's default (pitch follows
                     // rate), which is what NC sounds like.
                     playbackRate={playRate}
+                    stars={shownStars}
                     preservePitch={playRate !== playedRate ? true : playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"
                     flatBackdrop
@@ -1200,6 +1232,7 @@ export function MapDetailModal({
                     </svg>
                     {shareCopied ? t`Link copied!` : t`Share`}
                   </button>
+                  {actions}
                 </div>
               </div>
             </div>

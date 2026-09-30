@@ -90,6 +90,7 @@ import {
 export { cycleModFilterMode, matchesModAcronymFilter, reverseCycleModFilterMode, type ModFilterMode };
 import { preservePlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { ScoreDetailModal, ScoreRow, TrackedScoreRow, getScoreRowLayout, type BestListRow } from "../../components/player/ScoreRows";
+import { ScorePlayDetailModal } from "../../components/player/ScorePlayDetailModal";
 import { PlayerActivityPanel } from "../../components/player/ActivityPanel";
 import { BpmBreakdownModal, ModUsageModal, PpDistributionModal } from "../../components/player/InsightModals";
 import {
@@ -2264,15 +2265,14 @@ export function PlayerProfilePage({
         )}
       </AnimatePresence>
 
-      {/* Score details modal */}
-      <AnimatePresence>
-        {detailScore && (
-          <ScoreDetailModal
-            score={detailScore}
-            onClose={() => setDetailScore(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Score details modal: the play, with its map behind the second tab */}
+      {detailScore && (
+        <ScorePlayDetailModal
+          score={detailScore}
+          username={user?.username ?? username}
+          onClose={() => setDetailScore(null)}
+        />
+      )}
 
       {/* Hero: cover art, identity, and the headline ranks share one band, with
           the 90-day rank trend drawn edge to edge underneath them. */}

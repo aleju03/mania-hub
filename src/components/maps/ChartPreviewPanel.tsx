@@ -80,6 +80,7 @@ export function ChartPreviewPanel({
   beatmapset,
   selectedBeatmapId,
   playbackRate = 1,
+  stars,
   preservePitch,
   className = "",
   flatBackdrop = false,
@@ -88,6 +89,9 @@ export function ChartPreviewPanel({
   beatmapset: MapsFavouriteBeatmapset;
   selectedBeatmapId: number | null;
   playbackRate?: number;
+  // The selected difficulty's star rating at `playbackRate`, when the caller
+  // has it; the 1.0x value from the set otherwise.
+  stars?: number;
   // Off 1.0x the audio pitches with the rate (nightcore/daycore), which is
   // right for a rate picker and for NC/DC plays. A caller that knows the mod
   // was DT or HT sets this to keep the pitch where the map put it.
@@ -616,6 +620,15 @@ export function ChartPreviewPanel({
     setSeekRevision((revision) => revision + 1);
   }, [clearPreviewEndTimer]);
 
+  // A rate switch reloads the chart at the new speed. While it plays, the
+  // audio stops with it and both pick up where they were once it has loaded.
+  const lastPlaybackRateRef = useRef(previewPlaybackRate);
+  useEffect(() => {
+    if (lastPlaybackRateRef.current === previewPlaybackRate) return;
+    lastPlaybackRateRef.current = previewPlaybackRate;
+    if (playing || audioLoadStage !== null) seekChart(chartPlaybackMs);
+  }, [audioLoadStage, chartPlaybackMs, playing, previewPlaybackRate, seekChart]);
+
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !audioReadyRef.current) return;
@@ -806,7 +819,7 @@ export function ChartPreviewPanel({
         <div className="min-w-0 truncate text-[11px] font-semibold text-osu-l2">
           {selectedBeatmap ? (
             <>
-              <span className="text-osu-yellow">{selectedBeatmap.difficultyRating.toFixed(2)} ★</span>
+              <span className="text-osu-yellow">{(stars ?? selectedBeatmap.difficultyRating).toFixed(2)} ★</span>
               <span className="text-osu-f1"> / {Math.round(selectedBeatmap.cs)}K / {selectedBeatmap.version}</span>
             </>
           ) : (
