@@ -4,7 +4,8 @@ The independent LN model is shared by the backend and frontend through the
 `#dan/*` alias. It supports native **4K** only. Other keymodes keep their
 existing difficulty policy; 7K keeps General, Tech, Inverse and Release.
 
-Version **13** replaces the withdrawn v10 draft. The workload is specified
+Version **13** replaced the withdrawn v10 draft; **14** prices every written
+hold and every chord finger (below). The workload is specified
 from required actions and their interactions, and synthetic tests check that
 mechanical contract. Three things are fitted: the strain-to-rating conversion
 and the rate-mod response (below), and the skillset classifier.
@@ -31,8 +32,9 @@ its result.
 ## Effective holds and chart identity
 
 The existing effective-hold and identity policy remains in
-`dan-estimator/ln-effective.ts`. A hold whose body a tap can cover supplies no
-tail, held-finger constraint, or LN recovery work. Eligible near-window
+`dan-estimator/ln-effective.ts`. It decides whether a chart is LN and whether
+it publishes an LN number; since v14 it no longer discounts the work of the
+holds a tap would release (see the pricing note below). Eligible near-window
 release/repress chains retain their existing treatment. LN vibro cannot create
 chains merely from short written holds.
 
@@ -70,7 +72,7 @@ These are explicit model conventions, not measured human difficulty units.
 
 | Interaction | Treatment |
 | --- | --- |
-| Simultaneous or close same-direction finger commands | Square-root chord work; each added finger adds the incremental chord cost |
+| Simultaneous or close same-direction finger commands | One command per finger |
 | Repeating the same finger | A new command, even inside chord-group tolerance |
 | Moving a finger while its same-hand neighbour stays held | One independence task |
 | Pressing one finger while releasing its partner | One opposing-direction control task |
@@ -85,7 +87,7 @@ command cost, never note timestamps or topology. A constrained finger is
 counted once even if several descriptions apply (lock, anchor, nested hold,
 crossing hold). Duration variation alone does not invent additional commands.
 
-A normal tap contributes LN work when it interacts with an effective hold on
+A normal tap contributes LN work when it interacts with a hold on
 that hand or a same-lane shield/recovery. An unrelated rice passage and free-hand
 rice do not supply LN strain.
 
@@ -106,36 +108,41 @@ aggregation approach in the LN1 reference. The inherited response model is
 `exp(log(0.93) * (demand / skill)^4)`. A bounded binary search finds the skill
 that reaches the requested goal. Chart difficulty uses 0.93.
 
-The strain-to-rating conversion `6.6805 * strain^0.4316` is fitted on scores:
+The strain-to-rating conversion `3.6427 * strain^0.57` is fitted on scores:
 a player at LN Dan N should read on LN what a player at regular Dan N reads
 on Overall from rice plays alone, both aggregated over up to 20 top plays.
-The fit matches the median of each Dan from 2 to 16 over 15.6k players; Dans
-4 to 15 then agree within 1.6, and players whose two Dans sit within
-a quarter level read within a point of their rice Overall at every skill level.
-The earlier conversion, a fit to native Overall on the odd LN courses, read
-those players 3.75 lower, because MinaCalc does not see releases. LN Dans 1
-to 3 still read 1 to 6 above: their LN plays rate 16 to 18 whatever the curve,
-and few players sit there.
+The v14 refit (2026-09-30) matches the median of each Dan from 2 to 16 over
+3.7k players with an LN Dan and 20k with a regular one (five plays or more on
+the side); Dans 3 to 15 agree within 1.8, root mean square 1.1. LN Dans 1 and
+2 still read above, and few players sit there. The v13 conversion was
+`6.6805 * strain^0.4316`; a fit to native Overall on the odd LN courses before
+it read those players 3.75 lower, because MinaCalc does not see releases.
 
-Each hold's release work is priced by the chance an ordinary tap is too short
-to release it in time (see Effective holds above): a tap-covered hold's head
-counts as a press only where a tap there would, and its tail, recovery and
-held-finger constraints scale by that chance. Holds in same-lane
-release/repress chains keep full weight, read as the chart is written (1.0x):
-a rate mod shrinks same-lane gaps under the window without writing inverse,
-and pricing those new chains in full made a chart's DT rating jump where the
-same players' 1.0x and DT plays show no such jump (per-chart consistency with
-native Overall 0.064 against 0.086, over the 21 charts with 8 or more such
-players).
+Every written hold is priced as a hold, including one whose body a tap would
+release in time, and a chord costs each of its fingers. v13 priced each
+hold's release work by the chance an ordinary tap is too short to release it
+and made chords concave, which read dense short-hold charts as easy and, at
+1.5x, most of a chart's holds as free. On same-player scores (7,550 players,
+218k pairs of 1.0x plays on charts of 75%+ holds, 19.7k pairs at 1.5x, OD as a
+covariate) the harder chart of a pair reads harder 86.0% of the time at 1.0x
+and 85.2% at 1.5x, against 82.7% and 66.5% for v13, 82.8% and 75.5% for the
+v9 production model, and 85.3% and 80.8% for native Overall. Charts split by
+mapset agree on the unseen half (86.7% and 84.9% against native Overall's
+85.2% and 79.0%). v13 still ranks the easiest band (both charts under native
+Overall 22) better, 75.4% against 72.5%. Keeping a floor on short bodies
+(45ms), pricing them as presses only, or at half weight all read worse.
 
-A rate mod multiplies the rating by `rate^0.649` when speeding up and
-`rate^0.110` when slowing down. Both are fitted on the same player's plays of
-the same chart at 1.0x and at the rate (1,262 DT and 893 HT pairs): the LN SSR
-moves between them as native Overall SSR does on those plays, 1.22x at DT and
-1.01x at HT at the median. Pairs cancel the pp-farm selection that lifts DT
-plays above a player's level on any model. The directions differ because
-tap-covered holds drop out of the strain faster going up than they return
-going down.
+A rate mod multiplies the rating by `rate^0.06` when speeding up and
+`rate^-0.05` when slowing down. With every hold priced, the strain already
+grows with the rate. Both are fitted on how the same player's accuracies
+order a chart played at the rate against another at 1.0x (109k DT and 42k HT
+pairs, charts split by mapset): 0.06 orders 88.6% of the unseen half against
+native Overall's 85.5% and 86.5% for the v13 curve at `rate^0.649`, which on
+the v14 strain orders 73%. On the same player's plays of one chart at both
+rates (900 DT pairs) the LN SSR then moves 1.08x where native Overall moves
+1.22x, so a chart's LN number sits a little closer to its native Overall at
+DT than at 1.0x (median +3.9 against +5.4 at goal 0.93). Slowing down, the
+same-chart pairs (679) and the ordering agree on -0.05.
 
 LN is one strain and score-goal solution over all the work. `ln-ssr.ts`
 retains the 0.965 solver cap and extrapolates the cap/base slope above it. Native and LN use their existing separate calibrated
@@ -194,7 +201,7 @@ measurement withholds the badge until the bounded refresh reaches the chart.
 
 ## Persistence and rollout
 
-Current versions: LN skill **13**, player skills **51** (seeding 50 and earlier),
+Current versions: LN skill **14**, player skills **51** (seeding 50 and earlier),
 rate cache **34**, effective-LN model **11** and sweep **22**, subtype sweep **10**, player Dan
 sweep **53**, and player pattern sweep **19**. Chart detail responses provide the fresh base MSD, identity and primary Dan
 so the modal can override an older cached map entry. The newer stamps invalidate the
