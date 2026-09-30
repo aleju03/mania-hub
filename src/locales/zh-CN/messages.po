@@ -6259,8 +6259,12 @@ msgid "Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 
 msgstr "每一级分成五档，所以一张谱面可以是 7--、7-、7、7+ 或 7++，从 7 段的简单一端到困难一端。"
 
 #: src/routes/dan-estimates.tsx
-msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long jack chart, counts in both."
-msgstr "每次通过都会归到谱面最主要考验的技能。明显同时属于两类的谱面，比如很长的叠谱，会同时计入两边。"
+#~ msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long jack chart, counts in both."
+#~ msgstr "每次通过都会归到谱面最主要考验的技能。明显同时属于两类的谱面，比如很长的叠谱，会同时计入两边。"
+
+#: src/routes/dan-estimates.tsx
+msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
+msgstr "每次通过都会归到谱面最主要考验的技能。明显同时属于两类的谱面，比如很长的技术谱，会同时计入两边。"
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."

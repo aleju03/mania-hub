@@ -384,7 +384,7 @@ function DanEstimatesPage() {
           <P>
             <Trans>
               Each pass goes into the skill its chart asks for most. A chart that is clearly two things
-              at once, such as a long jack chart, counts in both.
+              at once, such as a long tech chart, counts in both.
             </Trans>
           </P>
           <SkillGrid />

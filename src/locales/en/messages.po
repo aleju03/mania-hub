@@ -6277,8 +6277,12 @@ msgid "Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 
 msgstr "Each level is split into five steps, so a chart can be 7--, 7-, 7, 7+ or 7++, from the easy end of 7th dan to the hard end."
 
 #: src/routes/dan-estimates.tsx
-msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long jack chart, counts in both."
-msgstr "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long jack chart, counts in both."
+#~ msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long jack chart, counts in both."
+#~ msgstr "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long jack chart, counts in both."
+
+#: src/routes/dan-estimates.tsx
+msgid "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
+msgstr "Each pass goes into the skill its chart asks for most. A chart that is clearly two things at once, such as a long tech chart, counts in both."
 
 #: src/routes/maps.tsx
 msgid "Each player is equally likely, no matter how many favourites they have."
