@@ -37,6 +37,8 @@ export interface MyDataTopPlaysParams extends MyDataFeedFilters {
 }
 
 export interface MyDataTrackedPlay extends LeanTrackerScore {
+  /** The play's stored identity, which removeMyTrackedScores names it by. */
+  scoreIdentity?: string;
   archived?: boolean;
   archivedExact?: boolean;
 }
@@ -444,6 +446,39 @@ export const fetchMyDataDashboard = createServerFn({ method: "GET" })
       };
     } catch {
       return fetchMyDataDashboardFallback(cfg);
+    }
+  });
+
+export type RemoveMyTrackedScoresInput = { all: true } | { all?: false; scoreIdentities: string[] };
+
+function readRemoveInput(data: unknown): RemoveMyTrackedScoresInput {
+  const input = (data ?? {}) as { all?: unknown; scoreIdentities?: unknown };
+  if (input.all === true) return { all: true };
+  const identities = Array.isArray(input.scoreIdentities)
+    ? input.scoreIdentities.filter((identity): identity is string => typeof identity === "string" && identity.length > 0)
+    : [];
+  return { scoreIdentities: identities.slice(0, 200) };
+}
+
+/** Removes the viewer's own tracked plays; the backend only resolves their rows. */
+export const removeMyTrackedScores = createServerFn({ method: "POST" })
+  .validator(readRemoveInput)
+  .handler(async ({ data }): Promise<{ ok: boolean; removed: number }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await myDataBackend();
+    if (!cfg) return { ok: false, removed: 0 };
+    if (!data.all && data.scoreIdentities.length === 0) return { ok: false, removed: 0 };
+    try {
+      const response = await fetch(`${cfg.base}/api/my-data/remove-scores`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, ...data }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { ok?: unknown; removed?: unknown };
+      return { ok: response.ok && body.ok === true, removed: Number(body.removed) || 0 };
+    } catch {
+      return { ok: false, removed: 0 };
     }
   });
 

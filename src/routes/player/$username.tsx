@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -3117,32 +3117,29 @@ function PlayerSkillCard({ title, accent, children }: { title: string; accent: s
 let lastSkillsPanelHeight: number | null = null;
 
 // What the public Skills tab is showing: its published ratings, or one of the
-// two bounded plays lists behind them.
+// bounded plays lists behind them. The top switch only says "Plays"; which list
+// is picked inside the plays toolbar.
 type PlayerSkillsView = "ratings" | SkillPlaysExplorerView;
 
-const PLAYER_SKILLS_VIEWS: PlayerSkillsView[] = ["ratings", "msd", "dan", "unrated"];
-
-function getPlayerSkillsViewLabelMsg(view: PlayerSkillsView): MessageDescriptor {
-  if (view === "msd") return msg`MSD plays`;
-  if (view === "dan") return msg`Dan plays`;
-  if (view === "unrated") return msg`Unrated plays`;
-  return msg`Ratings`;
-}
+const PLAYS_VIEWS: SkillPlaysExplorerView[] = ["msd", "dan", "unrated"];
 
 // Public Skills tab: the exact per-keymode skill ratings (same renderer as the
 // My Data card) with population percentiles and player dan chips. First-time
 // visitors start "pending" while the backend rates their plays, so the panel
 // polls until the breakdown lands.
-/* The ratings view is one column: the keymode strip, the open panel and the
-   add-a-score row all share this width and centre together on a wide screen.
-   The plays views stay full width - they are lists, not a card. */
+/* Every Skills view is one column: the view switch, the keymode strip, the
+   open panel, the add-a-score row and the plays lists all share this width
+   and centre together on a wide screen. */
 const SKILLS_COLUMN_CLASS = "mx-auto max-w-[880px]";
 
 function PlayerSkillsPanel({ user }: { user: OsuUser }) {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const auth = useAuth();
   const noDans = useNoDans();
   const [skillsView, setSkillsView] = useState<PlayerSkillsView>("ratings");
+  // The plays list the Plays tab reopens on, so leaving for Ratings and coming
+  // back lands on the list that was open.
+  const [lastPlaysView, setLastPlaysView] = useState<SkillPlaysExplorerView>("msd");
   /* Swapping the ratings grid for a plays list that has not loaded yet takes
      a thousand pixels out of the document for as long as the read takes. The
      browser clamps the scroll offset to the shorter page, so a reader deep in
@@ -3263,13 +3260,27 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
   const skillModeStrip = modes;
   const activeSkillMode = modes.find((mode) => mode.keyCount === skillModeKey) ?? modes[0] ?? null;
   const view = noDans && skillsView === "dan" ? "ratings" : skillsView;
-  const skillsViews = PLAYER_SKILLS_VIEWS.filter((option) => !noDans || option !== "dan");
+  const playsViews = PLAYS_VIEWS.filter((option) => !noDans || option !== "dan");
+  const reopenPlaysView = noDans && lastPlaysView === "dan" ? "msd" : lastPlaysView;
 
+  /* The switch answers the click at once; the view behind it renders as a
+     transition. Mounting fifty play rows is a long task, and done urgently it
+     held the whole click, highlight included, until the rows were drawn. The
+     held height rides in the transition so the floor lands with the view it
+     is for, not a frame early under the outgoing one. */
+  const [pendingView, setPendingView] = useState<PlayerSkillsView | null>(null);
   const selectView = useCallback((next: PlayerSkillsView) => {
     if (next === skillsView) return;
-    setHeldHeight(panelRef.current?.getBoundingClientRect().height ?? null);
-    setSkillsView(next);
+    const height = panelRef.current?.getBoundingClientRect().height ?? null;
+    setPendingView(next);
+    startTransition(() => {
+      setPendingView(null);
+      setHeldHeight(height);
+      setSkillsView(next);
+      if (next !== "ratings") setLastPlaysView(next);
+    });
   }, [skillsView]);
+  const switchView = pendingView ?? view;
 
   /* The ratings view releases the floor itself, one frame after it has an
      answer to draw. Waiting for the answer is the point: on a fresh mount the
@@ -3298,7 +3309,7 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
      looking for a loved or graveyard play would otherwise take its absence
      for a bug. Older backends omit the flag, and then nothing is claimed. */
   const untrackedNote = skills?.tracked === false && !restricted ? (
-    <div className={`mb-4 ${view === "ratings" || !rated ? SKILLS_COLUMN_CLASS : ""}`}>
+    <div className={`mb-4 ${SKILLS_COLUMN_CLASS}`}>
       <SkillsUntrackedNotice
         username={user.username}
         isOwner={auth.viewer?.id === user.id}
@@ -3311,21 +3322,21 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
       <SharedSkillPlay userId={user.id} username={user.username} />
       {untrackedNote}
       {rated ? (
-        /* Pinned to the page edge on every view: the ratings column below is
-           centred and the plays views are full width, and a switch that
-           followed either would jump sideways on each click. */
-        <div className="mb-3 flex">
-          {/* One track, the same object as the keymode and order controls
-              below it, so the row reads as a switch and not four loose buttons. */}
+        /* Every view shares the one centred column, so the switch sits at the
+           same spot in all of them and stays under the pointer on a click. */
+        <div className={`mb-3 flex ${SKILLS_COLUMN_CLASS}`}>
           <Segmented
             ariaLabel={t`View`}
-            value={view}
-            options={skillsViews.map((option) => ({
-              value: option,
-              label: i18n._(getPlayerSkillsViewLabelMsg(option)),
-              onPrefetch: option === "ratings" ? undefined : () => prefetchSkillPlaysExplorerView(user.id, modes, option),
-            }))}
-            onChange={selectView}
+            value={switchView === "ratings" ? "ratings" : "plays"}
+            options={[
+              { value: "ratings" as const, label: t`Ratings` },
+              {
+                value: "plays" as const,
+                label: t({ message: "Plays", context: "Skills view" }),
+                onPrefetch: () => prefetchSkillPlaysExplorerView(user.id, modes, reopenPlaysView),
+              },
+            ]}
+            onChange={(next) => selectView(next === "ratings" ? "ratings" : reopenPlaysView)}
             shape="tabs"
           />
         </div>
@@ -3336,8 +3347,10 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
         /* Shaped like what lands: a keymode strip over one panel, not the
            two-panel grid the tab used to open with. */
         <div>
-          {/* The view switch lands first, at the size of its four labels. */}
-          <Skeleton className="mb-3 h-[30px] w-[340px] max-w-full rounded-lg" />
+          {/* The view switch lands first, at the size of its two labels. */}
+          <div className={SKILLS_COLUMN_CLASS}>
+            <Skeleton className="mb-3 h-[30px] w-[140px] max-w-full rounded-lg" />
+          </div>
           <div className={SKILLS_COLUMN_CLASS}>
             <div className="mb-4 flex flex-wrap gap-x-7 gap-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -3357,13 +3370,17 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           </div>
         </div>
       ) : rated && view !== "ratings" ? (
-        <SkillPlaysExplorer
-          userId={user.id}
-          username={user.username}
-          modes={modes}
-          view={view}
-          onListSettled={releaseHeldHeight}
-        />
+        <div className={SKILLS_COLUMN_CLASS}>
+          <SkillPlaysExplorer
+            userId={user.id}
+            username={user.username}
+            modes={modes}
+            view={view}
+            views={playsViews}
+            onViewChange={selectView}
+            onListSettled={releaseHeldHeight}
+          />
+        </div>
       ) : rated ? (
         /* One column, strip and panel the same width: a page-wide strip over a
            half-width panel read as a layout that had lost its other half. */

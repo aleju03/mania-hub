@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -14,9 +14,9 @@ import { Pagination } from "../ui/Pagination";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
-import { PatternPicker, validPatternIds } from "./PatternPicker";
+import { SkillPicker, validPatternIds, validSkillIds } from "./PatternPicker";
 import { playPatternHit } from "./patternSfx";
-import { RangeSlider } from "./RangeSlider";
+import { RangePill, type RangePillSkin } from "./RangePill";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { SearchCard, toPreviewTrack } from "./SearchCard";
 import { DEFAULT_SEARCH_SORT, savedSearchSortToRestore } from "./searchSortPreference";
@@ -32,7 +32,9 @@ import {
 } from "./FilterChips";
 import type { TriStateMode } from "../../lib/maps-random-filter";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
-import { useNoDans } from "../../store";
+import { useExperimentalLn, useNoDans } from "../../store";
+import { activeMsdKeys, MSD_FILTER_KEYS, MSD_FILTER_MAX, MSD_FILTER_SKILLSET, serializeMsdRanges, type MsdRanges } from "../../lib/map-search-msd";
+import { MSD_SKILLSET_META, OVERALL_AXIS_META, PATTERN_RATING_META } from "../../lib/skill-axes";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -60,6 +62,7 @@ const STATUS_OPTIONS = [
 const SORT_OPTIONS = [
   { id: "playcount", label: msg`Most played` },
   { id: "stars", label: msg`Difficulty` },
+  { id: "msd", label: msg`MSD` },
   { id: "bpm", label: msg`BPM` },
   { id: "length", label: msg`Length` },
   { id: "date", label: msg`Newest` },
@@ -73,6 +76,11 @@ export interface MapSearchUiState {
   statusesExclude: string[];
   patterns: string[];
   patternsExclude: string[];
+  // Rice dan tiles (speed, stamina, tech, jack, stream).
+  skills: string[];
+  skillsExclude: string[];
+  // Per-skillset MSD bounds, 0 for an open side (lib/map-search-msd.ts).
+  msd: MsdRanges;
   starMin: number;
   starMax: number;
   bpmMin: number;
@@ -130,6 +138,9 @@ function stateKey(s: MapSearchUiState): string {
     [...s.statusesExclude].sort(),
     [...s.patterns].sort(),
     [...s.patternsExclude].sort(),
+    [...s.skills].sort(),
+    [...s.skillsExclude].sort(),
+    serializeMsdRanges(s.msd),
     s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.lnMin, s.lnMax, s.danMin, s.danMax,
     s.sort, s.dir, s.page,
   ]);
@@ -139,20 +150,24 @@ function stateKey(s: MapSearchUiState): string {
 // inline row and the mobile filter sheet.
 type ApplyFn = (patch: Partial<MapSearchUiState>) => void;
 
+function pruneForKeys(ui: MapSearchUiState, keys: string[]): Partial<MapSearchUiState> {
+  const patterns = validPatternIds(keys);
+  const skills = validSkillIds(keys);
+  return {
+    patterns: ui.patterns.filter((pattern) => patterns.has(pattern)),
+    patternsExclude: ui.patternsExclude.filter((pattern) => patterns.has(pattern)),
+    skills: ui.skills.filter((skill) => skills.has(skill)),
+    skillsExclude: ui.skillsExclude.filter((skill) => skills.has(skill)),
+  };
+}
+
 function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   const { t } = useLingui();
-  // A keymode switch changes the pattern vocabulary; drop pattern picks the
+  // A keymode switch changes the skill and pattern vocabulary; drop picks the
   // new keymode can't express so no filter survives without a visible chip.
   const cycleKey = (id: string, reverse = false) => {
     const next = cycleFacet(ui.keys, ui.keysExclude, id, reverse);
-    const valid = validPatternIds(next.includes);
-    apply({
-      keys: next.includes,
-      keysExclude: next.excludes,
-      patterns: ui.patterns.filter((pattern) => valid.has(pattern)),
-      patternsExclude: ui.patternsExclude.filter((pattern) => valid.has(pattern)),
-      page: 0,
-    });
+    apply({ keys: next.includes, keysExclude: next.excludes, ...pruneForKeys(ui, next.includes), page: 0 });
   };
   return (
     <ChipGroup label={t`Keys`}>
@@ -198,24 +213,69 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   );
 }
 
-function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+function StarSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
   const { t } = useLingui();
   return (
-    <StarRangePill lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel={t`Star rating`} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
+    <StarRangePill lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel={t`Star rating`} heading={heading} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
   );
 }
 
-function BpmSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+// A range pill's heading, in the ChipGroup label style.
+function FilterHeading({ children }: { children: ReactNode }) {
+  return <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{children}</span>;
+}
+
+// BPM and length share one neutral skin: faint at the low end, full at the top.
+function plainSkin(hi: number, overrides: Pick<RangePillSkin, "format" | "valueText" | "bucket" | "decorations" | "placeholder" | "typeHint"> & Partial<RangePillSkin>): RangePillSkin {
+  const color = OVERALL_AXIS_META.color;
+  const share = (value: number) => Math.round(25 + (Math.max(0, Math.min(hi, value)) / hi) * 60);
+  return {
+    gradient: (from, to) =>
+      `linear-gradient(90deg, color-mix(in srgb, ${color} ${share(from)}%, #2a2233), color-mix(in srgb, ${color} ${share(to)}%, #2a2233))`,
+    textColor: (center) => (share(center) >= 55 ? "hsl(0, 0%, 8%)" : "hsl(0, 0%, 94%)"),
+    labelColor: () => color,
+    ...overrides,
+  };
+}
+
+const BPM_MAX = 400;
+const LENGTH_MAX = 600;
+
+// "2:30" is minutes and seconds, a bare number is minutes.
+function parseLength(text: string): number | null {
+  const clock = /^(\d+):([0-5]?\d)$/.exec(text);
+  if (clock) return Number(clock[1]) * 60 + Number(clock[2]);
+  return /^\d*\.?\d+$/.test(text) ? Math.round(Number(text) * 60) : null;
+}
+
+function BpmSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
   const { t } = useLingui();
+  const skin = plainSkin(BPM_MAX, {
+    format: (v) => String(Math.round(v)),
+    valueText: (v) => `${Math.round(v)} BPM`,
+    bucket: 10,
+    decorations: /bpm/gi,
+    placeholder: "170-200",
+    typeHint: t`Type a range: 170-200, 220+, <150`,
+  });
   return (
-    <RangeSlider lo={0} hi={400} min={ui.bpmMin} max={ui.bpmMax} step={5} ariaLabel={t`BPM`} onChange={(min, max) => apply({ bpmMin: min, bpmMax: max, page: 0 })} />
+    <RangePill lo={0} hi={BPM_MAX} min={ui.bpmMin} max={ui.bpmMax} step={5} ariaLabel={t`BPM`} skin={skin} heading={heading} onChange={(min, max) => apply({ bpmMin: min, bpmMax: max, page: 0 })} />
   );
 }
 
-function LengthSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+function LengthSlider({ ui, apply, heading }: { ui: MapSearchUiState; apply: ApplyFn; heading?: ReactNode }) {
   const { t } = useLingui();
+  const skin = plainSkin(LENGTH_MAX, {
+    format: formatDuration,
+    valueText: formatDuration,
+    bucket: 60,
+    decorations: /min|m/gi,
+    placeholder: "2:00-4:00",
+    typeHint: t`Type a range: 2:00-4:00, 5+, <1:30`,
+    parseNumber: parseLength,
+  });
   return (
-    <RangeSlider lo={0} hi={600} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel={t`Length`} format={(v) => formatDuration(v)} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
+    <RangePill lo={0} hi={LENGTH_MAX} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel={t`Length`} skin={skin} heading={heading} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
   );
 }
 
@@ -303,16 +363,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
     playPatternHit(lo != null);
     if (ambiguous && lo != null) {
       const keys = [group.keysId];
-      const valid = validPatternIds(keys);
-      apply({
-        danMin: lo,
-        danMax: hi,
-        keys,
-        keysExclude: [],
-        patterns: ui.patterns.filter((pattern) => valid.has(pattern)),
-        patternsExclude: ui.patternsExclude.filter((pattern) => valid.has(pattern)),
-        page: 0,
-      });
+      apply({ danMin: lo, danMax: hi, keys, keysExclude: [], ...pruneForKeys(ui, keys), page: 0 });
       return;
     }
     apply({ danMin: lo, danMax: hi, page: 0 });
@@ -502,21 +553,16 @@ function DanMini({ level, context }: { level: number; context: DanScaleContext }
   );
 }
 
-// Estimated-dan filter. Collapsed it is a plain chip showing the selection
-// (badge art, or "Any"); clicking opens the badge wall as a floating panel
-// anchored under it, overlay-style so the filter row never grows. The mobile
-// sheet renders the wall inline instead (inline prop): it is a vertical
-// surface where the wall fits naturally and a flyout would clip its scroll.
-function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply: ApplyFn; inline?: boolean }) {
-  const context = danSliderContext(ui);
-  const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
+// A filter chip that opens a floating panel anchored under it, overlay-style
+// so the filter row never grows. Shared by the dan and MSD pickers.
+function FilterPopover({ active, trigger, children }: { active: boolean; trigger: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
-  // The trigger is the last control in the filter row, so on a narrow desktop
-  // (1272px was the reported one) a left-anchored ladder wall runs off the right
-  // edge and the top dan badges become unclickable. Measure once per open and
-  // slide the panel back inside, never past the left edge.
+  // The trigger sits late in the filter row, so on a narrow desktop (1272px
+  // was the reported one) a left-anchored panel runs off the right edge and
+  // its far controls become unclickable. Measure once per open and slide the
+  // panel back inside, never past the left edge.
   const [shift, setShift] = useState(0);
 
   useLayoutEffect(() => {
@@ -557,8 +603,6 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
     };
   }, [open]);
 
-  if (inline) return <DanBadgeWall ui={ui} apply={apply} />;
-
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -570,22 +614,10 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
         style={{
           background: open ? "color-mix(in srgb, var(--color-osu-pink) 12%, transparent)" : "transparent",
           color: ACCENT_CHIP_TEXT,
-          boxShadow: accentChipRing(open ? 90 : selection ? 65 : 35),
+          boxShadow: accentChipRing(open ? 90 : active ? 65 : 35),
         }}
       >
-        {selection ? (
-          <span className="inline-flex items-center gap-1.5">
-            <DanMini level={selection.lo} context={context} />
-            {selection.hi !== selection.lo && (
-              <>
-                <span className="text-[10px] opacity-70"><Trans>to</Trans></span>
-                <DanMini level={selection.hi} context={context} />
-              </>
-            )}
-          </span>
-        ) : (
-          <span><Trans>Any</Trans></span>
-        )}
+        {trigger}
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
@@ -601,10 +633,179 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
           className="absolute left-0 top-[calc(100%+6px)] z-30 w-max max-w-[min(440px,92vw)] rounded-lg bg-osu-b4 p-3 ring-1 ring-white/10 shadow-xl"
           style={shift ? { transform: `translateX(${shift}px)` } : undefined}
         >
-          <DanBadgeWall ui={ui} apply={apply} />
+          {children}
         </div>
       )}
     </div>
+  );
+}
+
+// Estimated-dan filter. Collapsed it is a plain chip showing the selection
+// (badge art, or "Any"); clicking opens the badge wall as a floating panel.
+// The mobile sheet renders the wall inline instead (inline prop): it is a
+// vertical surface where the wall fits naturally and a flyout would clip its
+// scroll.
+function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply: ApplyFn; inline?: boolean }) {
+  const context = danSliderContext(ui);
+  const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
+  if (inline) return <DanBadgeWall ui={ui} apply={apply} />;
+  return (
+    <FilterPopover
+      active={selection != null}
+      trigger={selection ? (
+        <span className="inline-flex items-center gap-1.5">
+          <DanMini level={selection.lo} context={context} />
+          {selection.hi !== selection.lo && (
+            <>
+              <span className="text-[10px] opacity-70"><Trans>to</Trans></span>
+              <DanMini level={selection.hi} context={context} />
+            </>
+          )}
+        </span>
+      ) : (
+        <span><Trans>Any</Trans></span>
+      )}
+    >
+      <DanBadgeWall ui={ui} apply={apply} />
+    </FilterPopover>
+  );
+}
+
+const LN_AXIS_META = PATTERN_RATING_META.find((meta) => meta.key === "ln");
+const MSD_FILTER_META = Object.fromEntries(
+  [OVERALL_AXIS_META, ...MSD_SKILLSET_META].map((meta) => [meta.key, meta]),
+);
+if (LN_AXIS_META) MSD_FILTER_META.LN = LN_AXIS_META;
+
+function formatMsd(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+// The skillset a picked Skill tile reads most directly, so opening the MSD
+// panel with Jack on lands on Jackspeed rather than Overall.
+const SKILL_MSD_FOCUS: Record<string, string> = {
+  speed: "stream",
+  stamina: "stamina",
+  tech: "technical",
+  jack: "jackspeed",
+  stream: "stream",
+};
+
+function msdRangeText(range: { min: number; max: number }): string {
+  const { min, max } = range;
+  if (min > 0 && max > 0) return `${formatMsd(min)}–${formatMsd(max)}`;
+  return min > 0 ? `${formatMsd(min)}+` : `≤ ${formatMsd(max)}`;
+}
+
+function msdSkin(color: string, typeHint: string): RangePillSkin {
+  const share = (value: number) => Math.round(30 + (Math.max(0, Math.min(MSD_FILTER_MAX, value)) / MSD_FILTER_MAX) * 70);
+  return {
+    // Faint at the easy end, the skillset's full colour at the top.
+    gradient: (from, to) =>
+      `linear-gradient(90deg, color-mix(in srgb, ${color} ${share(from)}%, #2a2233), color-mix(in srgb, ${color} ${share(to)}%, #2a2233))`,
+    format: formatMsd,
+    valueText: formatMsd,
+    textColor: (center) => (center >= 22 ? "hsl(0, 0%, 8%)" : "hsl(0, 0%, 94%)"),
+    labelColor: () => color,
+    bucket: 1,
+    decorations: /msd/gi,
+    placeholder: "24-28",
+    typeHint,
+  };
+}
+
+// Pick a skillset, then set its range on one wide pill. Skillsets that
+// already carry a range say so on their chip; every set range must hold.
+function MsdPanel({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { t, i18n } = useLingui();
+  const active = activeMsdKeys(ui.msd);
+  // The LN range reads the 4K LN model, so it is offered with the model on
+  // (or while a range from a shared link is still set, so it can be cleared).
+  const showLn = useExperimentalLn();
+  const keys = MSD_FILTER_KEYS.filter((key) => key !== "ln" || showLn || active.includes("ln"));
+  const [focus, setFocus] = useState<string>(() => {
+    if (active.length > 0) return active[0];
+    const skill = ui.skills.find((id) => SKILL_MSD_FOCUS[id]);
+    if (skill) return SKILL_MSD_FOCUS[skill];
+    return ui.patterns.includes("ln") && showLn ? "ln" : "overall";
+  });
+  const metaFor = (key: string) => MSD_FILTER_META[MSD_FILTER_SKILLSET[key]];
+  const labelFor = (key: string) => {
+    const meta = metaFor(key);
+    return meta ? i18n._(meta.labelMsg) : key;
+  };
+  const focusColor = metaFor(focus)?.color ?? "#c9cfdd";
+  const range = ui.msd[focus] ?? { min: 0, max: 0 };
+  const setRange = (key: string, min: number, max: number) => {
+    const next = { ...ui.msd };
+    if (min > 0 || max > 0) next[key] = { min, max };
+    else delete next[key];
+    apply({ msd: next, page: 0 });
+  };
+  return (
+    <div className="flex w-full flex-col gap-3 sm:w-[400px]">
+      <div className="flex flex-wrap gap-1.5">
+        {keys.map((key) => {
+          const color = metaFor(key)?.color ?? "#c9cfdd";
+          const set = ui.msd[key] && (ui.msd[key].min > 0 || ui.msd[key].max > 0);
+          const focused = key === focus;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFocus(key)}
+              aria-pressed={focused}
+              className="rounded-md px-2.5 py-1 text-[12px] font-bold tabular-nums cursor-pointer transition-colors duration-100 hover:brightness-110"
+              style={
+                set
+                  ? { background: color, color: "#11111a", boxShadow: focused ? "0 0 0 2px rgba(255,255,255,0.7)" : undefined }
+                  : { color, boxShadow: `inset 0 0 0 1.5px ${color}${focused ? "" : "59"}`, background: focused ? `${color}1f` : "transparent" }
+              }
+            >
+              {labelFor(key)}
+              {set ? ` ${msdRangeText(ui.msd[key])}` : ""}
+            </button>
+          );
+        })}
+      </div>
+      <div className="border-t border-white/[0.07] pt-3">
+        <RangePill
+          key={focus}
+          lo={0}
+          hi={MSD_FILTER_MAX}
+          min={range.min}
+          max={range.max}
+          step={0.5}
+          ariaLabel={labelFor(focus)}
+          skin={msdSkin(focusColor, t`Type a range: 24-28, 30+, <20`)}
+          onChange={(min, max) => setRange(focus, min, max)}
+          heading={<span className="text-[15px] font-bold" style={{ color: focusColor }}>{labelFor(focus)}</span>}
+          valueClassName="text-[15px]"
+        />
+        <div className="mt-1 flex justify-between text-[11px] tabular-nums text-osu-f1" aria-hidden="true">
+          {[0, 10, 20, 30, 40].map((tick) => <span key={tick}>{tick}</span>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MsdPicker({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const { i18n } = useLingui();
+  const active = activeMsdKeys(ui.msd);
+  let summary: ReactNode = <Trans>Any</Trans>;
+  if (active.length === 1) {
+    const key = active[0];
+    const meta = MSD_FILTER_META[MSD_FILTER_SKILLSET[key]];
+    summary = `${meta ? i18n._(meta.labelMsg) : key} ${msdRangeText(ui.msd[key])}`;
+  } else if (active.length > 1) {
+    const count = active.length;
+    summary = <Trans>{count} skillsets</Trans>;
+  }
+  return (
+    <FilterPopover active={active.length > 0} trigger={<span className="tabular-nums">{summary}</span>}>
+      <MsdPanel ui={ui} apply={apply} />
+    </FilterPopover>
   );
 }
 
@@ -800,6 +1001,9 @@ function MobileFilterSheet({
               <DanPicker ui={ui} apply={apply} inline />
             </ChipGroup>
           ) : null}
+          <ChipGroup label={t`MSD`}>
+            <MsdPanel ui={ui} apply={apply} />
+          </ChipGroup>
           <ChipGroup label={t`BPM`}>
             <BpmSlider ui={ui} apply={apply} />
           </ChipGroup>
@@ -888,8 +1092,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   // still syncs underneath (shareable links, back/forward) without gating the fetch.
   const [ui, setUi] = useState<MapSearchUiState>(state);
   const [searchInput, setSearchInput] = useState(state.q);
-  const [showMore, setShowMore] = useState(state.bpmMin > 0 || state.bpmMax > 0 || state.lenMin > 0 || state.lenMax > 0);
   const [result, setResult] = useState<LiveMapSearchResult | null>(null);
+  // Whether the shown result came from a skill-filtered query. Read from the
+  // result rather than the live filter, so the cards' skill chips switch in the
+  // same frame as the cards themselves.
+  const [resultSkillFiltered, setResultSkillFiltered] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<LiveMapSearchEntry | null>(null);
@@ -995,6 +1202,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       statusesExclude: ui.statusesExclude,
       patterns: ui.patterns,
       patternsExclude: ui.patternsExclude,
+      skills: ui.skills,
+      skillsExclude: ui.skillsExclude,
+      msd: serializeMsdRanges(ui.msd),
       starMin: ui.starMin > 0 ? ui.starMin : null,
       starMax: ui.starMax > 0 ? ui.starMax : null,
       bpmMin: ui.bpmMin > 0 ? ui.bpmMin : null,
@@ -1014,6 +1224,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       .then((data) => {
         if (cancelled) return;
         setResult(data);
+        setResultSkillFiltered(ui.skills.length + ui.skillsExclude.length > 0);
         lastResultRef.current = data;
         setLoading(false);
       })
@@ -1061,6 +1272,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.statusesExclude.length > 0 ||
     ui.patterns.length > 0 ||
     ui.patternsExclude.length > 0 ||
+    ui.skills.length > 0 ||
+    ui.skillsExclude.length > 0 ||
+    activeMsdKeys(ui.msd).length > 0 ||
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0 ||
@@ -1068,14 +1282,15 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     (!noDans && (ui.danMin != null || ui.danMax != null));
 
   // How many collapsed filters are active, for the mobile toggle's badge.
-  // Patterns stay visible above the toggle, so they don't count.
+  // Skills and patterns stay visible above the toggle, so they don't count.
   const collapsedFilterCount =
     ui.keys.length + ui.keysExclude.length +
     ui.statuses.length + ui.statusesExclude.length +
     (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
     (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
     (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
-    (!noDans && (ui.danMin != null || ui.danMax != null) ? 1 : 0);
+    (!noDans && (ui.danMin != null || ui.danMax != null) ? 1 : 0) +
+    activeMsdKeys(ui.msd).length;
 
   // The sort table is module-scope descriptors; resolve it once per locale.
   const sortOptions = useMemo(
@@ -1087,6 +1302,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     setSearchInput("");
     apply({
       q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
+      skills: [], skillsExclude: [], msd: {},
       starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0, lnMin: 0, lnMax: 0,
       danMin: null, danMax: null,
       page: 0,
@@ -1132,69 +1348,90 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           </span>
         </div>
 
-        {/* Pattern — the headline filter, each shown as a mini note-chart */}
-        <div className="flex flex-col gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Pattern</Trans></span>
-          <PatternPicker
-            selected={ui.patterns}
-            excluded={ui.patternsExclude}
-            keys={ui.keys}
-            onToggle={(pattern, reverse) => {
-              const next = cycleFacet(ui.patterns, ui.patternsExclude, pattern, reverse);
-              apply({ patterns: next.includes, patternsExclude: next.excludes, page: 0 });
-            }}
-            lnShare={{ min: ui.lnMin, max: ui.lnMax }}
-            onLnShareChange={(min, max) => apply({ lnMin: min, lnMax: max, page: 0 })}
-          />
-        </div>
-
-        {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}
-        <div className="flex items-center gap-2 sm:hidden">
-          <MobileFilters
-            ui={ui}
-            apply={apply}
-            onClear={clearFilters}
-            hasActiveFilters={hasActiveFilters}
-            collapsedFilterCount={collapsedFilterCount}
-            resultsLabel={t`Show ${totalLabel} maps`}
-            showDan={!noDans}
-          />
-          <div className="ml-auto">
-            <SortSelect options={sortOptions} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
+        {/* One grid from 1140px: the first column fits the skillset and status
+            chips, the other three split the rest, so keymode sits over stars,
+            dan over BPM and MSD over length. Narrower, the cells wrap. */}
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-4 min-[1140px]:grid min-[1140px]:grid-cols-[auto_repeat(3,minmax(0,1fr))]">
+          {/* Skill: the headline filter, the dan tiles plus LN and the finer patterns */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Skill</Trans></span>
+              {/* With no keymode picked, a skill pick also reaches 7K charts.
+                  Beside the heading so toggling it never moves the page. */}
+              {(ui.keys.some((key) => key !== "4k") || (ui.keys.length === 0 && ui.skills.length + ui.skillsExclude.length > 0)) && (
+                <span className="text-[11px] leading-none text-osu-f1"><Trans>Skill detection outside 4K is not fully tuned yet.</Trans></span>
+              )}
+            </div>
+            <SkillPicker
+              skills={ui.skills}
+              skillsExcluded={ui.skillsExclude}
+              onToggleSkill={(skill, reverse) => {
+                const next = cycleFacet(ui.skills, ui.skillsExclude, skill, reverse);
+                apply({ skills: next.includes, skillsExclude: next.excludes, page: 0 });
+              }}
+              patterns={ui.patterns}
+              patternsExcluded={ui.patternsExclude}
+              keys={ui.keys}
+              onTogglePattern={(pattern, reverse) => {
+                const next = cycleFacet(ui.patterns, ui.patternsExclude, pattern, reverse);
+                apply({ patterns: next.includes, patternsExclude: next.excludes, page: 0 });
+              }}
+              lnShare={{ min: ui.lnMin, max: ui.lnMax }}
+              onLnShareChange={(min, max) => apply({ lnMin: min, lnMax: max, page: 0 })}
+            />
           </div>
-          <DirButton dir={ui.dir} onToggle={() => apply({ sort: ui.sort, dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })} />
-        </div>
-
-        {/* Secondary filters: inline on sm+, in the bottom sheet on phones */}
-        <div className="hidden sm:flex flex-col gap-4">
-          <div className="flex flex-wrap gap-x-10 gap-y-4">
+          <div className="hidden sm:block">
             <KeysChips ui={ui} apply={apply} />
-            <StatusChips ui={ui} apply={apply} />
-            <ChipGroup label={t`Difficulty`}>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                <StarSlider ui={ui} apply={apply} />
-                <button type="button" onClick={() => setShowMore((value) => !value)} className="text-[11.5px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
-                  {showMore ? <Trans>− bpm & length</Trans> : <Trans>+ bpm & length</Trans>}
-                </button>
-              </div>
-            </ChipGroup>
-            {!noDans ? (
-              <ChipGroup label={t`Dan (est.)`}>
-                <DanPicker ui={ui} apply={apply} />
-              </ChipGroup>
-            ) : null}
           </div>
-
-          {showMore && (
-            <div className="flex flex-wrap gap-x-10 gap-y-4">
-              <ChipGroup label={t`BPM`}>
-                <BpmSlider ui={ui} apply={apply} />
-              </ChipGroup>
-              <ChipGroup label={t`Length`}>
-                <LengthSlider ui={ui} apply={apply} />
+          {/* Dan and MSD stay together while the row wraps; on the grid
+              each takes its own column. */}
+          <div className="hidden gap-x-8 sm:max-[1139px]:flex min-[1140px]:contents">
+            {!noDans ? (
+              <div>
+                <ChipGroup label={t`Dan (est.)`}>
+                  <DanPicker ui={ui} apply={apply} />
+                </ChipGroup>
+              </div>
+            ) : null}
+            <div className={noDans ? "min-[1140px]:col-start-4" : ""}>
+              <ChipGroup label={t`MSD`}>
+                <MsdPicker ui={ui} apply={apply} />
               </ChipGroup>
             </div>
-          )}
+          </div>
+
+          {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}
+          <div className="flex basis-full items-center gap-2 sm:hidden">
+            <MobileFilters
+              ui={ui}
+              apply={apply}
+              onClear={clearFilters}
+              hasActiveFilters={hasActiveFilters}
+              collapsedFilterCount={collapsedFilterCount}
+              resultsLabel={t`Show ${totalLabel} maps`}
+              showDan={!noDans}
+            />
+            <div className="ml-auto">
+              <SortSelect options={sortOptions} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
+            </div>
+            <DirButton dir={ui.dir} onToggle={() => apply({ sort: ui.sort, dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })} />
+          </div>
+
+          {/* Secondary filters: inline on sm+, in the bottom sheet on phones */}
+          <div className="hidden sm:block">
+            <StatusChips ui={ui} apply={apply} />
+          </div>
+          <div className="hidden basis-full gap-x-8 sm:max-[1139px]:flex min-[1140px]:contents">
+            <div className="min-w-0 flex-1">
+              <StarSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Difficulty`}</FilterHeading>} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <BpmSlider ui={ui} apply={apply} heading={<FilterHeading>{t`BPM`}</FilterHeading>} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <LengthSlider ui={ui} apply={apply} heading={<FilterHeading>{t`Length`}</FilterHeading>} />
+            </div>
+          </div>
         </div>
 
         {/* Sort + actions (desktop; phones sort from the toolbar above). Plain
@@ -1259,6 +1496,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                   key={entry.beatmapId}
                   entry={entry}
                   preview={preview}
+                  showSkill={resultSkillFiltered}
                   onOpen={(opened) => {
                     // The detail modal has its own audio; don't play over it.
                     stopPreview();

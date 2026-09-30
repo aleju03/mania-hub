@@ -1,6 +1,6 @@
-// Small numeric helpers shared by the dan estimator: clamps and gates,
-// quantiles, sliding-window counts, entropies over bucketed intervals, and the
-// power-mean spikiness measure used on row density.
+// Small numeric helpers shared by the chart features and pattern analysis:
+// clamps and gates, quantiles, sliding-window counts, entropies over bucketed
+// intervals, and the power-mean spikiness measure used on row density.
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -8,11 +8,6 @@ export function clamp(value: number, min: number, max: number): number {
 
 export function clamp01(value: number): number {
   return clamp(value, 0, 1);
-}
-
-/** The value when the condition holds, otherwise 0. */
-export function gateWhen(condition: boolean, value: number): number {
-  return condition ? value : 0;
 }
 
 /** The weakest of several 0-1 gates, clamped to 0-1: every condition has to hold. */

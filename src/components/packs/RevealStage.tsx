@@ -1244,12 +1244,16 @@ export function RevealStage({
   /* A butchered pack has nothing to draw for one at a time: there is no tier
      worth holding a beat on, and the stack is in halves. It deals itself out
      the moment the reveal mounts, and the summary follows; a viewer who set
-     reveal-all in settings gets the same deal on every pack. The ref keeps
+     reveal-all in settings gets the same deal on every pack. It starts in a
+     layout effect so the first painted frame is already the deal: a passive
+     effect let the one-by-one stack, its buttons and hint paint first, which
+     read as the reveal-all button being pressed for you. The ref keeps
      that to one run: StrictMode's mount -> cleanup -> mount would otherwise start a
      second pass that records every pull twice. */
+  const autoDeal = damage !== null || autoRevealAll;
   const autoDealtRef = useRef(false);
-  useEffect(() => {
-    if ((!damage && !autoRevealAll) || autoDealtRef.current) return;
+  useLayoutEffect(() => {
+    if (!autoDeal || autoDealtRef.current) return;
     autoDealtRef.current = true;
     void revealRest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1373,12 +1377,13 @@ export function RevealStage({
         }
         transition={{ duration: reducedMotion ? 0 : 0.45, ease: [0.3, 0.7, 0.2, 1] }}
       >
-        {/* Face-down stack (the cascade row replaces it while skipping). A cut
-            pack never shows it: the deal starts on the first effect, and one
-            frame of an intact stack would undercut what just happened. */}
+        {/* Face-down stack (the cascade row replaces it while skipping). A
+            pack that deals itself out never shows it: one frame of an intact
+            stack would undercut a cut pack, and reads as a skipped draw on
+            reveal-all. */}
         {cardBack &&
           !cascade &&
-          !damage &&
+          !autoDeal &&
           Array.from({ length: remainingBacks }, (_, position) => position)
             .reverse()
             .map((position) => {
@@ -1698,7 +1703,7 @@ export function RevealStage({
                   <Trans>Drawing player...</Trans>
                 )
               ) : skipping ? (
-                <Trans>Revealing the rest...</Trans>
+                autoRevealAll ? <Trans>Revealing your cards...</Trans> : <Trans>Revealing the rest...</Trans>
               ) : (
                 <Trans>Tap the stack or drag the top card to draw</Trans>
               )}

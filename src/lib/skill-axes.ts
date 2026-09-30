@@ -74,6 +74,10 @@ export const DAN_SKILLSET_META: Record<string, { label: string; labelMsg: Messag
   lntech: { label: "Tech", labelMsg: msg`Tech`, color: "#83cf6b" },
   lninverse: { label: "Inverse", labelMsg: msg`Inverse`, color: "#c59a5c" },
   lnrelease: { label: "Release", labelMsg: msg`Release`, color: "#46c7b8" },
+  lnhybrid: { label: "All-round", labelMsg: msg`All-round`, color: "#f07474" },
+  lntechnical: { label: "Technical", labelMsg: msg`Technical`, color: "#83cf6b" },
+  lnwalls: { label: "Walls", labelMsg: msg`Walls`, color: "#c59a5c" },
+  lnspeed: { label: "Speed", labelMsg: msg`Speed`, color: "#5ab2f2" },
 };
 
 // The aggregate rating, kept out of MSD_SKILLSET_META on purpose: it is not a
@@ -88,6 +92,60 @@ export const OVERALL_AXIS_META: SkillAxisMeta = {
   color: "#c9cfdd",
 };
 
+// The Etterna way of building the headline Overall, derived by the backend on
+// read and served as ratings.EtternaOverall (player-skills.ts etternaOverall):
+// the average of the best 6 of the 7 MinaCalc skillsets plus LN (best 5 where
+// Technical is not rated). `Overall` stays the Classic aggregate. The pattern
+// keymodes have no Etterna Overall.
+export const ETTERNA_OVERALL_AXIS = "EtternaOverall";
+// The backend's 4K EtternaOverall with the LN rating left out, which the
+// Overall chip reads while the 4K LN model is off (useExperimentalLn).
+export const ETTERNA_OVERALL_NO_LN_AXIS = "EtternaOverallNoLn";
+
+// The same average over a history snapshot, whose ratings carry the display
+// skillset values and `pattern:ln`. Mirrors etternaOverall in player-skills.ts.
+export function etternaOverallFromRatings(keyCount: number, ratings: Record<string, number>): number {
+  if (usesPatternSkillAxes(keyCount)) return 0;
+  const skillsets = MSD_SKILLSET_META.filter((meta) => meta.key !== "Technical" || keyCount === 4 || keyCount === 5);
+  const values = skillsets.map((meta) => Number(ratings[meta.key]) || 0).filter((value) => value >= 1);
+  const ln = Number(ratings["pattern:ln"]) || 0;
+  if (ln >= 1) values.push(ln);
+  const best = values.sort((a, b) => b - a).slice(0, skillsets.length - 1);
+  if (best.length === 0) return 0;
+  return Math.round((best.reduce((sum, value) => sum + value, 0) / best.length) * 100) / 100;
+}
+
+export type OverallMethod = "etterna" | "classic";
+
+/**
+ * The headline Overall of a mode under a method. Falls back to Classic where
+ * there is no Etterna Overall (6K/7K/8K, or a payload from before it existed).
+ */
+export function modeOverall(mode: MyDataSkillMode, method: OverallMethod, options: { ln4k?: boolean } = {}): {
+  value: number;
+  percentile: MyDataSkillPercentile | undefined;
+  etterna: boolean;
+} {
+  const etterna = Number(mode.ratings[ETTERNA_OVERALL_AXIS]);
+  if (method === "etterna" && etterna > 0 && options.ln4k === false && mode.keyCount === 4) {
+    // Without the 4K LN model the average leaves LN out; its percentile only
+    // holds while LN was not among the counted skillsets.
+    const withoutLn = etternaOverallFromRatings(mode.keyCount, { ...mode.ratings, "pattern:ln": 0 });
+    if (withoutLn > 0) {
+      const same = Math.abs(withoutLn - etterna) < 0.005;
+      return { value: withoutLn, percentile: same ? mode.percentiles?.[ETTERNA_OVERALL_AXIS] : undefined, etterna: true };
+    }
+  }
+  if (method === "etterna" && etterna > 0) {
+    return { value: etterna, percentile: mode.percentiles?.[ETTERNA_OVERALL_AXIS], etterna: true };
+  }
+  return { value: Number(mode.ratings.Overall ?? 0), percentile: mode.percentiles?.Overall, etterna: false };
+}
+
+export function hasEtternaOverall(mode: MyDataSkillMode): boolean {
+  return Number(mode.ratings[ETTERNA_OVERALL_AXIS]) > 0;
+}
+
 // Presentation for an axis key that arrived from the backend rather than from a
 // player's own breakdown, which is what the /rankings leaderboards get. Keys are
 // the wire form: a bare MSD skillset name, or `pattern:{id}`.
@@ -96,7 +154,7 @@ export function skillAxisMeta(axis: string): SkillAxisMeta | null {
     const id = axis.slice("pattern:".length);
     return PATTERN_RATING_META.find((meta) => meta.key === id) ?? null;
   }
-  if (axis === OVERALL_AXIS_META.key) return OVERALL_AXIS_META;
+  if (axis === OVERALL_AXIS_META.key || axis === ETTERNA_OVERALL_AXIS || axis === ETTERNA_OVERALL_NO_LN_AXIS) return OVERALL_AXIS_META;
   return MSD_SKILLSET_META.find((meta) => meta.key === axis) ?? null;
 }
 
@@ -134,7 +192,9 @@ const PATTERN_ENTRIES_MIN = 3;
 // 6K/7K/8K speak the in-house pattern vocabulary (falling back to the MSD names
 // until three patterns are rated); every other keymode speaks MinaCalc's
 // skillsets.
-export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
+// `ln4k: false` leaves out the 4K LN axis, for readers who have not turned
+// the 4K LN model on (useExperimentalLn).
+export function skillModeEntries(mode: MyDataSkillMode, options: { ln4k?: boolean } = {}): SkillAxisEntry[] {
   if (usesPatternSkillAxes(mode.keyCount)) {
     const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
     const patternEntries = PATTERN_RATING_META
@@ -155,7 +215,7 @@ export function skillModeEntries(mode: MyDataSkillMode): SkillAxisEntry[] {
   // The wire axis stays pattern:ln
   // so the radar, explorer and population board open the same evidence.
   const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
-  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474", value: ln.rating, axis: "pattern:ln" });
+  if (ln && ln.rating >= 1 && (options.ln4k !== false || mode.keyCount !== 4)) entries.push({ key: "ln", label: "LN", labelMsg: msg`LN`, color: "#f07474", value: ln.rating, axis: "pattern:ln" });
   return entries.sort((a, b) => b.value - a.value);
 }
 

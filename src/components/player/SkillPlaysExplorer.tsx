@@ -41,6 +41,7 @@ import {
 import type { MyDataSkillMode } from "#/lib/my-data";
 import { formatAccuracy, formatAccuracyAgainst, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
 import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisMeta } from "#/lib/skill-axes";
+import { useExperimentalLn } from "#/store";
 import { beatmapStatusPill } from "#/lib/beatmap-status";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
@@ -289,12 +290,16 @@ interface SkillPlaysExplorerProps {
   /** The keymodes this profile has a rating for, in the panel's own order. */
   modes: MyDataSkillMode[];
   view: SkillPlaysExplorerView;
+  /** The lists on offer in the toolbar's own switch, which shows only while
+   *  there is somewhere to switch to. */
+  views?: SkillPlaysExplorerView[];
+  onViewChange?: (next: SkillPlaysExplorerView) => void;
   /** Fired when a list read settles, either way. The panel holds its height
    *  across a view switch and needs to know when to let go of it. */
   onListSettled?: () => void;
 }
 
-export function SkillPlaysExplorer({ userId, username, modes, view, onListSettled }: SkillPlaysExplorerProps) {
+export function SkillPlaysExplorer({ userId, username, modes, view, views, onViewChange, onListSettled }: SkillPlaysExplorerProps) {
   const { t, i18n } = useLingui();
   // Read once, on mount. Safe to touch localStorage in the initializer here
   // because this panel only mounts after a click on the view switch, never
@@ -306,6 +311,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   // appearing under the first when the view changes.
   const [axis, setAxis] = useState<string>(storedPrefs.axis);
   const [side, setSide] = useState<"rc" | "ln">(storedPrefs.side);
+  const showLn = useExperimentalLn();
   const [sort, setSort] = useState<"rating" | "recent">(storedPrefs.sort);
   const [hideRanked, setHideRanked] = useState(storedPrefs.hideRanked);
   const [maxPerChart, setMaxPerChart] = useState<number>(storedPrefs.maxPerChart);
@@ -318,10 +324,9 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   // Reported by whichever list is mounted, from the cohort it actually holds,
   // so no chip is offered for a mod nothing in view was played with.
   const [availableMods, setAvailableMods] = useState<string[]>([]);
-  // Three narrowing controls plus the order is four tracks, which is one row
-  // on a desktop and four stacked ones on a phone, where they pushed the first
-  // play off the screen. Narrow screens get them behind one button instead;
-  // from sm up the disclosure is gone and they are simply on.
+  // The three narrowing controls live behind one button on every screen: laid
+  // out inline they were a third row of tracks that outweighed the two choices
+  // that decide what the list is.
   const [showFilters, setShowFilters] = useState(false);
   // Refresh: the nonce tells the mounted list to fetch its cohort again past
   // every cache. It only moves when a request is actually made; the spin runs
@@ -414,9 +419,14 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
   // that would come back empty. Overall leads: it is the one axis every
   // keymode has, and what a "best plays" list means before anyone narrows it.
   const axisOptions = useMemo<SkillAxisMeta[]>(
-    () => (mode ? [OVERALL_AXIS_META, ...skillModeEntries(mode)] : [OVERALL_AXIS_META]),
-    [mode],
+    () => (mode ? [OVERALL_AXIS_META, ...skillModeEntries(mode, { ln4k: showLn })] : [OVERALL_AXIS_META]),
+    [mode, showLn],
   );
+  // Without the 4K LN model there is no 4K LN dan to list.
+  const lnSideShown = showLn || keyCount !== 4;
+  useEffect(() => {
+    if (!lnSideShown && side === "ln") setSide("rc");
+  }, [lnSideShown, side]);
   useEffect(() => {
     if (!axisOptions.some((option) => axisKeyOf(option) === axis)) setAxis(OVERALL_AXIS_META.key);
   }, [axis, axisOptions]);
@@ -478,13 +488,24 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
       });
   }, []);
 
-  // Two rows, by what the control does rather than by how many there are.
-  // The first picks what the list is OF and carries the emphasis (the active
-  // skill wears its own color); the second is how the list is arranged and
-  // stays muted, so five controls read as two decisions instead of five.
+  // What the list is OF leads and carries the emphasis (the active skill
+  // wears its own color); how it is arranged follows, muted, with the
+  // narrowing controls folded behind one button.
   const toolbar = (
-    <div className="space-y-2">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
+        {onViewChange && views && views.length > 1 ? (
+          <Segmented
+            ariaLabel={t`Plays list`}
+            value={view}
+            options={views.map((option) => ({
+              value: option,
+              label: option === "msd" ? "MSD" : option === "dan" ? t`Dan` : t`Unrated`,
+              onPrefetch: () => prefetchSkillPlaysExplorerView(userId, modes, option),
+            }))}
+            onChange={onViewChange}
+          />
+        ) : null}
         {modes.length > 1 ? (
           <Segmented
             ariaLabel={t`Keymode`}
@@ -541,7 +562,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
             value={side}
             options={[
               { value: "rc" as const, label: t`Regular`, color: SIDE_COLOR.rc },
-              { value: "ln" as const, label: t`LN`, color: SIDE_COLOR.ln },
+              ...(lnSideShown ? [{ value: "ln" as const, label: t`LN`, color: SIDE_COLOR.ln }] : []),
             ].map((option) => ({
               ...option,
               onPrefetch: () => void loadDanCohort(userId, mode?.keyCount ?? keyCount, option.value, sort).catch(() => {}),
@@ -550,79 +571,81 @@ export function SkillPlaysExplorer({ userId, username, modes, view, onListSettle
           />
         )}
       </div>
-      {/* Two rows on a phone (the order, then the filters it opens) and one
-          wrapped row from sm up, where the disclosure is gone and all four
-          tracks belong to the same line. */}
-      <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1.5 sm:space-y-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <Segmented
-            ariaLabel={t`Order`}
-            value={sort}
-            options={[
-              {
-                value: "rating" as const,
-                label: t`Best`,
-                onPrefetch: () => {
-                  if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "rating").catch(() => {});
-                  else if (view === "unrated") void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, unratedSort, "rating").catch(() => {});
-                  else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "rating").catch(() => {});
+      {/* How the list is arranged, pushed to the end of the row. It shares
+          the dan and unrated rows, and drops under the longer skill list. */}
+      <div className="ml-auto flex items-center gap-1.5">
+        <Segmented
+          ariaLabel={t`Order`}
+          value={sort}
+          options={[
+            {
+              value: "rating" as const,
+              label: t`Best`,
+              onPrefetch: () => {
+                if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "rating").catch(() => {});
+                else if (view === "unrated") void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, unratedSort, "rating").catch(() => {});
+                else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "rating").catch(() => {});
+              },
+            },
+            {
+              value: "recent" as const,
+              label: t`Recent`,
+              onPrefetch: () => {
+                if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "recent").catch(() => {});
+                else if (view === "unrated") void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, unratedSort, "recent").catch(() => {});
+                else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "recent").catch(() => {});
+              },
+            },
+          ]}
+          onChange={setSort}
+        />
+        <FiltersMenu
+          open={showFilters}
+          activeCount={activeFilterCount}
+          onOpenChange={setShowFilters}
+        >
+          <FilterRow label={t`Rates per chart`}>
+            <RateCapControl value={maxPerChart} onChange={setMaxPerChart} />
+          </FilterRow>
+          {availableMods.length > 1 ? (
+            <FilterRow label={t`Mods`}>
+              <ModsControl mods={availableMods} modFilter={modFilter} onCycle={cycleMod} />
+            </FilterRow>
+          ) : null}
+          {/* The MSD and dan lists have plays they turned away, and only their
+              Recent order lists them, so only there is the second on offer. */}
+          <FilterRow label={t`Hide`}>
+            <HideControl
+              options={[
+                {
+                  key: "ranked",
+                  label: t`ranked`,
+                  title: t`Hide plays on ranked, approved and qualified charts`,
+                  pressed: hideRanked,
+                  onChange: () => setHideRanked((current) => !current),
                 },
-              },
-              {
-                value: "recent" as const,
-                label: t`Recent`,
-                onPrefetch: () => {
-                  if (view === "msd") void loadMsdCohort(userId, mode?.keyCount ?? keyCount, axis, "recent").catch(() => {});
-                  else if (view === "unrated") void loadUnratedCohort(userId, mode?.keyCount ?? keyCount, unratedSort, "recent").catch(() => {});
-                  else void loadDanCohort(userId, mode?.keyCount ?? keyCount, side, "recent").catch(() => {});
-                },
-              },
-            ]}
-            onChange={setSort}
-          />
-          <FiltersToggle
-            open={showFilters}
-            activeCount={activeFilterCount}
-            onToggle={() => setShowFilters((current) => !current)}
-          />
-          <button
-            type="button"
-            onClick={refresh}
-            title={t`Refresh`}
-            aria-label={t`Refresh`}
-            className={`inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center text-osu-f1 transition-colors hover:text-osu-l1 ${CONTROL_TRACK_CLASS}`}
-          >
-            <RefreshCw size={12} className={refreshSpinning ? "animate-spin" : ""} />
-          </button>
-        </div>
-        <div className={`${showFilters ? "flex" : "hidden"} flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex`}>
-          <RateCapControl value={maxPerChart} onChange={setMaxPerChart} />
-          {availableMods.length > 1 ? <ModsControl mods={availableMods} modFilter={modFilter} onCycle={cycleMod} /> : null}
-          {/* Both of these are the same decision asked twice, and together they
-              are the common setting, so they share one label and one track. The
-              MSD and dan lists have plays they turned away, and only their Recent
-              order lists them, so only there is the second on offer. */}
-          <HideControl
-            options={[
-              {
-                key: "ranked",
-                label: t`ranked`,
-                title: t`Hide plays on ranked, approved and qualified charts`,
-                pressed: hideRanked,
-                onChange: () => setHideRanked((current) => !current),
-              },
-              ...(view !== "unrated" && sort === "recent"
-                ? [{
-                  key: "uncounted",
-                  label: t`not counted`,
-                  title: view === "dan" ? t`Hide the plays the dan rules turned away` : t`Hide the plays with no skill rating`,
-                  pressed: !showRejected,
-                  onChange: () => setShowRejected((current) => !current),
-                }]
-                : []),
-            ]}
-          />
-        </div>
+                ...(view !== "unrated" && sort === "recent"
+                  ? [{
+                    key: "uncounted",
+                    label: t`not counted`,
+                    title: view === "dan" ? t`Hide the plays the dan rules turned away` : t`Hide the plays with no skill rating`,
+                    pressed: !showRejected,
+                    onChange: () => setShowRejected((current) => !current),
+                  }]
+                  : []),
+              ]}
+            />
+          </FilterRow>
+        </FiltersMenu>
+        <button
+          type="button"
+          onClick={refresh}
+          title={t`Refresh`}
+          aria-label={t`Refresh`}
+          className={`inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center text-osu-f1 transition-colors hover:text-osu-l1 ${CONTROL_TRACK_CLASS}`}
+        >
+          <RefreshCw size={12} className={refreshSpinning ? "animate-spin" : ""} />
+        </button>
       </div>
     </div>
   );
@@ -1552,7 +1575,7 @@ function UnratedPlaysList({
 
 /** The dan list's own shape for a turned-away play, so the map card can
  *  print the same sentence it does there. */
-function unratedRejection(item: LivePlayerUnratedPlay): LivePlayerDanRejectedPlay {
+export function unratedRejection(item: LivePlayerUnratedPlay): LivePlayerDanRejectedPlay {
   return {
     play: item.play,
     reason: item.reason,
@@ -1933,32 +1956,87 @@ function PillGroup<T extends string>({
 }
 
 /**
+ * The button the narrowing controls open from, and the panel they sit in.
+ *
+ * The count is what makes a closed button honest: a list quietly thinned by a
+ * setting nobody can see is the reason the button tints and numbers itself.
+ * The panel stays open while its controls are used, since several are often
+ * set together, and closes on a click outside or Escape.
+ */
+function FiltersMenu({
+  open,
+  activeCount,
+  onOpenChange,
+  children,
+}: {
+  open: boolean;
+  activeCount: number;
+  onOpenChange: (next: boolean) => void;
+  children: ReactNode;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      onOpenChange(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onOpenChange(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onOpenChange, open]);
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        aria-expanded={open}
+        className={`inline-flex cursor-pointer items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${CONTROL_TRACK_CLASS} ${
+          activeCount > 0 ? "bg-osu-pink/15 text-osu-pink-light" : "text-osu-f1 hover:text-osu-l1"
+        }`}
+      >
+        <SlidersHorizontal size={12} />
+        <Trans>Filters</Trans>
+        {activeCount > 0 ? <span className="tabular-nums">{activeCount}</span> : null}
+        <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-30 mt-1.5 grid w-max max-w-[calc(100vw-2rem)] grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5 rounded-xl bg-osu-b4 p-3 shadow-xl ring-1 ring-osu-b3/45">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** One line of the filters panel: its label, then its buttons. */
+function FilterRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <span className="text-[11px] text-osu-f1">{label}</span>
+      <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1">
+        {children}
+      </div>
+    </>
+  );
+}
+
+/**
  * The per-chart rate cap: how many plays of the same chart a list may repeat.
- *
- * The label is a cell of the track rather than a caption floating beside it,
- * so the control still reads as one object without asking anyone to work out
- * what it does. A mark alone was tried here and is wrong on touch: an icon
- * that only explains itself on hover explains itself to nobody on a phone.
- *
- * The whole track tints while a cap is on, because a filter that is quietly
- * thinning the list should be visible without reading the number.
+ * A cap that is on wears pink, the color every filter that is thinning the
+ * list wears.
  */
 function RateCapControl({ value, onChange }: { value: number; onChange: (next: number) => void }) {
   const { t } = useLingui();
-  const title = t`How many plays of the same chart the list may repeat`;
   const capped = value !== 0;
   return (
-    <div
-      role="group"
-      aria-label={title}
-      title={title}
-      className={`inline-flex items-center gap-0.5 p-0.5 pl-2 transition-colors ${CONTROL_TRACK_CLASS} ${
-        capped ? "bg-osu-pink/15" : ""
-      }`}
-    >
-      <span className={`mr-1 shrink-0 text-[11px] ${capped ? "text-osu-pink-light" : "text-osu-f1"}`}>
-        <Trans>Rates per chart</Trans>
-      </span>
+    <>
       {SKILL_PLAYS_RATE_CAPS.map((cap) => {
         const active = cap === value;
         return (
@@ -1968,7 +2046,7 @@ function RateCapControl({ value, onChange }: { value: number; onChange: (next: n
             onClick={() => onChange(cap)}
             aria-pressed={active}
             aria-label={cap === 0 ? t`Every rate of a chart` : cap === 1 ? t`1 rate per chart` : t`${cap} rates per chart`}
-            className={`min-w-6 cursor-pointer rounded-full px-2 py-1 text-[11.5px] font-semibold transition-colors ${
+            className={`min-w-7 cursor-pointer rounded-full px-2 py-1 text-[11.5px] font-semibold transition-colors ${
               active
                 ? capped ? "bg-osu-pink/30 text-osu-pink-light" : "bg-osu-b3 text-white"
                 : "text-osu-f1 hover:text-osu-l1"
@@ -1978,53 +2056,15 @@ function RateCapControl({ value, onChange }: { value: number; onChange: (next: n
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/**
- * The one control a phone gets for the three that narrow the list.
- *
- * It is not a menu: the same tracks a desktop shows inline open under it, in
- * the same order, so nobody has to learn a second arrangement. The count is
- * what makes a closed row honest - a list quietly thinned by a setting nobody
- * can see is the reason this is a disclosure and not a hidden default.
- */
-function FiltersToggle({
-  open,
-  activeCount,
-  onToggle,
-}: {
-  open: boolean;
-  activeCount: number;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      className={`inline-flex cursor-pointer items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-semibold transition-colors sm:hidden ${CONTROL_TRACK_CLASS} ${
-        activeCount > 0 ? "text-osu-pink-light" : "text-osu-f1"
-      }`}
-    >
-      <SlidersHorizontal size={12} />
-      <Trans>Filters</Trans>
-      {activeCount > 0 ? <span className="tabular-nums">{activeCount}</span> : null}
-      <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
-    </button>
+    </>
   );
 }
 
 /**
  * The mod filter, the same chip and the same cycle Best Performance uses:
- * click to require a mod, again to hide it, again to stop asking.
- *
- * It wears the toolbar's track rather than sitting loose beside it, because
- * the chips alone would read as badges on the row above rather than as a
- * control. Only the mods the visible cohort was played with get a chip, so an
- * empty answer is never on offer. The chips wrap inside the track: a player
- * with many mods on a phone would otherwise push the whole page sideways.
+ * click to require a mod, again to hide it, again to stop asking. Only the
+ * mods the visible cohort was played with get a chip, so an empty answer is
+ * never on offer.
  */
 function ModsControl({
   mods,
@@ -2035,17 +2075,8 @@ function ModsControl({
   modFilter: ModFilterState;
   onCycle: (mod: string, reverse: boolean) => void;
 }) {
-  const { t } = useLingui();
-  const any = Object.keys(modFilter).length > 0;
   return (
-    <div
-      role="group"
-      aria-label={t`Mods`}
-      className={`inline-flex max-w-full flex-wrap items-center gap-1 p-1 pl-2 ${CONTROL_TRACK_CLASS}`}
-    >
-      <span className={`mr-0.5 shrink-0 text-[11px] ${any ? "text-osu-pink-light" : "text-osu-f1"}`}>
-        <Trans>Mods</Trans>
-      </span>
+    <>
       {mods.map((mod) => (
         <ModFilterChip
           key={mod}
@@ -2055,31 +2086,18 @@ function ModsControl({
           onContextMenu={() => onCycle(mod, true)}
         />
       ))}
-    </div>
+    </>
   );
 }
 
-/**
- * What the list leaves out, as one track rather than a pill per answer.
- *
- * Two independent toggles, so this is not a Segmented: any number of them can
- * be on at once. What they share is the verb, and spelling "Hide" into every
- * pill made two controls that are usually set together take a whole row. The
- * word is the track's first cell instead, which halves the copy and reads as
- * one sentence: "hide ranked, not counted".
- */
+/** What the list leaves out: independent toggles, any number on at once. */
 function HideControl({
   options,
 }: {
   options: Array<{ key: string; label: string; title: string; pressed: boolean; onChange: () => void }>;
 }) {
-  const { t } = useLingui();
-  const any = options.some((option) => option.pressed);
   return (
-    <div role="group" aria-label={t`Hide`} className={`inline-flex items-center gap-0.5 p-0.5 pl-2 ${CONTROL_TRACK_CLASS}`}>
-      <span className={`mr-1 shrink-0 text-[11px] ${any ? "text-osu-pink-light" : "text-osu-f1"}`}>
-        <Trans>Hide</Trans>
-      </span>
+    <>
       {options.map((option) => (
         <button
           key={option.key}
@@ -2094,7 +2112,7 @@ function HideControl({
           {option.label}
         </button>
       ))}
-    </div>
+    </>
   );
 }
 

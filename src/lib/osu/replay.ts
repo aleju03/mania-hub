@@ -31,10 +31,11 @@ import {
   parseOptionalBeatmapChecksum
 } from "./validators";
 import { getOsuScoreModeName, getScoreEndpointOrder } from "./score-endpoint-order";
-import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "../replay-frames";
-import { packReplayFrames } from "../replay-pack";
+import { readOsr } from "../replay-osr";
+import { packReplayFrames, type PackedReplayFrames } from "../replay-pack";
+import type { ServerReplay } from "../replay-types";
 
-// ── Replay (parsed server-side via osu-parsers) ────────────────────────────
+// ── Replay (parsed server-side) ────────────────────────────
 
 const REPLAY_CACHE_LOCK_TTL_MS = 30_000;
 const REPLAY_CACHE_LOCK_WAIT_MS = 500;
@@ -47,27 +48,8 @@ type ReplayDownload = {
   endpointKind: ReplayEndpointKind;
 };
 
-type ParsedReplayResponse = {
-  header: {
-    playerName: string;
-    gameMode: number;
-    gameVersion?: number;
-    beatmapHash?: string;
-    modsUsed?: number;
-    totalScore: number;
-    maxCombo: number;
-    count300: number;
-    count100: number;
-    count50: number;
-    countGeki: number;
-    countKatu: number;
-    countMiss: number;
-    isPerfect: boolean;
-  };
-  lifeBarFrames: Array<{ time: number; health: number }>;
-  framesPacked: { count: number; times: string; keys: string };
-  keyCount: number;
-  stableScrollSpeedScale?: number;
+type ParsedReplayResponse = Omit<ServerReplay, "frames"> & {
+  framesPacked: PackedReplayFrames;
 };
 
 export type BeatmapChecksumLookupResult = OsuBeatmap & {
@@ -194,58 +176,13 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       const stored = await getJsonArtifact<ParsedReplayResponse>(storageKey);
       if (stored) return stored;
 
-      const { ScoreDecoder } = await import("osu-parsers");
       const buffer = await getReplayBuffer(data);
-      const decoder = new ScoreDecoder();
-      const score = await decoder.decodeFromBuffer(buffer);
-
-      const info = score.info;
-      const rawFrames = (score.replay?.frames ?? []) as any[];
-      const frames = decodeStableManiaReplayFrames(rawFrames);
-      const stableScrollSpeedScale = getStableManiaReplayScrollSpeedScale(rawFrames);
-      const lifeBarFrames = (score.replay?.lifeBar ?? [])
-        .map((frame: any) => ({
-          time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
-          health: Math.max(0, Math.min(1, Number(frame.health ?? 0))),
-        }))
-        .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
-        .sort((a, b) => a.time - b.time);
-
-      // For mania, column bitmask is in mouseX (position.x), NOT buttonState.
-      const framesPacked = packReplayFrames(frames);
-
-      // Detect key count: prefer beatmap CS from score API, fall back to OR of all frames
-      let keyCount = data.keyCount ?? 0;
-      if (!keyCount) {
-        let allBits = 0;
-        for (const frame of frames) allBits |= frame.keyState;
-        let maxBit = 0;
-        let tmp = allBits;
-        while (tmp > 0) { maxBit++; tmp >>= 1; }
-        keyCount = Math.max(maxBit, 4);
-      }
-
+      const { frames, keyCount, ...replay } = readOsr(buffer).replay;
       const response: ParsedReplayResponse = {
-        header: {
-          playerName: info?.username ?? "Unknown",
-          gameMode: info?.rulesetId ?? 3,
-          gameVersion: Number(score.replay?.gameVersion ?? 0) || undefined,
-          beatmapHash: info?.beatmapHashMD5 ?? "",
-          modsUsed: Number(info?.rawMods ?? info?.mods?.bitwise ?? 0) || 0,
-          totalScore: info?.totalScore ?? 0,
-          maxCombo: info?.maxCombo ?? 0,
-          count300: info?.count300 ?? 0,
-          count100: info?.count100 ?? 0,
-          count50: info?.count50 ?? 0,
-          countGeki: info?.countGeki ?? 0,
-          countKatu: info?.countKatu ?? 0,
-          countMiss: info?.countMiss ?? 0,
-          isPerfect: info?.perfect ?? false,
-        },
-        lifeBarFrames,
-        framesPacked,
-        keyCount,
-        stableScrollSpeedScale: stableScrollSpeedScale ?? undefined,
+        ...replay,
+        framesPacked: packReplayFrames(frames),
+        // The chart's key count from the score API beats the highest column pressed.
+        keyCount: data.keyCount || keyCount,
       };
       await putJsonArtifact(storageKey, response);
       return response;

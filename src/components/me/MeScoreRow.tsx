@@ -1,3 +1,5 @@
+import { Check, X } from "lucide-react";
+
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
@@ -31,7 +33,20 @@ function coverThumb(score: MyDataScoreRow): string | null {
 
 // One of the player's own tracked plays, styled like a tracker feed row but compact (no avatar,
 // since every row is the same player). Used for the My Data recent-plays feed.
-export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; isNew?: boolean; ppGain?: number }) {
+export function MeScoreRow({
+  score,
+  isNew,
+  ppGain,
+  selected,
+  onToggleSelected,
+}: {
+  score: MyDataScoreRow;
+  isNew?: boolean;
+  ppGain?: number;
+  /** Given when the viewer may remove this play; the × picks it. */
+  selected?: boolean;
+  onToggleSelected?: () => void;
+}) {
   const locale = useLocale();
   const acc = getDisplayedAccuracy(score);
   const beatmapUrl = score.beatmap?.url ?? (score.beatmap?.id ? `https://osu.ppy.sh/beatmaps/${score.beatmap.id}` : undefined);
@@ -41,8 +56,13 @@ export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; is
   const showExactStats = !score.archived || score.archivedExact;
 
   const { t } = useLingui();
+  const removable = onToggleSelected != null;
   return (
-    <div className={`flex items-center gap-2.5 rounded-lg border border-osu-b3/20 bg-osu-b4 py-2 pl-2 pr-2.5 transition-colors hover:bg-osu-b3/40${isNew ? " score-enter" : ""}`}>
+    <div
+      className={`group flex items-center gap-2.5 rounded-lg border py-2 pl-2 pr-2.5 transition-colors hover:bg-osu-b3/40${
+        selected ? " border-osu-red-light/40 bg-osu-red-light/10" : " border-osu-b3/20 bg-osu-b4"
+      }${isNew ? " score-enter" : ""}`}
+    >
       <div className="relative h-9 w-[52px] shrink-0 overflow-hidden rounded bg-osu-b3/40">
         {cover ? <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" /> : null}
         {score.archived && !score.archivedExact ? (
@@ -87,6 +107,21 @@ export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; is
           {formatTimeAgo(getScoreTimestamp(score), locale)}
         </span>
       </div>
+      {removable ? (
+        <button
+          type="button"
+          aria-pressed={!!selected}
+          aria-label={t`Remove play`}
+          onClick={onToggleSelected}
+          className={`-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-[opacity,colors] cursor-pointer ${
+            selected
+              ? "bg-osu-red-light text-osu-b5"
+              : "text-osu-f1 opacity-40 hover:bg-osu-red-light/15 hover:text-osu-red-light hover:opacity-100 group-hover:opacity-100"
+          }`}
+        >
+          {selected ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <X className="h-3.5 w-3.5" />}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -2674,6 +2674,9 @@ export interface LiveMapSearchEntry {
   // lngeneral, ...), strongest first; empty (or absent on cached payloads)
   // until the analysis lands.
   patternTags?: string[];
+  // Rice dan tiles the chart files under (speed/stamina/tech/jack/stream), the
+  // primary first; empty for LN charts, absent on cached payloads.
+  danTiles?: string[];
   covers: Record<string, string> | null;
   // From the unified chart analysis; null until the chart's analysis job lands.
   dan?: { label: string; family: string; rawDan: number } | null;
@@ -2716,6 +2719,10 @@ export interface LiveMapSearchParams {
   statusesExclude: string[];
   patterns: string[];
   patternsExclude: string[];
+  skills?: string[];
+  skillsExclude?: string[];
+  // `key:min-max` pairs (lib/map-search-msd.ts); empty for none.
+  msd?: string;
   starMin: number | null;
   starMax: number | null;
   bpmMin: number | null;
@@ -2783,6 +2790,9 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.statusesExclude.length) query.set("statusesExclude", params.statusesExclude.join(","));
   if (params.patterns.length) query.set("patterns", params.patterns.join(","));
   if (params.patternsExclude.length) query.set("patternsExclude", params.patternsExclude.join(","));
+  if (params.skills?.length) query.set("skills", params.skills.join(","));
+  if (params.skillsExclude?.length) query.set("skillsExclude", params.skillsExclude.join(","));
+  if (params.msd) query.set("msd", params.msd);
   if (params.starMin != null) query.set("starMin", String(params.starMin));
   if (params.starMax != null) query.set("starMax", String(params.starMax));
   if (params.bpmMin != null) query.set("bpmMin", String(params.bpmMin));
@@ -2928,6 +2938,9 @@ export interface LiveChartAnalysisDetail {
   // Direct metadata fallback for detail views whose map-search index row has
   // not yet been refreshed with OD.
   od?: number | null;
+  msd?: Record<string, number> | null;
+  primaryDan?: { label: string; family: string; rawDan: number } | null;
+  lnIdentity?: boolean | null;
   patterns: LiveChartAnalysisPatternHit[];
   clusters: LiveChartAnalysisCluster[];
   clusterCategory: string | null;
@@ -2947,7 +2960,7 @@ export interface LiveChartAnalysisDetail {
 
 export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveChartAnalysisDetail | null> {
   try {
-    return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`);
+    return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`, { cache: "no-store" });
   } catch {
     return null;
   }

@@ -21,7 +21,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { msdHeadline } from "#dan/msd-headline";
-import { useNoDans } from "../../store";
+import { useExperimentalLn, useNoDans } from "../../store";
 import {
   FamilyPatternChip,
   PATTERN_COLOR,
@@ -490,6 +490,9 @@ function DanEstimateBadge({ dan, other = null, keyCount }: { dan: DanBadgeVerdic
 export function MsdBlock({
   entry,
   msdLn,
+  analysisMsd,
+  analysisDan,
+  analysisLnIdentity,
   rate = 1,
   rateMsd = null,
   rateDan = null,
@@ -498,6 +501,9 @@ export function MsdBlock({
 }: {
   entry: LiveMapSearchEntry;
   msdLn?: Record<string, number> | null;
+  analysisMsd?: Record<string, number> | null;
+  analysisDan?: { label: string; family: string; rawDan: number } | null;
+  analysisLnIdentity?: boolean | null;
   // The rate a play on this chart was set at; 1 whenever the modal is not
   // standing in for a rate-modded play.
   rate?: number;
@@ -510,6 +516,7 @@ export function MsdBlock({
 }) {
   const { t, i18n } = useLingui();
   const noDans = useNoDans();
+  const showLn = useExperimentalLn();
   // Under a rate mod the chart the play met is not the stored one, so its own
   // MSD and dan replace the 1.0x pair wholesale: a rate-adjusted MSD next to a
   // 1.0x dan badge would describe two different charts. When the rate values
@@ -520,7 +527,7 @@ export function MsdBlock({
   // with player ratings. Bulk search rows carry them, so the number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
-  const msd = rateAdjusted ? rateMsd : msdLn ?? entry.msdLn ?? entry.msd ?? null;
+  const msd = rateAdjusted ? rateMsd : msdLn ?? analysisMsd ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
   // Independent LN is 4K-only, including when an older cached artifact
   // still contains obsolete LN values for another keymode. The backend
@@ -528,8 +535,10 @@ export function MsdBlock({
   // or not; identity only decides whether LN can be the headline.
   const hasLnIdentity = rateAdjusted
     ? rateDan == null || rateDan.family === "ln"
-    : entry.primaryPattern === "ln" || entry.dan?.family === "ln";
-  const skillsetNames = entry.keyCount === 4 && Number(msd.LN ?? 0) > 0
+    : analysisLnIdentity ?? (entry.primaryPattern === "ln" || entry.dan?.family === "ln");
+  // The 4K LN number shows only with the 4K LN model on.
+  const lnShown = entry.keyCount === 4 && showLn;
+  const skillsetNames = lnShown && Number(msd.LN ?? 0) > 0
     ? [...MSD_SKILLSETS, "LN"]
     : MSD_SKILLSETS;
   const skillsets = skillsetNames
@@ -541,10 +550,10 @@ export function MsdBlock({
   // On a 4K LN chart the headline is the higher of Overall and LN: native
   // Overall never sees a tail, so on its own it prices the rice that is left
   // once the holds are cut off.
-  const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity);
+  const overall = msdHeadline(msd, entry.keyCount, hasLnIdentity && (entry.keyCount !== 4 || showLn));
   const topName = skillsets[0]?.name;
 
-  const dan = noDans ? null : rateAdjusted ? rateDan : entry.dan ?? null;
+  const dan = noDans ? null : rateAdjusted ? rateDan : analysisDan !== undefined ? analysisDan : entry.dan ?? null;
   // "MSD" alone at 1.0x; a rate-modded play names the speed the numbers are
   // for, including when only the 1.0x pair could be shown.
   const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
@@ -588,7 +597,7 @@ export function MsdBlock({
         {/* Even columns keep the values aligned no matter how long the labels run. */}
         <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
           {skillsets.map(({ name, value }) => (
-            <div key={name} className="flex flex-col" title={name === "LN" ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
+            <div key={name} className="flex flex-col" title={name.startsWith("LN") ? t`Mania Tracker LN estimate: release timing, held-finger coordination and recovery. An independent model alongside MinaCalc.` : undefined}>
               <span
                 className={`text-[14px] font-semibold tabular-nums leading-none ${
                   name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
@@ -799,7 +808,11 @@ export function MapDetailModal({
 
   // The rate the opening play was set at, and only while that play's own diff
   // is the active one: the set's other diffs were not the ones played.
-  const playRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  const playedRate = play && active && play.beatmapId === active.beatmapId ? play.rateMod?.rate ?? 1 : 1;
+  // Without a play, the chart can be read at DT or HT: the preview plays at
+  // that speed and the MSD and dan are rated there.
+  const [modRate, setModRate] = useState<1 | 1.5 | 0.75>(1);
+  const playRate = playedRate === 1 ? modRate : playedRate;
   const ratePercent = Math.round(playRate * 100);
   // 1.5x is the one rate the catalog already carries (the DT sweep), and it
   // rides on the detail entry, so the common DT/NC play needs no request at all.
@@ -999,13 +1012,16 @@ export function MapDetailModal({
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd ? (
+                {active.msd || activeAnalysis?.msd ? (
                   ratePending ? (
                     <PendingMsdBlock label={t`MSD at ${formatRate(playRate)}`} />
                   ) : (
                     <MsdBlock
                       entry={active}
                       msdLn={activeAnalysis?.msdLn ?? null}
+                      analysisMsd={activeAnalysis?.msd}
+                      analysisDan={activeAnalysis?.status === "ready" ? activeAnalysis.primaryDan : undefined}
+                      analysisLnIdentity={activeAnalysis?.lnIdentity}
                       rate={playRate}
                       rateMsd={rateMsd}
                       rateDan={rateDan}
@@ -1064,6 +1080,21 @@ export function MapDetailModal({
 
                 {/* Chart preview, held as an empty box of its own height while
                     the entry is in flight so it lands without moving. */}
+                {playedRate === 1 && previewSet ? (
+                  <div className="-mb-1 flex justify-end gap-1">
+                    {([["HT", 0.75], ["DT", 1.5]] as const).map(([mod, rate]) => (
+                      <button
+                        key={mod}
+                        type="button"
+                        aria-pressed={modRate === rate}
+                        onClick={() => setModRate((current) => (current === rate ? 1 : rate))}
+                        className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-bold hover:brightness-110 ${modRate === rate ? "bg-osu-pink/20 text-osu-pink" : "text-osu-f1"}`}
+                      >
+                        {mod}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {previewSet ? (
                   <ChartPreviewPanel
                     beatmapset={previewSet}
@@ -1073,7 +1104,7 @@ export function MapDetailModal({
                     // longer known keeps the panel's default (pitch follows
                     // rate), which is what NC sounds like.
                     playbackRate={playRate}
-                    preservePitch={playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
+                    preservePitch={playRate !== playedRate ? true : playRate !== 1 && play?.rateMod ? !play.rateMod.pitched : undefined}
                     className="h-[300px] rounded-lg"
                     flatBackdrop
                   />

@@ -1,5 +1,5 @@
 // Reads a chart's notes (at the played rate) into the feature metrics every
-// other part of the dan estimator works from: density windows, chord and hold
+// other part of this folder works from: density windows, chord and hold
 // shares, jack/stream/jumpstream pressure, rhythm and row-pattern entropy,
 // repetition, LN density and overlap, and the off-grid (delay) row share.
 

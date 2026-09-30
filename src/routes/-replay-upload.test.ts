@@ -53,9 +53,8 @@ describe("replay upload mode", () => {
     expect(uploadServerSource).toContain('"X-Replay-Filename": encodeURIComponent(stored.originalFilename)');
     expect(uploadSource).toContain("extractReplayScoreIdFromFilename");
     expect(uploadSource).toContain("scoreId: Number.isSafeInteger(scoreId)");
-    expect(uploadSource).toContain('await import("osu-parsers")');
+    expect(uploadSource).toContain("readOsr(buffer)");
     expect(uploadSource).toContain("stableModBitmaskToMods");
-    expect(uploadSource).toContain("getStableManiaReplayScrollSpeedScale");
     expect(routeSource).toContain("stableScrollSpeedScale: parsed.stableScrollSpeedScale");
   });
 

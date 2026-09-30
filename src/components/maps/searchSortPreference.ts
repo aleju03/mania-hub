@@ -1,5 +1,5 @@
 // The Search tab's chosen sort, persisted so a return visit lands on it
-// instead of the default (Most played). Only the five user-selectable sorts
+// instead of the default (Most played). Only the six user-selectable sorts
 // are remembered; "relevance" is query-only and meaningless on a fresh visit.
 //
 // Shared between the maps route (which validates URL params, applies the
@@ -8,7 +8,7 @@
 
 const SEARCH_SORT_STORAGE_KEY = "mania-hub-maps-search-sort-v1";
 
-export const SEARCH_SORT_VALUES = ["playcount", "stars", "bpm", "length", "date", "relevance"];
+export const SEARCH_SORT_VALUES = ["playcount", "stars", "msd", "bpm", "length", "date", "relevance"];
 
 export const DEFAULT_SEARCH_SORT: SearchSortPreference = { sort: "playcount", dir: "desc" };
 

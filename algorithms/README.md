@@ -9,7 +9,7 @@ The code that rates charts and players on [mania-tracker.com](https://mania-trac
 | `chart/` | Parsing `.osu` files, BPM, the Invert mod, star rating, pp, score accuracy formulas |
 | `vibro/` | Whether a chart, or a chart at a given rate, can be played by shaking instead of hitting notes |
 | `classification/` | A chart's dan verdict and pattern tags at a given rate, and whether it can count toward a player's dan |
-| `dan-estimator/` | The in-house dan estimator: chart features, pattern analysis, family scoring, dan labels, dan course detection |
+| `dan-estimator/` | Chart features, pattern analysis, dan labels, LN identity and the in-house LN estimator |
 | `ln/` | The LN model: hold timeline, LN structure, the LN rating axis |
 | `msd/` | How MinaCalc is called and how its skillsets become a chart's MSD |
 | `leoblack/` | The wrapper around LeoBlack's estimators and the Companella refinement |

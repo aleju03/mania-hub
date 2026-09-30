@@ -1,7 +1,7 @@
 import type { OsuMod } from "./types";
 import type { ServerReplay } from "./replay-types";
-import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "./replay-frames";
-import { readLazerReplayMods } from "./replay-lazer-score";
+import { lazerReplayMods } from "./replay-lazer-score";
+import { readOsr } from "./replay-osr";
 
 const MANIA_RULESET_ID = 3;
 
@@ -48,8 +48,8 @@ export interface UploadedReplayParseResult {
 // the real list (with settings) in the trailing score info block. Prefer the
 // list - the bitfield flattens a custom rate into plain DT and drops anything
 // stable had no bit for. Stable replays have no block and keep the bitfield.
-export async function readUploadedReplayMods(buffer: ArrayBuffer, modsUsed: number): Promise<OsuMod[]> {
-  return (await readLazerReplayMods(buffer)) ?? stableModBitmaskToMods(modsUsed);
+export function readUploadedReplayMods(scoreInfoBlock: Uint8Array | null, modsUsed: number): OsuMod[] {
+  return lazerReplayMods(scoreInfoBlock) ?? stableModBitmaskToMods(modsUsed);
 }
 
 export function stableModBitmaskToMods(modsUsed: number): OsuMod[] {
@@ -94,73 +94,21 @@ export function extractReplayScoreIdFromFilename(filename: string | null | undef
 }
 
 export async function parseUploadedReplayBuffer(buffer: ArrayBuffer): Promise<UploadedReplayParseResult> {
-  const { ScoreDecoder } = await import("osu-parsers");
-  const score = await new ScoreDecoder().decodeFromBuffer(buffer);
-  const info = score.info;
-  const rawFrames = (score.replay?.frames ?? []) as any[];
-  const rulesetId = Number(info?.rulesetId ?? 0);
+  const { replay, rawFrameCount, scoreId, scoreInfoBlock } = readOsr(buffer);
 
-  if (rulesetId !== MANIA_RULESET_ID) {
+  if (replay.header.gameMode !== MANIA_RULESET_ID) {
     throw new Error("This is not an osu!mania replay.");
   }
-  if (rawFrames.length === 0) {
+  if (rawFrameCount === 0) {
     throw new Error("This replay has no playable input frames.");
   }
-
-  const frames = decodeStableManiaReplayFrames(rawFrames);
-  const stableScrollSpeedScale = getStableManiaReplayScrollSpeedScale(rawFrames);
-
-  if (frames.length === 0) {
+  if (replay.frames.length === 0) {
     throw new Error("This replay has no readable input frames.");
   }
 
-  const lifeBarFrames = (score.replay?.lifeBar ?? [])
-    .map((frame: any) => ({
-      time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
-      health: Math.max(0, Math.min(1, Number(frame.health ?? 0))),
-    }))
-    .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
-    .sort((a, b) => a.time - b.time);
-
-  const modsUsed = Number(info?.rawMods ?? info?.mods?.bitwise ?? 0) || 0;
-  let keyCount = 0;
-  for (const frame of frames) {
-    let state = frame.keyState;
-    let bit = 0;
-    while (state > 0) {
-      bit++;
-      state >>= 1;
-    }
-    keyCount = Math.max(keyCount, bit);
-  }
-
-  const replay: ServerReplay = {
-    header: {
-      playerName: String(info?.username ?? "Unknown"),
-      gameMode: rulesetId,
-      gameVersion: Number(score.replay?.gameVersion ?? 0) || undefined,
-      beatmapHash: String(info?.beatmapHashMD5 ?? ""),
-      modsUsed,
-      totalScore: Number(info?.totalScore ?? 0),
-      maxCombo: Number(info?.maxCombo ?? 0),
-      count300: Number(info?.count300 ?? 0),
-      count100: Number(info?.count100 ?? 0),
-      count50: Number(info?.count50 ?? 0),
-      countGeki: Number(info?.countGeki ?? 0),
-      countKatu: Number(info?.countKatu ?? 0),
-      countMiss: Number(info?.countMiss ?? 0),
-      isPerfect: Boolean(info?.perfect),
-    },
-    frames,
-    lifeBarFrames,
-    keyCount: Math.max(keyCount, 4),
-    stableScrollSpeedScale: stableScrollSpeedScale ?? undefined,
-  };
-
-  const scoreId = Number(info?.id ?? 0);
   return {
     replay,
-    mods: await readUploadedReplayMods(buffer, modsUsed),
+    mods: readUploadedReplayMods(scoreInfoBlock, replay.header.modsUsed ?? 0),
     scoreId: Number.isSafeInteger(scoreId) && scoreId > 0 ? scoreId : null,
   };
 }

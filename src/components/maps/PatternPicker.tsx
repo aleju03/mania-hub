@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { PATTERN_COLOR, usePatternLabel } from "./SearchCard";
+import { ACCENT_CHIP_TEXT, accentChipRing } from "./FilterChips";
+import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 import { playPatternHit } from "./patternSfx";
 import { LnSharePill } from "./LnSharePill";
 import type { TriStateMode } from "../../lib/maps-random-filter";
@@ -19,7 +21,7 @@ const PATTERN_OPTIONS = ["jack", "stream", "jumpstream", "handstream", "stamina"
 const SUBFAMILIES: Record<string, string[]> = {
   jack: ["speedjack", "handjack", "quadstream"],
   stream: ["dumpstream", "chordstream", "delay", "bracket"],
-  ln: ["lngeneral", "lnrelease", "lninverse", "lntech"],
+  ln: ["lnhybrid", "lntechnical", "lnwalls", "lnspeed", "lngeneral", "lnrelease", "lninverse", "lntech"],
 };
 
 // Each keymode speaks its own pattern vocabulary, mirroring the per-keymode
@@ -27,11 +29,8 @@ const SUBFAMILIES: Record<string, string[]> = {
 // dumpstream and jack subfamilies, 7K charts with chordstream/delay/bracket,
 // everything else with the wide-key stream set. Jack and stream stay in every
 // list: the analyzer detects both for all keymodes. The LN subfamilies are 4K
-// and 7K only, and 4K omits LN Release: the release ramps are measured on 7K
-// charts, so the old classifier doesn't emit that broad tag on 4 columns.
-// The shield facets the backend indexes (lnshield, lnreverseshield) are not
-// offered: a tap right after a release is ordinary LN texture, so the owner
-// pulled the buttons until the tags mean something to players.
+// and 7K only: 4K uses the four course stages, while 7K retains General,
+// Release, Inverse and Tech.
 // The full generic list only shows when the Keys facet is empty or mixed.
 const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
   "4k": ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"],
@@ -43,7 +42,7 @@ const KEYMODE_SUBFAMILIES: Record<string, Record<string, string[]>> = {
   "4k": {
     jack: ["speedjack", "handjack", "quadstream"],
     stream: ["dumpstream"],
-    ln: ["lngeneral", "lninverse", "lntech"],
+    ln: ["lnhybrid", "lntechnical", "lnwalls", "lnspeed"],
   },
   "7k": { ln: ["lngeneral", "lnrelease", "lninverse", "lntech"] },
   other: {},
@@ -64,6 +63,25 @@ export function validPatternIds(keys: string[]): Set<string> {
   return new Set([...options, ...Object.values(subfamilies).flat()]);
 }
 
+// The rice dan tiles each keymode's dan breakdown publishes (the backend's
+// danSkillsetBuckets): 4K has Stamina, 6K/7K have Stream instead. "other"
+// covers 6K; the remaining keymodes have no rice ladder and match nothing.
+const SKILL_OPTIONS = ["speed", "stamina", "tech", "jack", "stream"];
+const KEYMODE_SKILL_OPTIONS: Record<string, string[]> = {
+  "4k": ["speed", "stamina", "tech", "jack"],
+  "7k": ["speed", "tech", "jack", "stream"],
+  other: ["speed", "tech", "jack", "stream"],
+};
+
+function skillVocabulary(keys: string[]): string[] {
+  const context = keys.length === 1 ? keys[0] : null;
+  return (context && KEYMODE_SKILL_OPTIONS[context]) || SKILL_OPTIONS;
+}
+
+export function validSkillIds(keys: string[]): Set<string> {
+  return new Set(skillVocabulary(keys));
+}
+
 function PatternChip({
   pattern,
   mode,
@@ -72,6 +90,8 @@ function PatternChip({
   small = false,
   attachRight = false,
   className = "",
+  color: colorOverride,
+  label,
 }: {
   pattern: string;
   mode: TriStateMode | undefined;
@@ -80,10 +100,12 @@ function PatternChip({
   small?: boolean;
   attachRight?: boolean;
   className?: string;
+  color?: string;
+  label?: string;
 }) {
   const { t } = useLingui();
   const patternName = usePatternLabel();
-  const color = PATTERN_COLOR[pattern] ?? "#cfcfe6";
+  const color = colorOverride ?? PATTERN_COLOR[pattern] ?? "#cfcfe6";
   // Bumped on each select so the burst ring remounts and replays.
   const [burst, setBurst] = useState(0);
 
@@ -120,7 +142,7 @@ function PatternChip({
       className={`relative font-bold cursor-pointer transition-colors duration-150 ${radius} ${
         small
           ? "px-2.5 py-1 text-[11.5px]"
-          : "px-2 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-[12.5px]"
+          : "px-3.5 py-2 text-[13.5px] sm:py-1.5 sm:text-[12.5px]"
       } ${className}`}
       style={
         mode === "include"
@@ -145,7 +167,7 @@ function PatternChip({
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       )}
-      <span className={`relative z-10 ${mode === "exclude" ? "opacity-70" : ""}`}>{patternName(pattern)}</span>
+      <span className={`relative z-10 ${mode === "exclude" ? "opacity-70" : ""}`}>{label ?? patternName(pattern)}</span>
       {mode === "exclude" && (
         <span
           aria-hidden="true"
@@ -179,7 +201,7 @@ function SubfamilyCaret({
       onClick={onClick}
       aria-expanded={open}
       aria-label={t`${patternName(pattern)} subfamilies`}
-      className="grid w-5 shrink-0 place-items-center rounded-md rounded-l-none cursor-pointer transition-colors"
+      className="grid w-8 shrink-0 place-items-center rounded-md rounded-l-none cursor-pointer transition-colors sm:w-5"
       style={
         count > 0
           ? { background: `${color}2e`, color, boxShadow: `inset 0 0 0 1.5px ${color}59` }
@@ -342,6 +364,207 @@ export function PatternPicker({
           className="w-full text-center sm:w-auto sm:text-left"
         />
       ))}
+    </div>
+  );
+}
+
+// The Patterns flyout, grouped by what the pattern is rather than by analyzer
+// family: jacks, streams, then the rest. Each group keeps only the ids the
+// keymode's vocabulary reaches.
+const PATTERN_FLYOUT_GROUPS = [
+  ["jack", "chordjack", "speedjack", "handjack", "quadstream"],
+  ["stream", "jumpstream", "handstream", "chordstream", "dumpstream", "delay", "bracket"],
+  ["stamina", "tech"],
+];
+
+// The Search tab's headline row: the rice dan tiles a chart files under (the
+// same filing a clear on it gets for the per-skill dans), then LN with its
+// subtypes, then every finer analyzer pattern behind one Patterns flyout.
+// Skills and patterns are separate facets that AND together.
+export function SkillPicker({
+  skills,
+  skillsExcluded,
+  onToggleSkill,
+  patterns,
+  patternsExcluded,
+  onTogglePattern,
+  keys = [],
+  lnShare,
+  onLnShareChange,
+}: {
+  skills: string[];
+  skillsExcluded: string[];
+  onToggleSkill: (skill: string, reverse: boolean) => void;
+  patterns: string[];
+  patternsExcluded: string[];
+  onTogglePattern: (pattern: string, reverse: boolean) => void;
+  keys?: string[];
+  lnShare: { min: number; max: number };
+  onLnShareChange: (min: number, max: number) => void;
+}) {
+  const { t, i18n } = useLingui();
+  const patternName = usePatternLabel();
+  const [open, setOpen] = useState<"ln" | "patterns" | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Outside means outside the open chip and its flyout: the row itself spans
+  // the full width, so its empty space must close the flyout too.
+  const lnRef = useRef<HTMLSpanElement>(null);
+  const patternsRef = useRef<HTMLSpanElement>(null);
+  const skillOptions = skillVocabulary(keys);
+  const { options, subfamilies } = pickerVocabulary(keys);
+  const lnSubs = subfamilies.ln ?? [];
+  const reachablePatterns = new Set([...options, ...Object.values(subfamilies).flat()]);
+  const patternGroups = PATTERN_FLYOUT_GROUPS
+    .map((group) => group.filter((pattern) => reachablePatterns.has(pattern)))
+    .filter((group) => group.length > 0);
+  const activeSkills = [...new Set([...skills, ...skillsExcluded])];
+  const orphanSkills = activeSkills.filter((skill) => !skillOptions.includes(skill));
+  const activePatterns = [...new Set([...patterns, ...patternsExcluded])];
+  const lnIds = new Set(["ln", ...lnSubs]);
+  // Picks this keymode cannot express (a shared URL, usually) stay listed in
+  // the flyout so an active filter is never invisible.
+  const orphanPatterns = activePatterns.filter((pattern) => !reachablePatterns.has(pattern));
+  const lnShareActive = lnShare.min > 0 || lnShare.max > 0;
+  const lnCount = lnSubs.filter((sub) => activePatterns.includes(sub)).length + (lnShareActive ? 1 : 0);
+  const patternCount = activePatterns.filter((pattern) => !lnIds.has(pattern) || !reachablePatterns.has(pattern)).length;
+  const hasAnyActive = activeSkills.length + activePatterns.length > 0;
+  const skillMode = (skill: string): TriStateMode | undefined =>
+    skills.includes(skill) ? "include" : skillsExcluded.includes(skill) ? "exclude" : undefined;
+  const patternMode = (pattern: string): TriStateMode | undefined =>
+    patterns.includes(pattern) ? "include" : patternsExcluded.includes(pattern) ? "exclude" : undefined;
+  const skillChip = (skill: string, className: string) => {
+    const meta = DAN_SKILLSET_META[skill];
+    return (
+      <PatternChip
+        key={`skill:${skill}`}
+        pattern={skill}
+        color={meta?.color}
+        label={meta ? i18n._(meta.labelMsg) : skill}
+        mode={skillMode(skill)}
+        hasAnyActive={hasAnyActive}
+        onToggle={onToggleSkill}
+        className={className}
+      />
+    );
+  };
+
+  const vocabularyKey = `${skillOptions.join(",")}|${options.join(",")}`;
+  useEffect(() => {
+    setOpen(null);
+  }, [vocabularyKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const anchor = open === "ln" ? lnRef.current : patternsRef.current;
+      if (anchor && !anchor.contains(event.target as Node)) setOpen(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const flyout = "absolute top-[calc(100%+6px)] z-30 rounded-lg bg-osu-b4 p-2 ring-1 ring-white/10 shadow-xl";
+
+  return (
+    <div ref={rootRef} className="relative flex flex-wrap gap-2">
+      {skillOptions.map((skill) => skillChip(skill, ""))}
+      {orphanSkills.map((skill) => skillChip(skill, ""))}
+
+      <span ref={lnRef} className="inline-flex items-stretch gap-px sm:relative">
+        <PatternChip
+          pattern="ln"
+          mode={patternMode("ln")}
+          hasAnyActive={hasAnyActive}
+          onToggle={onTogglePattern}
+          attachRight
+          className=""
+        />
+        <SubfamilyCaret pattern="ln" open={open === "ln"} count={lnCount} onClick={() => setOpen(open === "ln" ? null : "ln")} />
+        {open === "ln" && (
+          <div
+            role="group"
+            aria-label={t`${patternName("ln")} subfamilies`}
+            className={`${flyout} left-0 flex max-h-72 w-max max-w-[min(340px,80vw)] flex-wrap gap-1.5 overflow-y-auto`}
+          >
+            {lnSubs.map((sub) => (
+              <PatternChip key={sub} pattern={sub} mode={patternMode(sub)} hasAnyActive={hasAnyActive} onToggle={onTogglePattern} small />
+            ))}
+            <div className="basis-full pt-1">
+              <LnSharePill
+                min={lnShare.min}
+                max={lnShare.max}
+                ariaLabel={t`LN share`}
+                onChange={onLnShareChange}
+                heading={<span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{t`LN share`}</span>}
+              />
+            </div>
+          </div>
+        )}
+      </span>
+
+      <span ref={patternsRef} className="inline-flex sm:relative">
+        <button
+          type="button"
+          onClick={() => setOpen(open === "patterns" ? null : "patterns")}
+          aria-expanded={open === "patterns"}
+          aria-haspopup="dialog"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2 text-[13.5px] font-bold cursor-pointer transition-colors sm:py-1.5 sm:text-[12.5px]"
+          style={{
+            color: ACCENT_CHIP_TEXT,
+            background: open === "patterns" ? "color-mix(in srgb, var(--color-osu-pink) 12%, transparent)" : "transparent",
+            boxShadow: accentChipRing(open === "patterns" ? 90 : patternCount > 0 ? 65 : 35),
+          }}
+        >
+          <Trans>Patterns</Trans>
+          {patternCount > 0 ? (
+            <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">{patternCount}</span>
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`h-3 w-3 transition-transform duration-150 ${open === "patterns" ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          )}
+        </button>
+        {open === "patterns" && (
+          <div
+            role="group"
+            aria-label={t`Patterns`}
+            className={`${flyout} left-0 right-0 flex max-h-[min(420px,70vh)] flex-col gap-2 overflow-y-auto sm:left-auto sm:w-[min(400px,92vw)]`}
+          >
+            {patternGroups.map((group, index) => (
+              <div key={group[0]} className={`flex flex-wrap items-center gap-1.5 ${index > 0 ? "border-t border-white/[0.07] pt-2" : ""}`}>
+                {group.map((pattern) => (
+                  <PatternChip key={pattern} pattern={pattern} mode={patternMode(pattern)} hasAnyActive={hasAnyActive} onToggle={onTogglePattern} small />
+                ))}
+              </div>
+            ))}
+            {orphanPatterns.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.07] pt-2">
+                {orphanPatterns.map((pattern) => (
+                  <PatternChip key={pattern} pattern={pattern} mode={patternMode(pattern)} hasAnyActive={hasAnyActive} onToggle={onTogglePattern} small />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </span>
     </div>
   );
 }

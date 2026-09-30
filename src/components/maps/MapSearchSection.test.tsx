@@ -39,6 +39,9 @@ const DEFAULT_STATE: MapSearchUiState = {
   statusesExclude: [],
   patterns: [],
   patternsExclude: [],
+  skills: [],
+  skillsExclude: [],
+  msd: {},
   starMin: 0,
   starMax: 0,
   bpmMin: 0,
@@ -187,7 +190,7 @@ describe("MapSearchSection cold-load fetch", () => {
     expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ danMin: null, danMax: null });
   });
 
-  it("right-clicking a neutral pattern excludes it", () => {
+  it("right-clicking a neutral skill excludes it", () => {
     const onChange = vi.fn();
     const view = render(
       withI18n(<MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />),
@@ -195,8 +198,8 @@ describe("MapSearchSection cold-load fetch", () => {
 
     fireEvent.contextMenu(within(view.container).getByRole("button", { name: "Jack" }));
 
-    expect(onChange).toHaveBeenLastCalledWith({ patterns: [], patternsExclude: ["jack"], page: 0 });
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ patterns: [], patternsExclude: ["jack"] });
+    expect(onChange).toHaveBeenLastCalledWith({ skills: [], skillsExclude: ["jack"], page: 0 });
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ skills: [], skillsExclude: ["jack"] });
   });
 
   it("right-clicking neutral key and status chips excludes them", () => {
@@ -212,6 +215,8 @@ describe("MapSearchSection cold-load fetch", () => {
       keysExclude: ["4k"],
       patterns: [],
       patternsExclude: [],
+      skills: [],
+      skillsExclude: [],
       page: 0,
     });
 

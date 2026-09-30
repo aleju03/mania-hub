@@ -121,6 +121,7 @@ import { MapsRandomDrawController } from "../lib/maps-random-draw-state";
 import type { RandomDrawEvent } from "../lib/maps-random-draw-state";
 import { useWindowActive } from "../lib/window-activity";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
+import { parseMsdRanges, serializeMsdRanges } from "../lib/map-search-msd";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,8 @@ type MapsSearch = {
   sDanMin: number | null;
   sDanMax: number | null;
   sPatterns: string;
+  sSkills: string;
+  sMsd: string;
   sCountryOnly: boolean;
   sSort: string;
   sDir: string;
@@ -281,6 +284,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sDanMin: null,
   sDanMax: null,
   sPatterns: "",
+  sSkills: "",
+  sMsd: "",
   sCountryOnly: false,
   sSort: DEFAULT_SEARCH_SORT.sort,
   sDir: DEFAULT_SEARCH_SORT.dir,
@@ -299,7 +304,10 @@ const SEARCH_PATTERN_VALUES = [
   // subfamilies (matched against detected-pattern tags, not dominance)
   "speedjack", "handjack", "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
+  "lnhybrid", "lntechnical", "lnwalls", "lnspeed",
 ];
+// The rice dan tiles the Skill row filters on (backend MAP_SEARCH_SKILLS).
+const SEARCH_SKILL_VALUES = ["speed", "stamina", "tech", "jack", "stream"];
 // SEARCH_SORT_VALUES lives in components/maps/searchSortPreference.ts.
 
 // Search range fields use 0 as "unset"; clamp anything else into [min, max].
@@ -709,6 +717,8 @@ export const Route = createFileRoute("/maps")({
     sDanMin: clampDanLevel(search.sDanMin),
     sDanMax: clampDanLevel(search.sDanMax),
     sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
+    sSkills: sanitizeSearchTriStateCsv(search.sSkills, SEARCH_SKILL_VALUES),
+    sMsd: serializeMsdRanges(parseMsdRanges(search.sMsd)),
     sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
     sDir: search.sDir === "asc" ? "asc" : DEFAULT_MAPS_SEARCH.sDir,
@@ -1095,6 +1105,7 @@ function MapsPage() {
     const keys = parseTriStateCsv(mapsSearch.sKeys, SEARCH_KEY_VALUES);
     const statuses = parseTriStateCsv(mapsSearch.sStatuses, SEARCH_STATUS_VALUES);
     const patterns = parseTriStateCsv(mapsSearch.sPatterns, SEARCH_PATTERN_VALUES);
+    const skills = parseTriStateCsv(mapsSearch.sSkills, SEARCH_SKILL_VALUES);
     return {
       q: mapsSearch.sQ,
       keys: [...keys.includes],
@@ -1103,6 +1114,9 @@ function MapsPage() {
       statusesExclude: [...statuses.excludes],
       patterns: [...patterns.includes],
       patternsExclude: [...patterns.excludes],
+      skills: [...skills.includes],
+      skillsExclude: [...skills.excludes],
+      msd: parseMsdRanges(mapsSearch.sMsd),
       starMin: mapsSearch.sStarMin,
       starMax: mapsSearch.sStarMax,
       bpmMin: mapsSearch.sBpmMin,
@@ -1133,6 +1147,11 @@ function MapsPage() {
       const current = parseTriStateCsv(mapsSearchRef.current.sPatterns, SEARCH_PATTERN_VALUES);
       next.sPatterns = serializeTriStateCsv(patch.patterns ?? current.includes, patch.patternsExclude ?? current.excludes);
     }
+    if (patch.skills !== undefined || patch.skillsExclude !== undefined) {
+      const current = parseTriStateCsv(mapsSearchRef.current.sSkills, SEARCH_SKILL_VALUES);
+      next.sSkills = serializeTriStateCsv(patch.skills ?? current.includes, patch.skillsExclude ?? current.excludes);
+    }
+    if (patch.msd !== undefined) next.sMsd = serializeMsdRanges(patch.msd);
     if (patch.starMin !== undefined) next.sStarMin = patch.starMin;
     if (patch.starMax !== undefined) next.sStarMax = patch.starMax;
     if (patch.bpmMin !== undefined) next.sBpmMin = patch.bpmMin;

@@ -25,7 +25,12 @@ it("keeps the shield facets out of every keymode's LN dropdown", () => {
   render(<I18nProvider i18n={getI18n("en")}><PatternPicker keys={["4k"]} selected={[]} onToggle={vi.fn()} /></I18nProvider>);
   fireEvent.click(screen.getByRole("button", { name: "LN subfamilies" }));
   expect(screen.queryByRole("button", { name: "Shields" })).toBeNull();
-  expect(screen.getByRole("button", { name: "LN Inverse" })).toBeTruthy();
+  for (const label of ["LN All-round", "LN Technical", "LN Walls", "LN Speed"]) {
+    expect(screen.getByRole("button", { name: label })).toBeTruthy();
+  }
+  expect(validPatternIds(["4k"]).has("lninverse")).toBe(false);
+  expect(validPatternIds(["7k"]).has("lninverse")).toBe(true);
+  expect(validPatternIds(["7k"]).has("lnwalls")).toBe(false);
 });
 
 it("puts the LN share slider in the LN dropdown and counts it on the caret", () => {

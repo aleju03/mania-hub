@@ -8,8 +8,9 @@ import { getServerLiveBackendUrl } from "./live-backend";
 
 export type TodoCategory = "bug" | "feature" | "idea" | "chore" | "task";
 export type TodoPriority = "low" | "normal" | "high";
-// "hold" is a parked task: still on the list, off the board, never scored.
-export type TodoStatus = "open" | "hold" | "done";
+// "doing" is a started task, still on the board; "hold" is a parked task: still on the list, off
+// the board, never scored.
+export type TodoStatus = "open" | "doing" | "hold" | "done";
 // Owner-defined buckets laid over the fixed categories, each painted in one of a fixed palette.
 export type TodoGroupColor = "pink" | "blue" | "green" | "yellow" | "purple" | "red" | "orange";
 
@@ -85,11 +86,12 @@ export const listAdminTodos = createServerFn({ method: "GET" }).handler(async ()
 });
 
 export const createAdminTodo = createServerFn({ method: "POST" })
-  .validator((data: { title?: unknown; notes?: unknown; category?: unknown; priority?: unknown }) => ({
+  .validator((data: { title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; groupId?: unknown }) => ({
     title: typeof data?.title === "string" ? data.title : "",
     notes: typeof data?.notes === "string" ? data.notes : null,
     category: typeof data?.category === "string" ? data.category : "task",
     priority: typeof data?.priority === "string" ? data.priority : "normal",
+    groupId: typeof data?.groupId === "string" ? data.groupId : null,
   }))
   .handler(async ({ data }): Promise<{ todo: AdminTodo }> => {
     await requireAdminAccess("Admin todo create");

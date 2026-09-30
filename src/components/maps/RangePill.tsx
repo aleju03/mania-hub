@@ -13,7 +13,7 @@ import {
 // its ends drag to set min/max and its body drags to shift the whole range.
 // Values of 0 mean "unset" like RangeSlider, so the parent stores 0/0 for
 // "any". Commits on release. The look (gradient, label format, icon, typed
-// range hints) comes from the skin; StarRangePill and LnSharePill are the two.
+// range hints) comes from the skin: stars, LN share, MSD, BPM and length.
 export interface RangePillSkin {
   /** Rail position of a value, 0..1; linear when omitted. */
   posFrac?: (value: number) => number;
@@ -41,6 +41,8 @@ export interface RangePillSkin {
   decorations: RegExp;
   placeholder: string;
   typeHint: string;
+  /** Reads one typed number, e.g. "2:30" as seconds; plain decimals when omitted. */
+  parseNumber?: (text: string) => number | null;
 }
 
 interface Props {
@@ -54,6 +56,8 @@ interface Props {
   skin: RangePillSkin;
   /** With a heading the pill takes two rows: heading + value on top, the rail full width below. */
   heading?: ReactNode;
+  /** Type size of the value beside the heading; the MSD picker shows it large. */
+  valueClassName?: string;
 }
 
 type DragMode = "min" | "max" | "body";
@@ -68,6 +72,7 @@ export function RangePill({
   ariaLabel,
   skin,
   heading,
+  valueClassName = "text-[11px]",
 }: Props) {
   const { t } = useLingui();
   const active = min > 0 || max > 0;
@@ -277,7 +282,7 @@ export function RangePill({
       .replace(/≥/g, ">")
       .toLowerCase();
     if (text === "" || text === "any") return { min: lo, max: hi };
-    const num = (s: string) => (/^\d*\.?\d+$/.test(s) ? Number(s) : null);
+    const num = (s: string) => (skin.parseNumber ? skin.parseNumber(s) : /^\d*\.?\d+$/.test(s) ? Number(s) : null);
     let nextMin = lo;
     let nextMax = hi;
     if (text.endsWith("+")) {
@@ -336,7 +341,7 @@ export function RangePill({
   const fmt = skin.format;
   const label =
     atFloor && atCeiling
-      ? "Any"
+      ? t`Any`
       : atCeiling
         ? `${fmt(localMin)}+`
         : atFloor
@@ -432,7 +437,7 @@ export function RangePill({
       }}
       placeholder={skin.placeholder}
       aria-label={t`${ariaLabel} range`}
-      className="shrink-0 w-24 bg-transparent text-[11px] font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30"
+      className={`shrink-0 w-24 bg-transparent ${valueClassName} font-semibold tabular-nums text-osu-l2 border-b border-osu-b3 outline-none focus:border-osu-pink placeholder:text-osu-f1/30`}
     />
   ) : (
     <span
@@ -453,7 +458,7 @@ export function RangePill({
           setEditing(true);
         }}
         title={skin.typeHint}
-        className={`text-left text-[11px] font-semibold tabular-nums cursor-text transition-[filter,color] ${active ? "hover:brightness-125" : "text-osu-f1/55 hover:text-osu-f1"}`}
+        className={`text-left ${valueClassName} font-semibold tabular-nums cursor-text transition-[filter,color] ${active ? "hover:brightness-125" : "text-osu-f1/55 hover:text-osu-f1"}`}
         style={active ? { color: skin.labelColor(midValue) } : undefined}
       >
         {label}
@@ -463,7 +468,7 @@ export function RangePill({
           type="button"
           onClick={() => onChange(0, 0)}
           title={t`Clear`}
-          className="text-[11px] font-semibold text-osu-f1/50 hover:text-osu-pink-light cursor-pointer"
+          className={`${valueClassName} font-semibold text-osu-f1/50 hover:text-osu-pink-light cursor-pointer`}
         >
           ✕
         </button>

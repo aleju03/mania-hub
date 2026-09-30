@@ -12,7 +12,7 @@ const fetchHistory = vi.hoisted(() => vi.fn());
 const authFlags = vi.hoisted(() => ({ canUseAdminFeatures: true, canUseDevFeatures: false }));
 vi.mock("../../lib/live-backend", () => ({ fetchLivePlayerSkillHistoryDirect: fetchHistory }));
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => authFlags }));
-vi.mock("../../store", () => ({ useNoDans: () => false }));
+vi.mock("../../store", () => ({ useNoDans: () => false, useExperimentalLn: () => true }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, search, ...props }: ComponentProps<"a"> & { to: string; search?: Record<string, number> }) => (
     <a {...props} href={to + (search ? `?${new URLSearchParams(Object.entries(search).map(([key, value]) => [key, String(value)]))}` : "")} />

@@ -30,6 +30,10 @@ export const PATTERN_LABEL: Record<string, string> = {
   lnrelease: "LN Release",
   lninverse: "LN Inverse",
   lntech: "LN Tech",
+  lnhybrid: "LN All-round",
+  lntechnical: "LN Technical",
+  lnwalls: "LN Walls",
+  lnspeed: "LN Speed",
 };
 
 // Same table as PATTERN_LABEL, in descriptor form: `PATTERN_LABEL` stays the
@@ -55,6 +59,10 @@ export const PATTERN_LABEL_MSG: Record<string, MessageDescriptor> = {
   lnrelease: msg`LN Release`,
   lninverse: msg`LN Inverse`,
   lntech: msg`LN Tech`,
+  lnhybrid: msg`LN All-round`,
+  lntechnical: msg`LN Technical`,
+  lnwalls: msg`LN Walls`,
+  lnspeed: msg`LN Speed`,
 };
 
 export const PATTERN_COLOR: Record<string, string> = {
@@ -78,6 +86,10 @@ export const PATTERN_COLOR: Record<string, string> = {
   lnrelease: "#f07474",
   lninverse: "#f07474",
   lntech: "#f07474",
+  lnhybrid: "#f07474",
+  lntechnical: "#83cf6b",
+  lnwalls: "#c59a5c",
+  lnspeed: "#5ab2f2",
 };
 
 export function patternLabel(pattern: string): string {

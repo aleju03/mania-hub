@@ -1,14 +1,14 @@
-// Shared types for the 4K rice dan estimator and the pattern analyzer: the
-// input a chart is rated with, the feature metrics read off its notes, the
-// estimate that comes back, and the pattern tags.
+// Shared types for the chart features, the pattern analyzer and dan
+// estimates: the input a chart is rated with, the feature metrics read off its
+// notes, the estimate that comes back, and the pattern tags.
 
 import type { ManiaNote } from "../chart/beatmap";
 
 export type DanSkillFamily = "jack" | "stream" | "jumpstream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
 export type DanPrimaryFamily = Exclude<DanSkillFamily, "ln" | "dan">;
 
-// Every pattern family the estimator can score and choose between. Consumers
-// iterate this list instead of naming families themselves.
+// Every rice pattern family. Consumers iterate this list instead of naming
+// families themselves.
 export const DAN_PRIMARY_FAMILIES: DanPrimaryFamily[] = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech"];
 
 export interface DanEstimateInput {
@@ -32,7 +32,7 @@ export interface DanEstimate {
   metrics: DanFeatureMetrics;
   skillScores: Record<DanSkillFamily, number>;
   warnings: string[];
-  debug?: DanEstimateDebug;
+  debug?: unknown;
 }
 
 export interface DanFeatureMetrics {
@@ -96,35 +96,6 @@ export interface DanFeatureMetrics {
   chordSizeChangeRate: number;
   directionChangeRate: number;
   staminaPressure: number;
-}
-
-export interface DanEstimateDebug {
-  scoring: DanScoringDebug;
-  familyChoice: DanFamilyChoiceDebug;
-}
-
-export interface DanScoringDebug {
-  densitySr: number;
-  staminaSr: number;
-  structuralSr: number;
-  base: number;
-  lnNerf: number;
-  gates: Record<string, number>;
-  terms: Record<string, number>;
-  contributions: Record<DanSkillFamily, DanScoreContribution[]>;
-}
-
-export interface DanScoreContribution {
-  id: string;
-  value: number;
-  description: string;
-}
-
-export interface DanFamilyChoiceDebug {
-  topFamily: DanSkillFamily;
-  topScore: number;
-  selectedFamily: DanSkillFamily;
-  reason: string;
 }
 
 export interface DanFeatureExtractionResult {

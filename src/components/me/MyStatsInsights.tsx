@@ -13,6 +13,7 @@ import type {
 } from "../../lib/my-data";
 import { PATTERN_COLOR, usePatternLabel } from "../../lib/pattern-labels";
 import { skillModeEntries } from "../../lib/skill-axes";
+import { useExperimentalLn } from "../../store";
 
 export const KEY_LABEL: Record<number, string> = { 1: "1K", 2: "2K", 3: "3K", 4: "4K", 5: "5K", 6: "6K", 7: "7K", 8: "8K", 9: "9K", 10: "10K" };
 export function InsightCard({ title, children, right, accent = "#e173a6" }: { title: string; children: React.ReactNode; right?: React.ReactNode; accent?: string }) {
@@ -57,13 +58,14 @@ export function StatColumn({ label, value, sub }: { label: string; value: string
 export function PlayDietCard({ insights, mode }: { insights: MyDataInsights; mode: MyDataSkillMode | null }) {
   const { t, i18n } = useLingui();
   const patternLabel = usePatternLabel();
+  const showLn = useExperimentalLn();
   const diet = mode ? insights.diet.find((entry) => entry.keyCount === mode.keyCount) ?? null : null;
   if (!mode || !diet || diet.analyzed < 5 || diet.tags.length === 0) return null;
 
   const ratings = new Map((mode.patterns ?? []).map((pattern) => [pattern.id, pattern.rating]));
   const rows = diet.tags.slice(0, 6);
   const top = rows[0];
-  const axes = skillModeEntries(mode);
+  const axes = skillModeEntries(mode, { ln4k: showLn });
   const weakest = axes.length >= 3 ? axes[axes.length - 1] : null;
 
   return (

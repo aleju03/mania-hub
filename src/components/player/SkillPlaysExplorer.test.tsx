@@ -94,6 +94,13 @@ afterEach(() => {
   fetchDanEvidence.mockReset();
 });
 
+// The narrowing controls sit behind the Filters button; open it if it is shut.
+async function findFilterButton(name: string) {
+  const toggle = screen.getByRole("button", { name: /^Filters/ });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  return screen.findByRole("button", { name });
+}
+
 describe("SkillPlaysExplorer bounded cohorts", () => {
   it.each([
     [41001, "rate_vibro", "Vibro detected. This play does not count toward skill or dan ratings."],
@@ -147,7 +154,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(screen.getByText("Accuracy below skill rating range, so this play has no MSD rating on any skillset.")).toBeTruthy();
     fireEvent.click(screen.getByText("Recent 103"));
     expect(within(screen.getByTestId("map-rating-state")).getByText("Accuracy below skill rating range")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "not counted" }));
+    fireEvent.click(await findFilterButton("not counted"));
     await waitFor(() => expect(screen.queryByText("Recent 103")).toBeNull());
     expect(screen.getByText("Recent 101")).toBeTruthy();
   });
@@ -173,7 +180,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     // Waiting, not turned away: the analyzing tail, and the toggle that hides
     // refusals leaves the row alone.
     expect(screen.queryByText("not rated")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "not counted" }));
+    fireEvent.click(await findFilterButton("not counted"));
     expect(screen.getByText("Recent 103")).toBeTruthy();
     fireEvent.click(screen.getByText("in queue"));
     expect(screen.getByText("Waiting for the next rating pass. The play is rated then, and this list updates on its own.")).toBeTruthy();
@@ -231,7 +238,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     // Newest first, and the row is not hidden by the "not counted" toggle.
     const titles = screen.getAllByText(/^Recent 10[24]$/).map((node) => node.textContent);
     expect(titles).toEqual(["Recent 104", "Recent 102"]);
-    fireEvent.click(screen.getByRole("button", { name: "not counted" }));
+    fireEvent.click(await findFilterButton("not counted"));
     expect(screen.getByText("Recent 104")).toBeTruthy();
     fireEvent.click(screen.getByText("in queue"));
     expect(screen.getByText("The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands.")).toBeTruthy();
@@ -308,7 +315,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(within(row!).getByTitle("MR")).toBeTruthy();
     expect(within(row!).getByTitle("DA")).toBeTruthy();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Click to require MR" }));
+    fireEvent.click(await findFilterButton("Click to require MR"));
     await waitFor(() => expect(screen.queryByText("Best 2")).toBeNull());
   });
 
@@ -335,7 +342,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     expect(screen.getByText("Showing 60 of 60")).toBeTruthy();
     expect(fetchSkillPlays).toHaveBeenCalledTimes(warmedRequestCount);
 
-    fireEvent.click(screen.getByRole("button", { name: "ranked" }));
+    fireEvent.click(await findFilterButton("ranked"));
     await waitFor(() => expect(screen.getByText("Showing 30 of 30, 30 hidden by filters")).toBeTruthy());
     expect(fetchSkillPlays).toHaveBeenCalledTimes(warmedRequestCount);
 

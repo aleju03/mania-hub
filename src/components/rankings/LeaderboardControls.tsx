@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { SegmentedControl } from "../ui/SegmentedControl";
-import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillAxisMeta } from "../../lib/skill-axes";
+import { DAN_SKILLSET_META, ETTERNA_OVERALL_AXIS, OVERALL_AXIS_META, skillAxisMeta } from "../../lib/skill-axes";
 import { formatNumber } from "../../lib/format";
 import { DEFAULT_DAN_SKILLSET, LEADERBOARD_KEY_COUNTS, type LeaderboardAxisInfo, type LeaderboardKeyCount } from "../../lib/skill-leaderboards";
 
@@ -69,7 +69,7 @@ export function AxisPicker({
         );
         // The aggregate is not one of the specialties, so a hairline marks where
         // the list of skills actually starts.
-        if (info.axis !== OVERALL_AXIS_META.key) return chip;
+        if (info.axis !== OVERALL_AXIS_META.key && info.axis !== ETTERNA_OVERALL_AXIS) return chip;
         return (
           <span key="overall" className="flex flex-shrink-0 items-center gap-1.5">
             {chip}

@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   feed: vi.fn(),
   top: vi.fn(),
   explorer: vi.fn(),
+  remove: vi.fn(),
+  stopTracking: vi.fn(),
 }));
 
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => ({ viewer: mocks.viewer }) }));
@@ -29,14 +31,19 @@ vi.mock("../../lib/my-data", () => ({
   fetchMyDataSkills: mocks.skills,
   fetchMyDataFeed: mocks.feed,
   fetchMyDataTopPlays: mocks.top,
+  removeMyTrackedScores: mocks.remove,
   MY_DATA_PAGE_SIZE: 50,
 }));
+vi.mock("../../lib/roster-self-track", () => ({ removeSelfFromRoster: mocks.stopTracking }));
 vi.mock("../../lib/live-backend", () => ({ openLiveEventSource: () => null }));
 vi.mock("../layout/PageHeader", () => ({ PageHeader: () => null }));
 vi.mock("../ui/Avatar", () => ({ Avatar: () => null }));
 vi.mock("../ui/CountryFlag", () => ({ CountryFlag: () => null }));
 vi.mock("./RosterOptInCard", () => ({ RosterOptInCard: () => <div>Opt in</div> }));
-vi.mock("./MeScoreRow", () => ({ MeScoreRow: () => null }));
+vi.mock("./MeScoreRow", () => ({
+  MeScoreRow: ({ score, onToggleSelected }: { score: { scoreIdentity?: string }; onToggleSelected?: () => void }) =>
+    onToggleSelected ? <button type="button" onClick={onToggleSelected}>{`select ${score.scoreIdentity}`}</button> : null,
+}));
 vi.mock("./MyStatsInsights", () => ({
   compact: (value: number) => String(value),
   formatDay: (value: string) => value,
@@ -169,4 +176,81 @@ it("keeps the signed-out and untracked entry states unchanged", async () => {
   await screen.findByText("Opt in");
   expect(screen.queryByRole("button", { name: "MSD plays" })).toBeNull();
   expect(mocks.explorer).not.toHaveBeenCalled();
+});
+
+const trackedPlay = (identity: string) => ({
+  id: 1, user_id: 123, accuracy: 0.9, beatmap_id: 1, mods: [], score: 0, max_combo: 0, passed: true, rank: "A",
+  statistics: {}, pp: null, ended_at: "2026-09-20T00:00:00Z", scoreIdentity: identity,
+  beatmap: { id: Number(identity.split(":")[1]) }, beatmapset: { id: 1, title: "Map" },
+});
+
+const hold = async (name: string) => {
+  const button = screen.getByRole("button", { name });
+  fireEvent.pointerDown(button);
+  await new Promise((resolve) => setTimeout(resolve, 1300));
+  fireEvent.pointerUp(button);
+};
+
+it("removes picked plays only after a completed hold", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, rankedMember: false, totalScores: 2 },
+    trackedPage: { items: [trackedPlay("official:1"), trackedPlay("official:2")], total: 2, limit: 50, offset: 0 },
+  });
+  mocks.remove.mockResolvedValue({ ok: true, removed: 1 });
+  render(panel());
+  fireEvent.click(await screen.findByRole("button", { name: "select official:2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  const button = screen.getByRole("button", { name: "Hold to remove" });
+  fireEvent.pointerDown(button);
+  fireEvent.pointerUp(button);
+  await new Promise((resolve) => setTimeout(resolve, 1300));
+  expect(mocks.remove).not.toHaveBeenCalled();
+  await hold("Hold to remove");
+  await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith({ data: { scoreIdentities: ["official:2"] } }));
+  await waitFor(() => expect(mocks.dashboard).toHaveBeenCalledTimes(2));
+});
+
+it("stops tracking and removes the recorded plays when the player picks that before holding", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, rankedMember: false, totalScores: 2 },
+    trackedPage: { items: [trackedPlay("official:1"), trackedPlay("official:2")], total: 2, limit: 50, offset: 0 },
+  });
+  mocks.stopTracking.mockResolvedValue({ ok: true, status: "removed", country: "CR" });
+  mocks.remove.mockResolvedValue({ ok: true, removed: 2 });
+  render(panel());
+  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Remove my 2 plays" }));
+  await hold("Hold to stop tracking");
+  await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith({ data: { all: true } }));
+  expect(mocks.stopTracking).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the recorded plays by default when a player stops tracking", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, rankedMember: false, totalScores: 2 },
+    trackedPage: { items: [trackedPlay("official:1")], total: 1, limit: 50, offset: 0 },
+  });
+  mocks.stopTracking.mockResolvedValue({ ok: true, status: "removed", country: "CR" });
+  render(panel());
+  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking" }));
+  await hold("Hold to stop tracking");
+  await waitFor(() => expect(mocks.dashboard).toHaveBeenCalledTimes(2));
+  expect(mocks.stopTracking).toHaveBeenCalledTimes(1);
+  expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it("offers no removal to a player tracked through the top 100", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, rankedMember: true, totalScores: 1 },
+    trackedPage: { items: [trackedPlay("official:1")], total: 1, limit: 50, offset: 0 },
+  });
+  render(panel());
+  await screen.findByRole("button", { name: "MSD plays" });
+  expect(screen.queryByRole("button", { name: "select official:1" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Remove all" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Stop tracking" })).toBeNull();
 });

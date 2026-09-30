@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { qualifyingSkillModes, lnPlayShare, skillModeEntries, topSharePercent } from "./skill-axes";
+import { qualifyingSkillModes, lnPlayShare, skillModeEntries, skillAxisMeta, DAN_SKILLSET_META, topSharePercent, etternaOverallFromRatings, modeOverall } from "./skill-axes";
 
 describe.each(Array.from({ length: 15 }, (_, i) => i + 4))("%iK LN presentation", keyCount => {
   it("preserves the LN axis and limits independent-model evidence to 4K", () => {
@@ -48,6 +48,17 @@ it("keeps a newly certified keymode reachable alongside a well-established main"
 describe("skillModeEntries", () => {
   const ratings = { Overall: 9, Stream: 8, Jumpstream: 9, Handstream: 7, Stamina: 7.5, JackSpeed: 6, Chordjack: 5, Technical: 3 };
 
+  it("keeps cached Dan families out of numerical rating axes", () => {
+    const ids = ["lnhybrid", "lntechnical", "lnwalls", "lnspeed"];
+    const patterns = ids.map(id => ({ id, rating: 20, plays: 5 }));
+    for (const id of ids) {
+      expect(skillModeEntries({ keyCount: 4, analyzedPlays: 20, ratings, patterns }).some(entry => entry.key === id)).toBe(false);
+      expect(skillAxisMeta(`pattern:${id}`)).toBeNull();
+      expect(DAN_SKILLSET_META[id]).toBeDefined();
+      expect(skillModeEntries({ keyCount: 7, analyzedPlays: 20, ratings, patterns }).some(entry => entry.key === id)).toBe(false);
+    }
+  });
+
   it("keeps a 6K/7K card on the MSD skillsets until three patterns are rated", () => {
     const thin = { keyCount: 7, analyzedPlays: 13, ratings, patterns: [{ id: "tech", rating: 4, plays: 4 }, { id: "chordstream", rating: 7, plays: 3 }] };
     expect(skillModeEntries(thin).map(entry => entry.key)).toEqual(["Jumpstream", "Stream", "Stamina", "Handstream", "JackSpeed", "Chordjack"]);
@@ -60,5 +71,36 @@ describe("skillModeEntries", () => {
       expect(skillModeEntries({ keyCount, analyzedPlays: 50, ratings, patterns: [] }).some(entry => entry.key === "Technical")).toBe(true);
     }
     expect(skillModeEntries({ keyCount: 9, analyzedPlays: 50, ratings, patterns: [] }).some(entry => entry.key === "Technical")).toBe(false);
+  });
+});
+
+describe("Etterna Overall", () => {
+  const rice = { Overall: 40, Stream: 36, Jumpstream: 37, Handstream: 35, Stamina: 38, JackSpeed: 28, Chordjack: 39, Technical: 34 };
+
+  it("matches the backend's best-6-plus-LN average on a history snapshot", () => {
+    expect(etternaOverallFromRatings(4, rice)).toBe(36.5);
+    expect(etternaOverallFromRatings(4, { ...rice, "pattern:ln": 30 })).toBe(36.5);
+    expect(etternaOverallFromRatings(4, { ...rice, "pattern:ln": 40 })).toBe(37.5);
+    expect(etternaOverallFromRatings(9, rice)).toBe(37);
+    expect(etternaOverallFromRatings(7, rice)).toBe(0);
+  });
+
+  it("falls back to Classic where the payload has no Etterna Overall", () => {
+    const mode = { keyCount: 4, analyzedPlays: 100, patterns: [], ratings: { ...rice, EtternaOverall: 36.5 }, percentiles: { EtternaOverall: { value: 90, population: 10 }, Overall: { value: 95, population: 10 } } };
+    expect(modeOverall(mode, "etterna")).toMatchObject({ value: 36.5, etterna: true, percentile: { value: 90 } });
+    expect(modeOverall(mode, "classic")).toMatchObject({ value: 40, etterna: false, percentile: { value: 95 } });
+    expect(modeOverall({ ...mode, ratings: rice }, "etterna")).toMatchObject({ value: 40, etterna: false });
+  });
+
+  it("leaves LN out of the 4K Etterna Overall and the axes with the 4K LN model off", () => {
+    const mode = {
+      keyCount: 4, analyzedPlays: 100, patterns: [{ id: "ln", rating: 40, plays: 30 }],
+      ratings: { ...rice, EtternaOverall: 37.5 }, percentiles: { EtternaOverall: { value: 90, population: 10 } },
+    };
+    expect(modeOverall(mode, "etterna")).toMatchObject({ value: 37.5, percentile: { value: 90 } });
+    // LN was counted, so the percentile no longer describes the number.
+    expect(modeOverall(mode, "etterna", { ln4k: false })).toEqual({ value: 36.5, percentile: undefined, etterna: true });
+    expect(skillModeEntries(mode, { ln4k: false }).some((entry) => entry.key === "ln")).toBe(false);
+    expect(skillModeEntries({ ...mode, keyCount: 7 }, { ln4k: false }).some((entry) => entry.key === "ln")).toBe(true);
   });
 });
