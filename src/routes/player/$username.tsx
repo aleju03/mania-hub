@@ -3536,6 +3536,10 @@ function OwnAboutCard({ raw, onEdit }: { raw: string; onEdit: () => void }) {
 function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void }) {
   const { t } = useLingui();
   const contentRef = useRef<HTMLDivElement | null>(null);
+  // React 19 rewrites innerHTML whenever this object's identity changes, so a
+  // fresh one on every parent render (scrolling re-renders the page) would
+  // wipe the toggled boxes.
+  const innerHtml = useMemo(() => ({ __html: html }), [html]);
 
   // Wire up osu's spoilerbox toggles + shorten raw URL link text. osu's own
   // JS isn't here, so we do the toggle behavior ourselves via event delegation
@@ -3613,7 +3617,7 @@ function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void })
       <div
         ref={contentRef}
         className="bbcode-content bbcode-content--capped px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto"
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={innerHtml}
       />
     </div>
   );
