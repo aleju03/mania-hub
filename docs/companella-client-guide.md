@@ -1,7 +1,7 @@
 # Companella client guide
 
-What a native client has to implement to send completed osu!stable mania plays
-to Mania Tracker. Nothing here needs write access to either repository: the contract
+What a native client has to implement to send completed osu!stable and
+osu!lazer mania plays to Mania Tracker. Nothing here needs write access to either repository: the contract
 is the public HTTP API in `companella-api.openapi.yaml`, and
 `scripts/companella-test-client.mjs` in the Mania Tracker repo is a working
 reference implementation of every step below.
@@ -155,8 +155,8 @@ failure uses the **same idempotency key and the same bytes**, but always a
 
 ## 3. Submitting a play
 
-Capture only completed native osu!stable mania plays with a complete usable
-replay. Exclude replay playback, spectating, previously displayed results, and
+Capture only completed native osu!stable or osu!lazer mania plays with a
+complete usable replay. Exclude replay playback, spectating, previously displayed results, and
 autoplay. The server still validates everything, because a client claim is not
 evidence, but filtering client-side saves both sides a round trip.
 
@@ -174,6 +174,10 @@ Content-Type: application/json
  "replay":{"sha256":"<64 hex>","byte_length":123456},
  "chart":{"md5":"<32 hex>","sha256":"<64 hex>","byte_length":54321}}
 ```
+
+`game_client` is `stable` or `lazer`, the game that wrote the replay. The
+replay's own version field has to agree: a lazer replay sent as `stable`, or
+the reverse, is rejected with `game_client_mismatch` when it is processed.
 
 Both chart digests are required. MD5 connects the replay header to osu!'s chart
 identity; SHA-256 identifies the exact stored bytes. Hash the **raw bytes on
@@ -287,6 +291,14 @@ review rather than counted. Send the `.osr` exactly as osu! saved it, without re
 merging or re-timing frames. Only 4K to 10K is judged and rated; wider keymodes are stored
 unrated. Mod combinations stable cannot produce (listed as
 `mod_pairs_rejected` in `/capabilities`) are refused.
+
+An osu!lazer play is judged by lazer's rules, with a hold's head and tail
+judged apart, and its mods are read from the score details lazer writes at the
+end of the replay, so the file has to carry them. A Double Time, Nightcore,
+Half Time or Daycore play is rated at the speed it was set to. The lazer mod
+lists are under `analysis.lazer` in `/capabilities`; Hold Off, No Release,
+Invert, Difficulty Adjust, Wind Up, Wind Down and Adaptive Speed plays are
+stored unrated.
 
 A play that passes the checks shows on the tracker
 and on the player's profile, marked as sent through Companella.

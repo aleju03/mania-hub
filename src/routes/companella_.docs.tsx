@@ -27,7 +27,7 @@ export const Route = createFileRoute("/companella_/docs")({
 });
 
 const API = "/api/integrations/companella/v1";
-const UPDATED = "September 23, 2026";
+const UPDATED = "October 1, 2026";
 
 type Method = "GET" | "POST" | "PUT";
 
@@ -59,7 +59,7 @@ const ERRORS: Array<[string, string]> = [
   ["429", "Wait for Retry-After. Keep the queue and don't retry in parallel."],
   ["503, or state deferred", "Retry later. Don't show a zero result in the meantime."],
   ["digest_mismatch, not_mania, broken file", "Don't retry the same file."],
-  ["Rejected with contradictory_mods, replay_header_too_long or beatmap_checksum_mismatch", "Don't retry the same replay."],
+  ["Rejected with contradictory_mods, game_client_mismatch, replay_header_too_long or beatmap_checksum_mismatch", "Don't retry the same replay."],
   ["404 on a submission", "Treat it as deleted. Don't try other ids."],
   ["Quarantined", "Show the server's message. Don't move the play to another account."],
 ];
@@ -76,7 +76,7 @@ function CompanellaDocsPage() {
           <header>
             <h1 className="text-2xl font-black text-white sm:text-4xl">Sending plays to Mania Tracker</h1>
             <p className="mt-4 text-[15px] leading-7 text-osu-f1">
-              Once a player connects Companella to their account, Companella sends each finished osu!stable mania play
+              Once a player connects Companella to their account, Companella sends each finished osu!stable or osu!lazer mania play
               to Mania Tracker with its replay and <Code>.osu</Code> file, and Mania Tracker checks and rates it.
             </p>
             <div className="mt-5 flex flex-wrap gap-2 text-sm">
@@ -245,7 +245,7 @@ Content-Type: application/json
 
           <Section n={3} title="Sending a play">
             <P>
-              Send only completed osu!stable mania plays that have a full replay. Skip replays being watched,
+              Send only completed osu!stable or osu!lazer mania plays that have a full replay. Skip replays being watched,
               spectating, old result screens and autoplay. The server rejects those anyway, so filtering them in the
               client saves requests.
             </P>
@@ -263,6 +263,10 @@ Content-Type: application/json
   "replay": { "sha256": "<64 hex>", "byte_length": 123456 },
   "chart":  { "md5": "<32 hex>", "sha256": "<64 hex>", "byte_length": 54321 }
 }`}</CodeBlock>
+            <P>
+              Set <Code>game_client</Code> to <Code>stable</Code> or <Code>lazer</Code>, the game that wrote the
+              replay. The server reads the game from the replay too and rejects a submission that names the other one.
+            </P>
             <P>
               Hash the files byte for byte as they are on disk, without changing line endings or removing a BOM. Don't
               send accuracy, mods, rate, beatmap id, username or any other play details. The server reads those from

@@ -61,6 +61,8 @@ export interface CompanellaScore {
   reviewState: ReviewState;
   provenance: string;
   clientKind: "native" | "test";
+  /** The game that wrote the replay. */
+  gameClient: "stable" | "lazer";
   mods: string[];
   runtimeRate: number;
   scoreV2: boolean;

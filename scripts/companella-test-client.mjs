@@ -333,7 +333,9 @@ async function submit(options) {
   const manifest = {
     protocol_version: 1,
     client_version: "reference-cli-1",
-    game_client: "stable",
+    // The game that wrote the replay, from its version field: osu!lazer
+    // writes 30000000 and up, stable its build date.
+    game_client: replay.length >= 5 && replay.readInt32LE(1) >= 30_000_000 ? "lazer" : "stable",
     capture_kind: "manual_import",
     replay: { sha256: sha256Hex(replay), byte_length: replay.length },
     chart: { md5: md5Hex(chart), sha256: sha256Hex(chart), byte_length: chart.length },

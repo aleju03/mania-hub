@@ -1,7 +1,7 @@
 # Companella integration
 
 The Companella score-import beta: a native osu! companion app sends completed
-osu!stable mania plays to Mania Tracker over an authenticated HTTPS API. The owner
+osu!stable and osu!lazer mania plays to Mania Tracker over an authenticated HTTPS API. The owner
 of the account sees them on `/companella`; plays that pass every check also
 show on the tracker and on the player's profile Recent tab (see "Privacy").
 
@@ -180,6 +180,10 @@ only digests and lengths. Identity-setting fields (`user_id`, `username`,
 `accuracy`, `msd`, `beatmap_id`, `mods`, …) are **rejected**, not ignored: a
 field we would have to distrust is better refused than silently accepted.
 
+`game_client` is `stable` or `lazer`. It only names what the client is about
+to send: processing reads the game from the replay's version field, and a
+manifest that names the other one is rejected (`game_client_mismatch`).
+
 The response says which assets the server still needs. `needs_beatmap: false`
 is answered only when the exact bytes are verified to exist and are reusable by
 this account, with the stored chart's sha256, md5 and length all equal to the
@@ -275,6 +279,13 @@ transition and so left the row `queued`.
   declared size *before* decoding, because the decode allocates per frame.
 - Large integers (online score id, timestamp ticks) stay `bigint` / decimal
   strings. A JS number would round a stable score id.
+- The replay's version field says which game wrote it: 30000000 and up is
+  osu!lazer. A lazer replay carries its score details after the frames, as
+  LZMA-compressed JSON, and the mods are read from there, since the header's
+  bitmask has no bit for most lazer mods and no room for a custom speed. The
+  block is capped at 64 KiB compressed and 256 KiB decoded, 32 mods, 16
+  settings per mod; a lazer replay without a readable one is
+  `replay_malformed`. The file's game has to be the one the manifest named.
 
 Then three separate verdicts, none of which is "verified":
 
@@ -287,7 +298,8 @@ Then three separate verdicts, none of which is "verified":
 Completion is the judgement total against the chart's object count: stable
 awards one judgement per mania object, holds included. Under ScoreV2 a hold is
 judged at its head and again at its tail, so the expected total is notes plus
-holds there. A count *above* the expected total is `unknown`, not a pass.
+holds there, and osu!lazer always judges that way. A count *above* the expected
+total is `unknown`, not a pass.
 
 Identity compares the replay's player name to the account's, through a
 conservative normalization (case folding plus osu!'s space/underscore
@@ -311,6 +323,21 @@ An unrecognised bit is never read as NoMod. Playback rate and hit windows come
 from the header mods, and `replay-rate.ts` checks that rate against the frames
 (see "The key presses").
 
+osu!lazer mods, in lazer's own acronyms (`classifyLazerMods`):
+
+| Class | Mods | Outcome |
+|---|---|---|
+| Rejected | AT, CN | submission refused (`automated_play_mods`) |
+| Contradictory | two of DT, NC, HT, DC; EZ with HR; NF with SD or PF; SD with PF; HD with FI; one mod twice; two key mods | submission refused (`contradictory_mods`) |
+| Stored unrated | RD, DS, a key mod other than the chart's own, HO, NR, IN, DA, WU, WD, AS, any other acronym, a speed outside the rate mod's slider | accepted, explicit reason |
+| Supported | NF, EZ, HD, HR, SD, PF, DT, NC, HT, DC, FL, FI, CO (Cover), MR, CL, CS, AC, MU | analyzed |
+
+A lazer rate mod is rated at the speed it was set to (`speed_change`, 1.01 to
+2.0 for DT and NC, 0.5 to 0.99 for HT and DC, rounded to 0.01), else its
+default. A lazer play is stored with `game_client = 'lazer'` and is shown on
+lazer's accuracy and grade; the public feed gives its row no legacy total,
+which is how the site tells a lazer row from a stable one.
+
 Only 4K to 10K is judged and rated (`isImportRatedKeyCount`). 11K and wider are
 stored unrated as `keymode_unsupported`, without judging, a timing row or a
 header review.
@@ -330,6 +357,10 @@ failed hold) and LN action Wife3. `goalsFromMeasuredWife` applies the same caps
 and 0.8 floor as `calibrateScoreForMsd`. A play whose presses cannot be judged
 is not rated; it never falls back to the header.
 
+A lazer replay is judged by lazer's rules: its own windows (stable's under
+Classic), scaled by the rate so they stay the same in real time, and a hold's
+head and tail judged apart. Wife3 reads the same real milliseconds either way.
+
 The judge reproduces stable's judgements very closely but not exactly, so a
 disagreement never rejects a play. It goes to review (`quarantined`, plus a
 `judgements_disagree_with_inputs` security event) when the header's accuracy
@@ -342,7 +373,11 @@ The threshold came from the audit cache: 7,156 stable replays up to 10K never
 differed from their headers by more than 0.62 points (p99.9 0.40), and the
 backend path flagged none of 6,137 of them (2026-09-22, script in
 `local-notes/companella-timing-check/`). 18K replays all read as misses in the
-judge, which is one reason only 4K to 10K is judged at all.
+judge, which is one reason only 4K to 10K is judged at all. On 39 osu!lazer
+replays (4K and 7K, clients 2025.710 to 2026.804, speeds 1.0x to 1.5x) the
+largest gap was 0.034 points, and the measured press goal sat a median 0.002
+above the count estimate for the same play (2026-10-01, scripts in
+`local-notes/companella-lazer/`).
 
 Presses that hit nothing are not checked. An early press inside a note's miss
 window misses it, in the game and in the judge alike, so a replay that mashes
@@ -368,10 +403,8 @@ window means. Measured over claimed rate:
 | `frame_locked` | the 5th percentile gap is 0.85 of the clock or more: a game at or below 60 fps, whose clock reads its frame rate | - | flagged | - |
 | `consistent` | 0.90 to 1.10 | - | - | - |
 | `claimed_rate_too_low`, `inconclusive_high` | above 1.10 | - | flagged | - |
-| `not_stable` | an osu!lazer header (game version 30000000 and up) | flagged | flagged | flagged |
 
-A claim slower than the real rate gains nothing, so HT is only flagged when the
-file is not a stable replay at all. When too few released gaps exist (dense or
+A claim slower than the real rate gains nothing, so HT is never flagged. When too few released gaps exist (dense or
 hold-heavy charts), gaps with one unchanged key state are tried instead; key
 repeat makes those read fast, so they may confirm a claim and never count
 against one.
@@ -395,6 +428,14 @@ unreadable, 4 steadily at 0.85, which looks like a slowed game clock), 44 of
 `local-notes/companella-anticheat-check/rate/`). It is a tripwire, not proof:
 respacing the idle frames defeats it.
 
+osu!lazer records on the same clock, each gap rounded to a whole millisecond,
+so the same check reads a lazer replay against the speed its rate mod was set
+to. The 39 lazer replays above (30 at 1.0x, 9 between 1.05x and 1.5x) all read
+`consistent`, at 1.02 to 1.04 of the claim. A lazer speed moves in steps of
+0.01, and a claim within 10% of the real rate reads as consistent. Rows
+checked before 2026-10-01 carry `not_stable` for a lazer header, which the
+check did not read then.
+
 ## Timing for official plays
 
 The one place an import reaches an official rating. A Bancho play's skill
@@ -406,8 +447,8 @@ still decides that the play exists and counts.
 - **What is stored.** After an import is accepted, `process.ts` writes a
   `companella_official_timing` row when the chart is the exact file of an
   official map (`resolveExactBeatmap`), the review state is clear, the mods are
-  supported, completion is `consistent_with_completed_play` and the client is
-  native. It holds the header's six counts, mods, total, play time, online
+  supported, completion is `consistent_with_completed_play`, the client is
+  native and the replay is a stable one. It holds the header's six counts, mods, total, play time, online
   score id and the two measured targets, then queues the owner's debounced
   skill recompute (`enqueuePlayerSkillsAfterSession`).
 - **Which targets.** `countPressTarget` / `countLnTarget` from
@@ -632,7 +673,8 @@ snapshots merge these rows on read, new ones go out live as their own
 listing rules again, so a play or owner hidden since is not sent. A play osu!
 also delivered is listed once, as the osu! row: matched by online score id
 when the replay has one, else by player, official map and total score within
-5 minutes (a stable replay saved locally carries no id). The tracker applies
+5 minutes (a stable replay saved locally carries no id; a lazer one carries
+lazer's own id in its score details). The tracker applies
 the same match to rows arriving live in either order. Nothing is written to `score_events`, a `live_event_log` score ref,
 `users`, rosters or any official projection. Only a restricted player's play in
 their current top-200 list has `replay: true` and a Watch button; every other

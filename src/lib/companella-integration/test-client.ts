@@ -256,6 +256,12 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** The game that wrote an .osr, from its version field: osu!lazer writes 30000000 and up, stable its build date. */
+function replayGameClient(replay: Uint8Array): "stable" | "lazer" {
+  if (replay.length < 5) return "stable";
+  return new DataView(replay.buffer, replay.byteOffset, replay.byteLength).getInt32(1, true) >= 30_000_000 ? "lazer" : "stable";
+}
+
 export interface SubmitProgress {
   step: string;
   detail?: string;
@@ -284,7 +290,7 @@ export async function submitPlay(
   const manifest = {
     protocol_version: 1,
     client_version: "browser-test-1",
-    game_client: "stable",
+    game_client: replayGameClient(files.replay),
     capture_kind: "beta_test",
     replay: { sha256: await sha256Hex(files.replay), byte_length: files.replay.length },
     chart: {
