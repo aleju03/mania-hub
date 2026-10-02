@@ -16,6 +16,7 @@ import {
   fetchCompanellaAuthorizationRequest,
   type AuthorizationDetail,
 } from "../lib/companella-integration/manage-server";
+import { knownApp } from "../lib/companella-integration/shared";
 
 /*
  * The consent screen.
@@ -185,9 +186,11 @@ function AuthorizePage() {
     }
   }, [consent, name, requestId]);
 
-  // The app names itself on the authorize link (app_name, stored with the
-  // request once it exists); without one it is just an external application.
-  const declaredName = (detail ? detail.app_name : search.app_name) || "";
+  // A known client id shows its own name and icon. Any other app names itself
+  // on the authorize link (app_name, stored with the request once it exists);
+  // without one it is just an external application.
+  const known = knownApp(detail ? detail.client_id : search.client_id);
+  const declaredName = known?.name ?? ((detail ? detail.app_name : search.app_name) || "");
   const appName = declaredName || t`An external application`;
   const appNameInline = declaredName || t`an external application`;
   // Where the browser goes after approval, shown so the loopback address the
@@ -241,9 +244,13 @@ function AuthorizePage() {
 
   const identityRow = (
     <div className="mb-6 flex items-center justify-center gap-3">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-osu-b4 text-2xl font-bold text-white">
-        {declaredName ? declaredName.charAt(0).toUpperCase() : <AppWindow size={26} />}
-      </div>
+      {known ? (
+        <img src={known.icon} alt={known.name} width={56} height={56} className="h-14 w-14 rounded-2xl" />
+      ) : (
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-osu-b4 text-2xl font-bold text-white">
+          {declaredName ? declaredName.charAt(0).toUpperCase() : <AppWindow size={26} />}
+        </div>
+      )}
       <div className="flex items-center gap-1 text-osu-f1/60">
         <span className="h-px w-5 bg-current" />
         <Link2 size={16} />

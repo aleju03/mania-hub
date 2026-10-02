@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
+import { Route as BridgeRouteImport } from './routes/bridge'
 import { Route as CommunitiesRouteImport } from './routes/communities'
 import { Route as CompanellaRouteImport } from './routes/companella'
 import { Route as DanEstimatesRouteImport } from './routes/dan-estimates'
@@ -71,6 +72,7 @@ import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSignaturePreviewRouteImport } from './routes/api/signature-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiTeamImageRouteImport } from './routes/api/team-image'
+import { Route as BridgeLatestDotjsonRouteImport } from './routes/bridge_.latest[.]json'
 import { Route as CollectionsIdRouteImport } from './routes/collections_.$id'
 import { Route as CommunitiesIdRouteImport } from './routes/communities_.$id'
 import { Route as CommunitiesReviewRouteImport } from './routes/communities_.review'
@@ -129,6 +131,11 @@ const SplatRoute = SplatRouteImport.update({
 const BbcodeRoute = BbcodeRouteImport.update({
   id: '/bbcode',
   path: '/bbcode',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BridgeRoute = BridgeRouteImport.update({
+  id: '/bridge',
+  path: '/bridge',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CommunitiesRoute = CommunitiesRouteImport.update({
@@ -427,6 +434,11 @@ const ApiTeamImageRoute = ApiTeamImageRouteImport.update({
   path: '/api/team-image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BridgeLatestDotjsonRoute = BridgeLatestDotjsonRouteImport.update({
+  id: '/bridge_/latest.json',
+  path: '/bridge/latest.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CollectionsIdRoute = CollectionsIdRouteImport.update({
   id: '/collections_/$id',
   path: '/collections/$id',
@@ -666,6 +678,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
+  '/bridge': typeof BridgeRoute
   '/communities': typeof CommunitiesRoute
   '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
@@ -725,6 +738,7 @@ export interface FileRoutesByFullPath {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
+  '/bridge/latest.json': typeof BridgeLatestDotjsonRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -774,6 +788,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
+  '/bridge': typeof BridgeRoute
   '/communities': typeof CommunitiesRoute
   '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
@@ -833,6 +848,7 @@ export interface FileRoutesByTo {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
+  '/bridge/latest.json': typeof BridgeLatestDotjsonRoute
   '/collections/$id': typeof CollectionsIdRoute
   '/communities/$id': typeof CommunitiesIdRoute
   '/communities/review': typeof CommunitiesReviewRoute
@@ -883,6 +899,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/bbcode': typeof BbcodeRoute
+  '/bridge': typeof BridgeRoute
   '/communities': typeof CommunitiesRoute
   '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
@@ -942,6 +959,7 @@ export interface FileRoutesById {
   '/api/signature-preview': typeof ApiSignaturePreviewRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/team-image': typeof ApiTeamImageRoute
+  '/bridge_/latest.json': typeof BridgeLatestDotjsonRoute
   '/collections_/$id': typeof CollectionsIdRoute
   '/communities_/$id': typeof CommunitiesIdRoute
   '/communities_/review': typeof CommunitiesReviewRoute
@@ -993,6 +1011,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/bbcode'
+    | '/bridge'
     | '/communities'
     | '/companella'
     | '/dan-estimates'
@@ -1052,6 +1071,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/sync'
     | '/api/team-image'
+    | '/bridge/latest.json'
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
@@ -1101,6 +1121,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/bbcode'
+    | '/bridge'
     | '/communities'
     | '/companella'
     | '/dan-estimates'
@@ -1160,6 +1181,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/sync'
     | '/api/team-image'
+    | '/bridge/latest.json'
     | '/collections/$id'
     | '/communities/$id'
     | '/communities/review'
@@ -1209,6 +1231,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/bbcode'
+    | '/bridge'
     | '/communities'
     | '/companella'
     | '/dan-estimates'
@@ -1268,6 +1291,7 @@ export interface FileRouteTypes {
     | '/api/signature-preview'
     | '/api/sync'
     | '/api/team-image'
+    | '/bridge_/latest.json'
     | '/collections_/$id'
     | '/communities_/$id'
     | '/communities_/review'
@@ -1318,6 +1342,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   BbcodeRoute: typeof BbcodeRoute
+  BridgeRoute: typeof BridgeRoute
   CommunitiesRoute: typeof CommunitiesRoute
   CompanellaRoute: typeof CompanellaRoute
   DanEstimatesRoute: typeof DanEstimatesRoute
@@ -1377,6 +1402,7 @@ export interface RootRouteChildren {
   ApiSignaturePreviewRoute: typeof ApiSignaturePreviewRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiTeamImageRoute: typeof ApiTeamImageRoute
+  BridgeLatestDotjsonRoute: typeof BridgeLatestDotjsonRoute
   CollectionsIdRoute: typeof CollectionsIdRoute
   CommunitiesIdRoute: typeof CommunitiesIdRoute
   CommunitiesReviewRoute: typeof CommunitiesReviewRoute
@@ -1431,6 +1457,13 @@ declare module '@tanstack/react-router' {
       path: '/bbcode'
       fullPath: '/bbcode'
       preLoaderRoute: typeof BbcodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bridge': {
+      id: '/bridge'
+      path: '/bridge'
+      fullPath: '/bridge'
+      preLoaderRoute: typeof BridgeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/communities': {
@@ -1844,6 +1877,13 @@ declare module '@tanstack/react-router' {
       path: '/api/team-image'
       fullPath: '/api/team-image'
       preLoaderRoute: typeof ApiTeamImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bridge_/latest.json': {
+      id: '/bridge_/latest.json'
+      path: '/bridge/latest.json'
+      fullPath: '/bridge/latest.json'
+      preLoaderRoute: typeof BridgeLatestDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/collections_/$id': {
@@ -2265,6 +2305,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   BbcodeRoute: BbcodeRoute,
+  BridgeRoute: BridgeRoute,
   CommunitiesRoute: CommunitiesRoute,
   CompanellaRoute: CompanellaRoute,
   DanEstimatesRoute: DanEstimatesRoute,
@@ -2324,6 +2365,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSignaturePreviewRoute: ApiSignaturePreviewRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiTeamImageRoute: ApiTeamImageRoute,
+  BridgeLatestDotjsonRoute: BridgeLatestDotjsonRoute,
   CollectionsIdRoute: CollectionsIdRoute,
   CommunitiesIdRoute: CommunitiesIdRoute,
   CommunitiesReviewRoute: CommunitiesReviewRoute,

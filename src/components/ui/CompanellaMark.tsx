@@ -1,14 +1,17 @@
 import { useLingui } from "@lingui/react/macro";
 
-// Marks a score row that came from a Companella import instead of osu!. The
-// icon is full colour on a solid disc, so it is an <img>, not a mask like the
-// mod glyphs. The 48px copy keeps a row from pulling the 256px original.
-export function CompanellaMark({ className = "h-[18px] w-[18px]" }: { className?: string }) {
+import { KNOWN_APPS, knownApp } from "../../lib/companella-integration/shared";
+
+// Marks a score row that came from an app import (Companella, Mania Bridge) instead of osu!, with the icon of the
+// app that sent it; a row without one predates the field and was Companella. The icon is full colour on a solid
+// disc, so it is an <img>, not a mask like the mod glyphs. The small mark copies keep a row from pulling the originals.
+export function CompanellaMark({ app, className = "h-[18px] w-[18px]" }: { app?: string; className?: string }) {
   const { t } = useLingui();
-  const label = t`Sent through Companella`;
+  const known = knownApp(app) ?? KNOWN_APPS.companella;
+  const label = t`Sent through ${known.name}`;
   return (
     <img
-      src="/images/companella-mark.png"
+      src={known.mark}
       alt={label}
       title={label}
       width={48}

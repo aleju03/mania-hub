@@ -221,7 +221,7 @@ function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
     keyCount: getBeatmapKeyCount(score.beatmap) ?? 0,
     keymodeLabel: getBeatmapKeymodeLabel(score.beatmap) ?? "",
     beatmapsetId: score.beatmapset.id,
-    ...(score.companella ? { companella: true } : {}),
+    ...(score.companella ? { companella: { app: score.companella.app } } : {}),
     user: {
       id: score.user.id,
       username: score.user.username,
@@ -944,7 +944,7 @@ function HomePage() {
                           <span className="text-osu-f1">on</span> {s.title}
                         </Trans>
                       </div>
-                      {s.companella && <CompanellaMark className="h-4 w-4" />}
+                      {s.companella && <CompanellaMark app={s.companella.app} className="h-4 w-4" />}
                     </div>
                     <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
                         [{s.version}] {s.keymodeLabel || (s.keyCount > 0 ? `${s.keyCount}K` : "")} &middot; {formatTimeAgo(s.timestamp, locale)}

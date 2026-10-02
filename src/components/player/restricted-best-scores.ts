@@ -68,7 +68,7 @@ export function buildRestrictedBestList(plays: RestrictedPpPlay[], owner: Tracke
         creator: play.creator ?? undefined,
         covers: cover ? { cover, "cover@2x": cover } : {},
       },
-      companella: { importId: play.scoreId, replay: true },
+      companella: { importId: play.scoreId, replay: true, ...(play.app ? { app: play.app } : {}) },
       // Absent fields stay absent, which no full OsuScore shape can express.
     } as unknown as OsuScore;
   });

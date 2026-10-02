@@ -140,6 +140,12 @@ msgstr "{0, plural, other {# 张谱面}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, other {# 位收藏者}}"
 
+#. placeholder {0}: bridge.length
+#. placeholder {0}: companella.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0, plural, one {# connected} other {# connected}}"
+msgstr "{0, plural, other {已连接 # 个}}"
+
 #. placeholder {0}: profileInsights.keyPpConverts
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
@@ -427,10 +433,11 @@ msgstr "{0} 个收藏册"
 msgid "{0} columns selected"
 msgstr "已选 {0} 列"
 
-#. placeholder {0}: active.length
+#. placeholder {0}: bridge.length
+#. placeholder {0}: companella.length
 #: src/components/settings/CompanellaGroup.tsx
-msgid "{0} connected"
-msgstr "已连接 {0} 个"
+#~ msgid "{0} connected"
+#~ msgstr "已连接 {0} 个"
 
 #. placeholder {0}: formatNumber(history.records.mostCopies.copies, locale)
 #: src/routes/packs_.collections_.history.$collector.tsx
@@ -4828,6 +4835,10 @@ msgstr "连接应用"
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
 msgstr ""
 
+#: src/routes/bridge.tsx
+msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
+msgstr "在应用内将它连接到你的账号。你可以在<0>设置</0>的“偏好”中撤销连接。"
+
 #: src/components/communities/field-options.tsx
 msgid "Connect your Discord account first."
 msgstr "请先关联你的 Discord 账号。"
@@ -4848,6 +4859,10 @@ msgstr "已连接 Discord"
 #: src/routes/tracker.tsx
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "已连接，但几分钟内没有新成绩。等信息流跟上后，最近的游玩会显示出来。"
+
+#: src/routes/bridge.tsx
+msgid "Connecting"
+msgstr "连接"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
@@ -6066,6 +6081,7 @@ msgstr "把轨道翻倍，分成两个舞台。"
 
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
+#: src/routes/bridge.tsx
 msgid "Download"
 msgstr "下载"
 
@@ -9586,6 +9602,18 @@ msgstr "马来语"
 msgid "manager"
 msgstr "管理员"
 
+#: src/routes/bridge.tsx
+msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
+msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
+
+#: src/routes/bridge.tsx
+msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+msgstr "Mania Bridge 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Mania Bridge 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 Share what I'm playing 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania 谱面"
@@ -11205,6 +11233,10 @@ msgstr "此账号暂不可用。"
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not available for this account."
 msgstr "此账号不可用。"
+
+#: src/routes/bridge.tsx
+msgid "Not available yet"
+msgstr "暂未开放"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not available yet."
@@ -14225,8 +14257,12 @@ msgstr "撤销此账号的所有连接？"
 #~ msgstr ""
 
 #: src/components/settings/CompanellaGroup.tsx
-msgid "Revoke this connection? Companella on that computer stops sending plays right away."
-msgstr "撤销此连接？该电脑上的 Companella 会立即停止上传成绩。"
+msgid "Revoke this connection? {appName} on that computer stops sending plays right away."
+msgstr "撤销此连接？该电脑上的 {appName} 会立即停止上传成绩。"
+
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Revoke this connection? Companella on that computer stops sending plays right away."
+#~ msgstr "撤销此连接？该电脑上的 Companella 会立即停止上传成绩。"
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
@@ -14913,13 +14949,22 @@ msgstr "正在发送..."
 msgid "Sending…"
 msgstr "正在发送…"
 
+#: src/routes/bridge.tsx
+msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
+msgstr "将你的 osu!mania 成绩发送到 Mania Tracker，并在你的个人资料上显示你正在玩什么。"
+
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "将一并发送："
 
+#. placeholder {0}: known.name
 #: src/components/ui/CompanellaMark.tsx
-msgid "Sent through Companella"
-msgstr "通过 Companella 提交"
+msgid "Sent through {0}"
+msgstr "通过 {0} 提交"
+
+#: src/components/ui/CompanellaMark.tsx
+#~ msgid "Sent through Companella"
+#~ msgstr "通过 Companella 提交"
 
 #. placeholder {0}: recipient?.username ?? ""
 #: src/components/packs/GiftSpareDialog.tsx
@@ -15084,6 +15129,7 @@ msgstr "设置"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
+#: src/routes/bridge.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "设置"
@@ -15950,6 +15996,10 @@ msgstr "按星级从高到低排序 - 左键切换升序，右键清除"
 #: src/routes/tracker.tsx
 msgid "Sorting lowest star rating first - left click to clear, right click for descending"
 msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
+
+#: src/routes/bridge.tsx
+msgid "Source code"
+msgstr "源代码"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"
@@ -19484,6 +19534,10 @@ msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或
 msgid "What is it for"
 msgstr "这个服务器是做什么的"
 
+#: src/routes/bridge.tsx
+msgid "What it does"
+msgstr "功能"
+
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
 msgstr "服务器简介"
@@ -19507,6 +19561,10 @@ msgstr "哪里看起来不对？"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
+
+#: src/routes/bridge.tsx
+msgid "What you need"
+msgstr "需要什么"
 
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
@@ -19614,6 +19672,10 @@ msgstr "导出图片的宽度，单位像素"
 #: src/lib/packs.ts
 msgid "Wild"
 msgstr "狂野"
+
+#: src/routes/bridge.tsx
+msgid "Windows and Linux"
+msgstr "Windows 和 Linux"
 
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"

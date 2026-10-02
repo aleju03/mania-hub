@@ -1681,6 +1681,8 @@ export interface RestrictedPpPlay {
   counts: { countGeki: number; count300: number; countKatu: number; count100: number; count50: number; countMiss: number };
   playedAt: string | null;
   receivedAt: string;
+  /** The client id of the app that sent it, for the row's icon. */
+  app?: string | null;
 }
 
 export interface RestrictedPpPlayer {

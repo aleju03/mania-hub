@@ -193,6 +193,8 @@ export interface OsuMod {
 export interface CompanellaScoreMark {
   importId: string;
   replay: boolean;
+  /** The client id of the app that sent it ("companella", "mania-bridge"); absent reads as Companella. */
+  app?: string;
 }
 
 export interface OsuScore {
@@ -287,7 +289,7 @@ export interface LeanHomeScore {
   keyCount: number;
   keymodeLabel?: string;
   beatmapsetId?: number;
-  companella?: boolean;
+  companella?: Pick<CompanellaScoreMark, "app">;
   user: {
     id: number;
     username: string;

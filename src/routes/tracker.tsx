@@ -2076,7 +2076,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   {keymodeLabel}
                 </span>
               )}
-              {score.companella && <CompanellaMark />}
+              {score.companella && <CompanellaMark app={score.companella.app} />}
               <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
             </div>
           )}

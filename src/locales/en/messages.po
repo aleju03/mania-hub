@@ -131,6 +131,12 @@ msgstr "{0, plural, one {# chart} other {# charts}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, one {# collector} other {# collectors}}"
 
+#. placeholder {0}: bridge.length
+#. placeholder {0}: companella.length
+#: src/components/settings/CompanellaGroup.tsx
+msgid "{0, plural, one {# connected} other {# connected}}"
+msgstr "{0, plural, one {# connected} other {# connected}}"
+
 #. placeholder {0}: profileInsights.keyPpConverts
 #: src/routes/player/$username.tsx
 msgid "{0, plural, one {# convert is left out, as osu! leaves converts out of its own keymode totals.} other {# converts are left out, as osu! leaves converts out of its own keymode totals.}}"
@@ -418,10 +424,11 @@ msgstr "{0} collections"
 msgid "{0} columns selected"
 msgstr "{0} columns selected"
 
-#. placeholder {0}: active.length
+#. placeholder {0}: bridge.length
+#. placeholder {0}: companella.length
 #: src/components/settings/CompanellaGroup.tsx
-msgid "{0} connected"
-msgstr "{0} connected"
+#~ msgid "{0} connected"
+#~ msgstr "{0} connected"
 
 #. placeholder {0}: formatNumber(history.records.mostCopies.copies, locale)
 #: src/routes/packs_.collections_.history.$collector.tsx
@@ -4846,6 +4853,10 @@ msgstr "Connect an app"
 msgid "Connect Companella to Mania Tracker and review the plays it imported."
 msgstr "Connect Companella to Mania Tracker and review the plays it imported."
 
+#: src/routes/bridge.tsx
+msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
+msgstr "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
+
 #: src/components/communities/field-options.tsx
 msgid "Connect your Discord account first."
 msgstr "Connect your Discord account first."
@@ -4866,6 +4877,10 @@ msgstr "connected to Discord"
 #: src/routes/tracker.tsx
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
+
+#: src/routes/bridge.tsx
+msgid "Connecting"
+msgstr "Connecting"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connection"
@@ -6084,6 +6099,7 @@ msgstr "Doubles the columns into two stages."
 
 #: src/components/replay/ReplayExportPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
+#: src/routes/bridge.tsx
 msgid "Download"
 msgstr "Download"
 
@@ -9616,6 +9632,18 @@ msgstr "Malay"
 msgid "manager"
 msgstr "manager"
 
+#: src/routes/bridge.tsx
+msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
+msgstr "Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build."
+
+#: src/routes/bridge.tsx
+msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+msgstr "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+
+#: src/routes/bridge.tsx
+#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
+
 #: src/routes/maps.tsx
 msgid "Mania maps"
 msgstr "Mania maps"
@@ -11235,6 +11263,10 @@ msgstr "Not available for this account yet."
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not available for this account."
 msgstr "Not available for this account."
+
+#: src/routes/bridge.tsx
+msgid "Not available yet"
+msgstr "Not available yet"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not available yet."
@@ -14255,8 +14287,12 @@ msgstr "Revoke every connection on this account?"
 #~ msgstr "Revoke every installation on this account?"
 
 #: src/components/settings/CompanellaGroup.tsx
-msgid "Revoke this connection? Companella on that computer stops sending plays right away."
-msgstr "Revoke this connection? Companella on that computer stops sending plays right away."
+msgid "Revoke this connection? {appName} on that computer stops sending plays right away."
+msgstr "Revoke this connection? {appName} on that computer stops sending plays right away."
+
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Revoke this connection? Companella on that computer stops sending plays right away."
+#~ msgstr "Revoke this connection? Companella on that computer stops sending plays right away."
 
 #: src/routes/companella.tsx
 msgid "Revoke this connection? It stops submitting right away."
@@ -14943,13 +14979,22 @@ msgstr "Sending..."
 msgid "Sending…"
 msgstr "Sending…"
 
+#: src/routes/bridge.tsx
+msgid "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
+msgstr "Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile."
+
 #: src/routes/report.tsx
 msgid "Sent along with it:"
 msgstr "Sent along with it:"
 
+#. placeholder {0}: known.name
 #: src/components/ui/CompanellaMark.tsx
-msgid "Sent through Companella"
-msgstr "Sent through Companella"
+msgid "Sent through {0}"
+msgstr "Sent through {0}"
+
+#: src/components/ui/CompanellaMark.tsx
+#~ msgid "Sent through Companella"
+#~ msgstr "Sent through Companella"
 
 #. placeholder {0}: recipient?.username ?? ""
 #: src/components/packs/GiftSpareDialog.tsx
@@ -15114,6 +15159,7 @@ msgstr "settings"
 
 #: src/components/layout/Nav.tsx
 #: src/components/layout/SettingsDrawer.tsx
+#: src/routes/bridge.tsx
 #: src/routes/news_.companella.tsx
 msgid "Settings"
 msgstr "Settings"
@@ -15984,6 +16030,10 @@ msgstr "Sorting highest star rating first - left click for ascending, right clic
 #: src/routes/tracker.tsx
 msgid "Sorting lowest star rating first - left click to clear, right click for descending"
 msgstr "Sorting lowest star rating first - left click to clear, right click for descending"
+
+#: src/routes/bridge.tsx
+msgid "Source code"
+msgstr "Source code"
 
 #: src/components/communities/field-options.tsx
 msgid "Spam or advertising"
@@ -19526,6 +19576,10 @@ msgstr "What are these maps for? Mention the skill focus, difficulty, or suggest
 msgid "What is it for"
 msgstr "What is it for"
 
+#: src/routes/bridge.tsx
+msgid "What it does"
+msgstr "What it does"
+
 #: src/routes/communities_.$id.tsx
 msgid "What it is for"
 msgstr "What it is for"
@@ -19549,6 +19603,10 @@ msgstr "What seems wrong?"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
 #~ msgstr "What the number is not"
+
+#: src/routes/bridge.tsx
+msgid "What you need"
+msgstr "What you need"
 
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
@@ -19656,6 +19714,10 @@ msgstr "Width of the exported image, in pixels"
 #: src/lib/packs.ts
 msgid "Wild"
 msgstr "Wild"
+
+#: src/routes/bridge.tsx
+msgid "Windows and Linux"
+msgstr "Windows and Linux"
 
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"

@@ -36,6 +36,20 @@ export type CompletionState = "consistent_with_completed_play" | "incomplete" | 
 export type ReviewState = "clear" | "flagged" | "quarantined";
 export type AnalysisState = "supported" | "unsupported" | "pending" | "failed_retryable";
 
+/**
+ * The apps the site knows by client id, shown with their own name and icon on the consent page and in Settings.
+ * Keyed on the client id rather than the app_name an app sends, since only registered ids get past the backend.
+ */
+export const KNOWN_APPS: Record<string, { name: string; icon: string; mark: string }> = {
+  companella: { name: "Companella", icon: "/images/companella-icon.png", mark: "/images/companella-mark.png" },
+  "mania-bridge": { name: "Mania Bridge", icon: "/images/mania-bridge-logo.png", mark: "/images/mania-bridge-mark.png" },
+};
+
+/** The known app for a client id, or null. Own keys only: a client id like "toString" is not an app. */
+export function knownApp(clientId: string | null | undefined): (typeof KNOWN_APPS)[string] | null {
+  return clientId && Object.hasOwn(KNOWN_APPS, clientId) ? KNOWN_APPS[clientId] : null;
+}
+
 export interface CompanellaInstallation {
   id: string;
   displayName: string;
