@@ -9,15 +9,45 @@ import { requireAdminAccess } from "./auth";
 import { trackServerEvent } from "./server-track";
 import { liveBridgeToken } from "./live-backend-tokens";
 import { isLikelyBeatmapFile } from "./osu-file-shape";
+import { ResponseMemoryCache } from "./response-memory-cache";
 
 const LIVE_BACKEND_OSU_TIMEOUT_MS = 120_000;
 const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 
-// Simple response cache (5 min TTL)
-const responseCache = new Map<string, { value: unknown; expires: number }>();
+// Large artifacts have their own budget so replay browsing cannot evict all
+// profile/API answers. R2 and backend retention are independent of this tier.
+const responseCache = new ResponseMemoryCache({
+  maxEntries: 1000, maxBytes: 16 * 1024 * 1024, maxEntryBytes: 2 * 1024 * 1024,
+});
+const artifactCache = new ResponseMemoryCache({
+  maxEntries: 200, maxBytes: 64 * 1024 * 1024, maxEntryBytes: 8 * 1024 * 1024,
+  maxAgeMs: 10 * 60_000,
+});
 const CACHE_TTL = 5 * 60 * 1000;
-const MAX_RESPONSE_CACHE_ENTRIES = 1000;
 const warnedCacheIssues = new Set<string>();
+let cachePruneTimer: ReturnType<typeof setTimeout> | null = null;
+
+function memoryCacheFor(key: string): ResponseMemoryCache {
+  return /^(?:replay-parsed|uploaded-replay-packed|beatmap-file):/.test(key) ? artifactCache : responseCache;
+}
+
+function scheduleCachePrune(): void {
+  if (cachePruneTimer !== null) return;
+  cachePruneTimer = setTimeout(() => {
+    cachePruneTimer = null;
+    responseCache.prune();
+    artifactCache.prune();
+    if (responseCache.stats().entries || artifactCache.stats().entries) scheduleCachePrune();
+  }, 60_000);
+  // Server caches must not keep a test process or a shutting-down worker alive.
+  cachePruneTimer.unref?.();
+}
+
+export function getServerResponseCacheStats() {
+  responseCache.prune();
+  artifactCache.prune();
+  return { responses: responseCache.stats(), artifacts: artifactCache.stats() };
+}
 
 export type CacheLookup<T> =
   | { hit: true; value: T }
@@ -42,22 +72,6 @@ function makeLockOwner(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-function setMemoryCache(key: string, value: unknown, expires: number): void {
-  responseCache.delete(key);
-  responseCache.set(key, { value, expires });
-
-  const now = Date.now();
-  for (const [entryKey, entry] of responseCache) {
-    if (entry.expires <= now) responseCache.delete(entryKey);
-  }
-
-  while (responseCache.size > MAX_RESPONSE_CACHE_ENTRIES) {
-    const oldestKey = responseCache.keys().next().value;
-    if (oldestKey === undefined) break;
-    responseCache.delete(oldestKey);
-  }
-}
-
 async function fetchWithTimeout(
   input: string | URL | Request,
   init: RequestInit | undefined,
@@ -73,14 +87,7 @@ async function fetchWithTimeout(
 }
 
 export function getCachedEntry<T>(key: string): CacheLookup<T> {
-  const entry = responseCache.get(key);
-  if (entry && Date.now() < entry.expires) {
-    responseCache.delete(key);
-    responseCache.set(key, entry);
-    return { hit: true, value: entry.value as T };
-  }
-  if (entry) responseCache.delete(key);
-  return { hit: false };
+  return memoryCacheFor(key).get<T>(key);
 }
 
 export function getCached<T>(key: string): T | null {
@@ -89,7 +96,8 @@ export function getCached<T>(key: string): T | null {
 }
 
 export function setCache(key: string, data: unknown, ttlMs = CACHE_TTL): void {
-  setMemoryCache(key, data, Date.now() + ttlMs);
+  memoryCacheFor(key).set(key, data, ttlMs);
+  scheduleCachePrune();
 }
 
 // ── "Persistent" cache helpers - now a memory tier only ──
@@ -126,13 +134,13 @@ export async function getPersistentCacheEntryAllowStale<T>(
 }
 
 export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
-  setMemoryCache(key, data, Date.now() + ttlMs);
+  setCache(key, data, ttlMs);
 }
 
 /** Drops an entry so the next read rebuilds it, for data that was deleted
     rather than expired. Per-instance, like the tier itself. */
 export async function invalidatePersistentCache(key: string): Promise<void> {
-  responseCache.delete(key);
+  memoryCacheFor(key).delete(key);
 }
 
 // ── Herd control - per-instance in-flight deduplication ──
@@ -214,6 +222,9 @@ export async function refreshCacheInBackground<T>(
 
 async function clearServerCachesInternal(): Promise<void> {
   responseCache.clear();
+  artifactCache.clear();
+  if (cachePruneTimer !== null) clearTimeout(cachePruneTimer);
+  cachePruneTimer = null;
   warnedCacheIssues.clear();
 }
 

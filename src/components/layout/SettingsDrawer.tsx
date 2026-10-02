@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { SettingsPanel } from "../settings/SettingsPanel";
+import { LazySettingsPanel } from "../settings/LazySettingsPanel";
 import { useLingui } from "@lingui/react/macro";
 
 interface SettingsDrawerProps {
@@ -62,7 +62,7 @@ export function SettingsDrawer({ open, onClose, onBackdropClose }: SettingsDrawe
         aria-label={t`Settings`}
         aria-hidden={!open}
       >
-        {open ? <SettingsPanel variant="drawer" onClose={onClose} /> : null}
+        {open ? <LazySettingsPanel onClose={onClose} /> : null}
       </div>
     </>
   );

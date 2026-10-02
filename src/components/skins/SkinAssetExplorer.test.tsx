@@ -134,9 +134,9 @@ describe("SkinAssetExplorer", () => {
   it("reads as one clickable strip before the archive is opened", () => {
     renderExplorer(SKIN);
 
-    const strip = screen.getByRole("button", { name: /inside the \.osk/i });
+    const strip = screen.getByRole("button", { name: /skin files/i });
     expect(strip.getAttribute("aria-expanded")).toBe("false");
-    expect(strip.textContent).toContain("Browse every image and sound this skin ships");
+    expect(strip.textContent).toContain("View the images and sounds in this skin without downloading it.");
     // The archive's weight is on the strip, so the click is an informed one.
     expect(strip.textContent).toContain("5.7 MB");
   });
@@ -146,11 +146,11 @@ describe("SkinAssetExplorer", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderExplorer(SKIN);
 
-    fireEvent.click(screen.getByRole("button", { name: /inside the \.osk/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skin files/i }));
     await waitFor(() => expect(screen.getByText(/could not be read/i)).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: /inside the \.osk/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skin files/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 

@@ -3231,7 +3231,7 @@ msgstr "cualquier lugar"
 msgid "API docs"
 msgstr ""
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "appearance"
 msgstr "apariencia"
 
@@ -4592,6 +4592,7 @@ msgstr "Cerrar vista previa"
 msgid "Close replay settings"
 msgstr "Cerrar ajustes del replay"
 
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Close settings"
 msgstr "Cerrar ajustes"
@@ -9363,6 +9364,7 @@ msgstr "cargando..."
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayBufferingIndicator.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
@@ -12520,7 +12522,7 @@ msgstr "Tiempo de juego"
 msgid "Play worth at least"
 msgstr "Play de al menos"
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "playback"
 msgstr "reproducción"
 
@@ -12861,7 +12863,7 @@ msgstr "Los charts de práctica se reconocen por sus notas y su OD, así que cua
 msgid "Precision"
 msgstr "Precisión"
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "preferences"
 msgstr "preferencias"
 
@@ -15066,6 +15068,7 @@ msgstr "Preparando..."
 msgid "Setting up…"
 msgstr "Preparando…"
 
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "settings"
 msgstr "ajustes"
@@ -15682,7 +15685,7 @@ msgstr "Los charts de práctica de skillset hacen lo mismo para un solo skill. P
 msgid "Skin"
 msgstr "Skin"
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "skin & layout"
 msgstr "skin y diseño"
 
@@ -18540,6 +18543,7 @@ msgstr "Prueba con un rango más amplio o vuelve más tarde."
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/routes/replay_.community.tsx
 msgid "Try again"
@@ -18649,6 +18653,10 @@ msgstr "Sesión típica <0>{0} plays</0>"
 #: src/components/communities/field-options.tsx
 msgid "Ukrainian"
 msgstr "Ucraniano"
+
+#: src/components/settings/LazySettingsPanel.tsx
+msgid "Unable to load settings."
+msgstr "No se pudieron cargar los ajustes."
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Unanalyzed"

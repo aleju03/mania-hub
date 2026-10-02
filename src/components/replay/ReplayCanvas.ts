@@ -8,6 +8,7 @@ import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScor
 import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
 import { buildReplayPeakKps, replayPeakKpsAt } from "../../lib/replay-kps";
+import { buildReplayNoteBlockEndTimes, REPLAY_NOTE_BLOCK_SIZE } from "../../lib/replay-note-culling";
 import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
@@ -767,6 +768,7 @@ export class ManiaReplayRenderer {
   private totalDuration: number;
   private segments: ReturnType<typeof buildReplaySegments>;
   private maxHoldDuration: number;
+  private noteBlockEndTimes: Float64Array;
   private scrollVelocities: ManiaScrollVelocity[];
   private scrollVelocityMinMultiplier = 1;
   private scrollVelocityTimes: number[] = [0];
@@ -1177,6 +1179,7 @@ export class ManiaReplayRenderer {
       this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
     }
     this.noteStates = simulated.noteStates;
+    this.noteBlockEndTimes = buildReplayNoteBlockEndTimes(this.notes, this.noteStates);
     this.replayMasterTimeline = null;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
       ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
@@ -2265,6 +2268,7 @@ export class ManiaReplayRenderer {
     // Previews carry no real life bar, so they can never be fails.
     this.failTime = null;
     this.noteStates = simulated.noteStates;
+    this.noteBlockEndTimes = buildReplayNoteBlockEndTimes(this.notes, this.noteStates);
     this.replayMasterTimeline = null;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
       ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
@@ -4254,8 +4258,23 @@ export class ManiaReplayRenderer {
     const searchMinTime = Math.min(visibleMinTime, this.currentTime - velocityWindow * 0.6);
     const searchMaxTime = visibleMaxTime;
     const startIdx = this.binarySearchNoteIndex(searchMinTime - this.maxHoldDuration);
+    // Missed taps can remain below raised receptors longer than searchMinTime.
+    // Only skip blocks beyond both the existing hold cutoff and the actual
+    // past edge of the viewport. The minimum SV makes this conservative across
+    // every speed change, in both scroll directions and in offline exports.
+    const pastViewportPixels = this.skinSettings.upscroll ? judgmentY + 20 : h + 20 - judgmentY;
+    const blockMinTime = Math.min(searchMinTime, this.currentTime, this.currentTime - pastViewportPixels / (pixelsPerMs * this.scrollVelocityMinMultiplier));
+    let nextBlockStart = startIdx;
 
     for (let i = startIdx; i < this.notes.length; i++) {
+      if (i === nextBlockStart) {
+        const block = Math.floor(i / REPLAY_NOTE_BLOCK_SIZE);
+        nextBlockStart = (block + 1) * REPLAY_NOTE_BLOCK_SIZE;
+        if (this.noteBlockEndTimes[block] < blockMinTime) {
+          i = nextBlockStart - 1;
+          continue;
+        }
+      }
       const note = this.notes[i];
       if (note.time > searchMaxTime) break;
       const col = note.column;

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { SettingsPanel, isSettingsTabId, type SettingsTabId } from "../components/settings/SettingsPanel";
+import { SettingsPanel } from "../components/settings/SettingsPanel";
+import { isSettingsTabId, type SettingsTabId } from "../components/settings/settings-tabs";
 
 export const Route = createFileRoute("/settings")({
   validateSearch: (search: Record<string, unknown>): { tab?: SettingsTabId } => ({

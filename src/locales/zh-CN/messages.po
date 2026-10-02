@@ -3240,7 +3240,7 @@ msgstr "不限地区"
 msgid "API docs"
 msgstr ""
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "appearance"
 msgstr "外观"
 
@@ -4601,6 +4601,7 @@ msgstr "关闭预览"
 msgid "Close replay settings"
 msgstr "关闭回放设置"
 
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Close settings"
 msgstr "关闭设置"
@@ -9372,6 +9373,7 @@ msgstr "加载中…"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayBufferingIndicator.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
@@ -12529,7 +12531,7 @@ msgstr "游玩时长"
 msgid "Play worth at least"
 msgstr "单个成绩至少"
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "playback"
 msgstr "回放"
 
@@ -12870,7 +12872,7 @@ msgstr "练习谱面按物件和 OD 匹配，所以同一文件的任何上传�
 msgid "Precision"
 msgstr "精度"
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "preferences"
 msgstr "偏好设置"
 
@@ -15075,6 +15077,7 @@ msgstr "设置中…"
 msgid "Setting up…"
 msgstr "正在准备…"
 
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "settings"
 msgstr "设置"
@@ -15691,7 +15694,7 @@ msgstr "技能练习谱面对单个技能也是一样。以通过线通过 <0>Vo
 msgid "Skin"
 msgstr "皮肤"
 
-#: src/components/settings/SettingsPanel.tsx
+#: src/components/settings/settings-tabs.ts
 msgid "skin & layout"
 msgstr "皮肤与布局"
 
@@ -18549,6 +18552,7 @@ msgstr "试试更大的范围，或稍后再来。"
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 #: src/components/player/SkillHistoryModal.tsx
 #: src/components/player/SkillPlaysModal.tsx
+#: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/routes/replay_.community.tsx
 msgid "Try again"
@@ -18658,6 +18662,10 @@ msgstr "一场通常打 <0>{0} 次</0>"
 #: src/components/communities/field-options.tsx
 msgid "Ukrainian"
 msgstr "乌克兰语"
+
+#: src/components/settings/LazySettingsPanel.tsx
+msgid "Unable to load settings."
+msgstr "无法加载设置。"
 
 #: src/components/player/ActivityPanel.tsx
 msgid "Unanalyzed"

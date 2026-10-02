@@ -96,6 +96,7 @@ import type { CursorSettings } from "../../lib/cursor";
 import { useAppStore, useChangelogNotify, useExperimentalLn, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings } from "../../store";
 import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
+import { SETTINGS_TABS as TABS, type SettingsTabId } from "./settings-tabs";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -129,14 +130,7 @@ const STYLE_LABELS: Record<ReplaySkinStyle, ReturnType<typeof msg>> = {
   arrows: msg`Arrows`,
 };
 
-export type SettingsTabId = "skin" | "viewer" | "preferences" | "appearance";
 type TabId = SettingsTabId;
-const TABS: { id: TabId; label: ReturnType<typeof msg> }[] = [
-  { id: "skin", label: msg`skin & layout` },
-  { id: "viewer", label: msg`playback` },
-  { id: "preferences", label: msg`preferences` },
-  { id: "appearance", label: msg`appearance` },
-];
 
 type Variant = "page" | "drawer";
 
@@ -144,10 +138,6 @@ interface SettingsPanelProps {
   variant?: Variant;
   onClose?: () => void;
   initialTab?: SettingsTabId;
-}
-
-export function isSettingsTabId(value: unknown): value is SettingsTabId {
-  return TABS.some((tab) => tab.id === value);
 }
 
 export function SettingsPanel({ variant = "page", onClose, initialTab = "skin" }: SettingsPanelProps) {

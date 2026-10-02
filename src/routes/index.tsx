@@ -27,7 +27,7 @@ import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore,
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo } from "../lib/seo";
 import { getI18n } from "../lib/i18n";
-import { seedPlayerShellFromRankingEntry } from "../lib/player-shell-cache";
+import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
@@ -474,9 +474,7 @@ function HomePage() {
     if (!ranking) return;
     // A shell cannot carry the account status a simulated player's profile
     // needs, so those rows seed none.
-    ranking.forEach((entry, i) => {
-      if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, i + 1);
-    });
+    seedPlayerShellsFromRankingEntries(ranking, 0, restrictedUserIds);
   }, [ranking, restrictedUserIds]);
 
   // Global's left panel shows the combined top players (the same board as the

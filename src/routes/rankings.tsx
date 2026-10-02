@@ -46,7 +46,7 @@ import {
 } from "../lib/skill-leaderboards";
 import { pageSeo } from "../lib/seo";
 import { fetchLiveGlobalRankings, fetchLiveRankDeltas, fetchLiveRankingsSnapshot, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
-import { seedPlayerShellFromRankingEntry } from "../lib/player-shell-cache";
+import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
 
@@ -470,9 +470,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
 
   useEffect(() => {
     if (!pageRanking) return;
-    pageRanking.forEach((entry, i) => {
-      if (!restrictedUserIds.has(entry.user.id)) seedPlayerShellFromRankingEntry(entry, (page - 1) * 50 + i + 1);
-    });
+    seedPlayerShellsFromRankingEntries(pageRanking, (page - 1) * 50, restrictedUserIds);
   }, [page, pageRanking, restrictedUserIds]);
 
   // Page 2 starts where page 1's merged list ends, so landing on it directly

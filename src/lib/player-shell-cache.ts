@@ -37,7 +37,18 @@ export function stripUntrackedProfilePresence(user: OsuUser): OsuUser {
 }
 
 export function seedPlayerShellFromRankingEntry(entry: LeanRankingEntry, countryRank?: number | null): void {
-  writePlayerShell(buildPlayerShellFromRankingEntry(entry, countryRank));
+  writePlayerShells([{ entry, countryRank }]);
+}
+
+/** Persist one ranking snapshot once, without renumbering excluded accounts. */
+export function seedPlayerShellsFromRankingEntries(
+  entries: readonly LeanRankingEntry[],
+  rankOffset = 0,
+  excludedUserIds?: ReadonlySet<number>,
+): void {
+  writePlayerShells(entries.flatMap((entry, index) => excludedUserIds?.has(entry.user.id)
+    ? []
+    : [{ entry, countryRank: rankOffset + index + 1 }]));
 }
 
 export function readPlayerShell(username: string): OsuUser | null {
@@ -91,17 +102,33 @@ export function playedWithinOnlineWindow(playedAt: string, now: number = Date.no
   return age < RECENT_PLAY_ONLINE_WINDOW_MS && age > -RECENT_PLAY_ONLINE_WINDOW_MS;
 }
 
-function writePlayerShell(user: OsuUser): void {
-  const key = normalizeUsernameKey(user.username);
-  if (!key) return;
-  const entry = {
-    user,
-    expiresAt: Date.now() + PLAYER_SHELL_CACHE_TTL_MS,
-  };
-  memoryCache.set(key, entry);
-
+function writePlayerShells(seeds: readonly { entry: LeanRankingEntry; countryRank?: number | null }[]): void {
+  if (seeds.length === 0) return;
+  const now = Date.now();
   const stored = readStoredShells();
-  stored[key] = entry;
+  let changed = false;
+  for (const seed of seeds) {
+    const key = normalizeUsernameKey(seed.entry.user.username);
+    if (!key) continue;
+    const entry = {
+      user: buildPlayerShellFromRankingEntry(seed.entry, seed.countryRank),
+      expiresAt: now + PLAYER_SHELL_CACHE_TTL_MS,
+    };
+    memoryCache.set(key, entry);
+    Object.defineProperty(stored, key, { value: entry, enumerable: true, configurable: true, writable: true });
+    // Keep the individual helper's insertion-order eviction. An old entry
+    // evicted early in this batch may be seeded again later in the same page.
+    const keys = Object.keys(stored).filter((storedKey) => {
+      if (stored[storedKey]?.expiresAt > now) return true;
+      delete stored[storedKey];
+      return false;
+    });
+    for (let index = 0; index < keys.length - PLAYER_SHELL_CACHE_MAX_ENTRIES; index += 1) {
+      delete stored[keys[index]];
+    }
+    changed = true;
+  }
+  if (!changed) return;
   writeStoredShells(stored);
 }
 

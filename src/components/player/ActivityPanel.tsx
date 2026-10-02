@@ -30,6 +30,7 @@ import {
   formatPP,
 } from "../../lib/format";
 import { refreshPlayerActivitySnapshot } from "../../lib/player-activity-refresh";
+import { formatDateTime, getDateTimeFormatter } from "../../lib/intl-formatters";
 import { useAuth } from "../../lib/auth-context";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { showTrackingStartedToast } from "../me/TrackingToasts";
@@ -1577,16 +1578,16 @@ function formatActivitySessionDate(startAt: string, dayKey: string, timeZone: st
   if (!Number.isFinite(date.getTime())) return null;
   if (getZonedDateKey(date, timeZone) === dayKey) return null;
   try {
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone });
+    return formatDateTime(date, "en-US", { month: "short", day: "numeric", timeZone });
   } catch {
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return formatDateTime(date, "en-US", { month: "short", day: "numeric" });
   }
 }
 
 // en-CA formats as YYYY-MM-DD, matching the backend's day keys.
 function getZonedDateKey(date: Date, timeZone: string): string {
   try {
-    return date.toLocaleDateString("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+    return formatDateTime(date, "en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
   } catch {
     return toDateKey(date);
   }
@@ -1596,9 +1597,9 @@ function formatActivityTime(value: string, timeZone: string): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "";
   try {
-    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
+    return formatDateTime(date, "en-US", { hour: "numeric", minute: "2-digit", timeZone });
   } catch {
-    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return formatDateTime(date, "en-US", { hour: "numeric", minute: "2-digit" });
   }
 }
 
@@ -1621,7 +1622,7 @@ function getZonedMinutesOfDay(value: string, timeZone: string): number | null {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
   try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" })
+    const parts = getDateTimeFormatter("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" })
       .formatToParts(date);
     const hour = Number(parts.find((part) => part.type === "hour")?.value);
     const minute = Number(parts.find((part) => part.type === "minute")?.value);
@@ -1638,10 +1639,10 @@ function getActivityTimezoneHint(timeZone: string, referenceIso: string | undefi
   const reference = referenceIso ? new Date(referenceIso) : new Date();
   if (!Number.isFinite(reference.getTime())) return null;
   try {
-    const zoned = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" })
+    const zoned = getDateTimeFormatter("en-US", { timeZone, timeZoneName: "shortOffset" })
       .formatToParts(reference)
       .find((part) => part.type === "timeZoneName")?.value ?? null;
-    const local = new Intl.DateTimeFormat("en-US", { timeZoneName: "shortOffset" })
+    const local = getDateTimeFormatter("en-US", { timeZoneName: "shortOffset" })
       .formatToParts(reference)
       .find((part) => part.type === "timeZoneName")?.value ?? null;
     if (!zoned || zoned === local) return null;
@@ -1679,7 +1680,7 @@ function parseLocalDateKey(date: string): Date {
 }
 
 function formatFullActivityDate(date: string): string {
-  return parseLocalDateKey(date).toLocaleDateString("en-US", {
+  return formatDateTime(parseLocalDateKey(date), "en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -1687,7 +1688,7 @@ function formatFullActivityDate(date: string): string {
 }
 
 function formatActivityMonth(date: string): string {
-  return parseLocalDateKey(date).toLocaleDateString("en-US", {
+  return formatDateTime(parseLocalDateKey(date), "en-US", {
     month: "short",
   });
 }

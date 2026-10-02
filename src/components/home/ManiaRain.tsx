@@ -45,6 +45,7 @@ interface NoteFragment {
 const FRAGMENT_LIFETIME_S = 0.7;
 const FRAGMENT_CAP = 36;
 const SLICE_MIN_SPEED_PX_PER_MS = 0.35;
+const RAIN_FRAME_MS = 1000 / 30;
 
 let cachedNoteImages: HTMLImageElement[] | null = null;
 let lnScratchCanvas: HTMLCanvasElement | null = null;
@@ -137,6 +138,8 @@ export function ManiaRain() {
   const animateRef = useRef<(time: number) => void>(() => undefined);
   const fragmentsRef = useRef<NoteFragment[]>([]);
   const sliceEnabledRef = useRef(false);
+  // Notes keep page-relative coordinates; only the visible strip has a bitmap.
+  const viewportRef = useRef({ width: 0, height: 0, offsetY: 0, visible: false });
   const pointerRef = useRef<{ x: number; y: number; t: number; has: boolean }>({
     x: 0,
     y: 0,
@@ -154,26 +157,34 @@ export function ManiaRain() {
     const rect = parent.getBoundingClientRect();
     const nextWidth = Math.max(1, Math.round(rect.width));
     const nextHeight = Math.max(1, Math.round(rect.height));
-    const previousWidth = canvas.width || nextWidth;
+    const bitmapHeight = Math.min(nextHeight, Math.max(1, Math.ceil(window.innerHeight)));
+    const offsetY = Math.max(0, Math.min(nextHeight - bitmapHeight, -rect.top));
+    const visible = rect.bottom > 0 && rect.top < window.innerHeight && rect.width > 0 && rect.height > 0;
+    const previous = viewportRef.current;
+    const previousWidth = previous.width || nextWidth;
 
-    if (canvas.width === nextWidth && canvas.height === nextHeight) {
+    if (previous.width === nextWidth && previous.height === nextHeight
+      && previous.offsetY === offsetY && previous.visible === visible && canvas.height === bitmapHeight) {
       return false;
     }
 
-    canvas.width = nextWidth;
-    canvas.height = nextHeight;
+    viewportRef.current = { width: nextWidth, height: nextHeight, offsetY, visible };
+    if (canvas.width !== nextWidth) canvas.width = nextWidth;
+    if (canvas.height !== bitmapHeight) canvas.height = bitmapHeight;
+    canvas.style.top = `${offsetY}px`;
+    canvas.style.height = `${bitmapHeight}px`;
 
     if (notesRef.current.length === 0 || !preservePositions) {
       const count = 55;
-      const cols = Math.ceil(Math.sqrt(count * (canvas.width / canvas.height)));
+      const cols = Math.ceil(Math.sqrt(count * (nextWidth / nextHeight)));
       const rows = Math.ceil(count / cols);
-      const cellW = canvas.width / cols;
-      const cellH = canvas.height / rows;
+      const cellW = nextWidth / cols;
+      const cellH = nextHeight / rows;
       const notes: FallingNote[] = [];
 
       for (let row = 0; row < rows && notes.length < count; row++) {
         for (let col = 0; col < cols && notes.length < count; col++) {
-          const note = createNote(canvas.width, canvas.height, false);
+          const note = createNote(nextWidth, nextHeight, false);
           note.x = (col + 0.15 + Math.random() * 0.7) * cellW;
           note.y = (row + Math.random()) * cellH;
           notes.push(note);
@@ -184,6 +195,7 @@ export function ManiaRain() {
       return true;
     }
 
+    if (nextWidth === previousWidth) return true;
     const scaleX = nextWidth / previousWidth;
     notesRef.current = notesRef.current.map((note) => ({
       ...note,
@@ -204,6 +216,7 @@ export function ManiaRain() {
   useEffect(() => {
     imagesRef.current = getNoteImages();
     ensureCanvasSize(false);
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
     sliceEnabledRef.current = readCursorSettings().enabled;
     const unsubscribeCursorSettings = subscribeCursorSettings((settings) => {
@@ -235,12 +248,12 @@ export function ManiaRain() {
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (!sliceEnabledRef.current || event.pointerType === "touch") return;
+      if (!sliceEnabledRef.current || motionQuery.matches || event.pointerType === "touch") return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      const y = event.clientY - rect.top + viewportRef.current.offsetY;
       const now = performance.now();
       const prev = pointerRef.current;
       const elapsed = now - prev.t;
@@ -255,7 +268,7 @@ export function ManiaRain() {
           for (const note of notesRef.current) {
             if (segmentHitsCircle(prev.x, prev.y, x, y, note.x, note.y, note.size * 0.6 + 4)) {
               spawnFragments(note, sliceAngle);
-              resetNote(note, canvas.width, canvas.height);
+              resetNote(note, viewportRef.current.width, viewportRef.current.height);
             }
           }
         }
@@ -265,7 +278,6 @@ export function ManiaRain() {
 
     const handleResize = () => {
       const resized = ensureCanvasSize(true);
-      lastTimeRef.current = performance.now();
       // Repaint now rather than waiting for the next animation frame. The
       // observer below fires after this frame's animation callbacks have
       // already drawn, so resizing wipes a canvas that is about to be painted
@@ -273,6 +285,8 @@ export function ManiaRain() {
       // content-height change does this, and a skin page changes height two or
       // three times as it opens.
       if (resized) renderScene(0);
+      if (!viewportRef.current.visible || !isWindowActive() || motionQuery.matches) stopAnimation();
+      else startAnimation();
     };
 
     const stopAnimation = () => {
@@ -284,14 +298,15 @@ export function ManiaRain() {
     };
 
     const startAnimation = () => {
-      if (rafRef.current != null) return;
+      if (rafRef.current != null || !viewportRef.current.visible || motionQuery.matches || !isWindowActive()) return;
       lastTimeRef.current = performance.now();
       rafRef.current = requestAnimationFrame(animateRef.current);
     };
 
     const handleWindowActivityChange = () => {
-      if (!isWindowActive()) {
+      if (!isWindowActive() || motionQuery.matches) {
         stopAnimation();
+        renderScene(0);
       } else {
         ensureCanvasSize(true);
         startAnimation();
@@ -305,20 +320,25 @@ export function ManiaRain() {
     const renderScene = (dt: number): boolean => {
       const canvas = canvasRef.current;
       if (!canvas) return false;
+      const viewport = viewportRef.current;
+      if (!viewport.visible) return false;
 
       const context = canvas.getContext("2d");
       if (!context) return false;
 
+      context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, canvas.width, canvas.height);
+      context.setTransform(1, 0, 0, 1, 0, -viewport.offsetY);
 
       for (const note of notesRef.current) {
         note.y += note.speed * dt;
         if (!note.isLN) note.rotation += note.rotSpeed * dt;
 
         const totalHeight = note.isLN ? note.lnHeight + note.size : note.size;
-        if (note.y > canvas.height + totalHeight) {
-          resetNote(note, canvas.width, canvas.height);
+        if (note.y > viewport.height + totalHeight) {
+          resetNote(note, viewport.width, viewport.height);
         }
+        if (note.y + note.size < viewport.offsetY || note.y - totalHeight > viewport.offsetY + canvas.height) continue;
 
         const image = imagesRef.current[note.imgIndex];
         const isBar = NOTE_IMAGES[note.imgIndex].aspect === "bar";
@@ -400,6 +420,8 @@ export function ManiaRain() {
         fragment.y += fragment.vy * dt;
         fragment.vy += 260 * dt;
         fragment.noteRotation += fragment.spin * dt;
+        if (fragment.y + fragment.size * 2 < viewport.offsetY
+          || fragment.y - fragment.size * 2 > viewport.offsetY + canvas.height) continue;
 
         const image = imagesRef.current[fragment.imgIndex];
         const isBar = NOTE_IMAGES[fragment.imgIndex].aspect === "bar";
@@ -436,8 +458,14 @@ export function ManiaRain() {
     };
 
     animateRef.current = (time: number) => {
+      // The rain drifts slowly; preserve full-rate feedback for sliced pieces.
+      const frameMs = fragmentsRef.current.length ? 1000 / 60 : RAIN_FRAME_MS;
+      if (lastTimeRef.current != null && time - lastTimeRef.current < frameMs - 1) {
+        rafRef.current = requestAnimationFrame(animateRef.current);
+        return;
+      }
       const rawDt = lastTimeRef.current == null ? 0.016 : (time - lastTimeRef.current) / 1000;
-      const dt = Math.min(0.05, Math.max(0.008, rawDt));
+      const dt = motionQuery.matches ? 0 : Math.min(0.05, Math.max(0.008, rawDt));
       lastTimeRef.current = time;
 
       if (!renderScene(dt)) {
@@ -450,22 +478,30 @@ export function ManiaRain() {
 
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("resize", handleResize, { passive: true });
+    window.addEventListener("scroll", handleResize, { passive: true, capture: true });
+    motionQuery.addEventListener("change", handleWindowActivityChange);
+    const handleImageLoad = () => renderScene(0);
+    for (const image of imagesRef.current) image.addEventListener("load", handleImageLoad);
     // The parent can also grow without a window resize (async content below
     // the fold); track it so the rain always covers the full page height.
     const parentObserver = canvasRef.current?.parentElement ? new ResizeObserver(handleResize) : null;
     if (parentObserver && canvasRef.current?.parentElement) parentObserver.observe(canvasRef.current.parentElement);
     const unsubscribeWindowActivity = subscribeWindowActivity(handleWindowActivityChange);
-    if (isWindowActive()) startAnimation();
+    renderScene(0);
+    startAnimation();
 
     return () => {
       stopAnimation();
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleResize, true);
+      motionQuery.removeEventListener("change", handleWindowActivityChange);
+      for (const image of imagesRef.current) image.removeEventListener("load", handleImageLoad);
       parentObserver?.disconnect();
       unsubscribeWindowActivity();
       unsubscribeCursorSettings();
     };
   }, [ensureCanvasSize]);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+  return <canvas ref={canvasRef} className="absolute left-0 top-0 w-full pointer-events-none" />;
 }

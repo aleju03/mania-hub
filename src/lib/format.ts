@@ -3,6 +3,7 @@ import { msg } from "@lingui/core/macro";
 
 import { getI18n } from "./i18n";
 import type { AppLocale } from "./locale";
+import { formatDateTime, getNumberFormatter } from "./intl-formatters";
 
 /* The UI locale is a catalog choice ("en"), not a full formatting locale;
    this maps it onto the Intl tag the numbers and dates should follow. en-US
@@ -32,7 +33,7 @@ function tr(locale: AppLocale, descriptor: MessageDescriptor): string {
    precedent): a caller that has waited for context - useLocale() - passes it,
    everything else keeps the en default, byte-identical to before. */
 export function formatNumber(n: number, locale: AppLocale = "en"): string {
-  return n.toLocaleString(INTL_LOCALE[locale]);
+  return getNumberFormatter(INTL_LOCALE[locale]).format(n);
 }
 
 /* Counts for icon-and-number stat rows, where two of them share the space one
@@ -44,16 +45,16 @@ export function formatCompactCount(n: number, locale: AppLocale = "en"): string 
     /* Compact notation is locale data, not a translation of English "k":
        Chinese groups by 万 while Spanish supplies its own separators and
        suffixes. CLDR already knows where each locale starts shortening. */
-    return new Intl.NumberFormat(INTL_LOCALE[locale], { notation: "compact" }).format(value);
+    return getNumberFormatter(INTL_LOCALE[locale], { notation: "compact" }).format(value);
   }
-  if (value < 1000) return value.toLocaleString("en-US");
+  if (value < 1000) return formatNumber(value);
   return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1).replace(/\.0$/, "")}k`;
 }
 
 /* 1st, 2nd, 3rd, 4th, and the 11th-13th exceptions. */
 export function formatOrdinal(n: number, locale: AppLocale = "en"): string {
   const value = Math.floor(n);
-  const grouped = value.toLocaleString(INTL_LOCALE[locale]);
+  const grouped = formatNumber(value, locale);
   if (locale === "en") {
     const lastTwo = Math.abs(value) % 100;
     const last = Math.abs(value) % 10;
@@ -69,15 +70,15 @@ export function formatOrdinal(n: number, locale: AppLocale = "en"): string {
 
 export function formatPP(pp: number | null, locale: AppLocale = "en"): string {
   if (pp == null) return "-";
-  return `${Math.round(pp).toLocaleString(INTL_LOCALE[locale])}pp`;
+  return `${formatNumber(Math.round(pp), locale)}pp`;
 }
 
 export function formatPpGain(pp: number, locale: AppLocale = "en"): string {
   if (Math.abs(pp) < 0.05) return "0";
-  return pp.toLocaleString(INTL_LOCALE[locale], {
+  return getNumberFormatter(INTL_LOCALE[locale], {
     maximumFractionDigits: 1,
     minimumFractionDigits: 0,
-  });
+  }).format(pp);
 }
 
 export function formatAccuracy(acc: number): string {
@@ -212,7 +213,7 @@ function dateForFormatting(dateStr: string, zoned: boolean): Date {
    to have waited for hydration first. useViewerTimeZone() is that gate. */
 export function formatDate(dateStr: string, timeZone = "UTC", locale: AppLocale = "en"): string {
   const zoned = isZonedInstant(dateStr);
-  return dateForFormatting(dateStr, zoned).toLocaleDateString(INTL_LOCALE[locale], {
+  return formatDateTime(dateForFormatting(dateStr, zoned), INTL_LOCALE[locale], {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -224,12 +225,12 @@ export function formatDate(dateStr: string, timeZone = "UTC", locale: AppLocale 
    a 45.9 MB export doesn't read as "46 MB" next to its own byte limit. */
 export function formatBytes(bytes: number, locale: AppLocale = "en"): string {
   const value = Math.max(0, bytes);
-  if (value < 1024) return `${Math.round(value).toLocaleString(INTL_LOCALE[locale])} B`;
+  if (value < 1024) return `${formatNumber(Math.round(value), locale)} B`;
   if (value < 1024 * 1024) {
-    return `${Math.round(value / 1024).toLocaleString(INTL_LOCALE[locale])} KB`;
+    return `${formatNumber(Math.round(value / 1024), locale)} KB`;
   }
   if (value < 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toLocaleString(INTL_LOCALE[locale], { maximumFractionDigits: 1 })} MB`;
+    return `${getNumberFormatter(INTL_LOCALE[locale], { maximumFractionDigits: 1 }).format(value / (1024 * 1024))} MB`;
   }
-  return `${(value / (1024 * 1024 * 1024)).toLocaleString(INTL_LOCALE[locale], { maximumFractionDigits: 2 })} GB`;
+  return `${getNumberFormatter(INTL_LOCALE[locale], { maximumFractionDigits: 2 }).format(value / (1024 * 1024 * 1024))} GB`;
 }
