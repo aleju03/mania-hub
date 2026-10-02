@@ -570,6 +570,10 @@ function describeNamedAnalyticsEvent(
     // what happens on Discord's side is not ours to see.
     case "community_join":
       return describeCommunity(row, "opened the invite for", row.communityId);
+    case "bridge_download":
+      return { kind: "visit", verb: "downloaded", subject: "Mania Bridge", detail: null };
+    case "bridge_source_click":
+      return { kind: "visit", verb: "opened", subject: "Mania Bridge's source code", detail: null };
     // The submit funnel, in the order the modal walks it: the consent screen,
     // the picker (or its no-postable-servers dead end), the details form, and
     // the submit. Which of these a visitor stops at is the point of tracking

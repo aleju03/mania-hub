@@ -176,6 +176,8 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   add_score_failed: "Score add turned down",
   add_score_open: "Add-a-score bar opened",
   add_score_submitted: "Score added",
+  bridge_download: "Mania Bridge downloaded",
+  bridge_source_click: "Mania Bridge source code opened",
   changelog_open: "Changelog opened",
   community_join: "Server invite opened",
   community_post_connect: "Discord connect clicked",

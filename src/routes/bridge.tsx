@@ -1,13 +1,16 @@
+import { useEffect, useState } from "react";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 
 import { getI18n } from "../lib/i18n";
+import { track } from "../lib/analytics";
 import { canUseAdminFeatures } from "../lib/auth-shared";
 import { pageSeo } from "../lib/seo";
 import { PageHeader } from "../components/layout/PageHeader";
 import { KNOWN_APPS } from "../lib/companella-integration/shared";
-import { MANIA_BRIDGE_DOWNLOAD_URL, MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSION } from "../lib/mania-bridge";
+import { MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSION, type ManiaBridgeDownloads } from "../lib/mania-bridge";
+import { fetchManiaBridgeDownloads } from "../lib/mania-bridge-server";
 
 /*
  * /bridge: Mania Bridge's download page, and where the app's Download button opens. Admin preview until the
@@ -16,6 +19,13 @@ import { MANIA_BRIDGE_DOWNLOAD_URL, MANIA_BRIDGE_SOURCE_URL, MANIA_BRIDGE_VERSIO
 
 export const Route = createFileRoute("/bridge")({
   beforeLoad: ({ context }) => { if (!canUseAdminFeatures(context.auth)) throw notFound(); },
+  loader: async () => {
+    try {
+      return await fetchManiaBridgeDownloads();
+    } catch {
+      return null;
+    }
+  },
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return pageSeo({
@@ -33,11 +43,110 @@ export const Route = createFileRoute("/bridge")({
 const SETTING = "whitespace-nowrap rounded bg-osu-b4 px-1.5 py-0.5 text-[13px] font-semibold text-white";
 const shareSetting = "Share what I'm playing";
 
+type Os = "windows" | "linux";
+
+const OS_NAME: Record<Os, string> = { windows: "Windows", linux: "Linux" };
+
+/** The visitor's system, read after hydration so the server render stays neutral. Null for anything else. */
+function useDetectedOs(): Os | null {
+  const [os, setOs] = useState<Os | null>(null);
+  useEffect(() => {
+    const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+    const platform = `${nav.userAgentData?.platform ?? ""} ${nav.userAgent}`;
+    if (/Android|CrOS/i.test(platform)) return;
+    if (/Windows/i.test(platform)) setOs("windows");
+    else if (/Linux/i.test(platform)) setOs("linux");
+  }, []);
+  return os;
+}
+
+function OsLogo({ os, className }: { os: Os; className: string }) {
+  return <img src={`/images/os/${os}.svg`} alt="" width={20} height={20} className={className} />;
+}
+
+type Package = "exe" | "appimage" | "deb" | "rpm";
+
+/** Counts a download click, with which installer it was. */
+function trackDownload(file: Package) {
+  track("bridge_download", { package: file, os: file === "exe" ? "windows" : "linux" });
+}
+
+function DownloadButton({ os, href }: { os: Os; href: string }) {
+  const name = OS_NAME[os];
+  return (
+    <a
+      href={href}
+      download
+      onClick={() => trackDownload(os === "windows" ? "exe" : "appimage")}
+      className="inline-flex items-center justify-center gap-2.5 rounded-full bg-osu-pink px-7 py-3 text-[15px] font-bold text-white transition hover:brightness-110"
+    >
+      <OsLogo os={os} className="h-5 w-5" />
+      <Trans>Download for {name}</Trans>
+    </a>
+  );
+}
+
+// A hairline between inline items, in place of a separator glyph.
+const DIVIDER = "h-3 w-px bg-white/15";
+
+// The small download links, with the same hairline between them.
+const LINK_ROW = "flex items-center text-[12px] text-osu-f1 [&>*+*]:ml-3 [&>*+*]:border-l [&>*+*]:border-white/15 [&>*+*]:pl-3";
+
+const SMALL_LINK = "inline-flex items-center gap-1.5 transition-colors hover:text-white";
+
+/** The installers: the visitor's system as the button, the rest as small links under it. */
+function Downloads({ downloads }: { downloads: ManiaBridgeDownloads | null }) {
+  const os = useDetectedOs();
+  if (!downloads || (!downloads.windows && !downloads.appImage)) {
+    return (
+      <div className="mt-7 rounded-full bg-osu-b4 px-7 py-3 text-[15px] font-bold text-osu-f1">
+        <Trans>Not available yet</Trans>
+      </div>
+    );
+  }
+  const linuxPackages = (
+    <>
+      {downloads.deb && <a href={downloads.deb} download onClick={() => trackDownload("deb")} className={SMALL_LINK}>.deb</a>}
+      {downloads.rpm && <a href={downloads.rpm} download onClick={() => trackDownload("rpm")} className={SMALL_LINK}>.rpm</a>}
+    </>
+  );
+  const primary: Os | null = os === "windows" && downloads.windows ? "windows" : os === "linux" && downloads.appImage ? "linux" : null;
+  if (!primary) {
+    return (
+      <>
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          {downloads.windows && <DownloadButton os="windows" href={downloads.windows} />}
+          {downloads.appImage && <DownloadButton os="linux" href={downloads.appImage} />}
+        </div>
+        {(downloads.deb || downloads.rpm) && <div className={`mt-3 ${LINK_ROW}`}>{linuxPackages}</div>}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="mt-7">
+        <DownloadButton os={primary} href={primary === "windows" ? downloads.windows! : downloads.appImage!} />
+      </div>
+      <div className={`mt-3 ${LINK_ROW}`}>
+        {primary === "linux" ? linuxPackages : null}
+        {primary === "linux" && downloads.windows && (
+          <a href={downloads.windows} download onClick={() => trackDownload("exe")} className={SMALL_LINK}><OsLogo os="windows" className="h-3 w-3 opacity-70" />Windows</a>
+        )}
+        {primary === "windows" && downloads.appImage && (
+          <a href={downloads.appImage} download onClick={() => trackDownload("appimage")} className={SMALL_LINK}><OsLogo os="linux" className="h-3 w-3 opacity-70" />Linux</a>
+        )}
+        {primary === "windows" ? linuxPackages : null}
+      </div>
+    </>
+  );
+}
+
 const LINK = "text-white underline decoration-white/30 underline-offset-2 transition-colors hover:decoration-white";
 
 function BridgePage() {
   const { t } = useLingui();
   const app = KNOWN_APPS["mania-bridge"];
+  const downloads = Route.useLoaderData();
 
   return (
     <div className="flex-1">
@@ -60,30 +169,22 @@ function BridgePage() {
               <Trans>Sends your osu!mania plays to Mania Tracker and shows what you're playing on your profile.</Trans>
             </p>
 
-            {MANIA_BRIDGE_DOWNLOAD_URL ? (
+            <Downloads downloads={downloads} />
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12px] text-osu-f1">
+              <span>v{MANIA_BRIDGE_VERSION}</span>
+              <span aria-hidden className={DIVIDER} />
+              <span>{t`Windows and Linux`}</span>
+              <span aria-hidden className={DIVIDER} />
               <a
-                href={MANIA_BRIDGE_DOWNLOAD_URL}
+                href={MANIA_BRIDGE_SOURCE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-7 inline-flex items-center justify-center rounded-full bg-osu-pink px-7 py-3 text-[15px] font-bold text-white transition hover:brightness-110"
+                onClick={() => track("bridge_source_click")}
+                className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
               >
-                <Trans>Download</Trans>
+                <img src="/images/brands/github.svg" alt="" width={12} height={12} className="h-3 w-3 opacity-70" />
+                <Trans>Source code on GitHub</Trans>
               </a>
-            ) : (
-              <div className="mt-7 rounded-full bg-osu-b4 px-7 py-3 text-[15px] font-bold text-osu-f1">
-                <Trans>Not available yet</Trans>
-              </div>
-            )}
-            <div className="mt-3 text-[12px] text-osu-f1">
-              v{MANIA_BRIDGE_VERSION} · {t`Windows and Linux`}
-              {MANIA_BRIDGE_SOURCE_URL && (
-                <>
-                  {" · "}
-                  <a href={MANIA_BRIDGE_SOURCE_URL} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-white">
-                    <Trans>Source code</Trans>
-                  </a>
-                </>
-              )}
             </div>
           </div>
 
@@ -101,7 +202,11 @@ function BridgePage() {
             <section>
               <h2 className="text-[13px] font-semibold text-white"><Trans>What you need</Trans></h2>
               <p className="mt-2">
-                <Trans>Mania Bridge reads osu! through tosu, so tosu has to be running. On Linux, lazer needs tosu's Linux build.</Trans>
+                <Trans>
+                  Mania Bridge reads osu! through tosu, so tosu has to be running. You can download it from{" "}
+                  <a href="https://tosu.app" target="_blank" rel="noopener noreferrer" className={LINK}>tosu.app</a>. On Linux, lazer
+                  needs tosu's Linux build.
+                </Trans>
               </p>
             </section>
             <section>
