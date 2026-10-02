@@ -31,8 +31,8 @@ function freshSnapshot(viewerId: number | null): CompanellaSnapshot | null {
 }
 
 /*
- * The Integrations group in Settings: Companella, and Mania Bridge once connected, each with its connected
- * computers and a Revoke. Connecting happens from inside the app.
+ * The Integrations group in Settings: Mania Bridge and Companella, each with its connected computers and a
+ * Revoke. Connecting happens from inside the app.
  * /companella stays the client developer's test bench.
  */
 export function CompanellaGroup() {
@@ -79,14 +79,17 @@ export function CompanellaGroup() {
   const bridgeApp = KNOWN_APPS[BRIDGE_CLIENT_ID];
   const bridge = active.filter((installation) => installation.clientId === BRIDGE_CLIENT_ID);
   const companella = active.filter((installation) => installation.clientId !== BRIDGE_CLIENT_ID);
-  const status = loading ? null
+  // Both apps connect through the same integration, so whatever keeps one from connecting keeps the other too.
+  const blocked = loading ? null
     : !access?.backendReachable ? t`Not reachable right now.`
     : !access.enabled ? t`Not available yet.`
     : !auth.viewer ? t`Sign in with osu! to connect it.`
     : !access.allowed && !access.hasData ? t`Not available for this account yet.`
     : !access.allowed ? t`Not available for this account.`
-    : companella.length > 0 ? t`${plural(companella.length, { one: "# connected", other: "# connected" })}`
-    : t`Not connected. Connect from inside Companella.`;
+    : undefined;
+  const statusFor = (connected: CompanellaInstallation[], appName: string) => blocked !== undefined ? blocked
+    : connected.length > 0 ? t`${plural(connected.length, { one: "# connected", other: "# connected" })}`
+    : t`Not connected. Connect from inside ${appName}.`;
 
   const revoke = (installation: CompanellaInstallation, appName: string) => {
     if (!window.confirm(t`Revoke this connection? ${appName} on that computer stops sending plays right away.`)) return;
@@ -101,28 +104,25 @@ export function CompanellaGroup() {
   return (
     <PanelGroup label={t`Integrations`}>
       <IntegrationApp
-        name="Companella"
-        icon="/images/companella-icon.png"
-        status={status}
-        aboutTo="/news/companella"
-        installations={companella}
+        name={bridgeApp.name}
+        icon={bridgeApp.icon}
+        aboutTo="/bridge"
+        status={statusFor(bridge, bridgeApp.name)}
+        installations={bridge}
         busyId={busyId}
-        onRevoke={(installation) => revoke(installation, "Companella")}
+        onRevoke={(installation) => revoke(installation, bridgeApp.name)}
       />
-      {/* Listed only once connected until the app is out, so there is nothing to download from /bridge yet. */}
-      {bridge.length > 0 && (
-        <div className="space-y-3 border-t border-white/[0.07] pt-3">
-          <IntegrationApp
-            name={bridgeApp.name}
-            icon={bridgeApp.icon}
-            aboutTo="/bridge"
-            status={t`${plural(bridge.length, { one: "# connected", other: "# connected" })}`}
-            installations={bridge}
-            busyId={busyId}
-            onRevoke={(installation) => revoke(installation, bridgeApp.name)}
-          />
-        </div>
-      )}
+      <div className="space-y-3 border-t border-white/[0.07] pt-3">
+        <IntegrationApp
+          name="Companella"
+          icon="/images/companella-icon.png"
+          status={statusFor(companella, "Companella")}
+          aboutTo="/news/companella"
+          installations={companella}
+          busyId={busyId}
+          onRevoke={(installation) => revoke(installation, "Companella")}
+        />
+      </div>
       {failed && <p role="alert" className="text-[11px] text-red-300"><Trans>Could not revoke that connection.</Trans></p>}
     </PanelGroup>
   );

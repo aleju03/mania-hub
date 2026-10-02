@@ -131,8 +131,7 @@ msgstr "{0, plural, one {# chart} other {# charts}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, one {# collector} other {# collectors}}"
 
-#. placeholder {0}: bridge.length
-#. placeholder {0}: companella.length
+#. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
 msgid "{0, plural, one {# connected} other {# connected}}"
 msgstr "{0, plural, one {# connected} other {# connected}}"
@@ -3184,7 +3183,7 @@ msgstr "analyzing…"
 msgid "and {0} more"
 msgstr "and {0} more"
 
-#. placeholder {0}: openedSection.clears - openedSection.plays.length
+#. placeholder {0}: section.clears - section.plays.length
 #: src/components/player/DanEvidenceModal.tsx
 msgid "and {0} more below these"
 msgstr "and {0} more below these"
@@ -11284,8 +11283,12 @@ msgid "Not connected"
 msgstr "Not connected"
 
 #: src/components/settings/CompanellaGroup.tsx
-msgid "Not connected. Connect from inside Companella."
-msgstr "Not connected. Connect from inside Companella."
+msgid "Not connected. Connect from inside {appName}."
+msgstr "Not connected. Connect from inside {appName}."
+
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Not connected. Connect from inside Companella."
+#~ msgstr "Not connected. Connect from inside Companella."
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -20173,12 +20176,12 @@ msgid "Your dan"
 msgstr "Your dan"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own."
-msgstr "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own."
+#~ msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own."
+#~ msgstr "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own."
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgstr "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your description shows up here."

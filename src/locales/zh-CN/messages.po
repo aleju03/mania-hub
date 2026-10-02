@@ -140,8 +140,7 @@ msgstr "{0, plural, other {# 张谱面}}"
 msgid "{0, plural, one {# collector} other {# collectors}}"
 msgstr "{0, plural, other {# 位收藏者}}"
 
-#. placeholder {0}: bridge.length
-#. placeholder {0}: companella.length
+#. placeholder {0}: connected.length
 #: src/components/settings/CompanellaGroup.tsx
 msgid "{0, plural, one {# connected} other {# connected}}"
 msgstr "{0, plural, other {已连接 # 个}}"
@@ -3166,7 +3165,7 @@ msgstr "分析中…"
 msgid "and {0} more"
 msgstr "还有 {0} 位"
 
-#. placeholder {0}: openedSection.clears - openedSection.plays.length
+#. placeholder {0}: section.clears - section.plays.length
 #: src/components/player/DanEvidenceModal.tsx
 msgid "and {0} more below these"
 msgstr "此外还有 {0} 次排在这些之后"
@@ -11254,8 +11253,12 @@ msgid "Not connected"
 msgstr ""
 
 #: src/components/settings/CompanellaGroup.tsx
-msgid "Not connected. Connect from inside Companella."
-msgstr "未连接。请在 Companella 内连接。"
+msgid "Not connected. Connect from inside {appName}."
+msgstr "未连接。请在 {appName} 内连接。"
+
+#: src/components/settings/CompanellaGroup.tsx
+#~ msgid "Not connected. Connect from inside Companella."
+#~ msgstr "未连接。请在 Companella 内连接。"
 
 #: src/components/player/DanEvidenceModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -20131,12 +20134,12 @@ msgid "Your dan"
 msgstr "你的段位"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own."
-msgstr "你的段位取你最好的 {averageWindow} 次通过的平均，每个技能组各自最多平均 {averageWindow} 次。"
+#~ msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own."
+#~ msgstr "你的段位取你最好的 {averageWindow} 次通过的平均，每个技能组各自最多平均 {averageWindow} 次。"
 
 #: src/components/player/DanEvidenceModal.tsx
-msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
-msgstr "你的段位取你最好的 {averageWindow} 次通过的平均，每个技能组各自最多平均 {averageWindow} 次。同一张谱面只计入你最好的两个变速成绩。证据更少时，会用现有的记录求平均，估算仍在完善中。"
+#~ msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+#~ msgstr "你的段位取你最好的 {averageWindow} 次通过的平均，每个技能组各自最多平均 {averageWindow} 次。同一张谱面只计入你最好的两个变速成绩。证据更少时，会用现有的记录求平均，估算仍在完善中。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Your description shows up here."
