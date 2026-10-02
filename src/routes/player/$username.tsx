@@ -33,6 +33,8 @@ import {
 } from "../../lib/format";
 import { useHasHydrated, useNoDans, useRecentPlayRatings } from "../../store";
 import { recentPlayRatingKey, useRecentPlayRatingLookup } from "../../components/player/recent-play-ratings";
+import { PresenceLine } from "../../components/player/LivePresence";
+import { usePlayerPresence } from "../../lib/companella-presence";
 import {
   getBeatmapKeyCount,
   
@@ -1853,6 +1855,7 @@ export function PlayerProfilePage({
     showRecentRatings ? visibleRows.flatMap((row) => (row.kind === "score" ? [row.score] : [])) : [],
     showRecentRatings,
   );
+  const livePresence = usePlayerPresence(user?.id);
 
   if (loadingUser && !user) {
     return <PlayerPageSkeleton tab={tab} onTabChange={handleTabChange} />;
@@ -1928,7 +1931,7 @@ export function PlayerProfilePage({
   // A play we just watched land beats osu!'s `last_visit`, which only tracks
   // website visits and can read weeks stale for someone mid-session.
   const seenPlayingNow = recentPlayAt != null && playedWithinOnlineWindow(recentPlayAt);
-  const isOnlineNow = user.is_online || seenPlayingNow;
+  const isOnlineNow = user.is_online || seenPlayingNow || livePresence != null;
 
   const coverImage = user.cover?.url || user.cover_url || null;
   const peakRank = user.rank_highest?.rank ?? null;
@@ -2324,7 +2327,7 @@ export function PlayerProfilePage({
                 {isOnlineNow ? (
                   <span
                     className="h-2 w-2 shrink-0 rounded-full bg-osu-green"
-                    title={user.is_online || !recentPlayAt ? t`Online` : t`Set a play ${formatDetailedTimeAgo(recentPlayAt, locale)}`}
+                    title={user.is_online || livePresence || !recentPlayAt ? t`Online` : t`Set a play ${formatDetailedTimeAgo(recentPlayAt, locale)}`}
                   />
                 ) : null}
               </h1>
@@ -2335,6 +2338,7 @@ export function PlayerProfilePage({
                   </span>
                 ))}
               </div>
+              {livePresence ? <PresenceLine presence={livePresence} /> : null}
               {canRename && renameOpen ? (
                 <DisplayNameForm
                   current={user.display_name ?? null}

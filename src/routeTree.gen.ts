@@ -107,6 +107,7 @@ import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/ca
 import { Route as ApiSignatureTokenVariantRouteImport } from './routes/api/signature/$token/$variant'
 import { Route as ApiIntegrationsCompanellaV1CapabilitiesRouteImport } from './routes/api/integrations/companella/v1/capabilities'
 import { Route as ApiIntegrationsCompanellaV1MeRouteImport } from './routes/api/integrations/companella/v1/me'
+import { Route as ApiIntegrationsCompanellaV1PresenceRouteImport } from './routes/api/integrations/companella/v1/presence'
 import { Route as ApiIntegrationsCompanellaV1SubmissionsRouteImport } from './routes/api/integrations/companella/v1/submissions'
 import { Route as ApiIntegrationsCompanellaV1OauthRevokeRouteImport } from './routes/api/integrations/companella/v1/oauth/revoke'
 import { Route as ApiIntegrationsCompanellaV1OauthTokenRouteImport } from './routes/api/integrations/companella/v1/oauth/token'
@@ -612,6 +613,12 @@ const ApiIntegrationsCompanellaV1MeRoute =
     path: '/api/integrations/companella/v1/me',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiIntegrationsCompanellaV1PresenceRoute =
+  ApiIntegrationsCompanellaV1PresenceRouteImport.update({
+    id: '/api/integrations/companella/v1/presence',
+    path: '/api/integrations/companella/v1/presence',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiIntegrationsCompanellaV1SubmissionsRoute =
   ApiIntegrationsCompanellaV1SubmissionsRouteImport.update({
     id: '/api/integrations/companella/v1/submissions',
@@ -754,6 +761,7 @@ export interface FileRoutesByFullPath {
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
+  '/api/integrations/companella/v1/presence': typeof ApiIntegrationsCompanellaV1PresenceRoute
   '/api/integrations/companella/v1/submissions': typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
   '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
@@ -861,6 +869,7 @@ export interface FileRoutesByTo {
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
+  '/api/integrations/companella/v1/presence': typeof ApiIntegrationsCompanellaV1PresenceRoute
   '/api/integrations/companella/v1/submissions': typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
   '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
@@ -969,6 +978,7 @@ export interface FileRoutesById {
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   '/api/integrations/companella/v1/me': typeof ApiIntegrationsCompanellaV1MeRoute
+  '/api/integrations/companella/v1/presence': typeof ApiIntegrationsCompanellaV1PresenceRoute
   '/api/integrations/companella/v1/submissions': typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
   '/api/integrations/companella/v1/oauth/revoke': typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   '/api/integrations/companella/v1/oauth/token': typeof ApiIntegrationsCompanellaV1OauthTokenRoute
@@ -1078,6 +1088,7 @@ export interface FileRouteTypes {
     | '/api/signature/$token/$variant'
     | '/api/integrations/companella/v1/capabilities'
     | '/api/integrations/companella/v1/me'
+    | '/api/integrations/companella/v1/presence'
     | '/api/integrations/companella/v1/submissions'
     | '/api/integrations/companella/v1/oauth/revoke'
     | '/api/integrations/companella/v1/oauth/token'
@@ -1185,6 +1196,7 @@ export interface FileRouteTypes {
     | '/api/signature/$token/$variant'
     | '/api/integrations/companella/v1/capabilities'
     | '/api/integrations/companella/v1/me'
+    | '/api/integrations/companella/v1/presence'
     | '/api/integrations/companella/v1/submissions'
     | '/api/integrations/companella/v1/oauth/revoke'
     | '/api/integrations/companella/v1/oauth/token'
@@ -1292,6 +1304,7 @@ export interface FileRouteTypes {
     | '/api/signature/$token/$variant'
     | '/api/integrations/companella/v1/capabilities'
     | '/api/integrations/companella/v1/me'
+    | '/api/integrations/companella/v1/presence'
     | '/api/integrations/companella/v1/submissions'
     | '/api/integrations/companella/v1/oauth/revoke'
     | '/api/integrations/companella/v1/oauth/token'
@@ -1391,6 +1404,7 @@ export interface RootRouteChildren {
   ApiSignatureTokenVariantRoute: typeof ApiSignatureTokenVariantRoute
   ApiIntegrationsCompanellaV1CapabilitiesRoute: typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
   ApiIntegrationsCompanellaV1MeRoute: typeof ApiIntegrationsCompanellaV1MeRoute
+  ApiIntegrationsCompanellaV1PresenceRoute: typeof ApiIntegrationsCompanellaV1PresenceRoute
   ApiIntegrationsCompanellaV1SubmissionsRoute: typeof ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren
   ApiIntegrationsCompanellaV1OauthRevokeRoute: typeof ApiIntegrationsCompanellaV1OauthRevokeRoute
   ApiIntegrationsCompanellaV1OauthTokenRoute: typeof ApiIntegrationsCompanellaV1OauthTokenRoute
@@ -2084,6 +2098,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiIntegrationsCompanellaV1MeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/integrations/companella/v1/presence': {
+      id: '/api/integrations/companella/v1/presence'
+      path: '/api/integrations/companella/v1/presence'
+      fullPath: '/api/integrations/companella/v1/presence'
+      preLoaderRoute: typeof ApiIntegrationsCompanellaV1PresenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/integrations/companella/v1/submissions': {
       id: '/api/integrations/companella/v1/submissions'
       path: '/api/integrations/companella/v1/submissions'
@@ -2332,6 +2353,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiIntegrationsCompanellaV1CapabilitiesRoute:
     ApiIntegrationsCompanellaV1CapabilitiesRoute,
   ApiIntegrationsCompanellaV1MeRoute: ApiIntegrationsCompanellaV1MeRoute,
+  ApiIntegrationsCompanellaV1PresenceRoute:
+    ApiIntegrationsCompanellaV1PresenceRoute,
   ApiIntegrationsCompanellaV1SubmissionsRoute:
     ApiIntegrationsCompanellaV1SubmissionsRouteWithChildren,
   ApiIntegrationsCompanellaV1OauthRevokeRoute:

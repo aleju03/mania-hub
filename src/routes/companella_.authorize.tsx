@@ -349,6 +349,14 @@ function AuthorizePage() {
             <Trans>Send the chart file when the site does not already have it</Trans>
           </div>
         </li>
+        {detail.scopes.includes("companella:presence:write") ? (
+          <li className="flex items-start gap-3 px-3 py-3">
+            <Check size={18} className="mt-0.5 shrink-0 text-emerald-300" />
+            <div className="text-sm text-white">
+              <Trans>Show what you are doing in osu! on your profile and the rankings</Trans>
+            </div>
+          </li>
+        ) : null}
       </ul>
 
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wider text-osu-f1">

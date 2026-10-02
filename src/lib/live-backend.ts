@@ -266,6 +266,7 @@ export const LIVE_EVENT_NAMES = [
   "status",
   "tracker_score",
   "companella_score",
+  "companella_presence",
   "score_gain",
   "top_play",
   "maps_farmed_update",
@@ -1598,6 +1599,44 @@ export interface CompanellaPublicProfile {
   userId: number;
   plays: CompanellaPublicPlay[];
   ratings: Array<{ keyCount: number; overall: number | null; officialOverall: number | null; localPlays: number }>;
+}
+
+/* What a connected player is doing in osu! right now, sent by Mania
+   Bridge. Mirrors CompanellaPresence in live-backend/src/integrations/companella/presence.ts. */
+export type CompanellaPresenceState =
+  | "menu" | "song_select" | "playing" | "results" | "editing" | "spectating" | "multiplayer" | "idle";
+
+export interface CompanellaPresence {
+  user_id: number;
+  username: string;
+  avatar_url: string | null;
+  country_code: string | null;
+  game_client: "stable" | "lazer";
+  state: CompanellaPresenceState;
+  ruleset: "osu" | "taiko" | "fruits" | "mania";
+  beatmap: {
+    id: number | null;
+    beatmapset_id: number | null;
+    artist: string;
+    title: string;
+    version: string;
+    creator: string;
+    key_count: number | null;
+  } | null;
+  mods: string[];
+  rate: number | null;
+  started_at: string | null;
+  updated_at: string;
+}
+
+/* Everyone with live presence right now. Empty when Companella is off. */
+export async function fetchCompanellaPresenceDirect(): Promise<CompanellaPresence[]> {
+  try {
+    return (await fetchLiveJson<{ presence: CompanellaPresence[] }>("/api/integrations/companella/public/presence")).presence;
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return [];
+    throw error;
+  }
 }
 
 /* A restricted player's Companella imports, the one public Companella read.

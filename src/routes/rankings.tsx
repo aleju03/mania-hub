@@ -20,6 +20,8 @@ import { Pagination } from "../components/ui/Pagination";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
+import { PresenceTag } from "../components/player/LivePresence";
+import { useCompanellaPresenceMap } from "../lib/companella-presence";
 import type { LeanRankingEntry, RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useNoDans, useSelectedCountry } from "../store";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -331,6 +333,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((state) => state.setRankings);
   const hiddenUserIds = useHiddenUserIds();
+  const presenceByUser = useCompanellaPresenceMap();
   const [pageTwoData, setPageTwoData] = useState<RankingsResponse | null>(null);
   const [pageTwoFetchedAt, setPageTwoFetchedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -827,6 +830,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                             <RankDeltaLabel label={t`7d`} change={entry.global_change} />
                             <RankDeltaLabel label={entry.user.country_code} change={entry.country_change} />
                           </div>
+                          {presenceByUser.get(entry.user.id) ? (
+                            <PresenceTag presence={presenceByUser.get(entry.user.id)!} className="mt-0.5 max-w-full" />
+                          ) : null}
                         </div>
                         <span className="text-sm font-bold text-right flex-shrink-0">{sortedValue}</span>
                       </div>
@@ -907,6 +913,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                               className="text-sm font-medium truncate min-w-0"
                             />
                             <CountryFlag code={entry.user.country_code} size="sm" />
+                            {presenceByUser.get(entry.user.id) ? (
+                              <PresenceTag presence={presenceByUser.get(entry.user.id)!} className="flex-1" />
+                            ) : null}
                           </Link>
                         </td>
                         <td className="py-2.5 px-3">
@@ -1133,6 +1142,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                         <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
                           {subtitle}
                         </div>
+                        {presenceByUser.get(entry.user.id) ? (
+                          <PresenceTag presence={presenceByUser.get(entry.user.id)!} className="mt-0.5 max-w-full" />
+                        ) : null}
                       </div>
                       <span className="text-sm font-bold text-right flex-shrink-0">{sortedValue}</span>
                     </div>
@@ -1232,6 +1244,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                               avatarUrl={entry.user.avatar_url}
                               className="text-sm font-medium truncate min-w-0"
                             />
+                            {presenceByUser.get(entry.user.id) ? (
+                              <PresenceTag presence={presenceByUser.get(entry.user.id)!} className="flex-1" />
+                            ) : null}
                           </Link>
                         </td>
                         <td className="py-2.5 px-3">

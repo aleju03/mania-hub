@@ -6383,6 +6383,10 @@ msgstr "Editar vistas previas de la skin"
 msgid "Edit your listing"
 msgstr "Editar tu anuncio"
 
+#: src/components/player/LivePresence.tsx
+msgid "Editing"
+msgstr "Editando"
+
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Edition crafted"
 #~ msgstr "Edición creada"
@@ -8199,6 +8203,14 @@ msgstr "en 90d"
 msgid "in flight"
 msgstr "en curso"
 
+#: src/components/player/LivePresence.tsx
+msgid "In multiplayer"
+msgstr "En multijugador"
+
+#: src/components/player/LivePresence.tsx
+msgid "In osu!"
+msgstr "En osu!"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "in queue"
 msgstr "en cola"
@@ -8206,6 +8218,14 @@ msgstr "en cola"
 #: src/components/communities/field-options.tsx
 msgid "In server discovery"
 msgstr "En el directorio de servidores"
+
+#: src/components/player/LivePresence.tsx
+msgid "In song select"
+msgstr "En la selección de canciones"
+
+#: src/components/player/LivePresence.tsx
+msgid "In the main menu"
+msgstr "En el menú principal"
 
 #: src/components/packs/album/AlbumView.tsx
 msgid "In your collection."
@@ -11580,6 +11600,10 @@ msgstr "en un mapa"
 msgid "On Showcase"
 msgstr "En Destacados"
 
+#: src/components/player/LivePresence.tsx
+msgid "On the results screen"
+msgstr "En la pantalla de resultados"
+
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "en la lista de pendientes"
@@ -12589,9 +12613,14 @@ msgstr "Los jugadores cerca de tu pp están farmeando mapas, pero ahora mismo ca
 msgid "Players you hide are filtered out of rankings and feeds across the site. This list is stored on this browser only."
 msgstr "Los jugadores que ocultas se filtran de rankings y feeds en todo el sitio. Esta lista se guarda solo en este navegador."
 
+#: src/components/player/LivePresence.tsx
 #: src/routes/tracker.tsx
 msgid "Playing"
 msgstr "Jugando"
+
+#: src/components/player/LivePresence.tsx
+msgid "Playing {mode}"
+msgstr "Jugando {mode}"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/packs/album/AlbumView.tsx
@@ -15295,6 +15324,10 @@ msgstr "Mostrar el storyboard del mapa detrás (y encima) del playfield"
 msgid "Show the site name on the render"
 msgstr "Mostrar el nombre del sitio en el render"
 
+#: src/routes/companella_.authorize.tsx
+msgid "Show what you are doing in osu! on your profile and the rankings"
+msgstr "Mostrar lo que estás haciendo en osu! en tu perfil y en los rankings"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "showcase"
 msgstr "destacados"
@@ -15913,6 +15946,10 @@ msgstr "Spam o publicidad"
 #: src/components/communities/field-options.tsx
 msgid "Spanish"
 msgstr "Español"
+
+#: src/components/player/LivePresence.tsx
+msgid "Spectating"
+msgstr "Espectando"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Spectators"

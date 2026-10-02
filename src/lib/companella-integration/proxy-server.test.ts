@@ -54,6 +54,20 @@ describe("native proxy", () => {
     expect(headers["x-companella-dpop"]).toBe("proof.value.here");
   });
 
+  it("passes a presence PUT through and answers the backend's 204 without a body", async () => {
+    mockBackend(new Response(null, { status: 204 }));
+    const request = new Request("https://mania-tracker.com/api/integrations/companella/v1/presence", {
+      method: "PUT",
+      headers: { authorization: "DPoP cmp_at_abc", dpop: "proof.value.here", "content-type": "application/json" },
+      body: JSON.stringify({ state: "menu" }),
+    });
+    const response = await forwardNativeRequest(request, "presence");
+    expect(calls[0].url).toBe(`${BACKEND}/api/integrations/companella/native/presence`);
+    expect(calls[0].init.method).toBe("PUT");
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+  });
+
   it("never forwards an internal header the caller supplied", async () => {
     mockBackend(new Response("{}", { status: 200 }));
     const request = new Request("https://mania-tracker.com/api/integrations/companella/v1/me", {

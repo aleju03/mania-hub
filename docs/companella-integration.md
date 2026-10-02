@@ -95,6 +95,7 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `lifecycle.ts` | One self-chaining maintenance job: retention, recovery, object collection. |
 | `public-profile.ts` | The imports of an account osu! turned away, for its public profile. |
 | `public-feed.ts` | Every account's checked imports as tracker and profile Recent rows, merged at read time. |
+| `presence.ts` | Live presence: what a connected player is doing in osu! right now, in memory only. |
 
 The replay judge itself is shared with the replay viewer: one copy under
 `live-backend/src/replay-judge/`, reached from the frontend as `#replay-judge/*`
@@ -723,6 +724,85 @@ community listing, or any shared cache, and the `companella_score` SSE event
 carries the play, never the replay: every private response is `no-store`. The
 exception is a restricted player's play in their current top-200 list (next
 section), whose replay is public.
+
+## Live presence
+
+For Mania Bridge, the owner's own companion app, which connects as the
+`companella` client like Companella does. Companella itself only submits plays
+and never sends presence, so none of this is in the client guide, the OpenAPI
+spec or `/companella/docs`; the app's own copy of the contract is `PRESENCE.md`
+in its repo.
+
+With the opt-in `companella:presence:write` scope the app sends what the
+player is doing in osu!, and the profile shows it under the name ("Playing
+<map>", "In song select") and the pp rankings beside it. The scope is not in
+the default grant: the app requests it at connect time only while the player
+has sharing turned on, and a credential without it gets `403
+insufficient_scope`. `/capabilities` lists the scope in `scopes_supported` and
+the limits below in its `presence` block; the app sends nothing until the
+scope is listed.
+
+`PUT /api/integrations/companella/v1/presence`, same DPoP auth as the other
+calls:
+
+```json
+{
+  "game_client": "lazer",
+  "state": "playing",
+  "ruleset": "mania",
+  "beatmap": {
+    "md5": "0123456789abcdef0123456789abcdef",
+    "beatmap_id": 123,
+    "artist": "…", "title": "…", "version": "…", "creator": "…",
+    "key_count": 4
+  },
+  "mods": ["DT"],
+  "rate": 1.5,
+  "started_at": "2026-10-02T18:00:00Z"
+}
+```
+
+- `state` is one of `menu`, `song_select`, `playing`, `results`, `editing`,
+  `spectating`, `multiplayer`, `idle`; anything else is `400
+  unsupported_state`. There is no pause state: a paused play stays `playing`
+  with the same `started_at`.
+- `ruleset` is the mode osu! is in: `osu`, `taiko`, `fruits` or `mania`. The
+  site shows the map only for `mania`.
+- `beatmap` is read only in `song_select`, `playing`, `results`, `editing` and
+  `spectating`, and `md5` is required when it is present. `beatmap_id` is null
+  for a map osu! does not know. When the md5 is a map the site has, the site
+  shows its own names for it; otherwise the four text fields as sent, cut to
+  256 characters.
+- `mods` is at most 32 acronyms of up to 8 characters; `rate` is 0.5 to 2.0
+  or null; `started_at` is read only while `playing`.
+
+Send on every change of state or map, plus the same body every 30 s. The site
+drops a player 90 s after the last send. Keep at least 2 s between sends; a
+faster one is `429 rate_limited` with `retry_after` (seconds) in the body and
+a `Retry-After` header. `DELETE` on the same path ends it at once (osu!
+closed, sharing turned off, the app quitting) and is never rate limited. Both
+answer `204` with no body. Revoking the installation also ends it.
+
+It is held in the serving process's memory (`presence.ts`), never in the database: one
+entry per player, the latest installation's, gone 90 s after the last send, on
+`DELETE`, or the moment the installation is revoked or blocked. A restart
+forgets everyone until their next heartbeat.
+
+A change goes out as a `companella_presence` SSE event, `{user_id, presence}`
+with `presence: null` when it ends. The event is country-less (every stream
+gets it) and is broadcast without being written to `live_event_log`
+(`LiveEventLog.broadcast`, sequence 0, sent with no `id:` line so it never
+moves a browser's resume cursor). A heartbeat that changes nothing sends no
+event. Pages read `GET public/presence` once, and again on every reconnect,
+then follow the events (`src/lib/companella-presence.ts`).
+
+Shown publicly under the same account rule as the feed: admitted by the beta,
+and active or gone on osu! itself, never switched off by this site. The md5 is
+resolved to the official map the way `resolveExactBeatmap` does it, and the
+site's own names replace the client's; an unknown map shows the client's text,
+cut to 256 characters with control characters removed. The map is dropped for
+a ruleset other than mania and in states with no map. The md5 is never sent
+out. Nothing here touches scores, rankings or any projection.
 
 ## Dan credit for regular players
 

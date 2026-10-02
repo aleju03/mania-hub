@@ -71,6 +71,7 @@ const ROUTE_RULES: Record<NativeRouteId, RouteRule> = {
   submissionReplay: { maxBodyBytes: REPLAY_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
   submissionBeatmap: { maxBodyBytes: BEATMAP_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: UPLOAD_TIMEOUT_MS },
   submissionComplete: { maxBodyBytes: 0, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
+  presence: { maxBodyBytes: JSON_BODY_BYTES, requires: "token_and_proof", oauth: false, timeoutMs: REQUEST_TIMEOUT_MS },
 };
 
 function backendBase(): string | null {
@@ -254,7 +255,9 @@ export async function forwardNativeRequest(
     // by a CDN, a shared proxy, or the browser.
     out.set("cache-control", "no-store");
     out.set("x-content-type-options", "nosniff");
-    return new Response(payload, { status: response.status, headers: out });
+    // A 204 (presence) must be built without a body, even an empty one.
+    const empty = response.status === 204 || response.status === 304;
+    return new Response(empty ? null : payload, { status: response.status, headers: out });
   } catch {
     if (tooLarge) return tooLargeResponse(rule);
     return errorResponse(504, "integration_unavailable", "The integration backend did not answer.", { retryable: true, oauth: rule.oauth });
