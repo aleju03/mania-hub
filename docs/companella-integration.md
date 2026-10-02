@@ -9,9 +9,9 @@ show on the tracker and on the player's profile Recent tab (see "Privacy").
 sets it, and nothing in this integration affects snipes, packs, goals or any
 official projection, with one exception: an import's key-press timing can stand
 in for the accuracy estimate of the official play osu! delivered for the same
-run (see "Timing for official plays"). Checked imports also contribute to
-regular players' public site Dan estimates through a read-time overlay (see
-"Dan credit for regular players"). Simulated pp remains limited to accounts
+run (see "Timing for official plays"). Checked imports also count toward
+regular players' public skill ratings (MSD, patterns and Dan) through a
+read-time overlay (see "Skill credit for regular players"). Simulated pp remains limited to accounts
 osu! turned away (see "Simulated pp for restricted players"); a public row
 may show the play's own pp beside it. See
 `companella-operations.md` for the rollout switch and
@@ -86,7 +86,8 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `replay-timing.ts` | Judges the replay's key presses: the Wife3 goals the rating runs at, and the header check. |
 | `admin-accounts.ts` | The admin list behind the Players tab on `/admin/companella`: every account that has used Companella, and one account's plays. |
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
-| `dan-overlay.ts` | Public Dan credit for active osu! accounts: checked imports combined with retained official evidence at read time. |
+| `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
+| `poll-hold.ts` | Holds a player's recent-score polls while Mania Bridge's presence is live, and polls once when it ends. |
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
 | `preview.ts` | The experimental aggregate, and its deduplication. |
@@ -652,8 +653,9 @@ owner is active (or has no `users` row) or gone on osu! per `accountGoneOnOsu`.
 An admin deactivation or wipe hides them. An import whose `online_score_id`
 equals one of the same user's `score_events` score ids is skipped, so a play
 osu! also sent is listed once. The row is a lean tracker score with a stable
-negative id derived from the import id and a `companella: { importId, replay }`
-mark. It uses the official beatmap and set when the import's chart is the exact
+negative id derived from the import id and a `companella: { importId, replay, app }`
+mark, where `app` is the sending installation's client id so the row shows that
+app's icon (Companella or Mania Bridge). It uses the official beatmap and set when the import's chart is the exact
 official file (the priced beatmap id, else the same md5 match
 `resolveExactBeatmap` makes), and otherwise a beatmap built from
 `companella_local_charts` with id 0 and no link. Its stars and BPM are the
@@ -727,8 +729,9 @@ section), whose replay is public.
 
 ## Live presence
 
-For Mania Bridge, the owner's own companion app, which connects as the
-`companella` client like Companella does. Companella itself only submits plays
+For Mania Bridge, the owner's own companion app, which connects with its own
+`mania-bridge` client id (same flow and scopes as Companella) so Settings lists
+it as its own integration. Companella itself only submits plays
 and never sends presence, so none of this is in the client guide, the OpenAPI
 spec or `/companella/docs`; the app's own copy of the contract is `PRESENCE.md`
 in its repo.
@@ -804,36 +807,75 @@ cut to 256 characters with control characters removed. The map is dropped for
 a ruleset other than mania and in states with no map. The md5 is never sent
 out. Nothing here touches scores, rankings or any projection.
 
-## Dan credit for regular players
+### Holding recent-score polls
 
-An active Bancho account's eligible Companella imports contribute to its public
-site Dan estimate, even when osu! has no official score for that run. In
+While a player's presence is live, `poll-hold.ts` holds their
+`reconcile_user_recent_scores` poll: the app already sends each play as it
+ends, and osu! keeps 24 hours of passed plays, so one poll after the session
+covers it. The poll is held, never dropped, because it is what makes those
+plays official. The hold is a `live_meta` row (`recent-reconcile:bridge-hold:<id>`)
+since presence is in the serving process and the poll runs in the worker; it
+is written when a presence appears and removed when it ends (the app closed,
+or 90 s without a heartbeat), so heartbeats write nothing; a player's start and
+end writes run in order. The poll job defers while it is held, re-checking
+every 15 minutes, so an ending that lands mid-check is still picked up. Ending
+the hold pulls the pending poll forward, or queues one if the feed never saw
+the session but the app sent a play during it. No poll is held past 18 hours
+after the player's last poll (or the hold's start, when later), like the
+closing poll, so a play from before the session cannot fall out of osu!'s
+window; and a hold 18 hours old is removed, so one an ending failed to remove
+cannot hold that player's polls for good. The serving process ends every hold when it starts, since
+its presence memory is empty; an app still open starts a new one on its next
+heartbeat. Only players with "Share what I'm playing" on send presence, so only
+they are held.
+
+## Skill credit for regular players
+
+An active Bancho account's eligible imports count toward its public skill
+ratings, MSD, patterns and Dan, even when osu! has no official score for that
+run. pp and the pp rankings stay official (simulated pp is only for restricted
+accounts, below). In
 particular, stable +V2 imports carry their actual `scoreV2Accuracy` into the
 4K LN ladder's 97% bar; the stable-only accuracy fallback does not apply.
 
-`dan-overlay.ts` reads accepted, completed native imports with clear review
+`skill-overlay.ts` reads accepted, completed native imports with clear review
 state, while the integration admits that account. It shares import placement
 and analysis validation with `restricted-profile.ts`: an exact official file
 or a verified clean rate copy can contribute; unmapped, pending, unsupported
 and vibro-excluded plays cannot. Existing OD, EZ, chart eligibility, accuracy,
 family limits and quorum rules still apply.
 
-Retained osu! plays and imports are folded together through the ordinary Dan
-rules. All attempts reach Dan selection, so the best Dan accuracy wins even
+Retained osu! plays and imports are folded together through the ordinary skill
+fold, MSD and Dan alike. For MSD one chart/effective rate is one slot. When
+an import and an osu! play are the same run (same slot, and the same six
+counts, read from osu!'s lazer names or the import's stable ones, or failing
+counts on either side, dated within 5 minutes), the import
+is the one rated, since its accuracy is read from the key presses where osu!'s
+copy only has the counts to estimate from; osu!'s copy moves to the Dan side.
+So a play that arrives from the app first and from osu! hours later is never
+counted twice and keeps its number. The band in "Timing for official plays"
+still clamps the stored official row; it does not apply here. Otherwise one
+play per slot rates, the highest goal across both sources, as the official
+compute keeps them, since the app sends every attempt; the rest, and sub-floor
+imports on a slot that rates, reach Dan only. A merged keymode keeps the
+stored row's engine stamps, so a row a version bump has not recomputed stays
+held back by the same gates. A keymode no import rates into keeps its stored MSD as
+computed; only its Dan comes from the fold. For Dan the ordinary rules apply. All attempts reach Dan selection, so the best Dan accuracy wins even
 when another attempt has a higher MSD value. One chart/effective rate counts
 once across official plays, imports, ScoreV1/ScoreV2 and verified rate-copy
 family members. Existing official course credentials remain in the fold.
 
-The overlay supplies the profile's public Dan summary, Dan evidence, and Dan
-leaderboard columns, including tracked players with no official skill row yet.
+The overlay supplies the profile's skill summary, the Skills plays list, Dan
+evidence, and the skill and Dan leaderboard columns, including tracked players
+with no official skill row yet.
 Profile reads use the existing read workers and inspect current eligibility;
 Dan boards pick up changes on their normal five-minute rebuild. Excluding or
-deleting an import removes its Dan contribution on the next fresh read, and
+deleting an import removes its contribution on the next fresh read, and
 Restore makes it eligible again. Existing imports need no reprocessing.
 
-This changes only public site Dan results. Ordinary players' official MSD
-totals, pp, histories, `player_skill_ratings`, score ingest, snipes, goals and
-packs are untouched. Their imported replays keep the existing privacy rules.
+Nothing official is written. `player_skill_ratings`, skill history, pp,
+score ingest, snipes, goals and packs (card snapshots included) keep reading
+osu! plays only. Their imported replays keep the existing privacy rules.
 Restricted accounts retain their existing separate profile/pp window below.
 
 ## Simulated pp for restricted players

@@ -20,6 +20,7 @@ All backend, all in `live-backend/.env`, all read once at boot through
 | `COMPANELLA_ENVIRONMENT` | `production` / `development` | Tokens, grants, artifacts and idempotency keys never cross it. |
 | `COMPANELLA_ENABLE_TEST_CLIENT` | `false` | Registers the `companella-test` client and its same-origin callback. |
 | `COMPANELLA_CLIENT_ID` | `companella` | The native client id. |
+| `MANIA_BRIDGE_CLIENT_ID` | `mania-bridge` | Mania Bridge's client id, listed apart from Companella in Settings. |
 | `COMPANELLA_TEST_CLIENT_ID` | `companella-test` | |
 | `COMPANELLA_REQUIRE_PROOF_NONCE` | `false` | Turning it on costs every client one extra round trip on its first request. |
 | `COMPANELLA_NONCE_SECRET` | `LIVE_ADMIN_TOKEN` | HMAC key behind the stateless nonce. |
