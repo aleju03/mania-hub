@@ -235,6 +235,11 @@ does not speed up a submission that is `queued`, `validating` or `analyzing`.
 attempt the receipt ends `rejected` with `processing_failed`. While a long chart
 lookup continues, the state stays `analyzing`.
 
+An `accepted` receipt read with `GET …/{id}` carries `rating`: the play's MSD
+(`msd`), the chart's MSD at the played rate (`chart_msd`) and the chart's dan
+(`dan.label`, the text the site shows), or `msd: null` with an `unrated_reason`.
+It is null in every other state.
+
 ## 4. Errors and what to do
 
 | Condition | Client behaviour |

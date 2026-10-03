@@ -777,4 +777,27 @@ components:
             message: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        rating:
+          type: [object, "null"]
+          description: |
+            Only on `GET /submissions/{id}`, once the state is `accepted` and
+            the play has been analyzed; null otherwise. The same MSD and dan
+            the player's Recent tab shows for the play.
+          properties:
+            analysis_state: { type: string, enum: [supported, unsupported] }
+            unrated_reason:
+              type: [string, "null"]
+              description: Why `msd` is null on an `unsupported` play, for example `replay_timing_unavailable` or `accuracy_below_calc_floor`. Codes may be added.
+            keys: { type: [integer, "null"] }
+            rate: { type: number, description: The speed the play ran at. }
+            msd: { type: [number, "null"], description: "The play's Overall SSR, 2 decimals. Null unless `analysis_state` is `supported`." }
+            chart_msd: { type: [number, "null"], description: "The chart's Overall MSD at `rate`, 2 decimals." }
+            dan:
+              type: [object, "null"]
+              description: The chart's dan at `rate`. Null when the play is not rated or the chart has none.
+              properties:
+                label: { type: string, description: 'The level the site shows, with an optional `--`, `-`, `+` or `++` tier: "8", "8+", "gamma-", "zenith++". The site prints a numeric label as "8 dan"; `family` says whether it is the LN ladder.' }
+                family: { type: string, enum: [dan, ln] }
+                raw: { type: number, description: "The level as a number, 2 decimals, for sorting within one keymode and family. 6K and 7K count from 0 (7K gamma is 11). Show `label`, not this." }
+                eligible: { type: boolean, description: "Whether the play can count toward the player's dan." }
       required: [submission_id, state]
