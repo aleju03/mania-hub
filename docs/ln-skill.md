@@ -148,6 +148,22 @@ LN is one strain and score-goal solution over all the work. `ln-ssr.ts`
 retains the 0.965 solver cap and extrapolates the cap/base slope above it. Native and LN use their existing separate calibrated
 performance goals; this change does not retune the Wife calibration.
 
+The v15 recalibration (2026-10-02) measured every LN-rated chart, not only
+those of 75%+ holds: 244k plays and about 1M same-player pairs, split by
+mapset. Under 75% holds v14 ordered pairs worse than native Overall (under
+60%: 73/75% against 82/83%), because the workload prices no rice, misses
+jacks from a tap into a hold head, and overprices releases. A press on a lane
+whose last object was a tap now adds up to 8 units of work, falling to nothing
+at a 200ms gap; a release costs a third of a press, and half that when its row
+only has presses on the other hand. The published number then blends toward
+native Overall + 1 at the same rate and goal, with weight 0.5 at 60% holds and
+one point less per unit of hold share (`publishedLnRating`), and maps the
+blend through `1.82 * x^0.84` so LN Dan N players read where regular Dan N
+players read on Overall. Over all pairs it orders 81.1% and 81.6% of the two
+halves against v14's 72.1% and 77.0%, and Dans 3 to 15 agree within 1.5, root
+mean square 0.77 (v14 1.32). The identity tiebreak (`dan/ln-identity.ts`)
+keeps v14's pricing, so the recalibration moves no chart between rice and LN.
+
 ## Four skillsets
 
 The families follow the stages of _underjoy's 4K LN Dan Courses v2: Stage 1
