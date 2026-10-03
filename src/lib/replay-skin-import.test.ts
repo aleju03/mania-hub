@@ -233,6 +233,22 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
     expect(result.settings.keymodeProfiles["4"].assets.columns[0].tap?.name).toBe("custom1.png");
   });
 
+  it("plays the first [Mania] block when a keymode is declared twice, like stable", async () => {
+    const file = await buildOsk(
+      [
+        "[General]", "Name: Repeated",
+        "[Mania]", "Keys: 4", "HitPosition: 455", "NoteImage0: mania/notes/orb",
+        "[Mania]", "Keys: 4", "HitPosition: 444",
+      ].join("\n"),
+      ["mania/notes/orb.png", "mania-note1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.summary.keymodes).toEqual([4]);
+    expect(result.settings.keymodeProfiles["4"].assets.columns[0].tap?.name).toBe("orb.png");
+    expect(result.settings.keymodeProfiles["4"].hitPosition).toBe(Math.round((480 - 455) * 1.6));
+  });
+
   it("retries -0 judgement frames and falls through combo prefixes like the game does", async () => {
     const file = await buildOsk(
       [

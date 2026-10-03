@@ -99,11 +99,16 @@ export async function importReplaySkinFromOsk(
   });
 
   const targetKeyCount = Math.max(1, Math.min(REPLAY_SKIN_MAX_COLUMNS, Math.round(options.targetKeyCount)));
+  // A skin.ini may repeat a [Mania] block for the same key count; stable
+  // plays the first one, so later duplicates are dropped rather than left to
+  // overwrite its profile.
+  const seenKeys = new Set<number>();
   const maniaBlocks = parsed.mania
     .map((block) => ({ block, keys: parseInteger(block.Keys) }))
     .filter((entry): entry is { block: Record<string, string>; keys: number } =>
       entry.keys != null && entry.keys >= 1 && entry.keys <= REPLAY_SKIN_MAX_COLUMNS,
-    );
+    )
+    .filter(({ keys }) => !seenKeys.has(keys) && seenKeys.add(keys));
 
   if (maniaBlocks.length === 0) {
     throw new Error("No [Mania] section with a valid Keys value was found.");
