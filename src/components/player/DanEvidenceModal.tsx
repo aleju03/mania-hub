@@ -279,6 +279,12 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   const openedSection = sections.find((section) => section.id === openSection) ?? null;
   const listSection = openedSection ?? sections[0] ?? null;
   const skillsetSections = sections.slice(1);
+  // The headline is the "all clears" reading, so once there is one the strip
+  // under it holds the skills alone and the count beside the exact estimate
+  // opens every clear. Without a headline number (under the quorum, or past
+  // the ladder's end) that count is not shown, so the column stays.
+  const allInHeader = !clearsFirst && dan != null && !beyond && sections.length > 1;
+  const stripSections = allInHeader ? skillsetSections : sections;
   // Picked from the profile under the list, so the swapped list starts at
   // its top rather than wherever the old one was scrolled.
   const showSkillsetClears = (id: string) => {
@@ -288,8 +294,9 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
   // The loading state stands in for the same column strip the loaded window
   // opens on, so nothing jumps when the estimate lands. Only 7K LN has
   // columns of skill buckets on the LN side; every other LN keymode is the
-  // one "all" column, and 4K LN loads as rows.
-  const skeletonColumns = side === "ln" && keyCount !== 7 ? 1 : 5;
+  // one "all" column, and 4K LN loads as rows. The "all" reading sits in the
+  // header, so the strip is the four skills.
+  const skeletonColumns = side === "ln" && keyCount !== 7 ? 1 : 4;
   // A lone column has nothing to sit beside, so it takes the whole row instead
   // of half of one - otherwise the only reading in the window hugs the left
   // edge on phones, where the columns wrap two to a row.
@@ -371,11 +378,13 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             exit={{ opacity: 0, y: 8, scale: 0.985 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
           >
-            <header className="relative shrink-0 overflow-hidden border-b border-osu-b3/25 bg-osu-b4 px-4 py-4 sm:px-6 sm:py-5">
-              <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} />
-              <div className="flex items-center gap-4 pr-10">
-                <div>
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-osu-f1">
+            {/* The estimate leads: course artwork on the left, then the keymode,
+                the sentence, and one line with the exact number and the clear
+                count. No panel, bar or eyebrow. */}
+            <header className="relative shrink-0 px-4 pb-3 pt-4 sm:px-6 sm:pt-5">
+              <div className="flex flex-row-reverse items-center justify-end gap-5 pr-10">
+                <div className="flex flex-col items-start">
+                  <div className="flex items-center gap-1.5 text-[12px] text-osu-f1">
                     <Trans>{keyCount}K {sideLabel} dan</Trans>
                     {/* The rules used to be spelled out under the title. Everyone has read
                         the article by now, so this is just a quiet way back to it. */}
@@ -409,6 +418,20 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                         <Trans>Exact estimate: {dan.rawDan.toFixed(2)}</Trans>
                         <ChevronDown size={12} className={`transition-transform ${stepsAt ? "rotate-180" : ""}`} />
                       </button>
+                      {allInHeader && evidence ? (
+                        <>
+                          <span className="mx-2 hidden h-3 w-px translate-y-0.5 bg-white/15 sm:inline-block" aria-hidden="true" />
+                          <button
+                            type="button"
+                            onClick={() => setOpenSection(openSection === "all" ? null : "all")}
+                            aria-expanded={openSection === "all"}
+                            className="mt-1 flex w-fit cursor-pointer items-center gap-1 text-[11px] tabular-nums text-osu-f1 transition-colors hover:text-white sm:mt-0 sm:inline-flex"
+                          >
+                            {t`${evidence.totalClears} plays`}
+                            <ChevronDown size={12} className={`transition-transform ${openSection === "all" ? "rotate-180" : ""}`} />
+                          </button>
+                        </>
+                      ) : null}
                       {/* A popover, so opening it never pushes the clears list down. */}
                       {typeof document !== "undefined" ? createPortal(
                         <AnimatePresence>
@@ -471,8 +494,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   ) : null}
                 </div>
                 {image ? (
-                  <span className="ml-auto flex shrink-0 items-start gap-[2px] leading-none">
-                    <img src={image} alt={formatDan(danLabel)} className="h-14 w-14 object-contain" />
+                  <span className="flex shrink-0 items-start gap-[2px] leading-none">
+                    <img src={image} alt={formatDan(danLabel)} className="h-16 w-16 object-contain sm:h-20 sm:w-20" />
                     {suffix ? (
                       <span className="mt-1 text-[18px] font-bold leading-none" style={{ color: danTierColor(suffix) ?? undefined }}>
                         {suffix}
@@ -480,7 +503,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                     ) : null}
                   </span>
                 ) : loading ? (
-                  <Skeleton className="ml-auto h-14 w-14 shrink-0 rounded-full" />
+                  <Skeleton className="h-16 w-16 shrink-0 rounded-full sm:h-20 sm:w-20" />
                 ) : null}
               </div>
               <button
@@ -501,11 +524,11 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                   ))}
                 </div>
               ) : loading ? (
-                <div className="flex flex-wrap border-b border-osu-b3/20">
+                <div className="flex flex-wrap border-y border-white/[0.07]">
                   {Array.from({ length: skeletonColumns }).map((_, index) => (
                     <div
                       key={index}
-                      className={`flex min-w-0 ${columnBasis(skeletonColumns)} flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 first:border-l-0 sm:basis-0 sm:flex-1`}
+                      className={`flex min-w-0 ${columnBasis(skeletonColumns)} flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1`}
                     >
                       <Skeleton className="h-3 w-14" />
                       <Skeleton className="h-12 w-12 rounded-full" />
@@ -564,17 +587,12 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                             {t`All clears`}
                           </button>
-                          <span
-                            className="text-[11px] font-bold uppercase tracking-[0.12em]"
-                            style={{ color: listSection.color }}
-                          >
-                            {listSection.label}
-                          </span>
+                          <span className="text-[13px] font-semibold text-white">{listSection.label}</span>
                         </div>
                       )}
                       <div className="pt-2">{renderClears(listSection)}</div>
                       {skillsetSections.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap border-t border-white/[0.07] pt-2">
+                        <div className="mt-3 flex flex-wrap border-y border-white/[0.07]">
                           {skillsetSections.map((section) => {
                             const open = openSection === section.id;
                             const bare = section.dan ? danBareLabel(section.dan.label) : null;
@@ -586,28 +604,35 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                 onClick={() => showSkillsetClears(section.id)}
                                 aria-pressed={open}
                                 title={open ? t`Hide the ${section.label} clears` : t`Show the ${section.label} clears`}
-                                className={`relative flex min-w-0 basis-1/2 flex-col items-center gap-1 rounded-md px-2 py-2 text-center transition-colors sm:basis-0 sm:flex-1 ${
+                                className={`relative flex min-w-0 basis-1/2 flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 text-center transition-colors first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1 ${
                                   open ? "bg-osu-b4" : "hover:bg-osu-b4/50"
                                 }`}
                               >
-                                <span
-                                  className="max-w-full truncate text-[11px] font-bold uppercase tracking-[0.12em]"
-                                  style={{ color: section.color }}
-                                >
+                                <span className="max-w-full truncate text-[12px] font-semibold text-osu-f1">
                                   {section.label}
                                 </span>
-                                <span className="flex items-center gap-1.5">
-                                  {sectionImage ? <img src={sectionImage} alt="" className="h-8 w-8 object-contain" /> : null}
-                                  {section.dan ? (
-                                    <span className="text-[13px] font-black leading-none text-white">
-                                      {section.skillsetClear ? "" : "~"}{formatDan(section.dan.label)}
-                                    </span>
+                                <span className="flex h-12 items-center justify-center">
+                                  {sectionImage ? (
+                                    <img src={sectionImage} alt="" className="h-12 w-12 object-contain" />
                                   ) : (
-                                    <span className="text-[11px] leading-none text-osu-f1">
-                                      <Trans>needs {quorum}</Trans>
-                                    </span>
+                                    <span className="text-2xl font-black leading-none text-osu-b3">-</span>
                                   )}
                                 </span>
+                                {section.dan ? (
+                                  <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
+                                    {section.skillsetClear ? "" : "~"}{formatDan(section.dan.label)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] leading-none text-osu-f1">
+                                    <Trans>needs {quorum}</Trans>
+                                  </span>
+                                )}
+                                <span className="text-[11px] tabular-nums text-osu-f1">
+                                  {section.skillsetClear ? t`Verified clear` : t`${section.clears} plays`}
+                                </span>
+                                {open ? (
+                                  <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
+                                ) : null}
                               </button>
                             );
                           })}
@@ -620,8 +645,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                           its course artwork at a size you can actually read, and
                           the clears behind it open underneath the one you pick -
                           so nothing is a list of plays until you ask for one. */}
-                      <div className="flex flex-wrap border-b border-osu-b3/20">
-                        {sections.map((section) => {
+                      <div className="flex flex-wrap border-y border-white/[0.07]">
+                        {stripSections.map((section) => {
                           const open = openSection === section.id;
                           const sectionBeyond = section.id === "all" && beyond;
                           const bare = section.dan ? danBareLabel(section.dan.label) : null;
@@ -634,14 +659,11 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                               onClick={() => setOpenSection(open ? null : section.id)}
                               aria-expanded={open}
                               title={open ? t`Hide the ${section.label} clears` : t`Show the ${section.label} clears`}
-                              className={`relative flex min-w-0 ${columnBasis(sections.length)} flex-col items-center gap-1.5 border-l border-osu-b3/15 px-2 py-3 text-center transition-colors first:border-l-0 sm:basis-0 sm:flex-1 ${
+                              className={`relative flex min-w-0 ${columnBasis(stripSections.length)} flex-col items-center gap-1.5 border-l border-white/[0.07] px-2 py-3 text-center transition-colors first:border-l-0 max-sm:odd:border-l-0 sm:basis-0 sm:flex-1 ${
                                 open ? "bg-osu-b4" : "hover:bg-osu-b4/50"
                               }`}
                             >
-                              <span
-                                className="max-w-full truncate text-[10px] font-bold uppercase tracking-[0.12em]"
-                                style={{ color: section.color }}
-                              >
+                              <span className="max-w-full truncate text-[12px] font-semibold text-osu-f1">
                                 {section.label}
                               </span>
                               <span className="flex h-12 items-center justify-center">
@@ -652,7 +674,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                 )}
                               </span>
                               {sectionLabel ? (
-                                <span className="max-w-full truncate text-sm font-black leading-none text-white">
+                                <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
                                   {sectionBeyond ? ">" : section.skillsetClear ? "" : "~"}{sectionLabel}
                                 </span>
                               ) : (
@@ -660,7 +682,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                   <Trans>needs {quorum}</Trans>
                                 </span>
                               )}
-                              <span className="text-[10px] tabular-nums text-osu-f1">
+                              <span className="text-[11px] tabular-nums text-osu-f1">
                                 {/* Under the averaging window the count reads as
                                     progress toward it: this dan is averaged from
                                     fewer plays than it wants. */}
