@@ -165,7 +165,7 @@ function IntegrationApp({ name, icon, status, aboutTo, installations, busyId, on
           <div className="min-w-0 flex-1">
             <div className="text-[12px] font-semibold text-osu-l1">{name}</div>
             {status ? (
-              <div className="truncate text-[11px] text-osu-f1">
+              <div className="text-[11px] text-osu-f1">
                 {singleStatus ?? status}
                 {single && single.displayName !== name && (
                   <>
