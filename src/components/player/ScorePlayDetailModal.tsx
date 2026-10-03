@@ -11,7 +11,7 @@ import {
   getScoreUrl,
   scoreHasReplay,
 } from "../../lib/score";
-import { companellaReplayImportId } from "../../lib/companella-scores";
+import { companellaReplayImportId, sharedImportPath } from "../../lib/companella-scores";
 import type { OsuScore } from "../../lib/types";
 import { MapDetailModal, type MapDetailPlayContext } from "../maps/MapDetailModal";
 import { rateModFor } from "./SkillPlaysModal";
@@ -100,6 +100,8 @@ export function ScorePlayDetailModal({ score, username, onClose }: { score: OsuS
     mods,
     daOd: difficultyAdjustOd(score),
     scoreId: score.id,
+    // An import has no osu! page; its link opens this card on the Recent tab.
+    sharePath: score.companella ? sharedImportPath(score.user?.username ?? username, score.companella.importId) : null,
     score: {
       statistics: score.statistics ?? null,
       maxCombo: score.max_combo ?? null,

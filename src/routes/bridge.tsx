@@ -193,7 +193,7 @@ function BridgePage() {
               <h2 className="text-[13px] font-semibold text-white"><Trans>What it does</Trans></h2>
               <p className="mt-2">
                 <Trans>
-                  Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With{" "}
+                  Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With{" "}
                   <span className={SETTING}>{shareSetting}</span> turned on, your profile and the pp rankings also show what
                   you're doing in osu!.
                 </Trans>

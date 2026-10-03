@@ -5080,6 +5080,7 @@ msgstr "无法加载这些成绩。"
 msgid "Could not load this leaderboard."
 msgstr "无法加载该排行榜。"
 
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 msgid "Could not load this score."
 msgstr "无法加载此成绩。"
@@ -5985,6 +5986,7 @@ msgstr "Discord 服务器"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/me/TrackingToasts.tsx
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Dismiss"
@@ -9363,6 +9365,7 @@ msgstr "正在加载成绩…"
 #~ msgid "Loading sets…"
 #~ msgstr "正在加载卡组…"
 
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 msgid "Loading shared score…"
 msgstr "正在加载分享的成绩…"
@@ -9630,8 +9633,12 @@ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can 
 msgstr "Mania Bridge 通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
 #: src/routes/bridge.tsx
-msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-msgstr "Mania Bridge 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+msgstr "Mania Bridge 会把你在 lazer 或 osu!stable 上完成的每个 mania 成绩连同回放发送到你的账号，即使你在 Bancho 被限制、离线游玩或在私服上游玩。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
+
+#: src/routes/bridge.tsx
+#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Mania Bridge 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 <0>{shareSetting}</0> 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
 #: src/routes/bridge.tsx
 #~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
@@ -14234,6 +14241,7 @@ msgstr "数据保留与控制"
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
@@ -18254,6 +18262,10 @@ msgstr "这个成绩属于 {0}，不是 mania。"
 #: src/components/player/SharedSkillPlay.tsx
 msgid "This score is no longer in the player's rated history."
 msgstr "此成绩已不在该玩家的评级记录中。"
+
+#: src/components/player/SharedRecentPlay.tsx
+msgid "This score is no longer on the player's profile."
+msgstr "此成绩已不在该玩家的资料页上。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "this skin"

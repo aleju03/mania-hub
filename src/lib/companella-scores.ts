@@ -88,6 +88,11 @@ export function dropCompanellaOsuTwins<T extends TwinScore>(scores: T[]): T[] {
   return scores.filter((score) => !score.companella || !official.some((candidate) => isCompanellaOsuTwin(score, candidate)));
 }
 
+/** The Recent tab link that opens one import: `?import=<id>`. */
+export function sharedImportPath(username: string, importId: string): string {
+  return `/player/${encodeURIComponent(username)}/recent?import=${encodeURIComponent(importId)}`;
+}
+
 function positiveOrUndefined(value: number | null | undefined): number | undefined {
   return value != null && value > 0 ? value : undefined;
 }

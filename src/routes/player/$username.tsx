@@ -44,6 +44,7 @@ import {
 import { useAuth } from "../../lib/auth-context";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
 import { SharedSkillPlay } from "../../components/player/SharedSkillPlay";
+import { SharedRecentPlay } from "../../components/player/SharedRecentPlay";
 import { DisplayNameButton, DisplayNameForm, pendingRenameDate } from "../../components/player/DisplayNameEditor";
 import { ServerLinkPill, ServerLinksButton } from "../../components/player/ServerLinks";
 import { BBCodePreview } from "../../components/player/bbcode/BBCodePreview";
@@ -2697,6 +2698,7 @@ export function PlayerProfilePage({
       {/* Tab body: About card or scores list */}
       <div className="bg-osu-b5 border-t border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-1.5">
+          {tab === "recent" && <SharedRecentPlay userId={user.id} username={user.username} />}
           <AnimatePresence mode="wait" initial={false}>
             {tab === "about" ? (
               <motion.div

@@ -1559,6 +1559,18 @@ export async function fetchLivePlayerRecentScoresDirect(
   return fetchLiveJson(`/api/profiles/${userId}/recent${query}`);
 }
 
+/** One import a link points at, kept even once its osu! row is on the Recent tab. Null when it is not listed. */
+export async function fetchLivePlayerSharedImportDirect(userId: number, importId: string): Promise<LeanTrackerScore | null> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  try {
+    const page = await fetchLiveJson<{ import?: LeanTrackerScore }>(`/api/profiles/${userId}/recent-import?id=${encodeURIComponent(importId)}`);
+    return page.import ?? null;
+  } catch (error) {
+    if (error instanceof LiveBackendRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 export async function fetchLivePlayerReplayScoresDirect(
   userId: number,
   options: { limit?: number; offset?: number } = {},

@@ -5071,6 +5071,7 @@ msgstr "No se pudieron cargar estas plays."
 msgid "Could not load this leaderboard."
 msgstr "No se pudo cargar este ranking."
 
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 msgid "Could not load this score."
 msgstr "No se pudo cargar esta puntuación."
@@ -5976,6 +5977,7 @@ msgstr "Servidores de Discord"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/me/TrackingToasts.tsx
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Dismiss"
@@ -9354,6 +9356,7 @@ msgstr "Cargando scores..."
 #~ msgid "Loading sets…"
 #~ msgstr "Cargando sets…"
 
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 msgid "Loading shared score…"
 msgstr "Cargando puntuación compartida…"
@@ -9621,8 +9624,12 @@ msgid "Mania Bridge reads osu! through tosu, so tosu has to be running. You can 
 msgstr "Mania Bridge lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
 #: src/routes/bridge.tsx
-msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
-msgstr "Mania Bridge envía a tu cuenta cada play de mania que terminas en osu!stable o lazer, con su replay. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
+msgid "Mania Bridge sends every mania play you finish on lazer or osu!stable to your account, with its replay, even if you're restricted on Bancho, playing offline or on a private server. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+msgstr "Mania Bridge envía a tu cuenta cada play de mania que terminas en lazer u osu!stable, con su replay, aunque estés restringido en Bancho, juegues offline o en un servidor privado. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
+
+#: src/routes/bridge.tsx
+#~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With <0>{shareSetting}</0> turned on, your profile and the pp rankings also show what you're doing in osu!."
+#~ msgstr "Mania Bridge envía a tu cuenta cada play de mania que terminas en osu!stable o lazer, con su replay. Con <0>{shareSetting}</0> activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
 
 #: src/routes/bridge.tsx
 #~ msgid "Mania Bridge sends every mania play you finish on osu!stable or lazer to your account, with its replay. With Share what I'm playing turned on, your profile and the pp rankings also show what you're doing in osu!."
@@ -14225,6 +14232,7 @@ msgstr "Retención y controles"
 #: src/components/packs/SetsView.tsx
 #: src/components/player/AddScoreModal.tsx
 #: src/components/player/RecentPlayRatingCells.tsx
+#: src/components/player/SharedRecentPlay.tsx
 #: src/components/player/SharedSkillPlay.tsx
 #: src/routes/communities.tsx
 #: src/routes/packs.tsx
@@ -18245,6 +18253,10 @@ msgstr "Este score es de {0}, no de mania."
 #: src/components/player/SharedSkillPlay.tsx
 msgid "This score is no longer in the player's rated history."
 msgstr "Esta puntuación ya no está en el historial de jugadas valoradas del jugador."
+
+#: src/components/player/SharedRecentPlay.tsx
+msgid "This score is no longer on the player's profile."
+msgstr "Esta puntuación ya no está en el perfil del jugador."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "this skin"
