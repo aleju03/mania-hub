@@ -512,6 +512,7 @@ export function MsdBlock({
   rateMsd = null,
   rateDan = null,
   secondaryDan = null,
+  rateSecondaryDan = null,
   vibroAnalysis,
 }: {
   entry: LiveMapSearchEntry;
@@ -525,8 +526,10 @@ export function MsdBlock({
   rateMsd?: Record<string, number> | null;
   rateDan?: { label: string; family: string; rawDan: number } | null;
   // The chart's other-side dan on a rice-and-LN hybrid (past the hold line),
-  // from the 1.0x analysis; a rate-adjusted view has only its own primary.
+  // from the 1.0x analysis. A rate-adjusted view of a 1.0x hybrid shows the
+  // rate's own other half instead, present where it is a hybrid at that rate too.
   secondaryDan?: { label: string; family: string; rawDan: number } | null;
+  rateSecondaryDan?: { label: string; family: string; rawDan: number } | null;
   vibroAnalysis?: VibroAnalysis;
 }) {
   const { t, i18n } = useLingui();
@@ -574,7 +577,8 @@ export function MsdBlock({
   const heading = rate === 1 ? t`MSD` : t`MSD at ${formatRate(rateAdjusted ? rate : 1)}`;
   const sectionRate = rateAdjusted ? rate : 1;
   const displaySections = groupDetectedSections(vibroAnalysis?.sections ?? [], sectionRate);
-  const otherDan = dan && !rateAdjusted && secondaryDan && secondaryDan.family !== dan.family ? secondaryDan : null;
+  const other = rateAdjusted ? (secondaryDan ? rateSecondaryDan : null) : secondaryDan;
+  const otherDan = dan && other && other.family !== dan.family ? other : null;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -1095,6 +1099,7 @@ export function MapDetailModal({
                       rateMsd={rateMsd}
                       rateDan={rateDan}
                       secondaryDan={activeAnalysis?.secondaryDan ?? null}
+                      rateSecondaryDan={rateAnalysis?.secondaryDan ?? null}
                       vibroAnalysis={playRate === 1 || ratePending ? activeAnalysis?.vibroAnalysis : entryDt ? entry?.vibroAnalysisDt : rateAnalysis?.vibroAnalysis}
                     />
                   </div>

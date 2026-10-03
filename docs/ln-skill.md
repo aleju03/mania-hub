@@ -164,6 +164,16 @@ halves against v14's 72.1% and 77.0%, and Dans 3 to 15 agree within 1.5, root
 mean square 0.77 (v14 1.32). The identity tiebreak (`dan/ln-identity.ts`)
 keeps v14's pricing, so the recalibration moves no chart between rice and LN.
 
+Since 2026-10-03 (effective v15) the tiebreak also needs held-through holds on
+a chart that only same-lane chains lift past the tap gate. In the hardest fifth
+of the chart's 2s windows (by LN workload demand), at least 2.2% of the notes
+have to be holds kept down while other columns press on two or more separate
+rows (`LN_HELD_THROUGH_MIN_SHARE`). A jumpstream written in holds, each held to
+the next row, reads 0 there and stays rice however far its rating beats
+Overall; the chain charts called LN read 2.6% and up. Charts past the tap line
+are not touched. Over the cached 4K charts it returns 23 of 662 tiebreak LN
+verdicts to rice.
+
 ## Four skillsets
 
 The families follow the stages of _underjoy's 4K LN Dan Courses v2: Stage 1
@@ -214,6 +224,14 @@ phrases. Individual taps threaded through LN commands do not qualify.
 The badge requires at least one quarter rice-phrase evidence, the existing
 25–75% raw hold band, and the minimum effective-hold work share. Missing
 measurement withholds the badge until the bounded refresh reaches the chart.
+
+The stored 1.5x and 0.75x verdicts read the same rule on their own rate's rice
+and work shares, and a hybrid at that rate stores its other half (`secondary`,
+`leanRateVerdict`). It counts only on a chart that also has the badge at 1.0x:
+more holds tap through at speed, so a chart can cross the rice-phrase line only
+at 1.5x, and the charts that did were LN on the owner's 2026-10-03 calls. On a
+chart that is a hybrid at both rates, the 1.5x view of the map modal shows both
+dans and an LN-filed clear at that rate also credits the rice ladder.
 
 ## Persistence and rollout
 

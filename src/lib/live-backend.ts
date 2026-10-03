@@ -3093,6 +3093,8 @@ export interface LiveRateChartAnalysis {
   ratePercent: number;
   status: "ready" | "unsupported" | "unavailable";
   dan: { label: string; family: string; rawDan: number } | null;
+  /** The other half on a chart that reads as a hybrid at this rate (1.5x only). */
+  secondaryDan?: { label: string; family: string; rawDan: number } | null;
   msd: Record<string, number> | null;
 }
 

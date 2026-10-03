@@ -87,8 +87,14 @@ it("shows the other side's dan beside the primary on a rice-and-LN hybrid", () =
   expect(screen.getByTitle("Hybrid chart: regular delta-, LN 15--")).toBeTruthy();
 });
 
-it("keeps one badge under a rate mod, whose analysis carries only its own primary", () => {
-  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} secondaryDan={{ label: "theta", family: "dan", rawDan: 18 }} /></I18nProvider>);
+it("keeps one badge under a rate mod unless the chart is a hybrid at 1.0x and at that rate", () => {
+  const { unmount } = render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} secondaryDan={{ label: "theta", family: "dan", rawDan: 18 }} /></I18nProvider>);
   expect(screen.getByText("LN dan est.")).toBeTruthy();
+  expect(screen.queryByText("hybrid")).toBeNull();
+  unmount();
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} secondaryDan={{ label: "theta", family: "dan", rawDan: 18 }} rateSecondaryDan={{ label: "zeta", family: "dan", rawDan: 16 }} /></I18nProvider>);
+  expect(screen.getByTitle("Hybrid chart: LN 11, regular zeta")).toBeTruthy();
+  cleanup();
+  render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} rateSecondaryDan={{ label: "zeta", family: "dan", rawDan: 16 }} /></I18nProvider>);
   expect(screen.queryByText("hybrid")).toBeNull();
 });
