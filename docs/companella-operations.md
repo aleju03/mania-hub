@@ -220,7 +220,7 @@ it.
 ## Rate flags
 
 A play whose frames do not confirm the speed its mods claim is not held. It
-counts, the player is not told, and `/admin/companella?tab=flags` lists it (each
+counts, the player is not told, and `/admin/bridgers?tab=flags` lists it (each
 one also logs `companella_rate_suspicious`). "Frames read slower" is the one to
 act on: `claimed_rate_too_high` never happened on an honest replay in the
 measurement, and a NoMod replay relabelled DT reads about 1.00x against a 1.50x

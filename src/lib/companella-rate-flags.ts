@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
-/* The admin list of Companella rate flags (/admin/companella?tab=flags): imported
+/* The admin list of Companella rate flags (/admin/bridgers?tab=flags): imported
    plays whose replay frames did not confirm the speed their mods claim. A flag
    holds nothing back and the player never sees it; holding a play is the
    admin's call from the list, through the ordinary review route. */
@@ -71,4 +71,25 @@ export const setRateFlagHeld = createServerFn({ method: "POST" })
       body: JSON.stringify({ score_id: data.scoreId, review_state: data.held ? "quarantined" : "clear" }),
     });
     if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/review`);
+  });
+
+/** Removes an excluded play for good: its replay and ratings go, and the same replay stays refused. */
+export const removeCompanellaPlay = createServerFn({ method: "POST" })
+  .validator((data: { scoreId?: unknown }) => {
+    const scoreId = String(data?.scoreId ?? "");
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(scoreId)) throw new Error("Invalid score id.");
+    return { scoreId };
+  })
+  .handler(async ({ data }): Promise<void> => {
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Remove a Companella play");
+    const response = await adminFetch("/api/admin/companella/remove", {
+      method: "POST",
+      body: JSON.stringify({ score_id: data.scoreId }),
+    });
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null) as { result?: string } | null;
+      throw new Error(body?.result === "processing" ? "This play is still processing. Try again in a few minutes." : "Exclude the play before removing it.");
+    }
+    if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/remove`);
   });

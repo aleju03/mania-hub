@@ -4,7 +4,7 @@ import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
 
 /* The admin list of every account that has used Companella
-   (the Players tab on /admin/companella), restricted on osu! or not: their plays, which
+   (the Players tab on /admin/bridgers), restricted on osu! or not: their plays, which
    of those are held, and who is blocked. Holding a play goes through the
    review route (setRateFlagHeld), blocking through setCompanellaAccountBlocked. */
 
@@ -31,6 +31,8 @@ export interface CompanellaAccountPlay {
   totalScore: number;
   /* "clear" counts; anything else is a review hold. */
   reviewState: string;
+  /* Removed by an admin: excluded for good, with its replay gone. */
+  removed: boolean;
   rateSuspicious: boolean;
   chart: { title: string | null; artist: string | null; version: string | null; keyCount: number | null };
   playedAt: string | null;

@@ -5,6 +5,6 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 export const Route = createFileRoute("/admin/companella-players")({
   beforeLoad: ({ context }) => {
     if (!canUseAdminFeatures(context.auth)) throw notFound();
-    throw redirect({ to: "/admin/companella", search: {}, replace: true });
+    throw redirect({ to: "/admin/bridgers", search: {}, replace: true });
   },
 });

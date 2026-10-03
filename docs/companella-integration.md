@@ -84,7 +84,7 @@ Backend, all under `live-backend/src/integrations/companella/`:
 | `lzma.ts`, `replay-file.ts` | Bounded LZMA1 and `.osr` parsing. |
 | `validation.ts` | Identity, completion and the mod capability matrix. |
 | `replay-timing.ts` | Judges the replay's key presses: the Wife3 goals the rating runs at, and the header check. |
-| `admin-accounts.ts` | The admin list behind the Players tab on `/admin/companella`: every account that has used Companella, and one account's plays. |
+| `admin-accounts.ts` | The admin list behind the Players tab on `/admin/bridgers`: every account that has used Companella, and one account's plays. |
 | `account-blocks.ts` | The admin block: an account caught cheating stops connecting and sending plays, and its connections are revoked. |
 | `skill-overlay.ts` | Public skill ratings (MSD, patterns, Dan) for active osu! accounts: checked imports combined with retained official evidence at read time. |
 | `poll-hold.ts` | Holds a player's recent-score polls while Mania Bridge's presence is live, and polls once when it ends. |
@@ -415,7 +415,7 @@ A flag holds nothing back: the play keeps its review state and counts like any
 other. The verdict is stored on the timing row as `rate_check_json` (with
 `suspicious`), the owner's copy of the timing leaves it out, and no security
 event is written, so the player never sees it. Each flag logs
-`companella_rate_suspicious`, and `/admin/companella?tab=flags` lists flagged plays
+`companella_rate_suspicious`, and `/admin/bridgers?tab=flags` lists flagged plays
 (backend `GET /api/admin/companella/rate-flags`, admin token) with Exclude and
 Restore actions that go through the review route. Player names open their
 moderation details in the Players tab.
@@ -931,12 +931,19 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   `account-blocks.ts`): its connections are revoked, and connecting,
   exchanging a code, refreshing and every credentialed request answer as for
   an account outside the beta until it is unblocked. A block removes no play;
-  the cheated ones are removed as above. The Players tab on `/admin/companella` does the
+  the cheated ones are removed as above. The Players tab on `/admin/bridgers` does the
   same for any account, restricted on osu! or not: it lists everyone with an
   import, a connection or a block (`GET /api/admin/companella/accounts`,
   `?filter=blocked`, `?q=` name or id), each account's plays
   (`GET /api/admin/companella/accounts/<id>/plays`), removes and restores
   single plays through the review route (Exclude / Restore), and blocks.
+  Remove (`POST /api/admin/companella/remove`, `purgeLocalScore` in
+  `scores.ts`) finishes an excluded play: its replay, analysis, timing, price
+  and official-timing claim are deleted and `purged_at` is set, but the row
+  stays excluded, so its fingerprint keeps refusing the same replay as
+  `duplicate_play` and Restore can no longer clear it. It is refused while the
+  play's submission is still processing. An owner delete still
+  frees the fingerprint, as it always has.
 - **Play count and time.** The standing's play count and play time (shown on
   the profile rail beside the simulated pp) count every checked import in the
   window, priced or not: each chart's length at the played rate. An account

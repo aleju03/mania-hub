@@ -34,7 +34,7 @@ Saved About pages show with no review first, so `/admin/about-pages` (`src/lib/o
 
 ## Companella moderation
 
-`/admin/companella` is the single Companella admin entry, with Players and Flagged plays tabs (`src/components/admin/companella/`). Tabs, filters, search and list pages live in the URL. The old `/admin/companella-players` and `/admin/companella-flags` links redirect to their corresponding tabs.
+`/admin/bridgers` (Bridgers in the menu) is the single admin entry for app imports from every client, Companella and Mania Bridge alike, with Players and Flagged plays tabs (`src/components/admin/companella/`). Tabs, filters, search and list pages live in the URL. The old `/admin/companella`, `/admin/companella-players` and `/admin/companella-flags` links redirect to it.
 
 Players (`src/lib/companella-accounts.ts`, backend `admin-accounts.ts`) lists every account that has used Companella, whether osu! still serves it or not, latest play first, with a Blocked filter and a name or `#id` search. Opening a row lists its plays with Exclude and Restore (the reversible review hold) and Block Companella, the same block as on Banned users. Blocking revokes connections and stops future imports; existing plays keep their review state. This is where a player in good standing on osu! who cheats through Companella is handled.
 

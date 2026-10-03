@@ -43,6 +43,7 @@ import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as AdminAboutPagesRouteImport } from './routes/admin/about-pages'
 import { Route as AdminBannedUsersRouteImport } from './routes/admin/banned-users'
 import { Route as AdminBbcodeImagesRouteImport } from './routes/admin/bbcode-images'
+import { Route as AdminBridgersRouteImport } from './routes/admin/bridgers'
 import { Route as AdminBugReportsRouteImport } from './routes/admin/bug-reports'
 import { Route as AdminCollectionsRouteImport } from './routes/admin/collections'
 import { Route as AdminCompanellaRouteImport } from './routes/admin/companella'
@@ -286,6 +287,11 @@ const AdminBannedUsersRoute = AdminBannedUsersRouteImport.update({
 const AdminBbcodeImagesRoute = AdminBbcodeImagesRouteImport.update({
   id: '/admin/bbcode-images',
   path: '/admin/bbcode-images',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBridgersRoute = AdminBridgersRouteImport.update({
+  id: '/admin/bridgers',
+  path: '/admin/bridgers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminBugReportsRoute = AdminBugReportsRouteImport.update({
@@ -709,6 +715,7 @@ export interface FileRoutesByFullPath {
   '/admin/about-pages': typeof AdminAboutPagesRoute
   '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/bridgers': typeof AdminBridgersRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
   '/admin/companella': typeof AdminCompanellaRoute
@@ -819,6 +826,7 @@ export interface FileRoutesByTo {
   '/admin/about-pages': typeof AdminAboutPagesRoute
   '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/bridgers': typeof AdminBridgersRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
   '/admin/companella': typeof AdminCompanellaRoute
@@ -930,6 +938,7 @@ export interface FileRoutesById {
   '/admin/about-pages': typeof AdminAboutPagesRoute
   '/admin/banned-users': typeof AdminBannedUsersRoute
   '/admin/bbcode-images': typeof AdminBbcodeImagesRoute
+  '/admin/bridgers': typeof AdminBridgersRoute
   '/admin/bug-reports': typeof AdminBugReportsRoute
   '/admin/collections': typeof AdminCollectionsRoute
   '/admin/companella': typeof AdminCompanellaRoute
@@ -1042,6 +1051,7 @@ export interface FileRouteTypes {
     | '/admin/about-pages'
     | '/admin/banned-users'
     | '/admin/bbcode-images'
+    | '/admin/bridgers'
     | '/admin/bug-reports'
     | '/admin/collections'
     | '/admin/companella'
@@ -1152,6 +1162,7 @@ export interface FileRouteTypes {
     | '/admin/about-pages'
     | '/admin/banned-users'
     | '/admin/bbcode-images'
+    | '/admin/bridgers'
     | '/admin/bug-reports'
     | '/admin/collections'
     | '/admin/companella'
@@ -1262,6 +1273,7 @@ export interface FileRouteTypes {
     | '/admin/about-pages'
     | '/admin/banned-users'
     | '/admin/bbcode-images'
+    | '/admin/bridgers'
     | '/admin/bug-reports'
     | '/admin/collections'
     | '/admin/companella'
@@ -1373,6 +1385,7 @@ export interface RootRouteChildren {
   AdminAboutPagesRoute: typeof AdminAboutPagesRoute
   AdminBannedUsersRoute: typeof AdminBannedUsersRoute
   AdminBbcodeImagesRoute: typeof AdminBbcodeImagesRoute
+  AdminBridgersRoute: typeof AdminBridgersRoute
   AdminBugReportsRoute: typeof AdminBugReportsRoute
   AdminCollectionsRoute: typeof AdminCollectionsRoute
   AdminCompanellaRoute: typeof AdminCompanellaRoute
@@ -1674,6 +1687,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/bbcode-images'
       fullPath: '/admin/bbcode-images'
       preLoaderRoute: typeof AdminBbcodeImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bridgers': {
+      id: '/admin/bridgers'
+      path: '/admin/bridgers'
+      fullPath: '/admin/bridgers'
+      preLoaderRoute: typeof AdminBridgersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/bug-reports': {
@@ -2336,6 +2356,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAboutPagesRoute: AdminAboutPagesRoute,
   AdminBannedUsersRoute: AdminBannedUsersRoute,
   AdminBbcodeImagesRoute: AdminBbcodeImagesRoute,
+  AdminBridgersRoute: AdminBridgersRoute,
   AdminBugReportsRoute: AdminBugReportsRoute,
   AdminCollectionsRoute: AdminCollectionsRoute,
   AdminCompanellaRoute: AdminCompanellaRoute,

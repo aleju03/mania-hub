@@ -103,7 +103,7 @@ function RateFlagRow({ entry, busy, onHold }: { entry: RateFlag; busy: boolean; 
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
-            to="/admin/companella"
+            to="/admin/bridgers"
             search={(previous) => ({ ...previous, tab: undefined, user: entry.userId, q: `#${entry.userId}`, filter: undefined, page: undefined })}
             className="min-w-0 truncate text-[14px] font-semibold text-white hover:text-osu-pink-light"
           >

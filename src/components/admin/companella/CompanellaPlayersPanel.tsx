@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, RefreshCw, RotateCcw, Search, X } from "lucide-react";
+import { ChevronDown, RefreshCw, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ConfirmModal } from "../../ui/ConfirmModal";
@@ -17,7 +17,7 @@ import {
   type CompanellaAccountPlay,
   type Paged,
 } from "../../../lib/companella-accounts";
-import { setRateFlagHeld } from "../../../lib/companella-rate-flags";
+import { removeCompanellaPlay, setRateFlagHeld } from "../../../lib/companella-rate-flags";
 import { formatAccuracy, formatNumber, formatTimeAgo } from "../../../lib/format";
 
 const PAGE_SIZE = 50;
@@ -62,6 +62,7 @@ function AccountRow({
   onToggle,
   onBlock,
   onHold,
+  onRemove,
   onPlaysPage,
   onRetry,
 }: {
@@ -73,6 +74,7 @@ function AccountRow({
   onToggle: () => void;
   onBlock: () => void;
   onHold: (play: CompanellaAccountPlay, held: boolean) => void;
+  onRemove: (play: CompanellaAccountPlay) => void;
   onPlaysPage: (page: number) => void;
   onRetry: () => void;
 }) {
@@ -128,7 +130,7 @@ function AccountRow({
               {blocked ? "Unblock Companella" : "Block Companella"}
             </button>
           </div>
-          <PlaysList plays={plays} page={playsPage} busy={busy} onHold={onHold} onPage={onPlaysPage} onRetry={onRetry} />
+          <PlaysList plays={plays} page={playsPage} busy={busy} onHold={onHold} onRemove={onRemove} onPage={onPlaysPage} onRetry={onRetry} />
         </div>
       ) : null}
     </div>
@@ -140,6 +142,7 @@ function PlaysList({
   page,
   busy,
   onHold,
+  onRemove,
   onPage,
   onRetry,
 }: {
@@ -147,6 +150,7 @@ function PlaysList({
   page: number;
   busy: boolean;
   onHold: (play: CompanellaAccountPlay, held: boolean) => void;
+  onRemove: (play: CompanellaAccountPlay) => void;
   onPage: (page: number) => void;
   onRetry: () => void;
 }) {
@@ -190,18 +194,34 @@ function PlaysList({
                   {play.accuracy != null ? <span className="tabular-nums text-osu-l2">{formatAccuracy(play.accuracy)}</span> : null}
                   {when ? <span title={formatWhen(when)}>{formatTimeAgo(when)}</span> : null}
                   {play.rateSuspicious ? <span className="text-osu-red-light">rate flagged</span> : null}
-                  {excluded ? <span className="text-amber-300">Excluded</span> : null}
+                  {play.removed ? <span className="text-osu-red-light">Removed</span>
+                    : excluded ? <span className="text-amber-300">Excluded</span> : null}
                 </div>
               </div>
-              <button
-                disabled={busy}
-                onClick={() => onHold(play, !excluded)}
-                aria-label={excluded ? "Restore" : "Exclude"}
-                className={`${excluded ? ACTION_CLASS : DANGER_CLASS} flex-shrink-0 sm:min-w-[76px]`}
-              >
-                {excluded ? <RotateCcw size={13} /> : <X size={13} />}
-                <span className="hidden sm:inline">{excluded ? "Restore" : "Exclude"}</span>
-              </button>
+              {play.removed ? null : (
+                <>
+                  {excluded ? (
+                    <button
+                      disabled={busy}
+                      onClick={() => onRemove(play)}
+                      aria-label="Remove"
+                      className={`${DANGER_CLASS} flex-shrink-0 sm:min-w-[76px]`}
+                    >
+                      <Trash2 size={13} />
+                      <span className="hidden sm:inline">Remove</span>
+                    </button>
+                  ) : null}
+                  <button
+                    disabled={busy}
+                    onClick={() => onHold(play, !excluded)}
+                    aria-label={excluded ? "Restore" : "Exclude"}
+                    className={`${excluded ? ACTION_CLASS : DANGER_CLASS} flex-shrink-0 sm:min-w-[76px]`}
+                  >
+                    {excluded ? <RotateCcw size={13} /> : <X size={13} />}
+                    <span className="hidden sm:inline">{excluded ? "Restore" : "Exclude"}</span>
+                  </button>
+                </>
+              )}
             </div>
           );
         })}
@@ -231,6 +251,7 @@ export function CompanellaPlayersPanel({
   const [playsPage, setPlaysPage] = useState<Record<number, number>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
   const [blockAsk, setBlockAsk] = useState<CompanellaAccount | null>(null);
+  const [removeAsk, setRemoveAsk] = useState<{ entry: CompanellaAccount; play: CompanellaAccountPlay } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
@@ -311,6 +332,12 @@ export function CompanellaPlayersPanel({
       await loadPlays(entry.userId, playsPage[entry.userId] ?? 0);
     });
 
+  const remove = (entry: CompanellaAccount, play: CompanellaAccountPlay) =>
+    act(entry.userId, async () => {
+      await removeCompanellaPlay({ data: { scoreId: play.scoreId } });
+      await loadPlays(entry.userId, playsPage[entry.userId] ?? 0);
+    });
+
   const changePlaysPage = (entry: CompanellaAccount, page: number) => {
     setPlaysPage((current) => ({ ...current, [entry.userId]: page }));
     void loadPlays(entry.userId, page);
@@ -362,7 +389,7 @@ export function CompanellaPlayersPanel({
           <span>Refresh</span>
         </button>
       </div>
-      <p className="text-[12px] text-osu-f1">Exclude keeps a play out of Companella results without deleting it. Restore lets it count again.</p>
+      <p className="text-[12px] text-osu-f1">Exclude keeps a play out of the results without deleting it. Restore lets it count again.</p>
 
       {error ? <Notice text={error} tone="error" onDismiss={() => setError(null)} /> : null}
       {message ? <Notice text={message} onDismiss={() => setMessage(null)} /> : null}
@@ -394,6 +421,7 @@ export function CompanellaPlayersPanel({
                 onToggle={() => toggle(entry)}
                 onBlock={() => entry.blockedAt != null ? void setBlocked(entry, false) : setBlockAsk(entry)}
                 onHold={(play, held) => void hold(entry, play, held)}
+                onRemove={(play) => setRemoveAsk({ entry, play })}
                 onPlaysPage={(page) => changePlaysPage(entry, page)}
                 onRetry={() => void loadPlays(entry.userId, playsPage[entry.userId] ?? 0)}
               />
@@ -403,6 +431,17 @@ export function CompanellaPlayersPanel({
           <Pagination page={Math.floor(offset / PAGE_SIZE)} totalPages={Math.ceil(total / PAGE_SIZE)} onPageChange={changePage} />
         </>
       )}
+
+      {removeAsk ? (
+        <ConfirmModal
+          title="Remove this play?"
+          body="Deletes its replay and ratings and keeps it excluded. This can't be undone."
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => void remove(removeAsk.entry, removeAsk.play)}
+          onClose={() => setRemoveAsk(null)}
+        />
+      ) : null}
 
       {blockAsk ? (
         <ConfirmModal
