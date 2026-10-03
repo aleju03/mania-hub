@@ -1256,9 +1256,51 @@ async function resolveOgPlayer(request: Request, username: string): Promise<OsuU
   }
 }
 
-/* Player card layout: cover-art ambient background, a big rounded-square
-   avatar (osu! site style, not a circle), and a stat stack on the right
-   with flag + country, username, global/country rank, PP, acc. */
+/* Player card, laid out like an osu! profile header: the player's own cover
+   across the top, the avatar sitting on the seam, name, country and team
+   beside it, the last 90 days of global rank on the right, and one row of
+   numbers split by keymode along the bottom. Flat fills only. */
+const PLAYER_OG = {
+  panel: "#241e21",
+  coverless: "#1b1619",
+  line: "rgba(255,255,255,0.09)",
+  label: "#bcaeb5",
+  sub: "#8d8088",
+  graph: "#ff66aa",
+  coverHeight: 250,
+  graphLeft: 836,
+  graphWidth: 308,
+  graphHeight: 90,
+};
+
+/* Ranks drawn the way osu! draws them: lower is better, so the line rises as
+   the player climbs. The vertical span has a floor, so a #4 to #5 wobble does
+   not draw as a cliff. Null when there is nothing to draw. */
+function playerRankGraph(history: number[] | null | undefined): ReactNode {
+  const data = (history ?? []).filter((rank) => Number.isFinite(rank) && rank > 0);
+  if (data.length < 2) return null;
+  const { graphWidth: w, graphHeight: height } = PLAYER_OG;
+  const lo = Math.min(...data);
+  const hi = Math.max(...data);
+  const span = Math.max(hi - lo, lo * 0.5, 4);
+  const base = (lo + hi) / 2 - span / 2;
+  const points = data
+    .map((rank, index) => `${((index / (data.length - 1)) * w).toFixed(1)},${(4 + ((rank - base) / span) * (height - 8)).toFixed(1)}`)
+    .join(" ");
+  return h(
+    "svg",
+    { key: "line", width: w, height, viewBox: `0 0 ${w} ${height}` },
+    h("polyline", {
+      points,
+      fill: "none",
+      stroke: PLAYER_OG.graph,
+      strokeWidth: 4,
+      strokeLinejoin: "round",
+      strokeLinecap: "round",
+    }),
+  );
+}
+
 async function renderPlayerOg(request: Request, rawUsername: string): Promise<Response> {
   const username = rawUsername.trim().slice(0, 64);
   const [regularFont, heavyFont, user] = await Promise.all([
@@ -1271,8 +1313,42 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
   const country = user.country?.name || getCountryName(user.country_code) || user.country_code;
   const cover = user.cover?.custom_url || user.cover?.url || user.cover_url || null;
   const flagUrl = `https://osu.ppy.sh/images/flags/${user.country_code}.png`;
-  const globalRank = stats.global_rank;
-  const countryRank = stats.country_rank;
+  const team = user.team ?? null;
+  // An unranked player's history is the line up to when they dropped off,
+  // which reads as a current rank it is not.
+  const graph = stats.global_rank != null ? playerRankGraph(user.rank_history?.data) : null;
+  const peak = user.rank_highest?.rank ?? null;
+  // A keymode the player has no pp in has no rank either; its column goes.
+  const keymodes = (["4k", "7k"] as const)
+    .map((variant) => stats.variants?.find((entry) => entry.variant === variant) ?? null)
+    .filter((entry): entry is NonNullable<typeof entry> => entry != null && entry.pp > 0);
+  const { panel, line, label, sub, coverHeight } = PLAYER_OG;
+
+  // Satori has no ellipsis, so the name shrinks to the room it has: up to the
+  // graph when there is one, the full width otherwise.
+  const nameRoom = (graph ? PLAYER_OG.graphLeft - 32 : 1144) - 296;
+  const nameSize = Math.max(44, Math.min(68, Math.floor(nameRoom / Math.max(1, user.username.length * 0.6))));
+
+  const column = (key: string, title: string, value: string, note: string | null) =>
+    h(
+      "div",
+      { key, style: { display: "flex", flexDirection: "column", gap: "6px" } },
+      [
+        h("div", { key: "t", style: { display: "flex", fontSize: "22px", color: label } }, title),
+        h("div", { key: "v", style: { display: "flex", fontSize: "46px", fontWeight: 900, lineHeight: 1 } }, value),
+        note ? h("div", { key: "n", style: { display: "flex", fontSize: "22px", color: sub } }, note) : null,
+      ],
+    );
+  const divider = (key: string) =>
+    h("div", { key, style: { display: "flex", width: "1px", height: "110px", background: line, flexShrink: 0 } });
+  const columns: ReactNode[] = [
+    column("global", "Global", stats.global_rank != null ? `#${formatOgInt(stats.global_rank)}` : "--", `${formatOgInt(stats.pp)}pp`),
+    column("country", clamp(country, 18), stats.country_rank != null ? `#${formatOgInt(stats.country_rank)}` : "--", null),
+    ...keymodes.map((entry) =>
+      column(entry.variant, entry.variant.toUpperCase(), entry.global_rank != null ? `#${formatOgInt(entry.global_rank)}` : "--", `${formatOgInt(entry.pp)}pp`),
+    ),
+    column("acc", "Accuracy", `${stats.hit_accuracy.toFixed(2)}%`, `${formatOgInt(stats.play_count)} plays`),
+  ].flatMap((node, index) => (index === 0 ? [node] : [divider(`d${index}`), node]));
 
   const response = new ImageResponse(
     h(
@@ -1284,253 +1360,122 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
           display: "flex",
           position: "relative",
           overflow: "hidden",
-          background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
+          background: panel,
           fontFamily: '"Torus OG"',
           color: "#ffffff",
         },
       },
       [
+        // satori ignores `inset`, so every full-bleed layer spells out its box.
         cover
           ? h("img", {
               key: "cover",
               src: cover,
-              style: {
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.22,
-              },
+              style: { position: "absolute", top: 0, left: 0, width: "1200px", height: `${coverHeight}px`, objectFit: "cover" },
+            })
+          : h("div", {
+              key: "cover",
+              style: { display: "flex", position: "absolute", top: 0, left: 0, width: "1200px", height: `${coverHeight}px`, background: PLAYER_OG.coverless },
+            }),
+        cover
+          ? h("div", {
+              key: "shade",
+              style: { display: "flex", position: "absolute", top: 0, left: 0, width: "1200px", height: `${coverHeight}px`, background: "rgba(0,0,0,0.15)" },
             })
           : null,
-        // Side-to-side dim overlay so the cover stays ambient but text wins.
-        h("div", {
-          key: "dim",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background:
-              "linear-gradient(90deg, rgba(15,10,13,0.92) 0%, rgba(15,10,13,0.65) 55%, rgba(15,10,13,0.88) 100%)",
-          },
-        }),
-        // Pink accent anchored behind the avatar.
-        h("div", {
-          key: "glow",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background:
-              "radial-gradient(circle at 22% 52%, rgba(255, 102, 170, 0.22) 0%, rgba(255, 102, 170, 0) 48%)",
-          },
-        }),
-
+        // The avatar sits on the seam inside a ring of the panel colour.
         h(
           "div",
           {
-            key: "content",
+            key: "avatar",
             style: {
-              position: "relative",
               display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "56px",
-              width: "100%",
-              height: "100%",
-              padding: "60px 64px",
+              position: "absolute",
+              top: "140px",
+              left: "56px",
+              width: "212px",
+              height: "212px",
+              padding: "8px",
+              borderRadius: "36px",
+              background: panel,
             },
           },
+          h("img", {
+            src: user.avatar_url,
+            style: { width: "196px", height: "196px", borderRadius: "30px", objectFit: "cover" },
+          }),
+        ),
+        h(
+          "div",
+          {
+            key: "identity",
+            style: { display: "flex", flexDirection: "column", gap: "10px", position: "absolute", top: "268px", left: "296px", maxWidth: `${nameRoom}px` },
+          },
           [
-            // Avatar: rounded-rect, pink border + soft shadow to match the
-            // in-app avatar treatment. Uses <img> so Satori rasterizes the
-            // remote CDN asset.
+            h("div", { key: "name", style: { display: "flex", fontSize: `${nameSize}px`, fontWeight: 900, lineHeight: 1 } }, user.username),
             h(
               "div",
-              {
-                key: "avatar",
-                style: {
-                  width: "320px",
-                  height: "320px",
-                  flexShrink: 0,
-                  borderRadius: "44px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "4px solid #ff66aa",
-                  boxSizing: "border-box",
-                  boxShadow: "0 0 48px rgba(255, 102, 170, 0.35)",
-                  background: "#1a1317",
-                },
-              },
-              h("img", {
-                src: user.avatar_url,
-                style: {
-                  width: "312px",
-                  height: "312px",
-                  borderRadius: "40px",
-                  objectFit: "cover",
-                },
-              }),
-            ),
-
-            // Right-side stat stack.
-            h(
-              "div",
-              {
-                key: "stats",
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: "1",
-                  minWidth: "0",
-                },
-              },
+              { key: "where", style: { display: "flex", alignItems: "center", gap: "14px", fontSize: "25px", color: label } },
               [
-                // Flag + country.
-                h(
-                  "div",
-                  {
-                    key: "country",
-                    style: {
-                      display: "flex",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: "14px",
-                      color: "#c7b8c1",
-                      fontSize: "26px",
-                      marginBottom: "16px",
-                    },
-                  },
-                  [
-                    h("img", {
-                      key: "flag",
-                      src: flagUrl,
-                      style: {
-                        width: "40px",
-                        height: "27px",
-                        borderRadius: "3px",
-                        objectFit: "cover",
-                      },
-                    }),
-                    h("div", { key: "cname" }, country),
-                  ],
-                ),
-
-                // Username - big and proudly Torus Heavy.
-                h(
-                  "div",
-                  {
-                    key: "name",
-                    style: {
-                      fontSize: "92px",
-                      fontWeight: 900,
-                      lineHeight: "1.0",
-                      marginBottom: "28px",
-                      maxWidth: "620px",
-                      overflow: "hidden",
-                    },
-                  },
-                  user.username,
-                ),
-
-                // Rank row.
-                h(
-                  "div",
-                  {
-                    key: "ranks",
-                    style: {
-                      display: "flex",
-                      flexDirection: "row",
-                      alignItems: "baseline",
-                      gap: "18px",
-                      fontSize: "30px",
-                      color: "#e8e3ec",
-                      marginBottom: "30px",
-                    },
-                  },
-                  [
-                    h(
-                      "div",
-                      { key: "g" },
-                      globalRank != null ? `#${formatOgInt(globalRank)} global` : "unranked",
-                    ),
-                    countryRank != null
-                      ? h(
-                          "div",
-                          {
-                            key: "sep",
-                            style: { color: "#5a4a52" },
-                          },
-                          "/",
-                        )
-                      : null,
-                    countryRank != null
-                      ? h(
-                          "div",
-                          {
-                            key: "c",
-                            style: { color: "#ff99cc" },
-                          },
-                          `#${formatOgInt(countryRank)} ${user.country_code}`,
-                        )
-                      : null,
-                  ],
-                ),
-
-                // PP + accuracy + playcount.
-                h(
-                  "div",
-                  {
-                    key: "nums",
-                    style: {
-                      display: "flex",
-                      flexDirection: "row",
-                      alignItems: "baseline",
-                      gap: "28px",
-                    },
-                  },
-                  [
-                    h(
-                      "div",
-                      {
-                        key: "pp",
-                        style: {
-                          fontSize: "68px",
-                          fontWeight: 900,
-                          color: "#ff66aa",
-                          lineHeight: "1",
-                        },
-                      },
-                      `${formatOgInt(stats.pp)}pp`,
-                    ),
-                    h(
-                      "div",
-                      {
-                        key: "acc",
-                        style: {
-                          fontSize: "28px",
-                          color: "#c7b8c1",
-                        },
-                      },
-                      `${stats.hit_accuracy.toFixed(2)}% acc`,
-                    ),
-                    h(
-                      "div",
-                      {
-                        key: "plays",
-                        style: {
-                          fontSize: "28px",
-                          color: "#7a6b74",
-                        },
-                      },
-                      `${formatOgInt(stats.play_count)} plays`,
-                    ),
-                  ],
-                ),
+                h("img", { key: "flag", src: flagUrl, style: { width: "36px", height: "24px", borderRadius: "3px" } }),
+                h("div", { key: "country", style: { display: "flex" } }, clamp(country, 22)),
+                team ? h("div", { key: "sep", style: { display: "flex", width: "1px", height: "22px", background: line } }) : null,
+                team?.flag_url
+                  ? h("img", { key: "tflag", src: team.flag_url, style: { width: "48px", height: "24px", borderRadius: "3px", objectFit: "cover" } })
+                  : null,
+                team ? h("div", { key: "team", style: { display: "flex" } }, clamp(team.name, 18)) : null,
               ],
             ),
           ],
+        ),
+        graph
+          ? h(
+              "div",
+              {
+                key: "graph",
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  position: "absolute",
+                  top: "276px",
+                  left: `${PLAYER_OG.graphLeft}px`,
+                  width: `${PLAYER_OG.graphWidth}px`,
+                },
+              },
+              [
+                h(
+                  "div",
+                  { key: "labels", style: { display: "flex", justifyContent: "space-between", fontSize: "22px", color: label } },
+                  [
+                    h("div", { key: "span", style: { display: "flex" } }, "90 days"),
+                    peak != null ? h("div", { key: "peak", style: { display: "flex" } }, `peak #${formatOgInt(peak)}`) : null,
+                  ],
+                ),
+                graph,
+              ],
+            )
+          : null,
+        h(
+          "div",
+          {
+            key: "stats",
+            style: {
+              display: "flex",
+              alignItems: "flex-start",
+              // Five columns fill the row; fewer keep their spacing instead of
+              // drifting to the edges.
+              justifyContent: keymodes.length === 2 ? "space-between" : "flex-start",
+              gap: keymodes.length === 2 ? undefined : "48px",
+              position: "absolute",
+              top: "430px",
+              left: "56px",
+              width: "1088px",
+              paddingTop: "34px",
+              borderTop: `1px solid ${line}`,
+            },
+          },
+          columns,
         ),
       ],
     ),
