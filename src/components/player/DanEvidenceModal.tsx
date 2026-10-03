@@ -247,6 +247,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
       {
         id: "all",
         skillsetClear: undefined as LivePlayerDanCourseEvidence | undefined,
+        verified: false,
         label: t`All clears`,
         color,
         dan: evidence.dan,
@@ -259,6 +260,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
         return {
           id: skillset.id,
           skillsetClear: skillset.skillsetClear,
+          // A run just under the bar lifts the tile without being a clear.
+          verified: skillset.skillsetClear != null && skillset.skillsetClear.accuracy + 1e-9 >= skillset.skillsetClear.bar,
           label: meta ? i18n._(meta.labelMsg) : skillset.id,
           color: meta?.color ?? color,
           dan: skillset.dan,
@@ -620,7 +623,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                 </span>
                                 {section.dan ? (
                                   <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
-                                    {section.skillsetClear ? "" : "~"}{formatDan(section.dan.label)}
+                                    {section.verified ? "" : "~"}{formatDan(section.dan.label)}
                                   </span>
                                 ) : (
                                   <span className="text-[11px] leading-none text-osu-f1">
@@ -628,7 +631,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                   </span>
                                 )}
                                 <span className="text-[11px] tabular-nums text-osu-f1">
-                                  {section.skillsetClear ? t`Verified clear` : t`${section.clears} plays`}
+                                  {section.verified ? t`Verified clear` : t`${section.clears} plays`}
                                 </span>
                                 {open ? (
                                   <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: section.color }} />
@@ -675,7 +678,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                               </span>
                               {sectionLabel ? (
                                 <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
-                                  {sectionBeyond ? ">" : section.skillsetClear ? "" : "~"}{sectionLabel}
+                                  {sectionBeyond ? ">" : section.verified ? "" : "~"}{sectionLabel}
                                 </span>
                               ) : (
                                 <span className="text-[11px] leading-none text-osu-f1">
@@ -686,8 +689,8 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                 {/* Under the averaging window the count reads as
                                     progress toward it: this dan is averaged from
                                     fewer plays than it wants. */}
-                                {section.skillsetClear ? t`Verified clear` : t`${section.clears} plays`}
-                                {!section.skillsetClear && section.weightedClears < averageWindow ? (
+                                {section.verified ? t`Verified clear` : t`${section.clears} plays`}
+                                {!section.verified && section.weightedClears < averageWindow ? (
                                   <span className="ml-1">
                                     {t`· ${(Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")}/${averageWindow} counted`}
                                   </span>
@@ -702,7 +705,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                       </div>
                       {/* Shown only while some column is short of the window, so a
                           filled-out breakdown carries no caveat at all. */}
-                      {sections.some((section) => !section.skillsetClear && section.weightedClears < averageWindow) ? (
+                      {sections.some((section) => !section.verified && section.weightedClears < averageWindow) ? (
                         <div className="px-2 pt-2 text-[11px] text-osu-f1">
                           <Trans>
                             Each skillset averages up to {averageWindow} clears. Only your two best rate plays per chart count.
@@ -930,6 +933,9 @@ function CredentialRow({
   const currency = credential.displayedAccuracy != null
     ? credential.currency === "v2" ? " (ScoreV2)" : " (stable)"
     : "";
+  const passed = credential.accuracy + 1e-9 >= credential.bar;
+  const level = formatDan(credential.level);
+  const credited = formatDan(credential.label);
   return (
     <button
       type="button"
@@ -937,10 +943,12 @@ function CredentialRow({
       disabled={!onOpen}
       className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left transition-colors enabled:cursor-pointer enabled:hover:bg-osu-b4"
       title={`${credential.artist} - ${credential.title} [${credential.version}] · ${
-        t`The ${formatDan(credential.level)} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept`
+        passed
+          ? t`The ${formatDan(credential.level)} chart of this skillset ladder: clearing it sets the level outright, and a higher estimate is kept`
+          : t`The ${level} chart of this skillset ladder: a run within one point of the bar sets ${credited}, and a higher estimate is kept`
       }${onOpen ? ` · ${t`view the score`}` : ""}`}
     >
-      <span className="w-4 shrink-0 text-right text-[10px] leading-none" style={{ color }} aria-hidden>✓</span>
+      <span className="w-4 shrink-0 text-right text-[10px] leading-none" style={{ color }} aria-hidden>{passed ? "✓" : ""}</span>
       <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
         {credential.title}
         <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{credential.version}]</span>
