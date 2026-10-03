@@ -494,8 +494,10 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
                       ))}
                       animate={{ scale: active ? 1.12 : 1 }}
                       transition={{ type: "spring", stiffness: 560, damping: 24 }}
-                      className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-[opacity,filter] duration-150 ${
-                        active ? "opacity-100" : isHovered ? "opacity-90 grayscale-[20%]" : "opacity-40 grayscale-[45%]"
+                      // Opacity only: CSS filters on these badges inside the sheet's
+                      // transformed scroll container left them unpainted on iOS WebKit.
+                      className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-opacity duration-150 ${
+                        active ? "opacity-100" : isHovered ? "opacity-80" : "opacity-40"
                       }`}
                     >
                       {src ? (
@@ -503,10 +505,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
                           src={src}
                           alt={label}
                           draggable={false}
-                          decoding="async"
-                          className={`h-full w-full object-contain ${
-                            active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-                          }`}
+                          className="h-full w-full object-contain"
                         />
                       ) : (
                         <span className="grid h-6 w-6 place-items-center rounded-full bg-osu-b3 ring-1 ring-white/20 text-[11px] font-black text-osu-l1">
