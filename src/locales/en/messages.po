@@ -2119,6 +2119,10 @@ msgstr "1 other"
 msgid "1 person has your card"
 msgstr "1 person has your card"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "1 play"
+msgstr "1 play"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
 msgstr "1 rate per chart"
@@ -8040,6 +8044,10 @@ msgstr "how many players near you have it"
 #~ msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 #~ msgstr "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 
+#: src/routes/recommendations.tsx
+msgid "How recommendations work"
+msgstr "How recommendations work"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "How to pick"
@@ -12499,8 +12507,8 @@ msgid "Pick another file"
 msgstr "Pick another file"
 
 #: src/routes/recommendations.tsx
-msgid "Pick any map on the left to preview it here."
-msgstr "Pick any map on the left to preview it here."
+#~ msgid "Pick any map on the left to preview it here."
+#~ msgstr "Pick any map on the left to preview it here."
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."

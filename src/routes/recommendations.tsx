@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Flame,
   Mountain,
+  CircleHelp,
 } from "lucide-react";
 import {
   isLiveBackendConfigured,
@@ -933,6 +934,7 @@ function FarmHelperPage() {
   // not include them either. The skillboost tab keeps its own count.
   if (pushLocked) tabCounts.all -= tabCounts.push;
   const boardCounts = visibleSnapshot ? countReasons(visibleSnapshot.recs) : null;
+  const railOpen = isXl && selected != null && visibleSnapshot != null;
   // Whether the backend actually had a cohort to compare against: without one,
   // an empty board is missing data, not an achievement.
   const hasCohortData =
@@ -1021,7 +1023,7 @@ function FarmHelperPage() {
                   />
                 </div>
               ) : (
-              <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_352px]">
+              <div className={`mt-4 grid items-start gap-4 ${railOpen ? "xl:grid-cols-[minmax(0,1fr)_352px]" : ""}`}>
                 <div ref={listRef} className="min-w-0 scroll-mt-20">
                   <BoardToolbar
                     query={query}
@@ -1043,6 +1045,22 @@ function FarmHelperPage() {
                       setSelectedKey(null);
                     }}
                     counts={tabCounts}
+                    guide={
+                      shellSnapshot ? (
+                        <ReadingGuide
+                          snapshot={shellSnapshot}
+                          view={view}
+                          refreshing={waitingForCurrentSnapshot}
+                          counts={boardCounts}
+                          hiddenByMarks={
+                            isOwner && view === "gain"
+                              ? (visibleSnapshot?.feedbackHiddenCount ?? 0) + (visibleSnapshot?.maxedHiddenCount ?? 0)
+                              : 0
+                          }
+                          pushLocked={pushLocked}
+                        />
+                      ) : null
+                    }
                     sortMode={sortMode}
                     sortDir={sortDir}
                     onSort={(next) => {
@@ -1214,17 +1232,16 @@ function FarmHelperPage() {
                     </div>
                   ) : null}
 
-                  {/* Below xl the rail is CSS-hidden, so the marks manager
-                      lives under the list instead. */}
-                  {marksManager ? <div className="mt-4 xl:hidden">{marksManager}</div> : null}
+                  {marksManager ? <div className="mt-4">{marksManager}</div> : null}
                 </div>
 
-                <aside className="hidden xl:block">
-                  <div className="sticky top-[76px]">
-                    {/* Only the active preview surface mounts (isXl gate):
-                        otherwise each row click would mount two FarmersLists
-                        and fire the farmers request twice. */}
-                    {selected && visibleSnapshot && isXl ? (
+                {/* The rail only exists while a map is previewed; the list
+                    keeps the full width otherwise. Only the active preview
+                    surface mounts (isXl gate): otherwise each row click would
+                    mount two FarmersLists and fire the farmers request twice. */}
+                {railOpen && selected && visibleSnapshot ? (
+                  <aside className="hidden xl:block">
+                    <div className="sticky top-[76px]">
                       <RecPreview
                         rec={selected}
                         snapshot={visibleSnapshot}
@@ -1236,25 +1253,9 @@ function FarmHelperPage() {
                         onClose={() => setSelectedKey(null)}
                         className="max-h-[calc(100dvh-104px)]"
                       />
-                    ) : (
-                      <>
-                        <ReadingGuide
-                          snapshot={shellSnapshot}
-                          view={view}
-                          refreshing={waitingForCurrentSnapshot}
-                          counts={boardCounts}
-                          hiddenByMarks={
-                            isOwner && view === "gain"
-                              ? (visibleSnapshot?.feedbackHiddenCount ?? 0) + (visibleSnapshot?.maxedHiddenCount ?? 0)
-                              : 0
-                          }
-                          pushLocked={pushLocked}
-                        />
-                        {marksManager ? <div className="mt-4">{marksManager}</div> : null}
-                      </>
-                    )}
-                  </div>
-                </aside>
+                    </div>
+                  </aside>
+                ) : null}
               </div>
               )}
             </>
@@ -1524,6 +1525,7 @@ function BoardToolbar({
   reasonFilter,
   onReason,
   counts,
+  guide,
   sortMode,
   sortDir,
   onSort,
@@ -1538,6 +1540,7 @@ function BoardToolbar({
   reasonFilter: ReasonFilter;
   onReason: (next: ReasonFilter) => void;
   counts: Record<ReasonFilter, number>;
+  guide: ReactNode;
   sortMode: SortMode;
   sortDir: SortDirection;
   onSort: (next: SortMode) => void;
@@ -1604,10 +1607,54 @@ function BoardToolbar({
           {showReason && countLabel ? (
             <span className="hidden text-[11px] tabular-nums text-osu-f1 lg:inline">{countLabel}</span>
           ) : null}
+          {guide ? <GuideMenu>{guide}</GuideMenu> : null}
           <ToolbarSearch value={query} onChange={onQuery} />
           <SortMenu sortMode={sortMode} sortDir={sortDir} onSort={onSort} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function GuideMenu({ children }: { children: ReactNode }) {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-label={t`How recommendations work`}
+        className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg transition-colors ${
+          open ? "bg-osu-b3/70 text-osu-c1" : "text-osu-f1 hover:bg-osu-b3/35 hover:text-osu-l2"
+        }`}
+      >
+        <CircleHelp className="h-4 w-4" />
+      </button>
+      {open ? (
+        <div className="absolute top-[calc(100%+6px)] z-30 w-[min(352px,calc(100vw-24px))] left-0 shadow-2xl">
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2548,7 +2595,6 @@ function ReadingGuide({
         {snapshot.modelsReady === false ? (
           <p className="text-osu-yellow"><Trans>estimates are rough until we've analyzed more of this player's plays</Trans></p>
         ) : null}
-        <p className="text-osu-f1/80"><Trans>Pick any map on the left to preview it here.</Trans></p>
       </div>
     </div>
   );
@@ -3355,7 +3401,7 @@ function LoadingState({ subject, view }: { subject?: KnownSubject | null; view: 
           <SkillBoardSkeleton />
         </div>
       ) : (
-      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_352px]">
+      <div className="mt-4">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-osu-b3/20 px-3 py-2">
             <Skeleton className="h-7 w-24 rounded-lg" />
@@ -3371,9 +3417,6 @@ function LoadingState({ subject, view }: { subject?: KnownSubject | null; view: 
               ))}
             </div>
           </div>
-        </div>
-        <div className="hidden xl:block">
-          <Skeleton className="h-[420px] w-full rounded-xl" />
         </div>
       </div>
       )}

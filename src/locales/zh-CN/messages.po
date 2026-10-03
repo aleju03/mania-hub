@@ -2105,6 +2105,10 @@ msgstr "另一人"
 msgid "1 person has your card"
 msgstr "有 1 人持有你的卡片"
 
+#: src/components/player/ActivityPanel.tsx
+msgid "1 play"
+msgstr "1 次游玩"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
 msgstr "每张谱面 1 个倍速"
@@ -8014,6 +8018,10 @@ msgstr "有多少与你水平相近的玩家打过它"
 #~ msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 #~ msgstr "这个改动对你影响多大，取决于你有多偏科，而这正是重点所在。典型的 4K 玩家会掉一级左右。玩家最强与最弱技能之间的差距，中位数是 1.7 级，到 90 分位则达到 4.3 级，而这个差距过去是完全看不见的。"
 
+#: src/routes/recommendations.tsx
+msgid "How recommendations work"
+msgstr "推荐是如何生成的"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "抽取方式"
@@ -12469,8 +12477,8 @@ msgid "Pick another file"
 msgstr "换一个文件"
 
 #: src/routes/recommendations.tsx
-msgid "Pick any map on the left to preview it here."
-msgstr "点击左侧任意谱面即可在此预览。"
+#~ msgid "Pick any map on the left to preview it here."
+#~ msgstr "点击左侧任意谱面即可在此预览。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Pick both a .osr and the .osu it was played on."
