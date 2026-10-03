@@ -3,7 +3,8 @@ import { loadTeamView, peekTeamView } from "../../lib/team-view-cache";
    a player and for a team. */
 
 import { useLocation } from "@tanstack/react-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -635,6 +636,18 @@ function ActivityYearView({
     () => ({ "--activity-weeks": String(activity.weeks.length) }) as CSSProperties,
     [activity.weeks.length],
   );
+  const [hoveredCell, setHoveredCell] = useState<{ date: string; scoreCount: number; left: number; top: number } | null>(null);
+  const showCellTooltip = (event: ReactPointerEvent<HTMLElement>, date: string, scoreCount: number) => {
+    if (event.pointerType !== "mouse") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHoveredCell({ date, scoreCount, left: rect.left + rect.width / 2, top: rect.top });
+  };
+  useEffect(() => {
+    if (!hoveredCell) return;
+    const hide = () => setHoveredCell(null);
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, [hoveredCell]);
   return (
     <>
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_130px]">
@@ -676,6 +689,7 @@ function ActivityYearView({
                     <div
                       className="activity-heatmap-grid mt-2 grid gap-1"
                       style={activityGridStyle}
+                      onPointerLeave={() => setHoveredCell(null)}
                     >
                       {activity.weeks.map((week) => (
                         <div key={week.key} className="grid min-w-0 grid-rows-7 gap-1">
@@ -685,7 +699,8 @@ function ActivityYearView({
                                 <button
                                   key={day.date}
                                   type="button"
-                                  title={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
+                                  aria-label={t`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
+                                  onPointerEnter={(event) => showCellTooltip(event, day.date, day.scoreCount)}
                                   onClick={() => onSelectDay(day)}
                                   className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
                                   style={getActivityCellStyle(day, activity.typicalSession)}
@@ -693,12 +708,13 @@ function ActivityYearView({
                               ) : (
                                 <span
                                   key={day.date}
-                                  title={t`${formatFullActivityDate(day.date)}: no tracked plays`}
+                                  aria-label={t`${formatFullActivityDate(day.date)}: no tracked plays`}
+                                  onPointerEnter={() => setHoveredCell(null)}
                                   className={`aspect-square w-full min-w-0 rounded-[3px] border ${ACTIVITY_EMPTY_CELL_CLASS}`}
                                 />
                               )
                             ) : (
-                              <span key={`empty-${index}`} className="aspect-square w-full min-w-0" />
+                              <span key={`empty-${index}`} className="aspect-square w-full min-w-0" onPointerEnter={() => setHoveredCell(null)} />
                             )
                           ))}
                         </div>
@@ -744,6 +760,18 @@ function ActivityYearView({
         </div>
       </div>
 
+      {hoveredCell && typeof document !== "undefined" ? createPortal(
+        <div
+          className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full rounded-lg bg-osu-b3 px-3 py-1.5 text-center shadow-xl shadow-black/50"
+          style={{ left: hoveredCell.left, top: hoveredCell.top - 6 }}
+        >
+          <div className="whitespace-nowrap text-sm font-semibold text-white">
+            {hoveredCell.scoreCount === 1 ? t`1 play` : t`${formatNumber(hoveredCell.scoreCount)} plays`}
+          </div>
+          <div className="whitespace-nowrap text-[11px] text-osu-f1">{formatShortActivityDate(hoveredCell.date)}</div>
+        </div>,
+        document.body,
+      ) : null}
     </>
   );
 }
@@ -1682,6 +1710,14 @@ function parseLocalDateKey(date: string): Date {
 function formatFullActivityDate(date: string): string {
   return formatDateTime(parseLocalDateKey(date), "en-US", {
     month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatShortActivityDate(date: string): string {
+  return formatDateTime(parseLocalDateKey(date), "en-US", {
+    month: "short",
     day: "numeric",
     year: "numeric",
   });
