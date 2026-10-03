@@ -4877,6 +4877,15 @@ msgstr "connected to Discord"
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 
+#. placeholder {0}: formatTimeAgo(single.lastSeenAt, locale)
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connected, last seen {0}"
+msgstr "Connected, last seen {0}"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connected, never seen"
+msgstr "Connected, never seen"
+
 #: src/routes/bridge.tsx
 msgid "Connecting"
 msgstr "Connecting"
@@ -11454,8 +11463,8 @@ msgid "Nothing is connected yet. Connect from Companella's settings."
 msgstr "Nothing is connected yet. Connect from Companella's settings."
 
 #: src/components/communities/CommunitySubmitModal.tsx
-msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
-msgstr "Nothing is posted until you review and submit it, and the access ends as soon as it is."
+#~ msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
+#~ msgstr "Nothing is posted until you review and submit it, and the access ends as soon as it is."
 
 #. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)
 #: src/routes/communities.tsx
@@ -16956,6 +16965,10 @@ msgstr "The {keyCount}K {sideLabel} course ladder ends at {0}, so the analyzer c
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {keys}K block resolves no note images; the preview shows flat colours."
 msgstr "The {keys}K block resolves no note images; the preview shows flat colours."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {level} chart of this skillset ladder: a run within one point of the bar sets {credited}, and a higher estimate is kept"
+msgstr "The {level} chart of this skillset ladder: a run within one point of the bar sets {credited}, and a higher estimate is kept"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."

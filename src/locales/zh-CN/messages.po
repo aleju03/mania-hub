@@ -4859,6 +4859,15 @@ msgstr "已连接 Discord"
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "已连接，但几分钟内没有新成绩。等信息流跟上后，最近的游玩会显示出来。"
 
+#. placeholder {0}: formatTimeAgo(single.lastSeenAt, locale)
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connected, last seen {0}"
+msgstr "已连接，最后活动于 {0}"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connected, never seen"
+msgstr "已连接，从未活动"
+
 #: src/routes/bridge.tsx
 msgid "Connecting"
 msgstr "连接"
@@ -11424,8 +11433,8 @@ msgid "Nothing is connected yet. Connect from Companella's settings."
 msgstr "尚未连接任何设备。请在 Companella 的设置中连接。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
-msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
-msgstr "在你确认并提交之前不会发布任何内容，提交之后授权立即结束。"
+#~ msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
+#~ msgstr "在你确认并提交之前不会发布任何内容，提交之后授权立即结束。"
 
 #. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)
 #: src/routes/communities.tsx
@@ -16922,6 +16931,10 @@ msgstr "{keyCount}K {sideLabel} 段位课程止步于 {0}，因此分析器无�
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {keys}K block resolves no note images; the preview shows flat colours."
 msgstr "{keys}K 配置没有解析出任何音符图像，预览只显示纯色。"
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {level} chart of this skillset ladder: a run within one point of the bar sets {credited}, and a higher estimate is kept"
+msgstr "这条技能组段位表的 {level} 谱面：距离门槛不到一个百分点的成绩会确定为 {credited}，更高的估算会被保留"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."

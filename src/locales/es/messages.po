@@ -4850,6 +4850,15 @@ msgstr "conectado a Discord"
 msgid "Connected, but no new scores have come in for a few minutes. Recent plays will appear once the feed catches up."
 msgstr "Conectado, pero no han llegado scores nuevos en varios minutos. Las plays recientes aparecerán cuando el feed se ponga al día."
 
+#. placeholder {0}: formatTimeAgo(single.lastSeenAt, locale)
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connected, last seen {0}"
+msgstr "Conectado, visto por última vez {0}"
+
+#: src/components/settings/CompanellaGroup.tsx
+msgid "Connected, never seen"
+msgstr "Conectado, nunca visto"
+
 #: src/routes/bridge.tsx
 msgid "Connecting"
 msgstr "Conectar"
@@ -11415,8 +11424,8 @@ msgid "Nothing is connected yet. Connect from Companella's settings."
 msgstr "Todavía no hay nada conectado. Conéctala desde los ajustes de Companella."
 
 #: src/components/communities/CommunitySubmitModal.tsx
-msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
-msgstr "No se publica nada hasta que lo revises y lo envíes, y el acceso termina apenas lo hagas."
+#~ msgid "Nothing is posted until you review and submit it, and the access ends as soon as it is."
+#~ msgstr "No se publica nada hasta que lo revises y lo envíes, y el acceso termina apenas lo hagas."
 
 #. placeholder {0}: country === COMMUNITY_INTERNATIONAL ? t`international servers` : displayCountryName(country, locale)
 #: src/routes/communities.tsx
@@ -16913,6 +16922,10 @@ msgstr "La escala de dans {sideLabel} de {keyCount}K termina en {0}, así que el
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {keys}K block resolves no note images; the preview shows flat colours."
 msgstr "El bloque {keys}K no resuelve imágenes de notas; la vista previa usa colores planos."
+
+#: src/components/player/DanEvidenceModal.tsx
+msgid "The {level} chart of this skillset ladder: a run within one point of the bar sets {credited}, and a higher estimate is kept"
+msgstr "El chart {level} de esta escalera de skillset: una run a menos de un punto de la barra fija {credited}, y se conserva una estimación más alta"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."

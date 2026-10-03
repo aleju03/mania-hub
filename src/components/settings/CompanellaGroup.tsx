@@ -139,51 +139,74 @@ function IntegrationApp({ name, icon, status, aboutTo, installations, busyId, on
 }) {
   const { t } = useLingui();
   const locale = useLocale();
+  const seen = (installation: CompanellaInstallation) => installation.lastSeenAt
+    ? t`last seen ${formatTimeAgo(installation.lastSeenAt, locale)}`
+    : t`never seen`;
+  // One computer folds into the app row; the computer's name defaults to the app's, so it only shows when renamed.
+  const single = installations.length === 1 ? installations[0] : null;
+  const singleStatus = single && (single.lastSeenAt
+    ? t`Connected, last seen ${formatTimeAgo(single.lastSeenAt, locale)}`
+    : t`Connected, never seen`);
+  const revokeButton = (installation: CompanellaInstallation, className: string) => (
+    <button
+      type="button"
+      disabled={busyId === installation.id}
+      onClick={() => onRevoke(installation)}
+      className={`shrink-0 cursor-pointer text-[11px] font-semibold text-rose-300 transition-colors hover:text-rose-200 disabled:cursor-default disabled:opacity-40 ${className}`}
+    >
+      <Trans>Revoke</Trans>
+    </button>
+  );
   return (
-    <>
-      <div className="flex items-center gap-3">
-        <img src={icon} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
-        <div className="min-w-0 flex-1">
-          <div className="text-[12px] font-semibold text-osu-l1">{name}</div>
-          {status ? (
-            <div className="text-[11px] text-osu-f1">{status}</div>
-          ) : (
-            <div className="mt-1 h-3 w-32 animate-pulse rounded bg-osu-b4/60" />
+    <div className="flex items-start gap-3">
+      <img src={icon} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-h-8 items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[12px] font-semibold text-osu-l1">{name}</div>
+            {status ? (
+              <div className="truncate text-[11px] text-osu-f1">
+                {singleStatus ?? status}
+                {single && single.displayName !== name && (
+                  <>
+                    <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px translate-y-px bg-white/15" />
+                    {single.displayName}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="mt-1 h-3 w-32 animate-pulse rounded bg-osu-b4/60" />
+            )}
+          </div>
+          {single && revokeButton(single, "rounded-lg bg-osu-b4 px-3 py-1.5 hover:bg-rose-500/20")}
+          {aboutTo && (
+            <Link
+              to={aboutTo}
+              className="shrink-0 rounded-lg bg-osu-b4 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+            >
+              <Trans>About</Trans>
+            </Link>
           )}
         </div>
-        {aboutTo && (
-          <Link
-            to={aboutTo}
-            className="shrink-0 rounded-lg bg-osu-b4 px-3 py-1.5 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
-          >
-            <Trans>About</Trans>
-          </Link>
+        {installations.length > 1 && (
+          <div className="mt-1.5 space-y-1.5">
+            {installations.map((installation) => (
+              <div key={installation.id} className="flex items-center gap-3 text-[11px] text-osu-f1">
+                <div className="min-w-0 flex-1 truncate">
+                  {installation.displayName !== name && (
+                    <>
+                      <span className="font-semibold text-osu-l1">{installation.displayName}</span>
+                      <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px translate-y-px bg-white/15" />
+                    </>
+                  )}
+                  {seen(installation)}
+                </div>
+                {revokeButton(installation, "")}
+              </div>
+            ))}
+          </div>
         )}
       </div>
-      {installations.length > 0 && (
-        <div className="divide-y divide-white/[0.06] border-t border-white/[0.07]">
-          {installations.map((installation) => (
-            <div key={installation.id} className="flex items-center gap-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] font-semibold text-white">{installation.displayName}</div>
-                <div className="text-[11px] text-osu-f1">
-                  {installation.lastSeenAt
-                    ? t`last seen ${formatTimeAgo(installation.lastSeenAt, locale)}`
-                    : t`never seen`}
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={busyId === installation.id}
-                onClick={() => onRevoke(installation)}
-                className="shrink-0 cursor-pointer rounded-lg bg-osu-b4 px-2.5 py-1 text-[11px] font-semibold text-rose-300 transition-colors hover:bg-rose-500/20 hover:text-rose-200 disabled:cursor-default disabled:opacity-40"
-              >
-                <Trans>Revoke</Trans>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
+    </div>
   );
 }
