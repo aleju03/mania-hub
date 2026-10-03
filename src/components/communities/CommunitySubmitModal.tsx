@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, Loader2, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import {
   COMMUNITY_PITCH_MAX_LENGTH,
   communityInviteExpiryLabel,
@@ -360,10 +360,9 @@ export function CommunitySubmitModal({
           step === "details" ? "max-w-3xl" : "max-w-lg"
         }`}
       >
-        {/* Discord's own blurple across the top, and its mark beside the title:
-            this flow hands someone to Discord and back, so it should look like
-            it belongs to Discord rather than like a form asking for a password. */}
-        <div className="h-1 rounded-t-xl" style={{ backgroundColor: DISCORD_BLURPLE }} aria-hidden="true" />
+        {/* Discord's mark beside the title: this flow hands someone to
+            Discord and back, so it should read as Discord's, not as a form
+            asking for a password. */}
         <div className="flex items-center gap-2.5 border-b border-osu-b3/30 px-4 py-3">
           <DiscordLogo className="h-5 w-5 shrink-0" />
           <h2 className="flex-1 text-[14px] font-bold text-white">{t`Post your Discord server`}</h2>
@@ -428,12 +427,6 @@ export function CommunitySubmitModal({
                   </li>
                 ))}
               </ul>
-              {/* Aimed at the fear a server owner actually has here, which is
-                  losing control of what goes up, not messages being read. */}
-              <p className="flex items-start gap-2 text-[12px] leading-relaxed text-osu-f1">
-                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
-                {t`Nothing is posted until you review and submit it, and the access ends as soon as it is.`}
-              </p>
               <a
                 href={connectHref}
                 onClick={() => track("community_post_connect")}
