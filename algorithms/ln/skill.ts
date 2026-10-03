@@ -7,8 +7,10 @@ import { buildLnWorkload, emptyLnFamilyVector, type LnFamilyVector, type LnWorkl
 /** v13 keeps normalized strain units and replaces the withdrawn, example-tuned v10 draft with required-action
  * workloads. Model development uses synthetic mechanical invariants only.
  * v14 prices every written hold as a hold and every finger of a chord
- * (ln-workload.ts), on constants refit below. */
-export const LN_SKILL_VERSION = 14;
+ * (ln-workload.ts), on constants refit below.
+ * v15 adds the jack term and cheaper releases to the
+ * workload, and publishes the rating through publishedLnRating. */
+export const LN_SKILL_VERSION = 15;
 export const LN_SKILL_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
 export const LN_SKILL_SCORE_GOAL = 0.93;
 export function isLnSkillSupported(keyCount: number): boolean {
@@ -71,9 +73,35 @@ export function withoutLnFamilyRatings(base: Record<string, number>): Record<str
   return values;
 }
 
+// The published LN number leans on native Overall at the same rate and goal,
+// more the fewer holds a chart has: weight 0.5 at 60% holds, one point less
+// per unit of hold share, so 0.1 at 100% and all of it under 10%. The LN
+// workload prices no rice, and on charts under 75% holds Overall ordered
+// same-player scores better than it did (2026-10-02, 244k plays split by
+// mapset: under 60% holds 82/83% against 73/75%). Blended this way the LN
+// number orders 81.1/81.6% of all pairs, v14 72.1/77.0%. Overall + 1 lines
+// hybrids up with full-LN charts. The power map after it keeps that ordering
+// and puts LN Dan N players where regular Dan N players read on Overall:
+// Dans 3 to 15 within 1.5, root mean square 0.77 (v14 1.32).
+const LN_OVERALL_WEIGHT_AT_60 = 0.5;
+const LN_OVERALL_OFFSET = 1;
+const LN_PUBLISHED_SCALE = 1.82;
+const LN_PUBLISHED_EXPONENT = 0.84;
+
+/** The LN number players see, from the model's rating and native Overall
+ * at the same rate and goal. A missing Overall publishes the rating alone. */
+export function publishedLnRating(skill: Pick<LnSkillResult, "rated" | "rating" | "holdRatio">, overall: number | null | undefined): number {
+  if (!skill.rated || !(skill.rating != null && skill.rating > 0)) return 0;
+  const native = Number(overall);
+  const weight = overall != null && Number.isFinite(native) && native > 0
+    ? Math.max(0, Math.min(1, LN_OVERALL_WEIGHT_AT_60 - (skill.holdRatio - 0.6))) : 0;
+  const blended = (1 - weight) * skill.rating + weight * (native + LN_OVERALL_OFFSET);
+  return LN_PUBLISHED_SCALE * Math.pow(Math.max(0, blended), LN_PUBLISHED_EXPONENT);
+}
+
 /** Publish one LN scalar alongside the untouched native MinaCalc keys. */
 export function lnSkillDisplayValues(skill: LnSkillResult, base: Record<string, number> = {}): Record<string, number> {
-  return { ...withoutLnFamilyRatings(base), LN: skill.rated ? skill.rating ?? 0 : 0 };
+  return { ...withoutLnFamilyRatings(base), LN: publishedLnRating(skill, base.Overall) };
 }
 
 /** The strain a player scores `goal` on: sections sorted hardest first and

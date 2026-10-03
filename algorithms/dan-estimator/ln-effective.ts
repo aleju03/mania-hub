@@ -68,6 +68,12 @@ export interface EffectiveLnAnalysis {
   /** trackedShare is under LN_TRACKED_MIN_SHARE: the holds are tapped through,
    * and no rating tiebreak may lift the chart to LN (dan/ln-identity.ts). */
   tapCovered: boolean;
+  /** The pinned and under-hold shares of the window at LN_HELD_PEAK_QUANTILE. */
+  heldPeakPinned: number;
+  heldPeakUnderHold: number;
+  /** Both under their lines and no written chains: the rating tiebreak cannot
+   * make the chart LN (dan/ln-identity.ts). */
+  heldPeakLight: boolean;
   /** The chart is LN vibro (dan/vibro-detection.ts) at this rate: staggered
    * hold spam played by shaking. Its chains establish nothing. */
   lnVibro: boolean;
@@ -116,13 +122,14 @@ export const LN_EFFECTIVE_KEY_COUNTS: ReadonlySet<number> = new Set([4]);
  * v8 tap line 0.10 and no LN number on tapped-through charts; v9 tap-weighted
  * release work; v10 pair-fitted rate response; v11 chains read as written;
  * v12 tap gate also reads the time-weighted median; v13 chains exempt a chart
- * from the tap gate. */
-export const LN_EFFECTIVE_MODEL_VERSION = 13;
+ * from the tap gate; v14 the rating tiebreak needs a held peak; v15 it needs
+ * held-through holds where only chains lift the tap gate (dan/ln-identity.ts). */
+export const LN_EFFECTIVE_MODEL_VERSION = 15;
 
 /**
  * The effective share at which a 4K chart's identity is LN: a note-weighted
  * median of window shares, so on its own scale rather than the 0.45 hold line.
- * Fitted 2026-09-03 to charts players call LN that land just under 0.45
+ * Fitted 2026-09-03 to hand-labeled LN charts that land just under 0.45
  * (0.415 to 0.439). Full-LN "noodle" charts a tap covers end to end sit at
  * 0.30 and below. A chart at 0.412 with 37.8% holds plays as jumpstream: the
  * hold line keeps it rice.
@@ -133,9 +140,9 @@ export const LN_EFFECTIVE_MIN_RATIO = 0.4;
  * The share of a window's notes that must be release work (long or chained
  * holds) for it to read LN when its bodies are tap-covered, scaled onto the
  * 0.4 line so one stored share answers both readings. Fitted 2026-09-17 on
- * charts the owner watched: an inverse handstream at 264 bpm (0.80) and a
- * pack chart at the same tempo (0.66) are LN; at 1.5x a 1/4-held jumpstream
- * chart (0.53) and two others (0.48, 0.27) stay rice.
+ * hand-labeled charts: an inverse handstream at 264 bpm (0.80) and a pack
+ * chart at the same tempo (0.66) are LN; at 1.5x three jumpstream charts
+ * written in holds (0.53, 0.48 and 0.27) stay rice.
  */
 export const LN_CHAINED_MIN_RATIO = 0.6;
 
@@ -156,17 +163,17 @@ const TAP_LOG_SPREAD = 0.29;
  * The share of a window's notes that must be holds an ordinary tap cannot
  * release in time (each counted by that chance), as the note-weighted median
  * over windows. Under it the holds are notation a player taps through: the
- * chart is rice and publishes no LN number. Bounded by the owner's labels:
- * rice reaches 0.084 (a chart at 1.0x that "plays like normal
- * jumpstream"), LN starts at 0.112 (one chart at 1.5x, another at 0.113 at
- * 1.0x); every LN course reads 0.154 or more.
+ * chart is rice and publishes no LN number. Bounded by hand-labeled charts:
+ * rice reaches 0.084 (a chart at 1.0x that plays as jumpstream), LN starts at
+ * 0.112 (one chart at 1.5x, another at 0.113); every LN course reads 0.154 or
+ * more.
  *
  * The share is the higher of two medians over the 10s windows: weighted by
  * notes, and weighted by time (every window alike). Notes alone let the
  * densest windows decide, and at speed those are exactly the ones a tap
  * covers, so a chart with LN through most of its playtime read as rice.
- * Time alone drops charts whose LN sits in the dense windows. On the owner's
- * 2026-09-29 calls (18 plays at 1.0x and 1.5x) notes alone agree on 11,
+ * Time alone drops charts whose LN sits in the dense windows. On 18
+ * hand-labeled plays at 1.0x and 1.5x (2026-09-29) notes alone agree on 11,
  * the higher of the two on 15; over the 11,080 cached 4K charts past the hold
  * line it adds 77 LN charts at 1.0x, 128 at 1.5x and 27 at 0.75x, and removes
  * none.
@@ -180,15 +187,39 @@ export const LN_TRACKED_MIN_SHARE = 0.1;
  * time, but a same-lane release and re-press among real holds is a motion a
  * tapped-through chart never asks for; the long-hold share keeps out a fast
  * 1/4-held stream, whose same-lane repeats chain at speed with no long hold.
- * On the owner's 2026-09-30 calls, 11 LN plays sat under the tap line and 7
- * of them pass both (chains 0.11 to 0.35, long 0.20 to 0.51), against 1 of
- * the 9 rice plays there; the other rice plays reach 0.08 chained. Over the
+ * Of 20 hand-labeled plays under the tap line (2026-09-30), 7 of the 11 LN
+ * plays pass both (chains 0.11 to 0.35, long 0.20 to 0.51), against 1 of the
+ * 9 rice plays; the other rice plays reach 0.08 chained. Over the
  * 11,144 cached 4K charts past the hold line it lifts the gate on 143 of the
  * 769 tapped-through charts at 1.0x, 1,568 of 4,817 at 1.5x and 7 of 235 at
  * 0.75x; structure or the rating tiebreak then decides them.
  */
 export const LN_TAP_GATE_CHAIN_EXEMPT_SHARE = 0.1;
 export const LN_TAP_GATE_CHAIN_EXEMPT_LONG_SHARE = 0.15;
+
+/**
+ * The rating tiebreak (dan/ln-identity.ts) needs the chart's heaviest
+ * sections to hold a finger down. A finger is pinned for the part of a hold
+ * past the longest ordinary tap (TAP_MEDIAN_MAX_MS) and before the release
+ * window; per 10s window, the pinned share is the time any finger is pinned
+ * and the under-hold share is the notes struck while another column is
+ * pinned. A chart whose window at LN_HELD_PEAK_QUANTILE stays under both
+ * lines plays as rice with hold notation, however its rating compares to
+ * Overall. Same-lane chains as written (at 1.0x) on a tenth of its notes
+ * (LN_TAP_GATE_CHAIN_EXEMPT_SHARE) exempt it: inverse pins nothing and is LN
+ * by its releases.
+ *
+ * Fitted 2026-10-02 on hand-labeled charts. Every LN label at 1.5x reads 0.19
+ * pinned or more and 0.09 under hold or more (the ninth-decile window);
+ * a 185 bpm jumpstream chart with 1/16 and 1/8 holds labeled rice at 1.5x
+ * reads 0.13 and 0.07 there, against 0.45 and 0.61 at 1.0x. Over
+ * the 12,278 cached 4K charts past the hold line it returns to rice 9 of 541
+ * tiebreak LN charts at 1.0x, 14 of 136 at 1.5x and none at 0.75x, and no
+ * labeled LN play.
+ */
+export const LN_HELD_PEAK_QUANTILE = 0.9;
+export const LN_HELD_PEAK_MIN_PINNED_SHARE = 0.15;
+export const LN_HELD_PEAK_MIN_UNDER_HOLD_SHARE = 0.08;
 
 /**
  * "Is this chart LN", for every identity consumer. On 4K a stored effective
@@ -356,6 +387,71 @@ export function tapShortfallChances(notes: EffectiveLnNote[], options: Effective
   return tapChances(sortChart(notes), playedRate(options.rate), options.windowMs ?? releaseGreatWindowMs(options.od));
 }
 
+/** See LN_HELD_PEAK_QUANTILE. */
+function heldPeak({ notes, lanes }: SortedChart, rate: number, windowMs: number): { pinned: number; underHold: number } {
+  const pins = lanes.map((lane) => {
+    const spans: Array<[number, number]> = [];
+    for (const index of lane) {
+      const note = notes[index];
+      if (!note.isHold) continue;
+      const start = note.time / rate + TAP_MEDIAN_MAX_MS, end = note.endTime / rate - windowMs;
+      if (end > start) spans.push([start, end]);
+    }
+    return { column: notes[lane[0]].column, spans };
+  });
+  const pinnedAt = (spans: Array<[number, number]>, time: number) => {
+    let lo = 0, hi = spans.length - 1, at = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (spans[mid][0] <= time) { at = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return at >= 0 && time < spans[at][1];
+  };
+  let first = Infinity, last = -Infinity;
+  for (const note of notes) {
+    first = Math.min(first, note.time / rate);
+    last = Math.max(last, (note.isHold && note.endTime > note.time ? note.endTime : note.time) / rate);
+  }
+  const slots = new Map<number, { notes: number; under: number; pinnedMs: number }>();
+  const slot = (key: number) => {
+    let window = slots.get(key);
+    if (!window) slots.set(key, window = { notes: 0, under: 0, pinnedMs: 0 });
+    return window;
+  };
+  for (const note of notes) {
+    const window = slot(Math.floor((note.time / rate - first) / WINDOW_MS));
+    window.notes += 1;
+    if (pins.some((pin) => pin.column !== note.column && pinnedAt(pin.spans, note.time / rate))) window.under += 1;
+  }
+  // Time with any finger pinned: the union of every lane's spans, split by window.
+  const merged = pins.flatMap((pin) => pin.spans).sort((a, b) => a[0] - b[0]);
+  let runStart = -Infinity, runEnd = -Infinity;
+  const addPinned = (start: number, end: number) => {
+    for (let key = Math.floor((start - first) / WINDOW_MS); first + key * WINDOW_MS < end; key += 1) {
+      const from = Math.max(start, first + key * WINDOW_MS), to = Math.min(end, first + (key + 1) * WINDOW_MS);
+      if (to > from) slot(key).pinnedMs += to - from;
+    }
+  };
+  for (const [start, end] of merged) {
+    if (start > runEnd) {
+      if (runEnd > runStart) addPinned(runStart, runEnd);
+      runStart = start;
+      runEnd = end;
+    } else runEnd = Math.max(runEnd, end);
+  }
+  if (runEnd > runStart) addPinned(runStart, runEnd);
+  const windows = [...slots.entries()].filter(([, window]) => window.notes >= WINDOW_MIN_NOTES).map(([key, window]) => ({
+    pinned: window.pinnedMs / Math.max(1, Math.min(WINDOW_MS, last - (first + key * WINDOW_MS))),
+    underHold: window.under / window.notes,
+  }));
+  const quantile = (values: number[]) => {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor((sorted.length - 1) * LN_HELD_PEAK_QUANTILE)];
+  };
+  return { pinned: quantile(windows.map((window) => window.pinned)), underHold: quantile(windows.map((window) => window.underHold)) };
+}
+
 function weightedMedian(entries: Array<{ share: number; weight: number }>): number | null {
   const sorted = [...entries].sort((a, b) => a.share - b.share);
   const total = sorted.reduce((sum, entry) => sum + entry.weight, 0);
@@ -371,7 +467,7 @@ function weightedMedian(entries: Array<{ share: number; weight: number }>): numb
 /** Per 10s window: the long share, or the release-work share (long plus
  * chained) scaled from its 0.6 line onto the 0.4 line, whichever is higher.
  * A tap-covered chart keeps only the chain reading: same-lane release/repress
- * stays LN however short its bodies (the owner's inverse ruling), while long
+ * stays LN however short its bodies (inverse plays as LN), while long
  * bodies a tap covers establish nothing. */
 function identityShare(window: { notes: number; long: number; chained: number; inChain: number }, tapCovered: boolean): number {
   if (!(window.notes > 0)) return 0;
@@ -421,6 +517,14 @@ function analyzeSorted(chart: SortedChart, options: EffectiveLnOptions, played: 
   const tapCovered = total > 0 && trackedShare < LN_TRACKED_MIN_SHARE && !chainExempt;
   const effectiveLnRatio = weightedMedian(windows.map((window) => ({ share: identityShare(window, tapCovered), weight: window.notes })))
     ?? identityShare(whole, tapCovered);
+  const peak = heldPeak(chart, rate, identityWindow);
+  let heldPeakLight = peak.pinned < LN_HELD_PEAK_MIN_PINNED_SHARE && peak.underHold < LN_HELD_PEAK_MIN_UNDER_HOLD_SHARE;
+  if (heldPeakLight && total > 0) {
+    // Chains as written: a rate mod does not write inverse (see EffectiveHolds.weights).
+    const written = rate === 1 ? identity : judgeHolds(chart, 1, identityWindow, isLnVibroChart(notes, { ...options, rate: 1 }));
+    const writtenChained = written.reduce((count, verdict) => count + (verdict?.kind === "chained" ? 1 : 0), 0);
+    if (writtenChained / total >= LN_TAP_GATE_CHAIN_EXEMPT_SHARE) heldPeakLight = false;
+  }
 
   return {
     notes: total,
@@ -436,6 +540,9 @@ function analyzeSorted(chart: SortedChart, options: EffectiveLnOptions, played: 
     identityWorkShare: holds > 0 ? (whole.long + whole.chained) / holds : 0,
     trackedShare,
     tapCovered,
+    heldPeakPinned: peak.pinned,
+    heldPeakUnderHold: peak.underHold,
+    heldPeakLight,
     lnVibro,
   };
 }

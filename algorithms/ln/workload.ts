@@ -13,8 +13,21 @@ export const LN_SECTION_MS = 500;
 // parameters estimated from charts or players.
 export const LN_STRAIN_HALF_LIFE_MS = 700;
 const SUSTAIN_RATIO = 4;
-// ScoreV2's release window is 1.5 times the head window.
-const RELEASE_WORK = 1 / 1.5;
+// A release costs a third of a press, and half that when its row only has
+// presses on the other hand. Same-player scores (2026-10-02, 244k plays)
+// found releases priced at the ScoreV2 window ratio (2/3) too dear.
+const RELEASE_WORK = 1 / 3;
+const CROSS_HAND_RELEASE = 0.5;
+// A press on a lane whose last object was a tap is a jack: JACK_UNITS at no
+// gap, falling linearly to nothing at JACK_WINDOW_MS. Charts full of 1/4
+// tap-into-head jacks at 80-100ms read 3-6 levels low without it.
+const JACK_UNITS = 8;
+const JACK_WINDOW_MS = 200;
+// The LN identity tiebreak (ln-identity.ts) compares a rating to Overall on
+// lines drawn and reviewed under v14's pricing: no jack term, releases at the
+// ScoreV2 window ratio, no cross-hand discount. It keeps that pricing, so a
+// change to how hard charts read moves no chart between rice and LN.
+const IDENTITY_RELEASE_WORK = 1 / 1.5;
 const TOLERANCE = LN_SAME_MOTION_TOLERANCE_MS;
 const HANDS = [3, 12];
 
@@ -84,8 +97,9 @@ function riceShareOf(timeline: LnTimeline4K, effective: boolean[], lane: Int8Arr
 
 /**
  * The required LN actions of a 4K chart, as strain per 500ms section. Each
- * press, release and independence task adds one unit of work to its hand, a
- * release two thirds of one. Only notes, rate and OD enter.
+ * press and independence task adds one unit of work to its hand, a release a
+ * third of one, a jack from a tap up to JACK_UNITS. Only notes, rate and OD
+ * enter.
  *
  * Every written hold is priced as a hold, including one a tap would release
  * in time, and a chord costs each finger in it. Measured on same-player
@@ -97,16 +111,24 @@ function riceShareOf(timeline: LnTimeline4K, effective: boolean[], lane: Int8Arr
  * discount read dense short-hold charts as easy, and at 1.5x most of a
  * chart's holds as free. The tap reading still decides identity and the rice
  * share.
+ *
+ * v15 (2026-10-02) re-measured over every LN-rated chart, not only 75%+ holds:
+ * 244k plays, ~1M same-player pairs split by mapset. The jack term and the
+ * cheaper releases took ordering from 72.1/77.0% to 77.7/79.7% across the two
+ * halves; the Overall blend in ln-skill.ts adds the rest. Reading the
+ * same-motion tolerance in chart time scored no better once blended and would
+ * rate a rate-mod play apart from the same notes baked into a file.
  */
 export function buildLnWorkload(
   map: Pick<ManiaBeatmap, "notes" | "keyCount" | "od">,
-  options: { rate?: number; od?: number | null } = {},
+  options: { rate?: number; od?: number | null; pricing?: "rating" | "identity" } = {},
 ): LnWorkload | null {
   if (map.keyCount !== 4) return null;
   const rate = Number.isFinite(options.rate) && Number(options.rate) > 0 ? Number(options.rate) : 1;
   const rawOd = options.od ?? map.od;
   const od = Number.isFinite(rawOd) ? Math.max(0, Math.min(10, rawOd)) : 8;
   const timeline = buildLnTimeline4K(map.notes, rate);
+  const identityPricing = options.pricing === "identity";
   const holds = readEffectiveHolds(timeline.valid ? map.notes : [], { rate, od, keyCount: 4 }, { weights: false });
   const result: LnWorkload = { timeline, od, effective: holds.analysis, sections: [], riceShare: 0 };
   if (!timeline.valid) return result;
@@ -174,10 +196,16 @@ export function buildLnWorkload(
       handMask = HANDS[hand];
       let presses = headMask & handMask;
       for (const id of row.taps) if (handMask & (1 << lane[id]) && relevant(lane[id], id)) presses |= 1 << lane[id];
+      for (let l = hand * 2; l < hand * 2 + 2 && !identityPricing; l += 1) {
+        if (!(presses & (1 << l)) || previous[l] < 0 || isHold[previous[l]]) continue;
+        add(JACK_UNITS * clamp(1 - (time - start[previous[l]]) / JACK_WINDOW_MS));
+      }
       const releases = tailMask & handMask, moves = presses | releases;
       if (!moves) continue;
       add(bits(presses));
-      add(RELEASE_WORK * bits(releases));
+      const otherHandPresses = (row.headMask | row.tapMask) & HANDS[hand ^ 1];
+      add(identityPricing ? IDENTITY_RELEASE_WORK * bits(releases)
+        : (otherHandPresses && !(presses & ~releases) ? CROSS_HAND_RELEASE : 1) * RELEASE_WORK * bits(releases));
       // One independence task per constrained finger, however many names
       // (anchor, lock, nested hold) describe it.
       for (let l = hand * 2; l < hand * 2 + 2; l += 1) {
